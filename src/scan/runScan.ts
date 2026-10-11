@@ -1,0 +1,458 @@
+import { join, sep } from 'node:path';
+import type { CatalogEntry } from '../catalog/catalog.js';
+import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
+import type { Environment } from '../environment/buildEnvironment.js';
+import type { Result } from '../result.js';
+import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import type { CommandFailure } from '../system/loadCommandOutput.js';
+import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
+import type { FileFailure } from '../system/loadFileIdentity.js';
+import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
+import { buildScanReport } from './buildScanReport.js';
+import type { Advice, Candidate, CandidateDecision, SkipReason } from './candidate.js';
+import { decideAppCandidate } from './decideAppCandidate.js';
+import { decideArtifactCandidate } from './decideArtifactCandidate.js';
+import { decideCatalogCandidate, isSystemOwnedTarget } from './decideCatalogCandidate.js';
+import { decideOrphanCandidate, getOrphanNameSkipReason } from './decideOrphanCandidate.js';
+import { decideUserFileCandidate } from './decideUserFileCandidate.js';
+import { dedupeCandidates } from './dedupeCandidates.js';
+import type { CatalogTarget } from './findCatalogTargets.js';
+import { findCatalogTargets } from './findCatalogTargets.js';
+import { findLargeUserFiles } from './findLargeUserFiles.js';
+import { findLastSignOfUse } from './findLastSignOfUse.js';
+import type { ArtifactFinding } from './findProjectArtifacts.js';
+import { findProjectArtifacts } from './findProjectArtifacts.js';
+import type { ScanIssue } from './issue.js';
+import {
+  DAY_MS,
+  PROJECT_SEARCH_EXCLUDED_NAMES,
+  SCAN_LIMITS,
+  USER_FILE_ROOT_RELATIVE_PATHS,
+} from './limits.js';
+import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
+import type { InstalledApp } from './loadInstalledApps.js';
+import { loadInstalledApps } from './loadInstalledApps.js';
+import type { Measurement } from './loadPathMeasurement.js';
+import { loadPathMeasurement } from './loadPathMeasurement.js';
+import { loadProcessCommands } from './loadProcessCommands.js';
+import { loadTreeActivity } from './loadTreeActivity.js';
+import {
+  findOwnerBundlePaths,
+  resolveOwnerBundleId,
+  resolveOwnerState,
+} from './resolveOwnerState.js';
+
+export type ScanOptions = {
+  staleDays: number;
+  unusedDays: number;
+};
+
+export type SkippedItem = {
+  path: string;
+  reason: SkipReason;
+};
+
+export type ScanReport = {
+  /** Ranked by allocated bytes. The number of an item is its index plus one. */
+  candidates: Candidate[];
+  advice: Advice[];
+  skipped: SkippedItem[];
+  issues: ScanIssue[];
+};
+
+type ScanContext = {
+  environment: Environment;
+  catalogEntries: CatalogEntry[];
+  staleCutoffMs: number;
+  unusedCutoffMs: number;
+  installedApps: InstalledApp[];
+  /** `null` when `ps` failed: every item with an owner app is then withheld. */
+  processCommands: string[] | null;
+  activeXcodeBundlePath: Result<string | null, CommandFailure>;
+};
+
+/** Decisions in source order with the issues met on the way. */
+type ScanPhase = { decisions: CandidateDecision[]; issues: ScanIssue[] };
+
+const EMPTY_PHASE: ScanPhase = { decisions: [], issues: [] };
+
+const XCODE_BUNDLE_ID_PREFIX = 'com.apple.dt.Xcode';
+
+/**
+ * Items measured at once. Each measurement walks with its own readers, so a few at a time keep
+ * the disk busy without holding thousands of half-read folders in memory.
+ */
+const runItemMeasurement = createConcurrencyLimit({ maxConcurrent: 4 });
+
+/** Names whose changes say nothing about whether a project is in use. */
+const PROJECT_ACTIVITY_EXCLUDED_NAMES = [
+  ...new Set([...PROJECT_ARTIFACT_RULES.map((rule) => rule.artifactName), '.git']),
+];
+
+/**
+ * Scans every source of leftovers and decides about each item. Reads only; it deletes nothing.
+ * Sources run in a fixed order, because an earlier item wins an overlap with a later one.
+ */
+export async function runScan(params: {
+  environment: Environment;
+  catalogEntries: CatalogEntry[];
+  options: ScanOptions;
+  onProgress: (message: string) => void;
+}): Promise<ScanReport> {
+  params.onProgress('Checking installed apps and running processes…');
+
+  const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
+    loadProcessCommands({ commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs }),
+    loadInstalledApps({
+      appDirs: params.environment.applicationDirs,
+      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+    }),
+    loadActiveXcodeBundlePath({ commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs }),
+  ]);
+  const context: ScanContext = {
+    environment: params.environment,
+    catalogEntries: params.catalogEntries,
+    staleCutoffMs: params.environment.nowMs - params.options.staleDays * DAY_MS,
+    unusedCutoffMs: params.environment.nowMs - params.options.unusedDays * DAY_MS,
+    installedApps: installed.apps,
+    processCommands: processCommands.kind === 'succeeded' ? processCommands.value : null,
+    activeXcodeBundlePath: activeXcodeBundlePath,
+  };
+  const setup: ScanPhase = {
+    decisions: [],
+    issues: [
+      ...buildCommandIssues({ results: [processCommands, activeXcodeBundlePath] }),
+      ...installed.issues,
+    ],
+  };
+
+  params.onProgress('Measuring known storage locations…');
+  const catalog = await loadCatalogPhase({ context: context });
+
+  params.onProgress('Searching your projects for old build folders…');
+  const artifacts = await loadArtifactPhase({ context: context });
+
+  params.onProgress('Measuring apps…');
+  const apps = await loadAppPhase({ context: context });
+
+  params.onProgress('Looking for large old files…');
+  const userFiles = await loadUserFilePhase({ context: context });
+
+  params.onProgress('Looking for data of removed apps…');
+  const orphans = await loadOrphanPhase({ context: context });
+
+  const scan = mergeScanPhases({ phases: [setup, catalog, artifacts, apps, userFiles, orphans] });
+
+  return buildScanReport({
+    decisions: dedupeCandidates({ decisions: scan.decisions }),
+    issues: scan.issues,
+  });
+}
+
+async function loadCatalogPhase(params: { context: ScanContext }): Promise<ScanPhase> {
+  const found = await findCatalogTargets({
+    environment: params.context.environment,
+    entries: params.context.catalogEntries,
+  });
+  const targetPhases = await Promise.all(
+    found.targets.map((target) =>
+      loadCatalogTargetPhase({ context: params.context, target: target }),
+    ),
+  );
+
+  return mergeScanPhases({ phases: [{ decisions: [], issues: found.issues }, ...targetPhases] });
+}
+
+async function loadCatalogTargetPhase(params: {
+  context: ScanContext;
+  target: CatalogTarget;
+}): Promise<ScanPhase> {
+  const entry = params.target.entry;
+  const path = params.target.path;
+  const ownerBundleId = resolveOwnerBundleId({
+    entry: entry,
+    path: path,
+    installedApps: params.context.installedApps,
+  });
+
+  // Decided before measuring, because macOS denies reading most of its own folders.
+  if (isSystemOwnedTarget({ entry: entry, ownerBundleId: ownerBundleId })) {
+    return { decisions: [{ kind: 'skip', path: path, reason: 'systemOwned' }], issues: [] };
+  }
+
+  return loadMeasuredPhase({
+    path: path,
+    decide: async (measurement) => {
+      const activity =
+        entry.ageRule === 'staleDays'
+          ? await loadTreeActivity({
+              path: path,
+              cutoffMs: params.context.staleCutoffMs,
+              excludedNames: [],
+              maxEntries: SCAN_LIMITS.probeMaxEntries,
+              deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
+            })
+          : null;
+
+      return decideCatalogCandidate({
+        entry: entry,
+        path: path,
+        measurement: measurement,
+        ownerBundleId: ownerBundleId,
+        ownerBundlePaths: findOwnerBundlePaths({
+          ownerBundleId: ownerBundleId,
+          installedApps: params.context.installedApps,
+        }),
+        ownerState: resolveOwnerState({
+          ownerBundleId: ownerBundleId,
+          installedApps: params.context.installedApps,
+          processCommands: params.context.processCommands,
+        }),
+        activity: activity,
+        minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
+      });
+    },
+  });
+}
+
+async function loadArtifactPhase(params: { context: ScanContext }): Promise<ScanPhase> {
+  const found = await findProjectArtifacts({
+    homeDir: params.context.environment.homeDir,
+    excludedTopNames: PROJECT_SEARCH_EXCLUDED_NAMES,
+    rules: PROJECT_ARTIFACT_RULES,
+    maxDepth: SCAN_LIMITS.projectMaxDepth,
+    deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
+  });
+  const findingPhases = await Promise.all(
+    found.findings.map((finding) =>
+      loadArtifactFindingPhase({ context: params.context, finding: finding }),
+    ),
+  );
+
+  return mergeScanPhases({ phases: [{ decisions: [], issues: found.issues }, ...findingPhases] });
+}
+
+function loadArtifactFindingPhase(params: {
+  context: ScanContext;
+  finding: ArtifactFinding;
+}): Promise<ScanPhase> {
+  return loadMeasuredPhase({
+    path: params.finding.artifactPath,
+    decide: async (measurement) => {
+      const activity = await loadTreeActivity({
+        path: params.finding.projectRoot,
+        cutoffMs: params.context.staleCutoffMs,
+        excludedNames: PROJECT_ACTIVITY_EXCLUDED_NAMES,
+        maxEntries: SCAN_LIMITS.probeMaxEntries,
+        deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
+      });
+
+      return decideArtifactCandidate({
+        finding: params.finding,
+        measurement: measurement,
+        activity: activity,
+        minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
+      });
+    },
+  });
+}
+
+async function loadAppPhase(params: { context: ScanContext }): Promise<ScanPhase> {
+  const appPhases = await Promise.all(
+    params.context.installedApps.map((app) =>
+      loadAppItemPhase({ context: params.context, app: app }),
+    ),
+  );
+
+  return mergeScanPhases({ phases: appPhases });
+}
+
+function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): Promise<ScanPhase> {
+  const app = params.app;
+
+  return loadMeasuredPhase({
+    path: app.bundlePath,
+    decide: async (measurement) => {
+      const lastSignOfUseMs =
+        app.bundleId === null
+          ? null
+          : await findLastSignOfUse({
+              homeDir: params.context.environment.homeDir,
+              bundleId: app.bundleId,
+              displayName: app.displayName,
+            });
+
+      return decideAppCandidate({
+        app: app,
+        measurement: measurement,
+        lastSignOfUseMs: lastSignOfUseMs,
+        unusedCutoffMs: params.context.unusedCutoffMs,
+        ownerState: resolveOwnerState({
+          ownerBundleId: app.bundleId,
+          installedApps: params.context.installedApps,
+          processCommands: params.context.processCommands,
+        }),
+        isProtectedDeveloperApp: isProtectedDeveloperApp({
+          app: app,
+          activeXcodeBundlePath: params.context.activeXcodeBundlePath,
+        }),
+        minAppBytes: SCAN_LIMITS.minAppBytes,
+      });
+    },
+  });
+}
+
+async function loadUserFilePhase(params: { context: ScanContext }): Promise<ScanPhase> {
+  const found = await findLargeUserFiles({
+    rootDirs: USER_FILE_ROOT_RELATIVE_PATHS.map((relativePath) =>
+      join(params.context.environment.homeDir, relativePath),
+    ),
+    minAllocatedBytes: SCAN_LIMITS.minUserFileBytes,
+    deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
+  });
+  // A large file inside a dependency or git folder belongs to its project, not to the user.
+  const decisions = found.findings
+    .filter((finding) => !isInsideProjectMachinery({ path: finding.path }))
+    .map((finding) =>
+      decideUserFileCandidate({
+        finding: finding,
+        unusedCutoffMs: params.context.unusedCutoffMs,
+        minUserFileBytes: SCAN_LIMITS.minUserFileBytes,
+      }),
+    );
+
+  return { decisions: decisions, issues: found.issues };
+}
+
+async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPhase> {
+  const containersPath = join(params.context.environment.homeDir, 'Library/Containers');
+  const names = await loadDirectoryNames({ path: containersPath });
+
+  if (names.kind === 'failed') {
+    if (names.failure.reason === 'missing' || names.failure.reason === 'notDirectory') {
+      return EMPTY_PHASE;
+    }
+
+    return {
+      decisions: [],
+      issues: [{ path: containersPath, reason: names.failure.reason, detail: names.failure.code }],
+    };
+  }
+
+  const installedBundleIds = buildInstalledBundleIds({ apps: params.context.installedApps });
+  const namePhases = await Promise.all(
+    names.value.map((name) => {
+      const path = join(containersPath, name);
+      const nameSkipReason = getOrphanNameSkipReason({
+        name: name,
+        installedBundleIds: installedBundleIds,
+      });
+
+      if (nameSkipReason !== null) {
+        const skipPhase: ScanPhase = {
+          decisions: [{ kind: 'skip', path: path, reason: nameSkipReason }],
+          issues: [],
+        };
+
+        return Promise.resolve(skipPhase);
+      }
+
+      return loadMeasuredPhase({
+        path: path,
+        decide: async (measurement) =>
+          decideOrphanCandidate({
+            path: path,
+            name: name,
+            measurement: measurement,
+            installedBundleIds: installedBundleIds,
+            minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
+          }),
+      });
+    }),
+  );
+
+  return mergeScanPhases({ phases: namePhases });
+}
+
+/**
+ * Measures the path and decides with the measurement. A path that vanished adds nothing; one
+ * that cannot be read adds an issue instead of a decision.
+ */
+function loadMeasuredPhase(params: {
+  path: string;
+  decide: (measurement: Measurement) => Promise<CandidateDecision>;
+}): Promise<ScanPhase> {
+  return runItemMeasurement(async () => {
+    const measured = await loadPathMeasurement({
+      path: params.path,
+      deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
+    });
+
+    return buildMeasuredPhase({ path: params.path, measured: measured, decide: params.decide });
+  });
+}
+
+async function buildMeasuredPhase(params: {
+  path: string;
+  measured: Result<Measurement, FileFailure>;
+  decide: (measurement: Measurement) => Promise<CandidateDecision>;
+}): Promise<ScanPhase> {
+  const measured = params.measured;
+
+  if (measured.kind === 'succeeded') {
+    return { decisions: [await params.decide(measured.value)], issues: [] };
+  }
+
+  if (measured.failure.reason === 'missing') {
+    return EMPTY_PHASE;
+  }
+
+  return {
+    decisions: [],
+    issues: [{ path: params.path, reason: measured.failure.reason, detail: measured.failure.code }],
+  };
+}
+
+function mergeScanPhases(params: { phases: ScanPhase[] }): ScanPhase {
+  return {
+    decisions: params.phases.flatMap((phase) => phase.decisions),
+    issues: params.phases.flatMap((phase) => phase.issues),
+  };
+}
+
+/**
+ * The active Xcode is protected. When `xcode-select` failed, which Xcode is active is unknown,
+ * so every Xcode is.
+ */
+function isProtectedDeveloperApp(params: {
+  app: InstalledApp;
+  activeXcodeBundlePath: Result<string | null, CommandFailure>;
+}): boolean {
+  if (params.activeXcodeBundlePath.kind === 'failed') {
+    return params.app.bundleId?.startsWith(XCODE_BUNDLE_ID_PREFIX) ?? false;
+  }
+
+  return params.app.bundlePath === params.activeXcodeBundlePath.value;
+}
+
+function isInsideProjectMachinery(params: { path: string }): boolean {
+  const segments = params.path.split(sep);
+
+  return segments.some((segment) => PROJECT_ACTIVITY_EXCLUDED_NAMES.includes(segment));
+}
+
+function buildCommandIssues(params: { results: Result<unknown, CommandFailure>[] }): ScanIssue[] {
+  return params.results.flatMap((result) => {
+    if (result.kind === 'succeeded') {
+      return [];
+    }
+
+    const issue: ScanIssue = {
+      path: result.failure.command,
+      reason: 'commandFailed',
+      detail: result.failure.reason,
+    };
+
+    return [issue];
+  });
+}
