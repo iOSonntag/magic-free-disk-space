@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import type { Result } from '../result.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
@@ -11,14 +12,19 @@ export type Measurement = {
   entryCount: number;
   unreadableCount: number;
   isComplete: boolean;
+  /** The newest modification time of the entries read, the root included. */
+  latestModifiedMs: number;
+  /** True when the folder is a mount point or another volume is mounted inside it. */
+  holdsOtherVolume: boolean;
 };
 
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
  * Sums the allocated size of a path without following symbolic links or entering another
- * volume mounted inside it. A partial sum from an unreadable entry or a passed deadline is a
- * success with `isComplete: false`.
+ * volume mounted inside it, which it notes instead, as it notes a folder that is a mount point.
+ * A partial sum from an unreadable entry or a passed deadline is a success with
+ * `isComplete: false`.
  */
 export async function loadPathMeasurement(params: {
   path: string;
@@ -47,6 +53,8 @@ export async function loadPathMeasurement(params: {
         entryCount: 1,
         unreadableCount: 0,
         isComplete: true,
+        latestModifiedMs: rootStats.modifiedMs,
+        holdsOtherVolume: false,
       },
     };
   }
@@ -56,6 +64,8 @@ export async function loadPathMeasurement(params: {
   let allocatedBytes = rootStats.allocatedBytes;
   let entryCount = 1;
   let unreadableCount = 0;
+  let latestModifiedMs = rootStats.modifiedMs;
+  let holdsOtherVolume = await isMountPoint({ path: params.path, dev: rootStats.dev });
 
   const walkEnd = await walkDirectoryTree({
     rootPath: params.path,
@@ -63,8 +73,14 @@ export async function loadPathMeasurement(params: {
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
     visitEntry: (entry) => {
+      if (entry.stats === null) {
+        return 'skip';
+      }
+
       // A volume mounted inside the tree is another disk, such as a simulator runtime image.
-      if (entry.stats === null || entry.stats.dev !== rootStats.dev) {
+      if (entry.stats.dev !== rootStats.dev) {
+        holdsOtherVolume = true;
+
         return 'skip';
       }
 
@@ -76,6 +92,7 @@ export async function loadPathMeasurement(params: {
       }
 
       entryCount += 1;
+      latestModifiedMs = Math.max(latestModifiedMs, entry.stats.modifiedMs);
 
       return 'descend';
     },
@@ -92,6 +109,15 @@ export async function loadPathMeasurement(params: {
       entryCount: entryCount,
       unreadableCount: unreadableCount,
       isComplete: walkEnd === 'completed' && unreadableCount === 0,
+      latestModifiedMs: latestModifiedMs,
+      holdsOtherVolume: holdsOtherVolume,
     },
   };
+}
+
+/** A folder on another volume than its parent is where that volume is mounted; unknown counts. */
+async function isMountPoint(params: { path: string; dev: bigint }): Promise<boolean> {
+  const parentStats = await loadEntryStats({ path: dirname(params.path) });
+
+  return parentStats.kind === 'failed' || parentStats.value.dev !== params.dev;
 }

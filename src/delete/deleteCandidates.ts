@@ -176,6 +176,7 @@ function isSameIdentity(params: { current: FileIdentity; scanned: FileIdentity }
   return (
     params.current.dev === params.scanned.dev &&
     params.current.ino === params.scanned.ino &&
+    params.current.birthtimeNs === params.scanned.birthtimeNs &&
     params.current.kind === params.scanned.kind &&
     params.current.realPath === params.scanned.realPath
   );

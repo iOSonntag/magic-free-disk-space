@@ -174,7 +174,13 @@ function buildOfferDecision(params: { path: string; realPath: string }): Candida
     kind: 'offer',
     candidate: {
       path: params.path,
-      identity: { dev: 1n, ino: 1n, kind: 'directory', realPath: params.realPath },
+      identity: {
+        dev: 1n,
+        ino: 1n,
+        birthtimeNs: 1n,
+        kind: 'directory',
+        realPath: params.realPath,
+      },
       title: 'Fixture cache',
       category: 'caches',
       risk: 'safe',

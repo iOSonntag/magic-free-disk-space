@@ -17,27 +17,15 @@ export type UserFileFinding = {
 
 type LargeFile = { path: string; stats: EntryStats };
 
-/** Folders that macOS shows as one document or that belong to an app, never loose files. */
-const PACKAGE_DIRECTORY_SUFFIXES = [
-  '.app',
-  '.photoslibrary',
-  '.musiclibrary',
-  '.fcpbundle',
-  '.logicx',
-  '.band',
-  '.sparsebundle',
-  '.xcodeproj',
-  '.xcworkspace',
-  '.framework',
-  '.xcframework',
-  '.bundle',
-  '.plugin',
-  '.component',
-  '.vst',
-  '.vst3',
-  '.aaxplugin',
-  '.kext',
-];
+/**
+ * A folder name ending in an extension, such as `iMovie Library.imovielibrary` or
+ * `Windows.vmwarevm`. macOS shows many such folders as one document, and only Launch Services
+ * tells which, so every one counts as a package: a large file inside it belongs to the package.
+ */
+const PACKAGE_DIRECTORY_NAME_PATTERN = /\.[A-Za-z][A-Za-z0-9-]*$/;
+
+/** A plain folder that Finder shows with a translated name, such as `Virtual Machines.localized`. */
+const LOCALIZED_DIRECTORY_SUFFIX = '.localized';
 
 /** A folder holding this entry is a git working tree; its files belong to a project. */
 const PROJECT_MARKER_NAME = '.git';
@@ -46,8 +34,8 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
  * Walks each root on its own volume without following symbolic links, and without entering
- * hidden folders, package folders such as `.app`, or git working trees. A passed deadline ends
- * the walk with one walkStopped issue. Findings come sorted by path.
+ * hidden folders, package folders (any folder named with an extension), or git working trees.
+ * A passed deadline ends the walk with one walkStopped issue. Findings come sorted by path.
  */
 export async function findLargeUserFiles(params: {
   rootDirs: string[];
@@ -169,9 +157,11 @@ function isUserFolderName(params: { name: string }): boolean {
     return false;
   }
 
-  const lowerCaseName = params.name.toLowerCase();
+  if (params.name.toLowerCase().endsWith(LOCALIZED_DIRECTORY_SUFFIX)) {
+    return true;
+  }
 
-  return !PACKAGE_DIRECTORY_SUFFIXES.some((suffix) => lowerCaseName.endsWith(suffix));
+  return !PACKAGE_DIRECTORY_NAME_PATTERN.test(params.name);
 }
 
 function buildFailureIssues(params: {

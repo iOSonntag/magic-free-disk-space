@@ -8,7 +8,13 @@ let nextTestIno = 1000n;
 export function buildTestIdentity(params: { realPath: string; kind?: FileKind }): FileIdentity {
   nextTestIno += 1n;
 
-  return { dev: 1n, ino: nextTestIno, kind: params.kind ?? 'directory', realPath: params.realPath };
+  return {
+    dev: 1n,
+    ino: nextTestIno,
+    birthtimeNs: 1n,
+    kind: params.kind ?? 'directory',
+    realPath: params.realPath,
+  };
 }
 
 export function buildTestMeasurement(params: {
@@ -16,6 +22,8 @@ export function buildTestMeasurement(params: {
   allocatedBytes: number;
   kind?: FileKind;
   isComplete?: boolean;
+  latestModifiedMs?: number;
+  holdsOtherVolume?: boolean;
 }): Measurement {
   return {
     identity: buildTestIdentity({ realPath: params.realPath, kind: params.kind ?? 'directory' }),
@@ -23,6 +31,8 @@ export function buildTestMeasurement(params: {
     entryCount: 3,
     unreadableCount: 0,
     isComplete: params.isComplete ?? true,
+    latestModifiedMs: params.latestModifiedMs ?? 0,
+    holdsOtherVolume: params.holdsOtherVolume ?? false,
   };
 }
 

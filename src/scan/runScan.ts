@@ -41,6 +41,7 @@ import {
   resolveOwnerBundleId,
   resolveOwnerState,
 } from './resolveOwnerState.js';
+import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 export type ScanOptions = {
   staleDays: number;
@@ -66,6 +67,8 @@ type ScanContext = {
   staleCutoffMs: number;
   unusedCutoffMs: number;
   installedApps: InstalledApp[];
+  /** False when an app folder or a bundle id could not be read: no container counts as orphaned. */
+  isInstalledAppListComplete: boolean;
   /** `null` when `ps` failed: every item with an owner app is then withheld. */
   processCommands: string[] | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
@@ -115,6 +118,7 @@ export async function runScan(params: {
     staleCutoffMs: params.environment.nowMs - params.options.staleDays * DAY_MS,
     unusedCutoffMs: params.environment.nowMs - params.options.unusedDays * DAY_MS,
     installedApps: installed.apps,
+    isInstalledAppListComplete: installed.issues.length === 0,
     processCommands: processCommands.kind === 'succeeded' ? processCommands.value : null,
     activeXcodeBundlePath: activeXcodeBundlePath,
   };
@@ -294,6 +298,7 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
         }),
         isProtectedDeveloperApp: isProtectedDeveloperApp({
           app: app,
+          appRealPath: measurement.identity.realPath,
           activeXcodeBundlePath: params.context.activeXcodeBundlePath,
         }),
         minAppBytes: SCAN_LIMITS.minAppBytes,
@@ -346,6 +351,7 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
       const nameSkipReason = getOrphanNameSkipReason({
         name: name,
         installedBundleIds: installedBundleIds,
+        isInstalledAppListComplete: params.context.isInstalledAppListComplete,
       });
 
       if (nameSkipReason !== null) {
@@ -365,6 +371,8 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
             name: name,
             measurement: measurement,
             installedBundleIds: installedBundleIds,
+            isInstalledAppListComplete: params.context.isInstalledAppListComplete,
+            unusedCutoffMs: params.context.unusedCutoffMs,
             minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
           }),
       });
@@ -376,7 +384,8 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
 
 /**
  * Measures the path and decides with the measurement. A path that vanished adds nothing; one
- * that cannot be read adds an issue instead of a decision.
+ * that cannot be read adds an issue instead of a decision. An offer holding another mounted
+ * volume becomes a skip.
  */
 function loadMeasuredPhase(params: {
   path: string;
@@ -400,7 +409,12 @@ async function buildMeasuredPhase(params: {
   const measured = params.measured;
 
   if (measured.kind === 'succeeded') {
-    return { decisions: [await params.decide(measured.value)], issues: [] };
+    const decision = skipOfferHoldingOtherVolume({
+      decision: await params.decide(measured.value),
+      measurement: measured.value,
+    });
+
+    return { decisions: [decision], issues: [] };
   }
 
   if (measured.failure.reason === 'missing') {
@@ -421,18 +435,20 @@ function mergeScanPhases(params: { phases: ScanPhase[] }): ScanPhase {
 }
 
 /**
- * The active Xcode is protected. When `xcode-select` failed, which Xcode is active is unknown,
- * so every Xcode is.
+ * The active Xcode is protected, compared by real path, so a link such as `Xcode.app` to the
+ * versioned bundle still protects it. When `xcode-select` failed, which Xcode is active is
+ * unknown, so every Xcode is.
  */
 function isProtectedDeveloperApp(params: {
   app: InstalledApp;
+  appRealPath: string;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
 }): boolean {
   if (params.activeXcodeBundlePath.kind === 'failed') {
     return params.app.bundleId?.startsWith(XCODE_BUNDLE_ID_PREFIX) ?? false;
   }
 
-  return params.app.bundlePath === params.activeXcodeBundlePath.value;
+  return params.appRealPath === params.activeXcodeBundlePath.value;
 }
 
 function isInsideProjectMachinery(params: { path: string }): boolean {

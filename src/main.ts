@@ -3,15 +3,14 @@ import { EXIT_CODES } from './cli/exitCodes.js';
 import { runCli } from './cli/runCli.js';
 import { createTerminalIo } from './cli/terminalIo.js';
 import { loadEnvironment } from './environment/loadEnvironment.js';
+import { formatEnvironmentFailure } from './report/formatEnvironmentFailure.js';
 
 async function main(): Promise<number> {
   const io = createTerminalIo();
   const environmentResult = await loadEnvironment();
 
   if (environmentResult.kind === 'failed') {
-    io.writeError(
-      `Cannot resolve ${environmentResult.failure.path}: ${environmentResult.failure.code}\n`,
-    );
+    io.writeError(`${formatEnvironmentFailure({ failure: environmentResult.failure })}\n`);
 
     return EXIT_CODES.cannotStart;
   }

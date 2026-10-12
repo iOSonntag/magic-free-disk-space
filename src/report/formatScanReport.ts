@@ -3,6 +3,7 @@ import type { ScanIssue } from '../scan/issue.js';
 import type { ScanReport, SkippedItem } from '../scan/runScan.js';
 import { formatSizeText } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
+import { formatDisplayText } from './formatDisplayText.js';
 
 const skipReasonTexts: Record<SkipReason, string> = {
   belowSizeThreshold: 'too small to matter',
@@ -16,6 +17,8 @@ const skipReasonTexts: Record<SkipReason, string> = {
   useUnknown: 'could not tell when it was last used',
   ownerInstalled: 'its app is installed',
   notBundleId: 'no app identifier',
+  installedAppsUnknown: 'could not read every installed app',
+  holdsOtherVolume: 'holds another mounted disk',
   overlapsEarlierCandidate: 'already covered by another item',
 };
 
@@ -65,8 +68,8 @@ function formatCandidateItemLines(params: { candidate: Candidate; number: number
   const sizeText = formatSizeText(params.candidate);
 
   return [
-    `${params.number}. ${sizeText} [${params.candidate.risk}] ${params.candidate.title}`,
-    `   ${params.candidate.path}`,
+    `${params.number}. ${sizeText} [${params.candidate.risk}] ${formatDisplayText({ text: params.candidate.title })}`,
+    `   ${formatDisplayText({ text: params.candidate.path })}`,
     `   ${params.candidate.explanation} ${params.candidate.regeneration}`,
   ];
 }
@@ -88,7 +91,7 @@ function formatAdviceItemLines(params: { item: Advice }): string[] {
 
   return [
     `- ${sizeText} [${params.item.risk}] ${params.item.title}`,
-    `   ${params.item.path}`,
+    `   ${formatDisplayText({ text: params.item.path })}`,
     `   ${params.item.advice}`,
   ];
 }
@@ -141,5 +144,5 @@ function formatIssueBlock(params: { issues: ScanIssue[] }): string[] {
 function formatIssueLine(params: { issue: ScanIssue }): string {
   const reasonText = issueReasonTexts[params.issue.reason];
 
-  return `- ${params.issue.path}: ${reasonText} (${params.issue.detail})`;
+  return `- ${formatDisplayText({ text: params.issue.path })}: ${reasonText} (${params.issue.detail})`;
 }

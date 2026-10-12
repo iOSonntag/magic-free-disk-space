@@ -30,6 +30,10 @@ export async function findLastSignOfUse(params: {
   return Math.max(...modifiedTimes);
 }
 
+/**
+ * The places an app writes when it runs: in the Library of the home folder and, for a
+ * sandboxed app, in the Library inside its container, where macOS redirects those writes.
+ */
 export function buildSignOfUsePaths(params: {
   homeDir: string;
   bundleId: string | null;
@@ -42,13 +46,34 @@ export function buildSignOfUsePaths(params: {
     return [displayNamePath];
   }
 
+  const containerPath = join(libraryDir, 'Containers', params.bundleId);
+
   return [
-    join(libraryDir, 'Preferences', `${params.bundleId}.plist`),
-    join(libraryDir, 'Saved Application State', `${params.bundleId}.savedState`),
-    join(libraryDir, 'Containers', params.bundleId),
-    join(libraryDir, 'Caches', params.bundleId),
-    join(libraryDir, 'Application Support', params.bundleId),
-    displayNamePath,
+    ...buildLibrarySignOfUsePaths({
+      libraryDir: libraryDir,
+      bundleId: params.bundleId,
+      displayName: params.displayName,
+    }),
+    containerPath,
+    ...buildLibrarySignOfUsePaths({
+      libraryDir: join(containerPath, 'Data/Library'),
+      bundleId: params.bundleId,
+      displayName: params.displayName,
+    }),
+  ];
+}
+
+function buildLibrarySignOfUsePaths(params: {
+  libraryDir: string;
+  bundleId: string;
+  displayName: string;
+}): string[] {
+  return [
+    join(params.libraryDir, 'Preferences', `${params.bundleId}.plist`),
+    join(params.libraryDir, 'Saved Application State', `${params.bundleId}.savedState`),
+    join(params.libraryDir, 'Caches', params.bundleId),
+    join(params.libraryDir, 'Application Support', params.bundleId),
+    join(params.libraryDir, 'Application Support', params.displayName),
   ];
 }
 

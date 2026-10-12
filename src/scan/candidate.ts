@@ -43,6 +43,8 @@ export type SkipReason =
   | 'useUnknown'
   | 'ownerInstalled'
   | 'notBundleId'
+  | 'installedAppsUnknown'
+  | 'holdsOtherVolume'
   | 'overlapsEarlierCandidate';
 
 export type CandidateDecisionOffer = { kind: 'offer'; candidate: Candidate };

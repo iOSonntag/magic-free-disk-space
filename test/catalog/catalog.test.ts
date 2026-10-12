@@ -84,6 +84,10 @@ describe('CATALOG_ENTRIES', () => {
     expect(neverDeleteIds).toEqual([]);
   });
 
+  test('the Trash is careful, because a deleted item does not come back', () => {
+    expect(CATALOG_ENTRIES.find((entry) => entry.id === 'trash')?.risk).toBe('careful');
+  });
+
   test('the staleDays age rule appears only with children scope', () => {
     const misscopedIds = CATALOG_ENTRIES.filter(
       (entry) => entry.ageRule === 'staleDays' && entry.scope !== 'children',

@@ -291,6 +291,39 @@ describe('runCli safety', () => {
     expect(await listFixturePaths()).toEqual(before);
   });
 
+  test('offers the old container of a removed app, but not one that changed recently', async () => {
+    const containersDir = join(fixtureRoot.homeDir, 'Library/Containers');
+
+    await createSizedFile(join(containersDir, 'com.example.gone/Data/blob.bin'), 2 * MIB);
+    await updateModifiedMs({
+      path: join(containersDir, 'com.example.gone/Data'),
+      modifiedMs: OLD_MS,
+    });
+    await updateModifiedMs({ path: join(containersDir, 'com.example.gone'), modifiedMs: OLD_MS });
+    // Its folders keep the time of now: the app still runs from somewhere else.
+    await createSizedFile(join(containersDir, 'com.example.elsewhere/Data/blob.bin'), 2 * MIB);
+
+    const { io } = await runWithInput({ argv: ['--list'], inputLines: [] });
+
+    expect(io.outText()).toContain('Data of an app that is no longer installed (com.example.gone)');
+    expect(io.outText()).not.toContain('com.example.elsewhere');
+  });
+
+  test('offers no container while an installed app could not be read', async () => {
+    const containerDir = join(fixtureRoot.homeDir, 'Library/Containers/com.example.gone');
+
+    await createSizedFile(join(containerDir, 'Data/blob.bin'), 2 * MIB);
+    await updateModifiedMs({ path: join(containerDir, 'Data'), modifiedMs: OLD_MS });
+    await updateModifiedMs({ path: containerDir, modifiedMs: OLD_MS });
+    // An app without an Info.plist: its id, and so the container it owns, is unknown.
+    await mkdir(join(fixtureRoot.applicationDir, 'Broken.app'));
+
+    const { io } = await runWithInput({ argv: ['--list'], inputLines: [] });
+
+    expect(io.outText()).not.toContain('com.example.gone');
+    expect(io.outText()).toContain('- could not read every installed app: 1');
+  });
+
   test('refuses to run anywhere but macOS', async () => {
     const io = createScriptedTerminalIo({ isTerminal: true, inputLines: ['1', 'DELETE'] });
     const exitCode = await runCli({
