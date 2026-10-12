@@ -17,20 +17,26 @@ const MIDDLE_MS = 1_650_000_000_000;
 const NEWEST_MS = 1_700_000_000_000;
 
 describe('buildSignOfUsePaths', () => {
-  test('lists the bundle id places and the display-name place', () => {
+  test('lists the bundle id places and the display-name place, in and outside the container', () => {
     const paths = buildSignOfUsePaths({
       homeDir: '/fixture/home',
       bundleId: BUNDLE_ID,
       displayName: DISPLAY_NAME,
     });
+    const containerLibrary = '/fixture/home/Library/Containers/com.example.fixture/Data/Library';
 
     expect(paths).toEqual([
       '/fixture/home/Library/Preferences/com.example.fixture.plist',
       '/fixture/home/Library/Saved Application State/com.example.fixture.savedState',
-      '/fixture/home/Library/Containers/com.example.fixture',
       '/fixture/home/Library/Caches/com.example.fixture',
       '/fixture/home/Library/Application Support/com.example.fixture',
       '/fixture/home/Library/Application Support/Fixture App',
+      '/fixture/home/Library/Containers/com.example.fixture',
+      `${containerLibrary}/Preferences/com.example.fixture.plist`,
+      `${containerLibrary}/Saved Application State/com.example.fixture.savedState`,
+      `${containerLibrary}/Caches/com.example.fixture`,
+      `${containerLibrary}/Application Support/com.example.fixture`,
+      `${containerLibrary}/Application Support/Fixture App`,
     ]);
   });
 
@@ -88,6 +94,35 @@ describe('findLastSignOfUse', () => {
     await createFixtureDirectory({ path: dataPath });
     await updateModifiedMs({ path: dataPath, modifiedMs: NEWEST_MS });
     await updateModifiedMs({ path: containerPath, modifiedMs: OLDEST_MS });
+
+    const lastSignOfUse = await findLastSignOfUse({
+      homeDir: fixtureRoot.homeDir,
+      bundleId: BUNDLE_ID,
+      displayName: DISPLAY_NAME,
+    });
+
+    expect(lastSignOfUse).toBe(NEWEST_MS);
+  });
+
+  test('sees the preferences that a sandboxed app writes inside its container', async () => {
+    const containerPath = join(fixtureRoot.homeDir, 'Library', 'Containers', BUNDLE_ID);
+    const preferencesDir = join(containerPath, 'Data/Library/Preferences');
+
+    await createFixtureDirectory({ path: preferencesDir });
+    await createFixtureFile({
+      path: join(preferencesDir, `${BUNDLE_ID}.plist`),
+      sizeBytes: 0,
+      modifiedMs: NEWEST_MS,
+    });
+
+    for (const path of [
+      preferencesDir,
+      join(containerPath, 'Data/Library'),
+      join(containerPath, 'Data'),
+      containerPath,
+    ]) {
+      await updateModifiedMs({ path: path, modifiedMs: OLDEST_MS });
+    }
 
     const lastSignOfUse = await findLastSignOfUse({
       homeDir: fixtureRoot.homeDir,

@@ -11,9 +11,9 @@ Options:
   --dry-run              Scan and show the removal plan. Deletes nothing.
   --select <selection>   With --dry-run: the items to plan, such as "1-3,7" or "safe".
   --stale-days <days>    Days without changes before temporary folders and project build folders count as stale (default 10).
-  --unused-days <days>   Days without use before apps and large files count as unused (default 180).
+  --unused-days <days>   Days without use before apps, large files, and the data of removed apps count as unused (default 180).
   -h, --help             Show this help.
 
-Exit codes: 0 done or cancelled, 1 a deletion failed or the log stopped the run, 2 bad usage or not macOS, 3 no interactive terminal, 4 the deletion log could not be created.`);
+Exit codes: 0 done or cancelled, 1 a deletion failed or the log stopped the run, 2 bad usage, not macOS, or an unsafe setup, 3 no interactive terminal, 4 the deletion log could not be created.`);
   });
 });

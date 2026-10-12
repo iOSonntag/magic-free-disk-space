@@ -62,6 +62,7 @@ describe('loadFileIdentity', () => {
       value: {
         dev: expect.any(BigInt),
         ino: expect.any(BigInt),
+        birthtimeNs: expect.any(BigInt),
         kind: 'file',
         realPath: expectedRealPath,
       },
@@ -80,6 +81,7 @@ describe('loadFileIdentity', () => {
       value: {
         dev: expect.any(BigInt),
         ino: expect.any(BigInt),
+        birthtimeNs: expect.any(BigInt),
         kind: 'directory',
         realPath: expectedRealPath,
       },
@@ -100,6 +102,7 @@ describe('loadFileIdentity', () => {
       value: {
         dev: expect.any(BigInt),
         ino: expect.any(BigInt),
+        birthtimeNs: expect.any(BigInt),
         kind: 'symbolicLink',
         realPath: expectedRealPath,
       },

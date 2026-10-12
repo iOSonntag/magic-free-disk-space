@@ -155,6 +155,56 @@ describe('findLargeUserFiles', () => {
     expect(result).toEqual({ findings: [], issues: [] });
   });
 
+  test('a file inside any folder named with an extension is not found', async () => {
+    const packagedPaths = [
+      'Movies/iMovie Library.imovielibrary/2019-05-01/Original Media/clip.mov',
+      'Documents/Virtual Machines.localized/Windows.vmwarevm/disk-s001.vmdk',
+      'Documents/Parallels/Windows 11.pvm/harddisk.hdd/harddisk.hds',
+      'Documents/Linux.utm/Data/disk.qcow2',
+    ];
+
+    for (const relativePath of packagedPaths) {
+      const path = join(fixtureRoot.homeDir, relativePath);
+
+      await createFixtureDirectory({ path: join(path, '..') });
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    const result = await findLargeUserFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
+      minAllocatedBytes: MIN_ALLOCATED_BYTES,
+      deadlineMs: FAR_FUTURE_DEADLINE_MS,
+    });
+
+    expect(result).toEqual({ findings: [], issues: [] });
+  });
+
+  test('a localized folder and a folder named with a version number are searched', async () => {
+    const localizedPath = join(fixtureRoot.homeDir, 'Documents/Old Exports.localized/export.mov');
+    const versionPath = join(fixtureRoot.homeDir, 'Documents/Release 2.0/installer.dmg');
+
+    for (const path of [localizedPath, versionPath]) {
+      await createFixtureDirectory({ path: join(path, '..') });
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    const result = await findLargeUserFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      minAllocatedBytes: MIN_ALLOCATED_BYTES,
+      deadlineMs: FAR_FUTURE_DEADLINE_MS,
+    });
+
+    expect(result.findings.map((finding) => finding.path)).toEqual([localizedPath, versionPath]);
+  });
+
   test('a symbolic link to a large file is not followed', async () => {
     const outsideDir = join(fixtureRoot.rootDir, 'outside');
     await createFixtureDirectory({ path: outsideDir });

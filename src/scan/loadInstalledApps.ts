@@ -56,7 +56,7 @@ export async function loadInstalledApps(params: {
       bundlePath: bundlePath,
       commandTimeoutMs: params.commandTimeoutMs,
     });
-    const nestedBundleIds = await loadNestedBundleIds({
+    const nested = await loadNestedBundleIds({
       bundlePath: bundlePath,
       commandTimeoutMs: params.commandTimeoutMs,
     });
@@ -69,11 +69,13 @@ export async function loadInstalledApps(params: {
       });
     }
 
+    issues.push(...nested.issues);
+
     apps.push({
       bundlePath: bundlePath,
       displayName: basename(bundlePath).slice(0, -APP_BUNDLE_SUFFIX.length),
       bundleId: bundleIdResult.kind === 'succeeded' ? bundleIdResult.value : null,
-      nestedBundleIds: nestedBundleIds,
+      nestedBundleIds: nested.bundleIds,
     });
   }
 
@@ -205,10 +207,14 @@ async function loadInfoPlistBundleId(params: {
   return { kind: 'succeeded', value: plutilResult.value.trim() };
 }
 
+/**
+ * A nested bundle without an id adds nothing. One whose id could not be read, because `plutil`
+ * timed out or did not start, adds an issue: its container would otherwise look orphaned.
+ */
 async function loadNestedBundleIds(params: {
   bundlePath: string;
   commandTimeoutMs: number;
-}): Promise<string[]> {
+}): Promise<{ bundleIds: string[]; issues: ScanIssue[] }> {
   const nestedBundlePathLists = await Promise.all(
     [join(params.bundlePath, 'Contents'), join(params.bundlePath, WRAPPED_BUNDLE_NAME)].map(
       (searchRootPath) =>
@@ -216,7 +222,8 @@ async function loadNestedBundleIds(params: {
     ),
   );
   const nestedBundlePaths = nestedBundlePathLists.flat();
-  const nestedBundleIds: string[] = [];
+  const bundleIds: string[] = [];
+  const issues: ScanIssue[] = [];
 
   for (const nestedBundlePath of nestedBundlePaths) {
     const bundleIdResult = await loadBundleId({
@@ -225,11 +232,17 @@ async function loadNestedBundleIds(params: {
     });
 
     if (bundleIdResult.kind === 'succeeded') {
-      nestedBundleIds.push(bundleIdResult.value);
+      bundleIds.push(bundleIdResult.value);
+    } else if (bundleIdResult.failure.reason !== 'exitedWithError') {
+      issues.push({
+        path: nestedBundlePath,
+        reason: 'commandFailed',
+        detail: bundleIdResult.failure.reason,
+      });
     }
   }
 
-  return nestedBundleIds;
+  return { bundleIds: bundleIds, issues: issues };
 }
 
 async function findNestedBundlePaths(params: {

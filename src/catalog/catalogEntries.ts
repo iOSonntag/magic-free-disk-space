@@ -1105,7 +1105,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     explanation:
       'Items you moved to the Trash; deleting one here removes it, as emptying the Trash would.',
     regeneration: 'A deleted item does not come back.',
-    risk: 'review',
+    risk: 'careful',
     root: 'home',
     path: '.Trash',
     scope: 'children',

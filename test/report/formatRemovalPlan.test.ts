@@ -9,7 +9,7 @@ function buildCandidate(params: {
 }): Candidate {
   return {
     path: params.path,
-    identity: { dev: 1n, ino: 1n, kind: 'directory', realPath: params.path },
+    identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
     title: 'Derived data',
     category: 'developer',
     risk: 'safe',
@@ -24,6 +24,29 @@ function buildCandidate(params: {
 }
 
 describe('formatRemovalPlan', () => {
+  test('writes out control characters in a path, so the plan cannot be rewritten', () => {
+    const lines = formatRemovalPlan({
+      plan: {
+        approved: [
+          buildCandidate({
+            path: '/fixture/clip\u001b[1A\u001b[2K.mov',
+            allocatedBytes: 1024,
+            isComplete: true,
+          }),
+        ],
+        refused: [{ path: '/fixture/a\rb', number: 2, reason: 'protectedRoot' }],
+      },
+    });
+
+    expect(lines).toEqual([
+      'This item will be deleted permanently, 1.0 KiB in total:',
+      '- 1.0 KiB /fixture/clip\\u{1b}[1A\\u{1b}[2K.mov',
+      '',
+      'Refused 1 selected item:',
+      '- 2. /fixture/a\\u{d}b: a protected folder',
+    ]);
+  });
+
   test('says that nothing of the selection can be deleted for an empty plan', () => {
     const lines = formatRemovalPlan({ plan: { approved: [], refused: [] } });
 

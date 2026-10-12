@@ -1,6 +1,6 @@
 import type { Result } from '../result.js';
 
-export type AllowedCommand = 'ps' | 'plutil' | 'xcode-select';
+export type AllowedCommand = 'ps' | 'plutil' | 'xcode-select' | 'getconf';
 
 export type CommandFailureTimedOut = {
   reason: 'timedOut';
@@ -35,6 +35,7 @@ const COMMAND_PATHS: Record<AllowedCommand, string> = {
   ps: '/bin/ps',
   plutil: '/usr/bin/plutil',
   'xcode-select': '/usr/bin/xcode-select',
+  getconf: '/usr/bin/getconf',
 };
 
 /** Runs a command from the allow-list and returns its standard output; any other end is a failure. */

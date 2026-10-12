@@ -15,7 +15,7 @@ function buildCandidate(params: {
 }): Candidate {
   return {
     path: params.path,
-    identity: { dev: 1n, ino: 1n, kind: 'directory', realPath: params.path },
+    identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
     title: params.title,
     category: 'caches',
     risk: params.risk,
@@ -170,6 +170,8 @@ describe('formatScanReport', () => {
         advice: [],
         skipped: [
           { path: '/fixture/overlap', reason: 'overlapsEarlierCandidate' },
+          { path: '/fixture/holdsOtherVolume', reason: 'holdsOtherVolume' },
+          { path: '/fixture/installedAppsUnknown', reason: 'installedAppsUnknown' },
           { path: '/fixture/notBundleId', reason: 'notBundleId' },
           { path: '/fixture/ownerInstalled', reason: 'ownerInstalled' },
           { path: '/fixture/useUnknown', reason: 'useUnknown' },
@@ -189,7 +191,7 @@ describe('formatScanReport', () => {
     expect(lines).toEqual([
       'Nothing to delete was found.',
       '',
-      'Skipped 12 items:',
+      'Skipped 14 items:',
       '- too small to matter: 1',
       '- symbolic link, never followed: 1',
       '- owned by macOS: 1',
@@ -201,8 +203,35 @@ describe('formatScanReport', () => {
       '- could not tell when it was last used: 1',
       '- its app is installed: 1',
       '- no app identifier: 1',
+      '- could not read every installed app: 1',
+      '- holds another mounted disk: 1',
       '- already covered by another item: 1',
     ]);
+  });
+
+  test('writes out control characters in a title and a path, so no line can be forged', () => {
+    const lines = formatScanReport({
+      report: {
+        candidates: [
+          buildCandidate({
+            title: 'movie.mov\n2. 1.0 KiB [safe] Xcode build data',
+            path: '/fixture/Downloads/movie.mov\n2. 1.0 KiB [safe] Xcode build data',
+            risk: 'careful',
+            allocatedBytes: 1024,
+            isComplete: true,
+          }),
+        ],
+        advice: [],
+        skipped: [],
+        issues: [],
+      },
+    });
+
+    expect(lines.slice(1, 3)).toEqual([
+      '1. 1.0 KiB [careful] movie.mov\\u{a}2. 1.0 KiB [safe] Xcode build data',
+      '   /fixture/Downloads/movie.mov\\u{a}2. 1.0 KiB [safe] Xcode build data',
+    ]);
+    expect(lines.join('\n').split('\n')).toHaveLength(lines.length);
   });
 
   test('lists every issue with its reason and detail', () => {

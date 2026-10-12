@@ -2,6 +2,7 @@ import type { RemovalOutcome, RemovalOutcomeKind, RemovalRun } from '../delete/d
 import type { JournalFailure } from '../delete/deletionJournal.js';
 import { formatBytes } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
+import { formatDisplayText } from './formatDisplayText.js';
 
 const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   removed: 'deleted',
@@ -25,7 +26,7 @@ export function formatRemovalRun(params: { run: RemovalRun }): string[] {
 function formatOutcomeLine(params: { outcome: RemovalOutcome }): string {
   const codeText = params.outcome.code === null ? '' : ` (${params.outcome.code})`;
 
-  return `- ${outcomeTexts[params.outcome.outcome]}: ${params.outcome.path}${codeText}`;
+  return `- ${outcomeTexts[params.outcome.outcome]}: ${formatDisplayText({ text: params.outcome.path })}${codeText}`;
 }
 
 function formatFreedSummaryLine(params: { outcomes: RemovalOutcome[] }): string {

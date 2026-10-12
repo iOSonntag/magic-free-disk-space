@@ -17,7 +17,8 @@ It looks where space hides from people who are not storage experts:
 - **Apps** of 256 MiB or more with no sign of use for 180 days.
 - **Large files** of 100 MiB or more in Desktop, Documents, Downloads, and Movies, unchanged for
   180 days.
-- **Data of removed apps**: sandbox containers whose app is no longer installed.
+- **Data of removed apps**: sandbox containers whose app is in no Applications folder and that
+  have not changed for 180 days.
 - **The Trash**.
 
 Some places are only shown with advice, because the tool that owns them must clean them:
@@ -38,20 +39,20 @@ bun start --dry-run --select "1-3,7"   # show what a selection would delete; del
 The selection takes numbers and ranges (`1-3, 7`), `safe` for every item marked safe, or `none`.
 Pressing Enter alone cancels.
 
-| Option                 | Meaning                                                                   |
-| ---------------------- | ------------------------------------------------------------------------- |
-| `--list`               | Show what could be freed, then exit.                                      |
-| `--dry-run`            | Scan and show the removal plan.                                           |
-| `--select <selection>` | With `--dry-run`: the items to plan.                                      |
-| `--stale-days <days>`  | Days without changes before temporary and project folders count (10).     |
-| `--unused-days <days>` | Days without use before apps and large files count (180).                 |
-| `-h`, `--help`         | Show the help.                                                            |
+| Option                 | Meaning                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `--list`               | Show what could be freed, then exit.                                           |
+| `--dry-run`            | Scan and show the removal plan.                                                |
+| `--select <selection>` | With `--dry-run`: the items to plan.                                           |
+| `--stale-days <days>`  | Days without changes before temporary and project folders count (10).          |
+| `--unused-days <days>` | Days without use before apps, large files, and removed apps' data count (180). |
+| `-h`, `--help`         | Show the help.                                                                 |
 
 | Exit code | Meaning                                                              |
 | --------- | -------------------------------------------------------------------- |
 | 0         | Done, cancelled, or nothing to do.                                   |
 | 1         | A deletion failed, or the deletion log stopped the run.              |
-| 2         | Bad usage, or not macOS.                                             |
+| 2         | Bad usage, not macOS, or an unsafe setup (see below).                |
 | 3         | Deleting was asked for without an interactive terminal.              |
 | 4         | The deletion log could not be created, so nothing was deleted.       |
 
@@ -74,15 +75,26 @@ your terminal app Full Disk Access in System Settings > Privacy & Security.
   folder such as your home, Library, Documents, or Downloads folder itself, a folder that holds a
   protected folder, anything in `~/.ssh`, `~/.gnupg`, your keychains, or the deletion log, or
   anything outside your home, temporary, and Applications folders.
+- **A safe starting point.** The tool refuses to run as root or with `sudo`, with a home folder
+  that is not yours, or when the temporary folder overlaps your home. It asks macOS for your
+  temporary folder instead of trusting `TMPDIR`, because everything in it may count as temporary.
 - **Unchanged since the scan.** Right before deleting, the tool checks that the item still is
-  the same file or folder it measured (same disk, inode, kind, and path). If it was replaced,
-  the tool leaves it alone.
+  the same file or folder it measured (same disk, inode, creation time, kind, and path). If it
+  was replaced, the tool leaves it alone.
 - **Running apps are left alone.** The cache of an app that is running is not offered, and no
   folder that holds such a cache is offered whole. After you type `DELETE`, the running programs
   are read again, so an app opened during the scan keeps its data. If they cannot be read, every
   app-owned item is held back.
 - **Symbolic links are never followed**, neither while measuring nor while deleting: deleting a
   folder removes a link inside it, never the file the link points to.
+- **Mounted disks are left alone.** A folder where another disk is mounted, or that holds one,
+  is not offered, because deleting it would delete into that disk.
+- **Documents stay whole.** The search for large files never enters a folder named with an
+  extension, such as a photo or iMovie library or a virtual machine, so it never offers a part
+  of one.
+- **Left-behind app data is double-checked.** A sandbox container counts as left behind only when every
+  installed app could be read and nothing in the container changed for the unused period. An
+  app that still runs from another folder keeps writing to its container.
 - **A log of every deletion.** Before each deletion the tool writes what it is about to delete
   to `~/Library/Logs/magic-free-disk-space/deletions.jsonl`, and the outcome after it. If the log
   cannot be written, the run stops.
@@ -92,7 +104,7 @@ your terminal app Full Disk Access in System Settings > Privacy & Security.
 ## Privacy
 
 The tool works offline. It sends nothing anywhere and has no telemetry. It reads file sizes,
-dates, and app identifiers, and runs only `ps`, `plutil`, and `xcode-select`.
+dates, and app identifiers, and runs only `ps`, `plutil`, `xcode-select`, and `getconf`.
 
 ## Limits
 
@@ -101,11 +113,15 @@ dates, and app identifiers, and runs only `ps`, `plutil`, and `xcode-select`.
   but not atomically with it; a change in the instant between the two is not detected.
 - An app is known to be running only when it runs from your Applications folders. An app started
   from a disk image or another folder does not hold back its caches.
+- A cache folder counts as an app's only when it is named after the app's identifier or its name.
+  Another cache folder is offered even while its app runs.
+- The data of an app that lives outside the Applications folders, such as on an external disk,
+  looks left behind once that app has not run for the unused period.
 - Sizes are the space on disk. Files that share their data, such as APFS clones and hard links
   shared with other folders, may free less than shown.
 - Deleting a file in a folder that iCloud Drive syncs deletes it on your other devices as well.
-- A folder from another disk mounted inside a selected folder is not measured, but would be
-  deleted with it.
+- A disk mounted inside a folder after the scan, or in a part of it the scan could not read,
+  would be deleted with that folder.
 - An app's last use is read from the files the app writes, not from Spotlight, which does not
   record it reliably. An app with no such files is never offered.
 - macOS only.

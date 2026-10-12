@@ -3,6 +3,7 @@ import type { RefusalReason } from '../delete/validateRemoval.js';
 import type { Candidate } from '../scan/candidate.js';
 import { formatSizeText } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
+import { formatDisplayText } from './formatDisplayText.js';
 
 const refusalReasonTexts: Record<RefusalReason, string> = {
   neverRisk: 'marked never-delete',
@@ -33,7 +34,10 @@ function formatApprovedLines(params: { approved: Candidate[] }): string[] {
 
   return [
     `${subjectText} will be deleted permanently, ${totalSizeText} in total:`,
-    ...params.approved.map((candidate) => `- ${formatSizeText(candidate)} ${candidate.path}`),
+    ...params.approved.map(
+      (candidate) =>
+        `- ${formatSizeText(candidate)} ${formatDisplayText({ text: candidate.path })}`,
+    ),
   ];
 }
 
@@ -52,5 +56,5 @@ function formatRefusedBlock(params: { refused: RefusedRemoval[] }): string[] {
 function formatRefusedLine(params: { item: RefusedRemoval }): string {
   const reasonText = refusalReasonTexts[params.item.reason];
 
-  return `- ${params.item.number}. ${params.item.path}: ${reasonText}`;
+  return `- ${params.item.number}. ${formatDisplayText({ text: params.item.path })}: ${reasonText}`;
 }

@@ -4,8 +4,16 @@ import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 
 const MIB = 1_048_576;
+const UNUSED_CUTOFF_MS = 1_650_000_000_000;
 
-function decide(params: { name: string; allocatedBytes?: number; kind?: FileKind }) {
+function decide(params: {
+  name: string;
+  allocatedBytes?: number;
+  kind?: FileKind;
+  isComplete?: boolean;
+  latestModifiedMs?: number;
+  isInstalledAppListComplete?: boolean;
+}) {
   const path = `/home/Library/Containers/${params.name}`;
 
   return decideOrphanCandidate({
@@ -15,8 +23,12 @@ function decide(params: { name: string; allocatedBytes?: number; kind?: FileKind
       realPath: path,
       allocatedBytes: params.allocatedBytes ?? 3 * MIB,
       kind: params.kind ?? 'directory',
+      isComplete: params.isComplete ?? true,
+      latestModifiedMs: params.latestModifiedMs ?? UNUSED_CUTOFF_MS - 1,
     }),
     installedBundleIds: new Set(['com.example.installed']),
+    isInstalledAppListComplete: params.isInstalledAppListComplete ?? true,
+    unusedCutoffMs: UNUSED_CUTOFF_MS,
     minOfferedBytes: MIB,
   });
 }
@@ -50,6 +62,27 @@ describe('decideOrphanCandidate', () => {
     expect(decide({ name: 'com.example.installed' })).toMatchObject({
       kind: 'skip',
       reason: 'ownerInstalled',
+    });
+  });
+
+  test('skips every possible orphan while an installed app could not be read', () => {
+    expect(decide({ name: 'com.example.removed', isInstalledAppListComplete: false })).toEqual({
+      kind: 'skip',
+      path: '/home/Library/Containers/com.example.removed',
+      reason: 'installedAppsUnknown',
+    });
+    expect(
+      decide({ name: 'com.example.installed', isInstalledAppListComplete: false }),
+    ).toMatchObject({ kind: 'skip', reason: 'ownerInstalled' });
+  });
+
+  test('skips a container that changed since the cutoff, or whose newest change is unknown', () => {
+    expect(
+      decide({ name: 'com.example.elsewhere', latestModifiedMs: UNUSED_CUTOFF_MS }),
+    ).toMatchObject({ kind: 'skip', reason: 'recentActivity' });
+    expect(decide({ name: 'com.example.partial', isComplete: false })).toMatchObject({
+      kind: 'skip',
+      reason: 'activityUnknown',
     });
   });
 

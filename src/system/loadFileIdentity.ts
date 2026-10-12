@@ -10,6 +10,8 @@ export type FileKind = 'file' | 'directory' | 'symbolicLink' | 'other';
 export type FileIdentity = {
   dev: bigint;
   ino: bigint;
+  /** Tells apart a file that took the inode number of a deleted one, where a disk reuses them. */
+  birthtimeNs: bigint;
   kind: FileKind;
   /** The resolved path; for a link, socket, or pipe, its resolved folder with its own name. */
   realPath: string;
@@ -42,7 +44,13 @@ export async function loadFileIdentity(params: {
 
     return {
       kind: 'succeeded',
-      value: { dev: stats.dev, ino: stats.ino, kind: kind, realPath: realPath },
+      value: {
+        dev: stats.dev,
+        ino: stats.ino,
+        birthtimeNs: stats.birthtimeNs,
+        kind: kind,
+        realPath: realPath,
+      },
     };
   } catch (error) {
     return { kind: 'failed', failure: getFileFailure({ code: getErrorCode(error) }) };

@@ -10,6 +10,7 @@ import {
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
+  updateModifiedMs,
 } from '../support/fixtureRoot.js';
 
 async function loadMeasurementOrThrow(params: {
@@ -62,6 +63,7 @@ describe('loadPathMeasurement', () => {
     expect(measurement.entryCount).toBe(1);
     expect(measurement.unreadableCount).toBe(0);
     expect(measurement.isComplete).toBe(true);
+    expect(measurement.holdsOtherVolume).toBe(false);
   });
 
   test('sums the allocated bytes of every entry in a tree', async () => {
@@ -95,6 +97,30 @@ describe('loadPathMeasurement', () => {
     expect(measurement.entryCount).toBe(entryPaths.length);
     expect(measurement.unreadableCount).toBe(0);
     expect(measurement.isComplete).toBe(true);
+  });
+
+  test('reports the newest modification time in the tree and no other volume', async () => {
+    const treeDirPath = join(fixtureRoot.homeDir, 'tree');
+    const nestedDirPath = join(treeDirPath, 'nested');
+    const newestFilePath = join(nestedDirPath, 'newest.bin');
+
+    await createFixtureDirectory({ path: nestedDirPath });
+    await createFixtureFile({
+      path: join(treeDirPath, 'old.bin'),
+      sizeBytes: 10,
+      modifiedMs: 1_600_000_000_000,
+    });
+    await createFixtureFile({ path: newestFilePath, sizeBytes: 10, modifiedMs: 1_700_000_000_000 });
+    await updateModifiedMs({ path: nestedDirPath, modifiedMs: 1_600_000_000_000 });
+    await updateModifiedMs({ path: treeDirPath, modifiedMs: 1_600_000_000_000 });
+
+    const measurement = await loadMeasurementOrThrow({
+      path: treeDirPath,
+      deadlineMs: Date.now() + 60_000,
+    });
+
+    expect(measurement.latestModifiedMs).toBe(1_700_000_000_000);
+    expect(measurement.holdsOtherVolume).toBe(false);
   });
 
   test('counts a hard link once', async () => {
