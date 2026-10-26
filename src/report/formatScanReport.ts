@@ -1,9 +1,24 @@
+import type { Risk } from '../catalog/catalog.js';
 import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
 import type { ScanIssue } from '../scan/issue.js';
 import type { ScanReport, SkippedItem } from '../scan/runScan.js';
 import { formatSizeText } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
+
+/** A ranked candidate as a person sees it: every text is safe to show. */
+export type CandidateView = {
+  number: number;
+  title: string;
+  path: string;
+  risk: Risk;
+  explanation: string;
+  regeneration: string;
+  sizeText: string;
+};
+
+/** Who needs Full Disk Access: the terminal that runs the CLI, or the app. */
+export type FullDiskAccessHolder = 'terminal' | 'app';
 
 const skipReasonTexts: Record<SkipReason, string> = {
   belowSizeThreshold: 'too small to matter',
@@ -29,21 +44,22 @@ const issueReasonTexts: Record<ScanIssue['reason'], string> = {
   walkStopped: 'search stopped at its time limit',
 };
 
-const fullDiskAccessLine =
-  'Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
+const fullDiskAccessHolderTexts: Record<FullDiskAccessHolder, string> = {
+  terminal: 'your terminal',
+  app: 'this app',
+};
 
 export function formatScanReport(params: { report: ScanReport }): string[] {
   return [
     ...formatCandidateLines({ candidates: params.report.candidates }),
-    ...formatAdviceBlock({ advice: params.report.advice }),
-    ...formatSkippedBlock({ skipped: params.report.skipped }),
-    ...formatIssueBlock({ issues: params.report.issues }),
+    ...formatScanReportNotes({ report: params.report, fullDiskAccessHolder: 'terminal' }),
   ];
 }
 
-function formatCandidateLines(params: { candidates: Candidate[] }): string[] {
+/** "Nothing to delete was found." or the count and total size of the candidates. */
+export function formatCandidateSummary(params: { candidates: Candidate[] }): string {
   if (params.candidates.length === 0) {
-    return ['Nothing to delete was found.'];
+    return 'Nothing to delete was found.';
   }
 
   const totalSizeText = formatSizeText({
@@ -56,21 +72,61 @@ function formatCandidateLines(params: { candidates: Candidate[] }): string[] {
     plural: 'items',
   });
 
+  return `Found ${itemCountText}, ${totalSizeText} in total`;
+}
+
+export function formatCandidateView(params: {
+  candidate: Candidate;
+  number: number;
+}): CandidateView {
+  return {
+    number: params.number,
+    title: formatDisplayText({ text: params.candidate.title }),
+    path: formatDisplayText({ text: params.candidate.path }),
+    risk: params.candidate.risk,
+    explanation: params.candidate.explanation,
+    regeneration: params.candidate.regeneration,
+    sizeText: formatSizeText(params.candidate),
+  };
+}
+
+/** The blocks after the candidates: the advice, the skipped items, and the unreadable places. */
+export function formatScanReportNotes(params: {
+  report: ScanReport;
+  fullDiskAccessHolder: FullDiskAccessHolder;
+}): string[] {
   return [
-    `Found ${itemCountText}, ${totalSizeText} in total:`,
+    ...formatAdviceBlock({ advice: params.report.advice }),
+    ...formatSkippedBlock({ skipped: params.report.skipped }),
+    ...formatIssueBlock({
+      issues: params.report.issues,
+      fullDiskAccessHolder: params.fullDiskAccessHolder,
+    }),
+  ];
+}
+
+function formatCandidateLines(params: { candidates: Candidate[] }): string[] {
+  const summary = formatCandidateSummary({ candidates: params.candidates });
+
+  if (params.candidates.length === 0) {
+    return [summary];
+  }
+
+  return [
+    `${summary}:`,
     ...params.candidates.flatMap((candidate, index) =>
-      formatCandidateItemLines({ candidate: candidate, number: index + 1 }),
+      formatCandidateItemLines({
+        view: formatCandidateView({ candidate: candidate, number: index + 1 }),
+      }),
     ),
   ];
 }
 
-function formatCandidateItemLines(params: { candidate: Candidate; number: number }): string[] {
-  const sizeText = formatSizeText(params.candidate);
-
+function formatCandidateItemLines(params: { view: CandidateView }): string[] {
   return [
-    `${params.number}. ${sizeText} [${params.candidate.risk}] ${formatDisplayText({ text: params.candidate.title })}`,
-    `   ${formatDisplayText({ text: params.candidate.path })}`,
-    `   ${params.candidate.explanation} ${params.candidate.regeneration}`,
+    `${params.view.number}. ${params.view.sizeText} [${params.view.risk}] ${params.view.title}`,
+    `   ${params.view.path}`,
+    `   ${params.view.explanation} ${params.view.regeneration}`,
   ];
 }
 
@@ -122,7 +178,10 @@ function formatSkipReasonLines(params: { skipped: SkippedItem[] }): string[] {
   return lines;
 }
 
-function formatIssueBlock(params: { issues: ScanIssue[] }): string[] {
+function formatIssueBlock(params: {
+  issues: ScanIssue[];
+  fullDiskAccessHolder: FullDiskAccessHolder;
+}): string[] {
   if (params.issues.length === 0) {
     return [];
   }
@@ -135,7 +194,9 @@ function formatIssueBlock(params: { issues: ScanIssue[] }): string[] {
   const hasPermissionDenied = params.issues.some((issue) => issue.reason === 'permissionDenied');
 
   if (hasPermissionDenied) {
-    lines.push(fullDiskAccessLine);
+    lines.push(
+      `Give ${fullDiskAccessHolderTexts[params.fullDiskAccessHolder]} Full Disk Access in System Settings > Privacy & Security to scan protected folders.`,
+    );
   }
 
   return lines;

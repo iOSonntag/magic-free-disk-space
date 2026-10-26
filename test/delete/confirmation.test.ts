@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { isDeleteConfirmation } from '../../src/cli/confirmation.js';
+import { isDeleteConfirmation } from '../../src/delete/confirmation.js';
 
 describe('isDeleteConfirmation', () => {
   test('accepts the confirmation word', () => {
