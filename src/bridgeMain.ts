@@ -5,7 +5,6 @@ import { loadEnvironment } from './environment/loadEnvironment.js';
 
 const DONE_EXIT_CODE = 0;
 
-/** The code of an unsafe environment, as the CLI uses it. */
 const CANNOT_START_EXIT_CODE = 2;
 
 async function main(): Promise<number> {

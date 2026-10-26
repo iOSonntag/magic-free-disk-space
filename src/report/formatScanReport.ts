@@ -18,7 +18,7 @@ export type CandidateView = {
 };
 
 /** Who needs Full Disk Access: the terminal that runs the CLI, or the app. */
-export type FullDiskAccessHolder = 'terminal' | 'app';
+type FullDiskAccessHolder = 'terminal' | 'app';
 
 const skipReasonTexts: Record<SkipReason, string> = {
   belowSizeThreshold: 'too small to matter',

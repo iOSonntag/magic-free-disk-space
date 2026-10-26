@@ -7,7 +7,7 @@ import type { JournalFailure } from './deletionJournal.js';
 import { createDeletionJournal } from './deletionJournal.js';
 import type { RemovalPlan } from './planRemoval.js';
 
-export type ApprovedRemoval = {
+type ApprovedRemoval = {
   run: RemovalRun;
   logPath: string;
 };
@@ -19,10 +19,11 @@ export type ApprovedRemoval = {
 export async function deleteApprovedCandidates(params: {
   plan: RemovalPlan;
   deletionLogPath: string;
+  clock: () => number;
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
   const journal = await createDeletionJournal({
     logPath: params.deletionLogPath,
-    nowMs: Date.now(),
+    nowMs: params.clock(),
   });
 
   if (journal.kind === 'failed') {
@@ -36,7 +37,7 @@ export async function deleteApprovedCandidates(params: {
     candidates: params.plan.approved,
     journal: journal.value,
     processCommands: processCommands.kind === 'succeeded' ? processCommands.value : null,
-    clock: () => Date.now(),
+    clock: params.clock,
   });
 
   return { kind: 'succeeded', value: { run: run, logPath: journal.value.logPath } };

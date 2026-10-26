@@ -1,22 +1,19 @@
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { parseBridgeRequest } from '../../src/bridge/parseBridgeRequest.js';
 
 describe('parseBridgeRequest', () => {
-  test('parses the three requests', () => {
-    expect(parseBridgeRequest({ line: '{"kind":"scan"}' })).toEqual({
-      kind: 'succeeded',
-      value: { kind: 'scan' },
-    });
-    expect(parseBridgeRequest({ line: '{"kind":"plan","numbers":[1,3]}' })).toEqual({
-      kind: 'succeeded',
-      value: { kind: 'plan', numbers: [1, 3] },
-    });
-    expect(
-      parseBridgeRequest({ line: '{"kind":"delete","planId":2,"confirmation":"DELETE"}' }),
-    ).toEqual({
-      kind: 'succeeded',
-      value: { kind: 'delete', planId: 2, confirmation: 'DELETE' },
-    });
+  // The app's test builds its requests against the same fixture.
+  test('parses the three requests of the protocol fixture', async () => {
+    const fixtureText = await readFile(join(import.meta.dir, 'bridgeRequests.jsonl'), 'utf8');
+    const lines = fixtureText.split('\n').filter((line) => line !== '');
+
+    expect(lines.map((line) => parseBridgeRequest({ line: line }))).toEqual([
+      { kind: 'succeeded', value: { kind: 'scan' } },
+      { kind: 'succeeded', value: { kind: 'plan', numbers: [1, 3] } },
+      { kind: 'succeeded', value: { kind: 'delete', planId: 2, confirmation: 'DELETE' } },
+    ]);
   });
 
   test('fails on a line that is no JSON', () => {

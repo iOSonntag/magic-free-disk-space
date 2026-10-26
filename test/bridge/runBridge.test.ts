@@ -53,7 +53,6 @@ const SCAN_LINE = '{"kind":"scan"}';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
-const producedEvents: BridgeEvent[] = [];
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
@@ -92,6 +91,16 @@ async function listFixturePaths(): Promise<string[]> {
     .toSorted();
 }
 
+/** The time of every entry of the deletion log, in the order written. */
+async function loadJournalTimes(): Promise<unknown[]> {
+  const logText = await readFile(environment.deletionLogPath, 'utf8');
+
+  return logText
+    .split('\n')
+    .filter((line) => line !== '')
+    .map((line) => JSON.parse(line).atMs);
+}
+
 async function runBridgeWithLines(params: {
   lines: string[];
   nowMs?: number;
@@ -113,8 +122,6 @@ async function runBridgeWithLines(params: {
     loadEnvironment: async () => environmentResult,
     clock: () => params.nowMs ?? NOW_MS,
   });
-
-  producedEvents.push(...events);
 
   return { end: end, events: events };
 }
@@ -232,6 +239,30 @@ describe('runBridge', () => {
       'home/Library/Caches/AppCache',
       'home/Library/Caches/AppCache/blob.bin',
     ]);
+    expect(await loadJournalTimes()).toEqual([NOW_MS, NOW_MS, NOW_MS]);
+  });
+
+  test('a failed plan drops the plan before it, so its id deletes nothing', async () => {
+    const before = await listFixturePaths();
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildPlanLine({ numbers: [1] }),
+        buildPlanLine({ numbers: [1, 99] }),
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+      ],
+    });
+
+    expect(findAnswers({ events: events }).slice(1)).toEqual([
+      expect.objectContaining({ kind: 'planned', planId: 1 }),
+      { kind: 'failed', message: 'No item has the number 99.', isScanDropped: false },
+      {
+        kind: 'failed',
+        message: 'No deletion waits for its confirmation; review it again.',
+        isScanDropped: false,
+      },
+    ]);
+    expect(await listFixturePaths()).toEqual(before);
   });
 
   test('deletes the latest plan only: an older plan id deletes nothing', async () => {
@@ -374,8 +405,19 @@ describe('runBridge', () => {
     expect(await listFixturePaths()).toEqual(before);
   });
 
-  // Runs last: it reads the events every test above produced.
   test('every event matches the protocol fixture the app is tested with', async () => {
-    await expectEventsMatchProtocolFixture({ events: producedEvents });
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildPlanLine({ numbers: [3] }),
+        buildPlanLine({ numbers: [1] }),
+        buildDeleteLine({ planId: 1, confirmation: 'no' }),
+        buildPlanLine({ numbers: [99] }),
+        buildPlanLine({ numbers: [1] }),
+        buildDeleteLine({ planId: 2, confirmation: 'DELETE' }),
+      ],
+    });
+
+    await expectEventsMatchProtocolFixture({ events: events });
   });
 });

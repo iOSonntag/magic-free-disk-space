@@ -3,20 +3,20 @@ import { isDeleteConfirmation } from '../../src/delete/confirmation.js';
 
 describe('isDeleteConfirmation', () => {
   test('accepts the confirmation word', () => {
-    expect(isDeleteConfirmation({ line: 'DELETE' })).toBe(true);
+    expect(isDeleteConfirmation({ confirmation: 'DELETE' })).toBe(true);
   });
 
   test('ignores the whitespace around the word, including a carriage return', () => {
-    expect(isDeleteConfirmation({ line: '  DELETE \r' })).toBe(true);
+    expect(isDeleteConfirmation({ confirmation: '  DELETE \r' })).toBe(true);
   });
 
   test('is case-sensitive', () => {
-    expect(isDeleteConfirmation({ line: 'delete' })).toBe(false);
+    expect(isDeleteConfirmation({ confirmation: 'delete' })).toBe(false);
   });
 
   test('rejects any other text', () => {
-    expect(isDeleteConfirmation({ line: 'DELETE it' })).toBe(false);
-    expect(isDeleteConfirmation({ line: 'DELETED' })).toBe(false);
-    expect(isDeleteConfirmation({ line: '' })).toBe(false);
+    expect(isDeleteConfirmation({ confirmation: 'DELETE it' })).toBe(false);
+    expect(isDeleteConfirmation({ confirmation: 'DELETED' })).toBe(false);
+    expect(isDeleteConfirmation({ confirmation: '' })).toBe(false);
   });
 });

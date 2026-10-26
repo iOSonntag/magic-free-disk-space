@@ -4,5 +4,5 @@
 {"kind":"nothingApproved","lines":["Nothing of the selection can be deleted.","","Refused 1 selected item:","- 4. /Users/me/Library/Keychains: marked never-delete"]}
 {"kind":"deleted","lines":["- deleted: /Users/me/Library/Caches/ToolCache","Freed about 6.0 MiB in 1 item.","The deletion log is at /Users/me/Library/Logs/magic-free-disk-space/deletions.jsonl"]}
 {"kind":"cancelled"}
-{"kind":"failed","message":"No plan with this number is waiting; review the deletion again.","isScanDropped":false}
+{"kind":"failed","message":"This is not the deletion that waits for its confirmation; review it again.","isScanDropped":false}
 {"kind":"failed","message":"The scan is older than an hour; scan again.","isScanDropped":true}

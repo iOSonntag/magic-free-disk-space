@@ -22,32 +22,31 @@ import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
-import type { BridgeRequest } from './parseBridgeRequest.js';
 import { parseBridgeRequest } from './parseBridgeRequest.js';
 
-export type BridgeEventProgress = { kind: 'progress'; message: string };
+type BridgeEventProgress = { kind: 'progress'; message: string };
 
-export type BridgeEventScanned = {
+type BridgeEventScanned = {
   kind: 'scanned';
   summaryText: string;
   candidates: CandidateView[];
   notesLines: string[];
 };
 
-export type BridgeEventPlanned = {
+type BridgeEventPlanned = {
   kind: 'planned';
   planId: number;
   lines: string[];
   confirmationWord: string;
 };
 
-export type BridgeEventNothingApproved = { kind: 'nothingApproved'; lines: string[] };
+type BridgeEventNothingApproved = { kind: 'nothingApproved'; lines: string[] };
 
-export type BridgeEventDeleted = { kind: 'deleted'; lines: string[] };
+type BridgeEventDeleted = { kind: 'deleted'; lines: string[] };
 
-export type BridgeEventCancelled = { kind: 'cancelled' };
+type BridgeEventCancelled = { kind: 'cancelled' };
 
-export type BridgeEventFailed = {
+type BridgeEventFailed = {
   kind: 'failed';
   message: string;
   /** True when the bridge holds no scan anymore, so the next request must be a scan. */
@@ -55,7 +54,7 @@ export type BridgeEventFailed = {
 };
 
 /** The final event of a request; progress events may come before it. */
-export type BridgeAnswer =
+type BridgeAnswer =
   | BridgeEventScanned
   | BridgeEventPlanned
   | BridgeEventNothingApproved
@@ -109,12 +108,7 @@ const AWAITING_SCAN: BridgeStateAwaitingScan = { kind: 'awaitingScan' };
  * failed event, when the environment is unsafe. Deletes only the plan the app confirms with the
  * confirmation word, and only within an hour of its scan.
  */
-export async function runBridge(params: {
-  io: BridgeIo;
-  catalogEntries: CatalogEntry[];
-  loadEnvironment: () => Promise<Result<Environment, EnvironmentFailure>>;
-  clock: () => number;
-}): Promise<BridgeEnd> {
+export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
   const startEnvironment = await params.loadEnvironment();
 
   if (startEnvironment.kind === 'failed') {
@@ -161,47 +155,31 @@ async function answerRequestLine(params: {
   state: BridgeState;
   nextPlanId: number;
 }): Promise<BridgeStep> {
-  const request = parseBridgeRequest({ line: params.line });
+  const parsed = parseBridgeRequest({ line: params.line });
 
-  if (request.kind === 'failed') {
+  if (parsed.kind === 'failed') {
     return buildFailedStep({
-      message: `The app sent a request the bridge does not know (${request.failure.reason}).`,
+      message: `The app sent a request the bridge does not know (${parsed.failure.reason}).`,
       nextState: params.state,
     });
   }
 
-  return answerRequest({
-    context: params.context,
-    request: request.value,
-    state: params.state,
-    nextPlanId: params.nextPlanId,
-  });
-}
-
-async function answerRequest(params: {
-  context: BridgeContext;
-  request: BridgeRequest;
-  state: BridgeState;
-  nextPlanId: number;
-}): Promise<BridgeStep> {
-  const request = params.request;
-
-  switch (request.kind) {
+  switch (parsed.value.kind) {
     case 'scan':
       return answerScan({ context: params.context });
     case 'plan':
       return answerPlan({
         context: params.context,
         state: params.state,
-        numbers: request.numbers,
+        numbers: parsed.value.numbers,
         planId: params.nextPlanId,
       });
     case 'delete':
       return answerDelete({
         context: params.context,
         state: params.state,
-        planId: request.planId,
-        confirmation: request.confirmation,
+        planId: parsed.value.planId,
+        confirmation: parsed.value.confirmation,
       });
   }
 }
@@ -262,19 +240,17 @@ function answerPlan(params: {
     environment: params.state.environment,
   });
 
+  // Every plan request replaces the held plan, so a failed one leaves none to confirm.
+  const scanned = toScannedState({ state: params.state });
+
   if (planned.kind === 'failed') {
     return buildFailedStep({
       message: `No item has the number ${planned.failure.number}.`,
-      nextState: params.state,
+      nextState: scanned,
     });
   }
 
   const lines = formatRemovalPlan({ plan: planned.value });
-  const scanned: BridgeStateScanned = {
-    kind: 'scanned',
-    report: params.state.report,
-    environment: params.state.environment,
-  };
 
   if (planned.value.approved.length === 0) {
     return { answer: { kind: 'nothingApproved', lines: lines }, nextState: scanned };
@@ -321,19 +297,16 @@ async function answerDelete(params: {
     });
   }
 
-  const scanned: BridgeStateScanned = {
-    kind: 'scanned',
-    report: params.state.report,
-    environment: params.state.environment,
-  };
+  const scanned = toScannedState({ state: params.state });
 
-  if (!isDeleteConfirmation({ line: params.confirmation })) {
+  if (!isDeleteConfirmation({ confirmation: params.confirmation })) {
     return { answer: { kind: 'cancelled' }, nextState: scanned };
   }
 
   const removal = await deleteApprovedCandidates({
     plan: params.state.plan,
     deletionLogPath: params.state.environment.deletionLogPath,
+    clock: params.context.clock,
   });
 
   if (removal.kind === 'failed') {
@@ -352,6 +325,17 @@ async function answerDelete(params: {
       ],
     },
     nextState: AWAITING_SCAN,
+  };
+}
+
+/** The held scan without any plan. */
+function toScannedState(params: {
+  state: BridgeStateScanned | BridgeStatePlanned;
+}): BridgeStateScanned {
+  return {
+    kind: 'scanned',
+    report: params.state.report,
+    environment: params.state.environment,
   };
 }
 

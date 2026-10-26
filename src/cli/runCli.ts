@@ -171,7 +171,7 @@ async function runInteractiveDeletion(params: {
     `\nThis cannot be undone: the items do not go to the Trash.\nType ${DELETE_CONFIRMATION_WORD} to delete them permanently, or anything else to cancel.\n> `,
   );
 
-  if (confirmation === null || !isDeleteConfirmation({ line: confirmation })) {
+  if (confirmation === null || !isDeleteConfirmation({ confirmation: confirmation })) {
     params.io.writeOut('Cancelled. Nothing was deleted.\n');
 
     return EXIT_CODES.done;
@@ -180,6 +180,7 @@ async function runInteractiveDeletion(params: {
   const removal = await deleteApprovedCandidates({
     plan: plan,
     deletionLogPath: params.environment.deletionLogPath,
+    clock: () => Date.now(),
   });
 
   if (removal.kind === 'failed') {

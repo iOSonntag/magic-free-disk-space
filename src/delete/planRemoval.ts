@@ -15,7 +15,7 @@ export type RemovalPlan = {
   refused: RefusedRemoval[];
 };
 
-export type PlanFailure = { reason: 'outOfRange'; number: number };
+type PlanFailure = { reason: 'outOfRange'; number: number };
 
 /** Fails on the first selected number that names no item of `ranked`. */
 export function planRemoval(params: {

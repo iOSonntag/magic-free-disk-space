@@ -1,14 +1,14 @@
 import type { Result } from '../result.js';
 
-export type BridgeRequestScan = { kind: 'scan' };
+type BridgeRequestScan = { kind: 'scan' };
 
-export type BridgeRequestPlan = { kind: 'plan'; numbers: number[] };
+type BridgeRequestPlan = { kind: 'plan'; numbers: number[] };
 
-export type BridgeRequestDelete = { kind: 'delete'; planId: number; confirmation: string };
+type BridgeRequestDelete = { kind: 'delete'; planId: number; confirmation: string };
 
-export type BridgeRequest = BridgeRequestScan | BridgeRequestPlan | BridgeRequestDelete;
+type BridgeRequest = BridgeRequestScan | BridgeRequestPlan | BridgeRequestDelete;
 
-export type BridgeRequestFailure = { reason: 'invalidJson' | 'unknownRequest' };
+type BridgeRequestFailure = { reason: 'invalidJson' | 'unknownRequest' };
 
 /** Parses one line the app sent; any shape but the three requests fails. */
 export function parseBridgeRequest(params: {
@@ -66,8 +66,5 @@ function toBridgeRequest(params: { value: unknown }): BridgeRequest | null {
 }
 
 function isIntegerArray(value: unknown): value is number[] {
-  return (
-    Array.isArray(value) &&
-    value.every((element) => typeof element === 'number' && Number.isSafeInteger(element))
-  );
+  return Array.isArray(value) && value.every((element) => Number.isSafeInteger(element));
 }
