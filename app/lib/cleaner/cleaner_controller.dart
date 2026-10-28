@@ -29,28 +29,32 @@ final class ScanningState extends CleanerState {
   final String progressMessage;
 }
 
-final class ScannedState extends CleanerState {
-  const ScannedState({
-    required this.scan,
-    required this.selectedNumbers,
-    this.notice,
-  });
+/// A state that holds a scan and the numbers selected of it.
+sealed class ListedState extends CleanerState {
+  const ListedState({required this.scan, required this.selectedNumbers});
 
   final ScannedEvent scan;
   final Set<int> selectedNumbers;
+}
+
+final class ScannedState extends ListedState {
+  const ScannedState({
+    required super.scan,
+    required super.selectedNumbers,
+    this.notice,
+  });
+
   final String? notice;
 }
 
 /// The plan of the selection waits for its confirmation word.
-final class ConfirmingState extends CleanerState {
+final class ConfirmingState extends ListedState {
   const ConfirmingState({
-    required this.scan,
-    required this.selectedNumbers,
+    required super.scan,
+    required super.selectedNumbers,
     required this.plan,
   });
 
-  final ScannedEvent scan;
-  final Set<int> selectedNumbers;
   final PlannedEvent plan;
 }
 
@@ -137,19 +141,9 @@ class CleanerController extends ChangeNotifier {
           ),
         );
       case NothingApprovedEvent():
-        _setState(
-          ScannedState(
-            scan: current.scan,
-            selectedNumbers: current.selectedNumbers,
-            notice: answer.lines.join('\n'),
-          ),
-        );
+        _showList(current, notice: answer.lines.join('\n'));
       case FailedEvent():
-        _setFailedAnswer(
-          answer,
-          scan: current.scan,
-          selectedNumbers: current.selectedNumbers,
-        );
+        _setFailedAnswer(answer, current);
     }
   }
 
@@ -158,12 +152,7 @@ class CleanerController extends ChangeNotifier {
     if (current is! ConfirmingState) {
       return;
     }
-    _setState(
-      ScannedState(
-        scan: current.scan,
-        selectedNumbers: current.selectedNumbers,
-      ),
-    );
+    _showList(current);
   }
 
   Future<void> confirmDeletion(String confirmation) async {
@@ -184,19 +173,9 @@ class CleanerController extends ChangeNotifier {
       case DeletedEvent():
         _setState(DeletedState(lines: answer.lines));
       case CancelledEvent():
-        _setState(
-          ScannedState(
-            scan: current.scan,
-            selectedNumbers: current.selectedNumbers,
-            notice: answer.message,
-          ),
-        );
+        _showList(current, notice: answer.message);
       case FailedEvent():
-        _setFailedAnswer(
-          answer,
-          scan: current.scan,
-          selectedNumbers: current.selectedNumbers,
-        );
+        _setFailedAnswer(answer, current);
     }
   }
 
@@ -224,20 +203,21 @@ class CleanerController extends ChangeNotifier {
     }
   }
 
-  void _setFailedAnswer(
-    FailedEvent answer, {
-    required ScannedEvent scan,
-    required Set<int> selectedNumbers,
-  }) {
+  void _setFailedAnswer(FailedEvent answer, ListedState listed) {
     if (answer.isScanDropped) {
       _setState(IdleState(notice: answer.message));
       return;
     }
+    _showList(listed, notice: answer.message);
+  }
+
+  /// Shows the list of [listed] with its selection and no plan.
+  void _showList(ListedState listed, {String? notice}) {
     _setState(
       ScannedState(
-        scan: scan,
-        selectedNumbers: selectedNumbers,
-        notice: answer.message,
+        scan: listed.scan,
+        selectedNumbers: listed.selectedNumbers,
+        notice: notice,
       ),
     );
   }
