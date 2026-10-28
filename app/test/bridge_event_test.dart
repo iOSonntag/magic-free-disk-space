@@ -35,8 +35,8 @@ void main() {
     final PlannedEvent planned = events.whereType<PlannedEvent>().single;
     expect(planned.planId, 1);
     expect(
-      planned.warningLines.last,
-      'Type DELETE to delete them permanently.',
+      planned.warningLines,
+      contains('Type DELETE to delete them permanently.'),
     );
     expect(events.whereType<ProgressEvent>().single.message, isNotEmpty);
     expect(events.whereType<NothingApprovedEvent>().single.lines, isNotEmpty);

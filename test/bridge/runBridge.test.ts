@@ -238,6 +238,7 @@ describe('runBridge', () => {
       warningLines: [
         'This cannot be undone: the items do not go to the Trash.',
         'Type DELETE to delete them permanently.',
+        'Anything else cancels.',
       ],
     });
     expect(answers[3]).toMatchObject({ isScanDropped: true });

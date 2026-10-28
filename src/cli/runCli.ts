@@ -172,7 +172,7 @@ async function runInteractiveDeletion(params: {
   }
 
   const warningText = formatDeletionWarningLines().join('\n');
-  const confirmation = await params.io.readLine(`\n${warningText}\nAnything else cancels.\n> `);
+  const confirmation = await params.io.readLine(`\n${warningText}\n> `);
 
   if (confirmation === null || !isDeleteConfirmation({ confirmation: confirmation })) {
     params.io.writeOut(`${CANCELLED_TEXT}\n`);
