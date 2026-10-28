@@ -97,6 +97,9 @@ class ProcessBridgeClient implements CleanerBridge {
     if (answer case final TAnswer typedAnswer) {
       return typedAnswer;
     }
+    // A bridge that answers another request holds a state the app no longer
+    // knows, so the next request goes to a new bridge.
+    dispose();
     throw FormatException(
       'The bridge answered the ${request['kind']} request with ${answer.runtimeType}.',
     );

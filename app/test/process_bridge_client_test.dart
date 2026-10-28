@@ -88,10 +88,14 @@ done
     expect(answer, isA<NothingApprovedEvent>());
   });
 
-  test('an answer of another request fails with a FormatException', () async {
+  test('an answer of another request fails with a FormatException, and the next request goes to a new bridge', () async {
     client = await createClientOverScript('''
 while read -r request; do
-  echo '{"kind":"cancelled","message":"Cancelled. Nothing was deleted."}'
+  if [ "\$start" = 1 ]; then
+    echo '{"kind":"cancelled","message":"Cancelled. Nothing was deleted."}'
+  else
+    echo '${buildScannedLine('fresh')}'
+  fi
 done
 ''');
 
@@ -99,6 +103,9 @@ done
       client.scan(onProgress: (String _) {}),
       throwsFormatException,
     );
+    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+
+    expect((answer as ScannedEvent).summaryText, 'fresh');
   });
 
   test('passes the progress on and answers with the final event', () async {
