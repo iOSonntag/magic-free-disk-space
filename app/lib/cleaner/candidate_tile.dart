@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
+import 'text_styles.dart';
 
 class CandidateTile extends StatelessWidget {
   const CandidateTile({
@@ -45,10 +46,7 @@ class CandidateTile extends StatelessWidget {
                       _RiskChip(risk: candidate.risk),
                     ],
                   ),
-                  SelectableText(
-                    candidate.path,
-                    style: textTheme.bodySmall?.copyWith(fontFamily: 'Menlo'),
-                  ),
+                  SelectableText(candidate.path, style: monospaceStyle),
                   const SizedBox(height: 4),
                   Text(candidate.explanation, style: detailStyle),
                   Text(candidate.regeneration, style: detailStyle),

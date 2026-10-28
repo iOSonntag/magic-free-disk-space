@@ -1,4 +1,6 @@
 /// The requests the bridge reads, each sent as one line of JSON.
+library;
+
 Map<String, Object> buildScanRequest() {
   return {'kind': 'scan'};
 }

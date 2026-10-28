@@ -1,5 +1,5 @@
 name: magic_free_disk_space
-description: "A new Flutter project."
+description: "A simple Mac app over the magic-free-disk-space cleaner."
 publish_to: 'none'
 version: 0.1.0+1
 

@@ -233,7 +233,13 @@ describe('runBridge', () => {
       'deleted',
       'failed',
     ]);
-    expect(answers[1]).toMatchObject({ planId: 1, confirmationWord: 'DELETE' });
+    expect(answers[1]).toMatchObject({
+      planId: 1,
+      warningLines: [
+        'This cannot be undone: the items do not go to the Trash.',
+        'Type DELETE to delete them permanently.',
+      ],
+    });
     expect(answers[3]).toMatchObject({ isScanDropped: true });
     expect(before.filter((path) => !after.includes(path))).toEqual([
       'home/Library/Caches/AppCache',
@@ -297,7 +303,7 @@ describe('runBridge', () => {
       });
 
       expect(findAnswers({ events: events }).slice(2)).toEqual([
-        { kind: 'cancelled' },
+        { kind: 'cancelled', message: 'Cancelled. Nothing was deleted.' },
         {
           kind: 'failed',
           message: 'No deletion waits for its confirmation; review it again.',

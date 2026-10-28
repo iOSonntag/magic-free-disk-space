@@ -30,31 +30,36 @@ const ScannedEvent scannedEvent = ScannedEvent(
 const PlannedEvent plannedEvent = PlannedEvent(
   planId: 7,
   lines: ['- 6.0 MiB /Users/me/Library/Caches/ToolCache'],
-  confirmationWord: 'DELETE',
+  warningLines: ['Type DELETE to delete them permanently.'],
 );
 
 final class FakeCleanerBridge implements CleanerBridge {
-  BridgeEvent planAnswer = plannedEvent;
-  BridgeEvent deleteAnswer = const DeletedEvent(lines: ['Freed 6.0 MiB.']);
+  PlanAnswer planAnswer = plannedEvent;
+  DeleteAnswer deleteAnswer = const DeletedEvent(lines: ['Freed 6.0 MiB.']);
+  Object? scanError;
   List<int>? plannedNumbers;
   ({int planId, String confirmation})? deleteRequest;
 
   @override
-  Future<BridgeEvent> scan({
+  Future<ScanAnswer> scan({
     required void Function(String message) onProgress,
   }) async {
+    final Object? error = scanError;
+    if (error != null) {
+      throw error;
+    }
     onProgress('Measuring apps…');
     return scannedEvent;
   }
 
   @override
-  Future<BridgeEvent> plan(List<int> numbers) async {
+  Future<PlanAnswer> plan(List<int> numbers) async {
     plannedNumbers = numbers;
     return planAnswer;
   }
 
   @override
-  Future<BridgeEvent> delete({
+  Future<DeleteAnswer> delete({
     required int planId,
     required String confirmation,
   }) async {
@@ -72,10 +77,9 @@ void main() {
     controller = CleanerController(bridge: bridge);
   });
 
-  Future<ScannedState> scanAndSelectSafe() async {
+  Future<void> scanAndSelectSafe() async {
     await controller.scan();
-    controller.selectSafe();
-    return controller.state as ScannedState;
+    controller.selectSafeCandidates();
   }
 
   test('a scan reaches the scanned state through its progress', () async {
@@ -96,38 +100,72 @@ void main() {
   });
 
   test('select safe selects the numbers of safe risk only', () async {
-    final ScannedState state = await scanAndSelectSafe();
+    await scanAndSelectSafe();
 
-    expect(state.selectedNumbers, {1});
+    expect((controller.state as ScannedState).selectedNumbers, {1});
   });
 
-  test('a plan and a delete reach the deleted state', () async {
+  test('a plan waits for its confirmation, and the word deletes the plan it showed', () async {
     await scanAndSelectSafe();
-    controller.toggle(2);
+    controller.toggleCandidate(2);
 
-    final BridgeEvent? answer = await controller.requestPlan();
-    expect(answer, same(plannedEvent));
+    await controller.requestPlan();
+
     expect(bridge.plannedNumbers, [1, 2]);
+    expect((controller.state as ConfirmingState).plan, same(plannedEvent));
 
-    await controller.delete(planId: 7, confirmation: 'DELETE');
+    await controller.confirmDeletion('DELETE');
 
     expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
-    final DeletedState state = controller.state as DeletedState;
-    expect(state.lines, ['Freed 6.0 MiB.']);
+    expect((controller.state as DeletedState).lines, ['Freed 6.0 MiB.']);
   });
 
-  test('cancelled keeps the list with the notice', () async {
-    bridge.deleteAnswer = const CancelledEvent();
+  test(
+    'cancelling the confirmation sends nothing and keeps the selection',
+    () async {
+      await scanAndSelectSafe();
+      await controller.requestPlan();
+
+      controller.cancelConfirmation();
+
+      expect(bridge.deleteRequest, isNull);
+      final ScannedState state = controller.state as ScannedState;
+      expect(state.selectedNumbers, {1});
+      expect(state.notice, isNull);
+    },
+  );
+
+  test('cancelled keeps the list with the message of the bridge', () async {
+    bridge.deleteAnswer = const CancelledEvent(
+      message: 'Cancelled. Nothing was deleted.',
+    );
     await scanAndSelectSafe();
     await controller.requestPlan();
 
-    await controller.delete(planId: 7, confirmation: 'delete');
+    await controller.confirmDeletion('delete');
 
     final ScannedState state = controller.state as ScannedState;
     expect(state.scan, same(scannedEvent));
     expect(state.selectedNumbers, {1});
-    expect(state.notice, cancelledNotice);
+    expect(state.notice, 'Cancelled. Nothing was deleted.');
   });
+
+  test(
+    'nothing approved keeps the list with the lines of the bridge',
+    () async {
+      bridge.planAnswer = const NothingApprovedEvent(
+        lines: ['Nothing of the selection can be deleted.'],
+      );
+      await scanAndSelectSafe();
+
+      await controller.requestPlan();
+
+      expect(
+        (controller.state as ScannedState).notice,
+        'Nothing of the selection can be deleted.',
+      );
+    },
+  );
 
   test('failed with the scan dropped goes back to idle', () async {
     bridge.deleteAnswer = const FailedEvent(
@@ -137,23 +175,35 @@ void main() {
     await scanAndSelectSafe();
     await controller.requestPlan();
 
-    await controller.delete(planId: 7, confirmation: 'DELETE');
+    await controller.confirmDeletion('DELETE');
 
-    final IdleState state = controller.state as IdleState;
-    expect(state.notice, 'The scan is older than an hour; scan again.');
+    expect(
+      (controller.state as IdleState).notice,
+      'The scan is older than an hour; scan again.',
+    );
   });
 
   test('failed with the scan kept keeps the list with the message', () async {
     bridge.planAnswer = const FailedEvent(
-      message: 'No plan with this number is waiting.',
+      message: 'No item has the number 4.',
       isScanDropped: false,
     );
     await scanAndSelectSafe();
 
-    final BridgeEvent? answer = await controller.requestPlan();
+    await controller.requestPlan();
 
-    expect(answer, isNull);
     final ScannedState state = controller.state as ScannedState;
-    expect(state.notice, 'No plan with this number is waiting.');
+    expect(state.notice, 'No item has the number 4.');
+  });
+
+  test('a request that throws goes back to idle with the error', () async {
+    bridge.scanError = const FormatException('A bridge line is not an event.');
+
+    await controller.scan();
+
+    expect(
+      (controller.state as IdleState).notice,
+      contains('A bridge line is not an event.'),
+    );
   });
 }

@@ -34,11 +34,17 @@ void main() {
   test('parses the plan, the answers, and both failures', () {
     final PlannedEvent planned = events.whereType<PlannedEvent>().single;
     expect(planned.planId, 1);
-    expect(planned.confirmationWord, 'DELETE');
+    expect(
+      planned.warningLines.last,
+      'Type DELETE to delete them permanently.',
+    );
     expect(events.whereType<ProgressEvent>().single.message, isNotEmpty);
     expect(events.whereType<NothingApprovedEvent>().single.lines, isNotEmpty);
     expect(events.whereType<DeletedEvent>().single.lines, hasLength(3));
-    expect(events.whereType<CancelledEvent>(), hasLength(1));
+    expect(
+      events.whereType<CancelledEvent>().single.message,
+      'Cancelled. Nothing was deleted.',
+    );
     expect(
       events.whereType<FailedEvent>().map(
         (FailedEvent failed) => failed.isScanDropped,

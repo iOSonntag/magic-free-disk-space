@@ -1,6 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
-import 'bridge/bridge_client.dart';
+import 'bridge_process/process_bridge_client.dart';
 import 'cleaner/cleaner_controller.dart';
 import 'cleaner/cleaner_page.dart';
 
@@ -17,7 +19,7 @@ class MagicFreeDiskSpaceApp extends StatefulWidget {
 
 class _MagicFreeDiskSpaceAppState extends State<MagicFreeDiskSpaceApp> {
   final ProcessBridgeClient _bridgeClient = ProcessBridgeClient(
-    executablePath: buildBundledBridgePath(),
+    executablePath: buildBundledBridgePath(Platform.resolvedExecutable),
   );
   late final CleanerController _controller = CleanerController(
     bridge: _bridgeClient,

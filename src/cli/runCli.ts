@@ -1,9 +1,13 @@
 import type { CatalogEntry } from '../catalog/catalog.js';
-import { DELETE_CONFIRMATION_WORD, isDeleteConfirmation } from '../delete/confirmation.js';
+import { isDeleteConfirmation } from '../delete/confirmation.js';
 import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js';
 import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import {
+  CANCELLED_TEXT,
+  formatDeletionWarningLines,
+} from '../report/formatDeletionConfirmation.js';
 import {
   formatDeletionLogLine,
   formatJournalUnavailableText,
@@ -148,7 +152,7 @@ async function runInteractiveDeletion(params: {
   const selectedNumbers = await readSelection({ io: params.io, report: params.report });
 
   if (selectedNumbers === null || selectedNumbers.length === 0) {
-    params.io.writeOut('Cancelled. Nothing was deleted.\n');
+    params.io.writeOut(`${CANCELLED_TEXT}\n`);
 
     return EXIT_CODES.done;
   }
@@ -167,12 +171,11 @@ async function runInteractiveDeletion(params: {
     return EXIT_CODES.done;
   }
 
-  const confirmation = await params.io.readLine(
-    `\nThis cannot be undone: the items do not go to the Trash.\nType ${DELETE_CONFIRMATION_WORD} to delete them permanently, or anything else to cancel.\n> `,
-  );
+  const warningText = formatDeletionWarningLines().join('\n');
+  const confirmation = await params.io.readLine(`\n${warningText}\nAnything else cancels.\n> `);
 
   if (confirmation === null || !isDeleteConfirmation({ confirmation: confirmation })) {
-    params.io.writeOut('Cancelled. Nothing was deleted.\n');
+    params.io.writeOut(`${CANCELLED_TEXT}\n`);
 
     return EXIT_CODES.done;
   }

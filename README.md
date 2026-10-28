@@ -69,7 +69,7 @@ Building it needs Bun, [Flutter](https://flutter.dev), and Xcode; no developer c
 the app is signed for this Mac only.
 
 ```sh
-bun run app:install    # build the app and copy it to /Applications
+bun run app:install    # build the app and replace it in /Applications; quit the app first
 bun run app:run        # build and start a debug version
 ```
 
@@ -119,8 +119,8 @@ bun run app:run        # build and start a debug version
   to `~/Library/Logs/magic-free-disk-space/deletions.jsonl`, and the outcome after it. If the log
   cannot be written, the run stops.
 - **Interactive only.** The CLI deletes only in a terminal; a piped or scripted run is refused
-  before the scan. `--list` and `--dry-run` never delete. The app asks for `DELETE` in its own
-  dialog and deletes exactly the plan that dialog showed.
+  before the scan. `--list` and `--dry-run` never delete. The app asks for `DELETE` on its
+  confirmation screen and deletes exactly the plan that screen showed.
 
 ## Privacy
 

@@ -1,10 +1,14 @@
 import type { CatalogEntry } from '../catalog/catalog.js';
-import { DELETE_CONFIRMATION_WORD, isDeleteConfirmation } from '../delete/confirmation.js';
+import { isDeleteConfirmation } from '../delete/confirmation.js';
 import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js';
 import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../environment/loadEnvironment.js';
+import {
+  CANCELLED_TEXT,
+  formatDeletionWarningLines,
+} from '../report/formatDeletionConfirmation.js';
 import {
   formatDeletionLogLine,
   formatJournalUnavailableText,
@@ -37,14 +41,14 @@ type BridgeEventPlanned = {
   kind: 'planned';
   planId: number;
   lines: string[];
-  confirmationWord: string;
+  warningLines: string[];
 };
 
 type BridgeEventNothingApproved = { kind: 'nothingApproved'; lines: string[] };
 
 type BridgeEventDeleted = { kind: 'deleted'; lines: string[] };
 
-type BridgeEventCancelled = { kind: 'cancelled' };
+type BridgeEventCancelled = { kind: 'cancelled'; message: string };
 
 type BridgeEventFailed = {
   kind: 'failed';
@@ -261,7 +265,7 @@ function answerPlan(params: {
       kind: 'planned',
       planId: params.planId,
       lines: lines,
-      confirmationWord: DELETE_CONFIRMATION_WORD,
+      warningLines: formatDeletionWarningLines(),
     },
     nextState: {
       kind: 'planned',
@@ -300,7 +304,7 @@ async function answerDelete(params: {
   const scanned = toScannedState({ state: params.state });
 
   if (!isDeleteConfirmation({ confirmation: params.confirmation })) {
-    return { answer: { kind: 'cancelled' }, nextState: scanned };
+    return { answer: { kind: 'cancelled', message: CANCELLED_TEXT }, nextState: scanned };
   }
 
   const removal = await deleteApprovedCandidates({

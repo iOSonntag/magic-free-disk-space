@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../bridge/bridge_event.dart';
 import 'candidate_tile.dart';
 import 'cleaner_controller.dart';
-import 'deletion_dialog.dart';
+import 'confirmation_view.dart';
+import 'text_styles.dart';
 
 class CleanerPage extends StatelessWidget {
   const CleanerPage({super.key, required this.controller});
@@ -28,13 +29,14 @@ class CleanerPage extends StatelessWidget {
               state: state,
               controller: controller,
             ),
+            ConfirmingState() => ConfirmationView(
+              plan: state.plan,
+              onConfirm: controller.confirmDeletion,
+              onCancel: controller.cancelConfirmation,
+            ),
             DeletingState() => const _ProgressView(message: 'Deleting…'),
             DeletedState() => _DeletedView(
               lines: state.lines,
-              onScan: controller.scan,
-            ),
-            FailedState() => _IdleView(
-              notice: state.message,
               onScan: controller.scan,
             ),
           },
@@ -122,7 +124,7 @@ class _ScannedView extends StatelessWidget {
           spacing: 8,
           children: [
             OutlinedButton(
-              onPressed: controller.selectSafe,
+              onPressed: controller.selectSafeCandidates,
               child: const Text('Select safe'),
             ),
             OutlinedButton(
@@ -140,7 +142,7 @@ class _ScannedView extends StatelessWidget {
           CandidateTile(
             candidate: candidate,
             isSelected: state.selectedNumbers.contains(candidate.number),
-            onToggle: () => controller.toggle(candidate.number),
+            onToggle: () => controller.toggleCandidate(candidate.number),
           ),
         if (notesLines.isNotEmpty)
           ExpansionTile(
@@ -161,35 +163,6 @@ class _SelectionBar extends StatelessWidget {
   final ScannedState state;
   final CleanerController controller;
 
-  Future<void> _requestDeletion(BuildContext context) async {
-    final BridgeEvent? answer = await controller.requestPlan();
-    if (!context.mounted) {
-      return;
-    }
-    switch (answer) {
-      case PlannedEvent():
-        final String? confirmation = await showDialog<String>(
-          context: context,
-          builder: (BuildContext context) => DeletionDialog(plan: answer),
-        );
-        if (confirmation == null) {
-          return;
-        }
-        await controller.delete(
-          planId: answer.planId,
-          confirmation: confirmation,
-        );
-      case NothingApprovedEvent():
-        await showDialog<void>(
-          context: context,
-          builder: (BuildContext context) =>
-              NothingApprovedDialog(answer: answer),
-        );
-      default:
-        return;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final int selectedCount = state.selectedNumbers.length;
@@ -199,9 +172,7 @@ class _SelectionBar extends StatelessWidget {
           Text('$selectedCount selected'),
           const Spacer(),
           FilledButton(
-            onPressed: selectedCount > 0
-                ? () => _requestDeletion(context)
-                : null,
+            onPressed: selectedCount > 0 ? controller.requestPlan : null,
             child: const Text('Delete…'),
           ),
         ],

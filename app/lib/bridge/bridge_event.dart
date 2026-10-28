@@ -24,13 +24,22 @@ sealed class BridgeEvent {
   const BridgeEvent();
 }
 
+/// The final event that answers a scan request.
+sealed class ScanAnswer implements BridgeEvent {}
+
+/// The final event that answers a plan request.
+sealed class PlanAnswer implements BridgeEvent {}
+
+/// The final event that answers a delete request.
+sealed class DeleteAnswer implements BridgeEvent {}
+
 final class ProgressEvent extends BridgeEvent {
   const ProgressEvent({required this.message});
 
   final String message;
 }
 
-final class ScannedEvent extends BridgeEvent {
+final class ScannedEvent extends BridgeEvent implements ScanAnswer {
   const ScannedEvent({
     required this.summaryText,
     required this.candidates,
@@ -42,35 +51,38 @@ final class ScannedEvent extends BridgeEvent {
   final List<String> notesLines;
 }
 
-final class PlannedEvent extends BridgeEvent {
+final class PlannedEvent extends BridgeEvent implements PlanAnswer {
   const PlannedEvent({
     required this.planId,
     required this.lines,
-    required this.confirmationWord,
+    required this.warningLines,
   });
 
   final int planId;
   final List<String> lines;
-  final String confirmationWord;
+  final List<String> warningLines;
 }
 
-final class NothingApprovedEvent extends BridgeEvent {
+final class NothingApprovedEvent extends BridgeEvent implements PlanAnswer {
   const NothingApprovedEvent({required this.lines});
 
   final List<String> lines;
 }
 
-final class DeletedEvent extends BridgeEvent {
+final class DeletedEvent extends BridgeEvent implements DeleteAnswer {
   const DeletedEvent({required this.lines});
 
   final List<String> lines;
 }
 
-final class CancelledEvent extends BridgeEvent {
-  const CancelledEvent();
+final class CancelledEvent extends BridgeEvent implements DeleteAnswer {
+  const CancelledEvent({required this.message});
+
+  final String message;
 }
 
-final class FailedEvent extends BridgeEvent {
+final class FailedEvent extends BridgeEvent
+    implements ScanAnswer, PlanAnswer, DeleteAnswer {
   const FailedEvent({required this.message, required this.isScanDropped});
 
   final String message;
@@ -101,19 +113,21 @@ BridgeEvent parseBridgeEvent(Object? json) {
       'kind': 'planned',
       'planId': final int planId,
       'lines': final List<Object?> lines,
-      'confirmationWord': final String confirmationWord,
+      'warningLines': final List<Object?> warningLines,
     } =>
       PlannedEvent(
         planId: planId,
         lines: _parseLines(lines),
-        confirmationWord: confirmationWord,
+        warningLines: _parseLines(warningLines),
       ),
     {'kind': 'nothingApproved', 'lines': final List<Object?> lines} =>
       NothingApprovedEvent(lines: _parseLines(lines)),
     {'kind': 'deleted', 'lines': final List<Object?> lines} => DeletedEvent(
       lines: _parseLines(lines),
     ),
-    {'kind': 'cancelled'} => const CancelledEvent(),
+    {'kind': 'cancelled', 'message': final String message} => CancelledEvent(
+      message: message,
+    ),
     {
       'kind': 'failed',
       'message': final String message,
@@ -152,12 +166,8 @@ CandidateView _parseCandidate(Object? json) {
 }
 
 Risk _parseRisk(String name) {
-  for (final Risk risk in Risk.values) {
-    if (risk.name == name) {
-      return risk;
-    }
-  }
-  throw FormatException('Unknown risk: $name');
+  return Risk.values.asNameMap()[name] ??
+      (throw FormatException('Unknown risk: $name'));
 }
 
 List<String> _parseLines(List<Object?> lines) {
