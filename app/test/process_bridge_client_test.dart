@@ -127,6 +127,30 @@ done
     await expectLater(answer, throwsA(isA<BridgeClientDisposedException>()));
   });
 
+  test(
+    'dispose while the bridge starts fails the request and stops the bridge',
+    () async {
+      client = await createClientOverScript('''
+echo \$\$ > "\$(dirname "\$0")/pid"
+while read -r request; do
+  sleep 5
+done
+''');
+      final Future<ScanAnswer> answer = client.scan(onProgress: (String _) {});
+
+      client.dispose();
+
+      await expectLater(answer, throwsA(isA<BridgeClientDisposedException>()));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final File pidFile = File('${directory.path}/pid');
+      if (pidFile.existsSync()) {
+        final String pid = pidFile.readAsStringSync().trim();
+        final ProcessResult probe = await Process.run('kill', ['-0', pid]);
+        expect(probe.exitCode, isNot(0), reason: 'the bridge still runs');
+      }
+    },
+  );
+
   test('passes the progress on and answers with the final event', () async {
     client = await createClientOverScript('''
 while read -r request; do

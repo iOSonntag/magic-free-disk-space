@@ -57,6 +57,7 @@ class ProcessBridgeClient implements CleanerBridge {
   final String executablePath;
   Process? _process;
   _PendingRequest? _pending;
+  bool _isDisposed = false;
   final List<String> _stderrTail = [];
 
   @override
@@ -79,12 +80,11 @@ class ProcessBridgeClient implements CleanerBridge {
     );
   }
 
-  /// Stops the bridge and fails a pending request with a
-  /// [BridgeClientDisposedException]; the bridge's later lines answer no
-  /// request.
+  /// Stops the bridge for good and fails a pending request with a
+  /// [BridgeClientDisposedException]; a later request throws a [StateError].
   void dispose() {
-    _process?.kill();
-    _process = null;
+    _isDisposed = true;
+    _stopBridge();
     final _PendingRequest? pending = _pending;
     if (pending == null) {
       return;
@@ -93,10 +93,20 @@ class ProcessBridgeClient implements CleanerBridge {
     pending.completer.completeError(const BridgeClientDisposedException());
   }
 
+  /// Stops the bridge; its later lines answer no request, and the next
+  /// request starts a new one.
+  void _stopBridge() {
+    _process?.kill();
+    _process = null;
+  }
+
   Future<TAnswer> _send<TAnswer>(
     Map<String, Object> request, {
     void Function(String message)? onProgress,
   }) async {
+    if (_isDisposed) {
+      throw StateError('The bridge client is disposed.');
+    }
     if (_pending != null) {
       throw StateError('A request to the bridge is still pending.');
     }
@@ -104,6 +114,9 @@ class ProcessBridgeClient implements CleanerBridge {
       onProgress: onProgress ?? (String _) {},
     );
     _pending = pending;
+    // A dispose while the bridge starts fails the answer before this method
+    // awaits it, which would count as an uncaught error.
+    pending.completer.future.ignore();
     try {
       final Process process = _process ?? await _start();
       process.stdin.writeln(jsonEncode(request));
@@ -117,7 +130,7 @@ class ProcessBridgeClient implements CleanerBridge {
     }
     // A bridge that answers another request holds a state the app no longer
     // knows, so the next request goes to a new bridge.
-    dispose();
+    _stopBridge();
     throw FormatException(
       'The bridge answered the ${request['kind']} request with ${answer.runtimeType}.',
     );
@@ -125,6 +138,10 @@ class ProcessBridgeClient implements CleanerBridge {
 
   Future<Process> _start() async {
     final Process process = await Process.start(executablePath, const []);
+    if (_isDisposed) {
+      process.kill();
+      throw const BridgeClientDisposedException();
+    }
     _process = process;
     _stderrTail.clear();
     process.stdin.done.ignore();
@@ -153,8 +170,8 @@ class ProcessBridgeClient implements CleanerBridge {
     } catch (error, stackTrace) {
       // The bridge's next lines may still answer this request, so the next
       // request goes to a new bridge.
+      _stopBridge();
       _pending = null;
-      dispose();
       pending.completer.completeError(error, stackTrace);
       return;
     }
