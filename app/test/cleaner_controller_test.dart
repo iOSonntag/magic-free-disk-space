@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner_bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
 
 const ScannedEvent scannedEvent = ScannedEvent(
@@ -118,6 +119,17 @@ void main() {
 
     expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
     expect((controller.state as DeletedState).lines, ['Freed 6.0 MiB.']);
+  });
+
+  test('a tick while the plan request is pending changes nothing', () async {
+    await scanAndSelectSafe();
+
+    final Future<void> planRequest = controller.requestPlan();
+    controller.toggleCandidate(2);
+
+    expect((controller.state as ScannedState).selectedNumbers, {1});
+    await planRequest;
+    expect(bridge.plannedNumbers, [1]);
   });
 
   test(

@@ -1,17 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../bridge/bridge_event.dart';
-
-abstract interface class CleanerBridge {
-  Future<ScanAnswer> scan({required void Function(String message) onProgress});
-
-  Future<PlanAnswer> plan(List<int> numbers);
-
-  Future<DeleteAnswer> delete({
-    required int planId,
-    required String confirmation,
-  });
-}
+import 'cleaner_bridge.dart';
 
 sealed class CleanerState {
   const CleanerState();
@@ -183,7 +173,9 @@ class CleanerController extends ChangeNotifier {
   /// notice of the scan goes with the old selection.
   void _select(Set<int> Function(ScannedState current) pick) {
     final CleanerState current = _state;
-    if (current is! ScannedState) {
+    // The answer of a pending plan request keeps the selection it was sent
+    // with, so a tick meanwhile would be lost.
+    if (current is! ScannedState || _isRequestPending) {
       return;
     }
     _setState(ScannedState(scan: current.scan, selectedNumbers: pick(current)));
