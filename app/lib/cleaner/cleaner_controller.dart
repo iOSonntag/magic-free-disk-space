@@ -58,14 +58,25 @@ final class DeletedState extends CleanerState {
   final List<String> lines;
 }
 
+const String _deletionStoppedText =
+    'The deletion stopped before its answer, so some items may already be '
+    'gone. Scan again to see what is left.';
+
 class CleanerController extends ChangeNotifier {
   CleanerController({required this._bridge});
 
   final CleanerBridge _bridge;
   CleanerState _state = const IdleState();
   bool _isRequestPending = false;
+  bool _isDisposed = false;
 
   CleanerState get state => _state;
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
 
   Future<void> scan() async {
     if (_isRequestPending) {
@@ -156,6 +167,7 @@ class CleanerController extends ChangeNotifier {
         planId: current.plan.planId,
         confirmation: confirmation,
       ),
+      errorLead: _deletionStoppedText,
     );
     switch (answer) {
       case null:
@@ -182,13 +194,18 @@ class CleanerController extends ChangeNotifier {
   }
 
   /// Runs one request to the bridge; returns null when it threw, after
-  /// moving to an [IdleState] with the error as its notice.
-  Future<TAnswer?> _request<TAnswer>(Future<TAnswer> Function() send) async {
+  /// moving to an [IdleState] whose notice is the error, below [errorLead]
+  /// when given.
+  Future<TAnswer?> _request<TAnswer>(
+    Future<TAnswer> Function() send, {
+    String? errorLead,
+  }) async {
     _isRequestPending = true;
     try {
       return await send();
     } catch (error) {
-      _setState(IdleState(notice: '$error'));
+      final String notice = errorLead == null ? '$error' : '$errorLead\n$error';
+      _setState(IdleState(notice: notice));
       return null;
     } finally {
       _isRequestPending = false;
@@ -215,6 +232,11 @@ class CleanerController extends ChangeNotifier {
   }
 
   void _setState(CleanerState state) {
+    // The answer of a request may come after the page that held the
+    // controller went away.
+    if (_isDisposed) {
+      return;
+    }
     _state = state;
     notifyListeners();
   }

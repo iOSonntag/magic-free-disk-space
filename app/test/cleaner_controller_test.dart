@@ -38,6 +38,7 @@ final class FakeCleanerBridge implements CleanerBridge {
   PlanAnswer planAnswer = plannedEvent;
   DeleteAnswer deleteAnswer = const DeletedEvent(lines: ['Freed 6.0 MiB.']);
   Object? scanError;
+  Object? deleteError;
   List<int>? plannedNumbers;
   ({int planId, String confirmation})? deleteRequest;
 
@@ -65,6 +66,10 @@ final class FakeCleanerBridge implements CleanerBridge {
     required String confirmation,
   }) async {
     deleteRequest = (planId: planId, confirmation: confirmation);
+    final Object? error = deleteError;
+    if (error != null) {
+      throw error;
+    }
     return deleteAnswer;
   }
 }
@@ -217,5 +222,27 @@ void main() {
       (controller.state as IdleState).notice,
       contains('A bridge line is not an event.'),
     );
+  });
+
+  test('a deletion that throws warns that some items may be gone', () async {
+    bridge.deleteError = const FormatException('The bridge stopped.');
+    await scanAndSelectSafe();
+    await controller.requestPlan();
+
+    await controller.confirmDeletion('DELETE');
+
+    final String? notice = (controller.state as IdleState).notice;
+    expect(notice, startsWith('The deletion stopped before its answer'));
+    expect(notice, contains('The bridge stopped.'));
+  });
+
+  test('an answer after dispose changes nothing', () async {
+    bridge.scanError = const FormatException('The bridge was stopped.');
+
+    final Future<void> scan = controller.scan();
+    controller.dispose();
+    await scan;
+
+    expect(controller.state, isA<ScanningState>());
   });
 }

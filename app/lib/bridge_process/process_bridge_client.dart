@@ -32,6 +32,16 @@ final class BridgeStoppedException implements Exception {
   }
 }
 
+/// The client was disposed while a request waited for its answer.
+final class BridgeClientDisposedException implements Exception {
+  const BridgeClientDisposedException();
+
+  @override
+  String toString() {
+    return 'The bridge was stopped while a request waited for its answer.';
+  }
+}
+
 /// The bridge in the app's `Contents/MacOS` folder, beside the app's own
 /// [resolvedExecutable].
 String buildBundledBridgePath(String resolvedExecutable) {
@@ -69,10 +79,18 @@ class ProcessBridgeClient implements CleanerBridge {
     );
   }
 
-  /// Stops the bridge; its later lines answer no request.
+  /// Stops the bridge and fails a pending request with a
+  /// [BridgeClientDisposedException]; the bridge's later lines answer no
+  /// request.
   void dispose() {
     _process?.kill();
     _process = null;
+    final _PendingRequest? pending = _pending;
+    if (pending == null) {
+      return;
+    }
+    _pending = null;
+    pending.completer.completeError(const BridgeClientDisposedException());
   }
 
   Future<TAnswer> _send<TAnswer>(
@@ -135,8 +153,8 @@ class ProcessBridgeClient implements CleanerBridge {
     } catch (error, stackTrace) {
       // The bridge's next lines may still answer this request, so the next
       // request goes to a new bridge.
-      dispose();
       _pending = null;
+      dispose();
       pending.completer.completeError(error, stackTrace);
       return;
     }

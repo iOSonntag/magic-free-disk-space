@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -106,6 +107,24 @@ done
     final ScanAnswer answer = await client.scan(onProgress: (String _) {});
 
     expect((answer as ScannedEvent).summaryText, 'fresh');
+  });
+
+  test('dispose fails the pending request', () async {
+    client = await createClientOverScript('''
+while read -r request; do
+  echo '{"kind":"progress","message":"Measuring apps…"}'
+  sleep 5
+done
+''');
+    final Completer<void> progressSeen = Completer<void>();
+    final Future<ScanAnswer> answer = client.scan(
+      onProgress: (String _) => progressSeen.complete(),
+    );
+    await progressSeen.future;
+
+    client.dispose();
+
+    await expectLater(answer, throwsA(isA<BridgeClientDisposedException>()));
   });
 
   test('passes the progress on and answers with the final event', () async {
