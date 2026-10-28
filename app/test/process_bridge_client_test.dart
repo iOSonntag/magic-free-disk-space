@@ -131,7 +131,6 @@ done
     'dispose while the bridge starts fails the request and stops the bridge',
     () async {
       client = await createClientOverScript('''
-echo \$\$ > "\$(dirname "\$0")/pid"
 while read -r request; do
   sleep 5
 done
@@ -142,12 +141,12 @@ done
 
       await expectLater(answer, throwsA(isA<BridgeClientDisposedException>()));
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      final File pidFile = File('${directory.path}/pid');
-      if (pidFile.existsSync()) {
-        final String pid = pidFile.readAsStringSync().trim();
-        final ProcessResult probe = await Process.run('kill', ['-0', pid]);
-        expect(probe.exitCode, isNot(0), reason: 'the bridge still runs');
-      }
+      final ProcessResult search = await Process.run('pgrep', [
+        '-f',
+        '${directory.path}/fake-bridge',
+      ]);
+      // pgrep exits with 1 when no process matches.
+      expect(search.exitCode, 1, reason: 'the bridge still runs');
     },
   );
 
