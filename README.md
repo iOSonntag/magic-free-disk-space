@@ -62,6 +62,26 @@ macOS hides some folders, such as the Trash and the caches of Apple's apps, from
 without Full Disk Access. The scan lists what it could not read. To scan those places too, give
 your terminal app Full Disk Access in System Settings > Privacy & Security.
 
+## App
+
+A Mac app with the same scan and the same guards: tick the items, review the plan, type `DELETE`.
+Building it needs Bun, [Flutter](https://flutter.dev), and Xcode; no developer certificate, because
+the app is signed for this Mac only.
+
+```sh
+bun run app:install    # build the app and replace it in /Applications; quit the app first
+bun run app:run        # build and start a debug version
+```
+
+- The app scans with the default days: 10 without changes, 180 without use.
+- A scan older than an hour must be redone before anything is deleted, since the app may stay
+  open for days.
+- Full Disk Access goes to the app, not the terminal. Grant it again after each install: every
+  build changes the signature macOS knows the app by.
+- The app runs `magic-free-disk-space-bridge` from inside its bundle, a build of
+  `src/bridgeMain.ts` that answers the app over a pipe. It is part of the app, not a tool to run
+  yourself.
+
 ## How it keeps you safe
 
 - **Deletion is permanent.** Items do not go to the Trash. That is the point of the tool, so
@@ -98,8 +118,9 @@ your terminal app Full Disk Access in System Settings > Privacy & Security.
 - **A log of every deletion.** Before each deletion the tool writes what it is about to delete
   to `~/Library/Logs/magic-free-disk-space/deletions.jsonl`, and the outcome after it. If the log
   cannot be written, the run stops.
-- **Interactive only.** Deleting needs a terminal; a piped or scripted run is refused before the
-  scan. `--list` and `--dry-run` never delete.
+- **Interactive only.** The CLI deletes only in a terminal; a piped or scripted run is refused
+  before the scan. `--list` and `--dry-run` never delete. The app asks for `DELETE` on its
+  confirmation screen and deletes exactly the plan that screen showed.
 
 ## Privacy
 
@@ -132,6 +153,7 @@ dates, and app identifiers, and runs only `ps`, `plutil`, `xcode-select`, and `g
 bun test           # unit, filesystem, and end-to-end safety tests on temporary fixtures
 bun run typecheck
 bun run check      # Biome lint and format check
+cd app && flutter analyze && flutter test   # the app
 ```
 
 Tests never touch your real home folder: each one builds its own folders in a temporary

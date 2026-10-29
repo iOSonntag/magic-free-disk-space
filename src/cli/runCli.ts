@@ -1,18 +1,24 @@
 import type { CatalogEntry } from '../catalog/catalog.js';
-import { deleteCandidates } from '../delete/deleteCandidates.js';
-import { createDeletionJournal } from '../delete/deletionJournal.js';
+import { isDeleteConfirmation } from '../delete/confirmation.js';
+import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js';
+import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import {
+  CANCELLED_TEXT,
+  formatDeletionWarningLines,
+} from '../report/formatDeletionConfirmation.js';
+import {
+  formatDeletionLogLine,
+  formatJournalUnavailableText,
+} from '../report/formatDeletionLog.js';
 import { formatArgumentFailure, formatSelectionFailure } from '../report/formatInputFailures.js';
 import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
 import { formatRemovalRun } from '../report/formatRemovalRun.js';
 import { formatScanReport } from '../report/formatScanReport.js';
 import { formatUsage } from '../report/formatUsage.js';
-import { SCAN_LIMITS } from '../scan/limits.js';
-import { loadProcessCommands } from '../scan/loadProcessCommands.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
-import { DELETE_CONFIRMATION_WORD, isDeleteConfirmation } from './confirmation.js';
 import { EXIT_CODES } from './exitCodes.js';
 import type { CliArguments } from './parseArguments.js';
 import { parseArguments } from './parseArguments.js';
@@ -121,8 +127,8 @@ function runDryRun(params: {
     return EXIT_CODES.cannotStart;
   }
 
-  const plan = planRemoval({
-    ranked: params.report.candidates,
+  const plan = planParsedSelection({
+    report: params.report,
     selectedNumbers: selection.value,
     environment: params.environment,
   });
@@ -146,13 +152,13 @@ async function runInteractiveDeletion(params: {
   const selectedNumbers = await readSelection({ io: params.io, report: params.report });
 
   if (selectedNumbers === null || selectedNumbers.length === 0) {
-    params.io.writeOut('Cancelled. Nothing was deleted.\n');
+    params.io.writeOut(`${CANCELLED_TEXT}\n`);
 
     return EXIT_CODES.done;
   }
 
-  const plan = planRemoval({
-    ranked: params.report.candidates,
+  const plan = planParsedSelection({
+    report: params.report,
     selectedNumbers: selectedNumbers,
     environment: params.environment,
   });
@@ -165,42 +171,37 @@ async function runInteractiveDeletion(params: {
     return EXIT_CODES.done;
   }
 
-  const confirmation = await params.io.readLine(
-    `\nThis cannot be undone: the items do not go to the Trash.\nType ${DELETE_CONFIRMATION_WORD} to delete them permanently, or anything else to cancel.\n> `,
-  );
+  const warningText = formatDeletionWarningLines().join('\n');
+  const confirmation = await params.io.readLine(`\n${warningText}\n> `);
 
-  if (confirmation === null || !isDeleteConfirmation({ line: confirmation })) {
-    params.io.writeOut('Cancelled. Nothing was deleted.\n');
+  if (confirmation === null || !isDeleteConfirmation({ confirmation: confirmation })) {
+    params.io.writeOut(`${CANCELLED_TEXT}\n`);
 
     return EXIT_CODES.done;
   }
 
-  const journal = await createDeletionJournal({
-    logPath: params.environment.deletionLogPath,
-    nowMs: Date.now(),
+  const removal = await deleteApprovedCandidates({
+    plan: plan,
+    deletionLogPath: params.environment.deletionLogPath,
+    clock: () => Date.now(),
   });
 
-  if (journal.kind === 'failed') {
-    params.io.writeError(
-      `Cannot write the deletion log at ${journal.failure.path} (${journal.failure.code}). Nothing was deleted.\n`,
-    );
+  if (removal.kind === 'failed') {
+    params.io.writeError(`${formatJournalUnavailableText({ failure: removal.failure })}\n`);
 
     return EXIT_CODES.journalUnavailable;
   }
 
-  // Read again now: the scan took minutes, and an app may have started since.
-  const processCommands = await loadProcessCommands({
-    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
-  });
-  const run = await deleteCandidates({
-    candidates: plan.approved,
-    journal: journal.value,
-    processCommands: processCommands.kind === 'succeeded' ? processCommands.value : null,
-    clock: () => Date.now(),
-  });
+  const run = removal.value.run;
 
-  writeLines({ io: params.io, lines: ['', ...formatRemovalRun({ run: run })] });
-  params.io.writeOut(`The deletion log is at ${journal.value.logPath}\n`);
+  writeLines({
+    io: params.io,
+    lines: [
+      '',
+      ...formatRemovalRun({ run: run }),
+      formatDeletionLogLine({ logPath: removal.value.logPath }),
+    ],
+  });
 
   const hasFailure =
     run.journalFailure !== null ||
@@ -237,6 +238,25 @@ async function readSelection(params: {
 
     params.io.writeError(`${formatSelectionFailure({ failure: selection.failure })}\n`);
   }
+}
+
+/** Throws when a number lies outside the ranking, which `parseSelection` already ruled out. */
+function planParsedSelection(params: {
+  report: ScanReport;
+  selectedNumbers: number[];
+  environment: Environment;
+}): RemovalPlan {
+  const planned = planRemoval({
+    ranked: params.report.candidates,
+    selectedNumbers: params.selectedNumbers,
+    environment: params.environment,
+  });
+
+  if (planned.kind === 'failed') {
+    throw new Error(`Parsed selection names ${planned.failure.number}, outside the ranking`);
+  }
+
+  return planned.value;
 }
 
 function buildSelectionChoices(params: { report: ScanReport }): SelectionChoice[] {

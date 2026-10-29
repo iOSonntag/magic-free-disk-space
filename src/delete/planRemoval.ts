@@ -1,4 +1,5 @@
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { Result } from '../result.js';
 import type { Candidate } from '../scan/candidate.js';
 import type { RefusalReason } from './validateRemoval.js';
 import { validateRemoval } from './validateRemoval.js';
@@ -14,19 +15,19 @@ export type RemovalPlan = {
   refused: RefusedRemoval[];
 };
 
-/** Throws on a number outside `ranked`: the selection must be checked against the ranking first. */
+type PlanFailure = { reason: 'outOfRange'; number: number };
+
+/** Fails on the first selected number that names no item of `ranked`. */
 export function planRemoval(params: {
   ranked: Candidate[];
   selectedNumbers: number[];
   environment: Environment;
-}): RemovalPlan {
+}): Result<RemovalPlan, PlanFailure> {
   const selectedNumbers = new Set(params.selectedNumbers);
 
   for (const number of selectedNumbers) {
     if (!Number.isInteger(number) || number < 1 || number > params.ranked.length) {
-      throw new Error(
-        `Selected number ${number} is outside the ranking of ${params.ranked.length}`,
-      );
+      return { kind: 'failed', failure: { reason: 'outOfRange', number: number } };
     }
   }
 
@@ -49,5 +50,5 @@ export function planRemoval(params: {
     }
   }
 
-  return { approved: approved, refused: refused };
+  return { kind: 'succeeded', value: { approved: approved, refused: refused } };
 }

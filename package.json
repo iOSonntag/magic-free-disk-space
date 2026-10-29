@@ -10,7 +10,11 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "check": "biome check .",
-    "format": "biome check --write ."
+    "format": "biome check --write .",
+    "app:bridge": "bun build src/bridgeMain.ts --compile --outfile app/build/bridge/magic-free-disk-space-bridge",
+    "app:build": "bun run app:bridge && cd app && flutter build macos",
+    "app:run": "bun run app:bridge && cd app && flutter run -d macos",
+    "app:install": "! pgrep -xq 'Magic Free Disk Space' || { echo 'Quit Magic Free Disk Space first.' >&2; exit 1; }; bun run app:build && rsync -a --delete 'app/build/macos/Build/Products/Release/Magic Free Disk Space.app/' '/Applications/Magic Free Disk Space.app/' && echo 'Installed. Grant Full Disk Access again in System Settings > Privacy & Security > Full Disk Access: every build changes the signature.'"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

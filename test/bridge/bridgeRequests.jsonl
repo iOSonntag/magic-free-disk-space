@@ -1,0 +1,3 @@
+{"kind":"scan"}
+{"kind":"plan","numbers":[1,3]}
+{"kind":"delete","planId":2,"confirmation":"DELETE"}
