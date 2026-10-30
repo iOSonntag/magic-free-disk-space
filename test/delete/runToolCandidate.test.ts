@@ -413,6 +413,34 @@ exit 3`,
     expect(await isPresent(removedPart)).toBe(false);
   });
 
+  test('reports nothing freed when the measurement after the command is incomplete', async () => {
+    const unit = await createMiseUnit('20.1.0');
+    const unreadablePart = join(unit.installPath, 'lib');
+
+    await createUnitTool({
+      unit: unit,
+      probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
+      commandBody: `rm -r '${join(unit.installPath, 'bin')}'
+chmod 000 '${unreadablePart}'
+exit 0`,
+    });
+
+    const run = await runToolCandidate({
+      unit: unit,
+      environment: environment,
+      loadProcessCommands: loadNoProcessCommands,
+      timeoutMs: TIMEOUT_MS,
+    });
+    const measurementAfter = await loadUnitMeasurement({
+      unit: unit,
+      deadlineMs: Date.now() + 60_000,
+    });
+
+    expect(measurementAfter.isComplete).toBe(false);
+    expect(run).toEqual({ kind: 'completed', freedBytes: 0, stderrTail: '' });
+    expect(await isPresent(unreadablePart)).toBe(true);
+  });
+
   test('fails with a timeout when the command passes its limit', async () => {
     const unit = await createMiseUnit('20.1.0');
 

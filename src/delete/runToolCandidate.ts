@@ -40,7 +40,8 @@ export type ToolCandidateRun =
  * finds the unit unchanged and idle with that fresh tool, with the processes
  * `loadProcessCommands` reads right before the recheck. The unit is measured first, so
  * `freedBytes`, the drop of its measured size, holds nothing the recheck itself added; the
- * command runs right after the recheck.
+ * command runs right after the recheck. `freedBytes` is 0 when the measurement after the
+ * command is incomplete.
  */
 export async function runToolCandidate(params: {
   unit: ExploreToolUnit;
@@ -107,7 +108,11 @@ async function runCheckedUnitCommand(params: {
     unit: params.unit,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
   });
-  const freedBytes = Math.max(0, params.before.allocatedBytes - after.allocatedBytes);
+  // An incomplete measurement after the run misses part of what is left, so its drop could
+  // count bytes that were never freed.
+  const freedBytes = after.isComplete
+    ? Math.max(0, params.before.allocatedBytes - after.allocatedBytes)
+    : 0;
 
   if (command.kind === 'failed') {
     return {
