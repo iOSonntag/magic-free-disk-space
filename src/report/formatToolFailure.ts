@@ -19,29 +19,18 @@ export function formatToolFailureSummary(params: { failure: ExploreToolFailure }
 export function formatToolFailureFirstStderrLine(params: {
   failure: ExploreToolFailure;
 }): string | null {
-  const firstLine = getStderrTail({ failure: params.failure })
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line !== '');
+  const [firstLine] = formatToolFailureStderrLines({ failure: params.failure });
 
-  if (firstLine === undefined) {
-    return null;
-  }
-
-  return formatDisplayText({ text: firstLine });
+  return firstLine ?? null;
 }
 
-/** The end of the tool's stderr, trimmed and safe to show; `null` when the tool wrote none. */
-export function formatToolFailureStderrTail(params: {
-  failure: ExploreToolFailure;
-}): string | null {
-  const stderrTail = getStderrTail({ failure: params.failure }).trim();
-
-  if (stderrTail === '') {
-    return null;
-  }
-
-  return formatDisplayText({ text: stderrTail });
+/** Each line with text on it of the end of the tool's stderr, trimmed and safe to show. */
+export function formatToolFailureStderrLines(params: { failure: ExploreToolFailure }): string[] {
+  return getStderrTail({ failure: params.failure })
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .map((line) => formatDisplayText({ text: line }));
 }
 
 function formatToolCommandFailureSummary(params: { failure: ToolCommandFailure }): string {

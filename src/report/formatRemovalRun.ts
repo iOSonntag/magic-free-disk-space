@@ -10,7 +10,7 @@ import type { JournalFailure } from '../delete/deletionJournal.js';
 import { formatBytes } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
-import { formatToolFailureStderrTail, formatToolFailureSummary } from './formatToolFailure.js';
+import { formatToolFailureStderrLines, formatToolFailureSummary } from './formatToolFailure.js';
 
 const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   removed: 'deleted',
@@ -49,16 +49,12 @@ function formatCodedOutcomeLine(params: { outcome: RemovalOutcomeCoded }): strin
 /** The failure in short, then the end of what the tool wrote to stderr when it wrote any. */
 function formatToolFailedLines(params: { outcome: RemovalOutcomeToolFailed }): string[] {
   const failureText = formatToolFailureSummary({ failure: params.outcome.failure });
-  const lines = [
+  const stderrLines = formatToolFailureStderrLines({ failure: params.outcome.failure });
+
+  return [
     `- ${outcomeTexts.toolFailed}: ${formatDisplayText({ text: params.outcome.path })} (${failureText})`,
+    ...stderrLines.map((line) => `   ${line}`),
   ];
-  const stderrTail = formatToolFailureStderrTail({ failure: params.outcome.failure });
-
-  if (stderrTail !== null) {
-    lines.push(`   ${stderrTail}`);
-  }
-
-  return lines;
 }
 
 /** Counts the space every outcome gave back, which a failed tool run may have partly freed. */

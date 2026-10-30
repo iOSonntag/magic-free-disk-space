@@ -102,7 +102,7 @@ describe('formatRemovalRun', () => {
     ]);
   });
 
-  test('names the failure of a tool, its stderr tail, and counts what it freed', () => {
+  test('names the failure of a tool, each line of its stderr tail, and counts what it freed', () => {
     const lines = formatRemovalRun({
       run: {
         outcomes: [
@@ -120,7 +120,11 @@ describe('formatRemovalRun', () => {
             outcome: 'toolFailed',
             failure: {
               reason: 'commandFailed',
-              failure: { reason: 'exitedWithError', exitCode: 2, stderrTail: 'device busy\n' },
+              failure: {
+                reason: 'exitedWithError',
+                exitCode: 2,
+                stderrTail: 'device busy\n\n  try again later\n',
+              },
             },
           },
           {
@@ -156,6 +160,7 @@ describe('formatRemovalRun', () => {
       '- deleted: /fixture/tool-a',
       '- its tool failed: /fixture/tool-b (exited with code 2)',
       '   device busy',
+      '   try again later',
       '- its tool failed: /fixture/tool-c (stopped at its time limit of 600 s)',
       '   still deleting',
       '- its tool failed: /fixture/tool-d (its output could not be read: no device list)',
