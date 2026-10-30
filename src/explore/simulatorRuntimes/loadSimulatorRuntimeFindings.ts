@@ -1,6 +1,4 @@
-import type { Result } from '../../result.js';
-import type { ExploreProbeToolRun } from '../exploreProbe.js';
-import type { ExploreProbeFailure, ExploreProbeFindings } from '../exploreUnit.js';
+import type { ExploreProbeToolResult, ExploreProbeToolRun } from '../exploreProbe.js';
 import { buildSimulatorRuntimeFindings } from './buildSimulatorRuntimeFindings.js';
 import { loadSimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
 
@@ -10,7 +8,7 @@ import { loadSimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
  */
 export async function loadSimulatorRuntimeFindings(
   run: ExploreProbeToolRun,
-): Promise<Result<ExploreProbeFindings, ExploreProbeFailure>> {
+): Promise<ExploreProbeToolResult> {
   const state = await loadSimulatorRuntimeState(run);
 
   if (state.kind === 'failed') {

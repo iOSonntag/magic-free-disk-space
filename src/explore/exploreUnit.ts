@@ -70,6 +70,11 @@ export type ExploreToolUnitHomebrewOrphans = {
   kegPaths: AbsolutePath[];
 };
 
+/** The units Homebrew removes from its Cellar, which one recheck compares. */
+export type ExploreToolUnitHomebrew =
+  | ExploreToolUnitHomebrewOldVersions
+  | ExploreToolUnitHomebrewOrphans;
+
 /** An item a developer tool owns and removes with its own command. */
 export type ExploreToolUnit =
   | ExploreToolUnitSimulatorDevice
@@ -77,8 +82,7 @@ export type ExploreToolUnit =
   | ExploreToolUnitMiseVersion
   | ExploreToolUnitSimulatorRuntime
   | ExploreToolUnitAndroidAvd
-  | ExploreToolUnitHomebrewOldVersions
-  | ExploreToolUnitHomebrewOrphans;
+  | ExploreToolUnitHomebrew;
 
 /** A system image folder of the SDK that no AVD names. */
 export type ExplorePathUnitAndroidSystemImage = {
@@ -94,23 +98,28 @@ export type ExplorePathUnitAndroidEmulator = {
   folderPath: AbsolutePath;
 };
 
+/** A package folder of the Android SDK, offered by the state of its SDK. */
+export type ExplorePathUnitAndroidPackage =
+  | ExplorePathUnitAndroidSystemImage
+  | ExplorePathUnitAndroidEmulator;
+
+/** Why an extension folder is offered: `.obsolete` marks it, or a newer version outdates it. */
+export type ExplorePathUnitVscodeExtensionReason = 'obsolete' | 'olderVersion';
+
 /** An extension folder that no registry of VS Code lists. */
 export type ExplorePathUnitVscodeExtension = {
   kind: 'vscodeExtension';
   folderPath: AbsolutePath;
   extensionId: string;
   version: string;
-  reason: 'obsolete' | 'olderVersion';
+  reason: ExplorePathUnitVscodeExtensionReason;
 };
 
 /**
  * An item whose tool has no command for it, so the app deletes its one folder. `folderPath` is the
  * one home of that folder: the candidate's path and the deletion both take it from there.
  */
-export type ExplorePathUnit =
-  | ExplorePathUnitAndroidSystemImage
-  | ExplorePathUnitAndroidEmulator
-  | ExplorePathUnitVscodeExtension;
+export type ExplorePathUnit = ExplorePathUnitAndroidPackage | ExplorePathUnitVscodeExtension;
 
 export type ExploreUnit = ExploreToolUnit | ExplorePathUnit;
 

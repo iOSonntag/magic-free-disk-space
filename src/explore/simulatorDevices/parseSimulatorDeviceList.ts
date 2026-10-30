@@ -13,7 +13,8 @@ export type SimulatorDeviceUdid = string & { [simulatorDeviceUdidBrand]: true };
 export type SimulatorDevice = {
   udid: SimulatorDeviceUdid;
   name: string;
-  runtimeId: string;
+  /** Such as `com.apple.CoreSimulator.SimRuntime.iOS-18-2`, the key it is listed under. */
+  runtimeIdentifier: string;
   /** Such as `Shutdown` or `Booted`. */
   state: string;
   isAvailable: boolean;
@@ -60,13 +61,13 @@ export function parseSimulatorDeviceList(params: {
 
   const devices: SimulatorDevice[] = [];
 
-  for (const [runtimeId, runtimeDevices] of Object.entries(json.value.devices)) {
+  for (const [runtimeIdentifier, runtimeDevices] of Object.entries(json.value.devices)) {
     if (!Array.isArray(runtimeDevices)) {
       return { kind: 'failed', failure: 'the devices of a runtime are no list' };
     }
 
     for (const value of runtimeDevices) {
-      const device = parseSimulatorDevice({ value: value, runtimeId: runtimeId });
+      const device = parseSimulatorDevice({ value: value, runtimeIdentifier: runtimeIdentifier });
 
       if (device === null) {
         return { kind: 'failed', failure: 'a device lacks a field or has a malformed one' };
@@ -81,7 +82,7 @@ export function parseSimulatorDeviceList(params: {
 
 function parseSimulatorDevice(params: {
   value: unknown;
-  runtimeId: string;
+  runtimeIdentifier: string;
 }): SimulatorDevice | null {
   const value = params.value;
 
@@ -117,7 +118,7 @@ function parseSimulatorDevice(params: {
   return {
     udid: udid.value,
     name: name,
-    runtimeId: params.runtimeId,
+    runtimeIdentifier: params.runtimeIdentifier,
     state: state,
     isAvailable: isAvailable,
     availabilityError: availabilityError,

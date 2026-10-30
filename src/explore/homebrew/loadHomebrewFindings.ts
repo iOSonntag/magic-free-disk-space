@@ -1,6 +1,4 @@
-import type { Result } from '../../result.js';
-import type { ExploreProbeToolRun } from '../exploreProbe.js';
-import type { ExploreProbeFailure, ExploreProbeFindings } from '../exploreUnit.js';
+import type { ExploreProbeToolResult, ExploreProbeToolRun } from '../exploreProbe.js';
 import { buildHomebrewFindings } from './buildHomebrewFindings.js';
 import { loadHomebrewState } from './loadHomebrewState.js';
 
@@ -10,7 +8,7 @@ import { loadHomebrewState } from './loadHomebrewState.js';
  */
 export async function loadHomebrewFindings(
   run: ExploreProbeToolRun,
-): Promise<Result<ExploreProbeFindings, ExploreProbeFailure>> {
+): Promise<ExploreProbeToolResult> {
   const state = await loadHomebrewState(run);
 
   if (state.kind === 'failed') {

@@ -1,8 +1,7 @@
-import type { Result } from '../../result.js';
-import type { UnitComparison } from '../decideComparisonActivity.js';
+import type { UnitComparison, UnitRecheck } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
-import type { ExploreProbeFailure, ExploreToolUnitSimulatorRuntime } from '../exploreUnit.js';
+import type { ExploreToolUnitSimulatorRuntime } from '../exploreUnit.js';
 import { hasAvailableSimulatorDevice } from './buildSimulatorRuntimeFindings.js';
 import type { SimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
 import { loadSimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
@@ -14,20 +13,18 @@ import { loadSimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
 export async function recheckSimulatorRuntimeUnit(params: {
   unit: ExploreToolUnitSimulatorRuntime;
   run: ExploreUnitRecheckRun;
-}): Promise<Result<UnitComparison, ExploreProbeFailure>> {
+}): Promise<UnitRecheck> {
   const state = await loadSimulatorRuntimeState(params.run);
 
   if (state.kind === 'failed') {
     return state;
   }
 
-  const comparison = compareSimulatorRuntime({
+  return compareSimulatorRuntime({
     unit: params.unit,
     state: state.value,
     processCommands: params.run.processCommands,
   });
-
-  return { kind: 'succeeded', value: comparison };
 }
 
 /**

@@ -1,13 +1,11 @@
-import type { Result } from '../../result.js';
-import type { ExploreProbeRun } from '../exploreProbe.js';
-import type { ExploreFileUnreadable, ExploreProbeFindings } from '../exploreUnit.js';
+import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
 import { buildVscodeExtensionFindings } from './buildVscodeExtensionFindings.js';
 import { loadVscodeExtensionState } from './loadVscodeExtensionState.js';
 
 /** The extension folders no registry lists that are obsolete or an older version. */
 export async function loadVscodeExtensionFindings(
   run: ExploreProbeRun,
-): Promise<Result<ExploreProbeFindings, ExploreFileUnreadable>> {
+): Promise<ExploreProbeFilesResult> {
   const state = await loadVscodeExtensionState({ homeDir: run.environment.homeDir });
 
   if (state.kind === 'failed') {

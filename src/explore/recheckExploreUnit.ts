@@ -1,6 +1,5 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
-import type { Result } from '../result.js';
 import type { ReadFailure } from '../system/readFailure.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { compareAndroidPathUnit } from './android/compareAndroidPathUnit.js';
@@ -8,12 +7,11 @@ import { loadAndroidSdkState } from './android/loadAndroidSdkState.js';
 import { recheckAndroidAvdUnit } from './android/recheckAndroidAvdUnit.js';
 import { isDartGcSetOffered } from './dartPubCache/buildDartPubCacheFindings.js';
 import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
-import type { UnitComparison } from './decideComparisonActivity.js';
+import type { UnitComparison, UnitRecheck } from './decideComparisonActivity.js';
 import { decideComparisonActivity } from './decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from './exploreProbe.js';
 import type {
   ExplorePathUnit,
-  ExploreProbeFailure,
   ExploreToolUnit,
   ExploreToolUnitDartPubCache,
   ExploreToolUnitMiseVersion,
@@ -29,10 +27,6 @@ import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDe
 import { recheckSimulatorRuntimeUnit } from './simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { compareVscodeExtensionUnit } from './vscodeExtensions/compareVscodeExtensionUnit.js';
 import { loadVscodeExtensionState } from './vscodeExtensions/loadVscodeExtensionState.js';
-
-export type UnitRecheckFailed = { kind: 'failed'; failure: ExploreProbeFailure };
-
-export type UnitRecheck = UnitComparison | UnitRecheckFailed;
 
 /** A file the recheck of a path unit needs could not be read. */
 export type PathUnitRecheckUnreadable = { kind: 'unreadable'; path: string; failure: ReadFailure };
@@ -100,18 +94,12 @@ export async function recheckExploreUnit(params: {
       });
     }
     case 'simulatorRuntime':
-      return comparisonResultToUnitRecheck(
-        await recheckSimulatorRuntimeUnit({ unit: params.unit, run: run }),
-      );
+      return recheckSimulatorRuntimeUnit({ unit: params.unit, run: run });
     case 'androidAvd':
-      return comparisonResultToUnitRecheck(
-        await recheckAndroidAvdUnit({ unit: params.unit, run: run }),
-      );
+      return recheckAndroidAvdUnit({ unit: params.unit, run: run });
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
-      return comparisonResultToUnitRecheck(
-        await recheckHomebrewUnit({ unit: params.unit, run: run }),
-      );
+      return recheckHomebrewUnit({ unit: params.unit, run: run });
   }
 }
 
@@ -153,16 +141,6 @@ export async function recheckExplorePathUnit(params: {
       });
     }
   }
-}
-
-function comparisonResultToUnitRecheck(
-  compared: Result<UnitComparison, ExploreProbeFailure>,
-): UnitRecheck {
-  if (compared.kind === 'failed') {
-    return { kind: 'failed', failure: compared.failure };
-  }
-
-  return compared.value;
 }
 
 /** Unchanged while the device is still listed at the same place and still offered. */

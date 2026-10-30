@@ -1,8 +1,8 @@
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
-import { formatSimulatorRuntimeName } from '../simulatorDevices/buildSimulatorDeviceFindings.js';
 import type { SimulatorDevice } from '../simulatorDevices/parseSimulatorDeviceList.js';
+import { formatSimulatorRuntimeName } from './formatSimulatorRuntimeName.js';
 import type { SimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
 import type { SimulatorRuntime } from './parseSimulatorRuntimeList.js';
 
@@ -12,7 +12,7 @@ export function hasAvailableSimulatorDevice(params: {
   devices: SimulatorDevice[];
 }): boolean {
   return params.devices.some(
-    (device) => device.isAvailable && device.runtimeId === params.runtimeIdentifier,
+    (device) => device.isAvailable && device.runtimeIdentifier === params.runtimeIdentifier,
   );
 }
 

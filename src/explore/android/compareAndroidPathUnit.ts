@@ -1,9 +1,6 @@
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
-import type {
-  ExplorePathUnitAndroidEmulator,
-  ExplorePathUnitAndroidSystemImage,
-} from '../exploreUnit.js';
+import type { ExplorePathUnitAndroidPackage } from '../exploreUnit.js';
 import type { AndroidPackageOffers } from './decideAndroidPackageOffers.js';
 import {
   decideAndroidEmulatorOffers,
@@ -16,7 +13,7 @@ import type { AndroidSdkState } from './loadAndroidSdkState.js';
  * and its busy rule sees it idle.
  */
 export function compareAndroidPathUnit(params: {
-  unit: ExplorePathUnitAndroidSystemImage | ExplorePathUnitAndroidEmulator;
+  unit: ExplorePathUnitAndroidPackage;
   state: AndroidSdkState;
   processCommands: string[] | null;
 }): UnitComparison {
@@ -36,7 +33,7 @@ export function compareAndroidPathUnit(params: {
 }
 
 function decideAndroidPathUnitOffers(params: {
-  unit: ExplorePathUnitAndroidSystemImage | ExplorePathUnitAndroidEmulator;
+  unit: ExplorePathUnitAndroidPackage;
   state: AndroidSdkState;
 }): AndroidPackageOffers {
   switch (params.unit.kind) {

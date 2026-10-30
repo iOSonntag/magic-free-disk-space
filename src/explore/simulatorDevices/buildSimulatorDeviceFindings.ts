@@ -2,9 +2,8 @@ import { dirname } from 'node:path';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
+import { formatSimulatorRuntimeName } from '../simulatorRuntimes/formatSimulatorRuntimeName.js';
 import type { SimulatorDevice } from './parseSimulatorDeviceList.js';
-
-const RUNTIME_ID_PREFIX = 'com.apple.CoreSimulator.SimRuntime.';
 
 /**
  * A device is offered only when its runtime is gone: neither `simctl` nor the device files tell
@@ -20,7 +19,7 @@ export function buildSimulatorDeviceFindings(params: {
   processCommands: string[] | null;
 }): ExploreFinding[] {
   return params.devices.filter(isSimulatorDeviceOffered).map((device) => {
-    const runtimeName = formatSimulatorRuntimeName({ runtimeIdentifier: device.runtimeId });
+    const runtimeName = formatSimulatorRuntimeName({ runtimeIdentifier: device.runtimeIdentifier });
     const finding: ExploreFinding = {
       unit: {
         kind: 'simulatorDevice',
@@ -46,28 +45,11 @@ export function buildSimulatorDeviceFindings(params: {
 }
 
 function buildSimulatorDeviceEvidenceLines(params: { device: SimulatorDevice }): string[] {
-  const runtimeLine = `Its runtime ${params.device.runtimeId} is no longer installed.`;
+  const runtimeLine = `Its runtime ${params.device.runtimeIdentifier} is no longer installed.`;
 
   if (params.device.availabilityError === null) {
     return [runtimeLine];
   }
 
   return [runtimeLine, `Simulator reports: ${params.device.availabilityError}`];
-}
-
-/** `com.apple.CoreSimulator.SimRuntime.iOS-18-2` reads `iOS 18.2`; an unknown shape stays as is. */
-export function formatSimulatorRuntimeName(params: { runtimeIdentifier: string }): string {
-  if (!params.runtimeIdentifier.startsWith(RUNTIME_ID_PREFIX)) {
-    return params.runtimeIdentifier;
-  }
-
-  const [platform, ...versionParts] = params.runtimeIdentifier
-    .slice(RUNTIME_ID_PREFIX.length)
-    .split('-');
-
-  if (versionParts.length === 0) {
-    return params.runtimeIdentifier;
-  }
-
-  return `${platform} ${versionParts.join('.')}`;
 }

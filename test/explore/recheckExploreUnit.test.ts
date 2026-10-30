@@ -57,7 +57,7 @@ const xcrun: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 const unavailableDevice: SimulatorDevice = {
   udid: UNAVAILABLE_DEVICE_UDID,
   name: 'iPhone 15',
-  runtimeId: 'com.apple.CoreSimulator.SimRuntime.iOS-17-0',
+  runtimeIdentifier: 'com.apple.CoreSimulator.SimRuntime.iOS-17-0',
   state: 'Shutdown',
   isAvailable: false,
   availabilityError: null,

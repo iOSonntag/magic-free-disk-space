@@ -264,7 +264,7 @@ describe('compareSimulatorRuntime', () => {
     const state = parseFixtureState();
     const devices = state.devices.map((device) =>
       device.udid === AVAILABLE_UNDATED_DEVICE_UDID
-        ? { ...device, runtimeId: OFFERED_RUNTIME_IDENTIFIER }
+        ? { ...device, runtimeIdentifier: OFFERED_RUNTIME_IDENTIFIER }
         : device,
     );
 

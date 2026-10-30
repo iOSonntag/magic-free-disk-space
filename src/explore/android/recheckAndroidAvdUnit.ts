@@ -1,8 +1,7 @@
-import type { Result } from '../../result.js';
-import type { UnitComparison } from '../decideComparisonActivity.js';
+import type { UnitRecheck } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
-import type { ExploreProbeFailure, ExploreToolUnitAndroidAvd } from '../exploreUnit.js';
+import type { ExploreToolUnitAndroidAvd } from '../exploreUnit.js';
 import { loadAndroidSdkState } from './loadAndroidSdkState.js';
 
 /**
@@ -12,7 +11,7 @@ import { loadAndroidSdkState } from './loadAndroidSdkState.js';
 export async function recheckAndroidAvdUnit(params: {
   unit: ExploreToolUnitAndroidAvd;
   run: ExploreUnitRecheckRun;
-}): Promise<Result<UnitComparison, ExploreProbeFailure>> {
+}): Promise<UnitRecheck> {
   const state = await loadAndroidSdkState({ homeDir: params.run.environment.homeDir });
 
   if (state.kind === 'failed') {
@@ -31,14 +30,11 @@ export async function recheckAndroidAvdUnit(params: {
     );
 
   if (!isStillListed) {
-    return { kind: 'succeeded', value: { kind: 'changed' } };
+    return { kind: 'changed' };
   }
 
-  return {
-    kind: 'succeeded',
-    value: decideComparisonActivity({
-      facts: { kind: 'android' },
-      processCommands: params.run.processCommands,
-    }),
-  };
+  return decideComparisonActivity({
+    facts: { kind: 'android' },
+    processCommands: params.run.processCommands,
+  });
 }

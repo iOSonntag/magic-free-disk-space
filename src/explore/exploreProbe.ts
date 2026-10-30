@@ -28,18 +28,20 @@ export type ExploreProbeTool = {
   toolName: ToolName;
   /** `xcrun simctl` without an active Xcode asks to install the command line tools. */
   isActiveXcodeRequired: boolean;
-  loadFindings: (
-    run: ExploreProbeToolRun,
-  ) => Promise<Result<ExploreProbeFindings, ExploreProbeFailure>>;
+  loadFindings: (run: ExploreProbeToolRun) => Promise<ExploreProbeToolResult>;
 };
+
+/** The answer of a tool probe, which may fail by its command, its output, or a file. */
+export type ExploreProbeToolResult = Result<ExploreProbeFindings, ExploreProbeFailure>;
 
 /** A probe that only reads files, so it runs no command and has no tool failure. */
 export type ExploreProbeFiles = {
   kind: 'files';
-  loadFindings: (
-    run: ExploreProbeRun,
-  ) => Promise<Result<ExploreProbeFindings, ExploreFileUnreadable>>;
+  loadFindings: (run: ExploreProbeRun) => Promise<ExploreProbeFilesResult>;
 };
+
+/** The answer of a files probe, which may fail only by a file it could not read. */
+export type ExploreProbeFilesResult = Result<ExploreProbeFindings, ExploreFileUnreadable>;
 
 export type ExploreProbe = ExploreProbeTool | ExploreProbeFiles;
 

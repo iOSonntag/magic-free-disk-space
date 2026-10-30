@@ -1,10 +1,9 @@
-import type { Result } from '../../result.js';
-import type { ExploreProbeRun, ExploreProbeToolRun } from '../exploreProbe.js';
 import type {
-  ExploreFileUnreadable,
-  ExploreProbeFailure,
-  ExploreProbeFindings,
-} from '../exploreUnit.js';
+  ExploreProbeFilesResult,
+  ExploreProbeRun,
+  ExploreProbeToolResult,
+  ExploreProbeToolRun,
+} from '../exploreProbe.js';
 import {
   buildAndroidAvdFindings,
   buildAndroidEmulatorFindings,
@@ -19,7 +18,7 @@ import { loadAndroidSdkState } from './loadAndroidSdkState.js';
 /** The AVDs not used since the cutoff, each removed by the located `avdmanager`. */
 export async function loadAndroidAvdFindings(
   run: ExploreProbeToolRun,
-): Promise<Result<ExploreProbeFindings, ExploreProbeFailure>> {
+): Promise<ExploreProbeToolResult> {
   const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
 
   if (state.kind === 'failed') {
@@ -40,7 +39,7 @@ export async function loadAndroidAvdFindings(
 /** The system image folders of the SDK that no AVD names. */
 export async function loadAndroidSystemImageFindings(
   run: ExploreProbeRun,
-): Promise<Result<ExploreProbeFindings, ExploreFileUnreadable>> {
+): Promise<ExploreProbeFilesResult> {
   const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
 
   if (state.kind === 'failed') {
@@ -59,7 +58,7 @@ export async function loadAndroidSystemImageFindings(
 /** The emulator package of the SDK while no AVD exists. */
 export async function loadAndroidEmulatorFindings(
   run: ExploreProbeRun,
-): Promise<Result<ExploreProbeFindings, ExploreFileUnreadable>> {
+): Promise<ExploreProbeFilesResult> {
   const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
 
   if (state.kind === 'failed') {

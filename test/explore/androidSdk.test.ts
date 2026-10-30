@@ -19,6 +19,7 @@ import type {
   ExploreProbeFindings,
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -51,7 +52,7 @@ const NOT_JUDGED: ExploreProbeFindings = { findings: [], isComplete: false };
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
-let homeDir: string;
+let homeDir: AbsolutePath;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
@@ -495,8 +496,7 @@ describe('recheckAndroidAvdUnit', () => {
     const unit = await createOfferedAvd();
 
     expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
-      kind: 'succeeded',
-      value: { kind: 'unchanged' },
+      kind: 'unchanged',
     });
   });
 
@@ -508,8 +508,7 @@ describe('recheckAndroidAvdUnit', () => {
     });
 
     expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
-      kind: 'succeeded',
-      value: { kind: 'changed' },
+      kind: 'changed',
     });
   });
 
@@ -518,8 +517,7 @@ describe('recheckAndroidAvdUnit', () => {
     await rm(unit.iniPath);
 
     expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
-      kind: 'succeeded',
-      value: { kind: 'changed' },
+      kind: 'changed',
     });
   });
 
@@ -529,7 +527,7 @@ describe('recheckAndroidAvdUnit', () => {
     for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
       expect(
         await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun(processCommands) }),
-      ).toEqual({ kind: 'succeeded', value: { kind: 'busy' } });
+      ).toEqual({ kind: 'busy' });
     }
   });
 

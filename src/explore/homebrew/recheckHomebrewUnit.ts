@@ -1,34 +1,27 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import type { Result } from '../../result.js';
-import type { UnitComparison } from '../decideComparisonActivity.js';
+import type { UnitComparison, UnitRecheck } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
-import type {
-  ExploreProbeFailure,
-  ExploreToolUnitHomebrewOldVersions,
-  ExploreToolUnitHomebrewOrphans,
-} from '../exploreUnit.js';
+import type { ExploreToolUnitHomebrew } from '../exploreUnit.js';
 import type { HomebrewState } from './loadHomebrewState.js';
 import { loadHomebrewState } from './loadHomebrewState.js';
 
 /** Unchanged while the fresh lines or list of the unit are a subset of the scanned ones, and idle. */
 export async function recheckHomebrewUnit(params: {
-  unit: ExploreToolUnitHomebrewOldVersions | ExploreToolUnitHomebrewOrphans;
+  unit: ExploreToolUnitHomebrew;
   run: ExploreUnitRecheckRun;
-}): Promise<Result<UnitComparison, ExploreProbeFailure>> {
+}): Promise<UnitRecheck> {
   const state = await loadHomebrewState(params.run);
 
   if (state.kind === 'failed') {
     return state;
   }
 
-  const comparison = compareHomebrewUnit({
+  return compareHomebrewUnit({
     unit: params.unit,
     state: state.value,
     processCommands: params.run.processCommands,
   });
-
-  return { kind: 'succeeded', value: comparison };
 }
 
 /**
@@ -36,7 +29,7 @@ export async function recheckHomebrewUnit(params: {
  * offer, which also covers a Cellar that moved; else busy or not by the Homebrew rule.
  */
 export function compareHomebrewUnit(params: {
-  unit: ExploreToolUnitHomebrewOldVersions | ExploreToolUnitHomebrewOrphans;
+  unit: ExploreToolUnitHomebrew;
   state: HomebrewState;
   processCommands: string[] | null;
 }): UnitComparison {
@@ -54,7 +47,7 @@ export function compareHomebrewUnit(params: {
 }
 
 function listFreshHomebrewKegPaths(params: {
-  unit: ExploreToolUnitHomebrewOldVersions | ExploreToolUnitHomebrewOrphans;
+  unit: ExploreToolUnitHomebrew;
   state: HomebrewState;
 }): AbsolutePath[] {
   switch (params.unit.kind) {

@@ -1,7 +1,7 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type {
   ExploreFinding,
-  ExplorePathUnitVscodeExtension,
+  ExplorePathUnitVscodeExtensionReason,
   ExploreProbeFindings,
 } from '../exploreUnit.js';
 import type {
@@ -11,8 +11,6 @@ import type {
 } from './loadVscodeExtensionState.js';
 import { hasVscodeExtensionFolder } from './loadVscodeExtensionState.js';
 
-type VscodeExtensionReason = ExplorePathUnitVscodeExtension['reason'];
-
 export type VscodeExtensionOfferObsolete = { reason: 'obsolete' };
 
 export type VscodeExtensionOfferOlderVersion = { reason: 'olderVersion'; newerVersion: string };
@@ -21,7 +19,10 @@ export type VscodeExtensionOfferOlderVersion = { reason: 'olderVersion'; newerVe
 export type VscodeExtensionOffer = VscodeExtensionOfferObsolete | VscodeExtensionOfferOlderVersion;
 
 /** Tried in this order, so a folder `.obsolete` marks is offered as obsolete. */
-const VSCODE_EXTENSION_REASONS: VscodeExtensionReason[] = ['obsolete', 'olderVersion'];
+const VSCODE_EXTENSION_REASONS: ExplorePathUnitVscodeExtensionReason[] = [
+  'obsolete',
+  'olderVersion',
+];
 
 /**
  * Offers each extension folder no registry lists that `.obsolete` marks or that a newer version of
@@ -95,7 +96,7 @@ function findFirstVscodeExtensionOffer(params: {
 export function findVscodeExtensionOffer(params: {
   state: VscodeExtensionStateInstalled;
   folder: VscodeExtensionFolder;
-  reason: VscodeExtensionReason;
+  reason: ExplorePathUnitVscodeExtensionReason;
 }): VscodeExtensionOffer | null {
   if (
     params.state.listedFolderNames === null ||
