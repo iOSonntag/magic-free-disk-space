@@ -52,14 +52,14 @@ Pressing Enter alone cancels.
 | `--unused-days <days>` | Days without use before apps, large files, and removed apps' data count (180). |
 | `-h`, `--help`         | Show the help.                                                                 |
 
-| Exit code | Meaning                                                              |
-| --------- | -------------------------------------------------------------------- |
-| 0         | Done, cancelled, or nothing to do.                                   |
-| 1         | A deletion failed, or the deletion log stopped the run.              |
-| 2         | Bad usage, not macOS, or an unsafe setup (see below).                |
-| 3         | Deleting was asked for without an interactive terminal.              |
-| 4         | The deletion log could not be created, so nothing was deleted.       |
-| 130, 143  | Stopped by SIGINT or SIGTERM; a tool it ran is stopped with it.      |
+| Exit code          | Meaning                                                                           |
+| ------------------ | --------------------------------------------------------------------------------- |
+| 0                  | Done, cancelled, or nothing to do.                                                |
+| 1                  | A deletion failed, or the deletion log stopped the run.                           |
+| 2                  | Bad usage, not macOS, or an unsafe setup (see below).                             |
+| 3                  | Deleting was asked for without an interactive terminal.                           |
+| 4                  | The deletion log could not be created, so nothing was deleted.                    |
+| 129, 130, 131, 143 | Stopped by SIGHUP, SIGINT, SIGQUIT, or SIGTERM; a tool it ran is stopped with it. |
 
 ### Full Disk Access
 

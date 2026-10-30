@@ -4,7 +4,7 @@ import { runCli } from './cli/runCli.js';
 import { createTerminalIo } from './cli/terminalIo.js';
 import { loadEnvironment } from './environment/loadEnvironment.js';
 import { formatEnvironmentFailure } from './report/formatEnvironmentFailure.js';
-import { stopRunningTools } from './tools/runToolCommand.js';
+import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
 import { TOOL_INSTALL_LOCATIONS } from './tools/toolInstallLocations.js';
 
 async function main(): Promise<number> {
@@ -26,17 +26,13 @@ async function main(): Promise<number> {
   });
 }
 
-// A tool runs in its own process group, which outlives this process unless it is stopped here.
-process.on('exit', () => {
-  stopRunningTools();
-});
-process.on('SIGINT', () => {
-  stopRunningTools();
-  process.exit(EXIT_CODES.interrupted);
-});
-process.on('SIGTERM', () => {
-  stopRunningTools();
-  process.exit(EXIT_CODES.terminated);
+stopRunningToolsOnProcessEnd({
+  signalExitCodes: {
+    SIGHUP: EXIT_CODES.hungUp,
+    SIGINT: EXIT_CODES.interrupted,
+    SIGQUIT: EXIT_CODES.quit,
+    SIGTERM: EXIT_CODES.terminated,
+  },
 });
 
 process.exitCode = await main();
