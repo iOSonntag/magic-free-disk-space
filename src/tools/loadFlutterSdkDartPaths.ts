@@ -16,9 +16,10 @@ const ACTIVE_ROOTS_PATH = '.pub-cache/active_roots';
 /**
  * Returns the Dart binary path of each distinct Flutter SDK that the projects of
  * `~/.pub-cache/active_roots` name, in the sorted order of their files. A project names its root
- * in a file it may commit, so a root counts only when it holds a `.git` entry, which no cloned
- * tree carries, and its real path is apart from the project's. Unreadable or malformed files and
- * roots whose real path cannot be read are skipped; the binaries themselves are not checked.
+ * in a file it may commit, so a root counts only when it holds a `.git` entry, does not hold the
+ * project, and lies outside the checkout that holds the project, or outside the project when no
+ * checkout holds it. Unreadable or malformed files and roots whose real path cannot be read are
+ * skipped; the binaries themselves are not checked.
  */
 export async function loadFlutterSdkDartPaths(params: { homeDir: string }): Promise<string[]> {
   const activeRootFiles = await loadActiveRootFiles({
@@ -38,23 +39,24 @@ export async function loadFlutterSdkDartPaths(params: { homeDir: string }): Prom
 }
 
 /**
- * Whether the real paths of a Flutter root and of the project that names it are disjoint, neither
- * equal to nor inside the other.
+ * Whether the real path of a Flutter root lies outside the checkout of the project that names it,
+ * or outside the project itself when `checkoutRoot` is `null`, and does not hold the project.
  */
-export function isFlutterRootApartFromProject(params: {
+export function isFlutterRootApartFromCheckout(params: {
   flutterRoot: string;
   projectRoot: string;
+  checkoutRoot: string | null;
 }): boolean {
-  const flutterRootInProject = isSameOrInsidePath({
+  const flutterRootInCheckout = isSameOrInsidePath({
     path: params.flutterRoot,
-    parentPath: params.projectRoot,
+    parentPath: params.checkoutRoot ?? params.projectRoot,
   });
   const projectInFlutterRoot = isSameOrInsidePath({
     path: params.projectRoot,
     parentPath: params.flutterRoot,
   });
 
-  return !flutterRootInProject && !projectInFlutterRoot;
+  return !flutterRootInCheckout && !projectInFlutterRoot;
 }
 
 /** Parses an active-roots file into the path of the `package_config.json` it names, else `null`. */
@@ -133,7 +135,10 @@ async function loadFlutterRoot(params: { activeRootFile: string }): Promise<stri
   return flutterRoot;
 }
 
-/** Whether `flutterRoot` is a git checkout apart from `projectRoot`, the folder of `.dart_tool`. */
+/**
+ * Whether `flutterRoot` is a git checkout apart from the checkout of `projectRoot`, the folder of
+ * `.dart_tool`.
+ */
 async function isFlutterRootAccepted(params: {
   flutterRoot: string;
   projectRoot: string;
@@ -145,9 +150,11 @@ async function isFlutterRootAccepted(params: {
     return false;
   }
 
-  const apart = isFlutterRootApartFromProject({
+  const checkoutRoot = await loadCheckoutRoot({ projectRealPath: projectRealPath });
+  const apart = isFlutterRootApartFromCheckout({
     flutterRoot: flutterRealPath,
     projectRoot: projectRealPath,
+    checkoutRoot: checkoutRoot,
   });
 
   if (!apart) {
@@ -157,6 +164,37 @@ async function isFlutterRootAccepted(params: {
   const gitEntryStats = await loadEntryStats({ path: join(flutterRealPath, '.git') });
 
   return gitEntryStats.kind === 'succeeded';
+}
+
+/**
+ * The root of the git checkout that holds `projectRealPath`, the project folder included: the
+ * nearest folder whose `.git` is a directory, else the outermost one whose `.git` is any other
+ * entry, such as the file of a submodule or a worktree, else `null`. A failed lstat counts as no
+ * `.git`.
+ */
+async function loadCheckoutRoot(params: { projectRealPath: string }): Promise<string | null> {
+  let outermostGitFileFolder: string | null = null;
+  let folder = params.projectRealPath;
+
+  while (true) {
+    const gitEntryStats = await loadEntryStats({ path: join(folder, '.git') });
+
+    if (gitEntryStats.kind === 'succeeded') {
+      if (gitEntryStats.value.kind === 'directory') {
+        return folder;
+      }
+
+      outermostGitFileFolder = folder;
+    }
+
+    const parentFolder = dirname(folder);
+
+    if (parentFolder === folder) {
+      return outermostGitFileFolder;
+    }
+
+    folder = parentFolder;
+  }
 }
 
 function parseFileUrlField(params: { text: string; field: string }): string | null {

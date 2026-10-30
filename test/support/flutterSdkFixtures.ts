@@ -17,22 +17,21 @@ export function buildProjectRoot(params: { homeDir: string; name: string }): str
 }
 
 /**
- * Writes a project `<homeDir>/projects/<name>` whose package config names `flutterRoot`, the
- * active-roots file `<group>/<name>` that names that package config, and the `.git` entry of
- * `flutterRoot`, a folder without `flutterRootGitEntry`.
+ * Writes a project at `projectRoot`, else at `<homeDir>/projects/<name>`, whose package config
+ * names `flutterRoot`, the active-roots file `<group>/<name>` that names that package config, and
+ * the `.git` entry of `flutterRoot`, a folder without `flutterRootGitEntry`.
  */
 export async function createActiveProject(params: {
   homeDir: string;
   group: string;
   name: string;
   flutterRoot: string;
-  flutterRootGitEntry?: FlutterRootGitEntry;
+  flutterRootGitEntry?: GitEntry;
+  projectRoot?: string;
 }): Promise<void> {
-  const packageConfigPath = join(
-    buildProjectRoot({ homeDir: params.homeDir, name: params.name }),
-    '.dart_tool',
-    'package_config.json',
-  );
+  const projectRoot =
+    params.projectRoot ?? buildProjectRoot({ homeDir: params.homeDir, name: params.name });
+  const packageConfigPath = join(projectRoot, '.dart_tool', 'package_config.json');
 
   await Bun.write(
     packageConfigPath,
@@ -42,24 +41,25 @@ export async function createActiveProject(params: {
     buildActiveRootPath({ homeDir: params.homeDir, group: params.group, name: params.name }),
     JSON.stringify({ package_config: pathToFileURL(packageConfigPath).href }),
   );
-  await createFlutterRootGitEntry({
-    flutterRoot: params.flutterRoot,
+  await createGitEntry({
+    folder: params.flutterRoot,
     gitEntry: params.flutterRootGitEntry ?? 'folder',
   });
 }
 
-async function createFlutterRootGitEntry(params: {
-  flutterRoot: string;
-  gitEntry: FlutterRootGitEntry;
+/** Writes `gitEntry` as the `.git` entry of `folder`, with `folder`; `none` writes nothing. */
+export async function createGitEntry(params: {
+  folder: string;
+  gitEntry: GitEntry;
 }): Promise<void> {
-  const gitPath = join(params.flutterRoot, '.git');
+  const gitPath = join(params.folder, '.git');
 
   switch (params.gitEntry) {
     case 'folder':
       await mkdir(gitPath, { recursive: true });
       return;
     case 'file':
-      await mkdir(params.flutterRoot, { recursive: true });
+      await mkdir(params.folder, { recursive: true });
       await writeFile(gitPath, 'gitdir: ../flutter.git/worktrees/stable\n');
       return;
     case 'none':
@@ -67,8 +67,8 @@ async function createFlutterRootGitEntry(params: {
   }
 }
 
-/** The `.git` entry of a Flutter root: a clone's folder, a worktree's file, or none. */
-export type FlutterRootGitEntry = 'folder' | 'file' | 'none';
+/** The `.git` entry of a folder: a clone's folder, the file of a worktree or a submodule, or none. */
+export type GitEntry = 'folder' | 'file' | 'none';
 
 /** Writes `version` as the version file of the Dart SDK whose binary is at `dartPath`. */
 export async function writeDartVersionFile(params: {
