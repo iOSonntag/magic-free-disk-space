@@ -20,12 +20,11 @@ type ApprovedRemoval = {
  */
 export async function deleteApprovedCandidates(params: {
   plan: RemovalPlan;
-  deletionLogPath: string;
   environment: Environment;
   clock: () => number;
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
   const journal = await createDeletionJournal({
-    logPath: params.deletionLogPath,
+    logPath: params.environment.deletionLogPath,
     nowMs: params.clock(),
   });
 

@@ -186,7 +186,6 @@ async function runInteractiveDeletion(params: {
 
   const removal = await deleteApprovedCandidates({
     plan: plan,
-    deletionLogPath: params.environment.deletionLogPath,
     environment: params.environment,
     clock: () => Date.now(),
   });

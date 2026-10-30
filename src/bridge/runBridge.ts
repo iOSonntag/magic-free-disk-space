@@ -315,7 +315,6 @@ async function answerDelete(params: {
 
   const removal = await deleteApprovedCandidates({
     plan: params.state.plan,
-    deletionLogPath: params.state.environment.deletionLogPath,
     environment: params.state.environment,
     clock: params.context.clock,
   });

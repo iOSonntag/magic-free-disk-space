@@ -59,8 +59,15 @@ const toolDistrustDetailTexts: Record<ToolDistrustDetail, string> = {
   notExecutableFile: 'not an executable file',
 };
 
-/** Issues of a tool that could not be asked, listed apart from the places that could not be read. */
-const TOOL_ISSUE_REASONS: ScanIssue['reason'][] = ['toolFailed', 'toolUntrusted'];
+/** Issues of a tool that could not be asked are listed apart from the places that could not be read. */
+const issueBlocks: Record<ScanIssue['reason'], 'place' | 'tool'> = {
+  permissionDenied: 'place',
+  unexpected: 'place',
+  commandFailed: 'place',
+  walkStopped: 'place',
+  toolFailed: 'tool',
+  toolUntrusted: 'tool',
+};
 
 const fullDiskAccessHolderTexts: Record<FullDiskAccessHolder, string> = {
   terminal: 'your terminal',
@@ -243,8 +250,8 @@ function formatIssueBlock(params: {
   issues: ScanIssue[];
   fullDiskAccessHolder: FullDiskAccessHolder;
 }): string[] {
-  const toolIssues = params.issues.filter((issue) => TOOL_ISSUE_REASONS.includes(issue.reason));
-  const placeIssues = params.issues.filter((issue) => !TOOL_ISSUE_REASONS.includes(issue.reason));
+  const toolIssues = params.issues.filter((issue) => issueBlocks[issue.reason] === 'tool');
+  const placeIssues = params.issues.filter((issue) => issueBlocks[issue.reason] === 'place');
 
   return [
     ...formatPlaceIssueBlock({
