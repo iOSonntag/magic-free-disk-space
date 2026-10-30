@@ -16,6 +16,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 describe('loadExploreRead', () => {
   let fixtureRoot: FixtureRoot;
@@ -175,7 +176,10 @@ describe('loadExploreRead', () => {
       const missing = await loadExploreRealPath({ path: join(fixtureRoot.homeDir, 'gone') });
       const underFile = await loadExploreRealPath({ path: join(filePath, 'child') });
 
-      expect(linked).toEqual({ kind: 'succeeded', value: await realpath(folderPath) });
+      expect(linked).toEqual({
+        kind: 'succeeded',
+        value: buildTestAbsolutePath({ text: await realpath(folderPath) }),
+      });
       expect(missing).toEqual({ kind: 'succeeded', value: null });
       expect(underFile).toEqual({ kind: 'succeeded', value: null });
     });

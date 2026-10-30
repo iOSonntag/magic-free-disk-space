@@ -1,4 +1,6 @@
 import { realpath } from 'node:fs/promises';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import type { DirectoryEntry } from '../system/loadDirectoryEntries.js';
@@ -80,19 +82,35 @@ export async function loadExploreEntryStats(params: {
   return toNullWhenNotFound({ path: params.path, failure: stats.failure });
 }
 
-/** The path with every link resolved; `null` when nothing is there or a part of it is no folder. */
+/**
+ * The path with every link resolved; `null` when nothing is there or a part of it is no folder.
+ * Throws when `realpath` answers with a path that is not absolute.
+ */
 export async function loadExploreRealPath(params: {
   path: string;
-}): Promise<Result<string | null, ExploreFileUnreadable>> {
-  try {
-    const realPath = await runFilesystemCall(() => realpath(params.path));
+}): Promise<Result<AbsolutePath | null, ExploreFileUnreadable>> {
+  const text = await loadRealPathText({ path: params.path });
 
-    return { kind: 'succeeded', value: realPath };
+  if (text.kind === 'failed') {
+    return toNullWhenNotFound({ path: params.path, failure: text.failure });
+  }
+
+  const realPath = parseAbsolutePath({ text: text.value });
+
+  if (realPath.kind === 'failed') {
+    throw new Error('realpath returned a path that is not absolute.');
+  }
+
+  return realPath;
+}
+
+async function loadRealPathText(params: { path: string }): Promise<Result<string, FileFailure>> {
+  try {
+    const text = await runFilesystemCall(() => realpath(params.path));
+
+    return { kind: 'succeeded', value: text };
   } catch (error) {
-    return toNullWhenNotFound({
-      path: params.path,
-      failure: getFileFailure({ code: getErrorCode(error) }),
-    });
+    return { kind: 'failed', failure: getFileFailure({ code: getErrorCode(error) }) };
   }
 }
 

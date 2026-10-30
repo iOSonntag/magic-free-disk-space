@@ -1,7 +1,6 @@
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
@@ -105,7 +104,7 @@ export async function loadVscodeExtensionState(params: {
     homePath: params.homeDir,
     extensionsFolder: {
       path: extensionsPath,
-      realPath: parseRealPath({ text: extensionsRealPath.value }),
+      realPath: extensionsRealPath.value,
     },
   });
 
@@ -128,16 +127,6 @@ export async function loadVscodeExtensionState(params: {
       obsoleteFolderNames: obsoleteFolderNames.value,
     },
   };
-}
-
-function parseRealPath(params: { text: string }): AbsolutePath {
-  const realPath = parseAbsolutePath({ text: params.text });
-
-  if (realPath.kind === 'failed') {
-    throw new Error('realpath returned a path that is not absolute.');
-  }
-
-  return realPath.value;
 }
 
 /** Whether `folderNames`, a set of the state, holds the folder. */
