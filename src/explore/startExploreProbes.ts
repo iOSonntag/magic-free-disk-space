@@ -18,7 +18,7 @@ import type {
   ExploreProbeTool,
   ExploreProbeToolRun,
 } from './exploreProbe.js';
-import type { ExploreFinding, ExploreToolFailure } from './exploreUnit.js';
+import type { ExploreFinding, ExploreProbeFindings, ExploreToolFailure } from './exploreUnit.js';
 import { loadHomebrewFindings } from './homebrew/loadHomebrewFindings.js';
 import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from './limits.js';
 import type { ExploreProbeDefinition } from './loadProbeOutput.js';
@@ -31,11 +31,7 @@ import { loadSimulatorRuntimeFindings } from './simulatorRuntimes/loadSimulatorR
 import { loadVscodeExtensionFindings } from './vscodeExtensions/loadVscodeExtensionFindings.js';
 
 /** What the probe judged; `isComplete` is false when it could not judge some or all of its units. */
-export type ExploreProbeOutcomeProbed = {
-  kind: 'probed';
-  findings: ExploreFinding[];
-  isComplete: boolean;
-};
+export type ExploreProbeOutcomeProbed = { kind: 'probed' } & ExploreProbeFindings;
 
 export type ExploreProbeOutcomeToolMissing = { kind: 'toolMissing' };
 
@@ -306,11 +302,7 @@ async function runExploreToolProbe(params: {
     }
   }
 
-  return {
-    kind: 'probed',
-    findings: findings.value.findings,
-    isComplete: findings.value.isComplete,
-  };
+  return { kind: 'probed', ...findings.value };
 }
 
 async function runExploreFilesProbe(params: {
@@ -323,9 +315,5 @@ async function runExploreFilesProbe(params: {
     return { kind: 'unreadable', path: findings.failure.path, failure: findings.failure.failure };
   }
 
-  return {
-    kind: 'probed',
-    findings: findings.value.findings,
-    isComplete: findings.value.isComplete,
-  };
+  return { kind: 'probed', ...findings.value };
 }

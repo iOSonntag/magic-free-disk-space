@@ -2,6 +2,7 @@ import { dirname } from 'node:path';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { TreeEntry, TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
+import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
 
 export type ArtifactFinding = {
@@ -70,16 +71,7 @@ export async function findProjectArtifacts(params: {
     isStopped: () => Date.now() >= params.deadlineMs,
     visitEntry: visitProjectEntry,
     onUnreadable: (unreadable) => {
-      if (
-        unreadable.failure.reason === 'permissionDenied' ||
-        unreadable.failure.reason === 'unexpected'
-      ) {
-        issues.push({
-          path: unreadable.path,
-          reason: unreadable.failure.reason,
-          detail: unreadable.failure.code,
-        });
-      }
+      issues.push(...buildFailureIssues({ path: unreadable.path, failure: unreadable.failure }));
     },
   });
 

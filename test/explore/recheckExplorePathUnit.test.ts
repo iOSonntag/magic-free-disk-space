@@ -143,7 +143,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
     ).toEqual({ kind: 'busy' });
   });
 
-  test('answers unreadable with the path and the failure of a denied read', async () => {
+  test('answers failed with the path and the failure of a denied read', async () => {
     const registryPath = join(extensionsPath, 'extensions.json');
 
     await chmod(registryPath, 0o000);
@@ -155,9 +155,12 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         processCommands: [],
       }),
     ).toEqual({
-      kind: 'unreadable',
-      path: registryPath,
-      failure: { reason: 'permissionDenied', code: 'EACCES' },
+      kind: 'failed',
+      failure: {
+        reason: 'fileUnreadable',
+        path: registryPath,
+        failure: { reason: 'permissionDenied', code: 'EACCES' },
+      },
     });
   });
 });

@@ -1,6 +1,6 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
-import type { ReadFailure } from '../system/readFailure.js';
+import type { ResultFailed } from '../result.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { compareAndroidPathUnit } from './android/compareAndroidPathUnit.js';
 import { loadAndroidSdkState } from './android/loadAndroidSdkState.js';
@@ -11,6 +11,7 @@ import type { UnitComparison, UnitRecheck } from './decideComparisonActivity.js'
 import { decideComparisonActivity } from './decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from './exploreProbe.js';
 import type {
+  ExploreFileUnreadable,
   ExplorePathUnit,
   ExploreToolUnit,
   ExploreToolUnitDartPubCache,
@@ -28,11 +29,8 @@ import { recheckSimulatorRuntimeUnit } from './simulatorRuntimes/recheckSimulato
 import { compareVscodeExtensionUnit } from './vscodeExtensions/compareVscodeExtensionUnit.js';
 import { loadVscodeExtensionState } from './vscodeExtensions/loadVscodeExtensionState.js';
 
-/** A file the recheck of a path unit needs could not be read. */
-export type PathUnitRecheckUnreadable = { kind: 'unreadable'; path: string; failure: ReadFailure };
-
 /** A path recheck runs no command, so it has no tool failure. */
-export type PathUnitRecheck = UnitComparison | PathUnitRecheckUnreadable;
+export type PathUnitRecheck = UnitComparison | ResultFailed<ExploreFileUnreadable>;
 
 /**
  * Runs the unit's probe again with `tool`, the unit's tool as `loadTrustedTool` just returned it,
@@ -105,7 +103,7 @@ export async function recheckExploreUnit(params: {
 
 /**
  * Reads the state of the unit's probe again and compares it with the unit, right before its
- * folder is deleted. A failed read answers `unreadable`. Never rejects.
+ * folder is deleted. A failed read returns the loader's failure as it is. Never rejects.
  */
 export async function recheckExplorePathUnit(params: {
   unit: ExplorePathUnit;
@@ -118,7 +116,7 @@ export async function recheckExplorePathUnit(params: {
       const state = await loadAndroidSdkState({ homeDir: params.environment.homeDir });
 
       if (state.kind === 'failed') {
-        return { kind: 'unreadable', path: state.failure.path, failure: state.failure.failure };
+        return state;
       }
 
       return compareAndroidPathUnit({
@@ -131,7 +129,7 @@ export async function recheckExplorePathUnit(params: {
       const state = await loadVscodeExtensionState({ homeDir: params.environment.homeDir });
 
       if (state.kind === 'failed') {
-        return { kind: 'unreadable', path: state.failure.path, failure: state.failure.failure };
+        return state;
       }
 
       return compareVscodeExtensionUnit({

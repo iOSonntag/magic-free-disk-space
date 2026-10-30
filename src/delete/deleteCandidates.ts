@@ -344,12 +344,12 @@ async function deleteUnitFolderCandidate(params: {
         outcome: 'ownerRunning',
         code: null,
       });
-    case 'unreadable':
+    case 'failed':
       return buildPathOutcome({
         path: folderPath,
         allocatedBytes: params.allocatedBytes,
-        outcome: readFailureToOutcomeKind(recheck.failure),
-        code: recheck.failure.code,
+        outcome: readFailureToOutcomeKind(recheck.failure.failure),
+        code: recheck.failure.failure.code,
       });
     case 'unchanged':
       return deleteScannedPath({
