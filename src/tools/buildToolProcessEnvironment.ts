@@ -4,11 +4,24 @@ import type { ToolName } from './toolInstallLocations.js';
 
 const SYSTEM_PATH_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
 
+// Keeps Homebrew from updating itself, reporting home, and printing hints or colour codes into its
+// output. Homebrew reads its brew.env files anyway, and `HOMEBREW_NO_COLOR` wins over a
+// `HOMEBREW_COLOR` set there.
+const HOMEBREW_ENVIRONMENT_ENTRIES = {
+  HOMEBREW_NO_AUTO_UPDATE: '1',
+  HOMEBREW_NO_ANALYTICS: '1',
+  HOMEBREW_NO_ENV_HINTS: '1',
+  HOMEBREW_NO_COLOR: '1',
+};
+
 // Entries that keep each tool from reaching the network or changing its own setup.
 const TOOL_ENVIRONMENT_ENTRIES: Record<ToolName, Record<string, string>> = {
   xcrun: {},
   dart: {},
   mise: { MISE_OFFLINE: '1' },
+  brewAppleSilicon: HOMEBREW_ENVIRONMENT_ENTRIES,
+  brewIntel: HOMEBREW_ENVIRONMENT_ENTRIES,
+  avdmanager: {},
 };
 
 /**

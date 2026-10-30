@@ -62,7 +62,7 @@ describe('parseSimulatorDeviceList', () => {
     expect(devices[0]).toEqual({
       udid: UNAVAILABLE_DEVICE_UDID,
       name: 'iPhone 15',
-      runtimeId: 'com.apple.CoreSimulator.SimRuntime.iOS-17-0',
+      runtimeIdentifier: 'com.apple.CoreSimulator.SimRuntime.iOS-17-0',
       state: 'Shutdown',
       isAvailable: false,
       availabilityError: 'runtime profile not found using "System" match policy',

@@ -11,7 +11,7 @@ It looks where space hides from people who are not storage experts:
 - **Package manager caches**: npm, Bun, pnpm, Homebrew, CocoaPods, Swift Package Manager,
   Composer, pip, uv, Bundler, Hex.
 - **App caches**: every folder in `~/Library/Caches` and `~/.cache`, plus the caches of Slack,
-  Discord, Chrome, Brave, Visual Studio Code, and Zoom.
+  Discord, Chrome, Brave, Visual Studio Code, Spotify, and Zoom.
 - **Project build folders** such as `node_modules`, `.next`, `.venv`, or `_build` of projects
   that have not changed for 10 days.
 - **Apps** of 256 MiB or more with no sign of use for 180 days.
@@ -21,13 +21,24 @@ It looks where space hides from people who are not storage experts:
   have not changed for 180 days.
 - **The Trash**.
 
-Under **Explore**, some items are removed by the command of the tool that owns them: simulator
-devices with `xcrun simctl delete`, unused Dart and Flutter packages with `dart pub cache gc`,
-and mise tool versions no project pins with `mise uninstall`.
+Under **Explore**, items a developer tool owns are offered with the reasons for each, and removed
+by the tool's own command where it has one:
+
+- Simulators whose runtime is gone, with `xcrun simctl delete`, and simulator runtimes no
+  available simulator uses and not used for 180 days, with `xcrun simctl runtime delete`.
+- Android emulators not used for 180 days, with `avdmanager delete avd`. Android system images
+  no emulator uses, and the Android emulator program while no emulator exists, are deleted as
+  their folder.
+- Old versions of Homebrew packages, with `brew cleanup <package>`, and packages that nothing
+  needs any more, with `brew autoremove`.
+- Unused Dart and Flutter packages, with `dart pub cache gc`, and mise tool versions no project
+  pins, with `mise uninstall`.
+- Visual Studio Code extensions that VS Code marked for removal or that a newer version of them
+  replaced, deleted as their folder.
 
 Other places are only shown with advice, because the tool that owns them must clean them:
-Docker images, simulator runtimes, Android emulators, the pnpm store, Homebrew packages, Node.js
-versions not installed with mise, iPhone backups, and more.
+Docker images, the pnpm store, Homebrew apps, Node.js versions not installed with mise, iPhone
+backups, and more.
 
 ## Usage
 
@@ -49,7 +60,7 @@ Pressing Enter alone cancels.
 | `--dry-run`            | Scan and show the removal plan.                                                |
 | `--select <selection>` | With `--dry-run`: the items to plan.                                           |
 | `--stale-days <days>`  | Days without changes before temporary and project folders count (10).          |
-| `--unused-days <days>` | Days without use before apps, large files, and removed apps' data count (180). |
+| `--unused-days <days>` | Days without use before an item counts as unused (180).                        |
 | `-h`, `--help`         | Show the help.                                                                 |
 
 | Exit code          | Meaning                                                                           |
@@ -110,13 +121,15 @@ bun run app:run        # build and start a debug version
   folder that holds such a cache is offered whole. After you type `DELETE`, the running programs
   are read again, so an app opened during the scan keeps its data. If they cannot be read, every
   app-owned item is held back.
-- **Tools remove what they own.** Items that a developer tool owns, such as a simulator, the
-  Dart package cache, or a mise tool version, are listed under Explore with the reasons the tool
-  gave, and the plan names the command that removes each. They are never selected for you, not
-  even by "safe". A tool counts only from a known install location, never from `PATH`, and only
-  when it is owned by you or root and nobody else can change it. Right before its command runs,
-  the tool and the item are checked again: a changed item, or one whose app or tool is busy, is
-  left alone, and a command stops at a 10 minute limit.
+- **Tools remove what they own.** Items that a developer tool owns, such as a simulator, an
+  Android emulator, or an old Homebrew version, are listed under Explore with the reasons the
+  tool gave, and the plan names the command that removes each. An item whose tool has no command
+  for it, such as an Android system image or an old VS Code extension, is deleted as its folder,
+  under the same guards as every other folder. They are never selected for you, not even by
+  "safe". A tool counts only from a known install location, never from `PATH`, and only when it
+  is owned by you or root and nobody else can change it. Right before its command runs or its
+  folder is deleted, the item is checked again: a changed item, or one whose app or tool is busy,
+  is left alone, and a command stops at a 10 minute limit.
 - **Symbolic links are never followed**, neither while measuring nor while deleting: deleting a
   folder removes a link inside it, never the file the link points to.
 - **Mounted disks are left alone.** A folder where another disk is mounted, or that holds one,
@@ -138,12 +151,16 @@ bun run app:run        # build and start a debug version
 ## Privacy
 
 The tool works offline. It sends nothing anywhere and has no telemetry. It reads file sizes,
-dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`.
+dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`. To judge
+Android and VS Code items, it also reads their own records: the SDK's `package.xml` files, each
+emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. It
+only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
-simctl`, `dart`, and `mise`, to learn which of their items are unused; these forms change
-nothing. Only after you type `DELETE` does it run their cleanup commands, one for each item you
-selected. A tool runs with a fixed environment that keeps it offline where the tool allows that.
+simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
+change nothing. Only after you type `DELETE` does it run their cleanup commands, such as
+`brew cleanup` or `avdmanager delete avd`, one for each item you selected. A tool runs with a
+fixed environment that keeps it offline where the tool allows that.
 
 ## Limits
 

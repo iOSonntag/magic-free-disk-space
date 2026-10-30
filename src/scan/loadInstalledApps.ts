@@ -2,10 +2,9 @@ import { basename, join } from 'node:path';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadCommandOutput } from '../system/loadCommandOutput.js';
-import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
-import type { FileFailure } from '../system/loadFileIdentity.js';
+import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
 
 export type InstalledApp = {
@@ -90,11 +89,7 @@ async function findAppBundlePaths(params: { appDirs: string[] }): Promise<AppBun
     const listing = await loadDirectoryNames({ path: appDir });
 
     if (listing.kind === 'failed') {
-      const listingIssue = getReadIssue({ path: appDir, failure: listing.failure });
-
-      if (listingIssue !== null) {
-        issues.push(listingIssue);
-      }
+      issues.push(...buildFailureIssues({ path: appDir, failure: listing.failure }));
 
       continue;
     }
@@ -110,11 +105,7 @@ async function findAppBundlePaths(params: { appDirs: string[] }): Promise<AppBun
       const stats = await loadEntryStats({ path: entryPath });
 
       if (stats.kind === 'failed') {
-        const statsIssue = getReadIssue({ path: entryPath, failure: stats.failure });
-
-        if (statsIssue !== null) {
-          issues.push(statsIssue);
-        }
+        issues.push(...buildFailureIssues({ path: entryPath, failure: stats.failure }));
 
         continue;
       }
@@ -135,9 +126,10 @@ async function findVendorBundlePaths(params: { vendorPath: string }): Promise<Ap
   const listing = await loadDirectoryNames({ path: params.vendorPath });
 
   if (listing.kind === 'failed') {
-    const listingIssue = getReadIssue({ path: params.vendorPath, failure: listing.failure });
-
-    return { bundlePaths: [], issues: listingIssue === null ? [] : [listingIssue] };
+    return {
+      bundlePaths: [],
+      issues: buildFailureIssues({ path: params.vendorPath, failure: listing.failure }),
+    };
   }
 
   const bundlePaths = listing.value
@@ -145,17 +137,6 @@ async function findVendorBundlePaths(params: { vendorPath: string }): Promise<Ap
     .map((name) => join(params.vendorPath, name));
 
   return { bundlePaths: bundlePaths, issues: [] };
-}
-
-function getReadIssue(params: {
-  path: string;
-  failure: DirectoryFailure | FileFailure;
-}): ScanIssue | null {
-  if (params.failure.reason === 'permissionDenied' || params.failure.reason === 'unexpected') {
-    return { path: params.path, reason: params.failure.reason, detail: params.failure.code };
-  }
-
-  return null;
 }
 
 function isAppBundleName(params: { name: string }): boolean {

@@ -1,5 +1,5 @@
 import type { CandidateCategory, Risk } from '../catalog/catalog.js';
-import type { ExploreToolUnit } from '../explore/exploreUnit.js';
+import type { ExplorePathUnit, ExploreToolUnit } from '../explore/exploreUnit.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 
 /** Deleted as a path, only while its identity still matches the scan. */
@@ -12,6 +12,16 @@ export type CandidateRemovalDeletePath = {
 
 /** Removed by the command of the unit's own tool, after the unit is checked again. */
 export type CandidateRemovalRunTool = { kind: 'runTool'; unit: ExploreToolUnit };
+
+/**
+ * Deleted as the unit's one folder, after the unit is checked again and only while the folder's
+ * identity still matches the scan.
+ */
+export type CandidateRemovalDeleteUnitFolder = {
+  kind: 'deleteUnitFolder';
+  identity: FileIdentity;
+  unit: ExplorePathUnit;
+};
 
 /** What an item is and what it holds, the same for every origin. */
 export type CandidateListing = {
@@ -34,10 +44,10 @@ export type CandidateMatched = CandidateListing & {
   removal: CandidateRemovalDeletePath;
 };
 
-/** An item a probe of Explore found, removed by the command of its tool. */
+/** An item a probe of Explore found, removed by the command of its tool or as its unit's folder. */
 export type CandidateProbed = CandidateListing & {
   origin: 'explore';
-  removal: CandidateRemovalRunTool;
+  removal: CandidateRemovalRunTool | CandidateRemovalDeleteUnitFolder;
   /** What the probe found that makes the item safe to offer. */
   evidenceLines: string[];
 };

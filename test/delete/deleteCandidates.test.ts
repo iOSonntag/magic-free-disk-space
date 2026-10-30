@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { RemovalOutcomeKind } from '../../src/delete/deleteCandidates.js';
+import type { RemovalOutcomeKind, RemovalRun } from '../../src/delete/deleteCandidates.js';
 import {
   deleteCandidates,
   isUnremovedOutcome,
@@ -24,6 +24,20 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
+import {
+  buildTestVscodeExtensionCandidate,
+  buildVscodeExtensionsPath,
+  buildVscodeProfilesPath,
+  buildVscodeRegistryText,
+  createVscodeExtensionFolders,
+  createVscodeInstallation,
+  FIXTURE_PROFILE_ID,
+  OBSOLETE_FOLDER_NAME,
+  OLDER_FOLDER_NAME,
+  VSCODE_APP_COMMAND,
+  VSCODE_FOLDER_SIZE_BYTES,
+  writeVscodeFile,
+} from '../explore/vscodeExtensionFixtures.js';
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
@@ -186,8 +200,13 @@ async function createToolCandidate(params: {
   await createUnitRunFakeTool({
     folder: dirname(unit.tool.path),
     unit: unit,
-    probeStdoutText: buildMisePrunableJson({ homeDir: fixtureRoot.homeDir }),
-    probeExitCode: 0,
+    answers: [
+      {
+        command: 'miseVersions',
+        stdoutText: buildMisePrunableJson({ homeDir: fixtureRoot.homeDir }),
+        exitCode: 0,
+      },
+    ],
     commandBody: params.buildCommandBody(candidate.path),
   });
 
@@ -214,8 +233,13 @@ async function createSimulatorCandidate(): Promise<Candidate> {
   await createUnitRunFakeTool({
     folder: dirname(unit.tool.path),
     unit: unit,
-    probeStdoutText: buildSimulatorDeviceListJson({ homeDir: fixtureRoot.homeDir }),
-    probeExitCode: 0,
+    answers: [
+      {
+        command: 'simulatorDevices',
+        stdoutText: buildSimulatorDeviceListJson({ homeDir: fixtureRoot.homeDir }),
+        exitCode: 0,
+      },
+    ],
     commandBody: `touch '${markerPath}'
 rm -r '${dataPath}'
 exit 0`,
@@ -745,6 +769,179 @@ exit 0`,
     expect(await isPresent(markerPath)).toBe(false);
     expect(await isPresent(readToolUnit(simulatorCandidate).tool.path)).toBe(true);
     expect(await isPresent(simulatorCandidate.path)).toBe(true);
+  });
+});
+
+describe('deleteCandidates with a VS Code extension folder', () => {
+  /** The obsolete folder of the fixture installation, scanned with the identity it has. */
+  async function scanVscodeCandidate(): Promise<Candidate> {
+    await createVscodeInstallation({ homeDir: environment.homeDir });
+
+    const candidate = buildTestVscodeExtensionCandidate({ homeDir: environment.homeDir });
+    const removal = candidate.removal;
+    const identity = await loadFileIdentity({ path: candidate.path });
+
+    if (identity.kind === 'failed' || removal.kind !== 'deleteUnitFolder') {
+      throw new Error('The obsolete folder should be scanned as a unit folder.');
+    }
+
+    return { ...candidate, removal: { ...removal, identity: identity.value } };
+  }
+
+  async function deleteVscodeCandidate(params: {
+    candidate: Candidate;
+    loadProcessCommands: () => Promise<string[] | null>;
+  }): Promise<RemovalRun> {
+    return deleteCandidates({
+      candidates: [params.candidate],
+      journal: await createTestJournal(),
+      loadProcessCommands: params.loadProcessCommands,
+      environment: environment,
+      clock: () => NOW_MS,
+    });
+  }
+
+  test('deletes the folder as a path and records a path intent and outcome', async () => {
+    const candidate = await scanVscodeCandidate();
+    const journal = await createTestJournal();
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: journal,
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      clock: () => NOW_MS,
+    });
+
+    expect(run).toEqual({
+      outcomes: [
+        {
+          path: candidate.path,
+          allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
+          freedBytes: VSCODE_FOLDER_SIZE_BYTES,
+          outcome: 'removed',
+          code: null,
+        },
+      ],
+      journalFailure: null,
+    });
+    expect(await loadJournalLines(journal)).toEqual([
+      expect.objectContaining({ kind: 'sessionStart' }),
+      {
+        kind: 'intent',
+        atMs: NOW_MS,
+        path: candidate.path,
+        allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
+      },
+      expect.objectContaining({ kind: 'outcome', path: candidate.path, outcome: 'removed' }),
+    ]);
+    expect(await isPresent(candidate.path)).toBe(false);
+    expect(
+      await isPresent(
+        join(buildVscodeExtensionsPath({ homeDir: environment.homeDir }), OLDER_FOLDER_NAME),
+      ),
+    ).toBe(true);
+  });
+
+  test('leaves the folder alone once a profile lists it after the scan', async () => {
+    const candidate = await scanVscodeCandidate();
+
+    await writeVscodeFile({
+      path: join(
+        buildVscodeProfilesPath({ homeDir: environment.homeDir }),
+        FIXTURE_PROFILE_ID,
+        'extensions.json',
+      ),
+      text: buildVscodeRegistryText({
+        extensionsPath: buildVscodeExtensionsPath({ homeDir: environment.homeDir }),
+        folderNames: [OBSOLETE_FOLDER_NAME],
+        form: 'locationOnly',
+      }),
+    });
+
+    const run = await deleteVscodeCandidate({
+      candidate: candidate,
+      loadProcessCommands: buildProcessCommandsLoader([]),
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
+    expect(await isPresent(candidate.path)).toBe(true);
+  });
+
+  test('reads the processes afresh, so VS Code started after the confirmation keeps it', async () => {
+    const candidate = await scanVscodeCandidate();
+    const processReads: string[][] = [[], [VSCODE_APP_COMMAND]];
+    let readCount = 0;
+
+    const run = await deleteVscodeCandidate({
+      candidate: candidate,
+      loadProcessCommands: async () => {
+        readCount += 1;
+
+        return processReads[readCount - 1] ?? [];
+      },
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'ownerRunning', freedBytes: 0 });
+    expect(readCount).toBe(2);
+    expect(await isPresent(candidate.path)).toBe(true);
+  });
+
+  test('reports a denied read of a registry as a permission denial and keeps the folder', async () => {
+    const candidate = await scanVscodeCandidate();
+
+    await chmod(
+      join(buildVscodeExtensionsPath({ homeDir: environment.homeDir }), 'extensions.json'),
+      0o000,
+    );
+
+    const run = await deleteVscodeCandidate({
+      candidate: candidate,
+      loadProcessCommands: buildProcessCommandsLoader([]),
+    });
+
+    expect(run.outcomes[0]).toMatchObject({
+      outcome: 'permissionDenied',
+      code: 'EACCES',
+      freedBytes: 0,
+    });
+    expect(await isPresent(candidate.path)).toBe(true);
+  });
+
+  test('reports any other failed read of a registry as failed with its code', async () => {
+    const candidate = await scanVscodeCandidate();
+    const registryPath = join(
+      buildVscodeExtensionsPath({ homeDir: environment.homeDir }),
+      'extensions.json',
+    );
+
+    await rm(registryPath);
+    await symlink(registryPath, registryPath);
+
+    const run = await deleteVscodeCandidate({
+      candidate: candidate,
+      loadProcessCommands: buildProcessCommandsLoader([]),
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'ELOOP', freedBytes: 0 });
+    expect(await isPresent(candidate.path)).toBe(true);
+  });
+
+  test('leaves a folder alone that was replaced after the scan', async () => {
+    const candidate = await scanVscodeCandidate();
+
+    await rm(candidate.path, { recursive: true });
+    await createVscodeExtensionFolders({
+      homeDir: environment.homeDir,
+      folderNames: [OBSOLETE_FOLDER_NAME],
+    });
+
+    const run = await deleteVscodeCandidate({
+      candidate: candidate,
+      loadProcessCommands: buildProcessCommandsLoader([]),
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
+    expect(await isPresent(join(candidate.path, 'package.json'))).toBe(true);
   });
 });
 

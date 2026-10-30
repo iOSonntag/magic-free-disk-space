@@ -1,4 +1,5 @@
-export type ToolName = 'xcrun' | 'dart' | 'mise';
+/** One name per binary the explore probes run; each Homebrew prefix is a tool of its own. */
+export type ToolName = 'xcrun' | 'dart' | 'mise' | 'brewAppleSilicon' | 'brewIntel' | 'avdmanager';
 
 /** A fixed place of the binary; `home` paths are relative to the home folder. */
 export type ToolLocationPath = { kind: 'path'; root: 'home' | 'absolute'; path: string };
@@ -26,5 +27,11 @@ export const TOOL_INSTALL_LOCATIONS: ToolInstallLocations = {
     { kind: 'path', root: 'absolute', path: '/opt/homebrew/bin/mise' },
     { kind: 'path', root: 'absolute', path: '/usr/local/bin/mise' },
     { kind: 'path', root: 'home', path: '.local/bin/mise' },
+  ],
+  brewAppleSilicon: [{ kind: 'path', root: 'absolute', path: '/opt/homebrew/bin/brew' }],
+  brewIntel: [{ kind: 'path', root: 'absolute', path: '/usr/local/bin/brew' }],
+  avdmanager: [
+    { kind: 'path', root: 'home', path: 'Library/Android/sdk/cmdline-tools/latest/bin/avdmanager' },
+    { kind: 'path', root: 'absolute', path: '/opt/homebrew/bin/avdmanager' },
   ],
 };

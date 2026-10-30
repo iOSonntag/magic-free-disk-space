@@ -1,13 +1,19 @@
 import { rm } from 'node:fs/promises';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { ExploreToolFailure } from '../explore/exploreUnit.js';
+import type { ExploreProbeFailure } from '../explore/exploreUnit.js';
 import { buildUnitRunArguments } from '../explore/exploreUnit.js';
+import { recheckExplorePathUnit } from '../explore/recheckExploreUnit.js';
 import type { Result } from '../result.js';
-import type { Candidate, CandidateRemovalDeletePath } from '../scan/candidate.js';
+import type {
+  Candidate,
+  CandidateRemovalDeletePath,
+  CandidateRemovalDeleteUnitFolder,
+} from '../scan/candidate.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import type { ReadFailure } from '../system/readFailure.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
 import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
@@ -41,7 +47,7 @@ export type RemovalOutcomeToolFailed = {
   allocatedBytes: number;
   freedBytes: number;
   outcome: 'toolFailed';
-  failure: ExploreToolFailure;
+  failure: ExploreProbeFailure;
 };
 
 export type RemovalOutcome = RemovalOutcomeCoded | RemovalOutcomeToolFailed;
@@ -73,8 +79,8 @@ export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
  * Removes each candidate permanently, in order, after recording the intent. A path goes only
  * while its identity still matches the scan and no owner app runs in the processes
  * `loadProcessCommands` read once after the confirmation; `null` withholds every owned item. A
- * tool item reads the processes afresh and runs only while its unit is still unchanged and
- * idle. A journal failure stops the run.
+ * tool item, and a unit deleted as its folder, read the processes afresh and go only while the
+ * unit is still unchanged and idle. A journal failure stops the run.
  */
 export async function deleteCandidates(params: {
   candidates: Candidate[];
@@ -130,6 +136,7 @@ export async function deleteCandidates(params: {
 function buildIntentEntry(params: { candidate: Candidate; atMs: number }): JournalEntry {
   switch (params.candidate.removal.kind) {
     case 'deletePath':
+    case 'deleteUnitFolder':
       return {
         kind: 'intent',
         atMs: params.atMs,
@@ -165,16 +172,17 @@ async function removeCandidate(params: {
         processCommands: params.processCommands,
       });
 
-      return {
-        outcome: outcome,
-        outcomeEntry: {
-          kind: 'outcome',
-          atMs: params.clock(),
-          path: outcome.path,
-          outcome: outcome.outcome,
-          code: outcome.code,
-        },
-      };
+      return pathOutcomeToRemoval({ outcome: outcome, atMs: params.clock() });
+    }
+    case 'deleteUnitFolder': {
+      const outcome = await deleteUnitFolderCandidate({
+        allocatedBytes: params.candidate.allocatedBytes,
+        removal: params.candidate.removal,
+        environment: params.environment,
+        loadProcessCommands: params.loadProcessCommands,
+      });
+
+      return pathOutcomeToRemoval({ outcome: outcome, atMs: params.clock() });
     }
     case 'runTool': {
       const run = await runToolCandidate({
@@ -196,6 +204,22 @@ async function removeCandidate(params: {
 
 /** The outcome of a removal and the journal entry that records it. */
 export type RecordedRemoval = { outcome: RemovalOutcome; outcomeEntry: JournalEntry };
+
+function pathOutcomeToRemoval(params: {
+  outcome: RemovalOutcomeCoded;
+  atMs: number;
+}): RecordedRemoval {
+  return {
+    outcome: params.outcome,
+    outcomeEntry: {
+      kind: 'outcome',
+      atMs: params.atMs,
+      path: params.outcome.path,
+      outcome: params.outcome.outcome,
+      code: params.outcome.code,
+    },
+  };
+}
 
 /** Maps the run of a tool item onto its outcome and its `toolOutcome` journal entry. */
 export function toolCandidateRunToRemoval(params: {
@@ -281,6 +305,76 @@ async function deletePathCandidate(params: {
     });
   }
 
+  return deleteScannedPath({
+    path: params.path,
+    allocatedBytes: params.allocatedBytes,
+    identity: params.removal.identity,
+  });
+}
+
+/**
+ * Deletes the unit's folder only while a fresh recheck, with the processes read right before,
+ * still offers the unit for the same reason, and the folder's identity still matches the scan.
+ */
+async function deleteUnitFolderCandidate(params: {
+  allocatedBytes: number;
+  removal: CandidateRemovalDeleteUnitFolder;
+  environment: Environment;
+  loadProcessCommands: () => Promise<string[] | null>;
+}): Promise<RemovalOutcomeCoded> {
+  const folderPath = params.removal.unit.folderPath;
+  const recheck = await recheckExplorePathUnit({
+    unit: params.removal.unit,
+    environment: params.environment,
+    processCommands: await params.loadProcessCommands(),
+  });
+
+  switch (recheck.kind) {
+    case 'changed':
+      return buildPathOutcome({
+        path: folderPath,
+        allocatedBytes: params.allocatedBytes,
+        outcome: 'changedSinceScan',
+        code: null,
+      });
+    case 'busy':
+      return buildPathOutcome({
+        path: folderPath,
+        allocatedBytes: params.allocatedBytes,
+        outcome: 'ownerRunning',
+        code: null,
+      });
+    case 'failed':
+      return buildPathOutcome({
+        path: folderPath,
+        allocatedBytes: params.allocatedBytes,
+        outcome: readFailureToOutcomeKind(recheck.failure.failure),
+        code: recheck.failure.failure.code,
+      });
+    case 'unchanged':
+      return deleteScannedPath({
+        path: folderPath,
+        allocatedBytes: params.allocatedBytes,
+        identity: params.removal.identity,
+      });
+  }
+}
+
+function readFailureToOutcomeKind(failure: ReadFailure): RemovalOutcomeCodedKind {
+  switch (failure.reason) {
+    case 'permissionDenied':
+      return 'permissionDenied';
+    case 'unexpected':
+      return 'failed';
+  }
+}
+
+/** Deletes the path only while its identity still matches the scan. */
+async function deleteScannedPath(params: {
+  path: string;
+  allocatedBytes: number;
+  identity: FileIdentity;
+}): Promise<RemovalOutcomeCoded> {
   const currentIdentity = await loadFileIdentity({ path: params.path });
 
   if (currentIdentity.kind === 'failed') {
@@ -310,7 +404,7 @@ async function deletePathCandidate(params: {
     });
   }
 
-  if (!isSameIdentity({ current: currentIdentity.value, scanned: params.removal.identity })) {
+  if (!isSameIdentity({ current: currentIdentity.value, scanned: params.identity })) {
     return buildPathOutcome({
       path: params.path,
       allocatedBytes: params.allocatedBytes,

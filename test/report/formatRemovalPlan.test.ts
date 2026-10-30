@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { formatRemovalPlan } from '../../src/report/formatRemovalPlan.js';
 import type { Candidate } from '../../src/scan/candidate.js';
+import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
@@ -108,6 +109,20 @@ describe('formatRemovalPlan', () => {
     });
 
     expect(lines).toContain('   by running: dart --suppress-analytics pub cache gc --force');
+  });
+
+  test('lists a unit folder as a path deleted as it is, with no command', () => {
+    const lines = formatRemovalPlan({
+      plan: {
+        approved: [buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' })],
+        refused: [],
+      },
+    });
+
+    expect(lines).toEqual([
+      'This item will be deleted permanently, 4.0 KiB in total:',
+      '- 4.0 KiB /Users/example/.vscode/extensions/example.alpha-1.0.0',
+    ]);
   });
 
   test('marks an incomplete approved size as at least', () => {

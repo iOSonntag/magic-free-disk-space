@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
-import { formatScanReport } from '../../src/report/formatScanReport.js';
+import { formatCandidateView, formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice, Candidate } from '../../src/scan/candidate.js';
+import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
@@ -9,6 +10,9 @@ import {
 
 const fullDiskAccessLine =
   'Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
+
+const EXPLORE_HEADING =
+  'Explore: their own tools remove these, or this tool deletes the folder shown where a tool has no command for it. "safe" never selects them; read the reasons first:';
 
 function buildCandidate(params: {
   title: string;
@@ -380,7 +384,7 @@ describe('formatScanReport', () => {
       '   /fixture/a',
       '   Cached files. Rebuilt when needed.',
       '',
-      'Explore: their own tools remove these, and "safe" never selects them. Read the reasons first:',
+      EXPLORE_HEADING,
       '2. 2.0 KiB [safe] node 20.1.0',
       '   /fixture/home/.local/share/mise/installs/node/20.1.0',
       `   ${toolCandidate.explanation} ${toolCandidate.regeneration}`,
@@ -401,6 +405,29 @@ describe('formatScanReport', () => {
     });
 
     expect(lines).toContain('   Runs: dart --suppress-analytics pub cache gc --force');
+  });
+
+  test('lists a unit folder as an Explore item with its evidence and no command', () => {
+    const lines = formatScanReport({
+      report: {
+        candidates: [buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' })],
+        safeNumbers: [],
+        advice: [],
+        skipped: [],
+        issues: [],
+      },
+    });
+
+    expect(lines).toEqual([
+      'Found 1 item, 4.0 KiB in total:',
+      '',
+      EXPLORE_HEADING,
+      '1. 4.0 KiB [review] VS Code extension example.alpha 1.0.0',
+      '   /Users/example/.vscode/extensions/example.alpha-1.0.0',
+      '   An extension folder VS Code marked for removal after an uninstall or an update. VS Code downloads it again only if you install this version again.',
+      "   - Neither VS Code's default registry nor any profile's lists this folder.",
+      "   - VS Code's .obsolete file marks it for removal.",
+    ]);
   });
 
   test('omits the Full Disk Access line when no issue is a permission problem', () => {
@@ -465,5 +492,30 @@ describe('formatScanReport', () => {
       'Could not read 1 place:',
       '- /fixture/c: unexpected error (EIO)',
     ]);
+  });
+});
+
+describe('formatCandidateView', () => {
+  test('gives a unit folder its evidence and no command, as the app receives it', () => {
+    expect(
+      formatCandidateView({
+        candidate: buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' }),
+        number: 3,
+      }),
+    ).toEqual({
+      number: 3,
+      title: 'VS Code extension example.alpha 1.0.0',
+      path: '/Users/example/.vscode/extensions/example.alpha-1.0.0',
+      risk: 'review',
+      explanation:
+        'An extension folder VS Code marked for removal after an uninstall or an update.',
+      regeneration: 'VS Code downloads it again only if you install this version again.',
+      sizeText: '4.0 KiB',
+      evidenceLines: [
+        "Neither VS Code's default registry nor any profile's lists this folder.",
+        "VS Code's .obsolete file marks it for removal.",
+      ],
+      commandText: null,
+    });
   });
 });

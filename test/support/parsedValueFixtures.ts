@@ -1,3 +1,7 @@
+import type { AndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
+import { parseAndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
+import type { HomebrewFormulaName } from '../../src/explore/homebrew/parseHomebrewFormulaName.js';
+import { parseHomebrewFormulaName } from '../../src/explore/homebrew/parseHomebrewFormulaName.js';
 import type {
   MiseToolName,
   MiseToolVersion,
@@ -8,6 +12,8 @@ import {
 } from '../../src/explore/miseVersions/parseMisePrunableVersions.js';
 import type { SimulatorDeviceUdid } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import { parseSimulatorDeviceUdid } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
+import type { SimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeId.js';
+import { parseSimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeId.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { Result } from '../../src/result.js';
@@ -28,6 +34,18 @@ export function buildTestMiseToolName(params: { text: string }): MiseToolName {
 
 export function buildTestMiseToolVersion(params: { text: string }): MiseToolVersion {
   return unwrapFixtureValue({ parsed: parseMiseToolVersion(params), text: params.text });
+}
+
+export function buildTestSimulatorRuntimeId(params: { text: string }): SimulatorRuntimeId {
+  return unwrapFixtureValue({ parsed: parseSimulatorRuntimeId(params), text: params.text });
+}
+
+export function buildTestAndroidAvdName(params: { text: string }): AndroidAvdName {
+  return unwrapFixtureValue({ parsed: parseAndroidAvdName(params), text: params.text });
+}
+
+export function buildTestHomebrewFormulaName(params: { text: string }): HomebrewFormulaName {
+  return unwrapFixtureValue({ parsed: parseHomebrewFormulaName(params), text: params.text });
 }
 
 function unwrapFixtureValue<T>(params: { parsed: Result<T, string>; text: string }): T {

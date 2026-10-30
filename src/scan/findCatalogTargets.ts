@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { FileFailure } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import { buildFailureIssues } from './buildReadIssue.js';
+import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 
 export type CatalogTarget = {
@@ -41,17 +41,6 @@ export async function findCatalogTargets(params: {
     targets: targetsPerEntry.flatMap((entryTargets) => entryTargets.targets),
     issues: targetsPerEntry.flatMap((entryTargets) => entryTargets.issues),
   };
-}
-
-function getCatalogEntryPath(params: { environment: Environment; entry: CatalogEntry }): string {
-  if (params.entry.root === 'absolute') {
-    return params.entry.path;
-  }
-
-  const rootDir =
-    params.entry.root === 'home' ? params.environment.homeDir : params.environment.tempDir;
-
-  return join(rootDir, params.entry.path);
 }
 
 async function findSelfTargets(params: {
@@ -93,15 +82,4 @@ async function findChildTargets(params: {
     })),
     issues: [],
   };
-}
-
-function buildFailureIssues(params: {
-  path: string;
-  failure: FileFailure | DirectoryFailure;
-}): ScanIssue[] {
-  if (params.failure.reason === 'permissionDenied' || params.failure.reason === 'unexpected') {
-    return [{ path: params.path, reason: params.failure.reason, detail: params.failure.code }];
-  }
-
-  return [];
 }

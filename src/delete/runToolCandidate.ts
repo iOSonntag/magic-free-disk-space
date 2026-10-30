@@ -1,5 +1,5 @@
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { ExploreToolFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
+import type { ExploreProbeFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
 import { buildUnitCommand } from '../explore/exploreUnit.js';
 import { recheckExploreUnit } from '../explore/recheckExploreUnit.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
@@ -27,7 +27,7 @@ export type ToolCandidateRunSkipped = { kind: 'skipped'; reason: ToolCandidateSk
 export type ToolCandidateRunFailed = {
   kind: 'failed';
   freedBytes: number;
-  failure: ExploreToolFailure;
+  failure: ExploreProbeFailure;
 };
 
 export type ToolCandidateRun =

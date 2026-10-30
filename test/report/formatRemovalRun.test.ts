@@ -72,6 +72,45 @@ describe('formatRemovalRun', () => {
     ]);
   });
 
+  test('reports the folders of path units as paths, deleted or left alone', () => {
+    const extensionsPath = '/Users/example/.vscode/extensions';
+    const lines = formatRemovalRun({
+      run: {
+        outcomes: [
+          {
+            path: `${extensionsPath}/example.alpha-1.0.0`,
+            allocatedBytes: 4096,
+            freedBytes: 4096,
+            outcome: 'removed',
+            code: null,
+          },
+          {
+            path: `${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
+            allocatedBytes: 4096,
+            freedBytes: 0,
+            outcome: 'changedSinceScan',
+            code: null,
+          },
+          {
+            path: `${extensionsPath}/example.gamma-3.0.0`,
+            allocatedBytes: 4096,
+            freedBytes: 0,
+            outcome: 'ownerRunning',
+            code: null,
+          },
+        ],
+        journalFailure: null,
+      },
+    });
+
+    expect(lines).toEqual([
+      `- deleted: ${extensionsPath}/example.alpha-1.0.0`,
+      `- changed since the scan, left alone: ${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
+      `- its app or tool is running now, left alone: ${extensionsPath}/example.gamma-3.0.0`,
+      'Freed about 4.0 KiB in 1 item.',
+    ]);
+  });
+
   test('omits the summary lines that do not apply', () => {
     const lines = formatRemovalRun({
       run: {
@@ -214,6 +253,32 @@ describe('formatRemovalRun', () => {
       '- its tool failed: /fixture/b (could not start: ENOENT)',
       '- its tool failed: /fixture/c (stopped when its output passed 1.0 MiB)',
     ]);
+  });
+
+  test('names the file a recheck could not read, with its code and no stderr', () => {
+    const lines = formatRemovalRun({
+      run: {
+        outcomes: [
+          {
+            path: '/fixture/avd',
+            allocatedBytes: 0,
+            freedBytes: 0,
+            outcome: 'toolFailed',
+            failure: {
+              reason: 'fileUnreadable',
+              path: '/fixture/avd/config.ini',
+              failure: { reason: 'permissionDenied', code: 'EACCES' },
+            },
+          },
+        ],
+        journalFailure: null,
+      },
+    });
+
+    expect(lines[0]).toBe(
+      '- its tool failed: /fixture/avd (could not read /fixture/avd/config.ini: EACCES)',
+    );
+    expect(lines[1]).toBe('Freed about 0 B in 0 items.');
   });
 
   test('adds the deletion log failure as the last line', () => {

@@ -1,5 +1,4 @@
 import type { CandidateDecision } from './candidate.js';
-import type { Measurement } from './loadPathMeasurement.js';
 
 /**
  * Turns an offer whose tree holds another mounted volume into a skip: a recursive removal would
@@ -7,7 +6,7 @@ import type { Measurement } from './loadPathMeasurement.js';
  */
 export function skipOfferHoldingOtherVolume(params: {
   decision: CandidateDecision;
-  measurement: Measurement;
+  measurement: { holdsOtherVolume: boolean };
 }): CandidateDecision {
   if (params.decision.kind !== 'offer' || !params.measurement.holdsOtherVolume) {
     return params.decision;

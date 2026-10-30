@@ -1,11 +1,11 @@
 import { basename } from 'node:path';
-import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
-import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
+import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import type { TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
+import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
 
 export type UserFileFinding = {
@@ -162,15 +162,4 @@ function isUserFolderName(params: { name: string }): boolean {
   }
 
   return !PACKAGE_DIRECTORY_NAME_PATTERN.test(params.name);
-}
-
-function buildFailureIssues(params: {
-  path: string;
-  failure: FileFailure | DirectoryFailure;
-}): ScanIssue[] {
-  if (params.failure.reason === 'permissionDenied' || params.failure.reason === 'unexpected') {
-    return [{ path: params.path, reason: params.failure.reason, detail: params.failure.code }];
-  }
-
-  return [];
 }

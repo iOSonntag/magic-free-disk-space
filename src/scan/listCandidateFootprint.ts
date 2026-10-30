@@ -7,6 +7,7 @@ export function listCandidateFootprint(candidate: Candidate): string[] {
     case 'deletePath':
       return [candidate.path];
     case 'runTool':
+    case 'deleteUnitFolder':
       return listUnitPaths(candidate.removal.unit);
   }
 }

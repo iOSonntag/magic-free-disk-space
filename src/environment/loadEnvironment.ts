@@ -1,6 +1,7 @@
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
+import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import { getErrorCode } from '../system/getErrorCode.js';
@@ -27,10 +28,19 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     };
   }
 
-  const homeDir = homedir();
-  const applicationDirs = ['/Applications', join(homeDir, 'Applications')];
+  const homeText = homedir();
+  const homeDir = parseAbsolutePath({ text: homeText });
 
-  const homeRealPath = await loadRealPath({ path: homeDir });
+  if (homeDir.kind === 'failed') {
+    return {
+      kind: 'failed',
+      failure: { reason: 'unresolvable', path: homeText, code: 'notAbsolute' },
+    };
+  }
+
+  const applicationDirs = ['/Applications', join(homeDir.value, 'Applications')];
+
+  const homeRealPath = await loadRealPath({ path: homeDir.value });
 
   if (homeRealPath.kind === 'failed') {
     return homeRealPath;
@@ -76,7 +86,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
       platform: process.platform,
       nowMs: Date.now(),
       userId: userId,
-      homeDir: homeDir,
+      homeDir: homeDir.value,
       homeRealPath: homeRealPath.value,
       tempDir: tempDir.value,
       tempRealPath: tempRealPath.value,

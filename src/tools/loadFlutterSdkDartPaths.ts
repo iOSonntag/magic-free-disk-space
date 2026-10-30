@@ -8,6 +8,7 @@ import { loadRealPath } from '../system/loadRealPath.js';
 import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
 import { FLUTTER_SDK_DART_PATH } from './decideDartBinaryPath.js';
 import { PACKAGE_CONFIG_FILE_NAME } from './decidePackageConfigTracking.js';
+import { TOOL_FILE_MAX_BYTES } from './limits.js';
 import { loadPackageConfigTracking } from './loadPackageConfigTracking.js';
 
 /** Bounds the files read when a cache holds many projects, or a crafted one many entries. */
@@ -99,25 +100,31 @@ async function loadActiveRootFiles(params: { activeRootsDir: string }): Promise<
 }
 
 async function loadFlutterRoot(params: { activeRootFile: string }): Promise<string | null> {
-  const activeRootText = await loadFileText({ path: params.activeRootFile });
+  const activeRootText = await loadFileText({
+    path: params.activeRootFile,
+    maxBytes: TOOL_FILE_MAX_BYTES,
+  });
 
-  if (activeRootText === null) {
+  if (activeRootText.kind === 'failed') {
     return null;
   }
 
-  const packageConfigPath = parseActiveRootPackageConfigPath(activeRootText);
+  const packageConfigPath = parseActiveRootPackageConfigPath(activeRootText.value);
 
   if (packageConfigPath === null) {
     return null;
   }
 
-  const packageConfigText = await loadFileText({ path: packageConfigPath });
+  const packageConfigText = await loadFileText({
+    path: packageConfigPath,
+    maxBytes: TOOL_FILE_MAX_BYTES,
+  });
 
-  if (packageConfigText === null) {
+  if (packageConfigText.kind === 'failed') {
     return null;
   }
 
-  const flutterRoot = parsePackageConfigFlutterRoot(packageConfigText);
+  const flutterRoot = parsePackageConfigFlutterRoot(packageConfigText.value);
 
   if (flutterRoot === null) {
     return null;

@@ -26,6 +26,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import type { ProbeCommandName } from './probeFakeTools.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -41,6 +42,13 @@ import {
 
 const TIMEOUT_MS = 10_000;
 
+/** The one probe command each tool of these tests answers. */
+const PROBE_COMMANDS: Record<'xcrun' | 'dart' | 'mise', ProbeCommandName> = {
+  xcrun: 'simulatorDevices',
+  dart: 'dartPubCache',
+  mise: 'miseVersions',
+};
+
 const SIMULATOR_APP_COMMAND =
   '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator';
 
@@ -49,7 +57,7 @@ const xcrun: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 const unavailableDevice: SimulatorDevice = {
   udid: UNAVAILABLE_DEVICE_UDID,
   name: 'iPhone 15',
-  runtimeId: 'com.apple.CoreSimulator.SimRuntime.iOS-17-0',
+  runtimeIdentifier: 'com.apple.CoreSimulator.SimRuntime.iOS-17-0',
   state: 'Shutdown',
   isAvailable: false,
   availabilityError: null,
@@ -230,8 +238,13 @@ describe('recheckExploreUnit', () => {
     const path = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: params.name,
-      stdoutText: params.stdoutText,
-      exitCode: params.exitCode,
+      answers: [
+        {
+          command: PROBE_COMMANDS[params.name],
+          stdoutText: params.stdoutText,
+          exitCode: params.exitCode,
+        },
+      ],
     });
 
     return { name: params.name, path: await realpath(path) };

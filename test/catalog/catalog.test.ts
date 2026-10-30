@@ -1,7 +1,22 @@
 import { describe, expect, test } from 'bun:test';
+import type { ExploreProbeId } from '../../src/catalog/catalog.js';
 import { CATALOG_ENTRIES } from '../../src/catalog/catalogEntries.js';
 
 const KEBAB_CASE_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** Every probe id, kept complete by the compiler. */
+const EXPLORE_PROBE_IDS: Record<ExploreProbeId, true> = {
+  simulatorDevices: true,
+  dartPubCache: true,
+  miseVersions: true,
+  simulatorRuntimes: true,
+  androidAvds: true,
+  androidSystemImages: true,
+  androidEmulator: true,
+  homebrewAppleSilicon: true,
+  homebrewIntel: true,
+  vscodeExtensions: true,
+};
 
 function isBlankText(text: string): boolean {
   return text.trim() === '';
@@ -50,12 +65,20 @@ describe('CATALOG_ENTRIES', () => {
     expect(misplacedIds).toEqual([]);
   });
 
-  test('absolute entries are advice', () => {
+  test('absolute entries are never deleted as a path, only advised or explored', () => {
     const absoluteDeleteIds = CATALOG_ENTRIES.filter(
-      (entry) => entry.root === 'absolute' && entry.removal.kind !== 'advice',
+      (entry) => entry.root === 'absolute' && entry.removal.kind === 'delete',
     ).map((entry) => entry.id);
 
     expect(absoluteDeleteIds).toEqual([]);
+  });
+
+  test('every explore probe belongs to exactly one entry', () => {
+    const probeIds: string[] = CATALOG_ENTRIES.flatMap((entry) =>
+      entry.removal.kind === 'explore' ? [entry.removal.probe] : [],
+    );
+
+    expect(probeIds.toSorted()).toEqual(Object.keys(EXPLORE_PROBE_IDS).toSorted());
   });
 
   test('home and temp paths are relative and hold no parent segment', () => {

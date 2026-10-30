@@ -4,12 +4,13 @@ import { planRemoval } from '../../src/delete/planRemoval.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 const ENVIRONMENT = buildEnvironment({
   platform: 'darwin',
   nowMs: 0,
   userId: 501,
-  homeDir: '/Users/tester',
+  homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
   homeRealPath: '/Users/tester',
   tempDir: '/private/tmp/tester',
   tempRealPath: '/private/tmp/tester',
