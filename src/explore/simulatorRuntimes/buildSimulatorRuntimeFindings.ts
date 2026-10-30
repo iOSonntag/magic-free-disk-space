@@ -1,8 +1,8 @@
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
+import { formatSimulatorRuntimeName } from '../simulatorDevices/formatSimulatorRuntimeName.js';
 import type { SimulatorDevice } from '../simulatorDevices/parseSimulatorDeviceList.js';
-import { formatSimulatorRuntimeName } from './formatSimulatorRuntimeName.js';
 import type { SimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
 import type { SimulatorRuntime } from './parseSimulatorRuntimeList.js';
 
