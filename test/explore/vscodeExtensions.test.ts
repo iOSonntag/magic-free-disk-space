@@ -69,10 +69,13 @@ async function loadFindings(processCommands: string[] | null = []): Promise<Expl
 
 /**
  * Two versions of one id in the linked extensions folder: the default registry lists the newer
- * by `relativeLocation`, a profile the older by a location under the real path of the folder.
+ * by `relativeLocation`, a profile the older by a location under `profileExtensionsPath`, the real
+ * path of the folder when it is `null`.
  */
-async function createLinkedVscodeInstallation(): Promise<void> {
-  const realExtensionsPath = await realpath(extensionsPath);
+async function createLinkedVscodeInstallation(
+  params: { profileExtensionsPath: string | null } = { profileExtensionsPath: null },
+): Promise<void> {
+  const profileExtensionsPath = params.profileExtensionsPath ?? (await realpath(extensionsPath));
 
   await createVscodeExtensionFolders({
     homeDir: environment.homeDir,
@@ -93,7 +96,7 @@ async function createLinkedVscodeInstallation(): Promise<void> {
       'extensions.json',
     ),
     text: buildVscodeRegistryText({
-      extensionsPath: realExtensionsPath,
+      extensionsPath: profileExtensionsPath,
       folderNames: [LINKED_OLDER_FOLDER_NAME],
       form: 'locationOnly',
     }),
@@ -227,6 +230,19 @@ describe('loadVscodeExtensionFindings', () => {
     await createFixtureDirectory({ path: join(realVscodePath, 'extensions') });
     await symlink(realVscodePath, join(environment.homeDir, '.vscode'));
     await createLinkedVscodeInstallation();
+
+    expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
+  });
+
+  test('never offers a version a profile lists through a second link to the extensions folder', async () => {
+    const realExtensionsPath = join(environment.homeDir, 'real-vscode-extensions');
+    const secondLinkPath = join(environment.homeDir, 'second-vscode-extensions');
+
+    await createFixtureDirectory({ path: realExtensionsPath });
+    await createFixtureDirectory({ path: join(environment.homeDir, '.vscode') });
+    await symlink(realExtensionsPath, extensionsPath);
+    await symlink(realExtensionsPath, secondLinkPath);
+    await createLinkedVscodeInstallation({ profileExtensionsPath: secondLinkPath });
 
     expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
   });
