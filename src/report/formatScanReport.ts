@@ -1,10 +1,9 @@
 import type { Risk } from '../catalog/catalog.js';
-import { buildUnitCommand } from '../explore/exploreUnit.js';
+import { buildUnitRunArguments } from '../explore/exploreUnit.js';
 import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
 import type { ScanIssue } from '../scan/issue.js';
 import type { ScanReport, SkippedItem } from '../scan/runScan.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
-import { buildToolArguments } from '../tools/runToolCommand.js';
 import { formatSizeText } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
@@ -121,10 +120,7 @@ export function formatCandidateCommandText(params: { candidate: Candidate }): st
       return null;
     case 'runTool': {
       const unit = params.candidate.removal.unit;
-      const commandText = [
-        unit.tool.name,
-        ...buildToolArguments({ name: unit.tool.name, args: buildUnitCommand(unit) }),
-      ].join(' ');
+      const commandText = [unit.tool.name, ...buildUnitRunArguments(unit)].join(' ');
 
       return formatDisplayText({ text: commandText });
     }

@@ -1,14 +1,13 @@
 import { rm } from 'node:fs/promises';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExploreToolFailure } from '../explore/exploreUnit.js';
-import { buildUnitCommand } from '../explore/exploreUnit.js';
+import { buildUnitRunArguments } from '../explore/exploreUnit.js';
 import type { Result } from '../result.js';
 import type { Candidate, CandidateRemovalDeletePath } from '../scan/candidate.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import { buildToolArguments } from '../tools/runToolCommand.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
 import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
@@ -144,10 +143,7 @@ function buildIntentEntry(params: { candidate: Candidate; atMs: number }): Journ
         path: params.candidate.path,
         allocatedBytes: params.candidate.allocatedBytes,
         unit: params.candidate.removal.unit,
-        args: buildToolArguments({
-          name: params.candidate.removal.unit.tool.name,
-          args: buildUnitCommand(params.candidate.removal.unit),
-        }),
+        args: buildUnitRunArguments(params.candidate.removal.unit),
       };
   }
 }
