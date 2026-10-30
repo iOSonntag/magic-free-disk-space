@@ -1,11 +1,11 @@
 import type { Result } from '../result.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
+import { buildFailureIssues } from './buildReadIssue.js';
 import type { CandidateDecision } from './candidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
 import type { ScanPhase } from './scanPhase.js';
-import { EMPTY_SCAN_PHASE } from './scanPhase.js';
 import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 /**
@@ -45,12 +45,8 @@ async function buildMeasuredPhase(params: {
     return { decisions: [decision], issues: [] };
   }
 
-  if (measured.failure.reason === 'missing') {
-    return EMPTY_SCAN_PHASE;
-  }
-
   return {
     decisions: [],
-    issues: [{ path: params.path, reason: measured.failure.reason, detail: measured.failure.code }],
+    issues: buildFailureIssues({ path: params.path, failure: measured.failure }),
   };
 }
