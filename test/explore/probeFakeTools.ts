@@ -1,8 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExploreToolUnit } from '../../src/explore/exploreUnit.js';
-import { buildUnitCommand } from '../../src/explore/exploreUnit.js';
-import { buildToolArguments } from '../../src/tools/runToolCommand.js';
+import { buildUnitRunArguments } from '../../src/explore/exploreUnit.js';
 import type { ToolInstallLocations, ToolName } from '../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../support/fakeTool.js';
 
@@ -63,10 +62,7 @@ export async function createUnitRunFakeTool(params: {
 }): Promise<string> {
   const name = params.unit.tool.name;
   const stdoutPath = join(params.folder, `${name}.stdout`);
-  const commandText = buildToolArguments({
-    name: name,
-    args: buildUnitCommand(params.unit),
-  }).join(' ');
+  const commandText = buildUnitRunArguments(params.unit).join(' ');
   const body = `if [ "$*" = "${PROBE_ARGUMENT_TEXTS[name]}" ]; then
 ${params.probePrelude ?? ''}
   cat '${stdoutPath}'

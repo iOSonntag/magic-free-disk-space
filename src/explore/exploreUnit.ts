@@ -2,6 +2,7 @@ import type { Risk } from '../catalog/catalog.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolCommandFailure } from '../tools/runToolCommand.js';
+import { buildToolArguments } from '../tools/runToolCommand.js';
 import type { MiseToolName, MiseToolVersion } from './miseVersions/parseMisePrunableVersions.js';
 import type { SimulatorDeviceUdid } from './simulatorDevices/parseSimulatorDeviceList.js';
 
@@ -80,4 +81,9 @@ export function buildUnitCommand(unit: ExploreToolUnit): string[] {
     case 'miseVersion':
       return ['uninstall', `${unit.toolName}@${unit.version}`];
   }
+}
+
+/** The whole argument list the unit's run executes, the tool's leading arguments first. */
+export function buildUnitRunArguments(unit: ExploreToolUnit): string[] {
+  return buildToolArguments({ name: unit.tool.name, args: buildUnitCommand(unit) });
 }
