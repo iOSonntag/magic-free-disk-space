@@ -13,8 +13,6 @@ export type CandidateRemovalDeletePath = {
 /** Removed by the command of the unit's own tool, after the unit is checked again. */
 export type CandidateRemovalRunTool = { kind: 'runTool'; unit: ExploreToolUnit };
 
-export type CandidateRemoval = CandidateRemovalDeletePath | CandidateRemovalRunTool;
-
 /** What an item is and what it holds, the same for every origin. */
 export type CandidateListing = {
   /** The path shown; for a tool item, the place of its unit. */
