@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { loadPackageConfigTracking } from '../../src/tools/loadPackageConfigTracking.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import { createGitEntry, createGitIndex } from '../support/flutterSdkFixtures.js';
+import {
+  createGitEntry,
+  createGitIndex,
+  createUntrackedProjectRepository,
+} from '../support/flutterSdkFixtures.js';
 
 const PACKAGE_CONFIG_PATH = '.dart_tool/package_config.json';
 
@@ -29,11 +33,7 @@ async function createDartTool(projectRoot: string): Promise<string> {
 
 /** Creates the project at `projectRoot` as a git repository whose index names only `pubspec.yaml`. */
 async function createUntrackedProject(projectRoot: string): Promise<string> {
-  await createGitIndex({
-    gitDir: join(projectRoot, '.git'),
-    version: 2,
-    paths: ['pubspec.yaml'],
-  });
+  await createUntrackedProjectRepository({ projectRoot: projectRoot });
 
   return await createDartTool(projectRoot);
 }
@@ -99,14 +99,13 @@ describe('loadPackageConfigTracking', () => {
   test('reads a repository of .dart_tool itself before the one of the project', async () => {
     const projectRoot = join(fixtureRoot.rootDir, 'app');
 
-    await createUntrackedProject(projectRoot);
-    await Bun.write(join(projectRoot, '.dart_tool', '.git'), 'gitdir: ../../dart-tool.git\n');
+    const dartToolPath = await createUntrackedProject(projectRoot);
+    await Bun.write(join(dartToolPath, '.git'), 'gitdir: ../../dart-tool.git\n');
     await createGitIndex({
       gitDir: join(fixtureRoot.rootDir, 'dart-tool.git'),
       version: 2,
       paths: ['package_config.json'],
     });
-    const dartToolPath = await realpath(join(projectRoot, '.dart_tool'));
 
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
   });

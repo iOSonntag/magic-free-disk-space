@@ -61,16 +61,23 @@ export async function createActiveProject(params: {
   });
 
   if (params.includeProjectRepository !== false) {
-    await createGitIndex({
-      gitDir: join(projectRoot, '.git'),
-      version: 2,
-      paths: ['pubspec.yaml'],
-    });
+    await createUntrackedProjectRepository({ projectRoot: projectRoot });
   }
 
   await createGitEntry({
     folder: params.flutterRoot,
     gitEntry: params.flutterRootGitEntry ?? 'folder',
+  });
+}
+
+/** Writes `<projectRoot>/.git` as a repository whose v2 index names only `pubspec.yaml`. */
+export async function createUntrackedProjectRepository(params: {
+  projectRoot: string;
+}): Promise<void> {
+  await createGitIndex({
+    gitDir: join(params.projectRoot, '.git'),
+    version: 2,
+    paths: ['pubspec.yaml'],
   });
 }
 
