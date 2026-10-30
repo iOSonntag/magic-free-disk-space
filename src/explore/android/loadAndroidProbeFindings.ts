@@ -5,27 +5,72 @@ import type {
   ExploreProbeFailure,
   ExploreProbeFindings,
 } from '../exploreUnit.js';
-
-// Not judged until part 2A builds these probes, so their entries stay advice.
-const NOT_JUDGED_FINDINGS: ExploreProbeFindings = { findings: [], isComplete: false };
+import {
+  buildAndroidAvdFindings,
+  buildAndroidEmulatorFindings,
+  buildAndroidSystemImageFindings,
+} from './buildAndroidFindings.js';
+import {
+  decideAndroidEmulatorOffers,
+  decideAndroidSystemImageOffers,
+} from './decideAndroidPackageOffers.js';
+import { loadAndroidSdkState } from './loadAndroidSdkState.js';
 
 /** The AVDs not used since the cutoff, each removed by the located `avdmanager`. */
 export async function loadAndroidAvdFindings(
-  _run: ExploreProbeToolRun,
+  run: ExploreProbeToolRun,
 ): Promise<Result<ExploreProbeFindings, ExploreProbeFailure>> {
-  return { kind: 'succeeded', value: NOT_JUDGED_FINDINGS };
+  const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
+
+  if (state.kind === 'failed') {
+    return state;
+  }
+
+  return {
+    kind: 'succeeded',
+    value: buildAndroidAvdFindings({
+      state: state.value,
+      tool: run.tool,
+      unusedCutoffMs: run.unusedCutoffMs,
+      processCommands: run.processCommands,
+    }),
+  };
 }
 
 /** The system image folders of the SDK that no AVD names. */
 export async function loadAndroidSystemImageFindings(
-  _run: ExploreProbeRun,
+  run: ExploreProbeRun,
 ): Promise<Result<ExploreProbeFindings, ExploreFileUnreadable>> {
-  return { kind: 'succeeded', value: NOT_JUDGED_FINDINGS };
+  const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
+
+  if (state.kind === 'failed') {
+    return state;
+  }
+
+  return {
+    kind: 'succeeded',
+    value: buildAndroidSystemImageFindings({
+      offers: decideAndroidSystemImageOffers(state.value),
+      processCommands: run.processCommands,
+    }),
+  };
 }
 
 /** The emulator package of the SDK while no AVD exists. */
 export async function loadAndroidEmulatorFindings(
-  _run: ExploreProbeRun,
+  run: ExploreProbeRun,
 ): Promise<Result<ExploreProbeFindings, ExploreFileUnreadable>> {
-  return { kind: 'succeeded', value: NOT_JUDGED_FINDINGS };
+  const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
+
+  if (state.kind === 'failed') {
+    return state;
+  }
+
+  return {
+    kind: 'succeeded',
+    value: buildAndroidEmulatorFindings({
+      offers: decideAndroidEmulatorOffers(state.value),
+      processCommands: run.processCommands,
+    }),
+  };
 }
