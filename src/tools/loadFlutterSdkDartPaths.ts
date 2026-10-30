@@ -13,8 +13,8 @@ import type { PackageConfigTracking } from './decidePackageConfigTracking.js';
 import {
   decidePackageConfigTracking,
   PACKAGE_CONFIG_FILE_NAME,
-  parseGitDirFilePath,
 } from './decidePackageConfigTracking.js';
+import { parseGitDirFilePath } from './parseGitDirFilePath.js';
 
 /** Bounds the files read when a cache holds many projects, or a crafted one many entries. */
 export const ACTIVE_ROOT_FILES_MAX_COUNT = 64;
@@ -24,11 +24,29 @@ const ACTIVE_ROOTS_PATH = '.pub-cache/active_roots';
 const GIT_INDEX_MAX_BYTES = 64 * 1024 * 1024;
 
 /**
+ * Working-copy markers of version control systems other than git, which can restore a tracked file
+ * as git can.
+ */
+const otherVersionControlMarkerNames = [
+  '.jj',
+  '.hg',
+  '.sl',
+  '.svn',
+  '.bzr',
+  '_darcs',
+  '.pijul',
+  '.fslckout',
+  '_FOSSIL_',
+  'CVS',
+];
+
+/**
  * Returns the Dart binary path of each distinct Flutter SDK that the projects of
  * `~/.pub-cache/active_roots` name, in the sorted order of their files. A root counts only when it
  * holds a `.git` entry, is disjoint from its project, and comes from the plain file
- * `<project>/.dart_tool/package_config.json` that pub wrote: the index of the repository git finds
- * for it must be readable and not name it. Anything unreadable or malformed is skipped.
+ * `<project>/.dart_tool/package_config.json` that pub wrote: a repository git finds for it must
+ * exist, its index be readable and not name it, and no folder up to `/` hold a marker of another
+ * version control. Anything unreadable or malformed is skipped.
  */
 export async function loadFlutterSdkDartPaths(params: { homeDir: string }): Promise<string[]> {
   const activeRootFiles = await loadActiveRootFiles({
@@ -147,7 +165,7 @@ async function loadFlutterRoot(params: { activeRootFile: string }): Promise<stri
 /**
  * Whether `flutterRoot` is a git checkout apart from `projectRoot`, the folder of `.dart_tool`,
  * named by `packageConfigPath`, the plain file `.dart_tool/package_config.json` of the project
- * that no repository tracks.
+ * that a readable git index does not name, with no other version control up to `/`.
  */
 async function isFlutterRootAccepted(params: {
   flutterRoot: string;
@@ -190,22 +208,57 @@ async function isFlutterRootAccepted(params: {
 
 /**
  * Whether the index of the repository git finds from `dartToolRealPath` names the package config:
- * `untracked` without a repository, `unknown` when the repository or its index cannot be read
- * whole.
+ * `unknown` without a repository, with a marker of another version control in any folder up to
+ * `/`, or when a lookup, the repository, or its index cannot be read whole.
  */
 async function loadPackageConfigTracking(params: {
   dartToolRealPath: string;
 }): Promise<PackageConfigTracking> {
-  const gitDir = await findGitDir({ folder: params.dartToolRealPath });
+  const folders = buildFolderPathsUpToRoot(params.dartToolRealPath);
+  const clearOfOtherVersionControl = await isClearOfOtherVersionControl({ folders: folders });
+
+  if (!clearOfOtherVersionControl) {
+    return 'unknown';
+  }
+
+  const gitDir = await findGitDir({ folders: folders });
 
   switch (gitDir.kind) {
     case 'none':
-      return 'untracked';
-    case 'unknown':
+    case 'unreadable':
       return 'unknown';
     case 'found':
       return await loadGitDirPackageConfigTracking({ gitDir: gitDir.path });
   }
+}
+
+/** `folder` and each folder above it, nearest first, up to `/`. */
+function buildFolderPathsUpToRoot(folder: string): string[] {
+  const parentFolder = dirname(folder);
+
+  if (parentFolder === folder) {
+    return [folder];
+  }
+
+  return [folder, ...buildFolderPathsUpToRoot(parentFolder)];
+}
+
+/**
+ * Whether none of `folders` holds a marker of another version control; `false` too when an lstat
+ * fails for a reason other than a missing entry.
+ */
+async function isClearOfOtherVersionControl(params: { folders: string[] }): Promise<boolean> {
+  for (const folder of params.folders) {
+    for (const markerName of otherVersionControlMarkerNames) {
+      const markerStats = await loadEntryStats({ path: join(folder, markerName) });
+
+      if (markerStats.kind === 'succeeded' || markerStats.failure.reason !== 'missing') {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 async function loadGitDirPackageConfigTracking(params: {
@@ -234,17 +287,23 @@ async function loadGitDirPackageConfigTracking(params: {
   return decidePackageConfigTracking(indexBytes);
 }
 
-/** The git dir of the repository that holds `folder`, as git finds it walking up from `folder`. */
-type GitDirLookup = { kind: 'found'; path: string } | { kind: 'none' } | { kind: 'unknown' };
+type GitDirLookupFound = { kind: 'found'; path: string };
+
+/** No folder of the walk holds a `.git` entry. */
+type GitDirLookupNone = { kind: 'none' };
+
+/** The nearest `.git` names no git dir this rule can read, or an lstat of the walk failed. */
+type GitDirLookupUnreadable = { kind: 'unreadable' };
+
+/** The git dir of the repository that holds a folder, as git finds it walking up from it. */
+type GitDirLookup = GitDirLookupFound | GitDirLookupNone | GitDirLookupUnreadable;
 
 /**
- * The git dir that the nearest `.git` of `folder` or a folder above names: a directory, or a file
- * whose first line is `gitdir: <path>`. `unknown` for any other `.git` or a failed read.
+ * The git dir that the nearest `.git` in `folders`, nearest first, names: a directory, or a file
+ * whose first line is `gitdir: <path>`. `unreadable` for any other `.git` or a failed read.
  */
-async function findGitDir(params: { folder: string }): Promise<GitDirLookup> {
-  let folder = params.folder;
-
-  while (true) {
+async function findGitDir(params: { folders: string[] }): Promise<GitDirLookup> {
+  for (const folder of params.folders) {
     const gitPath = join(folder, '.git');
     const gitEntryStats = await loadEntryStats({ path: gitPath });
 
@@ -257,17 +316,11 @@ async function findGitDir(params: { folder: string }): Promise<GitDirLookup> {
     }
 
     if (gitEntryStats.failure.reason !== 'missing') {
-      return { kind: 'unknown' };
+      return { kind: 'unreadable' };
     }
-
-    const parentFolder = dirname(folder);
-
-    if (parentFolder === folder) {
-      return { kind: 'none' };
-    }
-
-    folder = parentFolder;
   }
+
+  return { kind: 'none' };
 }
 
 async function loadGitDirOfEntry(params: {
@@ -282,20 +335,20 @@ async function loadGitDirOfEntry(params: {
       const gitFileText = await loadFileText({ path: params.gitPath });
 
       if (gitFileText === null) {
-        return { kind: 'unknown' };
+        return { kind: 'unreadable' };
       }
 
       const gitDir = parseGitDirFilePath({ text: gitFileText, folder: params.folder });
 
       if (gitDir === null) {
-        return { kind: 'unknown' };
+        return { kind: 'unreadable' };
       }
 
       return { kind: 'found', path: gitDir };
     }
     case 'symbolicLink':
     case 'other':
-      return { kind: 'unknown' };
+      return { kind: 'unreadable' };
   }
 }
 

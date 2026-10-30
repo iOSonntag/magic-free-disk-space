@@ -11,6 +11,19 @@ export function buildActiveRootPath(params: {
   return join(params.homeDir, '.pub-cache', 'active_roots', params.group, params.name);
 }
 
+/** Writes the active-roots file `<group>/<name>` under `homeDir` that names `packageConfigPath`. */
+export async function writeActiveRoot(params: {
+  homeDir: string;
+  group: string;
+  name: string;
+  packageConfigPath: string;
+}): Promise<void> {
+  await Bun.write(
+    buildActiveRootPath({ homeDir: params.homeDir, group: params.group, name: params.name }),
+    JSON.stringify({ package_config: pathToFileURL(params.packageConfigPath).href }),
+  );
+}
+
 /** The folder `<homeDir>/projects/<name>` of the project that `createActiveProject` writes. */
 export function buildProjectRoot(params: { homeDir: string; name: string }): string {
   return join(params.homeDir, 'projects', params.name);
@@ -19,7 +32,9 @@ export function buildProjectRoot(params: { homeDir: string; name: string }): str
 /**
  * Writes a project at `projectRoot`, else at `<homeDir>/projects/<name>`, whose package config
  * names `flutterRoot`, the active-roots file `<group>/<name>` that names that package config, and
- * the `.git` entry of `flutterRoot`, a folder without `flutterRootGitEntry`.
+ * the `.git` entry of `flutterRoot`, a folder without `flutterRootGitEntry`. Unless
+ * `includeProjectRepository` is `false`, the project is a git repository whose v2 index names
+ * only `pubspec.yaml`.
  */
 export async function createActiveProject(params: {
   homeDir: string;
@@ -28,6 +43,7 @@ export async function createActiveProject(params: {
   flutterRoot: string;
   flutterRootGitEntry?: GitEntry;
   projectRoot?: string;
+  includeProjectRepository?: boolean;
 }): Promise<void> {
   const projectRoot =
     params.projectRoot ?? buildProjectRoot({ homeDir: params.homeDir, name: params.name });
@@ -37,10 +53,21 @@ export async function createActiveProject(params: {
     packageConfigPath,
     JSON.stringify({ configVersion: 2, flutterRoot: pathToFileURL(params.flutterRoot).href }),
   );
-  await Bun.write(
-    buildActiveRootPath({ homeDir: params.homeDir, group: params.group, name: params.name }),
-    JSON.stringify({ package_config: pathToFileURL(packageConfigPath).href }),
-  );
+  await writeActiveRoot({
+    homeDir: params.homeDir,
+    group: params.group,
+    name: params.name,
+    packageConfigPath: packageConfigPath,
+  });
+
+  if (params.includeProjectRepository !== false) {
+    await createGitIndex({
+      gitDir: join(projectRoot, '.git'),
+      version: 2,
+      paths: ['pubspec.yaml'],
+    });
+  }
+
   await createGitEntry({
     folder: params.flutterRoot,
     gitEntry: params.flutterRootGitEntry ?? 'folder',

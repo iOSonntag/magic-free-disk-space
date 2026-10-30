@@ -1,13 +1,9 @@
-import { isAbsolute, join } from 'node:path';
-
 /** Whether a git index names `package_config.json`; `unknown` when the index cannot tell. */
 export type PackageConfigTracking = 'tracked' | 'untracked' | 'unknown';
 
 const GIT_INDEX_HEADER_LENGTH = 12;
 
 const GIT_INDEX_SIGNATURE = 'DIRC';
-
-const GIT_DIR_LINE_PREFIX = 'gitdir: ';
 
 export const PACKAGE_CONFIG_FILE_NAME = 'package_config.json';
 
@@ -46,28 +42,4 @@ export function decidePackageConfigTracking(indexBytes: Uint8Array): PackageConf
   }
 
   return 'untracked';
-}
-
-/**
- * The git dir that the first line `gitdir: <path>` of a `.git` file in `folder` names, a relative
- * path resolved against `folder`; `null` for any other text.
- */
-export function parseGitDirFilePath(params: { text: string; folder: string }): string | null {
-  const firstLine = params.text.split('\n')[0] ?? '';
-
-  if (!firstLine.startsWith(GIT_DIR_LINE_PREFIX)) {
-    return null;
-  }
-
-  const gitDirPath = firstLine.slice(GIT_DIR_LINE_PREFIX.length).trimEnd();
-
-  if (gitDirPath === '') {
-    return null;
-  }
-
-  if (isAbsolute(gitDirPath)) {
-    return gitDirPath;
-  }
-
-  return join(params.folder, gitDirPath);
 }
