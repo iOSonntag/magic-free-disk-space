@@ -180,6 +180,7 @@ export async function runScan(params: {
     probes: probes,
     catalogEntries: params.catalogEntries,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
+    runItemMeasurement: runItemMeasurement,
   });
   const exploreAdvice = await loadCatalogPhase({
     context: context,

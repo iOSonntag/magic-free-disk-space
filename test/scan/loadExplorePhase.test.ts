@@ -7,6 +7,7 @@ import type { ExploreFinding, ExploreToolFailure } from '../../src/explore/explo
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { loadExplorePhase } from '../../src/scan/loadExplorePhase.js';
+import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDeviceDataPath,
@@ -28,6 +29,8 @@ import {
 } from '../support/parsedValueFixtures.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
+
+const runItemMeasurement = createConcurrencyLimit({ maxConcurrent: 4 });
 
 function buildExploreEntry(params: { id: string; probe: ExploreProbeId }): CatalogEntry {
   return {
@@ -130,6 +133,7 @@ describe('loadExplorePhase', () => {
       probes: probes,
       catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
+      runItemMeasurement: runItemMeasurement,
     });
 
     expect(phase.issues).toEqual([]);
@@ -186,6 +190,7 @@ describe('loadExplorePhase', () => {
       }),
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
+      runItemMeasurement: runItemMeasurement,
     });
 
     expect(phase.decisions).toMatchObject([
@@ -219,6 +224,7 @@ describe('loadExplorePhase', () => {
       }),
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
+      runItemMeasurement: runItemMeasurement,
     });
 
     expect(phase.decisions).toEqual([]);
@@ -242,6 +248,7 @@ describe('loadExplorePhase', () => {
       }),
       catalogEntries: [simulatorEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
+      runItemMeasurement: runItemMeasurement,
     });
 
     expect(phase.issues).toEqual([

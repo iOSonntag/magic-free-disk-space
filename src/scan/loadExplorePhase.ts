@@ -1,8 +1,8 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
 import type { ExploreFinding } from '../explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
-import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
-import type { Candidate, CandidateDecision } from './candidate.js';
+import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import type { CandidateDecision, CandidateProbed } from './candidate.js';
 import type { ScanIssue } from './issue.js';
 import type { UnitMeasurement } from './loadUnitMeasurement.js';
 import { loadUnitMeasurement } from './loadUnitMeasurement.js';
@@ -17,13 +17,12 @@ export type ExplorePhase = {
   fallbackEntries: CatalogEntry[];
 };
 
-const runUnitMeasurement = createConcurrencyLimit({ maxConcurrent: 4 });
-
 /** Waits for the probe of each explore entry and decides its findings, in entry order. */
 export async function loadExplorePhase(params: {
   probes: Record<ExploreProbeId, Promise<ExploreProbeOutcome>>;
   catalogEntries: CatalogEntry[];
   measureTimeoutMs: number;
+  runItemMeasurement: ConcurrencyLimit;
 }): Promise<ExplorePhase> {
   const entryPhases = await Promise.all(
     params.catalogEntries.flatMap((entry) => {
@@ -36,6 +35,7 @@ export async function loadExplorePhase(params: {
           entry: entry,
           outcome: params.probes[entry.removal.probe],
           measureTimeoutMs: params.measureTimeoutMs,
+          runItemMeasurement: params.runItemMeasurement,
         }),
       ];
     }),
@@ -52,6 +52,7 @@ async function loadExploreEntryPhase(params: {
   entry: CatalogEntry;
   outcome: Promise<ExploreProbeOutcome>;
   measureTimeoutMs: number;
+  runItemMeasurement: ConcurrencyLimit;
 }): Promise<ExplorePhase> {
   const outcome = await params.outcome;
 
@@ -63,6 +64,7 @@ async function loadExploreEntryPhase(params: {
             finding: finding,
             category: params.entry.category,
             measureTimeoutMs: params.measureTimeoutMs,
+            runItemMeasurement: params.runItemMeasurement,
           }),
         ),
       );
@@ -96,6 +98,7 @@ async function loadExploreFindingDecision(params: {
   finding: ExploreFinding;
   category: CandidateCategory;
   measureTimeoutMs: number;
+  runItemMeasurement: ConcurrencyLimit;
 }): Promise<CandidateDecision> {
   switch (params.finding.activity) {
     case 'busy':
@@ -112,8 +115,9 @@ async function loadIdleFindingOffer(params: {
   finding: ExploreFinding;
   category: CandidateCategory;
   measureTimeoutMs: number;
+  runItemMeasurement: ConcurrencyLimit;
 }): Promise<CandidateDecision> {
-  const measurement = await runUnitMeasurement(() =>
+  const measurement = await params.runItemMeasurement(() =>
     loadUnitMeasurement({
       unit: params.finding.unit,
       deadlineMs: Date.now() + params.measureTimeoutMs,
@@ -134,7 +138,7 @@ function buildExploreCandidate(params: {
   finding: ExploreFinding;
   category: CandidateCategory;
   measurement: UnitMeasurement;
-}): Candidate {
+}): CandidateProbed {
   return {
     path: params.finding.displayPath,
     title: params.finding.title,
