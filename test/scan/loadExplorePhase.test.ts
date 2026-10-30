@@ -12,7 +12,7 @@ import { buildFixtureToolLocations, createProbeFakeTool } from '../explore/probe
 import {
   buildDeviceDataPath,
   buildSimulatorDeviceListJson,
-  NEVER_BOOTED_DEVICE_UDID,
+  UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -103,14 +103,14 @@ afterEach(async () => {
 
 describe('loadExplorePhase', () => {
   test('offers each idle device the fake simctl finds, measured, and skips the booted one', async () => {
-    const neverBootedDataPath = buildDeviceDataPath({
+    const unavailableDataPath = buildDeviceDataPath({
       homeDir: environment.homeDir,
-      udid: NEVER_BOOTED_DEVICE_UDID,
+      udid: UNAVAILABLE_DEVICE_UDID,
     });
 
-    await createFixtureDirectory({ path: neverBootedDataPath });
+    await createFixtureDirectory({ path: unavailableDataPath });
     await createFixtureFile({
-      path: join(neverBootedDataPath, 'example.db'),
+      path: join(unavailableDataPath, 'example.db'),
       sizeBytes: 8_192,
       modifiedMs: Date.now(),
     });
@@ -138,19 +138,19 @@ describe('loadExplorePhase', () => {
 
     expect(phase.issues).toEqual([]);
     expect(phase.fallbackEntries).toEqual([dartEntry, miseEntry]);
-    expect(phase.decisions.map((decision) => decision.kind)).toEqual(['offer', 'offer', 'skip']);
+    expect(phase.decisions.map((decision) => decision.kind)).toEqual(['offer', 'skip']);
 
-    const neverBooted = phase.decisions[1];
+    const unavailable = phase.decisions[0];
 
-    if (neverBooted?.kind !== 'offer') {
-      throw new Error('The never-booted device should be offered.');
+    if (unavailable?.kind !== 'offer') {
+      throw new Error('The device whose runtime is gone should be offered.');
     }
 
-    expect(neverBooted.candidate).toMatchObject({
+    expect(unavailable.candidate).toMatchObject({
       path: join(
         environment.homeDir,
         'Library/Developer/CoreSimulator/Devices',
-        NEVER_BOOTED_DEVICE_UDID,
+        UNAVAILABLE_DEVICE_UDID,
       ),
       category: 'developer',
       risk: 'review',
@@ -162,14 +162,17 @@ describe('loadExplorePhase', () => {
         unit: {
           kind: 'simulatorDevice',
           tool: { name: 'xcrun', path: await realpath(xcrun) },
-          udid: NEVER_BOOTED_DEVICE_UDID,
-          dataPath: neverBootedDataPath,
+          udid: UNAVAILABLE_DEVICE_UDID,
+          dataPath: unavailableDataPath,
         },
       },
-      evidenceLines: ['Simulator lists it as never booted.'],
+      evidenceLines: [
+        'Its runtime com.apple.CoreSimulator.SimRuntime.iOS-17-0 is no longer installed.',
+        'Simulator reports: runtime profile not found using "System" match policy',
+      ],
     });
-    expect(neverBooted.candidate.allocatedBytes).toBeGreaterThan(0);
-    expect(phase.decisions[2]).toMatchObject({ kind: 'skip', reason: 'ownerRunning' });
+    expect(unavailable.candidate.allocatedBytes).toBeGreaterThan(0);
+    expect(phase.decisions[1]).toMatchObject({ kind: 'skip', reason: 'ownerRunning' });
   });
 
   test('offers a finding below any size threshold and skips an unknown one', async () => {

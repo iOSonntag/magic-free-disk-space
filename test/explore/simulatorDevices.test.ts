@@ -7,11 +7,11 @@ import {
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import {
+  AVAILABLE_UNDATED_DEVICE_UDID,
   BOOTED_DEVICE_UDID,
   buildDeviceDataPath,
   buildSimulatorDeviceListJson,
   FIXTURE_HOME_DIR,
-  NEVER_BOOTED_DEVICE_UDID,
   UNAVAILABLE_DEVICE_UDID,
 } from './probeOutputFixtures.js';
 
@@ -67,10 +67,30 @@ describe('parseSimulatorDeviceList', () => {
       isAvailable: false,
       availabilityError: 'runtime profile not found using "System" match policy',
       dataPath: buildDeviceDataPath({ homeDir: FIXTURE_HOME_DIR, udid: UNAVAILABLE_DEVICE_UDID }),
-      lastBootedAt: '2025-01-02T03:04:05Z',
     });
-    expect(devices[1]?.lastBootedAt).toBeNull();
+    expect(devices[1]?.udid).toBe(AVAILABLE_UNDATED_DEVICE_UDID);
     expect(devices[1]?.availabilityError).toBeNull();
+  });
+
+  test('ignores lastBootedAt, whatever its value', () => {
+    for (const lastBootedAt of [null, 42, '2025-01-02T03:04:05Z']) {
+      const text = JSON.stringify({
+        devices: {
+          runtime: [
+            {
+              udid: UNAVAILABLE_DEVICE_UDID,
+              name: 'x',
+              state: 'Shutdown',
+              isAvailable: false,
+              dataPath: '/Users/example/data',
+              lastBootedAt: lastBootedAt,
+            },
+          ],
+        },
+      });
+
+      expect(parseSimulatorDeviceList({ stdoutText: text }).kind).toBe('succeeded');
+    }
   });
 
   test('rejects text that is no JSON', () => {
@@ -119,7 +139,7 @@ describe('parseSimulatorDeviceList', () => {
 });
 
 describe('buildSimulatorDeviceFindings', () => {
-  test('offers the unavailable, the never-booted, and the booted unavailable device, not the used one', () => {
+  test('offers the unavailable and the booted unavailable device, no available one', () => {
     const findings = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
@@ -136,24 +156,26 @@ describe('buildSimulatorDeviceFindings', () => {
       {
         kind: 'simulatorDevice',
         tool: tool,
-        udid: NEVER_BOOTED_DEVICE_UDID,
-        dataPath: buildDeviceDataPath({
-          homeDir: FIXTURE_HOME_DIR,
-          udid: NEVER_BOOTED_DEVICE_UDID,
-        }),
-      },
-      {
-        kind: 'simulatorDevice',
-        tool: tool,
         udid: BOOTED_DEVICE_UDID,
         dataPath: buildDeviceDataPath({ homeDir: FIXTURE_HOME_DIR, udid: BOOTED_DEVICE_UDID }),
       },
     ]);
-    expect(findings.map((finding) => finding.activity)).toEqual(['idle', 'idle', 'busy']);
+    expect(findings.map((finding) => finding.activity)).toEqual(['idle', 'busy']);
+  });
+
+  test('offers no available, shut-down device that simctl lists without lastBootedAt', () => {
+    const undatedDevices = parseFixtureDevices().filter(
+      (device) => device.udid === AVAILABLE_UNDATED_DEVICE_UDID,
+    );
+
+    expect(undatedDevices).toMatchObject([{ isAvailable: true, state: 'Shutdown' }]);
+    expect(
+      buildSimulatorDeviceFindings({ tool: tool, devices: undatedDevices, processCommands: [] }),
+    ).toEqual([]);
   });
 
   test('names the reason, the risk, and the device folder', () => {
-    const [unavailable, neverBooted] = buildSimulatorDeviceFindings({
+    const [unavailable, booted] = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
       processCommands: [],
@@ -168,7 +190,9 @@ describe('buildSimulatorDeviceFindings', () => {
       'Its runtime com.apple.CoreSimulator.SimRuntime.iOS-17-0 is no longer installed.',
       'Simulator reports: runtime profile not found using "System" match policy',
     ]);
-    expect(neverBooted?.evidenceLines).toEqual(['Simulator lists it as never booted.']);
+    expect(booted?.evidenceLines).toEqual([
+      'Its runtime com.apple.CoreSimulator.SimRuntime.iOS-26-0 is no longer installed.',
+    ]);
   });
 
   test('leaves each idle device unknown when the processes could not be read', () => {
@@ -178,6 +202,6 @@ describe('buildSimulatorDeviceFindings', () => {
       processCommands: null,
     });
 
-    expect(findings.map((finding) => finding.activity)).toEqual(['unknown', 'unknown', 'busy']);
+    expect(findings.map((finding) => finding.activity)).toEqual(['unknown', 'busy']);
   });
 });

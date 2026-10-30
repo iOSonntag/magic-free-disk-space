@@ -20,8 +20,6 @@ export type SimulatorDevice = {
   /** Why the device is unavailable, as `simctl` words it; `null` when it gives no reason. */
   availabilityError: string | null;
   dataPath: AbsolutePath;
-  /** `null` when the device was never booted. */
-  lastBootedAt: string | null;
 };
 
 export const SIMULATOR_DEVICE_LIST_PROBE: ExploreProbeDefinition<SimulatorDevice[]> = {
@@ -97,7 +95,6 @@ function parseSimulatorDevice(params: {
   const isAvailable = value.isAvailable;
   const dataPathText = value.dataPath;
   const availabilityError = value.availabilityError ?? null;
-  const lastBootedAt = value.lastBootedAt ?? null;
 
   if (
     typeof udidText !== 'string' ||
@@ -105,8 +102,7 @@ function parseSimulatorDevice(params: {
     typeof state !== 'string' ||
     typeof isAvailable !== 'boolean' ||
     typeof dataPathText !== 'string' ||
-    (availabilityError !== null && typeof availabilityError !== 'string') ||
-    (lastBootedAt !== null && typeof lastBootedAt !== 'string')
+    (availabilityError !== null && typeof availabilityError !== 'string')
   ) {
     return null;
   }
@@ -126,6 +122,5 @@ function parseSimulatorDevice(params: {
     isAvailable: isAvailable,
     availabilityError: availabilityError,
     dataPath: dataPath.value,
-    lastBootedAt: lastBootedAt,
   };
 }

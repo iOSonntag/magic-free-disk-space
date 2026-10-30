@@ -9,7 +9,7 @@ export const UNAVAILABLE_DEVICE_UDID = buildTestUdid({
   text: '11111111-AAAA-4AAA-8AAA-111111111111',
 });
 
-export const NEVER_BOOTED_DEVICE_UDID = buildTestUdid({
+export const AVAILABLE_UNDATED_DEVICE_UDID = buildTestUdid({
   text: '22222222-BBBB-4BBB-8BBB-222222222222',
 });
 
@@ -23,7 +23,10 @@ export function buildDeviceDataPath(params: { homeDir: string; udid: string }): 
   });
 }
 
-/** Four devices: one whose runtime is gone, one never booted, one used, one booted and never shut down. */
+/**
+ * Four devices: one whose runtime is gone, one available that `simctl` lists without
+ * `lastBootedAt`, one available with it, and one unavailable that is booted.
+ */
 export function buildSimulatorDeviceListJson(params: { homeDir: string }): string {
   return JSON.stringify({
     devices: {
@@ -45,11 +48,11 @@ export function buildSimulatorDeviceListJson(params: { homeDir: string }): strin
         {
           dataPath: buildDeviceDataPath({
             homeDir: params.homeDir,
-            udid: NEVER_BOOTED_DEVICE_UDID,
+            udid: AVAILABLE_UNDATED_DEVICE_UDID,
           }),
           dataPathSize: 4096,
-          logPath: `${params.homeDir}/Library/Logs/CoreSimulator/${NEVER_BOOTED_DEVICE_UDID}`,
-          udid: NEVER_BOOTED_DEVICE_UDID,
+          logPath: `${params.homeDir}/Library/Logs/CoreSimulator/${AVAILABLE_UNDATED_DEVICE_UDID}`,
+          udid: AVAILABLE_UNDATED_DEVICE_UDID,
           isAvailable: true,
           deviceTypeIdentifier: 'com.apple.CoreSimulator.SimDeviceType.iPad-Air',
           state: 'Shutdown',

@@ -54,7 +54,6 @@ const unavailableDevice: SimulatorDevice = {
   isAvailable: false,
   availabilityError: null,
   dataPath: buildDeviceDataPath({ homeDir: FIXTURE_HOME_DIR, udid: UNAVAILABLE_DEVICE_UDID }),
-  lastBootedAt: '2025-01-02T03:04:05Z',
 };
 
 const deviceUnit: ExploreToolUnitSimulatorDevice = {

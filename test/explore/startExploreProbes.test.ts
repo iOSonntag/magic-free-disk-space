@@ -106,11 +106,7 @@ describe('startExploreProbes', () => {
       throw new Error('Every probe should have run.');
     }
 
-    expect(simulatorDevices.findings.map((finding) => finding.activity)).toEqual([
-      'idle',
-      'idle',
-      'busy',
-    ]);
+    expect(simulatorDevices.findings.map((finding) => finding.activity)).toEqual(['idle', 'busy']);
     expect(simulatorDevices.findings[0]?.unit.tool).toEqual({
       name: 'xcrun',
       path: await realpath(tools.xcrun),
@@ -142,7 +138,7 @@ describe('startExploreProbes', () => {
       outcome.kind === 'probed' ? outcome.findings.map((finding) => finding.activity) : null,
     );
 
-    expect(activities).toEqual([['unknown', 'unknown', 'busy'], ['idle'], ['idle', 'idle']]);
+    expect(activities).toEqual([['unknown', 'busy'], ['idle'], ['idle', 'idle']]);
   });
 
   test('runs no tool before the processes are read', async () => {

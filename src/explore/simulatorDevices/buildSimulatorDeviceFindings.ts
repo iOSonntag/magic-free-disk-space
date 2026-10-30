@@ -6,9 +6,12 @@ import type { SimulatorDevice } from './parseSimulatorDeviceList.js';
 
 const RUNTIME_ID_PREFIX = 'com.apple.CoreSimulator.SimRuntime.';
 
-/** A device is offered when its runtime is gone, or when it is available and was never booted. */
+/**
+ * A device is offered only when its runtime is gone: neither `simctl` nor the device files tell
+ * whether an available device is in use.
+ */
 export function isSimulatorDeviceOffered(device: SimulatorDevice): boolean {
-  return !device.isAvailable || device.lastBootedAt === null;
+  return !device.isAvailable;
 }
 
 export function buildSimulatorDeviceFindings(params: {
@@ -42,10 +45,6 @@ export function buildSimulatorDeviceFindings(params: {
 }
 
 function buildSimulatorDeviceEvidenceLines(params: { device: SimulatorDevice }): string[] {
-  if (params.device.isAvailable) {
-    return ['Simulator lists it as never booted.'];
-  }
-
   const runtimeLine = `Its runtime ${params.device.runtimeId} is no longer installed.`;
 
   if (params.device.availabilityError === null) {
