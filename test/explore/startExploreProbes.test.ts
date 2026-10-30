@@ -320,4 +320,31 @@ describe('startExploreProbes', () => {
 
     expect(outcome).toEqual({ kind: 'timedOut' });
   });
+
+  test('fails a probe whose command passes its limit, naming its tool rather than timedOut', async () => {
+    const mise = await createProbeFakeTool({
+      folder: join(fixtureRoot.rootDir, 'tools'),
+      name: 'mise',
+      answers: [{ command: 'miseVersions', stdoutText: '', exitCode: 0 }],
+      prelude: 'sleep 5',
+    });
+
+    const probes = startExploreProbes({
+      environment: environment,
+      toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
+      processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      timeoutMs: 100,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
+    });
+
+    expect(await probes.miseVersions).toEqual({
+      kind: 'failed',
+      tool: { name: 'mise', path: await realpath(mise) },
+      failure: {
+        reason: 'commandFailed',
+        failure: { reason: 'timedOut', timeoutMs: expect.any(Number), stderrTail: '' },
+      },
+    });
+  });
 });

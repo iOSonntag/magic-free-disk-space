@@ -20,6 +20,7 @@ import type {
 } from './exploreProbe.js';
 import type { ExploreFinding, ExploreToolFailure } from './exploreUnit.js';
 import { loadHomebrewFindings } from './homebrew/loadHomebrewFindings.js';
+import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from './limits.js';
 import type { ExploreProbeDefinition } from './loadProbeOutput.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
 import { buildMiseVersionFindings } from './miseVersions/buildMiseVersionFindings.js';
@@ -57,7 +58,10 @@ export type ExploreProbeOutcomeUnreadable = {
   failure: ReadFailure;
 };
 
-/** The probe was still running at its deadline; whatever it still does is no longer awaited. */
+/**
+ * The probe was still running a grace past its deadline; whatever it still does is no longer
+ * awaited.
+ */
 export type ExploreProbeOutcomeTimedOut = { kind: 'timedOut' };
 
 export type ExploreProbeOutcome =
@@ -201,8 +205,9 @@ function buildCommandProbe<T>(params: {
 }
 
 /**
- * Runs one probe once the processes are read, and answers `timedOut` when it is still running
- * `timeoutMs` later: the Xcode wait, the tool lookup, and the loader all count.
+ * Runs one probe once the processes are read. It answers `timedOut` when it is still running
+ * `timeoutMs` plus the grace later: the Xcode wait, the tool lookup, and the loader all count. A
+ * command still running at the deadline fails first, naming its tool.
  */
 export async function runExploreProbe(params: {
   probe: ExploreProbe;
@@ -236,17 +241,21 @@ function runExploreProbeOfKind(params: {
   }
 }
 
-/** The outcome, or `timedOut` once `deadlineMs` passes first; the timer never outlives the race. */
+/**
+ * The outcome, or `timedOut` once the grace past `deadlineMs` passes first; the timer never
+ * outlives the race.
+ */
 async function raceExploreProbeDeadline(params: {
   outcome: Promise<ExploreProbeOutcome>;
   deadlineMs: number;
 }): Promise<ExploreProbeOutcome> {
+  const timedOutAtMs = params.deadlineMs + EXPLORE_PROBE_DEADLINE_GRACE_MS;
   const deadline = Promise.withResolvers<ExploreProbeOutcomeTimedOut>();
   const timer = setTimeout(
     () => {
       deadline.resolve({ kind: 'timedOut' });
     },
-    Math.max(0, params.deadlineMs - Date.now()),
+    Math.max(0, timedOutAtMs - Date.now()),
   );
 
   try {
