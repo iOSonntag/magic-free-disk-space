@@ -82,7 +82,7 @@ type ScanContext = {
 };
 
 /** Decisions in source order with the issues met on the way. */
-type ScanPhase = { decisions: CandidateDecision[]; issues: ScanIssue[] };
+export type ScanPhase = { decisions: CandidateDecision[]; issues: ScanIssue[] };
 
 const EMPTY_PHASE: ScanPhase = { decisions: [], issues: [] };
 
@@ -188,9 +188,13 @@ export async function runScan(params: {
     context: context,
     entries: explore.fallbackEntries,
   });
+  const incompleteExploreAdvice = await loadCatalogPhase({
+    context: context,
+    entries: explore.incompleteEntries,
+  });
 
-  // Explore comes last, so an item an earlier source found wins the overlap.
-  const scan = mergeScanPhases({
+  return buildScanReportOfPhases({
+    // Explore comes last, so an item an earlier source found wins the overlap.
     phases: [
       setup,
       catalog,
@@ -201,11 +205,28 @@ export async function runScan(params: {
       { decisions: explore.decisions, issues: explore.issues },
       exploreAdvice,
     ],
+    incompleteExploreAdvice: incompleteExploreAdvice,
   });
+}
+
+/**
+ * Dedupes the decisions of the phases, in their order, then adds the advice of the Explore entries
+ * whose probe judged only part of their units, and builds the report.
+ */
+export function buildScanReportOfPhases(params: {
+  phases: ScanPhase[];
+  incompleteExploreAdvice: ScanPhase;
+}): ScanReport {
+  const scan = mergeScanPhases({ phases: params.phases });
 
   return buildScanReport({
-    decisions: dedupeCandidates({ decisions: scan.decisions }),
-    issues: scan.issues,
+    decisions: [
+      ...dedupeCandidates({ decisions: scan.decisions }),
+      // Added after the dedupe, so this advice holds back no offer of its own entry, whose units
+      // lie inside its path. Moved before it, the advice would skip every finding of its probe.
+      ...params.incompleteExploreAdvice.decisions,
+    ],
+    issues: [...scan.issues, ...params.incompleteExploreAdvice.issues],
   });
 }
 

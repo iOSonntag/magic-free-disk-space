@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod } from 'node:fs/promises';
+import { chmod, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, CatalogRoot } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -165,6 +165,24 @@ describe('findCatalogTargets', () => {
     expect(result).toEqual({
       targets: [],
       issues: [{ path: join(lockedDir, 'inside'), reason: 'permissionDenied', detail: 'EACCES' }],
+    });
+  });
+
+  test('a self entry behind a symbolic link loop gives an unexpected issue with its code', async () => {
+    const loopPath = join(fixtureRoot.homeDir, 'Loop');
+    await symlink(loopPath, loopPath);
+    const entry = buildCatalogEntry({
+      id: 'inside-loop',
+      root: 'home',
+      path: 'Loop/inside',
+      scope: 'self',
+    });
+
+    const result = await findCatalogTargets({ environment, entries: [entry] });
+
+    expect(result).toEqual({
+      targets: [],
+      issues: [{ path: join(loopPath, 'inside'), reason: 'unexpected', detail: 'ELOOP' }],
     });
   });
 });

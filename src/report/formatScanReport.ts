@@ -179,7 +179,10 @@ function formatCandidateLines(params: { candidates: Candidate[] }): string[] {
   ];
 }
 
-/** The report ranks Explore items last, so their numbers follow the others under this heading. */
+/**
+ * The report ranks Explore items last, so their numbers follow the others under this heading. An
+ * item without a command is deleted as the folder it shows.
+ */
 function formatExploreBlock(params: { views: CandidateView[] }): string[] {
   if (params.views.length === 0) {
     return [];
@@ -187,7 +190,7 @@ function formatExploreBlock(params: { views: CandidateView[] }): string[] {
 
   return [
     '',
-    'Explore: their own tools remove these, and "safe" never selects them. Read the reasons first:',
+    'Explore: their own tools remove these, or this tool deletes the folder shown where a tool has no command for it. "safe" never selects them; read the reasons first:',
     ...params.views.flatMap((view) => formatCandidateItemLines({ view: view })),
   ];
 }

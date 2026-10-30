@@ -5,6 +5,8 @@ import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import { decideReadFailure } from '../system/readFailure.js';
+import { buildReadIssue } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
 
 export type CatalogTarget = {
@@ -99,9 +101,13 @@ function buildFailureIssues(params: {
   path: string;
   failure: FileFailure | DirectoryFailure;
 }): ScanIssue[] {
-  if (params.failure.reason === 'permissionDenied' || params.failure.reason === 'unexpected') {
-    return [{ path: params.path, reason: params.failure.reason, detail: params.failure.code }];
-  }
+  const verdict = decideReadFailure(params.failure);
 
-  return [];
+  switch (verdict.kind) {
+    case 'absent':
+    case 'unfit':
+      return [];
+    case 'failed':
+      return [buildReadIssue({ path: params.path, failure: verdict.failure })];
+  }
 }

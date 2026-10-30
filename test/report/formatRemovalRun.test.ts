@@ -72,6 +72,45 @@ describe('formatRemovalRun', () => {
     ]);
   });
 
+  test('reports the folders of path units as paths, deleted or left alone', () => {
+    const extensionsPath = '/Users/example/.vscode/extensions';
+    const lines = formatRemovalRun({
+      run: {
+        outcomes: [
+          {
+            path: `${extensionsPath}/example.alpha-1.0.0`,
+            allocatedBytes: 4096,
+            freedBytes: 4096,
+            outcome: 'removed',
+            code: null,
+          },
+          {
+            path: `${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
+            allocatedBytes: 4096,
+            freedBytes: 0,
+            outcome: 'changedSinceScan',
+            code: null,
+          },
+          {
+            path: `${extensionsPath}/example.gamma-3.0.0`,
+            allocatedBytes: 4096,
+            freedBytes: 0,
+            outcome: 'ownerRunning',
+            code: null,
+          },
+        ],
+        journalFailure: null,
+      },
+    });
+
+    expect(lines).toEqual([
+      `- deleted: ${extensionsPath}/example.alpha-1.0.0`,
+      `- changed since the scan, left alone: ${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
+      `- its app or tool is running now, left alone: ${extensionsPath}/example.gamma-3.0.0`,
+      'Freed about 4.0 KiB in 1 item.',
+    ]);
+  });
+
   test('omits the summary lines that do not apply', () => {
     const lines = formatRemovalRun({
       run: {
