@@ -1,6 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
+import { loadFileText } from '../system/loadFileText.js';
 import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
 import { FLUTTER_SDK_DART_PATH } from './decideDartBinaryPath.js';
 
@@ -42,14 +43,23 @@ export function parsePackageConfigFlutterRoot(text: string): string | null {
 }
 
 async function loadActiveRootFiles(params: { activeRootsDir: string }): Promise<string[]> {
-  const groupNames = await loadSortedNames({ dir: params.activeRootsDir });
+  const groupNames = await loadDirectoryNames({ path: params.activeRootsDir });
+
+  if (groupNames.kind === 'failed') {
+    return [];
+  }
+
   const files: string[] = [];
 
-  for (const groupName of groupNames) {
+  for (const groupName of groupNames.value) {
     const groupDir = join(params.activeRootsDir, groupName);
-    const fileNames = await loadSortedNames({ dir: groupDir });
+    const fileNames = await loadDirectoryNames({ path: groupDir });
 
-    for (const fileName of fileNames) {
+    if (fileNames.kind === 'failed') {
+      continue;
+    }
+
+    for (const fileName of fileNames.value) {
       if (files.length === ACTIVE_ROOT_FILES_MAX_COUNT) {
         return files;
       }
@@ -59,17 +69,6 @@ async function loadActiveRootFiles(params: { activeRootsDir: string }): Promise<
   }
 
   return files;
-}
-
-/** Never throws: a folder that cannot be read has no names. */
-async function loadSortedNames(params: { dir: string }): Promise<string[]> {
-  try {
-    const names = await readdir(params.dir);
-
-    return names.toSorted();
-  } catch {
-    return [];
-  }
 }
 
 async function loadFlutterRoot(params: { activeRootFile: string }): Promise<string | null> {
@@ -92,14 +91,6 @@ async function loadFlutterRoot(params: { activeRootFile: string }): Promise<stri
   }
 
   return parsePackageConfigFlutterRoot(packageConfigText);
-}
-
-async function loadFileText(params: { path: string }): Promise<string | null> {
-  try {
-    return await readFile(params.path, 'utf8');
-  } catch {
-    return null;
-  }
 }
 
 function parseFileUrlField(params: { text: string; field: string }): string | null {
