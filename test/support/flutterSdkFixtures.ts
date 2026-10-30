@@ -105,14 +105,19 @@ export async function createGitEntry(params: {
 export type GitEntry = 'folder' | 'file' | 'none';
 
 /**
- * The bytes of a git index of `version` whose entries name `paths`, with zero stat data and
- * hashes: version 2 and 3 pad each entry with NUL bytes to a multiple of 8, version 4 strips no
- * prefix and pads with one NUL.
+ * The bytes of a git index of `version` whose entries name `paths`, with zero stat data, object
+ * names, and checksum of `hashLength`, 20 unless given, and then `extensions`: version 2 and 3
+ * pad each entry with NUL bytes to a multiple of 8, version 4 strips no prefix and pads with one
+ * NUL. Each entry of `extendedPaths` sets the extended flag and its 16 more bits, in any version.
  */
 export function buildGitIndexBytes(params: {
   version: GitIndexVersion;
   paths: string[];
+  hashLength?: GitIndexHashLength;
+  extendedPaths?: string[];
+  extensions?: Uint8Array[];
 }): Uint8Array {
+  const hashLength = params.hashLength ?? 20;
   const header = new Uint8Array(12);
   const headerView = new DataView(header.buffer);
   header.set(new TextEncoder().encode('DIRC'), 0);
@@ -120,11 +125,36 @@ export function buildGitIndexBytes(params: {
   headerView.setUint32(8, params.paths.length);
 
   const entries = params.paths.map((path) =>
-    buildGitIndexEntry({ version: params.version, path: path }),
+    buildGitIndexEntry({
+      version: params.version,
+      path: path,
+      hashLength: hashLength,
+      extended: params.extendedPaths?.includes(path) ?? false,
+    }),
   );
 
-  return concatBytes([header, ...entries, new Uint8Array(20)]);
+  return concatBytes([
+    header,
+    ...entries,
+    ...(params.extensions ?? []),
+    new Uint8Array(hashLength),
+  ]);
 }
+
+/** The bytes of a git index extension: its 4-byte `signature`, the size of `content`, `content`. */
+export function buildGitIndexExtensionBytes(params: {
+  signature: string;
+  content: Uint8Array;
+}): Uint8Array {
+  const header = new Uint8Array(8);
+  header.set(new TextEncoder().encode(params.signature), 0);
+  new DataView(header.buffer).setUint32(4, params.content.length);
+
+  return concatBytes([header, params.content]);
+}
+
+/** The length of an object name and of the checksum: SHA-1 or SHA-256. */
+export type GitIndexHashLength = 20 | 32;
 
 /** Writes `<gitDir>/index`, a git index of `version` whose entries name `paths`. */
 export async function createGitIndex(params: {
@@ -140,18 +170,28 @@ export async function createGitIndex(params: {
 
 export type GitIndexVersion = 2 | 3 | 4;
 
-const GIT_INDEX_ENTRY_FIXED_LENGTH = 62;
+const GIT_INDEX_STAT_DATA_LENGTH = 40;
 
-function buildGitIndexEntry(params: { version: GitIndexVersion; path: string }): Uint8Array {
+const GIT_INDEX_EXTENDED_FLAG = 0x4000;
+
+function buildGitIndexEntry(params: {
+  version: GitIndexVersion;
+  path: string;
+  hashLength: GitIndexHashLength;
+  extended: boolean;
+}): Uint8Array {
   const name = new TextEncoder().encode(params.path);
-  const fixed = new Uint8Array(GIT_INDEX_ENTRY_FIXED_LENGTH);
-  new DataView(fixed.buffer).setUint16(60, Math.min(name.length, 0xfff));
+  const flagsOffset = GIT_INDEX_STAT_DATA_LENGTH + params.hashLength;
+  const fixedLength = flagsOffset + (params.extended ? 4 : 2);
+  const fixed = new Uint8Array(fixedLength);
+  const extendedFlag = params.extended ? GIT_INDEX_EXTENDED_FLAG : 0;
+  new DataView(fixed.buffer).setUint16(flagsOffset, extendedFlag | Math.min(name.length, 0xfff));
 
   if (params.version === 4) {
     return concatBytes([fixed, new Uint8Array([0]), name, new Uint8Array(1)]);
   }
 
-  const paddingLength = 8 - ((GIT_INDEX_ENTRY_FIXED_LENGTH + name.length) % 8);
+  const paddingLength = 8 - ((fixedLength + name.length) % 8);
 
   return concatBytes([fixed, name, new Uint8Array(paddingLength)]);
 }

@@ -5,6 +5,8 @@ import { loadPackageConfigTracking } from '../../src/tools/loadPackageConfigTrac
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import {
+  buildGitIndexBytes,
+  buildGitIndexExtensionBytes,
   createGitEntry,
   createGitIndex,
   createUntrackedProjectRepository,
@@ -130,11 +132,35 @@ describe('loadPackageConfigTracking', () => {
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
   });
 
-  test('returns unknown for a git dir that holds a split index', async () => {
-    const projectRoot = join(fixtureRoot.rootDir, 'app');
-    const dartToolPath = await createUntrackedProject(projectRoot);
+  test('returns untracked for a monorepo that tracks other configs but not the one of the project', async () => {
+    const repoRoot = join(fixtureRoot.rootDir, 'repo');
 
-    await Bun.write(join(projectRoot, '.git', `sharedindex.${'b'.repeat(40)}`), '');
+    await createGitIndex({
+      gitDir: join(repoRoot, '.git'),
+      version: 2,
+      paths: [
+        'app/pubspec.yaml',
+        'docs/package_config.json.backup',
+        `other/${PACKAGE_CONFIG_PATH}`,
+      ],
+    });
+    const dartToolPath = await createDartTool(join(repoRoot, 'app'));
+
+    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('untracked');
+  });
+
+  test('returns unknown for a split index, with a link extension', async () => {
+    const projectRoot = join(fixtureRoot.rootDir, 'app');
+    const linkExtension = buildGitIndexExtensionBytes({
+      signature: 'link',
+      content: new Uint8Array(20),
+    });
+
+    await Bun.write(
+      join(projectRoot, '.git', 'index'),
+      buildGitIndexBytes({ version: 2, paths: ['pubspec.yaml'], extensions: [linkExtension] }),
+    );
+    const dartToolPath = await createDartTool(projectRoot);
 
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
   });
