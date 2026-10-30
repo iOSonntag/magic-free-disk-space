@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rename, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   ACTIVE_ROOT_FILES_MAX_COUNT,
-  isFlutterRootApartFromCheckout,
+  isFlutterRootApartFromProject,
   loadFlutterSdkDartPaths,
   parseActiveRootPackageConfigPath,
   parsePackageConfigFlutterRoot,
@@ -16,7 +16,10 @@ import {
   buildProjectRoot,
   createActiveProject,
   createGitEntry,
+  createGitIndex,
 } from '../support/flutterSdkFixtures.js';
+
+const PACKAGE_CONFIG_PATH = '.dart_tool/package_config.json';
 
 let fixtureRoot: FixtureRoot;
 
@@ -30,6 +33,13 @@ afterEach(async () => {
 
 function buildSdkDartPath(flutterRoot: string): string {
   return join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
+}
+
+async function writeActiveRoot(params: { packageConfigPath: string }): Promise<void> {
+  await Bun.write(
+    buildActiveRootPath({ homeDir: fixtureRoot.homeDir, group: 'a0', name: 'a0aaaa' }),
+    JSON.stringify({ package_config: pathToFileURL(params.packageConfigPath).href }),
+  );
 }
 
 describe('loadFlutterSdkDartPaths', () => {
@@ -197,10 +207,14 @@ describe('loadFlutterSdkDartPaths', () => {
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
 
-  test('skips a sibling submodule of the project as its Flutter root', async () => {
+  test('skips a sibling submodule as the Flutter root of a project whose repository tracks its package config', async () => {
     const repoRoot = join(fixtureRoot.rootDir, 'repo');
 
-    await createGitEntry({ folder: repoRoot, gitEntry: 'folder' });
+    await createGitIndex({
+      gitDir: join(repoRoot, '.git'),
+      version: 2,
+      paths: ['app/.dart_tool/package_config.json', 'app/pubspec.yaml'],
+    });
     await createActiveProject({
       homeDir: fixtureRoot.homeDir,
       group: 'a0',
@@ -215,17 +229,40 @@ describe('loadFlutterSdkDartPaths', () => {
     expect(paths).toEqual([]);
   });
 
-  test('skips a Flutter root in the superproject of the submodule that holds the project', async () => {
-    const superRoot = join(fixtureRoot.rootDir, 'super');
+  test('skips a git dependency clone of the pub cache named by a tracked package config', async () => {
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
 
-    await createGitEntry({ folder: superRoot, gitEntry: 'folder' });
-    await createGitEntry({ folder: join(superRoot, 'sub'), gitEntry: 'file' });
+    await createGitIndex({
+      gitDir: join(projectRoot, '.git'),
+      version: 3,
+      paths: [PACKAGE_CONFIG_PATH],
+    });
     await createActiveProject({
       homeDir: fixtureRoot.homeDir,
       group: 'a0',
       name: 'a0aaaa',
-      flutterRoot: join(superRoot, 'sdk'),
-      flutterRootGitEntry: 'file',
+      flutterRoot: join(fixtureRoot.homeDir, '.pub-cache', 'git', `sdk-${'a'.repeat(40)}`),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a project in a submodule whose git dir tracks its package config', async () => {
+    const superRoot = join(fixtureRoot.rootDir, 'super');
+
+    await Bun.write(join(superRoot, 'sub', '.git'), 'gitdir: ../.git/modules/sub\n');
+    await createGitIndex({
+      gitDir: join(superRoot, '.git', 'modules', 'sub'),
+      version: 2,
+      paths: [`app/${PACKAGE_CONFIG_PATH}`],
+    });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
       projectRoot: join(superRoot, 'sub', 'app'),
     });
 
@@ -234,17 +271,18 @@ describe('loadFlutterSdkDartPaths', () => {
     expect(paths).toEqual([]);
   });
 
-  test('skips a Flutter root in the worktree that holds the project', async () => {
+  test('skips a project in a worktree whose git dir tracks its package config', async () => {
     const worktreeRoot = join(fixtureRoot.rootDir, 'wt');
+    const gitDir = join(fixtureRoot.rootDir, 'main', '.git', 'worktrees', 'wt');
 
-    await createGitEntry({ folder: worktreeRoot, gitEntry: 'file' });
+    await Bun.write(join(worktreeRoot, '.git'), `gitdir: ${gitDir}\n`);
+    await createGitIndex({ gitDir: gitDir, version: 2, paths: [PACKAGE_CONFIG_PATH] });
     await createActiveProject({
       homeDir: fixtureRoot.homeDir,
       group: 'a0',
       name: 'a0aaaa',
-      flutterRoot: join(worktreeRoot, 'sdk'),
-      flutterRootGitEntry: 'file',
-      projectRoot: join(worktreeRoot, 'app'),
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
+      projectRoot: worktreeRoot,
     });
 
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
@@ -252,17 +290,153 @@ describe('loadFlutterSdkDartPaths', () => {
     expect(paths).toEqual([]);
   });
 
-  test('returns a Flutter root outside the repository of the project', async () => {
-    const projectRoot = join(fixtureRoot.rootDir, 'app');
-    const flutterRoot = join(fixtureRoot.rootDir, 'flutter');
+  test('skips a package config that a repository of .dart_tool itself tracks', async () => {
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
+
+    await Bun.write(join(projectRoot, '.dart_tool', '.git'), 'gitdir: ../../dart-tool.git\n');
+    await createGitIndex({
+      gitDir: join(dirname(projectRoot), 'dart-tool.git'),
+      version: 2,
+      paths: ['package_config.json'],
+    });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a package config whose .dart_tool is a link', async () => {
+    const targetRoot = join(fixtureRoot.rootDir, 'target');
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
+
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
+      projectRoot: targetRoot,
+    });
+    await mkdir(projectRoot, { recursive: true });
+    await symlink(join(targetRoot, '.dart_tool'), join(projectRoot, '.dart_tool'));
+    await writeActiveRoot({ packageConfigPath: join(projectRoot, PACKAGE_CONFIG_PATH) });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a package config that is a link', async () => {
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
+    const packageConfigPath = join(projectRoot, PACKAGE_CONFIG_PATH);
+    const targetPath = join(fixtureRoot.rootDir, 'package_config.json');
+
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
+    });
+    await rename(packageConfigPath, targetPath);
+    await symlink(targetPath, packageConfigPath);
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a project whose git dir holds a split index', async () => {
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
+
+    await createGitIndex({ gitDir: join(projectRoot, '.git'), version: 2, paths: ['README.md'] });
+    await Bun.write(join(projectRoot, '.git', `sharedindex.${'b'.repeat(40)}`), '');
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a project whose index has version 4', async () => {
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
+
+    await createGitIndex({ gitDir: join(projectRoot, '.git'), version: 4, paths: ['README.md'] });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a project whose repository has no index', async () => {
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
 
     await createGitEntry({ folder: projectRoot, gitEntry: 'folder' });
     await createActiveProject({
       homeDir: fixtureRoot.homeDir,
       group: 'a0',
       name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('returns a Flutter root outside the repository of the project that does not track its package config', async () => {
+    const projectRoot = join(fixtureRoot.rootDir, 'app');
+    const flutterRoot = join(fixtureRoot.rootDir, 'flutter');
+
+    await createGitIndex({
+      gitDir: join(projectRoot, '.git'),
+      version: 2,
+      paths: ['README.md', 'lib/main.dart', 'pubspec.yaml'],
+    });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
       flutterRoot: flutterRoot,
       projectRoot: projectRoot,
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
+  });
+
+  test('returns a sibling submodule as the Flutter root when the repository does not track the package config', async () => {
+    const repoRoot = join(fixtureRoot.rootDir, 'repo');
+    const flutterRoot = join(repoRoot, 'sdk');
+
+    await createGitIndex({
+      gitDir: join(repoRoot, '.git'),
+      version: 2,
+      paths: ['app/pubspec.yaml', 'sdk'],
+    });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: flutterRoot,
+      flutterRootGitEntry: 'file',
+      projectRoot: join(repoRoot, 'app'),
     });
 
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
@@ -290,63 +464,24 @@ describe('loadFlutterSdkDartPaths', () => {
   });
 });
 
-describe('isFlutterRootApartFromCheckout', () => {
-  test('without a checkout, accepts paths disjoint from the project, a shared prefix included', () => {
+describe('isFlutterRootApartFromProject', () => {
+  test('accepts disjoint paths, a shared name prefix included', () => {
     expect(
-      isFlutterRootApartFromCheckout({
-        flutterRoot: '/sdk/flutter',
-        projectRoot: '/p/app',
-        checkoutRoot: null,
-      }),
+      isFlutterRootApartFromProject({ flutterRoot: '/sdk/flutter', projectRoot: '/p/app' }),
     ).toBe(true);
     expect(
-      isFlutterRootApartFromCheckout({
-        flutterRoot: '/p/app-sdk',
-        projectRoot: '/p/app',
-        checkoutRoot: null,
-      }),
+      isFlutterRootApartFromProject({ flutterRoot: '/p/app-sdk', projectRoot: '/p/app' }),
     ).toBe(true);
   });
 
-  test('without a checkout, rejects equal paths and a path inside the other', () => {
+  test('rejects equal paths and a path inside the other', () => {
+    expect(isFlutterRootApartFromProject({ flutterRoot: '/p/app', projectRoot: '/p/app' })).toBe(
+      false,
+    );
     expect(
-      isFlutterRootApartFromCheckout({
-        flutterRoot: '/p/app',
-        projectRoot: '/p/app',
-        checkoutRoot: null,
-      }),
+      isFlutterRootApartFromProject({ flutterRoot: '/p/app/flutter', projectRoot: '/p/app' }),
     ).toBe(false);
-    expect(
-      isFlutterRootApartFromCheckout({
-        flutterRoot: '/p/app/flutter',
-        projectRoot: '/p/app',
-        checkoutRoot: null,
-      }),
-    ).toBe(false);
-    expect(
-      isFlutterRootApartFromCheckout({
-        flutterRoot: '/p',
-        projectRoot: '/p/app',
-        checkoutRoot: null,
-      }),
-    ).toBe(false);
-  });
-
-  test('with a checkout, rejects a root inside it and accepts one outside it', () => {
-    expect(
-      isFlutterRootApartFromCheckout({
-        flutterRoot: '/p/sdk',
-        projectRoot: '/p/app',
-        checkoutRoot: '/p',
-      }),
-    ).toBe(false);
-    expect(
-      isFlutterRootApartFromCheckout({
-        flutterRoot: '/p-sdk',
-        projectRoot: '/p/app',
-        checkoutRoot: '/p',
-      }),
-    ).toBe(true);
+    expect(isFlutterRootApartFromProject({ flutterRoot: '/p', projectRoot: '/p/app' })).toBe(false);
   });
 });
 

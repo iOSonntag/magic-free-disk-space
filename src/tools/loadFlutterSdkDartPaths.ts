@@ -3,23 +3,32 @@ import { fileURLToPath } from 'node:url';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
+import { loadFileBytes } from '../system/loadFileBytes.js';
+import type { FileKind } from '../system/loadFileIdentity.js';
 import { loadFileText } from '../system/loadFileText.js';
 import { loadRealPath } from '../system/loadRealPath.js';
 import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
 import { FLUTTER_SDK_DART_PATH } from './decideDartBinaryPath.js';
+import type { PackageConfigTracking } from './decidePackageConfigTracking.js';
+import {
+  decidePackageConfigTracking,
+  PACKAGE_CONFIG_FILE_NAME,
+  parseGitDirFilePath,
+} from './decidePackageConfigTracking.js';
 
 /** Bounds the files read when a cache holds many projects, or a crafted one many entries. */
 export const ACTIVE_ROOT_FILES_MAX_COUNT = 64;
 
 const ACTIVE_ROOTS_PATH = '.pub-cache/active_roots';
 
+const GIT_INDEX_MAX_BYTES = 64 * 1024 * 1024;
+
 /**
  * Returns the Dart binary path of each distinct Flutter SDK that the projects of
- * `~/.pub-cache/active_roots` name, in the sorted order of their files. A project names its root
- * in a file it may commit, so a root counts only when it holds a `.git` entry, does not hold the
- * project, and lies outside the checkout that holds the project, or outside the project when no
- * checkout holds it. Unreadable or malformed files and roots whose real path cannot be read are
- * skipped; the binaries themselves are not checked.
+ * `~/.pub-cache/active_roots` name, in the sorted order of their files. A root counts only when it
+ * holds a `.git` entry, is disjoint from its project, and comes from the plain file
+ * `<project>/.dart_tool/package_config.json` that pub wrote: the index of the repository git finds
+ * for it must be readable and not name it. Anything unreadable or malformed is skipped.
  */
 export async function loadFlutterSdkDartPaths(params: { homeDir: string }): Promise<string[]> {
   const activeRootFiles = await loadActiveRootFiles({
@@ -39,24 +48,23 @@ export async function loadFlutterSdkDartPaths(params: { homeDir: string }): Prom
 }
 
 /**
- * Whether the real path of a Flutter root lies outside the checkout of the project that names it,
- * or outside the project itself when `checkoutRoot` is `null`, and does not hold the project.
+ * Whether the real paths of a Flutter root and of the project that names it are disjoint, neither
+ * equal to nor inside the other.
  */
-export function isFlutterRootApartFromCheckout(params: {
+export function isFlutterRootApartFromProject(params: {
   flutterRoot: string;
   projectRoot: string;
-  checkoutRoot: string | null;
 }): boolean {
-  const flutterRootInCheckout = isSameOrInsidePath({
+  const flutterRootInProject = isSameOrInsidePath({
     path: params.flutterRoot,
-    parentPath: params.checkoutRoot ?? params.projectRoot,
+    parentPath: params.projectRoot,
   });
   const projectInFlutterRoot = isSameOrInsidePath({
     path: params.projectRoot,
     parentPath: params.flutterRoot,
   });
 
-  return !flutterRootInCheckout && !projectInFlutterRoot;
+  return !flutterRootInProject && !projectInFlutterRoot;
 }
 
 /** Parses an active-roots file into the path of the `package_config.json` it names, else `null`. */
@@ -126,6 +134,7 @@ async function loadFlutterRoot(params: { activeRootFile: string }): Promise<stri
   const accepted = await isFlutterRootAccepted({
     flutterRoot: flutterRoot,
     projectRoot: dirname(dirname(packageConfigPath)),
+    packageConfigPath: packageConfigPath,
   });
 
   if (!accepted) {
@@ -136,25 +145,26 @@ async function loadFlutterRoot(params: { activeRootFile: string }): Promise<stri
 }
 
 /**
- * Whether `flutterRoot` is a git checkout apart from the checkout of `projectRoot`, the folder of
- * `.dart_tool`.
+ * Whether `flutterRoot` is a git checkout apart from `projectRoot`, the folder of `.dart_tool`,
+ * named by `packageConfigPath`, the plain file `.dart_tool/package_config.json` of the project
+ * that no repository tracks.
  */
 async function isFlutterRootAccepted(params: {
   flutterRoot: string;
   projectRoot: string;
+  packageConfigPath: string;
 }): Promise<boolean> {
   const flutterRealPath = await loadRealPath({ path: params.flutterRoot });
   const projectRealPath = await loadRealPath({ path: params.projectRoot });
+  const packageConfigRealPath = await loadRealPath({ path: params.packageConfigPath });
 
-  if (flutterRealPath === null || projectRealPath === null) {
+  if (flutterRealPath === null || projectRealPath === null || packageConfigRealPath === null) {
     return false;
   }
 
-  const checkoutRoot = await loadCheckoutRoot({ projectRealPath: projectRealPath });
-  const apart = isFlutterRootApartFromCheckout({
+  const apart = isFlutterRootApartFromProject({
     flutterRoot: flutterRealPath,
     projectRoot: projectRealPath,
-    checkoutRoot: checkoutRoot,
   });
 
   if (!apart) {
@@ -163,37 +173,129 @@ async function isFlutterRootAccepted(params: {
 
   const gitEntryStats = await loadEntryStats({ path: join(flutterRealPath, '.git') });
 
-  return gitEntryStats.kind === 'succeeded';
+  if (gitEntryStats.kind === 'failed') {
+    return false;
+  }
+
+  const projectDartToolPath = join(projectRealPath, '.dart_tool');
+
+  if (packageConfigRealPath !== join(projectDartToolPath, PACKAGE_CONFIG_FILE_NAME)) {
+    return false;
+  }
+
+  const tracking = await loadPackageConfigTracking({ dartToolRealPath: projectDartToolPath });
+
+  return tracking === 'untracked';
 }
 
 /**
- * The root of the git checkout that holds `projectRealPath`, the project folder included: the
- * nearest folder whose `.git` is a directory, else the outermost one whose `.git` is any other
- * entry, such as the file of a submodule or a worktree, else `null`. A failed lstat counts as no
- * `.git`.
+ * Whether the index of the repository git finds from `dartToolRealPath` names the package config:
+ * `untracked` without a repository, `unknown` when the repository or its index cannot be read
+ * whole.
  */
-async function loadCheckoutRoot(params: { projectRealPath: string }): Promise<string | null> {
-  let outermostGitFileFolder: string | null = null;
-  let folder = params.projectRealPath;
+async function loadPackageConfigTracking(params: {
+  dartToolRealPath: string;
+}): Promise<PackageConfigTracking> {
+  const gitDir = await findGitDir({ folder: params.dartToolRealPath });
+
+  switch (gitDir.kind) {
+    case 'none':
+      return 'untracked';
+    case 'unknown':
+      return 'unknown';
+    case 'found':
+      return await loadGitDirPackageConfigTracking({ gitDir: gitDir.path });
+  }
+}
+
+async function loadGitDirPackageConfigTracking(params: {
+  gitDir: string;
+}): Promise<PackageConfigTracking> {
+  const gitDirNames = await loadDirectoryNames({ path: params.gitDir });
+
+  if (gitDirNames.kind === 'failed') {
+    return 'unknown';
+  }
+
+  // A split index keeps most entries in `sharedindex.<sha>`, outside `$GIT_DIR/index`.
+  if (gitDirNames.value.some((name) => name.startsWith('sharedindex.'))) {
+    return 'unknown';
+  }
+
+  const indexBytes = await loadFileBytes({
+    path: join(params.gitDir, 'index'),
+    maxBytes: GIT_INDEX_MAX_BYTES,
+  });
+
+  if (indexBytes === null) {
+    return 'unknown';
+  }
+
+  return decidePackageConfigTracking(indexBytes);
+}
+
+/** The git dir of the repository that holds `folder`, as git finds it walking up from `folder`. */
+type GitDirLookup = { kind: 'found'; path: string } | { kind: 'none' } | { kind: 'unknown' };
+
+/**
+ * The git dir that the nearest `.git` of `folder` or a folder above names: a directory, or a file
+ * whose first line is `gitdir: <path>`. `unknown` for any other `.git` or a failed read.
+ */
+async function findGitDir(params: { folder: string }): Promise<GitDirLookup> {
+  let folder = params.folder;
 
   while (true) {
-    const gitEntryStats = await loadEntryStats({ path: join(folder, '.git') });
+    const gitPath = join(folder, '.git');
+    const gitEntryStats = await loadEntryStats({ path: gitPath });
 
     if (gitEntryStats.kind === 'succeeded') {
-      if (gitEntryStats.value.kind === 'directory') {
-        return folder;
-      }
+      return await loadGitDirOfEntry({
+        folder: folder,
+        gitPath: gitPath,
+        kind: gitEntryStats.value.kind,
+      });
+    }
 
-      outermostGitFileFolder = folder;
+    if (gitEntryStats.failure.reason !== 'missing') {
+      return { kind: 'unknown' };
     }
 
     const parentFolder = dirname(folder);
 
     if (parentFolder === folder) {
-      return outermostGitFileFolder;
+      return { kind: 'none' };
     }
 
     folder = parentFolder;
+  }
+}
+
+async function loadGitDirOfEntry(params: {
+  folder: string;
+  gitPath: string;
+  kind: FileKind;
+}): Promise<GitDirLookup> {
+  switch (params.kind) {
+    case 'directory':
+      return { kind: 'found', path: params.gitPath };
+    case 'file': {
+      const gitFileText = await loadFileText({ path: params.gitPath });
+
+      if (gitFileText === null) {
+        return { kind: 'unknown' };
+      }
+
+      const gitDir = parseGitDirFilePath({ text: gitFileText, folder: params.folder });
+
+      if (gitDir === null) {
+        return { kind: 'unknown' };
+      }
+
+      return { kind: 'found', path: gitDir };
+    }
+    case 'symbolicLink':
+    case 'other':
+      return { kind: 'unknown' };
   }
 }
 

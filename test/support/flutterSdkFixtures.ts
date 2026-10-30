@@ -70,6 +70,70 @@ export async function createGitEntry(params: {
 /** The `.git` entry of a folder: a clone's folder, the file of a worktree or a submodule, or none. */
 export type GitEntry = 'folder' | 'file' | 'none';
 
+/**
+ * The bytes of a git index of `version` whose entries name `paths`, with zero stat data and
+ * hashes: version 2 and 3 pad each entry with NUL bytes to a multiple of 8, version 4 strips no
+ * prefix and pads with one NUL.
+ */
+export function buildGitIndexBytes(params: {
+  version: GitIndexVersion;
+  paths: string[];
+}): Uint8Array {
+  const header = new Uint8Array(12);
+  const headerView = new DataView(header.buffer);
+  header.set(new TextEncoder().encode('DIRC'), 0);
+  headerView.setUint32(4, params.version);
+  headerView.setUint32(8, params.paths.length);
+
+  const entries = params.paths.map((path) =>
+    buildGitIndexEntry({ version: params.version, path: path }),
+  );
+
+  return concatBytes([header, ...entries, new Uint8Array(20)]);
+}
+
+/** Writes `<gitDir>/index`, a git index of `version` whose entries name `paths`. */
+export async function createGitIndex(params: {
+  gitDir: string;
+  version: GitIndexVersion;
+  paths: string[];
+}): Promise<void> {
+  await Bun.write(
+    join(params.gitDir, 'index'),
+    buildGitIndexBytes({ version: params.version, paths: params.paths }),
+  );
+}
+
+export type GitIndexVersion = 2 | 3 | 4;
+
+const GIT_INDEX_ENTRY_FIXED_LENGTH = 62;
+
+function buildGitIndexEntry(params: { version: GitIndexVersion; path: string }): Uint8Array {
+  const name = new TextEncoder().encode(params.path);
+  const fixed = new Uint8Array(GIT_INDEX_ENTRY_FIXED_LENGTH);
+  new DataView(fixed.buffer).setUint16(60, Math.min(name.length, 0xfff));
+
+  if (params.version === 4) {
+    return concatBytes([fixed, new Uint8Array([0]), name, new Uint8Array(1)]);
+  }
+
+  const paddingLength = 8 - ((GIT_INDEX_ENTRY_FIXED_LENGTH + name.length) % 8);
+
+  return concatBytes([fixed, name, new Uint8Array(paddingLength)]);
+}
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const bytes = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  let offset = 0;
+
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.length;
+  }
+
+  return bytes;
+}
+
 /** Writes `version` as the version file of the Dart SDK whose binary is at `dartPath`. */
 export async function writeDartVersionFile(params: {
   dartPath: string;
