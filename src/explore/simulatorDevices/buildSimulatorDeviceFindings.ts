@@ -20,6 +20,7 @@ export function buildSimulatorDeviceFindings(params: {
   processCommands: string[] | null;
 }): ExploreFinding[] {
   return params.devices.filter(isSimulatorDeviceOffered).map((device) => {
+    const runtimeName = formatSimulatorRuntimeName({ runtimeIdentifier: device.runtimeId });
     const finding: ExploreFinding = {
       unit: {
         kind: 'simulatorDevice',
@@ -27,7 +28,7 @@ export function buildSimulatorDeviceFindings(params: {
         udid: device.udid,
         dataPath: device.dataPath,
       },
-      title: `Simulator ${device.name} (${formatRuntimeName({ runtimeId: device.runtimeId })})`,
+      title: `Simulator ${device.name} (${runtimeName})`,
       explanation: 'A simulator device with the apps and data installed in it.',
       regeneration:
         'A deleted simulator does not come back; Xcode creates a new, empty one when you add it.',
@@ -55,15 +56,17 @@ function buildSimulatorDeviceEvidenceLines(params: { device: SimulatorDevice }):
 }
 
 /** `com.apple.CoreSimulator.SimRuntime.iOS-18-2` reads `iOS 18.2`; an unknown shape stays as is. */
-function formatRuntimeName(params: { runtimeId: string }): string {
-  if (!params.runtimeId.startsWith(RUNTIME_ID_PREFIX)) {
-    return params.runtimeId;
+export function formatSimulatorRuntimeName(params: { runtimeIdentifier: string }): string {
+  if (!params.runtimeIdentifier.startsWith(RUNTIME_ID_PREFIX)) {
+    return params.runtimeIdentifier;
   }
 
-  const [platform, ...versionParts] = params.runtimeId.slice(RUNTIME_ID_PREFIX.length).split('-');
+  const [platform, ...versionParts] = params.runtimeIdentifier
+    .slice(RUNTIME_ID_PREFIX.length)
+    .split('-');
 
   if (versionParts.length === 0) {
-    return params.runtimeId;
+    return params.runtimeIdentifier;
   }
 
   return `${platform} ${versionParts.join('.')}`;
