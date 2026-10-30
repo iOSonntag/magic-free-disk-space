@@ -151,12 +151,16 @@ bun run app:run        # build and start a debug version
 ## Privacy
 
 The tool works offline. It sends nothing anywhere and has no telemetry. It reads file sizes,
-dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`.
+dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`. To judge
+Android and VS Code items, it also reads their own records: the SDK's `package.xml` files, each
+emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. It
+only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
-simctl`, `dart`, and `mise`, to learn which of their items are unused; these forms change
-nothing. Only after you type `DELETE` does it run their cleanup commands, one for each item you
-selected. A tool runs with a fixed environment that keeps it offline where the tool allows that.
+simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
+change nothing. Only after you type `DELETE` does it run their cleanup commands, such as
+`brew cleanup` or `avdmanager delete avd`, one for each item you selected. A tool runs with a
+fixed environment that keeps it offline where the tool allows that.
 
 ## Limits
 
