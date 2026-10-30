@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   ACTIVE_ROOT_FILES_MAX_COUNT,
+  isFlutterRootApartFromProject,
   loadFlutterSdkDartPaths,
   parseActiveRootPackageConfigPath,
   parsePackageConfigFlutterRoot,
@@ -23,6 +25,10 @@ afterEach(async () => {
 
 function buildSdkDartPath(flutterRoot: string): string {
   return join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
+}
+
+function buildProjectRoot(name: string): string {
+  return join(fixtureRoot.homeDir, 'projects', name);
 }
 
 describe('loadFlutterSdkDartPaths', () => {
@@ -113,10 +119,118 @@ describe('loadFlutterSdkDartPaths', () => {
     expect(paths).toEqual([]);
   });
 
+  test('skips a Flutter root inside the project that names it', async () => {
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(buildProjectRoot('a0aaaa'), 'vendor', 'flutter'),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a Flutter root that holds the project, such as the root of its repository', async () => {
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: join(fixtureRoot.homeDir, 'projects'),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('skips a Flutter root without a .git entry', async () => {
+    const flutterRoot = join(fixtureRoot.homeDir, 'projects', 'a0aaaa-sdk');
+
+    await mkdir(join(flutterRoot, 'bin'), { recursive: true });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: flutterRoot,
+      flutterRootGitEntry: 'none',
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
+  test('returns a Flutter root with a .git folder that a project outside it names', async () => {
+    const flutterRoot = join(fixtureRoot.rootDir, 'flutter');
+
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: flutterRoot,
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
+  });
+
+  test('returns a Flutter root whose .git is a file, as in a worktree', async () => {
+    const flutterRoot = join(fixtureRoot.rootDir, 'flutter-worktree');
+
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: flutterRoot,
+      flutterRootGitEntry: 'file',
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
+  });
+
+  test('skips a Flutter root that only its own workspace names', async () => {
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'flutter',
+      flutterRoot: buildProjectRoot('flutter'),
+    });
+
+    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+
+    expect(paths).toEqual([]);
+  });
+
   test('returns nothing without a pub cache', async () => {
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
 
     expect(paths).toEqual([]);
+  });
+});
+
+describe('isFlutterRootApartFromProject', () => {
+  test('accepts disjoint paths, a shared name prefix included', () => {
+    expect(
+      isFlutterRootApartFromProject({ flutterRoot: '/sdk/flutter', projectRoot: '/p/app' }),
+    ).toBe(true);
+    expect(
+      isFlutterRootApartFromProject({ flutterRoot: '/p/app-sdk', projectRoot: '/p/app' }),
+    ).toBe(true);
+  });
+
+  test('rejects equal paths and a path inside the other', () => {
+    expect(isFlutterRootApartFromProject({ flutterRoot: '/p/app', projectRoot: '/p/app' })).toBe(
+      false,
+    );
+    expect(
+      isFlutterRootApartFromProject({ flutterRoot: '/p/app/flutter', projectRoot: '/p/app' }),
+    ).toBe(false);
+    expect(isFlutterRootApartFromProject({ flutterRoot: '/p', projectRoot: '/p/app' })).toBe(false);
   });
 });
 

@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -11,14 +12,16 @@ export function buildActiveRootPath(params: {
 }
 
 /**
- * Writes a project `<homeDir>/projects/<name>` whose package config names `flutterRoot`, and the
- * active-roots file `<group>/<name>` that names that package config.
+ * Writes a project `<homeDir>/projects/<name>` whose package config names `flutterRoot`, the
+ * active-roots file `<group>/<name>` that names that package config, and the `.git` entry of
+ * `flutterRoot`, a folder without `flutterRootGitEntry`.
  */
 export async function createActiveProject(params: {
   homeDir: string;
   group: string;
   name: string;
   flutterRoot: string;
+  flutterRootGitEntry?: FlutterRootGitEntry;
 }): Promise<void> {
   const packageConfigPath = join(
     params.homeDir,
@@ -36,7 +39,33 @@ export async function createActiveProject(params: {
     buildActiveRootPath({ homeDir: params.homeDir, group: params.group, name: params.name }),
     JSON.stringify({ package_config: pathToFileURL(packageConfigPath).href }),
   );
+  await createFlutterRootGitEntry({
+    flutterRoot: params.flutterRoot,
+    gitEntry: params.flutterRootGitEntry ?? 'folder',
+  });
 }
+
+async function createFlutterRootGitEntry(params: {
+  flutterRoot: string;
+  gitEntry: FlutterRootGitEntry;
+}): Promise<void> {
+  const gitPath = join(params.flutterRoot, '.git');
+
+  switch (params.gitEntry) {
+    case 'folder':
+      await mkdir(gitPath, { recursive: true });
+      return;
+    case 'file':
+      await mkdir(params.flutterRoot, { recursive: true });
+      await writeFile(gitPath, 'gitdir: ../flutter.git/worktrees/stable\n');
+      return;
+    case 'none':
+      return;
+  }
+}
+
+/** The `.git` entry of a Flutter root: a clone's folder, a worktree's file, or none. */
+export type FlutterRootGitEntry = 'folder' | 'file' | 'none';
 
 /** Writes `version` as the version file of the Dart SDK whose binary is at `dartPath`. */
 export async function writeDartVersionFile(params: {
