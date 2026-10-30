@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, truncate, writeFile } from 'node:fs/promises';
+import { chmod, realpath, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EXPLORE_FILE_MAX_BYTES } from '../../src/explore/limits.js';
 import {
@@ -7,6 +7,7 @@ import {
   loadExploreDirectoryNames,
   loadExploreEntryStats,
   loadExploreFileText,
+  loadExploreRealPath,
 } from '../../src/explore/loadExploreRead.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -158,6 +159,47 @@ describe('loadExploreRead', () => {
 
       expect(stats.kind === 'succeeded' ? stats.value?.modifiedMs : undefined).toBe(1_000_000);
       expect(missing).toEqual({ kind: 'succeeded', value: null });
+    });
+  });
+
+  describe('loadExploreRealPath', () => {
+    test('resolves a link, and returns null for a missing path and one under a file', async () => {
+      const folderPath = join(fixtureRoot.homeDir, 'folder');
+      const linkPath = join(fixtureRoot.homeDir, 'link');
+      const filePath = join(fixtureRoot.homeDir, 'file');
+      await createFixtureDirectory({ path: folderPath });
+      await symlink(folderPath, linkPath);
+      await writeFile(filePath, '');
+
+      const linked = await loadExploreRealPath({ path: linkPath });
+      const missing = await loadExploreRealPath({ path: join(fixtureRoot.homeDir, 'gone') });
+      const underFile = await loadExploreRealPath({ path: join(filePath, 'child') });
+
+      expect(linked).toEqual({ kind: 'succeeded', value: await realpath(folderPath) });
+      expect(missing).toEqual({ kind: 'succeeded', value: null });
+      expect(underFile).toEqual({ kind: 'succeeded', value: null });
+    });
+
+    test('fails as fileUnreadable at its path when a folder on it cannot be searched', async () => {
+      const folderPath = join(fixtureRoot.homeDir, 'locked');
+      const childPath = join(folderPath, 'child');
+      await createFixtureDirectory({ path: childPath });
+      await chmod(folderPath, 0o000);
+
+      try {
+        const realPath = await loadExploreRealPath({ path: childPath });
+
+        expect(realPath).toEqual({
+          kind: 'failed',
+          failure: {
+            reason: 'fileUnreadable',
+            path: childPath,
+            failure: { reason: 'permissionDenied', code: 'EACCES' },
+          },
+        });
+      } finally {
+        await chmod(folderPath, 0o700);
+      }
     });
   });
 });

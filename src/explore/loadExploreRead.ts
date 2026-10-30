@@ -1,4 +1,6 @@
+import { realpath } from 'node:fs/promises';
 import type { Result } from '../result.js';
+import { getErrorCode } from '../system/getErrorCode.js';
 import type { DirectoryEntry } from '../system/loadDirectoryEntries.js';
 import { loadDirectoryEntries } from '../system/loadDirectoryEntries.js';
 import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
@@ -7,9 +9,11 @@ import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileContentFailure } from '../system/loadFileBytes.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
+import { getFileFailure } from '../system/loadFileIdentity.js';
 import { loadFileText } from '../system/loadFileText.js';
 import type { ReadFailureVerdictAbsent, ReadFailureVerdictUnfit } from '../system/readFailure.js';
 import { decideReadFailure } from '../system/readFailure.js';
+import { runFilesystemCall } from '../system/runFilesystemCall.js';
 import type { ExploreFileUnreadable } from './exploreUnit.js';
 import { EXPLORE_FILE_MAX_BYTES } from './limits.js';
 
@@ -74,6 +78,22 @@ export async function loadExploreEntryStats(params: {
   }
 
   return toNullWhenNotFound({ path: params.path, failure: stats.failure });
+}
+
+/** The path with every link resolved; `null` when nothing is there or a part of it is no folder. */
+export async function loadExploreRealPath(params: {
+  path: string;
+}): Promise<Result<string | null, ExploreFileUnreadable>> {
+  try {
+    const realPath = await runFilesystemCall(() => realpath(params.path));
+
+    return { kind: 'succeeded', value: realPath };
+  } catch (error) {
+    return toNullWhenNotFound({
+      path: params.path,
+      failure: getFileFailure({ code: getErrorCode(error) }),
+    });
+  }
 }
 
 function toNullWhenNotFound(params: {

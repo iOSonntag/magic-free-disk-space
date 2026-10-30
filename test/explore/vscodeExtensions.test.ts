@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, mkdir, rm, symlink } from 'node:fs/promises';
+import { chmod, mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
@@ -19,6 +19,7 @@ import {
   buildVscodeObsoleteText,
   buildVscodeProfilesPath,
   buildVscodeRegistryText,
+  createVscodeExtensionFolders,
   createVscodeInstallation,
   DEFAULT_LISTED_FOLDER_NAME,
   FIXTURE_PROFILE_ID,
@@ -28,6 +29,10 @@ import {
   VSCODE_APP_COMMAND,
   writeVscodeFile,
 } from './vscodeExtensionFixtures.js';
+
+const LINKED_OLDER_FOLDER_NAME = 'pub.ext-1.0.0';
+
+const LINKED_NEWER_FOLDER_NAME = 'pub.ext-1.1.0';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -60,6 +65,39 @@ async function loadFindings(processCommands: string[] | null = []): Promise<Expl
   }
 
   return findings.value;
+}
+
+/**
+ * Two versions of one id in the linked extensions folder: the default registry lists the newer
+ * by `relativeLocation`, a profile the older by a location under the real path of the folder.
+ */
+async function createLinkedVscodeInstallation(): Promise<void> {
+  const realExtensionsPath = await realpath(extensionsPath);
+
+  await createVscodeExtensionFolders({
+    homeDir: environment.homeDir,
+    folderNames: [LINKED_OLDER_FOLDER_NAME, LINKED_NEWER_FOLDER_NAME],
+  });
+  await writeVscodeFile({
+    path: join(extensionsPath, 'extensions.json'),
+    text: buildVscodeRegistryText({
+      extensionsPath: extensionsPath,
+      folderNames: [LINKED_NEWER_FOLDER_NAME],
+      form: 'current',
+    }),
+  });
+  await writeVscodeFile({
+    path: join(
+      buildVscodeProfilesPath({ homeDir: environment.homeDir }),
+      FIXTURE_PROFILE_ID,
+      'extensions.json',
+    ),
+    text: buildVscodeRegistryText({
+      extensionsPath: realExtensionsPath,
+      folderNames: [LINKED_OLDER_FOLDER_NAME],
+      form: 'locationOnly',
+    }),
+  });
 }
 
 function listFolderPaths(findings: ExploreFinding[]): string[] {
@@ -170,6 +208,27 @@ describe('loadVscodeExtensionFindings', () => {
       join(extensionsPath, OBSOLETE_FOLDER_NAME),
       join(extensionsPath, OLDER_FOLDER_NAME),
     ]);
+  });
+
+  test('never offers a version a profile lists through the real path of a linked extensions folder', async () => {
+    const realExtensionsPath = join(environment.homeDir, 'real-vscode-extensions');
+
+    await createFixtureDirectory({ path: realExtensionsPath });
+    await createFixtureDirectory({ path: join(environment.homeDir, '.vscode') });
+    await symlink(realExtensionsPath, extensionsPath);
+    await createLinkedVscodeInstallation();
+
+    expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
+  });
+
+  test('never offers a version a profile lists through the real path of a linked .vscode folder', async () => {
+    const realVscodePath = join(environment.homeDir, 'real-vscode');
+
+    await createFixtureDirectory({ path: join(realVscodePath, 'extensions') });
+    await symlink(realVscodePath, join(environment.homeDir, '.vscode'));
+    await createLinkedVscodeInstallation();
+
+    expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
   });
 
   test('offers a linked extension folder, which the scan then skips as a link', async () => {

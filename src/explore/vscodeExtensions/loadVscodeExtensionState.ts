@@ -1,6 +1,7 @@
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
@@ -8,6 +9,7 @@ import {
   loadExploreDirectoryEntries,
   loadExploreDirectoryNames,
   loadExploreFileText,
+  loadExploreRealPath,
 } from '../loadExploreRead.js';
 
 const EXTENSIONS_FOLDER_NAMES = ['.vscode', 'extensions'];
@@ -52,6 +54,15 @@ export type VscodeExtensionStateInstalled = {
 /** What the reads of `~/.vscode/extensions`, its registries, and `.obsolete` found. */
 export type VscodeExtensionState = VscodeExtensionStateNoExtensions | VscodeExtensionStateInstalled;
 
+/**
+ * `~/.vscode/extensions` as written and with every link resolved, since a registry may name its
+ * folders through either.
+ */
+type ExtensionsFolderPaths = {
+  path: AbsolutePath;
+  realPath: AbsolutePath;
+};
+
 /** One registry to read: the default one, or a profile's. */
 type VscodeRegistry = {
   path: AbsolutePath;
@@ -80,9 +91,22 @@ export async function loadVscodeExtensionState(params: {
     return { kind: 'succeeded', value: { kind: 'noExtensions' } };
   }
 
+  const extensionsRealPath = await loadExploreRealPath({ path: extensionsPath });
+
+  if (extensionsRealPath.kind === 'failed') {
+    return extensionsRealPath;
+  }
+
+  if (extensionsRealPath.value === null) {
+    return { kind: 'succeeded', value: { kind: 'noExtensions' } };
+  }
+
   const listedFolderNames = await loadListedFolderNames({
     homePath: params.homeDir,
-    extensionsPath: extensionsPath,
+    extensionsFolder: {
+      path: extensionsPath,
+      realPath: parseRealPath({ text: extensionsRealPath.value }),
+    },
   });
 
   if (listedFolderNames.kind === 'failed') {
@@ -104,6 +128,16 @@ export async function loadVscodeExtensionState(params: {
       obsoleteFolderNames: obsoleteFolderNames.value,
     },
   };
+}
+
+function parseRealPath(params: { text: string }): AbsolutePath {
+  const realPath = parseAbsolutePath({ text: params.text });
+
+  if (realPath.kind === 'failed') {
+    throw new Error('realpath returned a path that is not absolute.');
+  }
+
+  return realPath.value;
 }
 
 /** Whether `folderNames`, a set of the state, holds the folder. */
@@ -167,9 +201,12 @@ function parseExtensionFolder(params: {
 /** The union of the folders every registry lists; `null` when one leaves the probe unjudged. */
 async function loadListedFolderNames(params: {
   homePath: AbsolutePath;
-  extensionsPath: AbsolutePath;
+  extensionsFolder: ExtensionsFolderPaths;
 }): Promise<Result<ReadonlySet<string> | null, ExploreFileUnreadable>> {
-  const registries = await listRegistries(params);
+  const registries = await listRegistries({
+    homePath: params.homePath,
+    extensionsPath: params.extensionsFolder.path,
+  });
 
   if (registries.kind === 'failed') {
     return registries;
@@ -181,7 +218,7 @@ async function loadListedFolderNames(params: {
   for (const registry of registries.value) {
     const folderNames = await loadRegistryFolderNames({
       registry: registry,
-      extensionsPath: params.extensionsPath,
+      extensionsFolder: params.extensionsFolder,
     });
 
     if (folderNames.kind === 'failed') {
@@ -230,7 +267,7 @@ async function listRegistries(params: {
 /** The folders of `~/.vscode/extensions` the registry lists; `null` when it leaves them unjudged. */
 async function loadRegistryFolderNames(params: {
   registry: VscodeRegistry;
-  extensionsPath: AbsolutePath;
+  extensionsFolder: ExtensionsFolderPaths;
 }): Promise<Result<string[] | null, ExploreFileUnreadable>> {
   const read = await loadExploreFileText({ path: params.registry.path });
 
@@ -248,7 +285,7 @@ async function loadRegistryFolderNames(params: {
         kind: 'succeeded',
         value: parseRegistryFolderNames({
           text: read.value.text,
-          extensionsPath: params.extensionsPath,
+          extensionsFolder: params.extensionsFolder,
         }),
       };
   }
@@ -257,7 +294,7 @@ async function loadRegistryFolderNames(params: {
 /** `null` when the registry is no list or an entry names no folder, so it never reads as empty. */
 function parseRegistryFolderNames(params: {
   text: string;
-  extensionsPath: AbsolutePath;
+  extensionsFolder: ExtensionsFolderPaths;
 }): string[] | null {
   const registry = parseJsonValue({ text: params.text });
 
@@ -270,7 +307,7 @@ function parseRegistryFolderNames(params: {
   for (const entry of registry.value) {
     const folderName = parseRegistryEntryFolderName({
       entry: entry,
-      extensionsPath: params.extensionsPath,
+      extensionsFolder: params.extensionsFolder,
     });
 
     if (folderName.kind === 'failed') {
@@ -286,13 +323,13 @@ function parseRegistryFolderNames(params: {
 }
 
 /**
- * Resolves an entry's folder as VS Code does: `relativeLocation` under the extensions folder,
- * else the path of its `location` URI. `null` for an entry that lists no folder of
+ * Resolves an entry's folder as VS Code does: `relativeLocation` under the extensions folder as
+ * written, else the path of its `location` URI. `null` for an entry that lists no folder of
  * `~/.vscode/extensions`: VS Code skips one whose only location is a string.
  */
 function parseRegistryEntryFolderName(params: {
   entry: unknown;
-  extensionsPath: AbsolutePath;
+  extensionsFolder: ExtensionsFolderPaths;
 }): Result<string | null, string> {
   if (!isJsonObject(params.entry)) {
     return { kind: 'failed', failure: 'an entry is no object' };
@@ -304,8 +341,8 @@ function parseRegistryEntryFolderName(params: {
     return {
       kind: 'succeeded',
       value: findExtensionsFolderName({
-        folderPath: resolve(params.extensionsPath, relativeLocation),
-        extensionsPath: params.extensionsPath,
+        folderPath: resolve(params.extensionsFolder.path, relativeLocation),
+        extensionsFolder: params.extensionsFolder,
       }),
     };
   }
@@ -324,17 +361,25 @@ function parseRegistryEntryFolderName(params: {
     kind: 'succeeded',
     value: findExtensionsFolderName({
       folderPath: resolve(location.path),
-      extensionsPath: params.extensionsPath,
+      extensionsFolder: params.extensionsFolder,
     }),
   };
 }
 
-/** The lower-case name of a folder directly inside the extensions folder, else `null`. */
+/**
+ * The lower-case name of a folder directly inside the extensions folder, by its path as written
+ * or its real path, else `null`.
+ */
 function findExtensionsFolderName(params: {
   folderPath: string;
-  extensionsPath: AbsolutePath;
+  extensionsFolder: ExtensionsFolderPaths;
 }): string | null {
-  if (dirname(params.folderPath).toLowerCase() !== params.extensionsPath.toLowerCase()) {
+  const parentPath = dirname(params.folderPath).toLowerCase();
+  const isInExtensionsFolder =
+    parentPath === params.extensionsFolder.path.toLowerCase() ||
+    parentPath === params.extensionsFolder.realPath.toLowerCase();
+
+  if (!isInExtensionsFolder) {
     return null;
   }
 
