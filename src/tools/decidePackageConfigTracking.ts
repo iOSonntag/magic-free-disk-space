@@ -1,4 +1,7 @@
-/** Whether a git index names `package_config.json`; `unknown` when the index cannot tell. */
+/**
+ * Whether version control tracks `package_config.json`; `unknown` when the index cannot tell, and
+ * for a project with no repository or under another version control.
+ */
 export type PackageConfigTracking = 'tracked' | 'untracked' | 'unknown';
 
 const GIT_INDEX_HEADER_LENGTH = 12;
