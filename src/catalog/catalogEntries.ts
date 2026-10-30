@@ -169,7 +169,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'simulatorRuntimes',
       advice:
         'List the installed simulator runtimes with `xcrun simctl runtime list`, then remove the ones you no longer need with `xcrun simctl runtime delete <identifier>`.',
     },
@@ -206,9 +207,10 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'androidAvds',
       advice:
-        "Delete emulators you no longer use in Android Studio's Device Manager or with `avdmanager delete avd -n <name>`.",
+        "Delete emulators you no longer use in Android Studio's Device Manager or with `avdmanager --sdk_root=<sdk> delete avd -n <name>`.",
     },
   },
   {
@@ -225,7 +227,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'androidSystemImages',
       advice:
         'Remove system images with the SDK Manager in Android Studio or with `sdkmanager --uninstall "system-images;<api>;<variant>;<abi>"`.',
     },
@@ -244,7 +247,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'androidEmulator',
       advice:
         'If you no longer run Android emulators, remove them with `sdkmanager --uninstall emulator`.',
     },
@@ -682,7 +686,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'homebrewAppleSilicon',
       advice:
         'Run `brew cleanup` to remove old versions and `brew autoremove` to remove dependencies nothing needs.',
     },
@@ -701,7 +706,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'homebrewIntel',
       advice:
         'Run `brew cleanup` to remove old versions and `brew autoremove` to remove dependencies nothing needs.',
     },
@@ -749,7 +755,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     category: 'packages',
     title: 'Homebrew Ruby gems',
     explanation:
-      'Ruby gems under Homebrew, including old versions; `gem cleanup --dryrun` shows the old ones first.',
+      'Ruby gems under Homebrew, including old versions; `gem cleanup --dry-run` shows the old ones first.',
     regeneration: 'A removed gem comes back only when you install it again with `gem install`.',
     risk: 'review',
     root: 'absolute',
@@ -760,7 +766,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     removal: {
       kind: 'advice',
       advice:
-        'Run `gem cleanup --dryrun` to see old gem versions, then `gem cleanup` to remove them.',
+        'Run `gem cleanup --dry-run` to see old gem versions, then `gem cleanup` to remove them.',
     },
   },
   {
@@ -824,18 +830,15 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     id: 'spotify-cache',
     category: 'caches',
     title: 'Spotify cache',
-    explanation: 'Cache of the Spotify app; clear it in the settings of Spotify under Storage.',
-    regeneration: 'Spotify fills it again as you play music.',
+    explanation: 'Songs and images the Spotify app streamed, kept to play them again sooner.',
+    regeneration: 'Spotify fills it again as you play music, downloading what it plays.',
     risk: 'review',
     root: 'home',
     path: 'Library/Caches/com.spotify.client',
     scope: 'self',
     ageRule: 'none',
     ownerBundleId: 'com.spotify.client',
-    removal: {
-      kind: 'advice',
-      advice: "Clear the cache in Spotify's settings under Storage.",
-    },
+    removal: { kind: 'delete' },
   },
   {
     id: 'spotify-offline-music',
@@ -1036,7 +1039,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'vscodeExtensions',
       advice:
         'Installed Visual Studio Code extensions. Uninstall the ones you no longer use in its Extensions view.',
     },
