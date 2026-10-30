@@ -13,10 +13,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { buildTestAbsolutePath } from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
   rootDir: string;
-  homeDir: string;
+  homeDir: AbsolutePath;
   tempDir: string;
   applicationDir: string;
 };
@@ -25,7 +27,7 @@ export async function createFixtureRoot(): Promise<FixtureRoot> {
   const rootDir = await mkdtemp(join(tmpdir(), 'magic-free-disk-space-test-'));
   const fixtureRoot: FixtureRoot = {
     rootDir,
-    homeDir: join(rootDir, 'home'),
+    homeDir: buildTestAbsolutePath({ text: join(rootDir, 'home') }),
     tempDir: join(rootDir, 'tmp'),
     applicationDir: join(rootDir, 'Applications'),
   };

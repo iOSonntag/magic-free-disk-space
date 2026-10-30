@@ -4,13 +4,14 @@ import {
   PROTECTED_HOME_RELATIVE_PATHS,
   SENSITIVE_HOME_RELATIVE_PATHS,
 } from '../catalog/protectedPaths.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 
 export type Environment = {
   platform: string;
   nowMs: number;
   /** The effective user, never root: the environment refuses to start as root. */
   userId: number;
-  homeDir: string;
+  homeDir: AbsolutePath;
   tempDir: string;
   applicationDirs: string[];
   /** Real paths under which a removal is allowed. */
@@ -26,7 +27,7 @@ export function buildEnvironment(params: {
   platform: string;
   nowMs: number;
   userId: number;
-  homeDir: string;
+  homeDir: AbsolutePath;
   homeRealPath: string;
   tempDir: string;
   tempRealPath: string;

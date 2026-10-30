@@ -4,12 +4,13 @@ import { validateRemoval } from '../../src/delete/validateRemoval.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 const ENVIRONMENT = buildEnvironment({
   platform: 'darwin',
   nowMs: 0,
   userId: 501,
-  homeDir: '/Users/tester',
+  homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
   homeRealPath: '/Users/tester',
   tempDir: '/var/folders/xy/abc/T',
   tempRealPath: '/private/var/folders/xy/abc/T',

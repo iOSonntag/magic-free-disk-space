@@ -1,15 +1,14 @@
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
-import { loadDirectoryEntries } from '../../system/loadDirectoryEntries.js';
-import { loadDirectoryNames } from '../../system/loadDirectoryNames.js';
-import { loadFileText } from '../../system/loadFileText.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
-import { decideReadFailure } from '../../system/readFailure.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
-import { EXPLORE_FILE_MAX_BYTES } from '../limits.js';
+import {
+  loadExploreDirectoryEntries,
+  loadExploreDirectoryNames,
+  loadExploreFileText,
+} from '../loadExploreRead.js';
 
 const EXTENSIONS_FOLDER_NAMES = ['.vscode', 'extensions'];
 
@@ -53,9 +52,6 @@ export type VscodeExtensionStateInstalled = {
 /** What the reads of `~/.vscode/extensions`, its registries, and `.obsolete` found. */
 export type VscodeExtensionState = VscodeExtensionStateNoExtensions | VscodeExtensionStateInstalled;
 
-/** The text of a file VS Code keeps, or the verdict of a read that found none to read. */
-type VscodeFileRead = { kind: 'text'; text: string } | { kind: 'absent' } | { kind: 'unfit' };
-
 /** One registry to read: the default one, or a profile's. */
 type VscodeRegistry = {
   path: AbsolutePath;
@@ -68,16 +64,10 @@ type VscodeRegistry = {
  * A read that is absent or unfit is a fact of the state; only a failed read fails.
  */
 export async function loadVscodeExtensionState(params: {
-  homeDir: string;
+  homeDir: AbsolutePath;
 }): Promise<Result<VscodeExtensionState, ExploreFileUnreadable>> {
-  const homePath = parseAbsolutePath({ text: params.homeDir });
-
-  if (homePath.kind === 'failed') {
-    throw new Error('The home folder is not an absolute path.');
-  }
-
   const extensionsPath = joinAbsolutePath({
-    parentPath: homePath.value,
+    parentPath: params.homeDir,
     names: EXTENSIONS_FOLDER_NAMES,
   });
   const folders = await loadExtensionFolders({ extensionsPath: extensionsPath });
@@ -91,7 +81,7 @@ export async function loadVscodeExtensionState(params: {
   }
 
   const listedFolderNames = await loadListedFolderNames({
-    homePath: homePath.value,
+    homePath: params.homeDir,
     extensionsPath: extensionsPath,
   });
 
@@ -128,25 +118,14 @@ export function hasVscodeExtensionFolder(params: {
 async function loadExtensionFolders(params: {
   extensionsPath: AbsolutePath;
 }): Promise<Result<VscodeExtensionFolder[] | null, ExploreFileUnreadable>> {
-  const entries = await loadDirectoryEntries({ path: params.extensionsPath });
+  const entries = await loadExploreDirectoryEntries({ path: params.extensionsPath });
 
   if (entries.kind === 'failed') {
-    const verdict = decideReadFailure(entries.failure);
+    return entries;
+  }
 
-    switch (verdict.kind) {
-      case 'absent':
-      case 'unfit':
-        return { kind: 'succeeded', value: null };
-      case 'failed':
-        return {
-          kind: 'failed',
-          failure: {
-            reason: 'fileUnreadable',
-            path: params.extensionsPath,
-            failure: verdict.failure,
-          },
-        };
-    }
+  if (entries.value === null) {
+    return { kind: 'succeeded', value: null };
   }
 
   const folders = entries.value.flatMap((entry) => {
@@ -234,24 +213,13 @@ async function listRegistries(params: {
     parentPath: params.homePath,
     names: PROFILES_FOLDER_NAMES,
   });
-  const profileNames = await loadDirectoryNames({ path: profilesPath });
+  const profileNames = await loadExploreDirectoryNames({ path: profilesPath });
 
   if (profileNames.kind === 'failed') {
-    const verdict = decideReadFailure(profileNames.failure);
-
-    switch (verdict.kind) {
-      case 'absent':
-      case 'unfit':
-        return { kind: 'succeeded', value: [defaultRegistry] };
-      case 'failed':
-        return {
-          kind: 'failed',
-          failure: { reason: 'fileUnreadable', path: profilesPath, failure: verdict.failure },
-        };
-    }
+    return profileNames;
   }
 
-  const profileRegistries = profileNames.value.map((profileName) => ({
+  const profileRegistries = (profileNames.value ?? []).map((profileName) => ({
     path: joinAbsolutePath({ parentPath: profilesPath, names: [profileName, REGISTRY_FILE_NAME] }),
     isRequired: false,
   }));
@@ -264,7 +232,7 @@ async function loadRegistryFolderNames(params: {
   registry: VscodeRegistry;
   extensionsPath: AbsolutePath;
 }): Promise<Result<string[] | null, ExploreFileUnreadable>> {
-  const read = await loadVscodeFileText({ path: params.registry.path });
+  const read = await loadExploreFileText({ path: params.registry.path });
 
   if (read.kind === 'failed') {
     return read;
@@ -377,7 +345,7 @@ function findExtensionsFolderName(params: {
 async function loadObsoleteFolderNames(params: {
   extensionsPath: AbsolutePath;
 }): Promise<Result<ReadonlySet<string> | null, ExploreFileUnreadable>> {
-  const read = await loadVscodeFileText({
+  const read = await loadExploreFileText({
     path: joinAbsolutePath({ parentPath: params.extensionsPath, names: [OBSOLETE_FILE_NAME] }),
   });
 
@@ -408,28 +376,4 @@ function parseObsoleteFolderNames(params: { text: string }): ReadonlySet<string>
   );
 
   return new Set(folderNames);
-}
-
-async function loadVscodeFileText(params: {
-  path: AbsolutePath;
-}): Promise<Result<VscodeFileRead, ExploreFileUnreadable>> {
-  const text = await loadFileText({ path: params.path, maxBytes: EXPLORE_FILE_MAX_BYTES });
-
-  if (text.kind === 'succeeded') {
-    return { kind: 'succeeded', value: { kind: 'text', text: text.value } };
-  }
-
-  const verdict = decideReadFailure(text.failure);
-
-  switch (verdict.kind) {
-    case 'absent':
-      return { kind: 'succeeded', value: { kind: 'absent' } };
-    case 'unfit':
-      return { kind: 'succeeded', value: { kind: 'unfit' } };
-    case 'failed':
-      return {
-        kind: 'failed',
-        failure: { reason: 'fileUnreadable', path: params.path, failure: verdict.failure },
-      };
-  }
 }
