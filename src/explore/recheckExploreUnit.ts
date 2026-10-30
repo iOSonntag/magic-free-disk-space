@@ -3,8 +3,8 @@ import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { isDartGcSetOffered } from './dartPubCache/buildDartPubCacheFindings.js';
 import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
-import type { UnitActivityFacts } from './decideUnitActivity.js';
-import { decideUnitActivity } from './decideUnitActivity.js';
+import type { UnitComparison } from './decideComparisonActivity.js';
+import { decideComparisonActivity } from './decideComparisonActivity.js';
 import type {
   ExploreToolFailure,
   ExploreToolUnit,
@@ -19,23 +19,9 @@ import { isSimulatorDeviceOffered } from './simulatorDevices/buildSimulatorDevic
 import type { SimulatorDevice } from './simulatorDevices/parseSimulatorDeviceList.js';
 import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
 
-export type UnitRecheckUnchanged = { kind: 'unchanged' };
-
-export type UnitRecheckChanged = { kind: 'changed' };
-
-/** The unit's tool or app works on it now, or its busy rule could not read the processes. */
-export type UnitRecheckBusy = { kind: 'busy' };
-
 export type UnitRecheckFailed = { kind: 'failed'; failure: ExploreToolFailure };
 
-export type UnitRecheck =
-  | UnitRecheckUnchanged
-  | UnitRecheckChanged
-  | UnitRecheckBusy
-  | UnitRecheckFailed;
-
-/** The answer of a comparison of a fresh probe with the unit. */
-export type UnitComparison = UnitRecheckUnchanged | UnitRecheckChanged | UnitRecheckBusy;
+export type UnitRecheck = UnitComparison | UnitRecheckFailed;
 
 /**
  * Runs the unit's probe again with `tool`, the unit's tool as `loadTrustedTool` just returned it,
@@ -164,20 +150,4 @@ export function compareMiseVersion(params: {
     facts: { kind: 'miseVersion' },
     processCommands: params.processCommands,
   });
-}
-
-/** An unknown activity counts as busy, so a unit runs only when its rule saw it idle. */
-function decideComparisonActivity(params: {
-  facts: UnitActivityFacts;
-  processCommands: string[] | null;
-}): UnitComparison {
-  const activity = decideUnitActivity(params);
-
-  switch (activity) {
-    case 'idle':
-      return { kind: 'unchanged' };
-    case 'busy':
-    case 'unknown':
-      return { kind: 'busy' };
-  }
 }
