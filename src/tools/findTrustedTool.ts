@@ -9,7 +9,7 @@ import { isDartVersionSupported } from './isDartVersionSupported.js';
 import { loadFlutterSdkDartPaths } from './loadFlutterSdkDartPaths.js';
 import type { ToolLocation, ToolLocationPath, ToolName } from './toolInstallLocations.js';
 
-/** A binary that passed the trust check; `path` is its real path. */
+/** A binary that passed the trust check and, for `dart`, the version check; `path` is its real path. */
 export type LocatedTool = { name: ToolName; path: string };
 
 export type ToolLookupFailureNotFound = { reason: 'notFound' };
@@ -23,9 +23,8 @@ export type ToolLookupFailureUntrusted = {
 export type ToolLookupFailure = ToolLookupFailureNotFound | ToolLookupFailureUntrusted;
 
 /**
- * Returns the first location whose binary is a regular executable file owned by `userId` or
- * root and writable by neither group nor others, and for `dart`, of an SDK of 3.11 or later.
- * Without one, it fails as `untrusted` for the first binary that exists, else as `notFound`.
+ * Returns the first location whose binary `loadTrustedTool` accepts. Without one, it fails as
+ * `untrusted` for the first binary that failed the trust check, else as `notFound`.
  */
 export async function findTrustedTool(params: {
   name: ToolName;
@@ -46,13 +45,7 @@ export async function findTrustedTool(params: {
       });
 
       if (checked.kind === 'succeeded') {
-        const accepted = await isLocatedToolAccepted({ tool: checked.value });
-
-        if (accepted) {
-          return checked;
-        }
-
-        continue;
+        return checked;
       }
 
       if (checked.failure.reason === 'untrusted' && firstUntrusted === null) {
@@ -65,10 +58,11 @@ export async function findTrustedTool(params: {
 }
 
 /**
- * Checks the binary at `path` again, as `findTrustedTool` checks each location. A symbolic link
- * is followed; the real path is what is checked, returned, and named in an `untrusted` failure.
- * For `dart`, Flutter's `bin/dart` wrapper stands for its SDK's binary, as `decideDartBinaryPath`
- * decides.
+ * Accepts the binary at `path` when it is a regular executable file owned by `userId` or root and
+ * writable by neither group nor others, and for `dart`, of an SDK of 3.11 or later; a trusted
+ * binary that fails the version check fails as `notFound`. A symbolic link is followed; the real
+ * path is what is checked, returned, and named in an `untrusted` failure. For `dart`, Flutter's
+ * `bin/dart` wrapper stands for its SDK's binary, as `decideDartBinaryPath` decides.
  */
 export async function loadTrustedTool(params: {
   name: ToolName;
@@ -96,7 +90,14 @@ export async function loadTrustedTool(params: {
     };
   }
 
-  return { kind: 'succeeded', value: { name: params.name, path: binaryPath } };
+  const tool: LocatedTool = { name: params.name, path: binaryPath };
+  const accepted = await isLocatedToolAccepted({ tool: tool });
+
+  if (!accepted) {
+    return { kind: 'failed', failure: { reason: 'notFound' } };
+  }
+
+  return { kind: 'succeeded', value: tool };
 }
 
 /** Whether a trusted binary can run the commands of its tool; only `dart` has a version rule. */

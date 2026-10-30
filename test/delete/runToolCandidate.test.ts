@@ -62,8 +62,19 @@ async function createUnitFile(params: { path: string; sizeBytes: number }): Prom
   });
 }
 
+/** A dart stands in an SDK layout, since the recheck reads the version file beside its `bin`. */
 function buildToolPath(name: ToolName): string {
-  return join(fixtureRoot.rootDir, 'tools', name);
+  switch (name) {
+    case 'dart':
+      return join(fixtureRoot.rootDir, 'tools', 'dart-sdk', 'bin', 'dart');
+    case 'xcrun':
+    case 'mise':
+      return join(fixtureRoot.rootDir, 'tools', name);
+  }
+}
+
+async function writeDartSdkVersion(version: string): Promise<void> {
+  await Bun.write(join(fixtureRoot.rootDir, 'tools', 'dart-sdk', 'version'), `${version}\n`);
 }
 
 /** Writes the unit's fake tool; its command first leaves the marker file, then runs `commandBody`. */
@@ -75,7 +86,7 @@ async function createUnitTool(params: {
   probePrelude?: string;
 }): Promise<void> {
   await createUnitRunFakeTool({
-    folder: join(fixtureRoot.rootDir, 'tools'),
+    folder: dirname(params.unit.tool.path),
     unit: params.unit,
     probeStdoutText: params.probeStdoutText,
     probeExitCode: params.probeExitCode ?? 0,
@@ -120,7 +131,7 @@ async function createSimulatorUnit(): Promise<ExploreToolUnitSimulatorDevice> {
   };
 }
 
-/** The unit of the fixture gc set, with a file in each of its paths. */
+/** The unit of the fixture gc set, with a file in each of its paths, of a Dart 3.11 SDK. */
 async function createDartUnit(): Promise<ExploreToolUnitDartPubCache> {
   const gcPaths = buildDartGcPaths({ homeDir: environment.homeDir });
 
@@ -130,6 +141,8 @@ async function createDartUnit(): Promise<ExploreToolUnitDartPubCache> {
       sizeBytes: 4096,
     });
   }
+
+  await writeDartSdkVersion('3.11.0');
 
   return { kind: 'dartPubCache', tool: { name: 'dart', path: buildToolPath('dart') }, gcPaths };
 }
@@ -276,6 +289,35 @@ exit 0`,
     expect(run).toEqual({ kind: 'skipped', reason: 'changedSinceScan' });
     expect(await isPresent(markerPath)).toBe(false);
     expect(await isPresent(unit.installPath)).toBe(true);
+  });
+
+  test('skips a dart unit whose SDK is older than 3.11 at run time', async () => {
+    const unit = await createDartUnit();
+
+    await createUnitTool({
+      unit: unit,
+      probeStdoutText: buildDartGcDryRunText({
+        homeDir: environment.homeDir,
+        gcPaths: unit.gcPaths,
+      }),
+      commandBody: `${buildRemoveCommands(unit.gcPaths)}
+exit 0`,
+    });
+    await writeDartSdkVersion('3.10.0');
+
+    const run = await runToolCandidate({
+      unit: unit,
+      environment: environment,
+      loadProcessCommands: loadNoProcessCommands,
+      timeoutMs: TIMEOUT_MS,
+    });
+
+    expect(run).toEqual({ kind: 'skipped', reason: 'changedSinceScan' });
+    expect(await isPresent(markerPath)).toBe(false);
+
+    for (const gcPath of unit.gcPaths) {
+      expect(await isPresent(gcPath)).toBe(true);
+    }
   });
 
   test('skips the unit when the recheck finds it changed', async () => {
