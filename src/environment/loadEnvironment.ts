@@ -55,9 +55,10 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     return tempRealPath;
   }
 
+  // Without an id, as on no Mac, the check refuses as for root.
+  const userId = process.geteuid?.() ?? 0;
   const rootsFailure = checkEnvironmentRoots({
-    // Without an id, as on no Mac, the check refuses as for root.
-    userId: process.geteuid?.() ?? 0,
+    userId: userId,
     homeRealPath: homeRealPath.value,
     homeOwnerId: homeOwnerId.value,
     tempRealPath: tempRealPath.value,
@@ -74,6 +75,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     value: buildEnvironment({
       platform: process.platform,
       nowMs: Date.now(),
+      userId: userId,
       homeDir: homeDir,
       homeRealPath: homeRealPath.value,
       tempDir: tempDir.value,

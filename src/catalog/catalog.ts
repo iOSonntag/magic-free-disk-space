@@ -19,7 +19,13 @@ export type CatalogRemovalDelete = { kind: 'delete' };
 
 export type CatalogRemovalAdvice = { kind: 'advice'; advice: string };
 
-export type CatalogRemoval = CatalogRemovalDelete | CatalogRemovalAdvice;
+/** The probes of tool-owned items; the explore module runs each one. */
+export type ExploreProbeId = 'simulatorDevices' | 'dartPubCache' | 'miseVersions';
+
+/** Offered as the units its probe finds; the advice stands when the probe cannot run. */
+export type CatalogRemovalExplore = { kind: 'explore'; probe: ExploreProbeId; advice: string };
+
+export type CatalogRemoval = CatalogRemovalDelete | CatalogRemovalAdvice | CatalogRemovalExplore;
 
 export type CatalogEntry = {
   id: string;

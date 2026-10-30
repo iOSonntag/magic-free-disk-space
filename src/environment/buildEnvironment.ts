@@ -8,6 +8,8 @@ import {
 export type Environment = {
   platform: string;
   nowMs: number;
+  /** The effective user, never root: the environment refuses to start as root. */
+  userId: number;
   homeDir: string;
   tempDir: string;
   applicationDirs: string[];
@@ -23,6 +25,7 @@ export type Environment = {
 export function buildEnvironment(params: {
   platform: string;
   nowMs: number;
+  userId: number;
   homeDir: string;
   homeRealPath: string;
   tempDir: string;
@@ -33,6 +36,7 @@ export function buildEnvironment(params: {
   return {
     platform: params.platform,
     nowMs: params.nowMs,
+    userId: params.userId,
     homeDir: params.homeDir,
     tempDir: params.tempDir,
     applicationDirs: params.applicationDirs,

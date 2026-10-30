@@ -53,6 +53,8 @@ export async function loadTestEnvironment(params: {
   return buildEnvironment({
     platform: 'darwin',
     nowMs: params.nowMs,
+    // The fixtures belong to the user that runs the tests.
+    userId: process.getuid?.() ?? 0,
     homeDir: params.fixtureRoot.homeDir,
     homeRealPath,
     tempDir: params.fixtureRoot.tempDir,

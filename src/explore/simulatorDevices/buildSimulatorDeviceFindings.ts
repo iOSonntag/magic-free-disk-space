@@ -1,0 +1,71 @@
+import { dirname } from 'node:path';
+import type { LocatedTool } from '../../tools/findTrustedTool.js';
+import { decideUnitActivity } from '../decideUnitActivity.js';
+import type { ExploreFinding } from '../exploreUnit.js';
+import type { SimulatorDevice } from './parseSimulatorDeviceList.js';
+
+const RUNTIME_ID_PREFIX = 'com.apple.CoreSimulator.SimRuntime.';
+
+/** A device is offered when its runtime is gone, or when it is available and was never booted. */
+export function isSimulatorDeviceOffered(device: SimulatorDevice): boolean {
+  return !device.isAvailable || device.lastBootedAt === null;
+}
+
+export function buildSimulatorDeviceFindings(params: {
+  tool: LocatedTool;
+  devices: SimulatorDevice[];
+  processCommands: string[] | null;
+}): ExploreFinding[] {
+  return params.devices.filter(isSimulatorDeviceOffered).map((device) => {
+    const finding: ExploreFinding = {
+      unit: {
+        kind: 'simulatorDevice',
+        tool: params.tool,
+        udid: device.udid,
+        dataPath: device.dataPath,
+      },
+      title: `Simulator ${device.name} (${formatRuntimeName({ runtimeId: device.runtimeId })})`,
+      explanation: 'A simulator device with the apps and data installed in it.',
+      regeneration:
+        'A deleted simulator does not come back; Xcode creates a new, empty one when you add it.',
+      risk: 'review',
+      evidenceLines: buildSimulatorDeviceEvidenceLines({ device: device }),
+      displayPath: dirname(device.dataPath),
+      activity: decideUnitActivity({
+        facts: { kind: 'simulatorDevice', state: device.state },
+        processCommands: params.processCommands,
+      }),
+    };
+
+    return finding;
+  });
+}
+
+function buildSimulatorDeviceEvidenceLines(params: { device: SimulatorDevice }): string[] {
+  if (params.device.isAvailable) {
+    return ['Simulator lists it as never booted.'];
+  }
+
+  const runtimeLine = `Its runtime ${params.device.runtimeId} is no longer installed.`;
+
+  if (params.device.availabilityError === null) {
+    return [runtimeLine];
+  }
+
+  return [runtimeLine, `Simulator reports: ${params.device.availabilityError}`];
+}
+
+/** `com.apple.CoreSimulator.SimRuntime.iOS-18-2` reads `iOS 18.2`; an unknown shape stays as is. */
+function formatRuntimeName(params: { runtimeId: string }): string {
+  if (!params.runtimeId.startsWith(RUNTIME_ID_PREFIX)) {
+    return params.runtimeId;
+  }
+
+  const [platform, ...versionParts] = params.runtimeId.slice(RUNTIME_ID_PREFIX.length).split('-');
+
+  if (versionParts.length === 0) {
+    return params.runtimeId;
+  }
+
+  return `${platform} ${versionParts.join('.')}`;
+}
