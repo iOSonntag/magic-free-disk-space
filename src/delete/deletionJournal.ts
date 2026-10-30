@@ -1,7 +1,7 @@
 import type { FileHandle } from 'node:fs/promises';
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { ExploreToolFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
+import type { ExploreProbeFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import type { RemovalOutcomeCodedKind } from './deleteCandidates.js';
@@ -62,7 +62,7 @@ export type JournalEntryToolOutcomeToolFailed = {
   path: string;
   outcome: 'toolFailed';
   freedBytes: number;
-  failure: ExploreToolFailure;
+  failure: ExploreProbeFailure;
 };
 
 export type JournalEntry =

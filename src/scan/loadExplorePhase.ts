@@ -1,8 +1,8 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
-import type { ExploreFinding } from '../explore/exploreUnit.js';
+import type { ExploreFinding, ExploreUnit } from '../explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
-import type { CandidateDecision, CandidateProbed } from './candidate.js';
+import type { CandidateDecision, CandidateProbed, CandidateRemovalRunTool } from './candidate.js';
 import type { ScanIssue } from './issue.js';
 import type { UnitMeasurement } from './loadUnitMeasurement.js';
 import { loadUnitMeasurement } from './loadUnitMeasurement.js';
@@ -87,6 +87,8 @@ async function loadExploreEntryPhase(params: {
         issues: [{ path: outcome.tool.path, reason: 'toolFailed', failure: outcome.failure }],
         fallbackEntries: [params.entry],
       };
+    case 'unreadable':
+      throw new Error('The issue of an unreadable probe file is not built yet (part 2B3)');
   }
 }
 
@@ -150,7 +152,24 @@ function buildExploreCandidate(params: {
     allocatedBytes: params.measurement.allocatedBytes,
     entryCount: params.measurement.entryCount,
     isComplete: params.measurement.isComplete,
-    removal: { kind: 'runTool', unit: params.finding.unit },
+    removal: buildExploreRemoval(params.finding.unit),
     evidenceLines: params.finding.evidenceLines,
   };
+}
+
+function buildExploreRemoval(unit: ExploreUnit): CandidateRemovalRunTool {
+  switch (unit.kind) {
+    case 'simulatorDevice':
+    case 'dartPubCache':
+    case 'miseVersion':
+    case 'simulatorRuntime':
+    case 'androidAvd':
+    case 'homebrewOldVersions':
+    case 'homebrewOrphans':
+      return { kind: 'runTool', unit: unit };
+    case 'androidSystemImage':
+    case 'androidEmulator':
+    case 'vscodeExtension':
+      throw new Error('The removal of a path unit is not built yet (part 2B3)');
+  }
 }

@@ -21,6 +21,9 @@ import {
 
 const TIMEOUT_MS = 10_000;
 
+/** No probe these tests check judges its units by their last use. */
+const UNUSED_CUTOFF_MS = 0;
+
 /** Long enough for a probe that does not wait to have run its tool. */
 const HELD_WAIT_MS = 300;
 
@@ -49,11 +52,16 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
   const dart = await createProbeFakeTool({
     folder: join(fixtureRoot.rootDir, 'dart-sdk', 'bin'),
     name: 'dart',
-    stdoutText: buildDartGcDryRunText({
-      homeDir: homeDir,
-      gcPaths: buildDartGcPaths({ homeDir: homeDir }),
-    }),
-    exitCode: 0,
+    answers: [
+      {
+        command: 'dartPubCache',
+        stdoutText: buildDartGcDryRunText({
+          homeDir: homeDir,
+          gcPaths: buildDartGcPaths({ homeDir: homeDir }),
+        }),
+        exitCode: 0,
+      },
+    ],
     prelude: `touch '${buildMarkerPath({ name: 'dart' })}'`,
   });
 
@@ -63,16 +71,26 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
     xcrun: await createProbeFakeTool({
       folder: folder,
       name: 'xcrun',
-      stdoutText: buildSimulatorDeviceListJson({ homeDir: homeDir }),
-      exitCode: 0,
+      answers: [
+        {
+          command: 'simulatorDevices',
+          stdoutText: buildSimulatorDeviceListJson({ homeDir: homeDir }),
+          exitCode: 0,
+        },
+      ],
       prelude: `touch '${buildMarkerPath({ name: 'xcrun' })}'`,
     }),
     dart: dart,
     mise: await createProbeFakeTool({
       folder: folder,
       name: 'mise',
-      stdoutText: buildMisePrunableJson({ homeDir: homeDir }),
-      exitCode: 0,
+      answers: [
+        {
+          command: 'miseVersions',
+          stdoutText: buildMisePrunableJson({ homeDir: homeDir }),
+          exitCode: 0,
+        },
+      ],
       prelude: `touch '${buildMarkerPath({ name: 'mise' })}'`,
     }),
   };
@@ -83,7 +101,7 @@ function buildMarkerPath(params: { name: string }): string {
 }
 
 describe('startExploreProbes', () => {
-  test('finds the units of every tool with the activity of each', async () => {
+  test('finds the units of every tool with the activity of each, all judged', async () => {
     const tools = await createWorkingTools();
 
     const probes = startExploreProbes({
@@ -92,6 +110,7 @@ describe('startExploreProbes', () => {
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     const simulatorDevices = await probes.simulatorDevices;
@@ -107,15 +126,17 @@ describe('startExploreProbes', () => {
     }
 
     expect(simulatorDevices.findings.map((finding) => finding.activity)).toEqual(['idle', 'busy']);
-    expect(simulatorDevices.findings[0]?.unit.tool).toEqual({
-      name: 'xcrun',
-      path: await realpath(tools.xcrun),
+    expect(simulatorDevices.findings[0]?.unit).toMatchObject({
+      tool: { name: 'xcrun', path: await realpath(tools.xcrun) },
     });
     expect(dartPubCache.findings).toHaveLength(1);
     expect(miseVersions.findings.map((finding) => finding.title)).toEqual([
       'mise node 20.1.0',
       'mise pnpm 9.0.0',
     ]);
+    expect(
+      [simulatorDevices, dartPubCache, miseVersions].map((outcome) => outcome.isComplete),
+    ).toEqual([true, true, true]);
   });
 
   test('leaves simulator devices unknown, but Dart and mise idle, when ps failed', async () => {
@@ -127,6 +148,7 @@ describe('startExploreProbes', () => {
       processCommands: Promise.resolve(null),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     const outcomes = [
@@ -151,6 +173,7 @@ describe('startExploreProbes', () => {
       processCommands: processCommands.promise,
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     await Bun.sleep(HELD_WAIT_MS);
@@ -176,9 +199,11 @@ describe('startExploreProbes', () => {
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
+    expect(await probes.simulatorRuntimes).toEqual({ kind: 'toolMissing' });
     expect((await probes.dartPubCache).kind).toBe('probed');
     expect((await probes.miseVersions).kind).toBe('probed');
     expect(await isPresent(buildMarkerPath({ name: 'xcrun' }))).toBe(false);
@@ -188,16 +213,22 @@ describe('startExploreProbes', () => {
     const xcrun = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: 'xcrun',
-      stdoutText: buildSimulatorDeviceListJson({ homeDir: environment.homeDir }),
-      exitCode: 3,
+      answers: [
+        {
+          command: 'simulatorDevices',
+          stdoutText: buildSimulatorDeviceListJson({ homeDir: environment.homeDir }),
+          exitCode: 3,
+        },
+      ],
     });
 
     const probes = startExploreProbes({
       environment: environment,
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun, dart: null, mise: null }),
+      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     expect(await probes.simulatorDevices).toEqual({
@@ -214,16 +245,16 @@ describe('startExploreProbes', () => {
     const mise = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: 'mise',
-      stdoutText: 'garbage',
-      exitCode: 0,
+      answers: [{ command: 'miseVersions', stdoutText: 'garbage', exitCode: 0 }],
     });
 
     const probes = startExploreProbes({
       environment: environment,
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: null, dart: null, mise: mise }),
+      toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     const outcome = await probes.miseVersions;
@@ -235,17 +266,17 @@ describe('startExploreProbes', () => {
     const dart = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: 'dart',
-      stdoutText: 'garbage',
-      exitCode: 0,
+      answers: [{ command: 'dartPubCache', stdoutText: 'garbage', exitCode: 0 }],
       mode: 0o775,
     });
 
     const probes = startExploreProbes({
       environment: environment,
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: null, dart: dart, mise: null }),
+      toolInstallLocations: buildFixtureToolLocations({ dart: dart }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     expect(await probes.dartPubCache).toEqual({
@@ -259,16 +290,18 @@ describe('startExploreProbes', () => {
       environment: environment,
       toolInstallLocations: buildFixtureToolLocations({
         xcrun: join(fixtureRoot.rootDir, 'absent', 'xcrun'),
-        dart: null,
-        mise: null,
       }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
+      unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
 
     expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
     expect(await probes.dartPubCache).toEqual({ kind: 'toolMissing' });
     expect(await probes.miseVersions).toEqual({ kind: 'toolMissing' });
+    expect(await probes.androidAvds).toEqual({ kind: 'toolMissing' });
+    expect(await probes.homebrewAppleSilicon).toEqual({ kind: 'toolMissing' });
+    expect(await probes.homebrewIntel).toEqual({ kind: 'toolMissing' });
   });
 });

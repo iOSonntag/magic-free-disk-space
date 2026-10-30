@@ -12,6 +12,7 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
+import type { ProbeCommandName } from '../explore/probeFakeTools.js';
 import { createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -70,7 +71,27 @@ function buildToolPath(name: ToolName): string {
       return join(fixtureRoot.rootDir, 'tools', 'dart-sdk', 'bin', 'dart');
     case 'xcrun':
     case 'mise':
+    case 'brewAppleSilicon':
+    case 'brewIntel':
+    case 'avdmanager':
       return join(fixtureRoot.rootDir, 'tools', name);
+  }
+}
+
+/** The one command of the probe that rechecks each unit these tests run. */
+function getRecheckCommand(unit: ExploreToolUnit): ProbeCommandName {
+  switch (unit.kind) {
+    case 'simulatorDevice':
+      return 'simulatorDevices';
+    case 'dartPubCache':
+      return 'dartPubCache';
+    case 'miseVersion':
+      return 'miseVersions';
+    case 'simulatorRuntime':
+    case 'androidAvd':
+    case 'homebrewOldVersions':
+    case 'homebrewOrphans':
+      throw new Error(`These tests run no ${unit.kind} unit.`);
   }
 }
 
@@ -85,8 +106,13 @@ async function createUnitTool(params: {
   await createUnitRunFakeTool({
     folder: dirname(params.unit.tool.path),
     unit: params.unit,
-    probeStdoutText: params.probeStdoutText,
-    probeExitCode: params.probeExitCode ?? 0,
+    answers: [
+      {
+        command: getRecheckCommand(params.unit),
+        stdoutText: params.probeStdoutText,
+        exitCode: params.probeExitCode ?? 0,
+      },
+    ],
     commandBody: `touch '${markerPath}'
 ${params.commandBody}`,
     ...(params.probePrelude === undefined ? {} : { probePrelude: params.probePrelude }),

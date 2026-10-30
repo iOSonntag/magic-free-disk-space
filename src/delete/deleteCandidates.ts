@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { ExploreToolFailure } from '../explore/exploreUnit.js';
+import type { ExploreProbeFailure } from '../explore/exploreUnit.js';
 import { buildUnitRunArguments } from '../explore/exploreUnit.js';
 import type { Result } from '../result.js';
 import type { Candidate, CandidateRemovalDeletePath } from '../scan/candidate.js';
@@ -41,7 +41,7 @@ export type RemovalOutcomeToolFailed = {
   allocatedBytes: number;
   freedBytes: number;
   outcome: 'toolFailed';
-  failure: ExploreToolFailure;
+  failure: ExploreProbeFailure;
 };
 
 export type RemovalOutcome = RemovalOutcomeCoded | RemovalOutcomeToolFailed;
@@ -130,6 +130,7 @@ export async function deleteCandidates(params: {
 function buildIntentEntry(params: { candidate: Candidate; atMs: number }): JournalEntry {
   switch (params.candidate.removal.kind) {
     case 'deletePath':
+    case 'deleteUnitFolder':
       return {
         kind: 'intent',
         atMs: params.atMs,
@@ -191,6 +192,8 @@ async function removeCandidate(params: {
         atMs: params.clock(),
       });
     }
+    case 'deleteUnitFolder':
+      throw new Error('The deletion of a unit folder is not built yet (part 2B3)');
   }
 }
 

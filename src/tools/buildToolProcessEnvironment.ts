@@ -4,11 +4,21 @@ import type { ToolName } from './toolInstallLocations.js';
 
 const SYSTEM_PATH_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
 
+// Keeps Homebrew from updating itself, reporting home, and printing hints into its output.
+const HOMEBREW_ENVIRONMENT_ENTRIES = {
+  HOMEBREW_NO_AUTO_UPDATE: '1',
+  HOMEBREW_NO_ANALYTICS: '1',
+  HOMEBREW_NO_ENV_HINTS: '1',
+};
+
 // Entries that keep each tool from reaching the network or changing its own setup.
 const TOOL_ENVIRONMENT_ENTRIES: Record<ToolName, Record<string, string>> = {
   xcrun: {},
   dart: {},
   mise: { MISE_OFFLINE: '1' },
+  brewAppleSilicon: HOMEBREW_ENVIRONMENT_ENTRIES,
+  brewIntel: HOMEBREW_ENVIRONMENT_ENTRIES,
+  avdmanager: {},
 };
 
 /**

@@ -17,6 +17,9 @@ const TOOL_LEADING_ARGUMENTS: Record<ToolName, string[]> = {
   xcrun: [],
   dart: ['--suppress-analytics'],
   mise: [],
+  brewAppleSilicon: [],
+  brewIntel: [],
+  avdmanager: [],
 };
 
 /** The output of a run that exited with 0. */

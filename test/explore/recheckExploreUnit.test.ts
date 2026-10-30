@@ -26,6 +26,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import type { ProbeCommandName } from './probeFakeTools.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -40,6 +41,13 @@ import {
 } from './probeOutputFixtures.js';
 
 const TIMEOUT_MS = 10_000;
+
+/** The one probe command each tool of these tests answers. */
+const PROBE_COMMANDS: Record<'xcrun' | 'dart' | 'mise', ProbeCommandName> = {
+  xcrun: 'simulatorDevices',
+  dart: 'dartPubCache',
+  mise: 'miseVersions',
+};
 
 const SIMULATOR_APP_COMMAND =
   '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator';
@@ -230,8 +238,13 @@ describe('recheckExploreUnit', () => {
     const path = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: params.name,
-      stdoutText: params.stdoutText,
-      exitCode: params.exitCode,
+      answers: [
+        {
+          command: PROBE_COMMANDS[params.name],
+          stdoutText: params.stdoutText,
+          exitCode: params.exitCode,
+        },
+      ],
     });
 
     return { name: params.name, path: await realpath(path) };

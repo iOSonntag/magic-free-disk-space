@@ -133,8 +133,15 @@ export function buildTestDartToolCandidate(params: { homeDir: string }): Candida
   };
 }
 
-/** No place for any tool, so a scan in a test never runs a real xcrun, dart, or mise. */
-export const TOOL_INSTALL_LOCATIONS_NONE: ToolInstallLocations = { xcrun: [], dart: [], mise: [] };
+/** No place for any tool, so a scan in a test never runs a real tool. */
+export const TOOL_INSTALL_LOCATIONS_NONE: ToolInstallLocations = {
+  xcrun: [],
+  dart: [],
+  mise: [],
+  brewAppleSilicon: [],
+  brewIntel: [],
+  avdmanager: [],
+};
 
 export function buildTestCatalogEntry(overrides: Partial<CatalogEntry>): CatalogEntry {
   return {

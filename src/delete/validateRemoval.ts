@@ -18,9 +18,9 @@ export type RemovalDecisionRefused = { kind: 'refused'; path: string; reason: Re
 export type RemovalDecision = RemovalDecisionApproved | RemovalDecisionRefused;
 
 /**
- * Refuses a candidate marked `never`. Approves a path item only when it is a plain file or folder
- * strictly inside an allowed root, is no protected folder and holds none, and lies in no
- * sensitive folder; a tool item passes, since its own tool removes it after a recheck.
+ * Refuses a candidate marked `never`. Approves a path item or a unit's folder only when it is a
+ * plain file or folder strictly inside an allowed root, is no protected folder and holds none, and
+ * lies in no sensitive folder; a tool item passes, since its own tool removes it after a recheck.
  */
 export function validateRemoval(params: {
   candidate: Candidate;
@@ -32,6 +32,7 @@ export function validateRemoval(params: {
 
   switch (params.candidate.removal.kind) {
     case 'deletePath':
+    case 'deleteUnitFolder':
       return validatePathRemoval({
         candidate: params.candidate,
         identity: params.candidate.removal.identity,

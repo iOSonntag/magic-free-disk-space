@@ -19,8 +19,18 @@ export type CatalogRemovalDelete = { kind: 'delete' };
 
 export type CatalogRemovalAdvice = { kind: 'advice'; advice: string };
 
-/** The probes of tool-owned items; the explore module runs each one. */
-export type ExploreProbeId = 'simulatorDevices' | 'dartPubCache' | 'miseVersions';
+/** The probes of tool-owned items; the explore module runs each one, and one entry names each. */
+export type ExploreProbeId =
+  | 'simulatorDevices'
+  | 'dartPubCache'
+  | 'miseVersions'
+  | 'simulatorRuntimes'
+  | 'androidAvds'
+  | 'androidSystemImages'
+  | 'androidEmulator'
+  | 'homebrewAppleSilicon'
+  | 'homebrewIntel'
+  | 'vscodeExtensions';
 
 /** Offered as the units its probe finds; the advice stands when the probe cannot run. */
 export type CatalogRemovalExplore = { kind: 'explore'; probe: ExploreProbeId; advice: string };

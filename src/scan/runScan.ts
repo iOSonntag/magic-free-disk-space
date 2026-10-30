@@ -121,6 +121,7 @@ export async function runScan(params: {
   const activeXcodeBundlePathLoad = loadActiveXcodeBundlePath({
     commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
   });
+  const unusedCutoffMs = params.environment.nowMs - params.options.unusedDays * DAY_MS;
   // The probes run beside every phase; the Explore phase waits for them last.
   const probes = startExploreProbes({
     environment: params.environment,
@@ -131,6 +132,7 @@ export async function runScan(params: {
       result.kind === 'succeeded' ? result.value : null,
     ),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
+    unusedCutoffMs: unusedCutoffMs,
   });
   const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
     processCommandsLoad,
@@ -143,7 +145,7 @@ export async function runScan(params: {
   const context: ScanContext = {
     environment: params.environment,
     staleCutoffMs: params.environment.nowMs - params.options.staleDays * DAY_MS,
-    unusedCutoffMs: params.environment.nowMs - params.options.unusedDays * DAY_MS,
+    unusedCutoffMs: unusedCutoffMs,
     installedApps: installed.apps,
     isInstalledAppListComplete: installed.issues.length === 0,
     processCommands: await knownProcessCommandsLoad,

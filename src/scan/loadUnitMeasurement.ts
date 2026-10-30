@@ -1,4 +1,4 @@
-import type { ExploreToolUnit } from '../explore/exploreUnit.js';
+import type { ExploreUnit } from '../explore/exploreUnit.js';
 import { listUnitPaths } from '../explore/exploreUnit.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
@@ -30,7 +30,7 @@ const MAX_CONCURRENT_PATHS = 8;
 
 /** Measures the paths of `listUnitPaths(unit)`, for the scan's offer and before and after a run. */
 export async function loadUnitMeasurement(params: {
-  unit: ExploreToolUnit;
+  unit: ExploreUnit;
   deadlineMs: number;
 }): Promise<UnitMeasurement> {
   const runPathMeasurement = createConcurrencyLimit({ maxConcurrent: MAX_CONCURRENT_PATHS });

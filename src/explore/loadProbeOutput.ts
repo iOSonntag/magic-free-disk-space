@@ -16,14 +16,15 @@ export type ExploreProbeDefinition<T> = {
 };
 
 /**
- * Runs the probe with `tool` and parses its standard output; a rejection of the parser fails as
- * `outputUnreadable`. Throws for a tool other than the probe's, a broken invariant of the caller.
+ * Runs the probe with `tool`, limited to the time left before `deadlineMs`, and parses its
+ * standard output; a rejection of the parser fails as `outputUnreadable`. Throws for a tool other
+ * than the probe's, a broken invariant of the caller.
  */
 export async function loadProbeOutput<T>(params: {
   probe: ExploreProbeDefinition<T>;
   tool: LocatedTool;
   environment: Environment;
-  timeoutMs: number;
+  deadlineMs: number;
 }): Promise<Result<T, ExploreToolFailure>> {
   if (params.tool.name !== params.probe.toolName) {
     throw new Error(`A probe of ${params.probe.toolName} got the tool ${params.tool.name}`);
@@ -34,7 +35,7 @@ export async function loadProbeOutput<T>(params: {
     args: params.probe.args,
     homeDir: params.environment.homeDir,
     tempDir: params.environment.tempDir,
-    timeoutMs: params.timeoutMs,
+    timeoutMs: Math.max(params.deadlineMs - Date.now(), 0),
   });
 
   if (output.kind === 'failed') {

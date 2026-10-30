@@ -110,6 +110,9 @@ async function isLocatedToolAccepted(params: { tool: LocatedTool }): Promise<boo
       return isDartSdkSupported({ binaryPath: params.tool.path });
     case 'xcrun':
     case 'mise':
+    case 'brewAppleSilicon':
+    case 'brewIntel':
+    case 'avdmanager':
       return true;
   }
 }
@@ -147,6 +150,9 @@ async function loadToolBinaryPath(params: {
       return loadDartBinaryPath({ realPath: realPath });
     case 'xcrun':
     case 'mise':
+    case 'brewAppleSilicon':
+    case 'brewIntel':
+    case 'avdmanager':
       return realPath;
   }
 }

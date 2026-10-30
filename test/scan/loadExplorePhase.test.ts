@@ -57,13 +57,23 @@ const miseEntry = buildExploreEntry({ id: 'mise', probe: 'miseVersions' });
 
 const deleteEntry: CatalogEntry = { ...simulatorEntry, id: 'plain', removal: { kind: 'delete' } };
 
+/** Each probe answers the outcome given, and every probe not given `toolMissing`. */
 function buildProbes(
-  outcomes: Record<ExploreProbeId, ExploreProbeOutcome>,
+  outcomes: Partial<Record<ExploreProbeId, ExploreProbeOutcome>>,
 ): Record<ExploreProbeId, Promise<ExploreProbeOutcome>> {
+  const toolMissing: ExploreProbeOutcome = { kind: 'toolMissing' };
+
   return {
-    simulatorDevices: Promise.resolve(outcomes.simulatorDevices),
-    dartPubCache: Promise.resolve(outcomes.dartPubCache),
-    miseVersions: Promise.resolve(outcomes.miseVersions),
+    simulatorDevices: Promise.resolve(outcomes.simulatorDevices ?? toolMissing),
+    dartPubCache: Promise.resolve(outcomes.dartPubCache ?? toolMissing),
+    miseVersions: Promise.resolve(outcomes.miseVersions ?? toolMissing),
+    simulatorRuntimes: Promise.resolve(outcomes.simulatorRuntimes ?? toolMissing),
+    androidAvds: Promise.resolve(outcomes.androidAvds ?? toolMissing),
+    androidSystemImages: Promise.resolve(outcomes.androidSystemImages ?? toolMissing),
+    androidEmulator: Promise.resolve(outcomes.androidEmulator ?? toolMissing),
+    homebrewAppleSilicon: Promise.resolve(outcomes.homebrewAppleSilicon ?? toolMissing),
+    homebrewIntel: Promise.resolve(outcomes.homebrewIntel ?? toolMissing),
+    vscodeExtensions: Promise.resolve(outcomes.vscodeExtensions ?? toolMissing),
   };
 }
 
@@ -118,15 +128,21 @@ describe('loadExplorePhase', () => {
     const xcrun = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: 'xcrun',
-      stdoutText: buildSimulatorDeviceListJson({ homeDir: environment.homeDir }),
-      exitCode: 0,
+      answers: [
+        {
+          command: 'simulatorDevices',
+          stdoutText: buildSimulatorDeviceListJson({ homeDir: environment.homeDir }),
+          exitCode: 0,
+        },
+      ],
     });
     const probes = startExploreProbes({
       environment: environment,
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun, dart: null, mise: null }),
+      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
       timeoutMs: 10_000,
+      unusedCutoffMs: 0,
     });
 
     const phase = await loadExplorePhase({
@@ -178,10 +194,11 @@ describe('loadExplorePhase', () => {
   test('offers a finding below any size threshold and skips an unknown one', async () => {
     const phase = await loadExplorePhase({
       probes: buildProbes({
-        simulatorDevices: { kind: 'probed', findings: [] },
-        dartPubCache: { kind: 'probed', findings: [] },
+        simulatorDevices: { kind: 'probed', findings: [], isComplete: true },
+        dartPubCache: { kind: 'probed', findings: [], isComplete: true },
         miseVersions: {
           kind: 'probed',
+          isComplete: true,
           findings: [
             buildMiseFinding({ installPath: join(environment.homeDir, 'gone'), activity: 'idle' }),
             buildMiseFinding({
@@ -246,8 +263,6 @@ describe('loadExplorePhase', () => {
           tool: { name: 'xcrun', path: '/usr/bin/xcrun' },
           failure: { reason: 'outputUnreadable', detail: 'no JSON' },
         },
-        dartPubCache: { kind: 'toolMissing' },
-        miseVersions: { kind: 'toolMissing' },
       }),
       catalogEntries: [simulatorEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,

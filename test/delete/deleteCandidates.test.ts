@@ -186,8 +186,13 @@ async function createToolCandidate(params: {
   await createUnitRunFakeTool({
     folder: dirname(unit.tool.path),
     unit: unit,
-    probeStdoutText: buildMisePrunableJson({ homeDir: fixtureRoot.homeDir }),
-    probeExitCode: 0,
+    answers: [
+      {
+        command: 'miseVersions',
+        stdoutText: buildMisePrunableJson({ homeDir: fixtureRoot.homeDir }),
+        exitCode: 0,
+      },
+    ],
     commandBody: params.buildCommandBody(candidate.path),
   });
 
@@ -214,8 +219,13 @@ async function createSimulatorCandidate(): Promise<Candidate> {
   await createUnitRunFakeTool({
     folder: dirname(unit.tool.path),
     unit: unit,
-    probeStdoutText: buildSimulatorDeviceListJson({ homeDir: fixtureRoot.homeDir }),
-    probeExitCode: 0,
+    answers: [
+      {
+        command: 'simulatorDevices',
+        stdoutText: buildSimulatorDeviceListJson({ homeDir: fixtureRoot.homeDir }),
+        exitCode: 0,
+      },
+    ],
     commandBody: `touch '${markerPath}'
 rm -r '${dataPath}'
 exit 0`,
