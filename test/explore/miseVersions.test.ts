@@ -15,13 +15,13 @@ import {
 
 const tool: LocatedTool = { name: 'mise', path: '/opt/example/bin/mise' };
 
-const nodeToolName = buildTestMiseToolName({ text: 'node' });
+const nodeMiseToolName = buildTestMiseToolName({ text: 'node' });
 
 const nodeVersion = buildTestMiseToolVersion({ text: '20.1.0' });
 
 const nodeInstallPath = buildMiseInstallPath({
   homeDir: FIXTURE_HOME_DIR,
-  toolName: 'node',
+  miseToolName: 'node',
   version: '20.1.0',
 });
 
@@ -51,13 +51,13 @@ describe('parseMisePrunableVersions', () => {
     ).toEqual({
       kind: 'succeeded',
       value: [
-        { toolName: nodeToolName, version: nodeVersion, installPath: nodeInstallPath },
+        { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
         {
-          toolName: buildTestMiseToolName({ text: 'pnpm' }),
+          miseToolName: buildTestMiseToolName({ text: 'pnpm' }),
           version: buildTestMiseToolVersion({ text: '9.0.0' }),
           installPath: buildMiseInstallPath({
             homeDir: FIXTURE_HOME_DIR,
-            toolName: 'pnpm',
+            miseToolName: 'pnpm',
             version: '9.0.0',
           }),
         },
@@ -95,7 +95,9 @@ describe('buildMiseVersionFindings', () => {
   test('offers each version with its install path shown with ~', () => {
     const findings = buildMiseVersionFindings({
       tool: tool,
-      versions: [{ toolName: nodeToolName, version: nodeVersion, installPath: nodeInstallPath }],
+      versions: [
+        { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
+      ],
       homeDir: FIXTURE_HOME_DIR,
       processCommands: null,
     });
@@ -104,7 +106,7 @@ describe('buildMiseVersionFindings', () => {
     expect(findings[0]?.unit).toEqual({
       kind: 'miseVersion',
       tool: tool,
-      toolName: nodeToolName,
+      miseToolName: nodeMiseToolName,
       version: nodeVersion,
       installPath: nodeInstallPath,
     });

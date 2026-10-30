@@ -11,16 +11,16 @@ export function buildMiseVersionFindings(params: {
   processCommands: string[] | null;
 }): ExploreFinding[] {
   return params.versions.map((version) => {
-    const versionName = `${version.toolName}@${version.version}`;
+    const versionName = `${version.miseToolName}@${version.version}`;
     const finding: ExploreFinding = {
       unit: {
         kind: 'miseVersion',
         tool: params.tool,
-        toolName: version.toolName,
+        miseToolName: version.miseToolName,
         version: version.version,
         installPath: version.installPath,
       },
-      title: `mise ${version.toolName} ${version.version}`,
+      title: `mise ${version.miseToolName} ${version.version}`,
       explanation: 'A tool version installed with mise that no config file mise tracks asks for.',
       regeneration: 'mise installs it again when a project asks for it.',
       risk: 'review',

@@ -27,7 +27,7 @@ describe('buildUnitRunArguments', () => {
       buildUnitRunArguments({
         kind: 'miseVersion',
         tool: { name: 'mise', path: '/opt/example/bin/mise' },
-        toolName: buildTestMiseToolName({ text: 'node' }),
+        miseToolName: buildTestMiseToolName({ text: 'node' }),
         version: buildTestMiseToolVersion({ text: '20.1.0' }),
         installPath: buildTestAbsolutePath({ text: '/opt/example/mise/installs/node/20.1.0' }),
       }),

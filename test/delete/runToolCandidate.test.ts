@@ -88,7 +88,7 @@ ${params.commandBody}`,
 async function createMiseUnit(version: string): Promise<ExploreToolUnitMiseVersion> {
   const installPath = buildMiseInstallPath({
     homeDir: environment.homeDir,
-    toolName: 'node',
+    miseToolName: 'node',
     version: version,
   });
 
@@ -98,7 +98,7 @@ async function createMiseUnit(version: string): Promise<ExploreToolUnitMiseVersi
   return {
     kind: 'miseVersion',
     tool: { name: 'mise', path: buildToolPath('mise') },
-    toolName: buildTestMiseToolName({ text: 'node' }),
+    miseToolName: buildTestMiseToolName({ text: 'node' }),
     version: buildTestMiseToolVersion({ text: version }),
     installPath: installPath,
   };

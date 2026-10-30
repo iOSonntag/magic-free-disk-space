@@ -16,7 +16,7 @@ export type MiseToolVersion = string & { [miseToolVersionBrand]: true };
 
 /** An installed version that `mise prune` would remove. */
 export type MisePrunableVersion = {
-  toolName: MiseToolName;
+  miseToolName: MiseToolName;
   version: MiseToolVersion;
   installPath: AbsolutePath;
 };
@@ -72,15 +72,15 @@ export function parseMisePrunableVersions(params: {
 
   const versions: MisePrunableVersion[] = [];
 
-  for (const [toolNameText, toolVersions] of Object.entries(json.value)) {
-    const toolName = parseMiseToolName({ text: toolNameText });
+  for (const [miseToolNameText, toolVersions] of Object.entries(json.value)) {
+    const miseToolName = parseMiseToolName({ text: miseToolNameText });
 
-    if (toolName.kind === 'failed' || !Array.isArray(toolVersions)) {
+    if (miseToolName.kind === 'failed' || !Array.isArray(toolVersions)) {
       return { kind: 'failed', failure: 'a tool has a malformed name or no list of versions' };
     }
 
     for (const value of toolVersions) {
-      const version = parseMisePrunableVersion({ value: value, toolName: toolName.value });
+      const version = parseMisePrunableVersion({ value: value, miseToolName: miseToolName.value });
 
       if (version === null) {
         return { kind: 'failed', failure: 'a version lacks a field or has a malformed one' };
@@ -95,7 +95,7 @@ export function parseMisePrunableVersions(params: {
 
 function parseMisePrunableVersion(params: {
   value: unknown;
-  toolName: MiseToolName;
+  miseToolName: MiseToolName;
 }): MisePrunableVersion | null {
   if (!isJsonObject(params.value)) {
     return null;
@@ -115,5 +115,9 @@ function parseMisePrunableVersion(params: {
     return null;
   }
 
-  return { toolName: params.toolName, version: version.value, installPath: installPath.value };
+  return {
+    miseToolName: params.miseToolName,
+    version: version.value,
+    installPath: installPath.value,
+  };
 }

@@ -94,7 +94,7 @@ export function buildTestToolCandidate(params: {
       unit: {
         kind: 'miseVersion',
         tool: { name: 'mise', path: `${params.homeDir}/.local/bin/mise` },
-        toolName: buildTestMiseToolName({ text: 'node' }),
+        miseToolName: buildTestMiseToolName({ text: 'node' }),
         version: buildTestMiseToolVersion({ text: params.version }),
         installPath: installPath,
       },

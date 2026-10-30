@@ -110,11 +110,11 @@ No unused cache entries found.
 
 export function buildMiseInstallPath(params: {
   homeDir: string;
-  toolName: string;
+  miseToolName: string;
   version: string;
 }): AbsolutePath {
   return buildTestAbsolutePath({
-    text: `${params.homeDir}/.local/share/mise/installs/${params.toolName}/${params.version}`,
+    text: `${params.homeDir}/.local/share/mise/installs/${params.miseToolName}/${params.version}`,
   });
 }
 
@@ -125,7 +125,7 @@ export function buildMisePrunableJson(params: { homeDir: string }): string {
         version: '20.1.0',
         install_path: buildMiseInstallPath({
           homeDir: params.homeDir,
-          toolName: 'node',
+          miseToolName: 'node',
           version: '20.1.0',
         }),
         installed: true,
@@ -137,7 +137,7 @@ export function buildMisePrunableJson(params: { homeDir: string }): string {
         version: '9.0.0',
         install_path: buildMiseInstallPath({
           homeDir: params.homeDir,
-          toolName: 'pnpm',
+          miseToolName: 'pnpm',
           version: '9.0.0',
         }),
         installed: true,

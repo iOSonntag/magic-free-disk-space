@@ -151,7 +151,7 @@ export function compareMiseVersion(params: {
 }): UnitComparison {
   const stillPrunable = params.versions.some(
     (version) =>
-      version.toolName === params.unit.toolName &&
+      version.miseToolName === params.unit.miseToolName &&
       version.version === params.unit.version &&
       version.installPath === params.unit.installPath,
   );

@@ -74,18 +74,18 @@ const dartUnit: ExploreToolUnitDartPubCache = {
 
 const nodeInstallPath = buildMiseInstallPath({
   homeDir: FIXTURE_HOME_DIR,
-  toolName: 'node',
+  miseToolName: 'node',
   version: '20.1.0',
 });
 
-const nodeToolName = buildTestMiseToolName({ text: 'node' });
+const nodeMiseToolName = buildTestMiseToolName({ text: 'node' });
 
 const nodeVersion = buildTestMiseToolVersion({ text: '20.1.0' });
 
 const miseUnit: ExploreToolUnitMiseVersion = {
   kind: 'miseVersion',
   tool: { name: 'mise', path: '/opt/example/mise' },
-  toolName: nodeToolName,
+  miseToolName: nodeMiseToolName,
   version: nodeVersion,
   installPath: nodeInstallPath,
 };
@@ -177,7 +177,9 @@ describe('compareMiseVersion', () => {
     expect(
       compareMiseVersion({
         unit: miseUnit,
-        versions: [{ toolName: nodeToolName, version: nodeVersion, installPath: nodeInstallPath }],
+        versions: [
+          { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
+        ],
         processCommands: null,
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -188,14 +190,14 @@ describe('compareMiseVersion', () => {
       [],
       [
         {
-          toolName: nodeToolName,
+          miseToolName: nodeMiseToolName,
           version: nodeVersion,
           installPath: buildTestAbsolutePath({ text: '/Users/example/elsewhere' }),
         },
       ],
       [
         {
-          toolName: nodeToolName,
+          miseToolName: nodeMiseToolName,
           version: buildTestMiseToolVersion({ text: '20.2.0' }),
           installPath: nodeInstallPath,
         },
@@ -299,11 +301,11 @@ describe('recheckExploreUnit', () => {
         unit: {
           kind: 'miseVersion',
           tool: mise,
-          toolName: nodeToolName,
+          miseToolName: nodeMiseToolName,
           version: nodeVersion,
           installPath: buildMiseInstallPath({
             homeDir: homeDir,
-            toolName: 'node',
+            miseToolName: 'node',
             version: '20.1.0',
           }),
         },

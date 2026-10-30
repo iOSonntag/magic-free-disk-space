@@ -75,7 +75,7 @@ function buildMiseFinding(params: {
     unit: {
       kind: 'miseVersion',
       tool: { name: 'mise', path: '/opt/example/mise' },
-      toolName: buildTestMiseToolName({ text: 'node' }),
+      miseToolName: buildTestMiseToolName({ text: 'node' }),
       version: buildTestMiseToolVersion({ text: '20.1.0' }),
       installPath: buildTestAbsolutePath({ text: params.installPath }),
     },

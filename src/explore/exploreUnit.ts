@@ -23,7 +23,7 @@ export type ExploreToolUnitDartPubCache = {
 export type ExploreToolUnitMiseVersion = {
   kind: 'miseVersion';
   tool: LocatedTool;
-  toolName: MiseToolName;
+  miseToolName: MiseToolName;
   version: MiseToolVersion;
   installPath: AbsolutePath;
 };
@@ -79,7 +79,7 @@ export function buildUnitCommand(unit: ExploreToolUnit): string[] {
     case 'dartPubCache':
       return ['pub', 'cache', 'gc', '--force'];
     case 'miseVersion':
-      return ['uninstall', `${unit.toolName}@${unit.version}`];
+      return ['uninstall', `${unit.miseToolName}@${unit.version}`];
   }
 }
 
