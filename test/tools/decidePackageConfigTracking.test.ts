@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Result } from '../../src/result.js';
-import type { EntryStats } from '../../src/system/loadEntryStats.js';
+import type { EntryStatsResult } from '../../src/system/loadEntryStats.js';
 import type { FileFailure } from '../../src/system/loadFileIdentity.js';
 import {
   decidePackageConfigTracking,
@@ -9,14 +8,14 @@ import {
 } from '../../src/tools/decidePackageConfigTracking.js';
 
 /** The stats of a plain file `ino` on device 1. */
-function buildFileStats(ino: bigint): Result<EntryStats, FileFailure> {
+function buildFileStats(ino: bigint): EntryStatsResult {
   return {
     kind: 'succeeded',
     value: { kind: 'file', dev: 1n, ino: ino, allocatedBytes: 4096, modifiedMs: 0 },
   };
 }
 
-function buildFailedStats(reason: FileFailure['reason']): Result<EntryStats, FileFailure> {
+function buildFailedStats(reason: FileFailure['reason']): EntryStatsResult {
   return { kind: 'failed', failure: { reason: reason, code: 'ECODE' } };
 }
 

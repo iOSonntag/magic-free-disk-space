@@ -1,6 +1,4 @@
-import type { Result } from '../result.js';
-import type { EntryStats } from '../system/loadEntryStats.js';
-import type { FileFailure } from '../system/loadFileIdentity.js';
+import type { EntryStatsResult } from '../system/loadEntryStats.js';
 
 /**
  * Whether version control tracks a project's `package_config.json`; `unknown` when the index
@@ -41,8 +39,8 @@ export function findPackageConfigCandidatePaths(params: { indexPaths: string[] }
  * failed for a reason other than `missing`; else `untracked`.
  */
 export function decidePackageConfigTracking(params: {
-  packageConfigStats: Result<EntryStats, FileFailure>;
-  candidateStats: Result<EntryStats, FileFailure>[];
+  packageConfigStats: EntryStatsResult;
+  candidateStats: EntryStatsResult[];
 }): PackageConfigTracking {
   const packageConfigStats = params.packageConfigStats;
 

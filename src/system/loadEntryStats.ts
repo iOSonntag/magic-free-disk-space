@@ -14,10 +14,10 @@ export type EntryStats = {
   modifiedMs: number;
 };
 
+export type EntryStatsResult = Result<EntryStats, FileFailure>;
+
 /** Reads the entry itself, never the target of a symbolic link. */
-export async function loadEntryStats(params: {
-  path: string;
-}): Promise<Result<EntryStats, FileFailure>> {
+export async function loadEntryStats(params: { path: string }): Promise<EntryStatsResult> {
   try {
     const stats = await runFilesystemCall(() => lstat(params.path, { bigint: true }));
 

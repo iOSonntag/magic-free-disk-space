@@ -1,10 +1,9 @@
 import { dirname, join } from 'node:path';
-import type { Result } from '../result.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { EntryStats } from '../system/loadEntryStats.js';
+import type { EntryStatsResult } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import { loadFileBytes } from '../system/loadFileBytes.js';
-import type { FileFailure, FileKind } from '../system/loadFileIdentity.js';
+import type { FileKind } from '../system/loadFileIdentity.js';
 import { loadFileText } from '../system/loadFileText.js';
 import type { PackageConfigTracking } from './decidePackageConfigTracking.js';
 import {
@@ -175,8 +174,8 @@ async function loadGitDirPackageConfigTracking(params: {
 async function loadCandidateStats(params: {
   workTreePath: string;
   candidatePaths: string[];
-}): Promise<Result<EntryStats, FileFailure>[]> {
-  const candidateStats: Result<EntryStats, FileFailure>[] = [];
+}): Promise<EntryStatsResult[]> {
+  const candidateStats: EntryStatsResult[] = [];
 
   for (const candidatePath of params.candidatePaths) {
     candidateStats.push(await loadEntryStats({ path: join(params.workTreePath, candidatePath) }));
