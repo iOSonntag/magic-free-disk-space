@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   ACTIVE_ROOT_FILES_MAX_COUNT,
@@ -11,7 +11,11 @@ import {
 } from '../../src/tools/loadFlutterSdkDartPaths.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import { buildActiveRootPath, createActiveProject } from '../support/flutterSdkFixtures.js';
+import {
+  buildActiveRootPath,
+  buildProjectRoot,
+  createActiveProject,
+} from '../support/flutterSdkFixtures.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -25,10 +29,6 @@ afterEach(async () => {
 
 function buildSdkDartPath(flutterRoot: string): string {
   return join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
-}
-
-function buildProjectRoot(name: string): string {
-  return join(fixtureRoot.homeDir, 'projects', name);
 }
 
 describe('loadFlutterSdkDartPaths', () => {
@@ -120,11 +120,13 @@ describe('loadFlutterSdkDartPaths', () => {
   });
 
   test('skips a Flutter root inside the project that names it', async () => {
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
+
     await createActiveProject({
       homeDir: fixtureRoot.homeDir,
       group: 'a0',
       name: 'a0aaaa',
-      flutterRoot: join(buildProjectRoot('a0aaaa'), 'vendor', 'flutter'),
+      flutterRoot: join(projectRoot, 'vendor', 'flutter'),
     });
 
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
@@ -137,7 +139,7 @@ describe('loadFlutterSdkDartPaths', () => {
       homeDir: fixtureRoot.homeDir,
       group: 'a0',
       name: 'a0aaaa',
-      flutterRoot: join(fixtureRoot.homeDir, 'projects'),
+      flutterRoot: dirname(buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' })),
     });
 
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
@@ -146,7 +148,8 @@ describe('loadFlutterSdkDartPaths', () => {
   });
 
   test('skips a Flutter root without a .git entry', async () => {
-    const flutterRoot = join(fixtureRoot.homeDir, 'projects', 'a0aaaa-sdk');
+    const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
+    const flutterRoot = join(dirname(projectRoot), 'a0aaaa-sdk');
 
     await mkdir(join(flutterRoot, 'bin'), { recursive: true });
     await createActiveProject({
@@ -198,7 +201,7 @@ describe('loadFlutterSdkDartPaths', () => {
       homeDir: fixtureRoot.homeDir,
       group: 'a0',
       name: 'flutter',
-      flutterRoot: buildProjectRoot('flutter'),
+      flutterRoot: buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'flutter' }),
     });
 
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });

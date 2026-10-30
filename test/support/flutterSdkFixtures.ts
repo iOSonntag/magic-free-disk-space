@@ -11,6 +11,11 @@ export function buildActiveRootPath(params: {
   return join(params.homeDir, '.pub-cache', 'active_roots', params.group, params.name);
 }
 
+/** The folder `<homeDir>/projects/<name>` of the project that `createActiveProject` writes. */
+export function buildProjectRoot(params: { homeDir: string; name: string }): string {
+  return join(params.homeDir, 'projects', params.name);
+}
+
 /**
  * Writes a project `<homeDir>/projects/<name>` whose package config names `flutterRoot`, the
  * active-roots file `<group>/<name>` that names that package config, and the `.git` entry of
@@ -24,9 +29,7 @@ export async function createActiveProject(params: {
   flutterRootGitEntry?: FlutterRootGitEntry;
 }): Promise<void> {
   const packageConfigPath = join(
-    params.homeDir,
-    'projects',
-    params.name,
+    buildProjectRoot({ homeDir: params.homeDir, name: params.name }),
     '.dart_tool',
     'package_config.json',
   );
