@@ -26,8 +26,6 @@ export type ExploreProbeToolRun = ExploreProbeRun & { tool: LocatedTool };
 export type ExploreProbeTool = {
   kind: 'tool';
   toolName: ToolName;
-  /** `xcrun simctl` without an active Xcode asks to install the command line tools. */
-  isActiveXcodeRequired: boolean;
   loadFindings: (run: ExploreProbeToolRun) => Promise<ExploreProbeToolResult>;
 };
 

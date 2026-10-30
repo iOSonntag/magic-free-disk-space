@@ -82,7 +82,6 @@ type ExploreProbeStart = {
 const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
   simulatorDevices: buildCommandProbe({
     definition: SIMULATOR_DEVICE_LIST_PROBE,
-    isActiveXcodeRequired: true,
     buildFindings: (probed) =>
       buildSimulatorDeviceFindings({
         tool: probed.run.tool,
@@ -92,7 +91,6 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
   }),
   dartPubCache: buildCommandProbe({
     definition: DART_PUB_CACHE_GC_DRY_RUN_PROBE,
-    isActiveXcodeRequired: false,
     buildFindings: (probed) =>
       buildDartPubCacheFindings({
         tool: probed.run.tool,
@@ -103,7 +101,6 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
   }),
   miseVersions: buildCommandProbe({
     definition: MISE_PRUNABLE_LIST_PROBE,
-    isActiveXcodeRequired: false,
     buildFindings: (probed) =>
       buildMiseVersionFindings({
         tool: probed.run.tool,
@@ -115,13 +112,11 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
   simulatorRuntimes: {
     kind: 'tool',
     toolName: 'xcrun',
-    isActiveXcodeRequired: true,
     loadFindings: loadSimulatorRuntimeFindings,
   },
   androidAvds: {
     kind: 'tool',
     toolName: 'avdmanager',
-    isActiveXcodeRequired: false,
     loadFindings: loadAndroidAvdFindings,
   },
   androidSystemImages: { kind: 'files', loadFindings: loadAndroidSystemImageFindings },
@@ -129,13 +124,11 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
   homebrewAppleSilicon: {
     kind: 'tool',
     toolName: 'brewAppleSilicon',
-    isActiveXcodeRequired: false,
     loadFindings: loadHomebrewFindings,
   },
   homebrewIntel: {
     kind: 'tool',
     toolName: 'brewIntel',
-    isActiveXcodeRequired: false,
     loadFindings: loadHomebrewFindings,
   },
   vscodeExtensions: { kind: 'files', loadFindings: loadVscodeExtensionFindings },
@@ -174,13 +167,11 @@ export function startExploreProbes(
 /** A probe of one read-only command whose parsed output its findings come from, all judged. */
 function buildCommandProbe<T>(params: {
   definition: ExploreProbeDefinition<T>;
-  isActiveXcodeRequired: boolean;
   buildFindings: (probed: { run: ExploreProbeToolRun; output: T }) => ExploreFinding[];
 }): ExploreProbeTool {
   return {
     kind: 'tool',
     toolName: params.definition.toolName,
-    isActiveXcodeRequired: params.isActiveXcodeRequired,
     loadFindings: async (run) => {
       const output = await loadProbeOutput({
         probe: params.definition,
@@ -266,7 +257,8 @@ async function runExploreToolProbe(params: {
   start: ExploreProbeStart;
   run: ExploreProbeRun;
 }): Promise<ExploreProbeOutcome> {
-  if (params.probe.isActiveXcodeRequired && (await params.start.activeXcodeBundlePath) === null) {
+  // `xcrun simctl` without an active Xcode asks to install the command line tools.
+  if (params.probe.toolName === 'xcrun' && (await params.start.activeXcodeBundlePath) === null) {
     return { kind: 'toolMissing' };
   }
 

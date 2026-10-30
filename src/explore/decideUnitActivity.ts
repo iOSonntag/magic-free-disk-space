@@ -61,10 +61,7 @@ export function decideUnitActivity(params: {
     case 'miseVersion':
       return 'idle';
     case 'simulatorRuntime':
-      return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => command.includes(SIMULATOR_APP_EXECUTABLE_PATH_PART),
-      });
+      return decideSimulatorAppActivity({ processCommands: params.processCommands });
     case 'android':
       return decideProcessActivity({
         processCommands: params.processCommands,
@@ -94,6 +91,11 @@ function decideSimulatorDeviceActivity(params: {
     return 'busy';
   }
 
+  return decideSimulatorAppActivity({ processCommands: params.processCommands });
+}
+
+/** Busy while Simulator.app runs; `unknown` when the processes were not read. */
+function decideSimulatorAppActivity(params: { processCommands: string[] | null }): UnitActivity {
   return decideProcessActivity({
     processCommands: params.processCommands,
     isOwnerProcess: (command) => command.includes(SIMULATOR_APP_EXECUTABLE_PATH_PART),
