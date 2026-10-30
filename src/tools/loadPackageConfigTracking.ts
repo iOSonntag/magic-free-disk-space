@@ -1,6 +1,5 @@
 import { dirname, join } from 'node:path';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { EntryStatsResult } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import { loadFileBytes } from '../system/loadFileBytes.js';
 import type { FileKind } from '../system/loadFileIdentity.js';
@@ -159,29 +158,16 @@ async function loadGitDirPackageConfigTracking(params: {
   const packageConfigStats = await loadEntryStats({
     path: join(params.dartToolRealPath, PACKAGE_CONFIG_FILE_NAME),
   });
-  const candidateStats = await loadCandidateStats({
-    workTreePath: params.workTreePath,
-    candidatePaths: candidatePaths,
-  });
+  const candidateStats = await Promise.all(
+    candidatePaths.map((candidatePath) =>
+      loadEntryStats({ path: join(params.workTreePath, candidatePath) }),
+    ),
+  );
 
   return decidePackageConfigTracking({
     packageConfigStats: packageConfigStats,
     candidateStats: candidateStats,
   });
-}
-
-/** The stats of each of `candidatePaths`, joined to `workTreePath`, in their order. */
-async function loadCandidateStats(params: {
-  workTreePath: string;
-  candidatePaths: string[];
-}): Promise<EntryStatsResult[]> {
-  const candidateStats: EntryStatsResult[] = [];
-
-  for (const candidatePath of params.candidatePaths) {
-    candidateStats.push(await loadEntryStats({ path: join(params.workTreePath, candidatePath) }));
-  }
-
-  return candidateStats;
 }
 
 /** `workTreePath` is the folder that holds the `.git` entry that names the git dir `path`. */
