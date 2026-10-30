@@ -1,3 +1,4 @@
+import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import type { ExploreToolCommandRun } from '../exploreProbe.js';
@@ -69,19 +70,11 @@ export async function loadHomebrewState(
 
   const orphans = orphanFormulae.value.map((formula) => ({
     formula: formula,
-    kegPath: buildHomebrewKegFolderPath({ cellarPath: cellarPath.value, formula: formula }),
+    kegPath: joinAbsolutePath({ parentPath: cellarPath.value, names: [formula] }),
   }));
 
   return {
     kind: 'succeeded',
     value: { cellarPath: cellarPath.value, oldVersions: oldVersions.value, orphans: orphans },
   };
-}
-
-function buildHomebrewKegFolderPath(params: {
-  cellarPath: AbsolutePath;
-  formula: HomebrewFormulaName;
-}): AbsolutePath {
-  // An absolute path with a formula name appended stays absolute.
-  return `${params.cellarPath}/${params.formula}` as AbsolutePath;
 }
