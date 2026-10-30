@@ -1,15 +1,19 @@
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join } from 'node:path';
+import type { Result } from '../result.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
+import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import { loadFileBytes } from '../system/loadFileBytes.js';
-import type { FileKind } from '../system/loadFileIdentity.js';
+import type { FileFailure, FileKind } from '../system/loadFileIdentity.js';
 import { loadFileText } from '../system/loadFileText.js';
 import type { PackageConfigTracking } from './decidePackageConfigTracking.js';
 import {
   decidePackageConfigTracking,
+  findPackageConfigCandidatePaths,
   PACKAGE_CONFIG_FILE_NAME,
 } from './decidePackageConfigTracking.js';
 import { parseGitDirFilePath } from './parseGitDirFilePath.js';
+import { parseGitIndexPaths } from './parseGitIndexPaths.js';
 
 const GIT_INDEX_MAX_BYTES = 64 * 1024 * 1024;
 
@@ -40,9 +44,10 @@ const walkedFolderMarkerNames = [
  * `.dart_tool` and each folder above it up to `/`: a marker of `dartToolFolderMarkerNames` in
  * `.dart_tool`, or of `walkedFolderMarkerNames` in any walked folder, counts by its exact name, and
  * any marker answers `unknown`. Else the nearest `.git`, a folder or a `gitdir:` file, names the git
- * dir, whose `index` of at most 64 MiB decides by the config's path relative to the folder of that
- * `.git`. Every case this rule cannot judge, a failed read, an index `parseGitIndexPaths` cannot
- * read, or no repository included, answers `unknown`.
+ * dir, whose `index` of at most 64 MiB decides: the volume tells whether an entry that
+ * `findPackageConfigCandidatePaths` finds, joined to the folder of that `.git`, is the config.
+ * Every case this rule cannot judge, a failed read, an index `parseGitIndexPaths` cannot read, or
+ * no repository included, answers `unknown`.
  */
 export async function loadPackageConfigTracking(params: {
   dartToolRealPath: string;
@@ -70,17 +75,15 @@ export async function loadPackageConfigTracking(params: {
 
   const gitDir = await findGitDir({ folders: folders });
 
-  switch (gitDir.kind) {
-    case 'none':
-    case 'unreadable':
-      return 'unknown';
-    case 'found':
-      return await loadGitDirPackageConfigTracking({
-        gitDir: gitDir.path,
-        workTreePath: gitDir.workTreePath,
-        dartToolRealPath: params.dartToolRealPath,
-      });
+  if (gitDir === null) {
+    return 'unknown';
   }
+
+  return await loadGitDirPackageConfigTracking({
+    gitDir: gitDir.path,
+    workTreePath: gitDir.workTreePath,
+    dartToolRealPath: params.dartToolRealPath,
+  });
 }
 
 /** `folder` and each folder above it, nearest first, up to `/`. */
@@ -125,8 +128,8 @@ async function hasVersionControlMarker(params: {
 }
 
 /**
- * Whether the `index` of `gitDir` names the `package_config.json` of `dartToolRealPath` by its
- * path relative to `workTreePath`; `unknown` for an index it cannot read.
+ * Whether an entry of the `index` of `gitDir`, joined to `workTreePath`, is the same file as the
+ * `package_config.json` of `dartToolRealPath`; `unknown` for an index it cannot read.
  */
 async function loadGitDirPackageConfigTracking(params: {
   gitDir: string;
@@ -142,36 +145,55 @@ async function loadGitDirPackageConfigTracking(params: {
     return 'unknown';
   }
 
-  const packageConfigPath = relative(
-    params.workTreePath,
-    join(params.dartToolRealPath, PACKAGE_CONFIG_FILE_NAME),
-  )
-    .split(sep)
-    .join('/');
+  const indexPaths = parseGitIndexPaths(indexBytes);
+
+  if (indexPaths === null) {
+    return 'unknown';
+  }
+
+  const candidatePaths = findPackageConfigCandidatePaths({ indexPaths: indexPaths });
+
+  if (candidatePaths === null) {
+    return 'unknown';
+  }
+
+  const packageConfigStats = await loadEntryStats({
+    path: join(params.dartToolRealPath, PACKAGE_CONFIG_FILE_NAME),
+  });
+  const candidateStats = await loadCandidateStats({
+    workTreePath: params.workTreePath,
+    candidatePaths: candidatePaths,
+  });
 
   return decidePackageConfigTracking({
-    indexBytes: indexBytes,
-    packageConfigPath: packageConfigPath,
+    packageConfigStats: packageConfigStats,
+    candidateStats: candidateStats,
   });
 }
 
+/** The stats of each of `candidatePaths`, joined to `workTreePath`, in their order. */
+async function loadCandidateStats(params: {
+  workTreePath: string;
+  candidatePaths: string[];
+}): Promise<Result<EntryStats, FileFailure>[]> {
+  const candidateStats: Result<EntryStats, FileFailure>[] = [];
+
+  for (const candidatePath of params.candidatePaths) {
+    candidateStats.push(await loadEntryStats({ path: join(params.workTreePath, candidatePath) }));
+  }
+
+  return candidateStats;
+}
+
 /** `workTreePath` is the folder that holds the `.git` entry that names the git dir `path`. */
-type GitDirLookupFound = { kind: 'found'; path: string; workTreePath: string };
-
-/** No folder of the walk holds a `.git` entry. */
-type GitDirLookupNone = { kind: 'none' };
-
-/** The nearest `.git` names no git dir this rule can read, or an lstat of the walk failed. */
-type GitDirLookupUnreadable = { kind: 'unreadable' };
-
-/** The git dir of the repository that holds a folder, as git finds it walking up from it. */
-type GitDirLookup = GitDirLookupFound | GitDirLookupNone | GitDirLookupUnreadable;
+type GitDir = { path: string; workTreePath: string };
 
 /**
  * The git dir that the nearest `.git` in `folders`, nearest first, names: a directory, or a file
- * whose first line is `gitdir: <path>`. `unreadable` for any other `.git` or a failed read.
+ * whose first line is `gitdir: <path>`. `null` when no folder holds a `.git`, when the nearest
+ * `.git` is a link, another kind, or a file that names no git dir, and when a read fails.
  */
-async function findGitDir(params: { folders: string[] }): Promise<GitDirLookup> {
+async function findGitDir(params: { folders: string[] }): Promise<GitDir | null> {
   for (const folder of params.folders) {
     const gitPath = join(folder, '.git');
     const gitEntryStats = await loadEntryStats({ path: gitPath });
@@ -185,38 +207,42 @@ async function findGitDir(params: { folders: string[] }): Promise<GitDirLookup> 
     }
 
     if (gitEntryStats.failure.reason !== 'missing') {
-      return { kind: 'unreadable' };
+      return null;
     }
   }
 
-  return { kind: 'none' };
+  return null;
 }
 
+/**
+ * The git dir that the `.git` entry `gitPath` of `kind` in `folder` names; `null` for a link,
+ * another kind, a file that names no git dir, and a failed read.
+ */
 async function loadGitDirOfEntry(params: {
   folder: string;
   gitPath: string;
   kind: FileKind;
-}): Promise<GitDirLookup> {
+}): Promise<GitDir | null> {
   switch (params.kind) {
     case 'directory':
-      return { kind: 'found', path: params.gitPath, workTreePath: params.folder };
+      return { path: params.gitPath, workTreePath: params.folder };
     case 'file': {
       const gitFileText = await loadFileText({ path: params.gitPath });
 
       if (gitFileText === null) {
-        return { kind: 'unreadable' };
+        return null;
       }
 
       const gitDir = parseGitDirFilePath({ text: gitFileText, folder: params.folder });
 
       if (gitDir === null) {
-        return { kind: 'unreadable' };
+        return null;
       }
 
-      return { kind: 'found', path: gitDir, workTreePath: params.folder };
+      return { path: gitDir, workTreePath: params.folder };
     }
     case 'symbolicLink':
     case 'other':
-      return { kind: 'unreadable' };
+      return null;
   }
 }

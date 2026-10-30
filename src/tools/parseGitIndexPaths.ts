@@ -155,7 +155,7 @@ function parseGitIndexEntries(params: {
       .subarray(0, params.checksumOffset)
       .indexOf(0, pathOffset);
 
-    if (pathOffset > params.checksumOffset || pathEndOffset === -1) {
+    if (pathEndOffset === -1) {
       return null;
     }
 

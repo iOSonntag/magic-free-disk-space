@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, mkdir, realpath, symlink, truncate } from 'node:fs/promises';
+import { chmod, link, mkdir, realpath, symlink, truncate, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { PackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
+import { PACKAGE_CONFIG_CANDIDATES_MAX_COUNT } from '../../src/tools/decidePackageConfigTracking.js';
 import { loadPackageConfigTracking } from '../../src/tools/loadPackageConfigTracking.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 import {
   buildGitIndexBytes,
   buildGitIndexExtensionBytes,
@@ -24,13 +26,44 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** Creates `<projectRoot>/.dart_tool` and returns its real path. */
+/** Creates `<projectRoot>/.dart_tool` with its package config and returns its real path. */
 async function createDartTool(projectRoot: string): Promise<string> {
   const dartToolPath = join(projectRoot, '.dart_tool');
 
-  await mkdir(dartToolPath, { recursive: true });
+  await Bun.write(join(dartToolPath, 'package_config.json'), '{"configVersion":2}');
 
   return await realpath(dartToolPath);
+}
+
+/** Whether the volume of the fixtures answers a folder for a case variant of its name. */
+async function probeVolumeFoldsCase(): Promise<boolean> {
+  const probeRoot = await createFixtureRoot();
+
+  try {
+    await mkdir(join(probeRoot.rootDir, 'Probe'));
+
+    return await isPresent(join(probeRoot.rootDir, 'probe'));
+  } finally {
+    await deleteFixtureRoot({ fixtureRoot: probeRoot });
+  }
+}
+
+const volumeFoldsCase = await probeVolumeFoldsCase();
+
+/**
+ * The tracking of the project `<repo>/<projectFolderName>` in a repository `repo` whose index
+ * names only `indexedPath`.
+ */
+async function loadTrackingOfRepository(params: {
+  projectFolderName: string;
+  indexedPath: string;
+}): Promise<PackageConfigTracking> {
+  const repoRoot = join(fixtureRoot.rootDir, 'repo');
+
+  await createGitIndex({ gitDir: join(repoRoot, '.git'), version: 2, paths: [params.indexedPath] });
+  const dartToolPath = await createDartTool(join(repoRoot, params.projectFolderName));
+
+  return await loadPackageConfigTracking({ dartToolRealPath: dartToolPath });
 }
 
 /** Creates the project at `projectRoot` as a git repository whose index names only `pubspec.yaml`. */
@@ -142,11 +175,115 @@ describe('loadPackageConfigTracking', () => {
         'app/pubspec.yaml',
         'docs/package_config.json.backup',
         `other/${PACKAGE_CONFIG_PATH}`,
+        `test/fixtures/${PACKAGE_CONFIG_PATH}`,
       ],
     });
+    await Bun.write(join(repoRoot, 'docs', 'package_config.json.backup'), '{}');
+    await createDartTool(join(repoRoot, 'other'));
+    await createDartTool(join(repoRoot, 'test', 'fixtures'));
     const dartToolPath = await createDartTool(join(repoRoot, 'app'));
 
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('untracked');
+  });
+
+  test('returns tracked for an entry that is a hard link to the package config', async () => {
+    const repoRoot = join(fixtureRoot.rootDir, 'repo');
+
+    await createGitIndex({
+      gitDir: join(repoRoot, '.git'),
+      version: 2,
+      paths: ['app/pubspec.yaml', 'other/package_config.json'],
+    });
+    const dartToolPath = await createDartTool(join(repoRoot, 'app'));
+    await mkdir(join(repoRoot, 'other'));
+    await link(
+      join(dartToolPath, 'package_config.json'),
+      join(repoRoot, 'other', 'package_config.json'),
+    );
+
+    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
+  });
+
+  test('returns tracked for an entry through a tracked folder link to the project', async () => {
+    const repoRoot = join(fixtureRoot.rootDir, 'repo');
+
+    await createGitIndex({
+      gitDir: join(repoRoot, '.git'),
+      version: 2,
+      paths: ['app/pubspec.yaml', 'link', `link/${PACKAGE_CONFIG_PATH}`],
+    });
+    const dartToolPath = await createDartTool(join(repoRoot, 'app'));
+    await symlink('app', join(repoRoot, 'link'));
+
+    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
+  });
+
+  test('returns unknown for a candidate entry whose stats are denied', async () => {
+    const repoRoot = join(fixtureRoot.rootDir, 'repo');
+    const lockedRoot = join(repoRoot, 'locked');
+
+    await createGitIndex({
+      gitDir: join(repoRoot, '.git'),
+      version: 2,
+      paths: ['app/pubspec.yaml', `locked/${PACKAGE_CONFIG_PATH}`],
+    });
+    await createDartTool(lockedRoot);
+    const dartToolPath = await createDartTool(join(repoRoot, 'app'));
+    // `deleteFixtureRoot` restores the mode before it deletes the fixture.
+    await chmod(lockedRoot, 0o000);
+
+    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
+  });
+
+  test('returns unknown for more candidate entries than the bound', async () => {
+    const repoRoot = join(fixtureRoot.rootDir, 'repo');
+    const candidatePaths = Array.from(
+      { length: PACKAGE_CONFIG_CANDIDATES_MAX_COUNT + 1 },
+      (_, index) => `p${index}/${PACKAGE_CONFIG_PATH}`,
+    );
+
+    await createGitIndex({ gitDir: join(repoRoot, '.git'), version: 2, paths: candidatePaths });
+    const dartToolPath = await createDartTool(join(repoRoot, 'app'));
+
+    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
+  });
+
+  test('returns unknown when the package config itself is missing', async () => {
+    const dartToolPath = await createUntrackedProject(join(fixtureRoot.rootDir, 'app'));
+
+    await unlink(join(dartToolPath, 'package_config.json'));
+
+    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
+  });
+
+  // A volume that keeps case apart, such as case-sensitive APFS, has no collision to test.
+  describe.skipIf(!volumeFoldsCase)('on a volume that folds case', () => {
+    test('returns tracked for an entry that differs from the project only in case', async () => {
+      const tracking = await loadTrackingOfRepository({
+        projectFolderName: 'app',
+        indexedPath: `App/${PACKAGE_CONFIG_PATH}`,
+      });
+
+      expect(tracking).toBe('tracked');
+    });
+
+    test('returns tracked for an entry with a sigma where the project has a final sigma', async () => {
+      const tracking = await loadTrackingOfRepository({
+        projectFolderName: `x${String.fromCodePoint(0x3c2)}`,
+        indexedPath: `x${String.fromCodePoint(0x3c3)}/${PACKAGE_CONFIG_PATH}`,
+      });
+
+      expect(tracking).toBe('tracked');
+    });
+
+    test('returns tracked for an entry with a sharp s where the project has ss', async () => {
+      const tracking = await loadTrackingOfRepository({
+        projectFolderName: 'strasse',
+        indexedPath: `stra${String.fromCodePoint(0xdf)}e/${PACKAGE_CONFIG_PATH}`,
+      });
+
+      expect(tracking).toBe('tracked');
+    });
   });
 
   test('returns unknown for a split index, with a link extension', async () => {

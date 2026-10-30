@@ -1,112 +1,142 @@
 import { describe, expect, test } from 'bun:test';
-import type { PackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
-import { decidePackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
-import { buildGitIndexBytes, buildGitIndexExtensionBytes } from '../support/flutterSdkFixtures.js';
+import type { Result } from '../../src/result.js';
+import type { EntryStats } from '../../src/system/loadEntryStats.js';
+import type { FileFailure } from '../../src/system/loadFileIdentity.js';
+import {
+  decidePackageConfigTracking,
+  findPackageConfigCandidatePaths,
+  PACKAGE_CONFIG_CANDIDATES_MAX_COUNT,
+} from '../../src/tools/decidePackageConfigTracking.js';
 
-const PACKAGE_CONFIG_PATH = 'app/.dart_tool/package_config.json';
-
-/** The tracking of `PACKAGE_CONFIG_PATH` in a version 2 index whose entries name `paths`. */
-function decideTrackingOfPaths(paths: string[]): PackageConfigTracking {
-  return decidePackageConfigTracking({
-    indexBytes: buildGitIndexBytes({ version: 2, paths: paths }),
-    packageConfigPath: PACKAGE_CONFIG_PATH,
-  });
+/** The stats of a plain file `ino` on device 1. */
+function buildFileStats(ino: bigint): Result<EntryStats, FileFailure> {
+  return {
+    kind: 'succeeded',
+    value: { kind: 'file', dev: 1n, ino: ino, allocatedBytes: 4096, modifiedMs: 0 },
+  };
 }
 
+function buildFailedStats(reason: FileFailure['reason']): Result<EntryStats, FileFailure> {
+  return { kind: 'failed', failure: { reason: reason, code: 'ECODE' } };
+}
+
+describe('findPackageConfigCandidatePaths', () => {
+  test('finds an entry whose last segment is the config name, in any folder', () => {
+    const indexPaths = [
+      'pubspec.yaml',
+      'app/.dart_tool/package_config.json',
+      'other/package_config.json',
+      'package_config.json',
+    ];
+
+    expect(findPackageConfigCandidatePaths({ indexPaths: indexPaths })).toEqual([
+      'app/.dart_tool/package_config.json',
+      'other/package_config.json',
+      'package_config.json',
+    ]);
+  });
+
+  test('finds a last segment in upper case, or with the Kelvin sign or long s', () => {
+    const kelvinSign = String.fromCodePoint(0x212a);
+    const longS = String.fromCodePoint(0x17f);
+    const indexPaths = [
+      'a/PACKAGE_CONFIG.JSON',
+      `b/pac${kelvinSign}age_config.json`,
+      `c/package_config.j${longS}on`,
+    ];
+
+    expect(findPackageConfigCandidatePaths({ indexPaths: indexPaths })).toEqual(indexPaths);
+  });
+
+  test('finds a last segment with a zero-width joiner inserted', () => {
+    const zeroWidthJoiner = String.fromCodePoint(0x200d);
+    const indexPaths = [`app/package${zeroWidthJoiner}_config.json`];
+
+    expect(findPackageConfigCandidatePaths({ indexPaths: indexPaths })).toEqual(indexPaths);
+  });
+
+  test('finds no backup of the config, and no folder of its name', () => {
+    const indexPaths = ['app/package_config.json.backup', 'package_config.json/README.md'];
+
+    expect(findPackageConfigCandidatePaths({ indexPaths: indexPaths })).toEqual([]);
+  });
+
+  test('returns null for more candidates than the bound', () => {
+    const indexPaths = Array.from(
+      { length: PACKAGE_CONFIG_CANDIDATES_MAX_COUNT + 1 },
+      (_, index) => `p${index}/package_config.json`,
+    );
+
+    expect(findPackageConfigCandidatePaths({ indexPaths: indexPaths.slice(1) })).toHaveLength(
+      PACKAGE_CONFIG_CANDIDATES_MAX_COUNT,
+    );
+    expect(findPackageConfigCandidatePaths({ indexPaths: indexPaths })).toBe(null);
+  });
+});
+
 describe('decidePackageConfigTracking', () => {
-  test('returns tracked for an entry of the exact path, in version 2 or 3', () => {
-    const paths = ['README.md', PACKAGE_CONFIG_PATH];
-
-    for (const version of [2, 3] as const) {
-      const tracking = decidePackageConfigTracking({
-        indexBytes: buildGitIndexBytes({ version: version, paths: paths }),
-        packageConfigPath: PACKAGE_CONFIG_PATH,
-      });
-
-      expect(tracking).toBe('tracked');
-    }
-  });
-
-  test('returns tracked for a case variant of the path', () => {
-    expect(decideTrackingOfPaths(['App/.Dart_Tool/Package_Config.json'])).toBe('tracked');
-  });
-
-  test('returns tracked for an NFD variant of a path with an accent', () => {
-    const accentedPath = `caf${String.fromCodePoint(0xe9)}/.dart_tool/package_config.json`;
-    const decomposedPath = accentedPath.normalize('NFD');
+  test('returns tracked for a candidate that is the same file as the config', () => {
     const tracking = decidePackageConfigTracking({
-      indexBytes: buildGitIndexBytes({ version: 2, paths: [decomposedPath] }),
-      packageConfigPath: accentedPath,
+      packageConfigStats: buildFileStats(7n),
+      candidateStats: [
+        buildFileStats(8n),
+        buildFailedStats('permissionDenied'),
+        buildFileStats(7n),
+      ],
     });
 
-    expect(decomposedPath).not.toBe(accentedPath);
     expect(tracking).toBe('tracked');
   });
 
-  test('returns tracked for the path with a zero-width joiner inserted', () => {
-    const zeroWidthJoiner = String.fromCodePoint(0x200d);
+  test('returns untracked for candidates that are other files or missing', () => {
+    const tracking = decidePackageConfigTracking({
+      packageConfigStats: buildFileStats(7n),
+      candidateStats: [buildFileStats(8n), buildFailedStats('missing')],
+    });
 
-    expect(decideTrackingOfPaths([`app/.dart_tool/package${zeroWidthJoiner}_config.json`])).toBe(
-      'tracked',
-    );
+    expect(tracking).toBe('untracked');
   });
 
-  test('returns untracked for a backup of the config', () => {
-    expect(decideTrackingOfPaths(['app/.dart_tool/package_config.json.backup'])).toBe('untracked');
+  test('returns untracked for the same inode on another device', () => {
+    const tracking = decidePackageConfigTracking({
+      packageConfigStats: buildFileStats(7n),
+      candidateStats: [
+        {
+          kind: 'succeeded',
+          value: { kind: 'file', dev: 2n, ino: 7n, allocatedBytes: 0, modifiedMs: 0 },
+        },
+      ],
+    });
+
+    expect(tracking).toBe('untracked');
   });
 
-  test('returns untracked for the config of a test fixture', () => {
-    expect(decideTrackingOfPaths(['test/fixtures/.dart_tool/package_config.json'])).toBe(
-      'untracked',
-    );
+  test('returns untracked for no candidate', () => {
+    const tracking = decidePackageConfigTracking({
+      packageConfigStats: buildFileStats(7n),
+      candidateStats: [],
+    });
+
+    expect(tracking).toBe('untracked');
   });
 
-  test('returns untracked for the config of another package of a monorepo', () => {
-    expect(
-      decideTrackingOfPaths(['app/pubspec.yaml', 'other/.dart_tool/package_config.json']),
-    ).toBe('untracked');
-  });
-
-  test('returns unknown for each index the parser cannot read', () => {
-    const readableBytes = buildGitIndexBytes({ version: 2, paths: [PACKAGE_CONFIG_PATH] });
-    const nonNulPaddingBytes = buildGitIndexBytes({ version: 2, paths: ['READ.md'] });
-    nonNulPaddingBytes[12 + 62 + 7 + 1] = 0x41;
-    const wrongCountBytes = readableBytes.slice();
-    new DataView(wrongCountBytes.buffer).setUint32(8, 2);
-    const unreadableIndexes = [
-      buildGitIndexBytes({ version: 4, paths: [PACKAGE_CONFIG_PATH] }),
-      buildGitIndexBytes({
-        version: 2,
-        paths: [PACKAGE_CONFIG_PATH],
-        extensions: [
-          buildGitIndexExtensionBytes({ signature: 'link', content: new Uint8Array(20) }),
-        ],
-      }),
-      buildGitIndexBytes({
-        version: 2,
-        paths: [PACKAGE_CONFIG_PATH],
-        extensions: [
-          buildGitIndexExtensionBytes({ signature: 'sdir', content: new Uint8Array(0) }),
-        ],
-      }),
-      readableBytes.subarray(0, 12 + 40),
-      nonNulPaddingBytes,
-      buildGitIndexBytes({
-        version: 2,
-        paths: [PACKAGE_CONFIG_PATH],
-        extendedPaths: [PACKAGE_CONFIG_PATH],
-      }),
-      wrongCountBytes,
-      readableBytes.subarray(0, readableBytes.length - 1),
-    ];
-
-    for (const indexBytes of unreadableIndexes) {
+  test('returns unknown for a candidate whose stats fail other than missing', () => {
+    for (const reason of ['permissionDenied', 'unexpected'] as const) {
       const tracking = decidePackageConfigTracking({
-        indexBytes: indexBytes,
-        packageConfigPath: PACKAGE_CONFIG_PATH,
+        packageConfigStats: buildFileStats(7n),
+        candidateStats: [buildFileStats(8n), buildFailedStats(reason)],
       });
 
       expect(tracking).toBe('unknown');
     }
+  });
+
+  test('returns unknown when the stats of the config fail', () => {
+    const tracking = decidePackageConfigTracking({
+      packageConfigStats: buildFailedStats('missing'),
+      candidateStats: [buildFileStats(7n)],
+    });
+
+    expect(tracking).toBe('unknown');
   });
 });
