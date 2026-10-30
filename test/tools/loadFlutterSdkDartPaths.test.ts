@@ -9,6 +9,7 @@ import {
 } from '../../src/tools/loadFlutterSdkDartPaths.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { buildActiveRootPath, createActiveProject } from '../support/flutterSdkFixtures.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -20,36 +21,8 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-function buildActiveRootPath(params: { group: string; name: string }): string {
-  return join(fixtureRoot.homeDir, '.pub-cache', 'active_roots', params.group, params.name);
-}
-
 function buildSdkDartPath(flutterRoot: string): string {
   return join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
-}
-
-/** Writes a project whose package config names `flutterRoot`, and the active root naming it. */
-async function createActiveProject(params: {
-  group: string;
-  name: string;
-  flutterRoot: string;
-}): Promise<void> {
-  const packageConfigPath = join(
-    fixtureRoot.homeDir,
-    'projects',
-    params.name,
-    '.dart_tool',
-    'package_config.json',
-  );
-
-  await Bun.write(
-    packageConfigPath,
-    JSON.stringify({ configVersion: 2, flutterRoot: pathToFileURL(params.flutterRoot).href }),
-  );
-  await Bun.write(
-    buildActiveRootPath({ group: params.group, name: params.name }),
-    JSON.stringify({ package_config: pathToFileURL(packageConfigPath).href }),
-  );
 }
 
 describe('loadFlutterSdkDartPaths', () => {
@@ -57,9 +30,24 @@ describe('loadFlutterSdkDartPaths', () => {
     const stableRoot = join(fixtureRoot.rootDir, 'flutter-stable');
     const betaRoot = join(fixtureRoot.rootDir, 'flutter-beta');
 
-    await createActiveProject({ group: 'b0', name: 'b0aaaa', flutterRoot: betaRoot });
-    await createActiveProject({ group: 'a0', name: 'a0bbbb', flutterRoot: stableRoot });
-    await createActiveProject({ group: 'a0', name: 'a0aaaa', flutterRoot: stableRoot });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'b0',
+      name: 'b0aaaa',
+      flutterRoot: betaRoot,
+    });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0bbbb',
+      flutterRoot: stableRoot,
+    });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'a0',
+      name: 'a0aaaa',
+      flutterRoot: stableRoot,
+    });
 
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
 
@@ -70,22 +58,33 @@ describe('loadFlutterSdkDartPaths', () => {
     const flutterRoot = join(fixtureRoot.rootDir, 'flutter');
     const brokenConfigPath = join(fixtureRoot.homeDir, 'broken', 'package_config.json');
 
-    await Bun.write(buildActiveRootPath({ group: 'a0', name: 'a0aaaa' }), '{ not json');
-    await Bun.write(buildActiveRootPath({ group: 'a0', name: 'a0bbbb' }), '["file:///x"]');
     await Bun.write(
-      buildActiveRootPath({ group: 'a0', name: 'a0cccc' }),
+      buildActiveRootPath({ homeDir: fixtureRoot.homeDir, group: 'a0', name: 'a0aaaa' }),
+      '{ not json',
+    );
+    await Bun.write(
+      buildActiveRootPath({ homeDir: fixtureRoot.homeDir, group: 'a0', name: 'a0bbbb' }),
+      '["file:///x"]',
+    );
+    await Bun.write(
+      buildActiveRootPath({ homeDir: fixtureRoot.homeDir, group: 'a0', name: 'a0cccc' }),
       JSON.stringify({ package_config: 'https://example.com/package_config.json' }),
     );
     await Bun.write(
-      buildActiveRootPath({ group: 'a0', name: 'a0dddd' }),
+      buildActiveRootPath({ homeDir: fixtureRoot.homeDir, group: 'a0', name: 'a0dddd' }),
       JSON.stringify({ package_config: pathToFileURL(join(fixtureRoot.homeDir, 'gone')).href }),
     );
     await Bun.write(brokenConfigPath, JSON.stringify({ flutterRoot: 42 }));
     await Bun.write(
-      buildActiveRootPath({ group: 'a0', name: 'a0eeee' }),
+      buildActiveRootPath({ homeDir: fixtureRoot.homeDir, group: 'a0', name: 'a0eeee' }),
       JSON.stringify({ package_config: pathToFileURL(brokenConfigPath).href }),
     );
-    await createActiveProject({ group: 'b0', name: 'b0aaaa', flutterRoot: flutterRoot });
+    await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
+      group: 'b0',
+      name: 'b0aaaa',
+      flutterRoot: flutterRoot,
+    });
 
     const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
 
@@ -96,10 +95,14 @@ describe('loadFlutterSdkDartPaths', () => {
     for (let index = 0; index < ACTIVE_ROOT_FILES_MAX_COUNT; index += 1) {
       const name = `a0${String(index).padStart(3, '0')}`;
 
-      await Bun.write(buildActiveRootPath({ group: 'a0', name: name }), '{}');
+      await Bun.write(
+        buildActiveRootPath({ homeDir: fixtureRoot.homeDir, group: 'a0', name: name }),
+        '{}',
+      );
     }
 
     await createActiveProject({
+      homeDir: fixtureRoot.homeDir,
       group: 'b0',
       name: 'b0aaaa',
       flutterRoot: join(fixtureRoot.rootDir, 'flutter'),

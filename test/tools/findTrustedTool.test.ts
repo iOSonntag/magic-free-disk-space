@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, realpath, symlink } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { findTrustedTool, loadTrustedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { createActiveProject, writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -223,11 +224,6 @@ describe('findTrustedTool', () => {
   });
 });
 
-/** Writes `version` as the version file of the Dart SDK whose binary is at `dartPath`. */
-async function writeDartVersionFile(params: { dartPath: string; version: string }): Promise<void> {
-  await Bun.write(join(dirname(dirname(params.dartPath)), 'version'), `${params.version}\n`);
-}
-
 /**
  * A made-up Flutter root at `folder` with the Dart binary of its SDK, a project whose package
  * config names it, and an active-roots file `ab/<activeRootFileName>` for that project; returns
@@ -239,12 +235,6 @@ async function createActiveFlutterSdk(params: {
   version: string | null;
 }): Promise<string> {
   const flutterRoot = join(fixtureRoot.rootDir, params.folder);
-  const packageConfigPath = join(
-    fixtureRoot.homeDir,
-    params.folder,
-    '.dart_tool',
-    'package_config.json',
-  );
   const dart = await createFakeTool({
     folder: join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin'),
     name: 'dart',
@@ -255,14 +245,12 @@ async function createActiveFlutterSdk(params: {
     await writeDartVersionFile({ dartPath: dart, version: params.version });
   }
 
-  await Bun.write(
-    packageConfigPath,
-    JSON.stringify({ flutterRoot: Bun.pathToFileURL(flutterRoot).href }),
-  );
-  await Bun.write(
-    join(fixtureRoot.homeDir, '.pub-cache', 'active_roots', 'ab', params.activeRootFileName),
-    JSON.stringify({ package_config: Bun.pathToFileURL(packageConfigPath).href }),
-  );
+  await createActiveProject({
+    homeDir: fixtureRoot.homeDir,
+    group: 'ab',
+    name: params.activeRootFileName,
+    flutterRoot: flutterRoot,
+  });
 
   return dart;
 }

@@ -30,6 +30,7 @@ import {
   isPresent,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
 
 const TIMEOUT_MS = 10_000;
@@ -71,10 +72,6 @@ function buildToolPath(name: ToolName): string {
     case 'mise':
       return join(fixtureRoot.rootDir, 'tools', name);
   }
-}
-
-async function writeDartSdkVersion(version: string): Promise<void> {
-  await Bun.write(join(fixtureRoot.rootDir, 'tools', 'dart-sdk', 'version'), `${version}\n`);
 }
 
 /** Writes the unit's fake tool; its command first leaves the marker file, then runs `commandBody`. */
@@ -142,7 +139,7 @@ async function createDartUnit(): Promise<ExploreToolUnitDartPubCache> {
     });
   }
 
-  await writeDartSdkVersion('3.11.0');
+  await writeDartVersionFile({ dartPath: buildToolPath('dart'), version: '3.11.0' });
 
   return { kind: 'dartPubCache', tool: { name: 'dart', path: buildToolPath('dart') }, gcPaths };
 }
@@ -303,7 +300,7 @@ exit 0`,
       commandBody: `${buildRemoveCommands(unit.gcPaths)}
 exit 0`,
     });
-    await writeDartSdkVersion('3.10.0');
+    await writeDartVersionFile({ dartPath: unit.tool.path, version: '3.10.0' });
 
     const run = await runToolCandidate({
       unit: unit,

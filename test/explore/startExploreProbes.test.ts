@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, realpath, writeFile } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
@@ -10,6 +10,7 @@ import {
   isPresent,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -44,11 +45,19 @@ afterEach(async () => {
  */
 async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise: string }> {
   const folder = join(fixtureRoot.rootDir, 'tools');
-  const dartSdkDir = join(fixtureRoot.rootDir, 'dart-sdk');
   const homeDir = environment.homeDir;
+  const dart = await createProbeFakeTool({
+    folder: join(fixtureRoot.rootDir, 'dart-sdk', 'bin'),
+    name: 'dart',
+    stdoutText: buildDartGcDryRunText({
+      homeDir: homeDir,
+      gcPaths: buildDartGcPaths({ homeDir: homeDir }),
+    }),
+    exitCode: 0,
+    prelude: `touch '${buildMarkerPath({ name: 'dart' })}'`,
+  });
 
-  await mkdir(dartSdkDir, { recursive: true });
-  await writeFile(join(dartSdkDir, 'version'), '3.11.0\n');
+  await writeDartVersionFile({ dartPath: dart, version: '3.11.0' });
 
   return {
     xcrun: await createProbeFakeTool({
@@ -58,16 +67,7 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
       exitCode: 0,
       prelude: `touch '${buildMarkerPath({ name: 'xcrun' })}'`,
     }),
-    dart: await createProbeFakeTool({
-      folder: join(dartSdkDir, 'bin'),
-      name: 'dart',
-      stdoutText: buildDartGcDryRunText({
-        homeDir: homeDir,
-        gcPaths: buildDartGcPaths({ homeDir: homeDir }),
-      }),
-      exitCode: 0,
-      prelude: `touch '${buildMarkerPath({ name: 'dart' })}'`,
-    }),
+    dart: dart,
     mise: await createProbeFakeTool({
       folder: folder,
       name: 'mise',
