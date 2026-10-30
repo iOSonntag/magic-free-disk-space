@@ -2,12 +2,18 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { compareAndroidAvdUnit } from '../../src/explore/android/compareAndroidAvdUnit.js';
 import { compareAndroidPathUnit } from '../../src/explore/android/compareAndroidPathUnit.js';
 import {
   loadAndroidAvdFindings,
   loadAndroidEmulatorFindings,
   loadAndroidSystemImageFindings,
 } from '../../src/explore/android/loadAndroidProbeFindings.js';
+import type {
+  AndroidAvd,
+  AndroidAvdPresent,
+  AndroidSdkState,
+} from '../../src/explore/android/loadAndroidSdkState.js';
 import { loadAndroidSdkState } from '../../src/explore/android/loadAndroidSdkState.js';
 import { parseAndroidIniText } from '../../src/explore/android/parseAndroidIniText.js';
 import { parseAndroidPackagePath } from '../../src/explore/android/parseAndroidPackagePath.js';
@@ -28,7 +34,7 @@ import {
   loadTestEnvironment,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
-import { buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -221,7 +227,14 @@ describe('the Android probes with an SDK', () => {
       'The SDK knows it as `system-images;android-35;google_apis;arm64-v8a`.',
     ]);
     expect(emulator?.risk).toBe('review');
+    expect(emulator?.title).toBe('Android emulator package');
     expect(emulator?.evidenceLines[0]).toBe('No AVD exists in ~/.android/avd.');
+    expect(image?.regeneration).toBe(
+      'The SDK Manager of Android Studio installs it again, as does `sdkmanager "system-images;android-35;google_apis;arm64-v8a"`.',
+    );
+    expect(emulator?.regeneration).toBe(
+      'The SDK Manager of Android Studio installs it again, as does `sdkmanager "emulator"`.',
+    );
 
     for (const finding of [image, emulator]) {
       expect(finding?.explanation).toContain('`ANDROID_AVD_HOME`');
@@ -501,6 +514,161 @@ describe('the Android probes with an SDK', () => {
   });
 });
 
+describe('compareAndroidAvdUnit', () => {
+  function buildAvdUnit(): ExploreToolUnitAndroidAvd {
+    return {
+      kind: 'androidAvd',
+      tool: tool,
+      sdkRoot: buildTestAbsolutePath({ text: '/Users/example/Library/Android/sdk' }),
+      name: buildTestAndroidAvdName({ text: 'Pixel' }),
+      avdPath: buildTestAbsolutePath({ text: '/Users/example/.android/avd/Pixel.avd' }),
+      iniPath: buildTestAbsolutePath({ text: '/Users/example/.android/avd/Pixel.ini' }),
+      lastUsedAtMs: ANDROID_OLD_USE_MS,
+    };
+  }
+
+  /** The unit's AVD as a present folder named `*.avd` that names an image. */
+  function buildListedAvd(params: { unit: ExploreToolUnitAndroidAvd }): AndroidAvdPresent {
+    return {
+      kind: 'present',
+      iniPath: params.unit.iniPath,
+      name: params.unit.name,
+      avdPath: params.unit.avdPath,
+      imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
+      lastUsedAtMs: params.unit.lastUsedAtMs,
+    };
+  }
+
+  function buildAvdState(params: {
+    unit: ExploreToolUnitAndroidAvd;
+    avds: AndroidAvd[] | null;
+  }): AndroidSdkState {
+    return {
+      sdk: { sdkRoot: params.unit.sdkRoot, systemImages: [], emulator: null },
+      avds: params.avds,
+    };
+  }
+
+  test('answers unchanged while the AVD is listed in its SDK at the same paths, name, and last use', () => {
+    const unit = buildAvdUnit();
+    const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
+
+    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      kind: 'unchanged',
+    });
+  });
+
+  test('answers busy while an emulator runs, and without processes', () => {
+    const unit = buildAvdUnit();
+    const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
+
+    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+      expect(
+        compareAndroidAvdUnit({ unit: unit, state: state, processCommands: processCommands }),
+      ).toEqual({ kind: 'busy' });
+    }
+  });
+
+  test('answers changed once the AVD was used again', () => {
+    const unit = buildAvdUnit();
+    const usedAgain = { ...buildListedAvd({ unit: unit }), lastUsedAtMs: ANDROID_RECENT_USE_MS };
+    const state = buildAvdState({ unit: unit, avds: [usedAgain] });
+
+    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      kind: 'changed',
+    });
+  });
+
+  test('answers changed once no AVD lists it, or ~/.android/avd is absent', () => {
+    const unit = buildAvdUnit();
+
+    for (const avds of [[], null]) {
+      const state = buildAvdState({ unit: unit, avds: avds });
+
+      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+        kind: 'changed',
+      });
+    }
+  });
+
+  test('answers changed once its folder is missing, or its ini is unlocated', () => {
+    const unit = buildAvdUnit();
+    const missing: AndroidAvd = {
+      kind: 'missing',
+      iniPath: unit.iniPath,
+      name: unit.name,
+      avdPath: unit.avdPath,
+    };
+    const unlocated: AndroidAvd = { kind: 'unlocated', iniPath: unit.iniPath, name: unit.name };
+
+    for (const avd of [missing, unlocated]) {
+      const state = buildAvdState({ unit: unit, avds: [avd] });
+
+      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+        kind: 'changed',
+      });
+    }
+  });
+
+  test('answers changed once its name, ini path, or folder path no longer match', () => {
+    const unit = buildAvdUnit();
+    const listed = buildListedAvd({ unit: unit });
+    const otherIniPath = buildTestAbsolutePath({ text: '/Users/example/.android/avd/Other.ini' });
+    const otherAvdPath = buildTestAbsolutePath({ text: '/Users/example/.android/avd/Other.avd' });
+    const differingAvds: AndroidAvdPresent[] = [
+      { ...listed, name: buildTestAndroidAvdName({ text: 'Other' }) },
+      { ...listed, iniPath: otherIniPath },
+      { ...listed, avdPath: otherAvdPath },
+    ];
+
+    for (const avd of differingAvds) {
+      const state = buildAvdState({ unit: unit, avds: [avd] });
+
+      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+        kind: 'changed',
+      });
+    }
+  });
+
+  test('answers changed once its config.ini names no image', () => {
+    const unit = buildAvdUnit();
+    const state = buildAvdState({
+      unit: unit,
+      avds: [{ ...buildListedAvd({ unit: unit }), imageSysdir: null }],
+    });
+
+    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      kind: 'changed',
+    });
+  });
+
+  test('answers changed for a folder not named *.avd, though its config.ini names an image', () => {
+    const notesPath = buildTestAbsolutePath({ text: '/Users/example/.android/avd/notes' });
+    const unit = { ...buildAvdUnit(), avdPath: notesPath };
+    const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
+
+    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      kind: 'changed',
+    });
+  });
+
+  test('answers changed without the SDK, or with the AVD in another SDK root', () => {
+    const unit = buildAvdUnit();
+    const avds = [buildListedAvd({ unit: unit })];
+    const otherSdkRoot = buildTestAbsolutePath({ text: '/Users/example/Other/sdk' });
+    const states: AndroidSdkState[] = [
+      { sdk: null, avds: avds },
+      { sdk: { sdkRoot: otherSdkRoot, systemImages: [], emulator: null }, avds: avds },
+    ];
+
+    for (const state of states) {
+      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+        kind: 'changed',
+      });
+    }
+  });
+});
+
 describe('recheckAndroidAvdUnit', () => {
   async function createOfferedAvd(): Promise<ExploreToolUnitAndroidAvd> {
     await writeAndroidEmulator({ homeDir: homeDir });
@@ -519,38 +687,6 @@ describe('recheckAndroidAvdUnit', () => {
 
     expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
       kind: 'unchanged',
-    });
-  });
-
-  test('answers changed once the AVD was used again', async () => {
-    const unit = await createOfferedAvd();
-    await updateModifiedMs({
-      path: join(unit.avdPath, 'hardware-qemu.ini'),
-      modifiedMs: ANDROID_RECENT_USE_MS,
-    });
-
-    expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
-      kind: 'changed',
-    });
-  });
-
-  test('answers changed once the AVD is gone', async () => {
-    const unit = await createOfferedAvd();
-    await rm(unit.iniPath);
-
-    expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
-      kind: 'changed',
-    });
-  });
-
-  test('answers changed once its config.ini no longer names an image, at the same path and last use', async () => {
-    const unit = await createOfferedAvd();
-    const configPath = join(unit.avdPath, 'config.ini');
-    await writeFile(configPath, 'AvdId=Example\nabi.type=arm64-v8a\n');
-    await updateModifiedMs({ path: configPath, modifiedMs: unit.lastUsedAtMs });
-
-    expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
-      kind: 'changed',
     });
   });
 

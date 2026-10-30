@@ -91,7 +91,7 @@ const IMAGE_SYSDIR_KEY = 'image.sysdir.1';
 const SYSTEM_IMAGE_FOLDER_DEPTH = 3;
 
 /**
- * Reads the SDK and the AVDs once, for the three Android probes and the rechecks of their units.
+ * Reads the SDK and the AVDs, for the three Android probes and the rechecks of their units.
  * A read that is absent or unfit is a fact of the state; only a failed read fails.
  */
 export async function loadAndroidSdkState(params: {

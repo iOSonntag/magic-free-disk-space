@@ -1,7 +1,11 @@
 import { basename } from 'node:path';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
-import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
+import type {
+  ExploreFinding,
+  ExplorePathUnitAndroidPackage,
+  ExploreProbeFindings,
+} from '../exploreUnit.js';
 import type { AndroidPackageOffer, AndroidPackageOffers } from './decideAndroidPackageOffers.js';
 import type { AndroidAvdPresent, AndroidSdkState } from './loadAndroidSdkState.js';
 
@@ -96,25 +100,14 @@ export function buildAndroidSystemImageFindings(params: {
   offers: AndroidPackageOffers;
   processCommands: string[] | null;
 }): ExploreProbeFindings {
-  const findings = params.offers.offers.map((offer) => {
-    const finding: ExploreFinding = {
-      unit: { kind: 'androidSystemImage', sdkRoot: offer.sdkRoot, folderPath: offer.folderPath },
-      title: `Android system image ${offer.packagePath}`,
-      explanation: `A system image of the Android SDK that no AVD in ~/.android/avd uses. ${AVDS_ELSEWHERE_TEXT} A deleted image downloads again when an AVD needs it.`,
-      regeneration: buildAndroidPackageRegeneration({ offer: offer }),
-      risk: 'review',
-      evidenceLines: ['No AVD uses this image.', `The SDK knows it as \`${offer.packagePath}\`.`],
-      displayPath: offer.folderPath,
-      activity: decideUnitActivity({
-        facts: { kind: 'android' },
-        processCommands: params.processCommands,
-      }),
-    };
-
-    return finding;
+  return buildAndroidPackageFindings({
+    unitKind: 'androidSystemImage',
+    buildTitle: (packagePath) => `Android system image ${packagePath}`,
+    explanation: `A system image of the Android SDK that no AVD in ~/.android/avd uses. ${AVDS_ELSEWHERE_TEXT} A deleted image downloads again when an AVD needs it.`,
+    firstEvidenceLine: 'No AVD uses this image.',
+    offers: params.offers,
+    processCommands: params.processCommands,
   });
-
-  return { findings: findings, isComplete: params.offers.isComplete };
 }
 
 /** The finding of the emulator package while no AVD exists. */
@@ -122,22 +115,39 @@ export function buildAndroidEmulatorFindings(params: {
   offers: AndroidPackageOffers;
   processCommands: string[] | null;
 }): ExploreProbeFindings {
+  return buildAndroidPackageFindings({
+    unitKind: 'androidEmulator',
+    buildTitle: () => 'Android emulator package',
+    explanation: `The Android emulator of the SDK, which only runs AVDs, while ~/.android/avd holds none. ${AVDS_ELSEWHERE_TEXT} A deleted emulator downloads again when an AVD needs it.`,
+    firstEvidenceLine: 'No AVD exists in ~/.android/avd.',
+    offers: params.offers,
+    processCommands: params.processCommands,
+  });
+}
+
+/** One finding for each offered package folder; complete exactly when the offers are. */
+function buildAndroidPackageFindings(params: {
+  unitKind: ExplorePathUnitAndroidPackage['kind'];
+  buildTitle: (packagePath: string) => string;
+  explanation: string;
+  firstEvidenceLine: string;
+  offers: AndroidPackageOffers;
+  processCommands: string[] | null;
+}): ExploreProbeFindings {
+  const activity = decideUnitActivity({
+    facts: { kind: 'android' },
+    processCommands: params.processCommands,
+  });
   const findings = params.offers.offers.map((offer) => {
     const finding: ExploreFinding = {
-      unit: { kind: 'androidEmulator', sdkRoot: offer.sdkRoot, folderPath: offer.folderPath },
-      title: 'Android emulator package',
-      explanation: `The Android emulator of the SDK, which only runs AVDs, while ~/.android/avd holds none. ${AVDS_ELSEWHERE_TEXT} A deleted emulator downloads again when an AVD needs it.`,
+      unit: { kind: params.unitKind, sdkRoot: offer.sdkRoot, folderPath: offer.folderPath },
+      title: params.buildTitle(offer.packagePath),
+      explanation: params.explanation,
       regeneration: buildAndroidPackageRegeneration({ offer: offer }),
       risk: 'review',
-      evidenceLines: [
-        'No AVD exists in ~/.android/avd.',
-        `The SDK knows it as \`${offer.packagePath}\`.`,
-      ],
+      evidenceLines: [params.firstEvidenceLine, `The SDK knows it as \`${offer.packagePath}\`.`],
       displayPath: offer.folderPath,
-      activity: decideUnitActivity({
-        facts: { kind: 'android' },
-        processCommands: params.processCommands,
-      }),
+      activity: activity,
     };
 
     return finding;
