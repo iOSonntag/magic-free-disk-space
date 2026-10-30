@@ -89,7 +89,6 @@ export function decideOrphanCandidate(params: {
       entryCount: params.measurement.entryCount,
       isComplete: params.measurement.isComplete,
       removal: { kind: 'deletePath', identity: params.measurement.identity, ownerBundlePaths: [] },
-      evidenceLines: [],
     },
   };
 }

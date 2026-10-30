@@ -33,7 +33,6 @@ function buildCandidate(params: {
       identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
       ownerBundlePaths: [],
     },
-    evidenceLines: [],
   };
 }
 

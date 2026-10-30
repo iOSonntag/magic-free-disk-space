@@ -112,9 +112,17 @@ export function formatCandidateView(params: {
     explanation: params.candidate.explanation,
     regeneration: params.candidate.regeneration,
     sizeText: formatSizeText(params.candidate),
-    evidenceLines: params.candidate.evidenceLines.map((line) => formatDisplayText({ text: line })),
+    evidenceLines: formatCandidateEvidenceLines({ candidate: params.candidate }),
     commandText: formatCandidateCommandText({ candidate: params.candidate }),
   };
+}
+
+function formatCandidateEvidenceLines(params: { candidate: Candidate }): string[] {
+  if (params.candidate.origin !== 'explore') {
+    return [];
+  }
+
+  return params.candidate.evidenceLines.map((line) => formatDisplayText({ text: line }));
 }
 
 /**

@@ -51,7 +51,6 @@ describe('decideCatalogCandidate', () => {
           identity: expect.any(Object),
           ownerBundlePaths: ['/Applications/Example.app'],
         },
-        evidenceLines: [],
       },
     });
   });

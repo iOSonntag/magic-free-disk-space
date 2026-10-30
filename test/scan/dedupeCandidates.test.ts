@@ -250,7 +250,6 @@ function buildOfferDecision(params: { path: string; realPath: string }): Candida
         },
         ownerBundlePaths: [],
       },
-      evidenceLines: [],
     },
   };
 }

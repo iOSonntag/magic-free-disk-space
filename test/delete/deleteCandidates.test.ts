@@ -83,7 +83,6 @@ async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Pro
     entryCount: 1,
     isComplete: true,
     removal: { kind: 'deletePath', identity: identity.value, ownerBundlePaths: ownerBundlePaths },
-    evidenceLines: [],
   };
 }
 

@@ -66,7 +66,6 @@ export function decideAppCandidate(params: {
         identity: params.measurement.identity,
         ownerBundlePaths: [path],
       },
-      evidenceLines: [],
     },
   };
 }

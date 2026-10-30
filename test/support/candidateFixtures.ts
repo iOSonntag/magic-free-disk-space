@@ -64,7 +64,6 @@ export function buildTestCandidate(params: {
       identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),
       ownerBundlePaths: [],
     },
-    evidenceLines: [],
   };
 }
 

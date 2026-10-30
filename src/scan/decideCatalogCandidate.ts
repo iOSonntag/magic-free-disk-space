@@ -68,7 +68,6 @@ export function decideCatalogCandidate(params: {
             identity: params.measurement.identity,
             ownerBundlePaths: params.ownerBundlePaths,
           },
-          evidenceLines: [],
         },
       };
     // An explore entry reaches this decision only when its probe did not run.
