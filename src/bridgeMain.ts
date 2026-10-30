@@ -2,6 +2,7 @@ import { createBridgeIo } from './bridge/bridgeIo.js';
 import { runBridge } from './bridge/runBridge.js';
 import { CATALOG_ENTRIES } from './catalog/catalogEntries.js';
 import { loadEnvironment } from './environment/loadEnvironment.js';
+import { TOOL_INSTALL_LOCATIONS } from './tools/toolInstallLocations.js';
 
 const DONE_EXIT_CODE = 0;
 
@@ -11,6 +12,7 @@ async function main(): Promise<number> {
   const end = await runBridge({
     io: createBridgeIo(),
     catalogEntries: CATALOG_ENTRIES,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS,
     loadEnvironment: loadEnvironment,
     clock: () => Date.now(),
   });

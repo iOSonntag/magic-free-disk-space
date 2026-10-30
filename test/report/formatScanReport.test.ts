@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice, Candidate } from '../../src/scan/candidate.js';
+import { buildTestToolCandidate } from '../support/candidateFixtures.js';
 
 const fullDiskAccessLine =
   'Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
@@ -15,7 +16,6 @@ function buildCandidate(params: {
 }): Candidate {
   return {
     path: params.path,
-    identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
     title: params.title,
     category: 'caches',
     risk: params.risk,
@@ -25,7 +25,12 @@ function buildCandidate(params: {
     allocatedBytes: params.allocatedBytes,
     entryCount: 1,
     isComplete: params.isComplete,
-    ownerBundlePaths: [],
+    removal: {
+      kind: 'deletePath',
+      identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
+      ownerBundlePaths: [],
+    },
+    evidenceLines: [],
   };
 }
 
@@ -50,7 +55,7 @@ function buildAdvice(params: {
 describe('formatScanReport', () => {
   test('says that nothing was found for an empty report', () => {
     const lines = formatScanReport({
-      report: { candidates: [], advice: [], skipped: [], issues: [] },
+      report: { candidates: [], safeNumbers: [], advice: [], skipped: [], issues: [] },
     });
 
     expect(lines).toEqual(['Nothing to delete was found.']);
@@ -75,6 +80,7 @@ describe('formatScanReport', () => {
             isComplete: true,
           }),
         ],
+        safeNumbers: [],
         advice: [],
         skipped: [],
         issues: [],
@@ -104,6 +110,7 @@ describe('formatScanReport', () => {
             isComplete: false,
           }),
         ],
+        safeNumbers: [],
         advice: [],
         skipped: [],
         issues: [],
@@ -117,6 +124,7 @@ describe('formatScanReport', () => {
     const lines = formatScanReport({
       report: {
         candidates: [],
+        safeNumbers: [],
         advice: [
           buildAdvice({
             title: 'Simulator runtimes',
@@ -144,6 +152,7 @@ describe('formatScanReport', () => {
     const lines = formatScanReport({
       report: {
         candidates: [],
+        safeNumbers: [],
         advice: [],
         skipped: [
           { path: '/fixture/a', reason: 'ownerRunning' },
@@ -167,6 +176,7 @@ describe('formatScanReport', () => {
     const lines = formatScanReport({
       report: {
         candidates: [],
+        safeNumbers: [],
         advice: [],
         skipped: [
           { path: '/fixture/overlap', reason: 'overlapsEarlierCandidate' },
@@ -221,6 +231,7 @@ describe('formatScanReport', () => {
             isComplete: true,
           }),
         ],
+        safeNumbers: [],
         advice: [],
         skipped: [],
         issues: [],
@@ -238,6 +249,7 @@ describe('formatScanReport', () => {
     const lines = formatScanReport({
       report: {
         candidates: [],
+        safeNumbers: [],
         advice: [],
         skipped: [],
         issues: [
@@ -261,10 +273,78 @@ describe('formatScanReport', () => {
     ]);
   });
 
+  test('lists the tools it could not ask apart from the places it could not read', () => {
+    const lines = formatScanReport({
+      report: {
+        candidates: [],
+        safeNumbers: [],
+        advice: [],
+        skipped: [],
+        issues: [
+          { path: '/fixture/locked', reason: 'unexpected', detail: 'EIO' },
+          { path: '/fixture/bin/mise', reason: 'toolUntrusted', detail: 'writableByOthers' },
+          { path: '/usr/bin/xcrun', reason: 'toolFailed', detail: 'exit code 1' },
+        ],
+      },
+    });
+
+    expect(lines).toEqual([
+      'Nothing to delete was found.',
+      '',
+      'Could not read 1 place:',
+      '- /fixture/locked: unexpected error (EIO)',
+      '',
+      'Could not ask 2 tools:',
+      '- /fixture/bin/mise: the tool is not trusted, never run (writableByOthers)',
+      '- /usr/bin/xcrun: the tool failed (exit code 1)',
+    ]);
+  });
+
+  test('lists the Explore items last under their heading, with evidence and command', () => {
+    const toolCandidate = buildTestToolCandidate({
+      homeDir: '/fixture/home',
+      version: '20.1.0',
+      allocatedBytes: 2048,
+    });
+    const lines = formatScanReport({
+      report: {
+        candidates: [
+          buildCandidate({
+            title: 'Derived data',
+            path: '/fixture/a',
+            risk: 'safe',
+            allocatedBytes: 1024,
+            isComplete: true,
+          }),
+          toolCandidate,
+        ],
+        safeNumbers: [1],
+        advice: [],
+        skipped: [],
+        issues: [],
+      },
+    });
+
+    expect(lines).toEqual([
+      'Found 2 items, 3.0 KiB in total:',
+      '1. 1.0 KiB [safe] Derived data',
+      '   /fixture/a',
+      '   Cached files. Rebuilt when needed.',
+      '',
+      'Explore: their own tools remove these, and "safe" never selects them. Read the reasons first:',
+      '2. 2.0 KiB [safe] node 20.1.0',
+      '   /fixture/home/.local/share/mise/installs/node/20.1.0',
+      `   ${toolCandidate.explanation} ${toolCandidate.regeneration}`,
+      '   - mise prune would remove node@20.1.0',
+      '   Runs: mise uninstall node@20.1.0',
+    ]);
+  });
+
   test('omits the Full Disk Access line when no issue is a permission problem', () => {
     const lines = formatScanReport({
       report: {
         candidates: [],
+        safeNumbers: [],
         advice: [],
         skipped: [],
         issues: [{ path: '/fixture/broken', reason: 'unexpected', detail: 'EIO' }],
@@ -291,6 +371,7 @@ describe('formatScanReport', () => {
             isComplete: true,
           }),
         ],
+        safeNumbers: [],
         advice: [
           buildAdvice({
             title: 'Simulator runtimes',

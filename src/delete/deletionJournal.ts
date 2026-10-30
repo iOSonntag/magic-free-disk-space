@@ -1,9 +1,11 @@
 import type { FileHandle } from 'node:fs/promises';
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import type { ExploreToolFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
-import type { RemovalOutcomeKind } from './deleteCandidates.js';
+import type { RemovalOutcomeCodedKind } from './deleteCandidates.js';
+import type { ToolCandidateSkipReason } from './runToolCandidate.js';
 
 export type JournalEntrySessionStart = { kind: 'sessionStart'; atMs: number };
 
@@ -18,11 +20,56 @@ export type JournalEntryOutcome = {
   kind: 'outcome';
   atMs: number;
   path: string;
-  outcome: RemovalOutcomeKind;
+  outcome: RemovalOutcomeCodedKind;
   code: string | null;
 };
 
-export type JournalEntry = JournalEntrySessionStart | JournalEntryIntent | JournalEntryOutcome;
+/** `args` are the unit's command; the unit holds the tool and its real path. */
+export type JournalEntryToolIntent = {
+  kind: 'toolIntent';
+  atMs: number;
+  path: string;
+  allocatedBytes: number;
+  unit: ExploreToolUnit;
+  args: string[];
+};
+
+/** The unit's command ran and exited 0. */
+export type JournalEntryToolOutcomeRemoved = {
+  kind: 'toolOutcome';
+  atMs: number;
+  path: string;
+  outcome: 'removed';
+  exitCode: 0;
+  stderrTail: string;
+  freedBytes: number;
+};
+
+/** The unit's command did not run. */
+export type JournalEntryToolOutcomeSkipped = {
+  kind: 'toolOutcome';
+  atMs: number;
+  path: string;
+  outcome: ToolCandidateSkipReason;
+};
+
+export type JournalEntryToolOutcomeToolFailed = {
+  kind: 'toolOutcome';
+  atMs: number;
+  path: string;
+  outcome: 'toolFailed';
+  freedBytes: number;
+  failure: ExploreToolFailure;
+};
+
+export type JournalEntry =
+  | JournalEntrySessionStart
+  | JournalEntryIntent
+  | JournalEntryOutcome
+  | JournalEntryToolIntent
+  | JournalEntryToolOutcomeRemoved
+  | JournalEntryToolOutcomeSkipped
+  | JournalEntryToolOutcomeToolFailed;
 
 export type JournalFailure = {
   reason: 'directoryUnavailable' | 'cannotOpen' | 'writeFailed';

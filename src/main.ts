@@ -4,6 +4,7 @@ import { runCli } from './cli/runCli.js';
 import { createTerminalIo } from './cli/terminalIo.js';
 import { loadEnvironment } from './environment/loadEnvironment.js';
 import { formatEnvironmentFailure } from './report/formatEnvironmentFailure.js';
+import { TOOL_INSTALL_LOCATIONS } from './tools/toolInstallLocations.js';
 
 async function main(): Promise<number> {
   const io = createTerminalIo();
@@ -19,6 +20,7 @@ async function main(): Promise<number> {
     argv: process.argv.slice(2),
     environment: environmentResult.value,
     catalogEntries: CATALOG_ENTRIES,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS,
     io: io,
   });
 }

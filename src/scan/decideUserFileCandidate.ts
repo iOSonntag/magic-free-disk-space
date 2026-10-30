@@ -28,7 +28,6 @@ export function decideUserFileCandidate(params: {
     kind: 'offer',
     candidate: {
       path: path,
-      identity: params.finding.identity,
       title: basename(path),
       category: 'userFiles',
       risk: 'careful',
@@ -38,7 +37,8 @@ export function decideUserFileCandidate(params: {
       allocatedBytes: params.finding.allocatedBytes,
       entryCount: 1,
       isComplete: true,
-      ownerBundlePaths: [],
+      removal: { kind: 'deletePath', identity: params.finding.identity, ownerBundlePaths: [] },
+      evidenceLines: [],
     },
   };
 }

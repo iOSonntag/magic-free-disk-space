@@ -2,6 +2,7 @@ import type { CatalogEntry, Risk } from '../../src/catalog/catalog.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
+import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
 
 let nextTestIno = 1000n;
 
@@ -44,7 +45,6 @@ export function buildTestCandidate(params: {
 }): Candidate {
   return {
     path: params.path,
-    identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),
     title: `Test item ${params.path}`,
     category: 'caches',
     risk: params.risk ?? 'safe',
@@ -54,9 +54,51 @@ export function buildTestCandidate(params: {
     allocatedBytes: params.allocatedBytes ?? 4096,
     entryCount: 1,
     isComplete: true,
-    ownerBundlePaths: [],
+    removal: {
+      kind: 'deletePath',
+      identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),
+      ownerBundlePaths: [],
+    },
+    evidenceLines: [],
   };
 }
+
+/** A tool item of a mise version under `homeDir`; its tool path is made up and never runs. */
+export function buildTestToolCandidate(params: {
+  homeDir: string;
+  version: string;
+  risk?: Risk;
+  allocatedBytes?: number;
+}): Candidate {
+  const installPath = `${params.homeDir}/.local/share/mise/installs/node/${params.version}`;
+
+  return {
+    path: installPath,
+    title: `node ${params.version}`,
+    category: 'developer',
+    risk: params.risk ?? 'safe',
+    origin: 'explore',
+    explanation: 'A tool version no config file asks for.',
+    regeneration: 'Installed again by mise when a project asks for it.',
+    allocatedBytes: params.allocatedBytes ?? 8192,
+    entryCount: 1,
+    isComplete: true,
+    removal: {
+      kind: 'runTool',
+      unit: {
+        kind: 'miseVersion',
+        tool: { name: 'mise', path: `${params.homeDir}/.local/bin/mise` },
+        toolName: 'node',
+        version: params.version,
+        installPath: installPath,
+      },
+    },
+    evidenceLines: [`mise prune would remove node@${params.version}`],
+  };
+}
+
+/** No place for any tool, so a scan in a test never runs a real xcrun, dart, or mise. */
+export const TOOL_INSTALL_LOCATIONS_NONE: ToolInstallLocations = { xcrun: [], dart: [], mise: [] };
 
 export function buildTestCatalogEntry(overrides: Partial<CatalogEntry>): CatalogEntry {
   return {

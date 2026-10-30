@@ -37,7 +37,6 @@ describe('decideCatalogCandidate', () => {
       kind: 'offer',
       candidate: {
         path: PATH,
-        identity: expect.any(Object),
         title: 'Test cache',
         category: 'caches',
         risk: 'safe',
@@ -47,7 +46,12 @@ describe('decideCatalogCandidate', () => {
         allocatedBytes: 5 * MIB,
         entryCount: 3,
         isComplete: true,
-        ownerBundlePaths: ['/Applications/Example.app'],
+        removal: {
+          kind: 'deletePath',
+          identity: expect.any(Object),
+          ownerBundlePaths: ['/Applications/Example.app'],
+        },
+        evidenceLines: [],
       },
     });
   });
@@ -82,6 +86,16 @@ describe('decideCatalogCandidate', () => {
         isComplete: true,
       },
     });
+  });
+
+  test('turns an explore entry into its advice, as when its probe did not run', () => {
+    const decision = decide({
+      entry: buildTestCatalogEntry({
+        removal: { kind: 'explore', probe: 'miseVersions', advice: 'Run mise prune.' },
+      }),
+    });
+
+    expect(decision.kind === 'advice' && decision.advice.advice).toBe('Run mise prune.');
   });
 
   test('skips a symbolic link before anything else', () => {

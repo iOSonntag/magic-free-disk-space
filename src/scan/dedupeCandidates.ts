@@ -1,11 +1,13 @@
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { CandidateDecision } from './candidate.js';
+import { listCandidateFootprint } from './listCandidateFootprint.js';
 
 /**
- * Turns into a skip each offer that would delete what the scan held back or offered already:
- * an offer holding a skipped or advised path, an offer inside an advised path, an offer equal
- * to an earlier skipped path, and an offer overlapping an earlier kept offer. Paths are compared
- * as the scan produced them, never followed through links. The result keeps length and order.
+ * Turns into a skip each offer with a footprint path that would remove what the scan held back
+ * or offered already: one holding a skipped or advised path, one inside an advised path, one
+ * equal to an earlier skipped path, and one overlapping an earlier kept footprint. Paths are
+ * compared as the scan produced them, never followed through links. The result keeps length and
+ * order.
  */
 export function dedupeCandidates(params: { decisions: CandidateDecision[] }): CandidateDecision[] {
   const skippedPaths = params.decisions.flatMap((decision) =>
@@ -28,29 +30,48 @@ export function dedupeCandidates(params: { decisions: CandidateDecision[] }): Ca
       return decision;
     }
 
-    const path = decision.candidate.path;
-    const isOverlapping =
-      [...skippedPaths, ...advisedPaths].some((heldPath) =>
-        isStrictlyInsidePath({ path: heldPath, parentPath: path }),
-      ) ||
-      advisedPaths.some((advisedPath) =>
-        isSameOrInsidePath({ path: path, parentPath: advisedPath }),
-      ) ||
-      earlierSkippedPaths.includes(path) ||
-      keptOfferPaths.some(
-        (keptPath) =>
-          isSameOrInsidePath({ path: path, parentPath: keptPath }) ||
-          isSameOrInsidePath({ path: keptPath, parentPath: path }),
-      );
+    const footprint = listCandidateFootprint(decision.candidate);
+    const isOverlapping = footprint.some((path) =>
+      isOverlappingHeldPath({
+        path: path,
+        skippedPaths: skippedPaths,
+        advisedPaths: advisedPaths,
+        earlierSkippedPaths: earlierSkippedPaths,
+        keptOfferPaths: keptOfferPaths,
+      }),
+    );
 
     if (isOverlapping) {
-      return { kind: 'skip', path: path, reason: 'overlapsEarlierCandidate' };
+      return { kind: 'skip', path: decision.candidate.path, reason: 'overlapsEarlierCandidate' };
     }
 
-    keptOfferPaths.push(path);
+    keptOfferPaths.push(...footprint);
 
     return decision;
   });
+}
+
+function isOverlappingHeldPath(params: {
+  path: string;
+  skippedPaths: string[];
+  advisedPaths: string[];
+  earlierSkippedPaths: string[];
+  keptOfferPaths: string[];
+}): boolean {
+  return (
+    [...params.skippedPaths, ...params.advisedPaths].some((heldPath) =>
+      isStrictlyInsidePath({ path: heldPath, parentPath: params.path }),
+    ) ||
+    params.advisedPaths.some((advisedPath) =>
+      isSameOrInsidePath({ path: params.path, parentPath: advisedPath }),
+    ) ||
+    params.earlierSkippedPaths.includes(params.path) ||
+    params.keptOfferPaths.some(
+      (keptPath) =>
+        isSameOrInsidePath({ path: params.path, parentPath: keptPath }) ||
+        isSameOrInsidePath({ path: keptPath, parentPath: params.path }),
+    )
+  );
 }
 
 function isStrictlyInsidePath(params: { path: string; parentPath: string }): boolean {

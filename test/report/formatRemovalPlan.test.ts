@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { formatRemovalPlan } from '../../src/report/formatRemovalPlan.js';
 import type { Candidate } from '../../src/scan/candidate.js';
+import { buildTestToolCandidate } from '../support/candidateFixtures.js';
 
 function buildCandidate(params: {
   path: string;
@@ -9,7 +10,6 @@ function buildCandidate(params: {
 }): Candidate {
   return {
     path: params.path,
-    identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
     title: 'Derived data',
     category: 'developer',
     risk: 'safe',
@@ -19,7 +19,12 @@ function buildCandidate(params: {
     allocatedBytes: params.allocatedBytes,
     entryCount: 1,
     isComplete: params.isComplete,
-    ownerBundlePaths: [],
+    removal: {
+      kind: 'deletePath',
+      identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
+      ownerBundlePaths: [],
+    },
+    evidenceLines: [],
   };
 }
 
@@ -68,6 +73,30 @@ describe('formatRemovalPlan', () => {
       'These 2 items will be deleted permanently, 3.0 KiB in total:',
       '- 1.0 KiB /fixture/a',
       '- 2.0 KiB /fixture/b',
+    ]);
+  });
+
+  test('names the command that removes a tool item below its path', () => {
+    const toolCandidate = buildTestToolCandidate({
+      homeDir: '/fixture/home',
+      version: '20.1.0',
+      allocatedBytes: 2048,
+    });
+    const lines = formatRemovalPlan({
+      plan: {
+        approved: [
+          buildCandidate({ path: '/fixture/a', allocatedBytes: 1024, isComplete: true }),
+          toolCandidate,
+        ],
+        refused: [],
+      },
+    });
+
+    expect(lines).toEqual([
+      'These 2 items will be deleted permanently, 3.0 KiB in total:',
+      '- 1.0 KiB /fixture/a',
+      '- 2.0 KiB /fixture/home/.local/share/mise/installs/node/20.1.0',
+      '   by running: mise uninstall node@20.1.0',
     ]);
   });
 

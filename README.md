@@ -105,6 +105,13 @@ bun run app:run        # build and start a debug version
   folder that holds such a cache is offered whole. After you type `DELETE`, the running programs
   are read again, so an app opened during the scan keeps its data. If they cannot be read, every
   app-owned item is held back.
+- **Tools remove what they own.** Items that a developer tool owns, such as a simulator, the
+  Dart package cache, or a mise tool version, are listed under Explore with the reasons the tool
+  gave, and the plan names the command that removes each. They are never selected for you, not
+  even by "safe". A tool counts only from a known install location, never from `PATH`, and only
+  when it is owned by you or root and nobody else can change it. Right before its command runs,
+  the tool and the item are checked again: a changed item, or one whose app or tool is busy, is
+  left alone, and a command stops at a 10 minute limit.
 - **Symbolic links are never followed**, neither while measuring nor while deleting: deleting a
   folder removes a link inside it, never the file the link points to.
 - **Mounted disks are left alone.** A folder where another disk is mounted, or that holds one,
@@ -116,8 +123,9 @@ bun run app:run        # build and start a debug version
   installed app could be read and nothing in the container changed for the unused period. An
   app that still runs from another folder keeps writing to its container.
 - **A log of every deletion.** Before each deletion the tool writes what it is about to delete
-  to `~/Library/Logs/magic-free-disk-space/deletions.jsonl`, and the outcome after it. If the log
-  cannot be written, the run stops.
+  to `~/Library/Logs/magic-free-disk-space/deletions.jsonl`, and the outcome after it; for a tool
+  item, the command before it runs, and its exit code, the end of its error output, and the space
+  it freed after. If the log cannot be written, the run stops.
 - **Interactive only.** The CLI deletes only in a terminal; a piped or scripted run is refused
   before the scan. `--list` and `--dry-run` never delete. The app asks for `DELETE` on its
   confirmation screen and deletes exactly the plan that screen showed.
@@ -125,7 +133,12 @@ bun run app:run        # build and start a debug version
 ## Privacy
 
 The tool works offline. It sends nothing anywhere and has no telemetry. It reads file sizes,
-dates, and app identifiers, and runs only `ps`, `plutil`, `xcode-select`, and `getconf`.
+dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`.
+
+During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
+simctl`, `dart`, and `mise`, to learn which of their items are unused; these forms change
+nothing. Only after you type `DELETE` does it run their cleanup commands, one for each item you
+selected. A tool runs with a fixed environment that keeps it offline where the tool allows that.
 
 ## Limits
 

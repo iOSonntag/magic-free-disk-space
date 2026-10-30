@@ -1,20 +1,29 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, lstat, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deleteCandidates } from '../../src/delete/deleteCandidates.js';
-import type { DeletionJournal } from '../../src/delete/deletionJournal.js';
+import { deleteCandidates, toolCandidateRunToRemoval } from '../../src/delete/deleteCandidates.js';
+import type { DeletionJournal, JournalEntry } from '../../src/delete/deletionJournal.js';
 import { createDeletionJournal } from '../../src/delete/deletionJournal.js';
+import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
+import { buildTestToolCandidate } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureFile, createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import {
+  createFixtureFile,
+  createFixtureRoot,
+  deleteFixtureRoot,
+  loadTestEnvironment,
+} from '../support/fixtureRoot.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
 
 let fixtureRoot: FixtureRoot;
+let environment: Environment;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
+  environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: NOW_MS });
 });
 
 afterEach(async () => {
@@ -38,7 +47,6 @@ async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Pro
 
   return {
     path: path,
-    identity: identity.value,
     title: 'Fixture item',
     category: 'caches',
     risk: 'safe',
@@ -48,7 +56,8 @@ async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Pro
     allocatedBytes: 4096,
     entryCount: 1,
     isComplete: true,
-    ownerBundlePaths: ownerBundlePaths,
+    removal: { kind: 'deletePath', identity: identity.value, ownerBundlePaths: ownerBundlePaths },
+    evidenceLines: [],
   };
 }
 
@@ -110,6 +119,7 @@ describe('deleteCandidates', () => {
       candidates: [await scanCandidate(selected)],
       journal: journal,
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
     const journalLines = (await readFile(journal.logPath, 'utf8'))
@@ -118,7 +128,9 @@ describe('deleteCandidates', () => {
       .map((line) => JSON.parse(line));
 
     expect(run).toEqual({
-      outcomes: [{ path: selected, allocatedBytes: 4096, outcome: 'removed', code: null }],
+      outcomes: [
+        { path: selected, allocatedBytes: 4096, freedBytes: 4096, outcome: 'removed', code: null },
+      ],
       journalFailure: null,
     });
     expect(await isPresent(selected)).toBe(false);
@@ -141,6 +153,7 @@ describe('deleteCandidates', () => {
       candidates: [await scanCandidate(selected)],
       journal: await createTestJournal(),
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -160,10 +173,11 @@ describe('deleteCandidates', () => {
       candidates: [scanned],
       journal: await createTestJournal(),
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
-    expect(run.outcomes[0]?.outcome).toBe('changedSinceScan');
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
     expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
   });
 
@@ -179,6 +193,7 @@ describe('deleteCandidates', () => {
       candidates: [scanned],
       journal: await createTestJournal(),
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -198,6 +213,7 @@ describe('deleteCandidates', () => {
       candidates: candidates,
       journal: await createTestJournal(),
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -220,6 +236,7 @@ describe('deleteCandidates', () => {
       candidates: candidates,
       journal: await createTestJournal(),
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -240,6 +257,7 @@ describe('deleteCandidates', () => {
       candidates: candidates,
       journal: journal,
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -262,6 +280,7 @@ describe('deleteCandidates', () => {
       candidates: candidates,
       journal: journal,
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -283,6 +302,7 @@ describe('deleteCandidates', () => {
       candidates: candidates,
       journal: await createTestJournal(),
       processCommands: ['/Applications/Example.app/Contents/MacOS/Example'],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -302,6 +322,7 @@ describe('deleteCandidates', () => {
       candidates: candidates,
       journal: await createTestJournal(),
       processCommands: null,
+      environment: environment,
       clock: () => NOW_MS,
     });
 
@@ -309,14 +330,149 @@ describe('deleteCandidates', () => {
     expect(await isPresent(appCache)).toBe(true);
   });
 
+  test('records the tool intent first and runs no tool when it cannot be recorded', async () => {
+    const pathItem = await createCacheFolder('after-tool');
+    const toolCandidate = buildTestToolCandidate({
+      homeDir: fixtureRoot.homeDir,
+      version: '20.1.0',
+    });
+    const entries: JournalEntry[] = [];
+    const journal: DeletionJournal = {
+      logPath: join(fixtureRoot.rootDir, 'deletions.jsonl'),
+      append: async (appendParams) => {
+        entries.push(appendParams.entry);
+
+        return {
+          kind: 'failed',
+          failure: { reason: 'writeFailed', path: 'deletions.jsonl', code: 'ENOSPC' },
+        };
+      },
+    };
+
+    const run = await deleteCandidates({
+      candidates: [toolCandidate, await scanCandidate(pathItem)],
+      journal: journal,
+      environment: environment,
+      processCommands: [],
+      clock: () => NOW_MS,
+    });
+
+    expect(entries).toEqual([
+      {
+        kind: 'toolIntent',
+        atMs: NOW_MS,
+        path: toolCandidate.path,
+        allocatedBytes: toolCandidate.allocatedBytes,
+        unit: expect.objectContaining({ kind: 'miseVersion', installPath: toolCandidate.path }),
+        args: ['uninstall', 'node@20.1.0'],
+      },
+    ]);
+    expect(run.outcomes).toEqual([
+      {
+        path: toolCandidate.path,
+        allocatedBytes: toolCandidate.allocatedBytes,
+        freedBytes: 0,
+        outcome: 'notAttempted',
+        code: null,
+      },
+      { path: pathItem, allocatedBytes: 4096, freedBytes: 0, outcome: 'notAttempted', code: null },
+    ]);
+    expect(await isPresent(pathItem)).toBe(true);
+  });
+
   test('does nothing for an empty list', async () => {
     const run = await deleteCandidates({
       candidates: [],
       journal: await createTestJournal(),
       processCommands: [],
+      environment: environment,
       clock: () => NOW_MS,
     });
 
     expect(run).toEqual({ outcomes: [], journalFailure: null });
+  });
+});
+
+describe('toolCandidateRunToRemoval', () => {
+  const TOOL_PATH = '/Users/tester/.local/share/mise/installs/node/20.1.0';
+
+  test('a completed run is removed with its measured drop and the stderr tail', () => {
+    expect(
+      toolCandidateRunToRemoval({
+        path: TOOL_PATH,
+        allocatedBytes: 8192,
+        run: { kind: 'completed', freedBytes: 6144, stderrTail: 'removed node@20.1.0' },
+        atMs: NOW_MS,
+      }),
+    ).toEqual({
+      outcome: {
+        path: TOOL_PATH,
+        allocatedBytes: 8192,
+        freedBytes: 6144,
+        outcome: 'removed',
+        code: null,
+      },
+      outcomeEntry: {
+        kind: 'toolOutcome',
+        atMs: NOW_MS,
+        path: TOOL_PATH,
+        outcome: 'removed',
+        exitCode: 0,
+        stderrTail: 'removed node@20.1.0',
+        freedBytes: 6144,
+      },
+    });
+  });
+
+  test('a skipped run frees nothing and records its reason', () => {
+    expect(
+      toolCandidateRunToRemoval({
+        path: TOOL_PATH,
+        allocatedBytes: 8192,
+        run: { kind: 'skipped', reason: 'ownerRunning' },
+        atMs: NOW_MS,
+      }),
+    ).toEqual({
+      outcome: {
+        path: TOOL_PATH,
+        allocatedBytes: 8192,
+        freedBytes: 0,
+        outcome: 'ownerRunning',
+        code: null,
+      },
+      outcomeEntry: { kind: 'toolOutcome', atMs: NOW_MS, path: TOOL_PATH, outcome: 'ownerRunning' },
+    });
+  });
+
+  test('a failed run keeps what it freed and its failure', () => {
+    const failure = {
+      reason: 'commandFailed',
+      failure: { reason: 'exitedWithError', exitCode: 1, stderrTail: 'locked' },
+    } as const;
+
+    expect(
+      toolCandidateRunToRemoval({
+        path: TOOL_PATH,
+        allocatedBytes: 8192,
+        run: { kind: 'failed', freedBytes: 1024, failure: failure },
+        atMs: NOW_MS,
+      }),
+    ).toEqual({
+      outcome: {
+        path: TOOL_PATH,
+        allocatedBytes: 8192,
+        freedBytes: 1024,
+        outcome: 'toolFailed',
+        failure: failure,
+      },
+      outcomeEntry: {
+        kind: 'toolOutcome',
+        atMs: NOW_MS,
+        path: TOOL_PATH,
+        outcome: 'toolFailed',
+        freedBytes: 1024,
+        failure: failure,
+      },
+    });
   });
 });

@@ -26,6 +26,7 @@ import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
+import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { parseBridgeRequest } from './parseBridgeRequest.js';
 
 type BridgeEventProgress = { kind: 'progress'; message: string };
@@ -34,6 +35,8 @@ type BridgeEventScanned = {
   kind: 'scanned';
   summaryText: string;
   candidates: CandidateView[];
+  /** The numbers "Select safe" picks; older app builds ignore it and pick by risk. */
+  safeNumbers: number[];
   notesLines: string[];
 };
 
@@ -95,6 +98,7 @@ type BridgeStep = { answer: BridgeAnswer; nextState: BridgeState };
 type BridgeContext = {
   io: BridgeIo;
   catalogEntries: CatalogEntry[];
+  toolInstallLocations: ToolInstallLocations;
   loadEnvironment: () => Promise<Result<Environment, EnvironmentFailure>>;
   clock: () => number;
 };
@@ -202,6 +206,7 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
   const report = await runScan({
     environment: environment.value,
     catalogEntries: params.context.catalogEntries,
+    toolInstallLocations: params.context.toolInstallLocations,
     options: {
       staleDays: SCAN_LIMITS.defaultStaleDays,
       unusedDays: SCAN_LIMITS.defaultUnusedDays,
@@ -218,6 +223,7 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
       candidates: report.candidates.map((candidate, index) =>
         formatCandidateView({ candidate: candidate, number: index + 1 }),
       ),
+      safeNumbers: report.safeNumbers,
       notesLines: formatScanReportNotes({ report: report, fullDiskAccessHolder: 'app' }),
     },
     nextState: { kind: 'scanned', report: report, environment: environment.value },
@@ -310,6 +316,7 @@ async function answerDelete(params: {
   const removal = await deleteApprovedCandidates({
     plan: params.state.plan,
     deletionLogPath: params.state.environment.deletionLogPath,
+    environment: params.state.environment,
     clock: params.context.clock,
   });
 

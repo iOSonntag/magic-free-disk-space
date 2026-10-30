@@ -1,11 +1,31 @@
 import type { CandidateCategory, Risk } from '../catalog/catalog.js';
+import type { ExploreToolUnit } from '../explore/exploreUnit.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 
-export type CandidateOrigin = 'catalog' | 'artifact' | 'application' | 'userFile' | 'leftover';
+export type CandidateOrigin =
+  | 'catalog'
+  | 'artifact'
+  | 'application'
+  | 'userFile'
+  | 'leftover'
+  | 'explore';
+
+/** Deleted as a path, only while its identity still matches the scan. */
+export type CandidateRemovalDeletePath = {
+  kind: 'deletePath';
+  identity: FileIdentity;
+  /** App bundles whose running process withholds the item, checked again right before deletion. */
+  ownerBundlePaths: string[];
+};
+
+/** Removed by the command of the unit's own tool, after the unit is checked again. */
+export type CandidateRemovalRunTool = { kind: 'runTool'; unit: ExploreToolUnit };
+
+export type CandidateRemoval = CandidateRemovalDeletePath | CandidateRemovalRunTool;
 
 export type Candidate = {
+  /** The path shown; for a tool item, the place of its unit. */
   path: string;
-  identity: FileIdentity;
   title: string;
   category: CandidateCategory;
   risk: Risk;
@@ -16,8 +36,9 @@ export type Candidate = {
   entryCount: number;
   /** False when the size is a lower bound: unreadable entries or a deadline. */
   isComplete: boolean;
-  /** App bundles whose running process withholds the item, checked again right before deletion. */
-  ownerBundlePaths: string[];
+  removal: CandidateRemoval;
+  /** What a probe found that makes the item safe to offer; empty outside Explore. */
+  evidenceLines: string[];
 };
 
 export type Advice = {

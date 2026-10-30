@@ -4,6 +4,7 @@ import type { Candidate } from '../scan/candidate.js';
 import { formatSizeText } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
+import { formatCandidateCommandText } from './formatScanReport.js';
 
 const refusalReasonTexts: Record<RefusalReason, string> = {
   neverRisk: 'marked never-delete',
@@ -34,11 +35,22 @@ function formatApprovedLines(params: { approved: Candidate[] }): string[] {
 
   return [
     `${subjectText} will be deleted permanently, ${totalSizeText} in total:`,
-    ...params.approved.map(
-      (candidate) =>
-        `- ${formatSizeText(candidate)} ${formatDisplayText({ text: candidate.path })}`,
-    ),
+    ...params.approved.flatMap((candidate) => formatApprovedItemLines({ candidate: candidate })),
   ];
+}
+
+/** A tool item names the command that removes it below its path. */
+function formatApprovedItemLines(params: { candidate: Candidate }): string[] {
+  const lines = [
+    `- ${formatSizeText(params.candidate)} ${formatDisplayText({ text: params.candidate.path })}`,
+  ];
+  const commandText = formatCandidateCommandText({ candidate: params.candidate });
+
+  if (commandText !== null) {
+    lines.push(`   by running: ${commandText}`);
+  }
+
+  return lines;
 }
 
 function formatRefusedBlock(params: { refused: RefusedRemoval[] }): string[] {

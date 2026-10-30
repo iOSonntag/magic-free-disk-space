@@ -1,5 +1,11 @@
 export type ScanIssue = {
   path: string;
-  reason: 'permissionDenied' | 'unexpected' | 'commandFailed' | 'walkStopped';
+  reason:
+    | 'permissionDenied'
+    | 'unexpected'
+    | 'commandFailed'
+    | 'walkStopped'
+    | 'toolFailed'
+    | 'toolUntrusted';
   detail: string;
 };

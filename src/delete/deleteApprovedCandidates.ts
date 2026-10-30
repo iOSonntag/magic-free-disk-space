@@ -1,3 +1,4 @@
+import type { Environment } from '../environment/buildEnvironment.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import { loadProcessCommands } from '../scan/loadProcessCommands.js';
@@ -19,6 +20,7 @@ type ApprovedRemoval = {
 export async function deleteApprovedCandidates(params: {
   plan: RemovalPlan;
   deletionLogPath: string;
+  environment: Environment;
   clock: () => number;
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
   const journal = await createDeletionJournal({
@@ -36,6 +38,7 @@ export async function deleteApprovedCandidates(params: {
   const run = await deleteCandidates({
     candidates: params.plan.approved,
     journal: journal.value,
+    environment: params.environment,
     processCommands: processCommands.kind === 'succeeded' ? processCommands.value : null,
     clock: params.clock,
   });

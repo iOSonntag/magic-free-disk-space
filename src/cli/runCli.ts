@@ -19,10 +19,10 @@ import { formatScanReport } from '../report/formatScanReport.js';
 import { formatUsage } from '../report/formatUsage.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
+import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { EXIT_CODES } from './exitCodes.js';
 import type { CliArguments } from './parseArguments.js';
 import { parseArguments } from './parseArguments.js';
-import type { SelectionChoice } from './parseSelection.js';
 import { parseSelection } from './parseSelection.js';
 import type { TerminalIo } from './terminalIo.js';
 
@@ -37,6 +37,7 @@ export async function runCli(params: {
   argv: string[];
   environment: Environment;
   catalogEntries: CatalogEntry[];
+  toolInstallLocations: ToolInstallLocations;
   io: TerminalIo;
 }): Promise<number> {
   if (params.environment.platform !== 'darwin') {
@@ -75,6 +76,7 @@ export async function runCli(params: {
   const report = await runScan({
     environment: params.environment,
     catalogEntries: params.catalogEntries,
+    toolInstallLocations: params.toolInstallLocations,
     options: { staleDays: parsed.value.staleDays, unusedDays: parsed.value.unusedDays },
     onProgress: (message) => {
       params.io.writeError(`${message}\n`);
@@ -118,7 +120,8 @@ function runDryRun(params: {
 
   const selection = parseSelection({
     input: params.selectionSpec,
-    choices: buildSelectionChoices({ report: params.report }),
+    choiceCount: params.report.candidates.length,
+    safeNumbers: params.report.safeNumbers,
   });
 
   if (selection.kind === 'failed') {
@@ -183,6 +186,7 @@ async function runInteractiveDeletion(params: {
   const removal = await deleteApprovedCandidates({
     plan: plan,
     deletionLogPath: params.environment.deletionLogPath,
+    environment: params.environment,
     clock: () => Date.now(),
   });
 
@@ -206,7 +210,10 @@ async function runInteractiveDeletion(params: {
   const hasFailure =
     run.journalFailure !== null ||
     run.outcomes.some(
-      (outcome) => outcome.outcome === 'permissionDenied' || outcome.outcome === 'failed',
+      (outcome) =>
+        outcome.outcome === 'permissionDenied' ||
+        outcome.outcome === 'failed' ||
+        outcome.outcome === 'toolFailed',
     );
 
   if (hasFailure) {
@@ -221,8 +228,6 @@ async function readSelection(params: {
   io: TerminalIo;
   report: ScanReport;
 }): Promise<number[] | null> {
-  const choices = buildSelectionChoices({ report: params.report });
-
   while (true) {
     const line = await params.io.readLine(`\n${SELECTION_PROMPT}`);
 
@@ -230,7 +235,11 @@ async function readSelection(params: {
       return null;
     }
 
-    const selection = parseSelection({ input: line, choices: choices });
+    const selection = parseSelection({
+      input: line,
+      choiceCount: params.report.candidates.length,
+      safeNumbers: params.report.safeNumbers,
+    });
 
     if (selection.kind === 'succeeded') {
       return selection.value;
@@ -257,13 +266,6 @@ function planParsedSelection(params: {
   }
 
   return planned.value;
-}
-
-function buildSelectionChoices(params: { report: ScanReport }): SelectionChoice[] {
-  return params.report.candidates.map((candidate, index) => ({
-    number: index + 1,
-    risk: candidate.risk,
-  }));
 }
 
 function writeLines(params: { io: TerminalIo; lines: string[] }): void {
