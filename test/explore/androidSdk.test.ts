@@ -387,7 +387,7 @@ describe('the Android probes with an SDK', () => {
     });
   });
 
-  test('hold back the images while an AVD config.ini names no image, and still date the AVD', async () => {
+  test('hold back the images while an AVD config.ini names no image, and judge no AVD', async () => {
     await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
     await writeAndroidAvd({
       homeDir: homeDir,
@@ -399,10 +399,7 @@ describe('the Android probes with an SDK', () => {
     const answers = await loadAndroidProbeAnswers();
 
     expect(answers.systemImages).toEqual(NOT_JUDGED);
-    expect(answers.avds.findings).toHaveLength(1);
-    expect(answers.avds.findings[0]?.evidenceLines).toEqual([
-      'Last used on 2020-09-13, by the dates of its emulator files.',
-    ]);
+    expect(answers.avds).toEqual(NOT_JUDGED);
   });
 
   test('hold back the images while an AVD has no config.ini', async () => {
@@ -418,7 +415,7 @@ describe('the Android probes with an SDK', () => {
     const answers = await loadAndroidProbeAnswers();
 
     expect(answers.systemImages).toEqual(NOT_JUDGED);
-    expect(answers.avds.findings).toHaveLength(1);
+    expect(answers.avds).toEqual(NOT_JUDGED);
   });
 
   test('leave an AVD with none of its last-use files not judged', async () => {
@@ -440,7 +437,7 @@ describe('the Android probes with an SDK', () => {
     await writeAndroidAvd({
       homeDir: homeDir,
       name: '-rf',
-      imageSysdir: null,
+      imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
 
@@ -448,6 +445,31 @@ describe('the Android probes with an SDK', () => {
 
     expect(answers.avds).toEqual(NOT_JUDGED);
     expect(answers.emulator).toEqual(JUDGED_EMPTY);
+  });
+
+  test('leave an AVD whose config.ini names no image not judged, with no unit', async () => {
+    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidAvd({
+      homeDir: homeDir,
+      name: 'Pixel',
+      imageSysdir: null,
+      lastUsedAtMs: ANDROID_OLD_USE_MS,
+    });
+
+    expect((await loadAndroidProbeAnswers()).avds).toEqual(NOT_JUDGED);
+  });
+
+  test('leave an AVD whose ini names a folder not named *.avd not judged, though its config.ini names an image', async () => {
+    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidAvd({
+      homeDir: homeDir,
+      name: 'Old',
+      folderName: 'notes',
+      imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
+      lastUsedAtMs: ANDROID_OLD_USE_MS,
+    });
+
+    expect((await loadAndroidProbeAnswers()).avds).toEqual(NOT_JUDGED);
   });
 
   test('fail with fileUnreadable on a denied read, naming the file', async () => {
@@ -485,7 +507,7 @@ describe('recheckAndroidAvdUnit', () => {
     await writeAndroidAvd({
       homeDir: homeDir,
       name: 'Pixel',
-      imageSysdir: null,
+      imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
 
@@ -515,6 +537,17 @@ describe('recheckAndroidAvdUnit', () => {
   test('answers changed once the AVD is gone', async () => {
     const unit = await createOfferedAvd();
     await rm(unit.iniPath);
+
+    expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
+      kind: 'changed',
+    });
+  });
+
+  test('answers changed once its config.ini no longer names an image, at the same path and last use', async () => {
+    const unit = await createOfferedAvd();
+    const configPath = join(unit.avdPath, 'config.ini');
+    await writeFile(configPath, 'AvdId=Example\nabi.type=arm64-v8a\n');
+    await updateModifiedMs({ path: configPath, modifiedMs: unit.lastUsedAtMs });
 
     expect(await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun([]) })).toEqual({
       kind: 'changed',

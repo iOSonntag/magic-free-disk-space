@@ -34,17 +34,20 @@ export async function createAndroidAvdHome(params: { homeDir: string }): Promise
 }
 
 /**
- * Writes `<name>.ini` and `<name>.avd` with a `config.ini` that names `imageSysdir`, or none
- * without it, and a `hardware-qemu.ini`; both files are dated `lastUsedAtMs`.
+ * Writes `<name>.ini` and its folder, `<name>.avd` unless `folderName` names another, with a
+ * `config.ini` that names `imageSysdir`, or none without it, and a `hardware-qemu.ini`; both files
+ * are dated `lastUsedAtMs`.
  */
 export async function writeAndroidAvd(params: {
   homeDir: string;
   name: string;
+  folderName?: string;
   imageSysdir: string | null;
   lastUsedAtMs: number;
 }): Promise<{ iniPath: AbsolutePath; avdPath: AbsolutePath }> {
   const avdHome = buildAndroidAvdHome(params);
-  const avdPath = join(avdHome, `${params.name}.avd`);
+  const folderName = params.folderName ?? `${params.name}.avd`;
+  const avdPath = join(avdHome, folderName);
   const iniPath = join(avdHome, `${params.name}.ini`);
   const configLines = ['AvdId=Example', 'abi.type=arm64-v8a'];
 
@@ -55,7 +58,7 @@ export async function writeAndroidAvd(params: {
   await mkdir(avdPath, { recursive: true });
   await writeFile(
     iniPath,
-    `avd.ini.encoding=UTF-8\npath=${avdPath}\npath.rel=avd/${params.name}.avd\ntarget=android-35\n`,
+    `avd.ini.encoding=UTF-8\npath=${avdPath}\npath.rel=avd/${folderName}\ntarget=android-35\n`,
   );
   await writeFile(join(avdPath, 'config.ini'), `${configLines.join('\n')}\n`);
   await writeFile(join(avdPath, 'hardware-qemu.ini'), 'hw.cpu.arch = arm64\n');

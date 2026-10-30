@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
@@ -7,9 +8,22 @@ import type { AndroidAvdPresent, AndroidSdkState } from './loadAndroidSdkState.j
 const AVDS_ELSEWHERE_TEXT =
   'AVDs moved elsewhere, such as by `ANDROID_AVD_HOME`, are not seen here.';
 
+const ANDROID_AVD_FOLDER_SUFFIX = '.avd';
+
 /**
- * One finding for each AVD last used before the cutoff. Without the SDK no unit is built, so the
- * probe judges nothing while `~/.android/avd` holds any `*.ini`.
+ * Whether the folder of an AVD is one avdmanager writes: named `*.avd`, with an image in its
+ * `config.ini`.
+ */
+export function isAndroidAvdFolder(
+  avd: AndroidAvdPresent,
+): avd is AndroidAvdPresent & { imageSysdir: string } {
+  return basename(avd.avdPath).endsWith(ANDROID_AVD_FOLDER_SUFFIX) && avd.imageSysdir !== null;
+}
+
+/**
+ * One finding for each AVD last used before the cutoff whose folder is named `*.avd` and whose
+ * `config.ini` names an image; any other AVD is not judged. Without the SDK no unit is built, so
+ * the probe judges nothing while `~/.android/avd` holds any `*.ini`.
  */
 export function buildAndroidAvdFindings(params: {
   state: AndroidSdkState;
@@ -38,7 +52,7 @@ export function buildAndroidAvdFindings(params: {
         break;
     }
 
-    if (avd.name === null || avd.lastUsedAtMs === null) {
+    if (avd.name === null || avd.lastUsedAtMs === null || !isAndroidAvdFolder(avd)) {
       isComplete = false;
       continue;
     }
@@ -62,7 +76,10 @@ export function buildAndroidAvdFindings(params: {
       regeneration:
         'A deleted AVD does not come back; the Device Manager of Android Studio creates a new, empty one.',
       risk: 'careful',
-      evidenceLines: buildAndroidAvdEvidenceLines({ avd: avd, lastUsedAtMs: avd.lastUsedAtMs }),
+      evidenceLines: buildAndroidAvdEvidenceLines({
+        imageSysdir: avd.imageSysdir,
+        lastUsedAtMs: avd.lastUsedAtMs,
+      }),
       displayPath: avd.avdPath,
       activity: decideUnitActivity({
         facts: { kind: 'android' },
@@ -130,17 +147,13 @@ export function buildAndroidEmulatorFindings(params: {
 }
 
 function buildAndroidAvdEvidenceLines(params: {
-  avd: AndroidAvdPresent;
+  imageSysdir: string;
   lastUsedAtMs: number;
 }): string[] {
   const lastUsedDate = new Date(params.lastUsedAtMs).toISOString().slice(0, 10);
   const lastUseLine = `Last used on ${lastUsedDate}, by the dates of its emulator files.`;
 
-  if (params.avd.imageSysdir === null) {
-    return [lastUseLine];
-  }
-
-  return [lastUseLine, `It runs the system image ${params.avd.imageSysdir}.`];
+  return [lastUseLine, `It runs the system image ${params.imageSysdir}.`];
 }
 
 function buildAndroidPackageRegeneration(params: { offer: AndroidPackageOffer }): string {
