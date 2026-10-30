@@ -4,6 +4,8 @@ import type { HomebrewCleanupRemoval } from './parseHomebrewCleanupDryRun.js';
 import type { HomebrewFormulaName } from './parseHomebrewFormulaName.js';
 import { parseHomebrewFormulaName } from './parseHomebrewFormulaName.js';
 
+const REINSTALL_BACKUP_SUFFIX = '.reinstall';
+
 /** An old keg of a formula, such as `<cellar>/<formula>/1.2.3`, that `brew cleanup` would remove. */
 export type HomebrewOldKeg = { path: AbsolutePath; version: string; sizeText: string };
 
@@ -12,8 +14,8 @@ export type HomebrewOldVersions = { formula: HomebrewFormulaName; kegs: Homebrew
 
 /**
  * Groups the removals under `<cellarPath>/<formula>/` by formula; every other removal, such as a
- * cached download or a path of another brew's Cellar, belongs to no formula here. Fails for a
- * folder of the Cellar whose name could start an option.
+ * cached download, a path of another brew's Cellar, or a `<version>.reinstall` backup keg, belongs
+ * to no formula here. Fails for a folder of the Cellar whose name could start an option.
  */
 export function buildHomebrewOldVersions(params: {
   cellarPath: AbsolutePath;
@@ -30,7 +32,8 @@ export function buildHomebrewOldVersions(params: {
     const [formulaText, ...versionSegments] = removal.path.slice(cellarPrefix.length).split('/');
     const version = versionSegments.join('/');
 
-    if (formulaText === undefined || version === '') {
+    // `cleanup -n` lists the backup keg a killed `brew reinstall` leaves; `brew cleanup` keeps it.
+    if (formulaText === undefined || version === '' || version.endsWith(REINSTALL_BACKUP_SUFFIX)) {
       continue;
     }
 

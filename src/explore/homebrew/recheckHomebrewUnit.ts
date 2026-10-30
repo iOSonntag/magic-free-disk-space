@@ -3,7 +3,7 @@ import type { UnitComparison, UnitRecheck } from '../decideComparisonActivity.js
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
 import type { ExploreToolUnitHomebrew } from '../exploreUnit.js';
-import type { HomebrewState } from './loadHomebrewState.js';
+import type { HomebrewOrphans, HomebrewState } from './loadHomebrewState.js';
 import { loadHomebrewState } from './loadHomebrewState.js';
 
 /** Unchanged while the fresh lines or list of the unit are a subset of the scanned ones, and idle. */
@@ -26,7 +26,8 @@ export async function recheckHomebrewUnit(params: {
 
 /**
  * `changed` when the fresh state offers no keg of the unit any more, or one the scan did not
- * offer, which also covers a Cellar that moved; else busy or not by the Homebrew rule.
+ * offer, which also covers a Cellar that moved and orphans not judged; else busy or not by the
+ * Homebrew rule.
  */
 export function compareHomebrewUnit(params: {
   unit: ExploreToolUnitHomebrew;
@@ -60,6 +61,15 @@ function listFreshHomebrewKegPaths(params: {
       return oldVersions === undefined ? [] : oldVersions.kegs.map((keg) => keg.path);
     }
     case 'homebrewOrphans':
-      return params.state.orphans.map((orphan) => orphan.kegPath);
+      return listFreshHomebrewOrphanKegPaths(params.state.orphans);
+  }
+}
+
+function listFreshHomebrewOrphanKegPaths(orphans: HomebrewOrphans): AbsolutePath[] {
+  switch (orphans.kind) {
+    case 'judged':
+      return orphans.orphans.map((orphan) => orphan.kegPath);
+    case 'notJudged':
+      return [];
   }
 }

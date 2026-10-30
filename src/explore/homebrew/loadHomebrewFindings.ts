@@ -4,7 +4,7 @@ import { loadHomebrewState } from './loadHomebrewState.js';
 
 /**
  * The old versions of each formula and the orphans in the Cellar of the located brew, the one
- * builder of both Homebrew probes; all judged once its three commands answered.
+ * builder of both Homebrew probes; not complete while a rack of an orphan holds back the orphans.
  */
 export async function loadHomebrewFindings(
   run: ExploreProbeToolRun,
@@ -15,11 +15,11 @@ export async function loadHomebrewFindings(
     return state;
   }
 
-  const findings = buildHomebrewFindings({
+  const probeFindings = buildHomebrewFindings({
     tool: run.tool,
     state: state.value,
     processCommands: run.processCommands,
   });
 
-  return { kind: 'succeeded', value: { findings: findings, isComplete: true } };
+  return { kind: 'succeeded', value: probeFindings };
 }

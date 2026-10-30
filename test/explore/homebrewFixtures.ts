@@ -1,3 +1,5 @@
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
@@ -23,11 +25,34 @@ export function buildHomebrewKegPath(params: {
 }
 
 /**
- * What `brew cleanup -n` prints in the form Homebrew uses: the old kegs of both Cellars, so each
- * brew must keep to its own, beside a cached download, the portable Ruby, and the closing line.
+ * Creates the folder of each keg in its rack under `cellarPath`, and an empty rack for a formula
+ * with no version.
  */
-export function buildHomebrewCleanupDryRunText(params: { homeDir: string }): string {
-  const kegLines = [APPLE_SILICON_CELLAR_PATH, INTEL_CELLAR_PATH].flatMap((cellarPath) =>
+export async function createHomebrewRacks(params: {
+  cellarPath: string;
+  racks: { formula: string; versions: string[] }[];
+}): Promise<void> {
+  for (const rack of params.racks) {
+    const rackPath = join(params.cellarPath, rack.formula);
+
+    await mkdir(rackPath, { recursive: true });
+
+    for (const version of rack.versions) {
+      await mkdir(join(rackPath, version));
+    }
+  }
+}
+
+/**
+ * What `brew cleanup -n` prints in the form Homebrew uses: the old kegs of each given Cellar, so
+ * each brew must keep to its own, beside a cached download, the portable Ruby, and the closing
+ * line.
+ */
+export function buildHomebrewCleanupDryRunText(params: {
+  homeDir: string;
+  cellarPaths: string[];
+}): string {
+  const kegLines = params.cellarPaths.flatMap((cellarPath) =>
     HOMEBREW_OLD_KEGS.map(
       (keg) =>
         `Would remove: ${buildHomebrewKegPath({ cellarPath: cellarPath, formula: keg.formula, version: keg.version })} (${keg.sizeText})`,

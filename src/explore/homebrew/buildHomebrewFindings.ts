@@ -1,15 +1,19 @@
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
-import type { ExploreFinding, UnitActivity } from '../exploreUnit.js';
+import type { ExploreFinding, ExploreProbeFindings, UnitActivity } from '../exploreUnit.js';
 import type { HomebrewOldVersions } from './buildHomebrewOldVersions.js';
-import type { HomebrewState } from './loadHomebrewState.js';
+import type { HomebrewOrphan, HomebrewState } from './loadHomebrewState.js';
 
-/** One finding per formula with old versions, and one for all orphans when there are any. */
+/**
+ * One finding per formula with old versions, and one for all orphans when there are any; not
+ * complete while the orphans are not judged.
+ */
 export function buildHomebrewFindings(params: {
   tool: LocatedTool;
   state: HomebrewState;
   processCommands: string[] | null;
-}): ExploreFinding[] {
+}): ExploreProbeFindings {
   const activity = decideUnitActivity({
     facts: { kind: 'homebrew' },
     processCommands: params.processCommands,
@@ -23,19 +27,29 @@ export function buildHomebrewFindings(params: {
     }),
   );
 
-  if (params.state.orphans.length === 0) {
-    return oldVersionFindings;
-  }
+  switch (params.state.orphans.kind) {
+    case 'notJudged':
+      return { findings: oldVersionFindings, isComplete: false };
+    case 'judged': {
+      if (params.state.orphans.orphans.length === 0) {
+        return { findings: oldVersionFindings, isComplete: true };
+      }
 
-  return [
-    ...oldVersionFindings,
-    buildHomebrewOrphansFinding({ tool: params.tool, state: params.state, activity: activity }),
-  ];
+      const orphansFinding = buildHomebrewOrphansFinding({
+        tool: params.tool,
+        cellarPath: params.state.cellarPath,
+        orphans: params.state.orphans.orphans,
+        activity: activity,
+      });
+
+      return { findings: [...oldVersionFindings, orphansFinding], isComplete: true };
+    }
+  }
 }
 
 function buildHomebrewOldVersionsFinding(params: {
   tool: LocatedTool;
-  cellarPath: string;
+  cellarPath: AbsolutePath;
   oldVersions: HomebrewOldVersions;
   activity: UnitActivity;
 }): ExploreFinding {
@@ -64,17 +78,18 @@ function buildHomebrewOldVersionsFinding(params: {
 
 function buildHomebrewOrphansFinding(params: {
   tool: LocatedTool;
-  state: HomebrewState;
+  cellarPath: AbsolutePath;
+  orphans: HomebrewOrphan[];
   activity: UnitActivity;
 }): ExploreFinding {
-  const formulae = params.state.orphans.map((orphan) => orphan.formula);
+  const formulae = params.orphans.map((orphan) => orphan.formula);
 
   return {
     unit: {
       kind: 'homebrewOrphans',
       tool: params.tool,
       formulae: formulae,
-      kegPaths: params.state.orphans.map((orphan) => orphan.kegPath),
+      kegPaths: params.orphans.map((orphan) => orphan.kegPath),
     },
     title: `Homebrew orphans ${formulae.join(', ')}`,
     explanation:
@@ -83,9 +98,9 @@ function buildHomebrewOrphansFinding(params: {
     risk: 'review',
     evidenceLines: [
       `\`brew autoremove -n\` would remove ${formulae.length} ${formulae.length === 1 ? 'formula' : 'formulae'} that no installed formula needs.`,
-      ...params.state.orphans.map((orphan) => `${orphan.formula} at ${orphan.kegPath}`),
+      ...params.orphans.map((orphan) => `${orphan.formula} at ${orphan.kegPath}`),
     ],
-    displayPath: params.state.cellarPath,
+    displayPath: params.cellarPath,
     activity: params.activity,
   };
 }
