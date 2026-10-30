@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { buildSimulatorDeviceFindings } from '../../src/explore/simulatorDevices/buildSimulatorDeviceFindings.js';
-import { parseSimulatorDeviceList } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
+import {
+  parseSimulatorDeviceList,
+  parseSimulatorDeviceUdid,
+} from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
+import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import {
   BOOTED_DEVICE_UDID,
@@ -24,6 +28,31 @@ function parseFixtureDevices() {
 
   return parsed.value;
 }
+
+describe('parseSimulatorDeviceUdid', () => {
+  test('passes a UUID in either case', () => {
+    expect(parseSimulatorDeviceUdid({ text: '11111111-aaaa-4aaa-8aaa-111111111111' }).kind).toBe(
+      'succeeded',
+    );
+    expect(parseSimulatorDeviceUdid({ text: UNAVAILABLE_DEVICE_UDID })).toEqual({
+      kind: 'succeeded',
+      value: UNAVAILABLE_DEVICE_UDID,
+    });
+  });
+
+  test('rejects any other text', () => {
+    expect(parseSimulatorDeviceUdid({ text: '--all' }).kind).toBe('failed');
+    expect(parseSimulatorDeviceUdid({ text: `${UNAVAILABLE_DEVICE_UDID} ` }).kind).toBe('failed');
+  });
+});
+
+describe('parseAbsolutePath', () => {
+  test('passes an absolute path and rejects a relative one', () => {
+    expect(parseAbsolutePath({ text: '/Users/example/data' }).kind).toBe('succeeded');
+    expect(parseAbsolutePath({ text: 'data' }).kind).toBe('failed');
+    expect(parseAbsolutePath({ text: '-rf' }).kind).toBe('failed');
+  });
+});
 
 describe('parseSimulatorDeviceList', () => {
   test('reads each device with its runtime', () => {

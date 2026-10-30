@@ -1,14 +1,13 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
+import { FLUTTER_SDK_DART_PATH } from './decideDartBinaryPath.js';
 
 /** Bounds the files read when a cache holds many projects, or a crafted one many entries. */
 export const ACTIVE_ROOT_FILES_MAX_COUNT = 64;
 
 const ACTIVE_ROOTS_PATH = '.pub-cache/active_roots';
-
-// The SDK's own binary; Flutter's `bin/dart` wrapper beside it can download an SDK.
-const FLUTTER_SDK_DART_PATH = 'bin/cache/dart-sdk/bin/dart';
 
 /**
  * Returns the Dart binary path of each distinct Flutter SDK that the projects of
@@ -104,27 +103,19 @@ async function loadFileText(params: { path: string }): Promise<string | null> {
 }
 
 function parseFileUrlField(params: { text: string; field: string }): string | null {
-  const parsed = parseJson(params.text);
+  const json = parseJsonValue({ text: params.text });
 
-  if (typeof parsed !== 'object' || parsed === null || !(params.field in parsed)) {
+  if (json.kind === 'failed' || !isJsonObject(json.value)) {
     return null;
   }
 
-  const value: unknown = Reflect.get(parsed, params.field);
+  const value = json.value[params.field];
 
   if (typeof value !== 'string') {
     return null;
   }
 
   return parseFileUrlPath(value);
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }
 
 /** The absolute path of a `file:` URL, else `null`. */

@@ -1,20 +1,60 @@
-import { isAbsolute } from 'node:path';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
-import { isJsonObject, parseJsonValue } from '../parseJsonValue.js';
+import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
+import type { ExploreProbeDefinition } from '../loadProbeOutput.js';
+
+declare const miseToolNameBrand: unique symbol;
+
+declare const miseToolVersionBrand: unique symbol;
+
+/** A tool name that `parseMiseToolName` checked, so it never reads as an option. */
+export type MiseToolName = string & { [miseToolNameBrand]: true };
+
+/** A version that `parseMiseToolVersion` checked, so it never reads as an option. */
+export type MiseToolVersion = string & { [miseToolVersionBrand]: true };
 
 /** An installed version that `mise prune` would remove. */
-export type MisePrunableVersion = { toolName: string; version: string; installPath: string };
+export type MisePrunableVersion = {
+  toolName: MiseToolName;
+  version: MiseToolVersion;
+  installPath: AbsolutePath;
+};
 
 /**
  * The same set `mise prune --dry-run` names, as JSON on stdout; the dry run itself reports on
  * stderr, which the runner keeps only as a tail.
  */
-export const MISE_PRUNABLE_LIST_ARGS = ['ls', '--prunable', '--json'];
+export const MISE_PRUNABLE_LIST_PROBE: ExploreProbeDefinition<MisePrunableVersion[]> = {
+  toolName: 'mise',
+  args: ['ls', '--prunable', '--json'],
+  parse: parseMisePrunableVersions,
+};
 
 // Both become the argument `<tool>@<version>` of `mise uninstall`, so neither may start an option.
 const TOOL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/@-]*$/;
 
 const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+
+/** The one maker of a `MiseToolName`; fails for a name that could start an option. */
+export function parseMiseToolName(params: { text: string }): Result<MiseToolName, string> {
+  if (!TOOL_NAME_PATTERN.test(params.text)) {
+    return { kind: 'failed', failure: 'a malformed tool name' };
+  }
+
+  // The brand records the check above, which the compiler cannot follow.
+  return { kind: 'succeeded', value: params.text as MiseToolName };
+}
+
+/** The one maker of a `MiseToolVersion`; fails for a version that could start an option. */
+export function parseMiseToolVersion(params: { text: string }): Result<MiseToolVersion, string> {
+  if (!VERSION_PATTERN.test(params.text)) {
+    return { kind: 'failed', failure: 'a malformed version' };
+  }
+
+  // The brand records the check above, which the compiler cannot follow.
+  return { kind: 'succeeded', value: params.text as MiseToolVersion };
+}
 
 /** Parses the JSON of `mise ls --prunable --json`; fails with a reason on any other shape. */
 export function parseMisePrunableVersions(params: {
@@ -32,13 +72,15 @@ export function parseMisePrunableVersions(params: {
 
   const versions: MisePrunableVersion[] = [];
 
-  for (const [toolName, toolVersions] of Object.entries(json.value)) {
-    if (!TOOL_NAME_PATTERN.test(toolName) || !Array.isArray(toolVersions)) {
+  for (const [toolNameText, toolVersions] of Object.entries(json.value)) {
+    const toolName = parseMiseToolName({ text: toolNameText });
+
+    if (toolName.kind === 'failed' || !Array.isArray(toolVersions)) {
       return { kind: 'failed', failure: 'a tool has a malformed name or no list of versions' };
     }
 
     for (const value of toolVersions) {
-      const version = parseMisePrunableVersion({ value: value, toolName: toolName });
+      const version = parseMisePrunableVersion({ value: value, toolName: toolName.value });
 
       if (version === null) {
         return { kind: 'failed', failure: 'a version lacks a field or has a malformed one' };
@@ -53,23 +95,25 @@ export function parseMisePrunableVersions(params: {
 
 function parseMisePrunableVersion(params: {
   value: unknown;
-  toolName: string;
+  toolName: MiseToolName;
 }): MisePrunableVersion | null {
   if (!isJsonObject(params.value)) {
     return null;
   }
 
-  const version = params.value.version;
-  const installPath = params.value.install_path;
+  const versionText = params.value.version;
+  const installPathText = params.value.install_path;
 
-  if (
-    typeof version !== 'string' ||
-    !VERSION_PATTERN.test(version) ||
-    typeof installPath !== 'string' ||
-    !isAbsolute(installPath)
-  ) {
+  if (typeof versionText !== 'string' || typeof installPathText !== 'string') {
     return null;
   }
 
-  return { toolName: params.toolName, version: version, installPath: installPath };
+  const version = parseMiseToolVersion({ text: versionText });
+  const installPath = parseAbsolutePath({ text: installPathText });
+
+  if (version.kind === 'failed' || installPath.kind === 'failed') {
+    return null;
+  }
+
+  return { toolName: params.toolName, version: version.value, installPath: installPath.value };
 }

@@ -1,9 +1,8 @@
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
-import {
-  DART_PUB_CACHE_GC_DRY_RUN_ARGS,
-  parseDartPubCacheGc,
-} from './dartPubCache/parseDartPubCacheGc.js';
+import { isDartGcSetOffered } from './dartPubCache/buildDartPubCacheFindings.js';
+import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
 import type { UnitActivityFacts } from './decideUnitActivity.js';
 import { decideUnitActivity } from './decideUnitActivity.js';
 import type {
@@ -15,16 +14,10 @@ import type {
 } from './exploreUnit.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
 import type { MisePrunableVersion } from './miseVersions/parseMisePrunableVersions.js';
-import {
-  MISE_PRUNABLE_LIST_ARGS,
-  parseMisePrunableVersions,
-} from './miseVersions/parseMisePrunableVersions.js';
+import { MISE_PRUNABLE_LIST_PROBE } from './miseVersions/parseMisePrunableVersions.js';
 import { isSimulatorDeviceOffered } from './simulatorDevices/buildSimulatorDeviceFindings.js';
 import type { SimulatorDevice } from './simulatorDevices/parseSimulatorDeviceList.js';
-import {
-  parseSimulatorDeviceList,
-  SIMULATOR_DEVICE_LIST_ARGS,
-} from './simulatorDevices/parseSimulatorDeviceList.js';
+import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
 
 export type UnitRecheckUnchanged = { kind: 'unchanged' };
 
@@ -63,11 +56,7 @@ export async function recheckExploreUnit(params: {
 
   switch (params.unit.kind) {
     case 'simulatorDevice': {
-      const devices = await loadProbeOutput({
-        ...probeRun,
-        args: SIMULATOR_DEVICE_LIST_ARGS,
-        parse: parseSimulatorDeviceList,
-      });
+      const devices = await loadProbeOutput({ ...probeRun, probe: SIMULATOR_DEVICE_LIST_PROBE });
 
       if (devices.kind === 'failed') {
         return devices;
@@ -82,8 +71,7 @@ export async function recheckExploreUnit(params: {
     case 'dartPubCache': {
       const gcPaths = await loadProbeOutput({
         ...probeRun,
-        args: DART_PUB_CACHE_GC_DRY_RUN_ARGS,
-        parse: parseDartPubCacheGc,
+        probe: DART_PUB_CACHE_GC_DRY_RUN_PROBE,
       });
 
       if (gcPaths.kind === 'failed') {
@@ -97,11 +85,7 @@ export async function recheckExploreUnit(params: {
       });
     }
     case 'miseVersion': {
-      const versions = await loadProbeOutput({
-        ...probeRun,
-        args: MISE_PRUNABLE_LIST_ARGS,
-        parse: parseMisePrunableVersions,
-      });
+      const versions = await loadProbeOutput({ ...probeRun, probe: MISE_PRUNABLE_LIST_PROBE });
 
       if (versions.kind === 'failed') {
         return versions;
@@ -138,15 +122,18 @@ export function compareSimulatorDevice(params: {
   });
 }
 
-/** Unchanged while the fresh gc set is not empty and holds no path the unit lacks. */
+/** Unchanged while the fresh gc set is still offered and holds no path the unit lacks. */
 export function compareDartPubCache(params: {
   unit: ExploreToolUnitDartPubCache;
-  gcPaths: string[];
+  gcPaths: AbsolutePath[];
   processCommands: string[] | null;
 }): UnitComparison {
   const scannedPaths = new Set(params.unit.gcPaths);
 
-  if (params.gcPaths.length === 0 || params.gcPaths.some((path) => !scannedPaths.has(path))) {
+  if (
+    !isDartGcSetOffered(params.gcPaths) ||
+    params.gcPaths.some((path) => !scannedPaths.has(path))
+  ) {
     return { kind: 'changed' };
   }
 

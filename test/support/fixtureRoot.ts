@@ -78,6 +78,14 @@ export async function createFixtureDirectory(params: { path: string }): Promise<
   await mkdir(params.path, { recursive: true });
 }
 
+/** Whether anything is at `path`; a symbolic link counts itself, whatever its target. */
+export async function isPresent(path: string): Promise<boolean> {
+  return lstat(path).then(
+    () => true,
+    () => false,
+  );
+}
+
 /** Sets the modified time of a file or directory. Call it after a directory's children exist: adding a child changes it. */
 export async function updateModifiedMs(params: {
   path: string;

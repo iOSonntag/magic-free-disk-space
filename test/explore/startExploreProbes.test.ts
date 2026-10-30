@@ -7,6 +7,7 @@ import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
   deleteFixtureRoot,
+  isPresent,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
@@ -18,6 +19,12 @@ import {
 } from './probeOutputFixtures.js';
 
 const TIMEOUT_MS = 10_000;
+
+/** Long enough for a probe that does not wait to have run its tool. */
+const HELD_WAIT_MS = 300;
+
+/** A made-up bundle path of an active Xcode. */
+const ACTIVE_XCODE_BUNDLE_PATH = '/Applications/Xcode.app';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -31,6 +38,7 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
+/** Each tool touches its marker in the fixture root before it answers. */
 async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise: string }> {
   const folder = join(fixtureRoot.rootDir, 'tools');
   const homeDir = environment.homeDir;
@@ -41,6 +49,7 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
       name: 'xcrun',
       stdoutText: buildSimulatorDeviceListJson({ homeDir: homeDir }),
       exitCode: 0,
+      prelude: `touch '${buildMarkerPath({ name: 'xcrun' })}'`,
     }),
     dart: await createProbeFakeTool({
       folder: folder,
@@ -50,14 +59,20 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
         gcPaths: buildDartGcPaths({ homeDir: homeDir }),
       }),
       exitCode: 0,
+      prelude: `touch '${buildMarkerPath({ name: 'dart' })}'`,
     }),
     mise: await createProbeFakeTool({
       folder: folder,
       name: 'mise',
       stdoutText: buildMisePrunableJson({ homeDir: homeDir }),
       exitCode: 0,
+      prelude: `touch '${buildMarkerPath({ name: 'mise' })}'`,
     }),
   };
+}
+
+function buildMarkerPath(params: { name: string }): string {
+  return join(fixtureRoot.rootDir, `${params.name}.ran`);
 }
 
 describe('startExploreProbes', () => {
@@ -68,6 +83,7 @@ describe('startExploreProbes', () => {
       environment: environment,
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -106,6 +122,7 @@ describe('startExploreProbes', () => {
       environment: environment,
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve(null),
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -121,6 +138,49 @@ describe('startExploreProbes', () => {
     expect(activities).toEqual([['unknown', 'unknown', 'busy'], ['idle'], ['idle', 'idle']]);
   });
 
+  test('runs no tool before the processes are read', async () => {
+    const tools = await createWorkingTools();
+    const processCommands = Promise.withResolvers<string[] | null>();
+
+    const probes = startExploreProbes({
+      environment: environment,
+      toolInstallLocations: buildFixtureToolLocations(tools),
+      processCommands: processCommands.promise,
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      timeoutMs: TIMEOUT_MS,
+    });
+
+    await Bun.sleep(HELD_WAIT_MS);
+
+    for (const name of ['xcrun', 'dart', 'mise']) {
+      expect(await isPresent(buildMarkerPath({ name: name }))).toBe(false);
+    }
+
+    processCommands.resolve([]);
+
+    expect((await probes.simulatorDevices).kind).toBe('probed');
+    expect((await probes.dartPubCache).kind).toBe('probed');
+    expect((await probes.miseVersions).kind).toBe('probed');
+    expect(await isPresent(buildMarkerPath({ name: 'xcrun' }))).toBe(true);
+  });
+
+  test('answers toolMissing for the simulators without an active Xcode and runs no xcrun', async () => {
+    const tools = await createWorkingTools();
+
+    const probes = startExploreProbes({
+      environment: environment,
+      toolInstallLocations: buildFixtureToolLocations(tools),
+      processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve(null),
+      timeoutMs: TIMEOUT_MS,
+    });
+
+    expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
+    expect((await probes.dartPubCache).kind).toBe('probed');
+    expect((await probes.miseVersions).kind).toBe('probed');
+    expect(await isPresent(buildMarkerPath({ name: 'xcrun' }))).toBe(false);
+  });
+
   test('fails a probe that exits non-zero, with its exit code and stderr', async () => {
     const xcrun = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
@@ -133,6 +193,7 @@ describe('startExploreProbes', () => {
       environment: environment,
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun, dart: null, mise: null }),
       processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -158,6 +219,7 @@ describe('startExploreProbes', () => {
       environment: environment,
       toolInstallLocations: buildFixtureToolLocations({ xcrun: null, dart: null, mise: mise }),
       processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -179,6 +241,7 @@ describe('startExploreProbes', () => {
       environment: environment,
       toolInstallLocations: buildFixtureToolLocations({ xcrun: null, dart: dart, mise: null }),
       processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -197,6 +260,7 @@ describe('startExploreProbes', () => {
         mise: null,
       }),
       processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
       timeoutMs: TIMEOUT_MS,
     });
 

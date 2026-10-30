@@ -1,17 +1,26 @@
 /** Made-up probe outputs in the formats the tools print; no value comes from a real machine. */
 
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { buildTestAbsolutePath, buildTestUdid } from '../support/parsedValueFixtures.js';
+
 export const FIXTURE_HOME_DIR = '/Users/example';
 
-export const UNAVAILABLE_DEVICE_UDID = '11111111-AAAA-4AAA-8AAA-111111111111';
+export const UNAVAILABLE_DEVICE_UDID = buildTestUdid({
+  text: '11111111-AAAA-4AAA-8AAA-111111111111',
+});
 
-export const NEVER_BOOTED_DEVICE_UDID = '22222222-BBBB-4BBB-8BBB-222222222222';
+export const NEVER_BOOTED_DEVICE_UDID = buildTestUdid({
+  text: '22222222-BBBB-4BBB-8BBB-222222222222',
+});
 
-export const USED_DEVICE_UDID = '33333333-CCCC-4CCC-8CCC-333333333333';
+export const USED_DEVICE_UDID = buildTestUdid({ text: '33333333-CCCC-4CCC-8CCC-333333333333' });
 
-export const BOOTED_DEVICE_UDID = '44444444-DDDD-4DDD-8DDD-444444444444';
+export const BOOTED_DEVICE_UDID = buildTestUdid({ text: '44444444-DDDD-4DDD-8DDD-444444444444' });
 
-export function buildDeviceDataPath(params: { homeDir: string; udid: string }): string {
-  return `${params.homeDir}/Library/Developer/CoreSimulator/Devices/${params.udid}/data`;
+export function buildDeviceDataPath(params: { homeDir: string; udid: string }): AbsolutePath {
+  return buildTestAbsolutePath({
+    text: `${params.homeDir}/Library/Developer/CoreSimulator/Devices/${params.udid}/data`,
+  });
 }
 
 /** Four devices: one whose runtime is gone, one never booted, one used, one booted and never shut down. */
@@ -73,13 +82,13 @@ export function buildSimulatorDeviceListJson(params: { homeDir: string }): strin
   });
 }
 
-export function buildDartGcPaths(params: { homeDir: string }): string[] {
+export function buildDartGcPaths(params: { homeDir: string }): AbsolutePath[] {
   return [
     `${params.homeDir}/.pub-cache/hosted-hashes/pub.dev/example_a-1.0.0.sha256`,
     `${params.homeDir}/.pub-cache/hosted/pub.dev/example_a-1.0.0`,
     `${params.homeDir}/.pub-cache/hosted/pub.dev/example_b-2.1.0`,
     `${params.homeDir}/.pub-cache/hosted/pub.dev/example_c-0.3.0`,
-  ];
+  ].map((text) => buildTestAbsolutePath({ text: text }));
 }
 
 export function buildDartGcDryRunText(params: { homeDir: string; gcPaths: string[] }): string {
@@ -103,8 +112,10 @@ export function buildMiseInstallPath(params: {
   homeDir: string;
   toolName: string;
   version: string;
-}): string {
-  return `${params.homeDir}/.local/share/mise/installs/${params.toolName}/${params.version}`;
+}): AbsolutePath {
+  return buildTestAbsolutePath({
+    text: `${params.homeDir}/.local/share/mise/installs/${params.toolName}/${params.version}`,
+  });
 }
 
 export function buildMisePrunableJson(params: { homeDir: string }): string {

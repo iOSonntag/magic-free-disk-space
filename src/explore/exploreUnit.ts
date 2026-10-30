@@ -1,27 +1,30 @@
 import type { Risk } from '../catalog/catalog.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolCommandFailure } from '../tools/runToolCommand.js';
+import type { MiseToolName, MiseToolVersion } from './miseVersions/parseMisePrunableVersions.js';
+import type { SimulatorDeviceUdid } from './simulatorDevices/parseSimulatorDeviceList.js';
 
 export type ExploreToolUnitSimulatorDevice = {
   kind: 'simulatorDevice';
   tool: LocatedTool;
-  udid: string;
-  dataPath: string;
+  udid: SimulatorDeviceUdid;
+  dataPath: AbsolutePath;
 };
 
 /** `gcPaths` is the list the dry run would delete; the run goes ahead only on a subset of it. */
 export type ExploreToolUnitDartPubCache = {
   kind: 'dartPubCache';
   tool: LocatedTool;
-  gcPaths: string[];
+  gcPaths: AbsolutePath[];
 };
 
 export type ExploreToolUnitMiseVersion = {
   kind: 'miseVersion';
   tool: LocatedTool;
-  toolName: string;
-  version: string;
-  installPath: string;
+  toolName: MiseToolName;
+  version: MiseToolVersion;
+  installPath: AbsolutePath;
 };
 
 /** An item a developer tool owns and removes with its own command. */
@@ -56,7 +59,7 @@ export type ExploreToolFailure =
   | ExploreToolFailureOutputUnreadable;
 
 /** The paths the unit's command removes, measured before and after its run; disjoint from catalog items. */
-export function listUnitPaths(unit: ExploreToolUnit): string[] {
+export function listUnitPaths(unit: ExploreToolUnit): AbsolutePath[] {
   switch (unit.kind) {
     case 'simulatorDevice':
       return [unit.dataPath];

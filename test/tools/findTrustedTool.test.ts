@@ -234,3 +234,118 @@ describe('findTrustedTool', () => {
     });
   });
 });
+
+describe("findTrustedTool with Flutter's wrapper of dart", () => {
+  /**
+   * A made-up Flutter root with its `bin/dart` wrapper and `bin/flutter` script, the SDK binary
+   * when `sdkDartMode` is given, and a link to the wrapper at a fixed location, which it returns.
+   */
+  async function createFlutterLayout(params: { sdkDartMode: number | null }): Promise<{
+    linkPath: string;
+    sdkDartPath: string;
+  }> {
+    const flutterRoot = join(fixtureRoot.rootDir, 'flutter');
+    const linkFolder = join(fixtureRoot.rootDir, 'usr', 'local', 'bin');
+    const linkPath = join(linkFolder, 'dart');
+    const wrapperPath = await createFakeTool({
+      folder: join(flutterRoot, 'bin'),
+      name: 'dart',
+      body: 'exit 0',
+    });
+
+    await createFakeTool({ folder: join(flutterRoot, 'bin'), name: 'flutter', body: 'exit 0' });
+    await mkdir(linkFolder, { recursive: true });
+    await symlink(wrapperPath, linkPath);
+
+    const sdkDartPath = join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
+
+    if (params.sdkDartMode !== null) {
+      await createFakeTool({
+        folder: join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin'),
+        name: 'dart',
+        body: 'exit 0',
+        mode: params.sdkDartMode,
+      });
+    }
+
+    return { linkPath: linkPath, sdkDartPath: sdkDartPath };
+  }
+
+  test('takes the binary of the SDK behind the wrapper', async () => {
+    const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [buildAbsoluteLocation(layout.linkPath)],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({
+      kind: 'succeeded',
+      value: { name: 'dart', path: await realpath(layout.sdkDartPath) },
+    });
+  });
+
+  test('finds nothing while the SDK binary is not there', async () => {
+    const layout = await createFlutterLayout({ sdkDartMode: null });
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [buildAbsoluteLocation(layout.linkPath)],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
+  });
+
+  test('puts the SDK binary through the trust check', async () => {
+    const layout = await createFlutterLayout({ sdkDartMode: 0o775 });
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [buildAbsoluteLocation(layout.linkPath)],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({
+      kind: 'failed',
+      failure: {
+        reason: 'untrusted',
+        path: await realpath(layout.sdkDartPath),
+        detail: 'writableByOthers',
+      },
+    });
+  });
+
+  test('keeps the `bin/dart` of a Dart SDK, which has no Flutter script beside it', async () => {
+    const dart = await createFakeTool({
+      folder: join(fixtureRoot.rootDir, 'dart-sdk', 'bin'),
+      name: 'dart',
+      body: 'exit 0',
+    });
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [buildAbsoluteLocation(dart)],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({
+      kind: 'succeeded',
+      value: { name: 'dart', path: await realpath(dart) },
+    });
+  });
+
+  test('loadTrustedTool reads the wrapper the same way', async () => {
+    const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
+
+    expect(await loadTrustedTool({ name: 'dart', path: layout.linkPath, userId: userId })).toEqual({
+      kind: 'succeeded',
+      value: { name: 'dart', path: await realpath(layout.sdkDartPath) },
+    });
+  });
+});

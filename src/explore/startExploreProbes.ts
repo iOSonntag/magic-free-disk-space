@@ -5,22 +5,14 @@ import type { LocatedTool, ToolLookupFailureUntrusted } from '../tools/findTrust
 import { findTrustedTool } from '../tools/findTrustedTool.js';
 import type { ToolInstallLocations, ToolName } from '../tools/toolInstallLocations.js';
 import { buildDartPubCacheFindings } from './dartPubCache/buildDartPubCacheFindings.js';
-import {
-  DART_PUB_CACHE_GC_DRY_RUN_ARGS,
-  parseDartPubCacheGc,
-} from './dartPubCache/parseDartPubCacheGc.js';
+import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
 import type { ExploreFinding, ExploreToolFailure } from './exploreUnit.js';
+import type { ExploreProbeDefinition } from './loadProbeOutput.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
 import { buildMiseVersionFindings } from './miseVersions/buildMiseVersionFindings.js';
-import {
-  MISE_PRUNABLE_LIST_ARGS,
-  parseMisePrunableVersions,
-} from './miseVersions/parseMisePrunableVersions.js';
+import { MISE_PRUNABLE_LIST_PROBE } from './miseVersions/parseMisePrunableVersions.js';
 import { buildSimulatorDeviceFindings } from './simulatorDevices/buildSimulatorDeviceFindings.js';
-import {
-  parseSimulatorDeviceList,
-  SIMULATOR_DEVICE_LIST_ARGS,
-} from './simulatorDevices/parseSimulatorDeviceList.js';
+import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
 
 export type ExploreProbeOutcomeProbed = { kind: 'probed'; findings: ExploreFinding[] };
 
@@ -43,54 +35,122 @@ export type ExploreProbeOutcome =
   | ExploreProbeOutcomeToolUntrusted
   | ExploreProbeOutcomeFailed;
 
+type ExploreProbeStart = {
+  environment: Environment;
+  toolInstallLocations: ToolInstallLocations;
+  processCommands: Promise<string[] | null>;
+  activeXcodeBundlePath: Promise<string | null>;
+  timeoutMs: number;
+};
+
 type ExploreProbeRun = {
   tool: LocatedTool;
   environment: Environment;
-  processCommands: Promise<string[] | null>;
+  processCommands: string[] | null;
   timeoutMs: number;
 };
 
 type ExploreProbe = {
   toolName: ToolName;
+  /** `xcrun simctl` without an active Xcode asks to install the command line tools. */
+  isActiveXcodeRequired: boolean;
   loadFindings: (run: ExploreProbeRun) => Promise<Result<ExploreFinding[], ExploreToolFailure>>;
 };
 
 const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
-  simulatorDevices: { toolName: 'xcrun', loadFindings: loadSimulatorDeviceFindings },
-  dartPubCache: { toolName: 'dart', loadFindings: loadDartPubCacheFindings },
-  miseVersions: { toolName: 'mise', loadFindings: loadMiseVersionFindings },
+  simulatorDevices: buildExploreProbe({
+    definition: SIMULATOR_DEVICE_LIST_PROBE,
+    isActiveXcodeRequired: true,
+    buildFindings: (probed) =>
+      buildSimulatorDeviceFindings({
+        tool: probed.run.tool,
+        devices: probed.output,
+        processCommands: probed.run.processCommands,
+      }),
+  }),
+  dartPubCache: buildExploreProbe({
+    definition: DART_PUB_CACHE_GC_DRY_RUN_PROBE,
+    isActiveXcodeRequired: false,
+    buildFindings: (probed) =>
+      buildDartPubCacheFindings({
+        tool: probed.run.tool,
+        gcPaths: probed.output,
+        homeDir: probed.run.environment.homeDir,
+        processCommands: probed.run.processCommands,
+      }),
+  }),
+  miseVersions: buildExploreProbe({
+    definition: MISE_PRUNABLE_LIST_PROBE,
+    isActiveXcodeRequired: false,
+    buildFindings: (probed) =>
+      buildMiseVersionFindings({
+        tool: probed.run.tool,
+        versions: probed.output,
+        homeDir: probed.run.environment.homeDir,
+        processCommands: probed.run.processCommands,
+      }),
+  }),
 };
 
 /**
- * Starts every probe at once and never rejects: each promise ends in an outcome. The activity of
- * each finding comes from `decideUnitActivity`, so `null` processes leave `unknown` only units
- * whose busy rule reads processes.
+ * Starts every probe at once and never rejects: each promise ends in an outcome. Each probe waits
+ * for `processCommands`, and the simulator probe for `activeXcodeBundlePath`, before it looks up
+ * its tool; without an active Xcode the simulator probe answers `toolMissing` and runs nothing.
+ * The activity of each finding comes from `decideUnitActivity`, so `null` processes leave
+ * `unknown` only units whose busy rule reads processes.
  */
-export function startExploreProbes(params: {
-  environment: Environment;
-  toolInstallLocations: ToolInstallLocations;
-  processCommands: Promise<string[] | null>;
-  timeoutMs: number;
-}): Record<ExploreProbeId, Promise<ExploreProbeOutcome>> {
+export function startExploreProbes(
+  params: ExploreProbeStart,
+): Record<ExploreProbeId, Promise<ExploreProbeOutcome>> {
   return {
-    simulatorDevices: runExploreProbe({ probe: EXPLORE_PROBES.simulatorDevices, ...params }),
-    dartPubCache: runExploreProbe({ probe: EXPLORE_PROBES.dartPubCache, ...params }),
-    miseVersions: runExploreProbe({ probe: EXPLORE_PROBES.miseVersions, ...params }),
+    simulatorDevices: runExploreProbe({ probe: EXPLORE_PROBES.simulatorDevices, start: params }),
+    dartPubCache: runExploreProbe({ probe: EXPLORE_PROBES.dartPubCache, start: params }),
+    miseVersions: runExploreProbe({ probe: EXPLORE_PROBES.miseVersions, start: params }),
+  };
+}
+
+function buildExploreProbe<T>(params: {
+  definition: ExploreProbeDefinition<T>;
+  isActiveXcodeRequired: boolean;
+  buildFindings: (probed: { run: ExploreProbeRun; output: T }) => ExploreFinding[];
+}): ExploreProbe {
+  return {
+    toolName: params.definition.toolName,
+    isActiveXcodeRequired: params.isActiveXcodeRequired,
+    loadFindings: async (run) => {
+      const output = await loadProbeOutput({
+        probe: params.definition,
+        tool: run.tool,
+        environment: run.environment,
+        timeoutMs: run.timeoutMs,
+      });
+
+      if (output.kind === 'failed') {
+        return output;
+      }
+
+      return { kind: 'succeeded', value: params.buildFindings({ run: run, output: output.value }) };
+    },
   };
 }
 
 async function runExploreProbe(params: {
   probe: ExploreProbe;
-  environment: Environment;
-  toolInstallLocations: ToolInstallLocations;
-  processCommands: Promise<string[] | null>;
-  timeoutMs: number;
+  start: ExploreProbeStart;
 }): Promise<ExploreProbeOutcome> {
+  const start = params.start;
+  // The processes are read before any tool starts, or a probe's own tool would show as running.
+  const processCommands = await start.processCommands;
+
+  if (params.probe.isActiveXcodeRequired && (await start.activeXcodeBundlePath) === null) {
+    return { kind: 'toolMissing' };
+  }
+
   const found = await findTrustedTool({
     name: params.probe.toolName,
-    locations: params.toolInstallLocations[params.probe.toolName],
-    homeDir: params.environment.homeDir,
-    userId: params.environment.userId,
+    locations: start.toolInstallLocations[params.probe.toolName],
+    homeDir: start.environment.homeDir,
+    userId: start.environment.userId,
   });
 
   if (found.kind === 'failed') {
@@ -104,9 +164,9 @@ async function runExploreProbe(params: {
 
   const findings = await params.probe.loadFindings({
     tool: found.value,
-    environment: params.environment,
-    processCommands: params.processCommands,
-    timeoutMs: params.timeoutMs,
+    environment: start.environment,
+    processCommands: processCommands,
+    timeoutMs: start.timeoutMs,
   });
 
   if (findings.kind === 'failed') {
@@ -114,78 +174,4 @@ async function runExploreProbe(params: {
   }
 
   return { kind: 'probed', findings: findings.value };
-}
-
-async function loadSimulatorDeviceFindings(
-  run: ExploreProbeRun,
-): Promise<Result<ExploreFinding[], ExploreToolFailure>> {
-  const devices = await loadProbeOutput({
-    tool: run.tool,
-    args: SIMULATOR_DEVICE_LIST_ARGS,
-    parse: parseSimulatorDeviceList,
-    environment: run.environment,
-    timeoutMs: run.timeoutMs,
-  });
-
-  if (devices.kind === 'failed') {
-    return devices;
-  }
-
-  const findings = buildSimulatorDeviceFindings({
-    tool: run.tool,
-    devices: devices.value,
-    processCommands: await run.processCommands,
-  });
-
-  return { kind: 'succeeded', value: findings };
-}
-
-async function loadDartPubCacheFindings(
-  run: ExploreProbeRun,
-): Promise<Result<ExploreFinding[], ExploreToolFailure>> {
-  const gcPaths = await loadProbeOutput({
-    tool: run.tool,
-    args: DART_PUB_CACHE_GC_DRY_RUN_ARGS,
-    parse: parseDartPubCacheGc,
-    environment: run.environment,
-    timeoutMs: run.timeoutMs,
-  });
-
-  if (gcPaths.kind === 'failed') {
-    return gcPaths;
-  }
-
-  const findings = buildDartPubCacheFindings({
-    tool: run.tool,
-    gcPaths: gcPaths.value,
-    homeDir: run.environment.homeDir,
-    processCommands: await run.processCommands,
-  });
-
-  return { kind: 'succeeded', value: findings };
-}
-
-async function loadMiseVersionFindings(
-  run: ExploreProbeRun,
-): Promise<Result<ExploreFinding[], ExploreToolFailure>> {
-  const versions = await loadProbeOutput({
-    tool: run.tool,
-    args: MISE_PRUNABLE_LIST_ARGS,
-    parse: parseMisePrunableVersions,
-    environment: run.environment,
-    timeoutMs: run.timeoutMs,
-  });
-
-  if (versions.kind === 'failed') {
-    return versions;
-  }
-
-  const findings = buildMiseVersionFindings({
-    tool: run.tool,
-    versions: versions.value,
-    homeDir: run.environment.homeDir,
-    processCommands: await run.processCommands,
-  });
-
-  return { kind: 'succeeded', value: findings };
 }

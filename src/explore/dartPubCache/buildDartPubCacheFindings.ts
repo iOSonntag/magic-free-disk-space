@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
@@ -6,14 +7,19 @@ import { formatSamplePathLines } from '../formatHomeRelativePath.js';
 
 const SAMPLE_PATH_MAX_COUNT = 3;
 
-/** One finding for the whole gc set, none when the set is empty. */
+/** An empty gc set offers nothing, at the scan and at the recheck before a run alike. */
+export function isDartGcSetOffered(gcPaths: AbsolutePath[]): boolean {
+  return gcPaths.length > 0;
+}
+
+/** One finding for the whole gc set, none when the set is not offered. */
 export function buildDartPubCacheFindings(params: {
   tool: LocatedTool;
-  gcPaths: string[];
+  gcPaths: AbsolutePath[];
   homeDir: string;
   processCommands: string[] | null;
 }): ExploreFinding[] {
-  if (params.gcPaths.length === 0) {
+  if (!isDartGcSetOffered(params.gcPaths)) {
     return [];
   }
 

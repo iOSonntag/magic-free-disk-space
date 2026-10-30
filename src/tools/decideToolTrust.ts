@@ -1,5 +1,3 @@
-import type { ToolLookupFailureUntrusted } from './findTrustedTool.js';
-
 const ROOT_USER_ID = 0;
 
 const ANY_EXECUTE_BITS = 0o111;
@@ -9,9 +7,10 @@ const GROUP_AND_OTHERS_WRITE_BITS = 0o022;
 /** The facts of a binary's real path that its trust rests on. */
 export type ToolFileStats = { isRegularFile: boolean; mode: number; ownerUserId: number };
 
-export type ToolTrust =
-  | { isTrusted: true }
-  | { isTrusted: false; detail: ToolLookupFailureUntrusted['detail'] };
+/** Why a binary is not trusted. */
+export type ToolDistrustDetail = 'foreignOwner' | 'writableByOthers' | 'notExecutableFile';
+
+export type ToolTrust = { isTrusted: true } | { isTrusted: false; detail: ToolDistrustDetail };
 
 /**
  * Trusts a regular executable file owned by `userId` or root that neither its group nor others

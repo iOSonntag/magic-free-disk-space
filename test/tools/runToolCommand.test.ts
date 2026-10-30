@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import { runToolCommand, TOOL_MAX_OUTPUT_BYTES } from '../../src/tools/runToolCommand.js';
+import {
+  buildToolArguments,
+  runToolCommand,
+  stopRunningTools,
+  TOOL_MAX_OUTPUT_BYTES,
+} from '../../src/tools/runToolCommand.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -67,6 +72,18 @@ async function waitUntilProcessGone(pid: number): Promise<boolean> {
 
 async function loadPid(path: string): Promise<number> {
   return Number.parseInt(await readFile(path, 'utf8'), 10);
+}
+
+async function waitUntilPresent(path: string): Promise<void> {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    if (await isPresent(path)) {
+      return;
+    }
+
+    await Bun.sleep(20);
+  }
+
+  throw new Error(`${path} did not appear.`);
 }
 
 describe('runToolCommand', () => {
@@ -186,6 +203,42 @@ echo done`,
     }
   });
 
+  test('runs the tool in the temporary folder', async () => {
+    const result = await runFakeTool({ name: 'xcrun', body: '/bin/pwd -P' });
+
+    expect(result).toEqual({
+      kind: 'succeeded',
+      value: { stdoutText: `${await realpath(fixtureRoot.tempDir)}\n`, stderrTail: '' },
+    });
+  });
+
+  test('stopRunningTools kills a running tool and what it started, and the run settles', async () => {
+    const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
+    const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
+    // The tool's pid file is written last and moved into place whole, so it marks both as ready.
+    const run = runFakeTool({
+      name: 'xcrun',
+      body: `/bin/sleep 60 &
+echo $! > '${grandchildPidFile}'
+echo $$ > '${toolPidFile}.partial'
+/bin/mv '${toolPidFile}.partial' '${toolPidFile}'
+/bin/sleep 60`,
+      timeoutMs: 60_000,
+    });
+
+    await waitUntilPresent(toolPidFile);
+    stopRunningTools();
+
+    const result = await run;
+
+    expect(result).toMatchObject({
+      kind: 'failed',
+      failure: { reason: 'endedBySignal', signal: 'SIGKILL' },
+    });
+    expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
+    expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
+  });
+
   test('puts the leading argument of dart before the arguments', async () => {
     const result = await runFakeTool({
       name: 'dart',
@@ -197,6 +250,20 @@ echo done`,
       kind: 'succeeded',
       value: { stdoutText: '--suppress-analytics\npub\ncache\ngc\n--dry-run\n', stderrTail: '' },
     });
+  });
+
+  test('buildToolArguments puts the leading arguments of the tool first', () => {
+    expect(buildToolArguments({ name: 'dart', args: ['pub', 'cache', 'gc', '--force'] })).toEqual([
+      '--suppress-analytics',
+      'pub',
+      'cache',
+      'gc',
+      '--force',
+    ]);
+    expect(buildToolArguments({ name: 'mise', args: ['uninstall', 'node@20.1.0'] })).toEqual([
+      'uninstall',
+      'node@20.1.0',
+    ]);
   });
 
   test('fails as spawn failed for a binary that is not there', async () => {

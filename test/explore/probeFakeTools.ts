@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExploreToolUnit } from '../../src/explore/exploreUnit.js';
 import { buildUnitCommand } from '../../src/explore/exploreUnit.js';
+import { buildToolArguments } from '../../src/tools/runToolCommand.js';
 import type { ToolInstallLocations, ToolName } from '../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../support/fakeTool.js';
 
@@ -16,7 +17,8 @@ const UNEXPECTED_ARGUMENTS_EXIT_CODE = 64;
 
 /**
  * Writes a fake `name` into `folder` that prints `stdoutText` and exits with `exitCode` when
- * called with its probe's arguments, and exits 64 for any other call.
+ * called with its probe's arguments, and exits 64 for any other call. `prelude`, shell code, runs
+ * before the answer.
  */
 export async function createProbeFakeTool(params: {
   folder: string;
@@ -24,9 +26,11 @@ export async function createProbeFakeTool(params: {
   stdoutText: string;
   exitCode: number;
   mode?: number;
+  prelude?: string;
 }): Promise<string> {
   const stdoutPath = join(params.folder, `${params.name}.stdout`);
   const body = `[ "$*" = "${PROBE_ARGUMENT_TEXTS[params.name]}" ] || { echo "unexpected arguments: $*" >&2; exit ${UNEXPECTED_ARGUMENTS_EXIT_CODE}; }
+${params.prelude ?? ''}
 cat '${stdoutPath}'
 echo 'a line on stderr' >&2
 exit ${params.exitCode}`;
@@ -43,17 +47,11 @@ exit ${params.exitCode}`;
   return path;
 }
 
-/** The runner's leading arguments of each tool, as text before the command's own arguments. */
-const LEADING_ARGUMENT_TEXTS: Record<ToolName, string> = {
-  xcrun: '',
-  dart: '--suppress-analytics ',
-  mise: '',
-};
-
 /**
  * Writes a fake of the unit's tool into `folder` that answers its probe as `createProbeFakeTool`
  * does, runs `commandBody` when called with the unit's command, and exits 64 for any other call.
- * `commandBody` is shell code that ends with its own `exit`.
+ * `commandBody` is shell code that ends with its own `exit`; `probePrelude`, shell code too, runs
+ * before the probe's answer.
  */
 export async function createUnitRunFakeTool(params: {
   folder: string;
@@ -61,11 +59,16 @@ export async function createUnitRunFakeTool(params: {
   probeStdoutText: string;
   probeExitCode: number;
   commandBody: string;
+  probePrelude?: string;
 }): Promise<string> {
   const name = params.unit.tool.name;
   const stdoutPath = join(params.folder, `${name}.stdout`);
-  const commandText = `${LEADING_ARGUMENT_TEXTS[name]}${buildUnitCommand(params.unit).join(' ')}`;
+  const commandText = buildToolArguments({
+    name: name,
+    args: buildUnitCommand(params.unit),
+  }).join(' ');
   const body = `if [ "$*" = "${PROBE_ARGUMENT_TEXTS[name]}" ]; then
+${params.probePrelude ?? ''}
   cat '${stdoutPath}'
   echo 'a line on stderr' >&2
   exit ${params.probeExitCode}

@@ -21,6 +21,11 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import {
+  buildTestAbsolutePath,
+  buildTestMiseToolName,
+  buildTestMiseToolVersion,
+} from '../support/parsedValueFixtures.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -73,11 +78,15 @@ const nodeInstallPath = buildMiseInstallPath({
   version: '20.1.0',
 });
 
+const nodeToolName = buildTestMiseToolName({ text: 'node' });
+
+const nodeVersion = buildTestMiseToolVersion({ text: '20.1.0' });
+
 const miseUnit: ExploreToolUnitMiseVersion = {
   kind: 'miseVersion',
   tool: { name: 'mise', path: '/opt/example/mise' },
-  toolName: 'node',
-  version: '20.1.0',
+  toolName: nodeToolName,
+  version: nodeVersion,
   installPath: nodeInstallPath,
 };
 
@@ -95,7 +104,12 @@ describe('compareSimulatorDevice', () => {
   test('is changed when the device is gone, moved, or no longer offered', () => {
     for (const devices of [
       [],
-      [{ ...unavailableDevice, dataPath: '/Users/example/elsewhere/data' }],
+      [
+        {
+          ...unavailableDevice,
+          dataPath: buildTestAbsolutePath({ text: '/Users/example/elsewhere/data' }),
+        },
+      ],
       [{ ...unavailableDevice, isAvailable: true }],
     ]) {
       expect(
@@ -146,7 +160,12 @@ describe('compareDartPubCache', () => {
     expect(
       compareDartPubCache({
         unit: dartUnit,
-        gcPaths: [...gcPaths, '/Users/example/.pub-cache/hosted/pub.dev/example_d-1.0.0'],
+        gcPaths: [
+          ...gcPaths,
+          buildTestAbsolutePath({
+            text: '/Users/example/.pub-cache/hosted/pub.dev/example_d-1.0.0',
+          }),
+        ],
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -158,7 +177,7 @@ describe('compareMiseVersion', () => {
     expect(
       compareMiseVersion({
         unit: miseUnit,
-        versions: [{ toolName: 'node', version: '20.1.0', installPath: nodeInstallPath }],
+        versions: [{ toolName: nodeToolName, version: nodeVersion, installPath: nodeInstallPath }],
         processCommands: null,
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -167,8 +186,20 @@ describe('compareMiseVersion', () => {
   test('is changed when the version is no longer prunable or moved', () => {
     for (const versions of [
       [],
-      [{ toolName: 'node', version: '20.1.0', installPath: '/Users/example/elsewhere' }],
-      [{ toolName: 'node', version: '20.2.0', installPath: nodeInstallPath }],
+      [
+        {
+          toolName: nodeToolName,
+          version: nodeVersion,
+          installPath: buildTestAbsolutePath({ text: '/Users/example/elsewhere' }),
+        },
+      ],
+      [
+        {
+          toolName: nodeToolName,
+          version: buildTestMiseToolVersion({ text: '20.2.0' }),
+          installPath: nodeInstallPath,
+        },
+      ],
     ]) {
       expect(
         compareMiseVersion({ unit: miseUnit, versions: versions, processCommands: [] }),
@@ -268,8 +299,8 @@ describe('recheckExploreUnit', () => {
         unit: {
           kind: 'miseVersion',
           tool: mise,
-          toolName: 'node',
-          version: '20.1.0',
+          toolName: nodeToolName,
+          version: nodeVersion,
           installPath: buildMiseInstallPath({
             homeDir: homeDir,
             toolName: 'node',

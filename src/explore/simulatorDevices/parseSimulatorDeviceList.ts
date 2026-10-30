@@ -1,10 +1,17 @@
-import { isAbsolute } from 'node:path';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
-import { isJsonObject, parseJsonValue } from '../parseJsonValue.js';
+import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
+import type { ExploreProbeDefinition } from '../loadProbeOutput.js';
+
+declare const simulatorDeviceUdidBrand: unique symbol;
+
+/** A UDID that `parseSimulatorDeviceUdid` checked: a UUID, so it never reads as an option. */
+export type SimulatorDeviceUdid = string & { [simulatorDeviceUdidBrand]: true };
 
 /** One device of `simctl list devices --json`, with the runtime it was listed under. */
 export type SimulatorDevice = {
-  udid: string;
+  udid: SimulatorDeviceUdid;
   name: string;
   runtimeId: string;
   /** Such as `Shutdown` or `Booted`. */
@@ -12,16 +19,32 @@ export type SimulatorDevice = {
   isAvailable: boolean;
   /** Why the device is unavailable, as `simctl` words it; `null` when it gives no reason. */
   availabilityError: string | null;
-  dataPath: string;
+  dataPath: AbsolutePath;
   /** `null` when the device was never booted. */
   lastBootedAt: string | null;
 };
 
-export const SIMULATOR_DEVICE_LIST_ARGS = ['simctl', 'list', 'devices', '--json'];
+export const SIMULATOR_DEVICE_LIST_PROBE: ExploreProbeDefinition<SimulatorDevice[]> = {
+  toolName: 'xcrun',
+  args: ['simctl', 'list', 'devices', '--json'],
+  parse: parseSimulatorDeviceList,
+};
 
 // The UDID becomes an argument of `simctl delete`, so only the shape `simctl` prints passes.
 const UDID_PATTERN =
   /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
+
+/** The one maker of a `SimulatorDeviceUdid`; fails for any text but a UUID. */
+export function parseSimulatorDeviceUdid(params: {
+  text: string;
+}): Result<SimulatorDeviceUdid, string> {
+  if (!UDID_PATTERN.test(params.text)) {
+    return { kind: 'failed', failure: 'not a UUID' };
+  }
+
+  // The brand records the check above, which the compiler cannot follow.
+  return { kind: 'succeeded', value: params.text as SimulatorDeviceUdid };
+}
 
 /** Parses the JSON of `simctl list devices --json`; fails with a reason on any other shape. */
 export function parseSimulatorDeviceList(params: {
@@ -68,36 +91,41 @@ function parseSimulatorDevice(params: {
     return null;
   }
 
-  const udid = value.udid;
+  const udidText = value.udid;
   const name = value.name;
   const state = value.state;
   const isAvailable = value.isAvailable;
-  const dataPath = value.dataPath;
+  const dataPathText = value.dataPath;
   const availabilityError = value.availabilityError ?? null;
   const lastBootedAt = value.lastBootedAt ?? null;
 
   if (
-    typeof udid !== 'string' ||
-    !UDID_PATTERN.test(udid) ||
+    typeof udidText !== 'string' ||
     typeof name !== 'string' ||
     typeof state !== 'string' ||
     typeof isAvailable !== 'boolean' ||
-    typeof dataPath !== 'string' ||
-    !isAbsolute(dataPath) ||
+    typeof dataPathText !== 'string' ||
     (availabilityError !== null && typeof availabilityError !== 'string') ||
     (lastBootedAt !== null && typeof lastBootedAt !== 'string')
   ) {
     return null;
   }
 
+  const udid = parseSimulatorDeviceUdid({ text: udidText });
+  const dataPath = parseAbsolutePath({ text: dataPathText });
+
+  if (udid.kind === 'failed' || dataPath.kind === 'failed') {
+    return null;
+  }
+
   return {
-    udid: udid,
+    udid: udid.value,
     name: name,
     runtimeId: params.runtimeId,
     state: state,
     isAvailable: isAvailable,
     availabilityError: availabilityError,
-    dataPath: dataPath,
+    dataPath: dataPath.value,
     lastBootedAt: lastBootedAt,
   };
 }
