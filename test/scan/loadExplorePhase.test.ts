@@ -3,7 +3,7 @@ import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, ExploreProbeId } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { ExploreFinding } from '../../src/explore/exploreUnit.js';
+import type { ExploreFinding, ExploreToolFailure } from '../../src/explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { loadExplorePhase } from '../../src/scan/loadExplorePhase.js';
@@ -21,6 +21,11 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import {
+  buildTestAbsolutePath,
+  buildTestMiseToolName,
+  buildTestMiseToolVersion,
+} from '../support/parsedValueFixtures.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
 
@@ -67,9 +72,9 @@ function buildMiseFinding(params: {
     unit: {
       kind: 'miseVersion',
       tool: { name: 'mise', path: '/opt/example/mise' },
-      toolName: 'node',
-      version: '20.1.0',
-      installPath: params.installPath,
+      toolName: buildTestMiseToolName({ text: 'node' }),
+      version: buildTestMiseToolVersion({ text: '20.1.0' }),
+      installPath: buildTestAbsolutePath({ text: params.installPath }),
     },
     title: 'mise node 20.1.0',
     explanation: 'An example version.',
@@ -117,6 +122,7 @@ describe('loadExplorePhase', () => {
       environment: environment,
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun, dart: null, mise: null }),
       processCommands: Promise.resolve([]),
+      activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
       timeoutMs: 10_000,
     });
 
@@ -190,6 +196,14 @@ describe('loadExplorePhase', () => {
   });
 
   test('falls back to advice for a probe that did not run, with an issue unless the tool is missing', async () => {
+    const miseFailure: ExploreToolFailure = {
+      reason: 'commandFailed',
+      failure: {
+        reason: 'exitedWithError',
+        exitCode: 3,
+        stderrTail: '\nmise ERROR something broke\nmore\n',
+      },
+    };
     const phase = await loadExplorePhase({
       probes: buildProbes({
         simulatorDevices: { kind: 'toolMissing' },
@@ -200,14 +214,7 @@ describe('loadExplorePhase', () => {
         miseVersions: {
           kind: 'failed',
           tool: { name: 'mise', path: '/opt/example/mise' },
-          failure: {
-            reason: 'commandFailed',
-            failure: {
-              reason: 'exitedWithError',
-              exitCode: 3,
-              stderrTail: '\nmise ERROR something broke\nmore\n',
-            },
-          },
+          failure: miseFailure,
         },
       }),
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
@@ -218,15 +225,11 @@ describe('loadExplorePhase', () => {
     expect(phase.fallbackEntries).toEqual([simulatorEntry, dartEntry, miseEntry]);
     expect(phase.issues).toEqual([
       { path: '/opt/example/dart', reason: 'toolUntrusted', detail: 'writableByOthers' },
-      {
-        path: '/opt/example/mise',
-        reason: 'toolFailed',
-        detail: 'exited with code 3: mise ERROR something broke',
-      },
+      { path: '/opt/example/mise', reason: 'toolFailed', failure: miseFailure },
     ]);
   });
 
-  test('summarizes unreadable output in the issue', async () => {
+  test('keeps the failure of unreadable output in the issue', async () => {
     const phase = await loadExplorePhase({
       probes: buildProbes({
         simulatorDevices: {
@@ -245,7 +248,7 @@ describe('loadExplorePhase', () => {
       {
         path: '/usr/bin/xcrun',
         reason: 'toolFailed',
-        detail: 'its output could not be read: no JSON',
+        failure: { reason: 'outputUnreadable', detail: 'no JSON' },
       },
     ]);
   });

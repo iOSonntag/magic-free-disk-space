@@ -154,7 +154,7 @@ describe('formatRemovalRun', () => {
 
     expect(lines).toEqual([
       '- deleted: /fixture/tool-a',
-      '- its tool failed: /fixture/tool-b (exit code 2)',
+      '- its tool failed: /fixture/tool-b (exited with code 2)',
       '   device busy',
       '- its tool failed: /fixture/tool-c (stopped at its time limit of 600 s)',
       '   still deleting',

@@ -8,6 +8,7 @@ import { getErrorCode } from '../system/getErrorCode.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import { buildToolArguments } from '../tools/runToolCommand.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
 import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
@@ -53,19 +54,37 @@ export type RemovalRun = {
 
 const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
 
+/** Whether the outcome left its item in place through a failure, which the run reports. */
+export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
+  switch (kind) {
+    case 'permissionDenied':
+    case 'failed':
+    case 'toolFailed':
+      return true;
+    case 'removed':
+    case 'alreadyGone':
+    case 'changedSinceScan':
+    case 'ownerRunning':
+    case 'notAttempted':
+      return false;
+  }
+}
+
 /**
  * Removes each candidate permanently, in order, after recording the intent. A path goes only
- * while its identity still matches the scan and no owner app runs in `processCommands`, read
- * after the confirmation; `null` withholds every owned item. A tool item runs only while its
- * unit is still unchanged and idle. A journal failure stops the run.
+ * while its identity still matches the scan and no owner app runs in the processes
+ * `loadProcessCommands` read once after the confirmation; `null` withholds every owned item. A
+ * tool item reads the processes afresh and runs only while its unit is still unchanged and
+ * idle. A journal failure stops the run.
  */
 export async function deleteCandidates(params: {
   candidates: Candidate[];
   journal: DeletionJournal;
   environment: Environment;
-  processCommands: string[] | null;
+  loadProcessCommands: () => Promise<string[] | null>;
   clock: () => number;
 }): Promise<RemovalRun> {
+  const processCommands = await params.loadProcessCommands();
   const outcomes: RemovalOutcome[] = [];
 
   for (const [index, candidate] of params.candidates.entries()) {
@@ -86,7 +105,8 @@ export async function deleteCandidates(params: {
     const removal = await removeCandidate({
       candidate: candidate,
       environment: params.environment,
-      processCommands: params.processCommands,
+      processCommands: processCommands,
+      loadProcessCommands: params.loadProcessCommands,
       clock: params.clock,
     });
 
@@ -124,7 +144,10 @@ function buildIntentEntry(params: { candidate: Candidate; atMs: number }): Journ
         path: params.candidate.path,
         allocatedBytes: params.candidate.allocatedBytes,
         unit: params.candidate.removal.unit,
-        args: buildUnitCommand(params.candidate.removal.unit),
+        args: buildToolArguments({
+          name: params.candidate.removal.unit.tool.name,
+          args: buildUnitCommand(params.candidate.removal.unit),
+        }),
       };
   }
 }
@@ -132,7 +155,9 @@ function buildIntentEntry(params: { candidate: Candidate; atMs: number }): Journ
 async function removeCandidate(params: {
   candidate: Candidate;
   environment: Environment;
+  /** The processes read once before the run, for path items. */
   processCommands: string[] | null;
+  loadProcessCommands: () => Promise<string[] | null>;
   clock: () => number;
 }): Promise<RecordedRemoval> {
   switch (params.candidate.removal.kind) {
@@ -159,7 +184,7 @@ async function removeCandidate(params: {
       const run = await runToolCandidate({
         unit: params.candidate.removal.unit,
         environment: params.environment,
-        processCommands: params.processCommands,
+        loadProcessCommands: params.loadProcessCommands,
         timeoutMs: TOOL_RUN_TIMEOUT_MS,
       });
 

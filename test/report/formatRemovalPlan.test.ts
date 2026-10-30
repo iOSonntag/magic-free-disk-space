@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { formatRemovalPlan } from '../../src/report/formatRemovalPlan.js';
 import type { Candidate } from '../../src/scan/candidate.js';
-import { buildTestToolCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestDartToolCandidate,
+  buildTestToolCandidate,
+} from '../support/candidateFixtures.js';
 
 function buildCandidate(params: {
   path: string;
@@ -98,6 +101,14 @@ describe('formatRemovalPlan', () => {
       '- 2.0 KiB /fixture/home/.local/share/mise/installs/node/20.1.0',
       '   by running: mise uninstall node@20.1.0',
     ]);
+  });
+
+  test('names the command with the leading arguments of its tool', () => {
+    const lines = formatRemovalPlan({
+      plan: { approved: [buildTestDartToolCandidate({ homeDir: '/fixture/home' })], refused: [] },
+    });
+
+    expect(lines).toContain('   by running: dart --suppress-analytics pub cache gc --force');
   });
 
   test('marks an incomplete approved size as at least', () => {

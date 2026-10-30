@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, lstat, mkdir } from 'node:fs/promises';
+import { chmod, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { runToolCandidate } from '../../src/delete/runToolCandidate.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -9,6 +9,7 @@ import type {
   ExploreToolUnitMiseVersion,
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import { createUnitRunFakeTool } from '../explore/probeFakeTools.js';
@@ -26,13 +27,17 @@ import {
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
+  isPresent,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
 const SIMULATOR_APP_COMMAND =
   '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator';
+
+const MEBIBYTE = 1_048_576;
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -47,13 +52,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
-
-async function isPresent(path: string): Promise<boolean> {
-  return lstat(path).then(
-    () => true,
-    () => false,
-  );
-}
 
 async function createUnitFile(params: { path: string; sizeBytes: number }): Promise<void> {
   await mkdir(dirname(params.path), { recursive: true });
@@ -74,6 +72,7 @@ async function createUnitTool(params: {
   probeStdoutText: string;
   probeExitCode?: number;
   commandBody: string;
+  probePrelude?: string;
 }): Promise<void> {
   await createUnitRunFakeTool({
     folder: join(fixtureRoot.rootDir, 'tools'),
@@ -82,6 +81,7 @@ async function createUnitTool(params: {
     probeExitCode: params.probeExitCode ?? 0,
     commandBody: `touch '${markerPath}'
 ${params.commandBody}`,
+    ...(params.probePrelude === undefined ? {} : { probePrelude: params.probePrelude }),
   });
 }
 
@@ -98,8 +98,8 @@ async function createMiseUnit(version: string): Promise<ExploreToolUnitMiseVersi
   return {
     kind: 'miseVersion',
     tool: { name: 'mise', path: buildToolPath('mise') },
-    toolName: 'node',
-    version: version,
+    toolName: buildTestMiseToolName({ text: 'node' }),
+    version: buildTestMiseToolVersion({ text: version }),
     installPath: installPath,
   };
 }
@@ -120,10 +120,32 @@ async function createSimulatorUnit(): Promise<ExploreToolUnitSimulatorDevice> {
   };
 }
 
+/** The unit of the fixture gc set, with a file in each of its paths. */
+async function createDartUnit(): Promise<ExploreToolUnitDartPubCache> {
+  const gcPaths = buildDartGcPaths({ homeDir: environment.homeDir });
+
+  for (const gcPath of gcPaths) {
+    await createUnitFile({
+      path: gcPath.endsWith('.sha256') ? gcPath : join(gcPath, 'lib/package.dart'),
+      sizeBytes: 4096,
+    });
+  }
+
+  return { kind: 'dartPubCache', tool: { name: 'dart', path: buildToolPath('dart') }, gcPaths };
+}
+
+function buildRemoveCommands(paths: AbsolutePath[]): string {
+  return paths.map((path) => `rm -r '${path}'`).join('\n');
+}
+
 async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
   const measurement = await loadUnitMeasurement({ unit: unit, deadlineMs: Date.now() + 60_000 });
 
   return measurement.allocatedBytes;
+}
+
+async function loadNoProcessCommands(): Promise<string[] | null> {
+  return [];
 }
 
 describe('runToolCandidate', () => {
@@ -143,7 +165,7 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -157,26 +179,15 @@ exit 0`,
   });
 
   test('runs the dart command and frees every path of its list', async () => {
-    const gcPaths = buildDartGcPaths({ homeDir: environment.homeDir });
-
-    for (const gcPath of gcPaths) {
-      await createUnitFile({
-        path: gcPath.endsWith('.sha256') ? gcPath : join(gcPath, 'lib/package.dart'),
-        sizeBytes: 4096,
-      });
-    }
-
-    const unit: ExploreToolUnitDartPubCache = {
-      kind: 'dartPubCache',
-      tool: { name: 'dart', path: buildToolPath('dart') },
-      gcPaths: gcPaths,
-    };
-    const removeCommands = gcPaths.map((gcPath) => `rm -r '${gcPath}'`).join('\n');
+    const unit = await createDartUnit();
 
     await createUnitTool({
       unit: unit,
-      probeStdoutText: buildDartGcDryRunText({ homeDir: environment.homeDir, gcPaths: gcPaths }),
-      commandBody: `${removeCommands}
+      probeStdoutText: buildDartGcDryRunText({
+        homeDir: environment.homeDir,
+        gcPaths: unit.gcPaths,
+      }),
+      commandBody: `${buildRemoveCommands(unit.gcPaths)}
 exit 0`,
     });
 
@@ -185,16 +196,49 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
 
     expect(allocatedBytes).toBeGreaterThan(0);
     expect(run).toEqual({ kind: 'completed', freedBytes: allocatedBytes, stderrTail: '' });
 
-    for (const gcPath of gcPaths) {
+    for (const gcPath of unit.gcPaths) {
       expect(await isPresent(gcPath)).toBe(false);
     }
+  });
+
+  test('measures the unit before the recheck, so what the recheck adds counts as never freed', async () => {
+    const unit = await createDartUnit();
+    const [, packagePath] = unit.gcPaths;
+
+    if (packagePath === undefined) {
+      throw new Error('The fixture gc set should list a package folder.');
+    }
+
+    await createUnitTool({
+      unit: unit,
+      probeStdoutText: buildDartGcDryRunText({
+        homeDir: environment.homeDir,
+        gcPaths: unit.gcPaths,
+      }),
+      probePrelude: `/bin/dd if=/dev/zero of='${packagePath}/lib/added.bin' bs=${MEBIBYTE} count=1 2>/dev/null`,
+      commandBody: `${buildRemoveCommands(unit.gcPaths)}
+exit 0`,
+    });
+
+    const allocatedBytesBefore = await measureAllocatedBytes(unit);
+
+    const run = await runToolCandidate({
+      unit: unit,
+      environment: environment,
+      loadProcessCommands: loadNoProcessCommands,
+      timeoutMs: TIMEOUT_MS,
+    });
+
+    expect(run).toEqual({ kind: 'completed', freedBytes: allocatedBytesBefore, stderrTail: '' });
+    expect(allocatedBytesBefore).toBeLessThan(MEBIBYTE);
+    expect(await isPresent(packagePath)).toBe(false);
   });
 
   test('skips the unit when its tool is gone', async () => {
@@ -203,7 +247,7 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -225,7 +269,7 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -247,7 +291,7 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -269,13 +313,13 @@ exit 0`,
     const whileSimulatorRuns = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [SIMULATOR_APP_COMMAND],
+      loadProcessCommands: async () => [SIMULATOR_APP_COMMAND],
       timeoutMs: TIMEOUT_MS,
     });
     const whileProcessesUnknown = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: null,
+      loadProcessCommands: async () => null,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -298,7 +342,7 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -325,7 +369,7 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -351,7 +395,7 @@ exit 3`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
     const allocatedBytesAfter = await measureAllocatedBytes(unit);
@@ -382,7 +426,7 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
-      processCommands: [],
+      loadProcessCommands: loadNoProcessCommands,
       timeoutMs: 300,
     });
 

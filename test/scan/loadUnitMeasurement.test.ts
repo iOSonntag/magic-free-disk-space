@@ -11,6 +11,11 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import {
+  buildTestAbsolutePath,
+  buildTestMiseToolName,
+  buildTestMiseToolVersion,
+} from '../support/parsedValueFixtures.js';
 
 const MODIFIED_MS = Date.parse('2026-01-01T00:00:00Z');
 
@@ -28,7 +33,7 @@ function buildDartUnit(gcPaths: string[]): ExploreToolUnitDartPubCache {
   return {
     kind: 'dartPubCache',
     tool: { name: 'dart', path: '/opt/example/dart' },
-    gcPaths: gcPaths,
+    gcPaths: gcPaths.map((text) => buildTestAbsolutePath({ text: text })),
   };
 }
 
@@ -96,9 +101,9 @@ describe('loadUnitMeasurement', () => {
       unit: {
         kind: 'miseVersion',
         tool: { name: 'mise', path: '/opt/example/mise' },
-        toolName: 'node',
-        version: '20.1.0',
-        installPath: versionFolder,
+        toolName: buildTestMiseToolName({ text: 'node' }),
+        version: buildTestMiseToolVersion({ text: '20.1.0' }),
+        installPath: buildTestAbsolutePath({ text: versionFolder }),
       },
       deadlineMs: Date.now() + 10_000,
     });

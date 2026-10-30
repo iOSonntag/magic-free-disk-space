@@ -3,9 +3,11 @@ import { buildUnitCommand } from '../explore/exploreUnit.js';
 import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
 import type { ScanIssue } from '../scan/issue.js';
 import type { ScanReport, SkippedItem } from '../scan/runScan.js';
+import { buildToolArguments } from '../tools/runToolCommand.js';
 import { formatSizeText } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
+import { formatToolFailureFirstStderrLine, formatToolFailureSummary } from './formatToolFailure.js';
 
 /** A ranked candidate as a person sees it: every text is safe to show. */
 export type CandidateView = {
@@ -29,8 +31,8 @@ const skipReasonTexts: Record<SkipReason, string> = {
   belowSizeThreshold: 'too small to matter',
   symbolicLink: 'symbolic link, never followed',
   systemOwned: 'owned by macOS',
-  ownerRunning: 'its app is running',
-  runningUnknown: 'could not check whether its app runs',
+  ownerRunning: 'its app or tool is running',
+  runningUnknown: 'could not check whether its app or tool runs',
   recentActivity: 'changed recently',
   activityUnknown: 'could not tell when it last changed',
   recentUse: 'used recently',
@@ -102,14 +104,20 @@ export function formatCandidateView(params: {
   };
 }
 
-/** `<tool name> <arguments>` of a tool item, safe to show; `null` for an item deleted as a path. */
+/**
+ * `<tool name> <arguments>` of a tool item, the tool's leading arguments included, so it reads as
+ * the command that runs; safe to show. `null` for an item deleted as a path.
+ */
 export function formatCandidateCommandText(params: { candidate: Candidate }): string | null {
   switch (params.candidate.removal.kind) {
     case 'deletePath':
       return null;
     case 'runTool': {
       const unit = params.candidate.removal.unit;
-      const commandText = [unit.tool.name, ...buildUnitCommand(unit)].join(' ');
+      const commandText = [
+        unit.tool.name,
+        ...buildToolArguments({ name: unit.tool.name, args: buildUnitCommand(unit) }),
+      ].join(' ');
 
       return formatDisplayText({ text: commandText });
     }
@@ -282,6 +290,29 @@ function formatPlaceIssueBlock(params: {
 
 function formatIssueLine(params: { issue: ScanIssue }): string {
   const reasonText = issueReasonTexts[params.issue.reason];
+  const detailText = formatIssueDetail({ issue: params.issue });
 
-  return `- ${formatDisplayText({ text: params.issue.path })}: ${reasonText} (${params.issue.detail})`;
+  return `- ${formatDisplayText({ text: params.issue.path })}: ${reasonText} (${detailText})`;
+}
+
+/** A failed tool reads as its summary, then the first line of its stderr when it wrote one. */
+function formatIssueDetail(params: { issue: ScanIssue }): string {
+  switch (params.issue.reason) {
+    case 'permissionDenied':
+    case 'unexpected':
+    case 'commandFailed':
+    case 'walkStopped':
+    case 'toolUntrusted':
+      return formatDisplayText({ text: params.issue.detail });
+    case 'toolFailed': {
+      const summary = formatToolFailureSummary({ failure: params.issue.failure });
+      const firstStderrLine = formatToolFailureFirstStderrLine({ failure: params.issue.failure });
+
+      if (firstStderrLine === null) {
+        return summary;
+      }
+
+      return `${summary}: ${firstStderrLine}`;
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import type { CatalogEntry } from '../catalog/catalog.js';
 import { isDeleteConfirmation } from '../delete/confirmation.js';
 import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js';
+import { isUnremovedOutcome } from '../delete/deleteCandidates.js';
 import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
@@ -209,12 +210,7 @@ async function runInteractiveDeletion(params: {
 
   const hasFailure =
     run.journalFailure !== null ||
-    run.outcomes.some(
-      (outcome) =>
-        outcome.outcome === 'permissionDenied' ||
-        outcome.outcome === 'failed' ||
-        outcome.outcome === 'toolFailed',
-    );
+    run.outcomes.some((outcome) => isUnremovedOutcome(outcome.outcome));
 
   if (hasFailure) {
     return EXIT_CODES.removalFailed;

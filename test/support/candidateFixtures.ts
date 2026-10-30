@@ -3,6 +3,11 @@ import type { Candidate } from '../../src/scan/candidate.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
+import {
+  buildTestAbsolutePath,
+  buildTestMiseToolName,
+  buildTestMiseToolVersion,
+} from './parsedValueFixtures.js';
 
 let nextTestIno = 1000n;
 
@@ -70,7 +75,9 @@ export function buildTestToolCandidate(params: {
   risk?: Risk;
   allocatedBytes?: number;
 }): Candidate {
-  const installPath = `${params.homeDir}/.local/share/mise/installs/node/${params.version}`;
+  const installPath = buildTestAbsolutePath({
+    text: `${params.homeDir}/.local/share/mise/installs/node/${params.version}`,
+  });
 
   return {
     path: installPath,
@@ -88,12 +95,42 @@ export function buildTestToolCandidate(params: {
       unit: {
         kind: 'miseVersion',
         tool: { name: 'mise', path: `${params.homeDir}/.local/bin/mise` },
-        toolName: 'node',
-        version: params.version,
+        toolName: buildTestMiseToolName({ text: 'node' }),
+        version: buildTestMiseToolVersion({ text: params.version }),
         installPath: installPath,
       },
     },
     evidenceLines: [`mise prune would remove node@${params.version}`],
+  };
+}
+
+/**
+ * The tool item of the Dart pub cache under `homeDir`, whose tool has leading arguments; its tool
+ * path is made up and never runs.
+ */
+export function buildTestDartToolCandidate(params: { homeDir: string }): Candidate {
+  const cachePath = `${params.homeDir}/.pub-cache`;
+
+  return {
+    path: cachePath,
+    title: 'Unused Dart and Flutter packages',
+    category: 'developer',
+    risk: 'review',
+    origin: 'explore',
+    explanation: 'Package versions no active project uses.',
+    regeneration: 'Downloaded again on `pub get`.',
+    allocatedBytes: 8192,
+    entryCount: 1,
+    isComplete: true,
+    removal: {
+      kind: 'runTool',
+      unit: {
+        kind: 'dartPubCache',
+        tool: { name: 'dart', path: `${params.homeDir}/.local/bin/dart` },
+        gcPaths: [buildTestAbsolutePath({ text: `${cachePath}/hosted/pub.dev/example_a-1.0.0` })],
+      },
+    },
+    evidenceLines: ['`dart pub cache gc` would delete 1 cache entry'],
   };
 }
 

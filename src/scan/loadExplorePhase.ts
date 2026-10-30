@@ -1,6 +1,5 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
 import type { ExploreFinding } from '../explore/exploreUnit.js';
-import { formatExploreToolFailure } from '../explore/formatExploreToolFailure.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { Candidate, CandidateDecision } from './candidate.js';
@@ -83,13 +82,7 @@ async function loadExploreEntryPhase(params: {
     case 'failed':
       return {
         decisions: [],
-        issues: [
-          {
-            path: outcome.tool.path,
-            reason: 'toolFailed',
-            detail: formatExploreToolFailure(outcome.failure),
-          },
-        ],
+        issues: [{ path: outcome.tool.path, reason: 'toolFailed', failure: outcome.failure }],
         fallbackEntries: [params.entry],
       };
   }
@@ -110,9 +103,16 @@ async function loadExploreFindingDecision(params: {
     case 'unknown':
       return { kind: 'skip', path: params.finding.displayPath, reason: 'runningUnknown' };
     case 'idle':
-      break;
+      return loadIdleFindingOffer(params);
   }
+}
 
+/** Measures the finding's paths and offers it at any size. */
+async function loadIdleFindingOffer(params: {
+  finding: ExploreFinding;
+  category: CandidateCategory;
+  measureTimeoutMs: number;
+}): Promise<CandidateDecision> {
   const measurement = await runUnitMeasurement(() =>
     loadUnitMeasurement({
       unit: params.finding.unit,

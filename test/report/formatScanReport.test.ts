@@ -2,7 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice, Candidate } from '../../src/scan/candidate.js';
-import { buildTestToolCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestDartToolCandidate,
+  buildTestToolCandidate,
+} from '../support/candidateFixtures.js';
 
 const fullDiskAccessLine =
   'Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
@@ -168,7 +171,7 @@ describe('formatScanReport', () => {
       '',
       'Skipped 3 items:',
       '- too small to matter: 2',
-      '- its app is running: 1',
+      '- its app or tool is running: 1',
     ]);
   });
 
@@ -205,8 +208,8 @@ describe('formatScanReport', () => {
       '- too small to matter: 1',
       '- symbolic link, never followed: 1',
       '- owned by macOS: 1',
-      '- its app is running: 1',
-      '- could not check whether its app runs: 1',
+      '- its app or tool is running: 1',
+      '- could not check whether its app or tool runs: 1',
       '- changed recently: 1',
       '- could not tell when it last changed: 1',
       '- used recently: 1',
@@ -283,7 +286,26 @@ describe('formatScanReport', () => {
         issues: [
           { path: '/fixture/locked', reason: 'unexpected', detail: 'EIO' },
           { path: '/fixture/bin/mise', reason: 'toolUntrusted', detail: 'writableByOthers' },
-          { path: '/usr/bin/xcrun', reason: 'toolFailed', detail: 'exit code 1' },
+          {
+            path: '/usr/bin/xcrun',
+            reason: 'toolFailed',
+            failure: {
+              reason: 'commandFailed',
+              failure: {
+                reason: 'exitedWithError',
+                exitCode: 1,
+                stderrTail: '\n  xcrun: error: simctl broke\nsecond line\n',
+              },
+            },
+          },
+          {
+            path: '/fixture/bin/dart',
+            reason: 'toolFailed',
+            failure: {
+              reason: 'commandFailed',
+              failure: { reason: 'timedOut', timeoutMs: 60_000, stderrTail: '' },
+            },
+          },
         ],
       },
     });
@@ -294,10 +316,38 @@ describe('formatScanReport', () => {
       'Could not read 1 place:',
       '- /fixture/locked: unexpected error (EIO)',
       '',
-      'Could not ask 2 tools:',
+      'Could not ask 3 tools:',
       '- /fixture/bin/mise: the tool is not trusted, never run (writableByOthers)',
-      '- /usr/bin/xcrun: the tool failed (exit code 1)',
+      '- /usr/bin/xcrun: the tool failed (exited with code 1: xcrun: error: simctl broke)',
+      '- /fixture/bin/dart: the tool failed (stopped at its time limit of 60 s)',
     ]);
+  });
+
+  test('writes out control characters in the detail of an issue and in the stderr of a tool', () => {
+    const lines = formatScanReport({
+      report: {
+        candidates: [],
+        safeNumbers: [],
+        advice: [],
+        skipped: [],
+        issues: [
+          { path: '/fixture/broken', reason: 'unexpected', detail: 'EIO\r- /fixture/forged' },
+          {
+            path: '/fixture/bin/mise',
+            reason: 'toolFailed',
+            failure: {
+              reason: 'commandFailed',
+              failure: { reason: 'endedBySignal', signal: 'SIGKILL', stderrTail: 'red\u001b[31m' },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(lines).toContain('- /fixture/broken: unexpected error (EIO\\u{d}- /fixture/forged)');
+    expect(lines).toContain(
+      '- /fixture/bin/mise: the tool failed (ended by signal SIGKILL: red\\u{1b}[31m)',
+    );
   });
 
   test('lists the Explore items last under their heading, with evidence and command', () => {
@@ -338,6 +388,20 @@ describe('formatScanReport', () => {
       '   - mise prune would remove node@20.1.0',
       '   Runs: mise uninstall node@20.1.0',
     ]);
+  });
+
+  test('shows the command of a tool item with the leading arguments of its tool', () => {
+    const lines = formatScanReport({
+      report: {
+        candidates: [buildTestDartToolCandidate({ homeDir: '/fixture/home' })],
+        safeNumbers: [],
+        advice: [],
+        skipped: [],
+        issues: [],
+      },
+    });
+
+    expect(lines).toContain('   Runs: dart --suppress-analytics pub cache gc --force');
   });
 
   test('omits the Full Disk Access line when no issue is a permission problem', () => {
@@ -397,7 +461,7 @@ describe('formatScanReport', () => {
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
       '',
       'Skipped 1 item:',
-      '- its app is running: 1',
+      '- its app or tool is running: 1',
       '',
       'Could not read 1 place:',
       '- /fixture/c: unexpected error (EIO)',

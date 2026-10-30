@@ -24,7 +24,10 @@ export type JournalEntryOutcome = {
   code: string | null;
 };
 
-/** `args` are the unit's command; the unit holds the tool and its real path. */
+/**
+ * `args` are every argument the tool runs with, its leading ones first, then the unit's command;
+ * the unit holds the tool and its real path.
+ */
 export type JournalEntryToolIntent = {
   kind: 'toolIntent';
   atMs: number;

@@ -15,7 +15,8 @@ type ApprovedRemoval = {
 
 /**
  * Deletes the approved items of a confirmed plan. Fails before any deletion when the log cannot
- * be created, and reads the running processes again first, since the scan may be minutes old.
+ * be created. The running processes are read again, since the scan may be minutes old: once
+ * before the run, and afresh for each tool item, since the items before it may take minutes.
  */
 export async function deleteApprovedCandidates(params: {
   plan: RemovalPlan;
@@ -32,16 +33,22 @@ export async function deleteApprovedCandidates(params: {
     return journal;
   }
 
-  const processCommands = await loadProcessCommands({
-    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
-  });
   const run = await deleteCandidates({
     candidates: params.plan.approved,
     journal: journal.value,
     environment: params.environment,
-    processCommands: processCommands.kind === 'succeeded' ? processCommands.value : null,
+    loadProcessCommands: loadCurrentProcessCommands,
     clock: params.clock,
   });
 
   return { kind: 'succeeded', value: { run: run, logPath: journal.value.logPath } };
+}
+
+/** `null` when `ps` failed, which withholds every item whose owner it would name. */
+async function loadCurrentProcessCommands(): Promise<string[] | null> {
+  const processCommands = await loadProcessCommands({
+    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+  });
+
+  return processCommands.kind === 'succeeded' ? processCommands.value : null;
 }

@@ -21,9 +21,13 @@ It looks where space hides from people who are not storage experts:
   have not changed for 180 days.
 - **The Trash**.
 
-Some places are only shown with advice, because the tool that owns them must clean them:
-Docker images, iOS simulators and runtimes, Android emulators, the pnpm store, Homebrew packages,
-installed Node.js versions, iPhone backups, and more.
+Under **Explore**, some items are removed by the command of the tool that owns them: simulator
+devices with `xcrun simctl delete`, unused Dart and Flutter packages with `dart pub cache gc`,
+and mise tool versions no project pins with `mise uninstall`.
+
+Other places are only shown with advice, because the tool that owns them must clean them:
+Docker images, simulator runtimes, Android emulators, the pnpm store, Homebrew packages, Node.js
+versions not installed with mise, iPhone backups, and more.
 
 ## Usage
 
@@ -55,6 +59,7 @@ Pressing Enter alone cancels.
 | 2         | Bad usage, not macOS, or an unsafe setup (see below).                |
 | 3         | Deleting was asked for without an interactive terminal.              |
 | 4         | The deletion log could not be created, so nothing was deleted.       |
+| 130, 143  | Stopped by SIGINT or SIGTERM; a tool it ran is stopped with it.      |
 
 ### Full Disk Access
 

@@ -115,11 +115,18 @@ export async function runScan(params: {
   const processCommandsLoad = loadProcessCommands({
     commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
   });
+  const activeXcodeBundlePathLoad = loadActiveXcodeBundlePath({
+    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+  });
   // The probes run beside every phase; the Explore phase waits for them last.
   const probes = startExploreProbes({
     environment: params.environment,
     toolInstallLocations: params.toolInstallLocations,
     processCommands: processCommandsLoad.then((result) =>
+      result.kind === 'succeeded' ? result.value : null,
+    ),
+    // A failed `xcode-select` counts as no active Xcode, so the simulator probe runs nothing.
+    activeXcodeBundlePath: activeXcodeBundlePathLoad.then((result) =>
       result.kind === 'succeeded' ? result.value : null,
     ),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
@@ -130,7 +137,7 @@ export async function runScan(params: {
       appDirs: params.environment.applicationDirs,
       commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
     }),
-    loadActiveXcodeBundlePath({ commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs }),
+    activeXcodeBundlePathLoad,
   ]);
   const context: ScanContext = {
     environment: params.environment,

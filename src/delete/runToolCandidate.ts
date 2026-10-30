@@ -3,7 +3,9 @@ import type { ExploreToolFailure, ExploreToolUnit } from '../explore/exploreUnit
 import { buildUnitCommand } from '../explore/exploreUnit.js';
 import { recheckExploreUnit } from '../explore/recheckExploreUnit.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
+import type { UnitMeasurement } from '../scan/loadUnitMeasurement.js';
 import { loadUnitMeasurement } from '../scan/loadUnitMeasurement.js';
+import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
 
@@ -35,15 +37,21 @@ export type ToolCandidateRun =
 
 /**
  * Runs the unit's command once its tool passes the trust check again and `recheckExploreUnit`
- * finds the unit unchanged and idle with that fresh tool, with the processes read after the
- * confirmation. `freedBytes` is the drop of the unit's measured size over the run.
+ * finds the unit unchanged and idle with that fresh tool, with the processes
+ * `loadProcessCommands` reads right before the recheck. The unit is measured first, so
+ * `freedBytes`, the drop of its measured size, holds nothing the recheck itself added; the
+ * command runs right after the recheck.
  */
 export async function runToolCandidate(params: {
   unit: ExploreToolUnit;
   environment: Environment;
-  processCommands: string[] | null;
+  loadProcessCommands: () => Promise<string[] | null>;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
+  const before = await loadUnitMeasurement({
+    unit: params.unit,
+    deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
+  });
   const trustedTool = await loadTrustedTool({
     name: params.unit.tool.name,
     path: params.unit.tool.path,
@@ -58,7 +66,7 @@ export async function runToolCandidate(params: {
     unit: params.unit,
     tool: trustedTool.value,
     environment: params.environment,
-    processCommands: params.processCommands,
+    processCommands: await params.loadProcessCommands(),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
   });
 
@@ -70,15 +78,26 @@ export async function runToolCandidate(params: {
     case 'failed':
       return { kind: 'failed', freedBytes: 0, failure: recheck.failure };
     case 'unchanged':
-      break;
+      return runCheckedUnitCommand({
+        unit: params.unit,
+        tool: trustedTool.value,
+        environment: params.environment,
+        before: before,
+        timeoutMs: params.timeoutMs,
+      });
   }
+}
 
-  const before = await loadUnitMeasurement({
-    unit: params.unit,
-    deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
-  });
+/** Runs the command of a unit the recheck found unchanged and measures what it freed. */
+async function runCheckedUnitCommand(params: {
+  unit: ExploreToolUnit;
+  tool: LocatedTool;
+  environment: Environment;
+  before: UnitMeasurement;
+  timeoutMs: number;
+}): Promise<ToolCandidateRun> {
   const command = await runToolCommand({
-    tool: trustedTool.value,
+    tool: params.tool,
     args: buildUnitCommand(params.unit),
     homeDir: params.environment.homeDir,
     tempDir: params.environment.tempDir,
@@ -88,7 +107,7 @@ export async function runToolCandidate(params: {
     unit: params.unit,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
   });
-  const freedBytes = Math.max(0, before.allocatedBytes - after.allocatedBytes);
+  const freedBytes = Math.max(0, params.before.allocatedBytes - after.allocatedBytes);
 
   if (command.kind === 'failed') {
     return {
