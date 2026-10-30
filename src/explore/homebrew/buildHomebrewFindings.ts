@@ -3,7 +3,9 @@ import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings, UnitActivity } from '../exploreUnit.js';
 import type { HomebrewOldVersions } from './buildHomebrewOldVersions.js';
-import type { HomebrewOrphan, HomebrewState } from './loadHomebrewState.js';
+import type { HomebrewOrphan } from './decideHomebrewOrphans.js';
+import { decideHomebrewOrphans } from './decideHomebrewOrphans.js';
+import type { HomebrewState } from './loadHomebrewState.js';
 
 /**
  * One finding per formula with old versions, and one for all orphans when there are any; not
@@ -27,18 +29,20 @@ export function buildHomebrewFindings(params: {
     }),
   );
 
-  switch (params.state.orphans.kind) {
+  const orphansJudgement = decideHomebrewOrphans({ orphans: params.state.orphans });
+
+  switch (orphansJudgement.kind) {
     case 'notJudged':
       return { findings: oldVersionFindings, isComplete: false };
     case 'judged': {
-      if (params.state.orphans.orphans.length === 0) {
+      if (orphansJudgement.orphans.length === 0) {
         return { findings: oldVersionFindings, isComplete: true };
       }
 
       const orphansFinding = buildHomebrewOrphansFinding({
         tool: params.tool,
         cellarPath: params.state.cellarPath,
-        orphans: params.state.orphans.orphans,
+        orphans: orphansJudgement.orphans,
         activity: activity,
       });
 
@@ -89,7 +93,7 @@ function buildHomebrewOrphansFinding(params: {
       kind: 'homebrewOrphans',
       tool: params.tool,
       formulae: formulae,
-      kegPaths: params.orphans.map((orphan) => orphan.kegPath),
+      rackPaths: params.orphans.map((orphan) => orphan.rackPath),
     },
     title: `Homebrew orphans ${formulae.join(', ')}`,
     explanation:
@@ -98,7 +102,7 @@ function buildHomebrewOrphansFinding(params: {
     risk: 'review',
     evidenceLines: [
       `\`brew autoremove -n\` would remove ${formulae.length} ${formulae.length === 1 ? 'formula' : 'formulae'} that no installed formula needs.`,
-      ...params.orphans.map((orphan) => `${orphan.formula} at ${orphan.kegPath}`),
+      ...params.orphans.map((orphan) => `${orphan.formula} at ${orphan.rackPath}`),
     ],
     displayPath: params.cellarPath,
     activity: params.activity,

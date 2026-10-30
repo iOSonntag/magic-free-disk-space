@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, realpath, rm } from 'node:fs/promises';
+import { chmod, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbeToolResult } from '../../src/explore/exploreProbe.js';
@@ -9,11 +9,10 @@ import type {
 } from '../../src/explore/exploreUnit.js';
 import { buildHomebrewFindings } from '../../src/explore/homebrew/buildHomebrewFindings.js';
 import { buildHomebrewOldVersions } from '../../src/explore/homebrew/buildHomebrewOldVersions.js';
+import type { HomebrewOrphan } from '../../src/explore/homebrew/decideHomebrewOrphans.js';
+import { decideHomebrewOrphans } from '../../src/explore/homebrew/decideHomebrewOrphans.js';
 import { loadHomebrewFindings } from '../../src/explore/homebrew/loadHomebrewFindings.js';
-import type {
-  HomebrewOrphan,
-  HomebrewState,
-} from '../../src/explore/homebrew/loadHomebrewState.js';
+import type { HomebrewState } from '../../src/explore/homebrew/loadHomebrewState.js';
 import { loadHomebrewState } from '../../src/explore/homebrew/loadHomebrewState.js';
 import { parseHomebrewAutoremoveDryRun } from '../../src/explore/homebrew/parseHomebrewAutoremoveDryRun.js';
 import { parseHomebrewCellarPath } from '../../src/explore/homebrew/parseHomebrewCellarPath.js';
@@ -75,14 +74,19 @@ const newerWgetKegPath = buildHomebrewKegPath({
   version: '1.21.4',
 });
 
-const libyamlKegPath = buildTestAbsolutePath({ text: `${APPLE_SILICON_CELLAR_PATH}/libyaml` });
+const libyamlRackPath = buildTestAbsolutePath({ text: `${APPLE_SILICON_CELLAR_PATH}/libyaml` });
 
-const libfooKegPath = buildTestAbsolutePath({ text: `${APPLE_SILICON_CELLAR_PATH}/libfoo` });
+const libfooRackPath = buildTestAbsolutePath({ text: `${APPLE_SILICON_CELLAR_PATH}/libfoo` });
 
-const orphans: HomebrewOrphan[] = [
-  { formula: libyaml, kegPath: libyamlKegPath },
-  { formula: libfoo, kegPath: libfooKegPath },
-];
+const pythonRackPath = buildTestAbsolutePath({ text: `${APPLE_SILICON_CELLAR_PATH}/python@3.12` });
+
+const libyamlOrphan: HomebrewOrphan = { formula: libyaml, rackPath: libyamlRackPath, kegCount: 1 };
+
+const libfooOrphan: HomebrewOrphan = { formula: libfoo, rackPath: libfooRackPath, kegCount: 1 };
+
+const orphans: HomebrewOrphan[] = [libyamlOrphan, libfooOrphan];
+
+const orphansWithTwoKegs: HomebrewOrphan[] = [{ ...libyamlOrphan, kegCount: 2 }, libfooOrphan];
 
 const state: HomebrewState = {
   cellarPath: APPLE_SILICON_CELLAR_PATH,
@@ -95,7 +99,7 @@ const state: HomebrewState = {
       ],
     },
   ],
-  orphans: { kind: 'judged', orphans: orphans },
+  orphans: orphans,
 };
 
 const oldVersionsUnit = buildOldVersionsUnit({ cellarPath: APPLE_SILICON_CELLAR_PATH });
@@ -118,7 +122,7 @@ function buildOrphansUnit(params: { cellarPath: string }): ExploreToolUnitHomebr
     kind: 'homebrewOrphans',
     tool: brew,
     formulae: [libyaml, libfoo],
-    kegPaths: ['libyaml', 'libfoo'].map((formula) =>
+    rackPaths: ['libyaml', 'libfoo'].map((formula) =>
       buildTestAbsolutePath({ text: `${params.cellarPath}/${formula}` }),
     ),
   };
@@ -343,6 +347,35 @@ describe('parseHomebrewAutoremoveDryRun', () => {
   });
 });
 
+describe('decideHomebrewOrphans', () => {
+  test('judges no orphans when none is listed', () => {
+    expect(decideHomebrewOrphans({ orphans: [] })).toEqual({ kind: 'judged', orphans: [] });
+  });
+
+  test('judges the orphans when each rack holds one keg', () => {
+    expect(decideHomebrewOrphans({ orphans: orphans })).toEqual({
+      kind: 'judged',
+      orphans: orphans,
+    });
+  });
+
+  test('is not judged while a rack holds two kegs', () => {
+    expect(decideHomebrewOrphans({ orphans: orphansWithTwoKegs })).toEqual({ kind: 'notJudged' });
+  });
+
+  test('is not judged while a rack holds no keg', () => {
+    expect(
+      decideHomebrewOrphans({ orphans: [{ ...libyamlOrphan, kegCount: 0 }, libfooOrphan] }),
+    ).toEqual({ kind: 'notJudged' });
+  });
+
+  test('is not judged while a rack is absent', () => {
+    expect(
+      decideHomebrewOrphans({ orphans: [{ ...libyamlOrphan, kegCount: null }, libfooOrphan] }),
+    ).toEqual({ kind: 'notJudged' });
+  });
+});
+
 describe('buildHomebrewFindings', () => {
   test('offers each formula with old versions and the orphans together', () => {
     const probeFindings = buildHomebrewFindings({ tool: brew, state: state, processCommands: [] });
@@ -371,7 +404,7 @@ describe('buildHomebrewFindings', () => {
   test('offers no orphans finding when autoremove lists none', () => {
     const probeFindings = buildHomebrewFindings({
       tool: brew,
-      state: { ...state, orphans: { kind: 'judged', orphans: [] } },
+      state: { ...state, orphans: [] },
       processCommands: [],
     });
 
@@ -384,7 +417,7 @@ describe('buildHomebrewFindings', () => {
   test('offers only the old versions, not complete, while the orphans are not judged', () => {
     const probeFindings = buildHomebrewFindings({
       tool: brew,
-      state: { ...state, orphans: { kind: 'notJudged' } },
+      state: { ...state, orphans: orphansWithTwoKegs },
       processCommands: [],
     });
 
@@ -413,7 +446,7 @@ describe('compareHomebrewUnit', () => {
         ...oldVersions,
         kegs: oldVersions.kegs.slice(0, 1),
       })),
-      orphans: { kind: 'judged', orphans: orphans.slice(0, 1) },
+      orphans: orphans.slice(0, 1),
     };
 
     for (const unit of [oldVersionsUnit, orphansUnit]) {
@@ -433,15 +466,12 @@ describe('compareHomebrewUnit', () => {
       oldVersions: [
         { formula: wget, kegs: [{ path: newKegPath, version: '1.21.5', sizeText: '' }] },
       ],
-      orphans: {
-        kind: 'judged',
-        orphans: [...orphans, { formula: python, kegPath: newKegPath }],
-      },
+      orphans: [...orphans, { formula: python, rackPath: pythonRackPath, kegCount: 1 }],
     };
     const emptied: HomebrewState = {
       ...state,
       oldVersions: [],
-      orphans: { kind: 'judged', orphans: [] },
+      orphans: [],
     };
 
     for (const unit of [oldVersionsUnit, orphansUnit]) {
@@ -457,7 +487,7 @@ describe('compareHomebrewUnit', () => {
     expect(
       compareHomebrewUnit({
         unit: orphansUnit,
-        state: { ...state, orphans: { kind: 'notJudged' } },
+        state: { ...state, orphans: orphansWithTwoKegs },
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -594,7 +624,7 @@ describe('with fake brews', () => {
     ]);
     expect(intelOutcome.findings[2]?.unit).toMatchObject({
       formulae: [libyaml, libfoo],
-      kegPaths: [`${intelCellarPath}/libyaml`, `${intelCellarPath}/libfoo`],
+      rackPaths: [`${intelCellarPath}/libyaml`, `${intelCellarPath}/libfoo`],
     });
     expect(intelOutcome.findings[0]?.unit).toMatchObject({
       tool: { name: 'brewIntel', path: await realpath(intel.path) },
@@ -691,7 +721,7 @@ describe('with fake brews', () => {
         unit: {
           ...fixtureOrphansUnit,
           tool: tool,
-          kegPaths: fixtureOrphansUnit.kegPaths.slice(0, 1),
+          rackPaths: fixtureOrphansUnit.rackPaths.slice(0, 1),
         },
       }),
     ).toEqual({ kind: 'changed' });
@@ -747,6 +777,46 @@ describe('with fake brews', () => {
     ]);
     expect(result.value.findings[0]?.unit).toMatchObject({ formula: wget });
     expect(result.value.isComplete).toBe(false);
+  });
+
+  test('loads the keg folders of each orphan rack, null for a rack that is absent or no folder', async () => {
+    await createHomebrewRacks({
+      cellarPath: appleSiliconCellarPath,
+      racks: [{ formula: 'libyaml', versions: ['0.2.4', '0.2.5'] }],
+    });
+
+    const tool = await createBrew({
+      name: 'brewAppleSilicon',
+      answers: buildWorkingAnswers({ cellarPath: appleSiliconCellarPath }),
+    });
+    const run = { tool: tool, environment: environment, deadlineMs: Date.now() + TIMEOUT_MS };
+    const libfooPath = join(appleSiliconCellarPath, 'libfoo');
+    const expectedOrphans: HomebrewOrphan[] = [
+      {
+        formula: libyaml,
+        rackPath: buildTestAbsolutePath({ text: join(appleSiliconCellarPath, 'libyaml') }),
+        kegCount: 2,
+      },
+      { formula: libfoo, rackPath: buildTestAbsolutePath({ text: libfooPath }), kegCount: null },
+    ];
+
+    const withAbsentRack = await loadHomebrewState(run);
+
+    if (withAbsentRack.kind !== 'succeeded') {
+      throw new Error('The state should load.');
+    }
+
+    expect(withAbsentRack.value.orphans).toEqual(expectedOrphans);
+
+    await writeFile(libfooPath, '');
+
+    const withFileRack = await loadHomebrewState(run);
+
+    if (withFileRack.kind !== 'succeeded') {
+      throw new Error('The state should load.');
+    }
+
+    expect(withFileRack.value.orphans).toEqual(expectedOrphans);
   });
 
   test('offers no orphans while one rack holds two kegs, or a rack is gone', async () => {

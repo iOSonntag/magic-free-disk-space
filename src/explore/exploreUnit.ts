@@ -62,12 +62,15 @@ export type ExploreToolUnitHomebrewOldVersions = {
   kegPaths: AbsolutePath[];
 };
 
-/** The formulae that `brew autoremove -n` lists, removed together by one `brew autoremove`. */
+/**
+ * The formulae that `brew autoremove -n` lists, removed together by one `brew autoremove`, with the
+ * racks `<cellar>/<formula>` the unit measures.
+ */
 export type ExploreToolUnitHomebrewOrphans = {
   kind: 'homebrewOrphans';
   tool: LocatedTool;
   formulae: HomebrewFormulaName[];
-  kegPaths: AbsolutePath[];
+  rackPaths: AbsolutePath[];
 };
 
 /** The units Homebrew removes from its Cellar, which one recheck compares. */
@@ -176,8 +179,9 @@ export function listUnitPaths(unit: ExploreUnit): AbsolutePath[] {
     case 'androidAvd':
       return [unit.avdPath, unit.iniPath];
     case 'homebrewOldVersions':
-    case 'homebrewOrphans':
       return unit.kegPaths;
+    case 'homebrewOrphans':
+      return unit.rackPaths;
     case 'androidSystemImage':
     case 'androidEmulator':
     case 'vscodeExtension':

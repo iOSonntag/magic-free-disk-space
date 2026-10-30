@@ -3,10 +3,13 @@ import type { UnitComparison, UnitRecheck } from '../decideComparisonActivity.js
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
 import type { ExploreToolUnitHomebrew } from '../exploreUnit.js';
-import type { HomebrewOrphans, HomebrewState } from './loadHomebrewState.js';
+import { listUnitPaths } from '../exploreUnit.js';
+import type { HomebrewOrphans } from './decideHomebrewOrphans.js';
+import { decideHomebrewOrphans } from './decideHomebrewOrphans.js';
+import type { HomebrewState } from './loadHomebrewState.js';
 import { loadHomebrewState } from './loadHomebrewState.js';
 
-/** Unchanged while the fresh lines or list of the unit are a subset of the scanned ones, and idle. */
+/** Unchanged while the fresh unit paths are a non-empty subset of the scanned ones, and idle. */
 export async function recheckHomebrewUnit(params: {
   unit: ExploreToolUnitHomebrew;
   run: ExploreUnitRecheckRun;
@@ -25,7 +28,7 @@ export async function recheckHomebrewUnit(params: {
 }
 
 /**
- * `changed` when the fresh state offers no keg of the unit any more, or one the scan did not
+ * `changed` when the fresh state offers no path of the unit any more, or one the scan did not
  * offer, which also covers a Cellar that moved and orphans not judged; else busy or not by the
  * Homebrew rule.
  */
@@ -34,10 +37,10 @@ export function compareHomebrewUnit(params: {
   state: HomebrewState;
   processCommands: string[] | null;
 }): UnitComparison {
-  const freshKegPaths = listFreshHomebrewKegPaths({ unit: params.unit, state: params.state });
-  const scannedKegPaths = new Set(params.unit.kegPaths);
+  const freshUnitPaths = listFreshHomebrewUnitPaths({ unit: params.unit, state: params.state });
+  const scannedUnitPaths = new Set(listUnitPaths(params.unit));
 
-  if (freshKegPaths.length === 0 || freshKegPaths.some((path) => !scannedKegPaths.has(path))) {
+  if (freshUnitPaths.length === 0 || freshUnitPaths.some((path) => !scannedUnitPaths.has(path))) {
     return { kind: 'changed' };
   }
 
@@ -47,7 +50,7 @@ export function compareHomebrewUnit(params: {
   });
 }
 
-function listFreshHomebrewKegPaths(params: {
+function listFreshHomebrewUnitPaths(params: {
   unit: ExploreToolUnitHomebrew;
   state: HomebrewState;
 }): AbsolutePath[] {
@@ -61,14 +64,16 @@ function listFreshHomebrewKegPaths(params: {
       return oldVersions === undefined ? [] : oldVersions.kegs.map((keg) => keg.path);
     }
     case 'homebrewOrphans':
-      return listFreshHomebrewOrphanKegPaths(params.state.orphans);
+      return listFreshHomebrewOrphanRackPaths(
+        decideHomebrewOrphans({ orphans: params.state.orphans }),
+      );
   }
 }
 
-function listFreshHomebrewOrphanKegPaths(orphans: HomebrewOrphans): AbsolutePath[] {
-  switch (orphans.kind) {
+function listFreshHomebrewOrphanRackPaths(orphansJudgement: HomebrewOrphans): AbsolutePath[] {
+  switch (orphansJudgement.kind) {
     case 'judged':
-      return orphans.orphans.map((orphan) => orphan.kegPath);
+      return orphansJudgement.orphans.map((orphan) => orphan.rackPath);
     case 'notJudged':
       return [];
   }

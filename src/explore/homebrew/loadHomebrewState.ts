@@ -8,21 +8,11 @@ import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import { loadProbeOutput } from '../loadProbeOutput.js';
 import type { HomebrewOldVersions } from './buildHomebrewOldVersions.js';
 import { buildHomebrewOldVersions } from './buildHomebrewOldVersions.js';
+import type { HomebrewOrphan } from './decideHomebrewOrphans.js';
 import { parseHomebrewAutoremoveDryRun } from './parseHomebrewAutoremoveDryRun.js';
 import { parseHomebrewCellarPath } from './parseHomebrewCellarPath.js';
 import { parseHomebrewCleanupDryRun } from './parseHomebrewCleanupDryRun.js';
 import type { HomebrewFormulaName } from './parseHomebrewFormulaName.js';
-
-/** A formula `brew autoremove -n` lists, with its rack `<cellar>/<formula>`. */
-export type HomebrewOrphan = { formula: HomebrewFormulaName; kegPath: AbsolutePath };
-
-/** The orphans when each rack holds the one keg `brew autoremove` removes, none listed included. */
-export type HomebrewOrphansJudged = { kind: 'judged'; orphans: HomebrewOrphan[] };
-
-/** A rack of an orphan that is gone, no folder, or holds no keg or more than one. */
-export type HomebrewOrphansNotJudged = { kind: 'notJudged' };
-
-export type HomebrewOrphans = HomebrewOrphansJudged | HomebrewOrphansNotJudged;
 
 /**
  * What `brew --cellar`, `brew cleanup -n`, and `brew autoremove -n` of one brew answered, with the
@@ -31,7 +21,7 @@ export type HomebrewOrphans = HomebrewOrphansJudged | HomebrewOrphansNotJudged;
 export type HomebrewState = {
   cellarPath: AbsolutePath;
   oldVersions: HomebrewOldVersions[];
-  orphans: HomebrewOrphans;
+  orphans: HomebrewOrphan[];
 };
 
 /**
@@ -97,41 +87,63 @@ export async function loadHomebrewState(
   };
 }
 
-/**
- * Judged only while each rack holds exactly one keg folder, as Homebrew's `rack.subdirs` counts,
- * since `brew autoremove` uninstalls one keg of each orphan and its unit measures the whole rack.
- */
+/** The rack of each formula as an orphan, in the order of `params.formulae`; a failed read fails. */
 async function loadHomebrewOrphans(params: {
   cellarPath: AbsolutePath;
   formulae: HomebrewFormulaName[];
-}): Promise<Result<HomebrewOrphans, ExploreFileUnreadable>> {
-  const orphans = params.formulae.map((formula) => ({
-    formula: formula,
-    kegPath: joinAbsolutePath({ parentPath: params.cellarPath, names: [formula] }),
-  }));
-  const racks = await Promise.all(
-    orphans.map((orphan) => loadExploreDirectoryEntries({ path: orphan.kegPath })),
+}): Promise<Result<HomebrewOrphan[], ExploreFileUnreadable>> {
+  const orphanReads = await Promise.all(
+    params.formulae.map((formula) =>
+      loadHomebrewOrphan({ cellarPath: params.cellarPath, formula: formula }),
+    ),
   );
 
-  for (const rack of racks) {
-    if (rack.kind === 'failed') {
-      return rack;
-    }
-  }
-
-  const judged = racks.every((rack) => rack.kind === 'succeeded' && isSingleKegRack(rack.value));
-
-  if (!judged) {
-    return { kind: 'succeeded', value: { kind: 'notJudged' } };
-  }
-
-  return { kind: 'succeeded', value: { kind: 'judged', orphans: orphans } };
+  return gatherHomebrewOrphanReads({ orphanReads: orphanReads });
 }
 
-function isSingleKegRack(entries: DirectoryEntry[] | null): boolean {
-  if (entries === null) {
-    return false;
+async function loadHomebrewOrphan(params: {
+  cellarPath: AbsolutePath;
+  formula: HomebrewFormulaName;
+}): Promise<Result<HomebrewOrphan, ExploreFileUnreadable>> {
+  const rackPath = joinAbsolutePath({ parentPath: params.cellarPath, names: [params.formula] });
+  const rack = await loadExploreDirectoryEntries({ path: rackPath });
+
+  if (rack.kind === 'failed') {
+    return rack;
   }
 
-  return entries.filter((entry) => entry.kind === 'directory').length === 1;
+  return {
+    kind: 'succeeded',
+    value: {
+      formula: params.formula,
+      rackPath: rackPath,
+      kegCount: countKegFolders({ entries: rack.value }),
+    },
+  };
+}
+
+/** The orphans of the reads in their order, or the first failed read. */
+function gatherHomebrewOrphanReads(params: {
+  orphanReads: Result<HomebrewOrphan, ExploreFileUnreadable>[];
+}): Result<HomebrewOrphan[], ExploreFileUnreadable> {
+  const orphans: HomebrewOrphan[] = [];
+
+  for (const orphanRead of params.orphanReads) {
+    if (orphanRead.kind === 'failed') {
+      return orphanRead;
+    }
+
+    orphans.push(orphanRead.value);
+  }
+
+  return { kind: 'succeeded', value: orphans };
+}
+
+/** The keg folders of a rack as Homebrew's `rack.subdirs` counts them; `null` for no rack. */
+function countKegFolders(params: { entries: DirectoryEntry[] | null }): number | null {
+  if (params.entries === null) {
+    return null;
+  }
+
+  return params.entries.filter((entry) => entry.kind === 'directory').length;
 }
