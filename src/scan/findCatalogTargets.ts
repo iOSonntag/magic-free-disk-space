@@ -1,12 +1,10 @@
 import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { FileFailure } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import { decideReadFailure } from '../system/readFailure.js';
-import { buildReadIssue } from './buildReadIssue.js';
+import { buildFailureIssues } from './buildReadIssue.js';
+import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 
 export type CatalogTarget = {
@@ -43,17 +41,6 @@ export async function findCatalogTargets(params: {
     targets: targetsPerEntry.flatMap((entryTargets) => entryTargets.targets),
     issues: targetsPerEntry.flatMap((entryTargets) => entryTargets.issues),
   };
-}
-
-function getCatalogEntryPath(params: { environment: Environment; entry: CatalogEntry }): string {
-  if (params.entry.root === 'absolute') {
-    return params.entry.path;
-  }
-
-  const rootDir =
-    params.entry.root === 'home' ? params.environment.homeDir : params.environment.tempDir;
-
-  return join(rootDir, params.entry.path);
 }
 
 async function findSelfTargets(params: {
@@ -95,19 +82,4 @@ async function findChildTargets(params: {
     })),
     issues: [],
   };
-}
-
-function buildFailureIssues(params: {
-  path: string;
-  failure: FileFailure | DirectoryFailure;
-}): ScanIssue[] {
-  const verdict = decideReadFailure(params.failure);
-
-  switch (verdict.kind) {
-    case 'absent':
-    case 'unfit':
-      return [];
-    case 'failed':
-      return [buildReadIssue({ path: params.path, failure: verdict.failure })];
-  }
 }

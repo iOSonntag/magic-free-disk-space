@@ -44,6 +44,8 @@ import {
   resolveOwnerBundleId,
   resolveOwnerState,
 } from './resolveOwnerState.js';
+import type { ScanPhase } from './scanPhase.js';
+import { EMPTY_SCAN_PHASE, mergeScanPhases } from './scanPhase.js';
 import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 export type ScanOptions = {
@@ -80,11 +82,6 @@ type ScanContext = {
   processCommands: string[] | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
 };
-
-/** Decisions in source order with the issues met on the way. */
-export type ScanPhase = { decisions: CandidateDecision[]; issues: ScanIssue[] };
-
-const EMPTY_PHASE: ScanPhase = { decisions: [], issues: [] };
 
 const XCODE_BUNDLE_ID_PREFIX = 'com.apple.dt.Xcode';
 
@@ -179,6 +176,7 @@ export async function runScan(params: {
 
   params.onProgress('Asking developer tools what they can clean…');
   const explore = await loadExplorePhase({
+    environment: params.environment,
     probes: probes,
     catalogEntries: params.catalogEntries,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
@@ -415,7 +413,7 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
 
   if (names.kind === 'failed') {
     if (names.failure.reason === 'missing' || names.failure.reason === 'notDirectory') {
-      return EMPTY_PHASE;
+      return EMPTY_SCAN_PHASE;
     }
 
     return {
@@ -498,19 +496,12 @@ async function buildMeasuredPhase(params: {
   }
 
   if (measured.failure.reason === 'missing') {
-    return EMPTY_PHASE;
+    return EMPTY_SCAN_PHASE;
   }
 
   return {
     decisions: [],
     issues: [{ path: params.path, reason: measured.failure.reason, detail: measured.failure.code }],
-  };
-}
-
-function mergeScanPhases(params: { phases: ScanPhase[] }): ScanPhase {
-  return {
-    decisions: params.phases.flatMap((phase) => phase.decisions),
-    issues: params.phases.flatMap((phase) => phase.issues),
   };
 }
 

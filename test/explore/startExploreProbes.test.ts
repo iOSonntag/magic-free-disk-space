@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { runExploreProbe, startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -303,5 +303,21 @@ describe('startExploreProbes', () => {
     expect(await probes.androidAvds).toEqual({ kind: 'toolMissing' });
     expect(await probes.homebrewAppleSilicon).toEqual({ kind: 'toolMissing' });
     expect(await probes.homebrewIntel).toEqual({ kind: 'toolMissing' });
+  });
+
+  test('answers timedOut for a files probe still reading at its deadline', async () => {
+    const outcome = await runExploreProbe({
+      probe: { kind: 'files', loadFindings: () => new Promise(() => {}) },
+      start: {
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({}),
+        processCommands: Promise.resolve([]),
+        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+        timeoutMs: 50,
+        unusedCutoffMs: UNUSED_CUTOFF_MS,
+      },
+    });
+
+    expect(outcome).toEqual({ kind: 'timedOut' });
   });
 });

@@ -72,7 +72,26 @@ describe('loadUnitMeasurement', () => {
         (await loadAllocatedBytesOrThrow(hashFile)),
       entryCount: 3,
       isComplete: true,
+      holdsOtherVolume: false,
     });
+  });
+
+  test('holds another volume when any path does, a missing one counting false', async () => {
+    const hashFile = join(fixtureRoot.homeDir, 'example.sha256');
+
+    await createFixtureFile({ path: hashFile, sizeBytes: 64, modifiedMs: MODIFIED_MS });
+
+    const plain = await loadUnitMeasurement({
+      unit: buildDartUnit([hashFile, join(fixtureRoot.homeDir, 'gone')]),
+      deadlineMs: Date.now() + 10_000,
+    });
+    const mounted = await loadUnitMeasurement({
+      unit: buildDartUnit([hashFile, '/dev', join(fixtureRoot.homeDir, 'gone')]),
+      deadlineMs: Date.now() + 10_000,
+    });
+
+    expect(plain.holdsOtherVolume).toBe(false);
+    expect(mounted.holdsOtherVolume).toBe(true);
   });
 
   test('is incomplete when a path cannot be read', async () => {
@@ -88,7 +107,12 @@ describe('loadUnitMeasurement', () => {
       deadlineMs: Date.now() + 10_000,
     });
 
-    expect(measurement).toEqual({ allocatedBytes: 0, entryCount: 0, isComplete: false });
+    expect(measurement).toEqual({
+      allocatedBytes: 0,
+      entryCount: 0,
+      isComplete: false,
+      holdsOtherVolume: false,
+    });
   });
 
   test('is incomplete when a folder of a path cannot be read in part', async () => {

@@ -134,6 +134,7 @@ async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
 
 function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
   return loadExplorePhase({
+    environment: environment,
     probes: buildProbes({ vscodeExtensions: outcome }),
     catalogEntries: [vscodeEntry],
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
@@ -185,6 +186,7 @@ describe('loadExplorePhase', () => {
     });
 
     const phase = await loadExplorePhase({
+      environment: environment,
       probes: probes,
       catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
@@ -233,6 +235,7 @@ describe('loadExplorePhase', () => {
 
   test('offers a finding below any size threshold and skips an unknown one', async () => {
     const phase = await loadExplorePhase({
+      environment: environment,
       probes: buildProbes({
         simulatorDevices: { kind: 'probed', findings: [], isComplete: true },
         dartPubCache: { kind: 'probed', findings: [], isComplete: true },
@@ -270,6 +273,7 @@ describe('loadExplorePhase', () => {
       },
     };
     const phase = await loadExplorePhase({
+      environment: environment,
       probes: buildProbes({
         simulatorDevices: { kind: 'toolMissing' },
         dartPubCache: {
@@ -412,8 +416,50 @@ describe('loadExplorePhase', () => {
     }
   });
 
+  test('falls back to advice for a probe that ran past its deadline, with an issue at its path', async () => {
+    const phase = await loadVscodePhase({ kind: 'timedOut' });
+
+    expect(phase).toEqual({
+      decisions: [],
+      issues: [
+        { path: join(environment.homeDir, 'vscode'), reason: 'walkStopped', detail: 'deadline' },
+      ],
+      fallbackEntries: [vscodeEntry],
+      incompleteEntries: [],
+    });
+  });
+
+  test('skips a path unit whose folder holds another volume, unoffered', async () => {
+    const outcome = await loadVscodeOutcome();
+
+    if (outcome.kind !== 'probed' || outcome.findings[0] === undefined) {
+      throw new Error('The VS Code probe should have found a folder.');
+    }
+
+    const finding = outcome.findings[0];
+
+    if (finding.unit.kind !== 'vscodeExtension') {
+      throw new Error('The VS Code probe should have found an extension folder.');
+    }
+
+    const mountedFinding: ExploreFinding = {
+      ...finding,
+      unit: { ...finding.unit, folderPath: buildTestAbsolutePath({ text: '/dev' }) },
+      activity: 'idle',
+    };
+    const phase = await loadVscodePhase({
+      kind: 'probed',
+      findings: [mountedFinding],
+      isComplete: true,
+    });
+
+    expect(phase.decisions).toEqual([{ kind: 'skip', path: '/dev', reason: 'holdsOtherVolume' }]);
+    expect(phase.issues).toEqual([]);
+  });
+
   test('keeps the failure of unreadable output in the issue', async () => {
     const phase = await loadExplorePhase({
+      environment: environment,
       probes: buildProbes({
         simulatorDevices: {
           kind: 'failed',

@@ -348,7 +348,7 @@ async function deleteUnitFolderCandidate(params: {
       return buildPathOutcome({
         path: folderPath,
         allocatedBytes: params.allocatedBytes,
-        outcome: getReadFailureOutcome(recheck.failure),
+        outcome: readFailureToOutcomeKind(recheck.failure),
         code: recheck.failure.code,
       });
     case 'unchanged':
@@ -360,7 +360,7 @@ async function deleteUnitFolderCandidate(params: {
   }
 }
 
-function getReadFailureOutcome(failure: ReadFailure): RemovalOutcomeCodedKind {
+function readFailureToOutcomeKind(failure: ReadFailure): RemovalOutcomeCodedKind {
   switch (failure.reason) {
     case 'permissionDenied':
       return 'permissionDenied';

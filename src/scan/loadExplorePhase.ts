@@ -1,4 +1,5 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
+import type { Environment } from '../environment/buildEnvironment.js';
 import type {
   ExploreFinding,
   ExplorePathUnit,
@@ -8,17 +9,20 @@ import type {
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import { decideReadFailure } from '../system/readFailure.js';
-import { buildReadIssue } from './buildReadIssue.js';
+import { buildFailureIssues, buildReadIssue } from './buildReadIssue.js';
 import type {
   CandidateDecision,
   CandidateProbed,
   CandidateRemovalDeleteUnitFolder,
   CandidateRemovalRunTool,
 } from './candidate.js';
+import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 import type { UnitMeasurement } from './loadUnitMeasurement.js';
 import { loadUnitMeasurement } from './loadUnitMeasurement.js';
+import type { ScanPhase } from './scanPhase.js';
+import { mergeScanPhases } from './scanPhase.js';
+import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 /**
  * The decisions of the probes that ran, and the entries the scan decides through its catalog path
@@ -33,13 +37,12 @@ export type ExplorePhase = {
   incompleteEntries: CatalogEntry[];
 };
 
-/** What one finding adds: its decision, or the issue of a folder that could not be read. */
-type ExploreFindingPhase = { decisions: CandidateDecision[]; issues: ScanIssue[] };
-
-const EMPTY_FINDING_PHASE: ExploreFindingPhase = { decisions: [], issues: [] };
-
-/** Waits for the probe of each explore entry and decides its findings, in entry order. */
+/**
+ * Waits for the probe of each explore entry and decides its findings, in entry order. A probe that
+ * ran past its deadline adds a `walkStopped` issue at its entry's path.
+ */
 export async function loadExplorePhase(params: {
+  environment: Environment;
   probes: Record<ExploreProbeId, Promise<ExploreProbeOutcome>>;
   catalogEntries: CatalogEntry[];
   measureTimeoutMs: number;
@@ -53,6 +56,7 @@ export async function loadExplorePhase(params: {
 
       return [
         loadExploreEntryPhase({
+          environment: params.environment,
           entry: entry,
           outcome: params.probes[entry.removal.probe],
           measureTimeoutMs: params.measureTimeoutMs,
@@ -71,6 +75,7 @@ export async function loadExplorePhase(params: {
 }
 
 async function loadExploreEntryPhase(params: {
+  environment: Environment;
   entry: CatalogEntry;
   outcome: Promise<ExploreProbeOutcome>;
   measureTimeoutMs: number;
@@ -90,10 +95,11 @@ async function loadExploreEntryPhase(params: {
           }),
         ),
       );
+      const merged = mergeScanPhases({ phases: findingPhases });
 
       return {
-        decisions: findingPhases.flatMap((phase) => phase.decisions),
-        issues: findingPhases.flatMap((phase) => phase.issues),
+        decisions: merged.decisions,
+        issues: merged.issues,
         fallbackEntries: [],
         incompleteEntries: outcome.isComplete ? [] : [params.entry],
       };
@@ -128,6 +134,20 @@ async function loadExploreEntryPhase(params: {
         fallbackEntries: [params.entry],
         incompleteEntries: [],
       };
+    case 'timedOut': {
+      const deadlineIssue: ScanIssue = {
+        path: getCatalogEntryPath({ environment: params.environment, entry: params.entry }),
+        reason: 'walkStopped',
+        detail: 'deadline',
+      };
+
+      return {
+        decisions: [],
+        issues: [deadlineIssue],
+        fallbackEntries: [params.entry],
+        incompleteEntries: [],
+      };
+    }
   }
 }
 
@@ -140,7 +160,7 @@ async function loadExploreFindingPhase(params: {
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-}): Promise<ExploreFindingPhase> {
+}): Promise<ScanPhase> {
   switch (params.finding.activity) {
     case 'busy':
       return {
@@ -162,7 +182,7 @@ async function loadIdleFindingPhase(params: {
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-}): Promise<ExploreFindingPhase> {
+}): Promise<ScanPhase> {
   const unit = params.finding.unit;
 
   switch (unit.kind) {
@@ -173,7 +193,7 @@ async function loadIdleFindingPhase(params: {
     case 'androidAvd':
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
-      return loadToolFindingOffer({ ...params, unit: unit });
+      return loadToolFindingPhase({ ...params, unit: unit });
     case 'androidSystemImage':
     case 'androidEmulator':
     case 'vscodeExtension':
@@ -181,14 +201,17 @@ async function loadIdleFindingPhase(params: {
   }
 }
 
-/** Measures the unit's paths and offers it at any size, shown at the finding's place. */
-async function loadToolFindingOffer(params: {
+/**
+ * Measures the unit's paths and offers it at any size, shown at the finding's place. Its tool
+ * decides what it removes, so a path holding another volume does not skip it.
+ */
+async function loadToolFindingPhase(params: {
   finding: ExploreFinding;
   unit: ExploreToolUnit;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-}): Promise<ExploreFindingPhase> {
+}): Promise<ScanPhase> {
   const measurement = await loadFindingMeasurement(params);
   const removal: CandidateRemovalRunTool = { kind: 'runTool', unit: params.unit };
 
@@ -206,7 +229,8 @@ async function loadToolFindingOffer(params: {
 /**
  * Offers the unit's folder at any size with the identity it has now, which the deletion checks
  * again. A folder that vanished since the probe adds nothing, one that cannot be read adds a place
- * issue, and a symbolic link is skipped, since only the folder itself may be deleted.
+ * issue, and a symbolic link is skipped, since only the folder itself may be deleted. A folder
+ * that is a mount point or holds one is skipped, since its removal would delete into that volume.
  */
 async function loadPathFindingPhase(params: {
   finding: ExploreFinding;
@@ -214,22 +238,14 @@ async function loadPathFindingPhase(params: {
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-}): Promise<ExploreFindingPhase> {
+}): Promise<ScanPhase> {
   const identity = await loadFileIdentity({ path: params.unit.folderPath });
 
   if (identity.kind === 'failed') {
-    const verdict = decideReadFailure(identity.failure);
-
-    switch (verdict.kind) {
-      case 'absent':
-      case 'unfit':
-        return EMPTY_FINDING_PHASE;
-      case 'failed':
-        return {
-          decisions: [],
-          issues: [buildReadIssue({ path: params.unit.folderPath, failure: verdict.failure })],
-        };
-    }
+    return {
+      decisions: [],
+      issues: buildFailureIssues({ path: params.unit.folderPath, failure: identity.failure }),
+    };
   }
 
   if (identity.value.kind === 'symbolicLink') {
@@ -246,15 +262,19 @@ async function loadPathFindingPhase(params: {
     unit: params.unit,
   };
 
-  return buildOfferPhase(
-    buildExploreCandidate({
+  const offer: CandidateDecision = {
+    kind: 'offer',
+    candidate: buildExploreCandidate({
       finding: params.finding,
       path: params.unit.folderPath,
       removal: removal,
       category: params.category,
       measurement: measurement,
     }),
-  );
+  };
+  const decision = skipOfferHoldingOtherVolume({ decision: offer, measurement: measurement });
+
+  return { decisions: [decision], issues: [] };
 }
 
 function loadFindingMeasurement(params: {
@@ -270,7 +290,7 @@ function loadFindingMeasurement(params: {
   );
 }
 
-function buildOfferPhase(candidate: CandidateProbed): ExploreFindingPhase {
+function buildOfferPhase(candidate: CandidateProbed): ScanPhase {
   return { decisions: [{ kind: 'offer', candidate: candidate }], issues: [] };
 }
 

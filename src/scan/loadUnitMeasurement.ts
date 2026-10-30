@@ -9,6 +9,11 @@ export type UnitMeasurement = {
   entryCount: number;
   /** False when a path was unreadable in part or the deadline passed. */
   isComplete: boolean;
+  /**
+   * True when a path is a mount point or holds another mounted volume; a path that is gone or
+   * unreadable counts false.
+   */
+  holdsOtherVolume: boolean;
 };
 
 type PathMeasurementPart = UnitMeasurement;
@@ -17,12 +22,14 @@ const MISSING_PATH_PART: PathMeasurementPart = {
   allocatedBytes: 0,
   entryCount: 0,
   isComplete: true,
+  holdsOtherVolume: false,
 };
 
 const UNREADABLE_PATH_PART: PathMeasurementPart = {
   allocatedBytes: 0,
   entryCount: 0,
   isComplete: false,
+  holdsOtherVolume: false,
 };
 
 /** Paths measured at once; a Dart gc set holds thousands of small folders. */
@@ -46,6 +53,7 @@ export async function loadUnitMeasurement(params: {
     allocatedBytes: parts.reduce((sum, part) => sum + part.allocatedBytes, 0),
     entryCount: parts.reduce((sum, part) => sum + part.entryCount, 0),
     isComplete: parts.every((part) => part.isComplete),
+    holdsOtherVolume: parts.some((part) => part.holdsOtherVolume),
   };
 }
 
@@ -60,6 +68,7 @@ async function loadPathMeasurementPart(params: {
       allocatedBytes: measured.value.allocatedBytes,
       entryCount: measured.value.entryCount,
       isComplete: measured.value.isComplete,
+      holdsOtherVolume: measured.value.holdsOtherVolume,
     };
   }
 
