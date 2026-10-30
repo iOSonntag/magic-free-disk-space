@@ -111,6 +111,28 @@ export function stopRunningTools(): void {
   }
 }
 
+/** A signal that ends the app, so every tool it still runs is stopped with it. */
+export type ProcessEndSignal = 'SIGHUP' | 'SIGINT' | 'SIGQUIT' | 'SIGTERM';
+
+/**
+ * Stops every running tool when the process exits, and on each signal exits with its code. A tool
+ * runs in a process group of its own, which outlives the process unless it is stopped here.
+ */
+export function stopRunningToolsOnProcessEnd(params: {
+  signalExitCodes: Record<ProcessEndSignal, number>;
+}): void {
+  process.on('exit', () => {
+    stopRunningTools();
+  });
+
+  for (const [signal, exitCode] of Object.entries(params.signalExitCodes)) {
+    process.on(signal, () => {
+      stopRunningTools();
+      process.exit(exitCode);
+    });
+  }
+}
+
 function startToolProcess(params: {
   tool: LocatedTool;
   args: string[];
