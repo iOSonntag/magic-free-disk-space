@@ -1,7 +1,8 @@
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Result } from '../result.js';
 import { loadFileText } from '../system/loadFileText.js';
+import { loadRealPath } from '../system/loadRealPath.js';
 import { decideDartBinaryPath, listFlutterWrapperPaths } from './decideDartBinaryPath.js';
 import type { ToolDistrustDetail, ToolFileStats } from './decideToolTrust.js';
 import { decideToolTrust } from './decideToolTrust.js';
@@ -196,15 +197,6 @@ function buildFixedLocationPath(params: { location: ToolLocationPath; homeDir: s
       return params.location.path;
     case 'home':
       return join(params.homeDir, params.location.path);
-  }
-}
-
-/** `null` when nothing is there, a link dangles, or the path cannot be read. */
-async function loadRealPath(params: { path: string }): Promise<string | null> {
-  try {
-    return await realpath(params.path);
-  } catch {
-    return null;
   }
 }
 

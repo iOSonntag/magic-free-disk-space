@@ -1,9 +1,10 @@
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadFileText } from '../system/loadFileText.js';
+import { loadRealPath } from '../system/loadRealPath.js';
 import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
 import { FLUTTER_SDK_DART_PATH } from './decideDartBinaryPath.js';
 
@@ -154,15 +155,6 @@ async function isFlutterRootAccepted(params: {
   }
 
   return isPathPresent({ path: join(flutterRealPath, '.git') });
-}
-
-/** `null` when nothing is there, a link dangles, or the path cannot be read. */
-async function loadRealPath(params: { path: string }): Promise<string | null> {
-  try {
-    return await realpath(params.path);
-  } catch {
-    return null;
-  }
 }
 
 /** Whether something is at `path` itself, a folder, a file, or a link, without following it. */
