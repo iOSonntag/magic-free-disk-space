@@ -10,6 +10,7 @@ import {
   findPackageConfigCandidatePaths,
   PACKAGE_CONFIG_FILE_NAME,
 } from './decidePackageConfigTracking.js';
+import { TOOL_FILE_MAX_BYTES } from './limits.js';
 import { parseGitDirFilePath } from './parseGitDirFilePath.js';
 import { parseGitIndexPaths } from './parseGitIndexPaths.js';
 
@@ -139,11 +140,11 @@ async function loadGitDirPackageConfigTracking(params: {
     maxBytes: GIT_INDEX_MAX_BYTES,
   });
 
-  if (indexBytes === null) {
+  if (indexBytes.kind === 'failed') {
     return 'unknown';
   }
 
-  const indexPaths = parseGitIndexPaths(indexBytes);
+  const indexPaths = parseGitIndexPaths(indexBytes.value);
 
   if (indexPaths === null) {
     return 'unknown';
@@ -212,13 +213,16 @@ async function loadGitDirOfEntry(params: {
     case 'directory':
       return { path: params.gitPath, workTreePath: params.folder };
     case 'file': {
-      const gitFileText = await loadFileText({ path: params.gitPath });
+      const gitFileText = await loadFileText({
+        path: params.gitPath,
+        maxBytes: TOOL_FILE_MAX_BYTES,
+      });
 
-      if (gitFileText === null) {
+      if (gitFileText.kind === 'failed') {
         return null;
       }
 
-      const gitDir = parseGitDirFilePath({ text: gitFileText, folder: params.folder });
+      const gitDir = parseGitDirFilePath({ text: gitFileText.value, folder: params.folder });
 
       if (gitDir === null) {
         return null;

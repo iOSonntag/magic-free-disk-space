@@ -8,6 +8,7 @@ import { decideDartBinaryPath, listFlutterWrapperPaths } from './decideDartBinar
 import type { ToolDistrustDetail, ToolFileStats } from './decideToolTrust.js';
 import { decideToolTrust } from './decideToolTrust.js';
 import { isDartVersionSupported } from './isDartVersionSupported.js';
+import { TOOL_FILE_MAX_BYTES } from './limits.js';
 import { loadFlutterSdkDartPaths } from './loadFlutterSdkDartPaths.js';
 import type { ToolLocation, ToolLocationPath, ToolName } from './toolInstallLocations.js';
 
@@ -120,13 +121,14 @@ async function isLocatedToolAccepted(params: { tool: LocatedTool }): Promise<boo
 async function isDartSdkSupported(params: { binaryPath: string }): Promise<boolean> {
   const versionText = await loadFileText({
     path: join(dirname(dirname(params.binaryPath)), 'version'),
+    maxBytes: TOOL_FILE_MAX_BYTES,
   });
 
-  if (versionText === null) {
+  if (versionText.kind === 'failed') {
     return false;
   }
 
-  return isDartVersionSupported(versionText);
+  return isDartVersionSupported(versionText.value);
 }
 
 /** The real path of the binary that the location at `path` stands for; `null` for none. */
