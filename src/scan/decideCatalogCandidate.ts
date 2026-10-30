@@ -48,39 +48,45 @@ export function decideCatalogCandidate(params: {
     return { kind: 'skip', path: params.path, reason: activitySkipReason };
   }
 
-  if (params.entry.removal.kind === 'advice') {
-    return {
-      kind: 'advice',
-      advice: {
-        path: params.path,
-        title: params.entry.title,
-        category: params.entry.category,
-        risk: params.entry.risk,
-        explanation: params.entry.explanation,
-        advice: params.entry.removal.advice,
-        allocatedBytes: params.measurement.allocatedBytes,
-        isComplete: params.measurement.isComplete,
-      },
-    };
+  switch (params.entry.removal.kind) {
+    case 'delete':
+      return {
+        kind: 'offer',
+        candidate: {
+          path: params.path,
+          title: params.entry.title,
+          category: params.entry.category,
+          risk: params.entry.risk,
+          origin: 'catalog',
+          explanation: params.entry.explanation,
+          regeneration: params.entry.regeneration,
+          allocatedBytes: params.measurement.allocatedBytes,
+          entryCount: params.measurement.entryCount,
+          isComplete: params.measurement.isComplete,
+          removal: {
+            kind: 'deletePath',
+            identity: params.measurement.identity,
+            ownerBundlePaths: params.ownerBundlePaths,
+          },
+        },
+      };
+    // An explore entry reaches this decision only when its probe did not run.
+    case 'advice':
+    case 'explore':
+      return {
+        kind: 'advice',
+        advice: {
+          path: params.path,
+          title: params.entry.title,
+          category: params.entry.category,
+          risk: params.entry.risk,
+          explanation: params.entry.explanation,
+          advice: params.entry.removal.advice,
+          allocatedBytes: params.measurement.allocatedBytes,
+          isComplete: params.measurement.isComplete,
+        },
+      };
   }
-
-  return {
-    kind: 'offer',
-    candidate: {
-      path: params.path,
-      identity: params.measurement.identity,
-      title: params.entry.title,
-      category: params.entry.category,
-      risk: params.entry.risk,
-      origin: 'catalog',
-      explanation: params.entry.explanation,
-      regeneration: params.entry.regeneration,
-      allocatedBytes: params.measurement.allocatedBytes,
-      entryCount: params.measurement.entryCount,
-      isComplete: params.measurement.isComplete,
-      ownerBundlePaths: params.ownerBundlePaths,
-    },
-  };
 }
 
 /** An Apple-named child of a `children` entry belongs to macOS; the scanner skips it unmeasured. */

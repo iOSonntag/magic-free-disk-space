@@ -1,10 +1,4 @@
-import type { Risk } from '../catalog/catalog.js';
 import type { Result } from '../result.js';
-
-export type SelectionChoice = {
-  number: number;
-  risk: Risk;
-};
 
 export type SelectionFailure = {
   reason: 'unknownToken' | 'outOfRange' | 'reversedRange' | 'noneMixed';
@@ -18,18 +12,25 @@ type NumberRange = {
 
 const digitsOnlyPattern = /^[0-9]+$/;
 
+/** `choiceCount` numbers the items 1 to it; `safe` picks `safeNumbers`, which the report decides. */
 export function parseSelection(params: {
   input: string;
-  choices: SelectionChoice[];
+  choiceCount: number;
+  safeNumbers: number[];
 }): Result<number[], SelectionFailure> {
   const tokens = params.input.split(/[\s,]+/).filter((token) => token !== '');
 
-  return collectSelectedNumbers({ tokens: tokens, choices: params.choices });
+  return collectSelectedNumbers({
+    tokens: tokens,
+    choiceCount: params.choiceCount,
+    safeNumbers: params.safeNumbers,
+  });
 }
 
 function collectSelectedNumbers(params: {
   tokens: string[];
-  choices: SelectionChoice[];
+  choiceCount: number;
+  safeNumbers: number[];
 }): Result<number[], SelectionFailure> {
   const selectedNumbers = new Set<number>();
 
@@ -37,7 +38,8 @@ function collectSelectedNumbers(params: {
     const tokenResult = parseSelectionToken({
       token: token,
       tokenCount: params.tokens.length,
-      choices: params.choices,
+      choiceCount: params.choiceCount,
+      safeNumbers: params.safeNumbers,
     });
 
     if (tokenResult.kind === 'failed') {
@@ -58,7 +60,8 @@ function collectSelectedNumbers(params: {
 function parseSelectionToken(params: {
   token: string;
   tokenCount: number;
-  choices: SelectionChoice[];
+  choiceCount: number;
+  safeNumbers: number[];
 }): Result<number[], SelectionFailure> {
   const lowerCaseToken = params.token.toLowerCase();
 
@@ -71,11 +74,7 @@ function parseSelectionToken(params: {
   }
 
   if (lowerCaseToken === 'safe') {
-    const safeNumbers = params.choices
-      .filter((choice) => choice.risk === 'safe')
-      .map((choice) => choice.number);
-
-    return { kind: 'succeeded', value: safeNumbers };
+    return { kind: 'succeeded', value: params.safeNumbers };
   }
 
   const numberRange = parseNumberRange({ token: params.token });
@@ -91,7 +90,7 @@ function parseSelectionToken(params: {
   return selectNumberRange({
     token: params.token,
     numberRange: numberRange,
-    choices: params.choices,
+    choiceCount: params.choiceCount,
   });
 }
 
@@ -122,7 +121,7 @@ function parseNumberRange(params: { token: string }): NumberRange | null {
 function selectNumberRange(params: {
   token: string;
   numberRange: NumberRange;
-  choices: SelectionChoice[];
+  choiceCount: number;
 }): Result<number[], SelectionFailure> {
   const rangeNumbers: number[] = [];
 
@@ -131,7 +130,7 @@ function selectNumberRange(params: {
     choiceNumber <= params.numberRange.endNumber;
     choiceNumber += 1
   ) {
-    if (!params.choices.some((choice) => choice.number === choiceNumber)) {
+    if (choiceNumber < 1 || choiceNumber > params.choiceCount) {
       return { kind: 'failed', failure: { reason: 'outOfRange', token: params.token } };
     }
 

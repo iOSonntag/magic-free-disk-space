@@ -1,8 +1,64 @@
 import { describe, expect, test } from 'bun:test';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
+import { buildTestToolCandidate } from '../support/candidateFixtures.js';
 
 describe('dedupeCandidates', () => {
+  test('skips a tool item whose footprint lies inside an earlier offer', () => {
+    const earlier = buildOfferDecision({ path: '/home/.local/share/mise', realPath: '/x' });
+    const toolOffer: CandidateDecision = {
+      kind: 'offer',
+      candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
+    };
+
+    expect(dedupeCandidates({ decisions: [earlier, toolOffer] })).toEqual([
+      earlier,
+      {
+        kind: 'skip',
+        path: '/home/.local/share/mise/installs/node/20.1.0',
+        reason: 'overlapsEarlierCandidate',
+      },
+    ]);
+  });
+
+  test('skips a later offer inside the footprint of a kept tool item', () => {
+    const toolOffer: CandidateDecision = {
+      kind: 'offer',
+      candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
+    };
+    const inside = buildOfferDecision({
+      path: '/home/.local/share/mise/installs/node/20.1.0/bin',
+      realPath: '/y',
+    });
+
+    expect(dedupeCandidates({ decisions: [toolOffer, inside] })).toEqual([
+      toolOffer,
+      {
+        kind: 'skip',
+        path: '/home/.local/share/mise/installs/node/20.1.0/bin',
+        reason: 'overlapsEarlierCandidate',
+      },
+    ]);
+  });
+
+  test('skips a tool item whose footprint holds a skipped path', () => {
+    const skip: CandidateDecision = {
+      kind: 'skip',
+      path: '/home/.local/share/mise/installs/node/20.1.0/lib',
+      reason: 'recentActivity',
+    };
+    const toolOffer: CandidateDecision = {
+      kind: 'offer',
+      candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
+    };
+
+    expect(dedupeCandidates({ decisions: [skip, toolOffer] })[1]).toEqual({
+      kind: 'skip',
+      path: '/home/.local/share/mise/installs/node/20.1.0',
+      reason: 'overlapsEarlierCandidate',
+    });
+  });
+
   test('skips an offer whose real path equals an earlier offer', () => {
     const earlier = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
     const later = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
@@ -174,13 +230,6 @@ function buildOfferDecision(params: { path: string; realPath: string }): Candida
     kind: 'offer',
     candidate: {
       path: params.path,
-      identity: {
-        dev: 1n,
-        ino: 1n,
-        birthtimeNs: 1n,
-        kind: 'directory',
-        realPath: params.realPath,
-      },
       title: 'Fixture cache',
       category: 'caches',
       risk: 'safe',
@@ -190,7 +239,17 @@ function buildOfferDecision(params: { path: string; realPath: string }): Candida
       allocatedBytes: 1024,
       entryCount: 1,
       isComplete: true,
-      ownerBundlePaths: [],
+      removal: {
+        kind: 'deletePath',
+        identity: {
+          dev: 1n,
+          ino: 1n,
+          birthtimeNs: 1n,
+          kind: 'directory',
+          realPath: params.realPath,
+        },
+        ownerBundlePaths: [],
+      },
     },
   };
 }

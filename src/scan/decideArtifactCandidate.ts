@@ -33,7 +33,6 @@ export function decideArtifactCandidate(params: {
     kind: 'offer',
     candidate: {
       path: path,
-      identity: params.measurement.identity,
       title: `${params.finding.rule.title} of ${basename(params.finding.projectRoot)}`,
       category: 'projects',
       risk: params.finding.rule.risk,
@@ -43,7 +42,7 @@ export function decideArtifactCandidate(params: {
       allocatedBytes: params.measurement.allocatedBytes,
       entryCount: params.measurement.entryCount,
       isComplete: params.measurement.isComplete,
-      ownerBundlePaths: [],
+      removal: { kind: 'deletePath', identity: params.measurement.identity, ownerBundlePaths: [] },
     },
   };
 }

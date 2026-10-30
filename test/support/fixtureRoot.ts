@@ -53,6 +53,8 @@ export async function loadTestEnvironment(params: {
   return buildEnvironment({
     platform: 'darwin',
     nowMs: params.nowMs,
+    // The fixtures belong to the user that runs the tests.
+    userId: process.getuid?.() ?? 0,
     homeDir: params.fixtureRoot.homeDir,
     homeRealPath,
     tempDir: params.fixtureRoot.tempDir,
@@ -74,6 +76,14 @@ export async function createFixtureFile(params: {
 
 export async function createFixtureDirectory(params: { path: string }): Promise<void> {
   await mkdir(params.path, { recursive: true });
+}
+
+/** Whether anything is at `path`; a symbolic link counts itself, whatever its target. */
+export async function isPresent(path: string): Promise<boolean> {
+  return lstat(path).then(
+    () => true,
+    () => false,
+  );
 }
 
 /** Sets the modified time of a file or directory. Call it after a directory's children exist: adding a child changes it. */

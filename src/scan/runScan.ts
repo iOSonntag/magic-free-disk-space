@@ -2,11 +2,13 @@ import { join, sep } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import { startExploreProbes } from '../explore/startExploreProbes.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
+import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import { buildScanReport } from './buildScanReport.js';
 import type { Advice, Candidate, CandidateDecision, SkipReason } from './candidate.js';
@@ -30,6 +32,7 @@ import {
   USER_FILE_ROOT_RELATIVE_PATHS,
 } from './limits.js';
 import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
+import { loadExplorePhase } from './loadExplorePhase.js';
 import type { InstalledApp } from './loadInstalledApps.js';
 import { loadInstalledApps } from './loadInstalledApps.js';
 import type { Measurement } from './loadPathMeasurement.js';
@@ -54,8 +57,13 @@ export type SkippedItem = {
 };
 
 export type ScanReport = {
-  /** Ranked by allocated bytes. The number of an item is its index plus one. */
+  /**
+   * Ranked by allocated bytes, Explore items after all others. The number of an item is its
+   * index plus one.
+   */
   candidates: Candidate[];
+  /** The numbers "Select safe" and the `safe` token pick: safe items outside Explore. */
+  safeNumbers: number[];
   advice: Advice[];
   skipped: SkippedItem[];
   issues: ScanIssue[];
@@ -63,7 +71,6 @@ export type ScanReport = {
 
 type ScanContext = {
   environment: Environment;
-  catalogEntries: CatalogEntry[];
   staleCutoffMs: number;
   unusedCutoffMs: number;
   installedApps: InstalledApp[];
@@ -99,27 +106,47 @@ const PROJECT_ACTIVITY_EXCLUDED_NAMES = [
 export async function runScan(params: {
   environment: Environment;
   catalogEntries: CatalogEntry[];
+  toolInstallLocations: ToolInstallLocations;
   options: ScanOptions;
   onProgress: (message: string) => void;
 }): Promise<ScanReport> {
   params.onProgress('Checking installed apps and running processes…');
 
+  const processCommandsLoad = loadProcessCommands({
+    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+  });
+  const knownProcessCommandsLoad = processCommandsLoad.then((result) =>
+    result.kind === 'succeeded' ? result.value : null,
+  );
+  const activeXcodeBundlePathLoad = loadActiveXcodeBundlePath({
+    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+  });
+  // The probes run beside every phase; the Explore phase waits for them last.
+  const probes = startExploreProbes({
+    environment: params.environment,
+    toolInstallLocations: params.toolInstallLocations,
+    processCommands: knownProcessCommandsLoad,
+    // A failed `xcode-select` counts as no active Xcode, so the simulator probe runs nothing.
+    activeXcodeBundlePath: activeXcodeBundlePathLoad.then((result) =>
+      result.kind === 'succeeded' ? result.value : null,
+    ),
+    timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
+  });
   const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
-    loadProcessCommands({ commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs }),
+    processCommandsLoad,
     loadInstalledApps({
       appDirs: params.environment.applicationDirs,
       commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
     }),
-    loadActiveXcodeBundlePath({ commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs }),
+    activeXcodeBundlePathLoad,
   ]);
   const context: ScanContext = {
     environment: params.environment,
-    catalogEntries: params.catalogEntries,
     staleCutoffMs: params.environment.nowMs - params.options.staleDays * DAY_MS,
     unusedCutoffMs: params.environment.nowMs - params.options.unusedDays * DAY_MS,
     installedApps: installed.apps,
     isInstalledAppListComplete: installed.issues.length === 0,
-    processCommands: processCommands.kind === 'succeeded' ? processCommands.value : null,
+    processCommands: await knownProcessCommandsLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
   };
   const setup: ScanPhase = {
@@ -131,7 +158,10 @@ export async function runScan(params: {
   };
 
   params.onProgress('Measuring known storage locations…');
-  const catalog = await loadCatalogPhase({ context: context });
+  const catalog = await loadCatalogPhase({
+    context: context,
+    entries: params.catalogEntries.filter((entry) => entry.removal.kind !== 'explore'),
+  });
 
   params.onProgress('Searching your projects for old build folders…');
   const artifacts = await loadArtifactPhase({ context: context });
@@ -145,7 +175,31 @@ export async function runScan(params: {
   params.onProgress('Looking for data of removed apps…');
   const orphans = await loadOrphanPhase({ context: context });
 
-  const scan = mergeScanPhases({ phases: [setup, catalog, artifacts, apps, userFiles, orphans] });
+  params.onProgress('Asking developer tools what they can clean…');
+  const explore = await loadExplorePhase({
+    probes: probes,
+    catalogEntries: params.catalogEntries,
+    measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
+    runItemMeasurement: runItemMeasurement,
+  });
+  const exploreAdvice = await loadCatalogPhase({
+    context: context,
+    entries: explore.fallbackEntries,
+  });
+
+  // Explore comes last, so an item an earlier source found wins the overlap.
+  const scan = mergeScanPhases({
+    phases: [
+      setup,
+      catalog,
+      artifacts,
+      apps,
+      userFiles,
+      orphans,
+      { decisions: explore.decisions, issues: explore.issues },
+      exploreAdvice,
+    ],
+  });
 
   return buildScanReport({
     decisions: dedupeCandidates({ decisions: scan.decisions }),
@@ -153,10 +207,13 @@ export async function runScan(params: {
   });
 }
 
-async function loadCatalogPhase(params: { context: ScanContext }): Promise<ScanPhase> {
+async function loadCatalogPhase(params: {
+  context: ScanContext;
+  entries: CatalogEntry[];
+}): Promise<ScanPhase> {
   const found = await findCatalogTargets({
     environment: params.context.environment,
-    entries: params.context.catalogEntries,
+    entries: params.entries,
   });
   const targetPhases = await Promise.all(
     found.targets.map((target) =>

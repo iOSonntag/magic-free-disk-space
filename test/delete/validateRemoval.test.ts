@@ -3,11 +3,12 @@ import type { Risk } from '../../src/catalog/catalog.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { buildTestCandidate } from '../support/candidateFixtures.js';
+import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
 
 const ENVIRONMENT = buildEnvironment({
   platform: 'darwin',
   nowMs: 0,
+  userId: 501,
   homeDir: '/Users/tester',
   homeRealPath: '/Users/tester',
   tempDir: '/var/folders/xy/abc/T',
@@ -111,5 +112,32 @@ describe('validateRemoval', () => {
     expect(validate({ path: '/Users/tester/Library/Containers/com.example.gone' }).kind).toBe(
       'approved',
     );
+  });
+
+  test('approves a tool item of any other risk, and refuses one marked never', () => {
+    for (const risk of ['safe', 'careful', 'review'] as const) {
+      const candidate = buildTestToolCandidate({
+        homeDir: '/Users/tester',
+        version: '20.1.0',
+        risk: risk,
+      });
+
+      expect(validateRemoval({ candidate: candidate, environment: ENVIRONMENT })).toEqual({
+        kind: 'approved',
+        candidate: candidate,
+      });
+    }
+
+    const neverCandidate = buildTestToolCandidate({
+      homeDir: '/Users/tester',
+      version: '20.1.0',
+      risk: 'never',
+    });
+
+    expect(validateRemoval({ candidate: neverCandidate, environment: ENVIRONMENT })).toEqual({
+      kind: 'refused',
+      path: neverCandidate.path,
+      reason: 'neverRisk',
+    });
   });
 });

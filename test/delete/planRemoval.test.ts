@@ -8,6 +8,7 @@ import { buildTestCandidate } from '../support/candidateFixtures.js';
 const ENVIRONMENT = buildEnvironment({
   platform: 'darwin',
   nowMs: 0,
+  userId: 501,
   homeDir: '/Users/tester',
   homeRealPath: '/Users/tester',
   tempDir: '/private/tmp/tester',

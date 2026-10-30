@@ -7,7 +7,10 @@ import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../../src/environment/loadEnvironment.js';
 import type { Result } from '../../src/result.js';
-import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
+import {
+  buildTestCatalogEntry,
+  TOOL_INSTALL_LOCATIONS_NONE,
+} from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -119,6 +122,7 @@ async function runBridgeWithLines(params: {
       },
     },
     catalogEntries: BRIDGE_CATALOG,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
     loadEnvironment: async () => environmentResult,
     clock: () => params.nowMs ?? NOW_MS,
   });

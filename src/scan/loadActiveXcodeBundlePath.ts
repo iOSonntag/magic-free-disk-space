@@ -1,7 +1,7 @@
-import { realpath } from 'node:fs/promises';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadCommandOutput } from '../system/loadCommandOutput.js';
+import { loadRealPath } from '../system/loadRealPath.js';
 
 const APP_BUNDLE_EXTENSION = '.app';
 
@@ -21,19 +21,14 @@ export async function loadActiveXcodeBundlePath(params: {
 
   const bundlePath = getXcodeBundlePath({ developerDirPath: outputResult.value.trim() });
 
-  return {
-    kind: 'succeeded',
-    value: bundlePath === null ? null : await loadRealPathOrSelf({ path: bundlePath }),
-  };
-}
-
-/** The resolved path, so a link such as `Xcode.app` names the bundle it points to. */
-async function loadRealPathOrSelf(params: { path: string }): Promise<string> {
-  try {
-    return await realpath(params.path);
-  } catch {
-    return params.path;
+  if (bundlePath === null) {
+    return { kind: 'succeeded', value: null };
   }
+
+  // A link such as `Xcode.app` names the bundle it points to; a path it cannot resolve stays.
+  const bundleRealPath = await loadRealPath({ path: bundlePath });
+
+  return { kind: 'succeeded', value: bundleRealPath ?? bundlePath };
 }
 
 /**

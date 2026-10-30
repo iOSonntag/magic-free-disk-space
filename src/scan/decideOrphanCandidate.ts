@@ -76,7 +76,6 @@ export function decideOrphanCandidate(params: {
     kind: 'offer',
     candidate: {
       path: params.path,
-      identity: params.measurement.identity,
       title: `Data of an app that is no longer installed (${params.name})`,
       category: 'leftovers',
       // Careful, not review: a container holds the documents of its app, such as virtual machines.
@@ -89,7 +88,7 @@ export function decideOrphanCandidate(params: {
       allocatedBytes: params.measurement.allocatedBytes,
       entryCount: params.measurement.entryCount,
       isComplete: params.measurement.isComplete,
-      ownerBundlePaths: [],
+      removal: { kind: 'deletePath', identity: params.measurement.identity, ownerBundlePaths: [] },
     },
   };
 }

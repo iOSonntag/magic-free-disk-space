@@ -52,7 +52,6 @@ export function decideAppCandidate(params: {
     kind: 'offer',
     candidate: {
       path: path,
-      identity: params.measurement.identity,
       title: params.app.displayName,
       category: 'applications',
       risk: params.isProtectedDeveloperApp ? 'never' : 'review',
@@ -62,7 +61,11 @@ export function decideAppCandidate(params: {
       allocatedBytes: params.measurement.allocatedBytes,
       entryCount: params.measurement.entryCount,
       isComplete: params.measurement.isComplete,
-      ownerBundlePaths: [path],
+      removal: {
+        kind: 'deletePath',
+        identity: params.measurement.identity,
+        ownerBundlePaths: [path],
+      },
     },
   };
 }

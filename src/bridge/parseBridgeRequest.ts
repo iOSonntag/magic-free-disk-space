@@ -1,4 +1,5 @@
 import type { Result } from '../result.js';
+import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
 
 type BridgeRequestScan = { kind: 'scan' };
 
@@ -14,10 +15,10 @@ type BridgeRequestFailure = { reason: 'invalidJson' | 'unknownRequest' };
 export function parseBridgeRequest(params: {
   line: string;
 }): Result<BridgeRequest, BridgeRequestFailure> {
-  const parsedJson = parseJson({ text: params.line });
+  const parsedJson = parseJsonValue({ text: params.line });
 
   if (parsedJson.kind === 'failed') {
-    return parsedJson;
+    return { kind: 'failed', failure: { reason: 'invalidJson' } };
   }
 
   const request = toBridgeRequest({ value: parsedJson.value });
@@ -29,37 +30,31 @@ export function parseBridgeRequest(params: {
   return { kind: 'succeeded', value: request };
 }
 
-function parseJson(params: { text: string }): Result<unknown, BridgeRequestFailure> {
-  try {
-    return { kind: 'succeeded', value: JSON.parse(params.text) };
-  } catch {
-    return { kind: 'failed', failure: { reason: 'invalidJson' } };
-  }
-}
-
 /** `null` when the value is none of the requests. */
 function toBridgeRequest(params: { value: unknown }): BridgeRequest | null {
-  if (typeof params.value !== 'object' || params.value === null) {
+  if (!isJsonObject(params.value)) {
     return null;
   }
 
-  const fields: Record<string, unknown> = { ...params.value };
-
-  if (fields.kind === 'scan') {
+  if (params.value.kind === 'scan') {
     return { kind: 'scan' };
   }
 
-  if (fields.kind === 'plan' && isIntegerArray(fields.numbers)) {
-    return { kind: 'plan', numbers: fields.numbers };
+  if (params.value.kind === 'plan' && isIntegerArray(params.value.numbers)) {
+    return { kind: 'plan', numbers: params.value.numbers };
   }
 
   if (
-    fields.kind === 'delete' &&
-    typeof fields.planId === 'number' &&
-    Number.isSafeInteger(fields.planId) &&
-    typeof fields.confirmation === 'string'
+    params.value.kind === 'delete' &&
+    typeof params.value.planId === 'number' &&
+    Number.isSafeInteger(params.value.planId) &&
+    typeof params.value.confirmation === 'string'
   ) {
-    return { kind: 'delete', planId: fields.planId, confirmation: fields.confirmation };
+    return {
+      kind: 'delete',
+      planId: params.value.planId,
+      confirmation: params.value.confirmation,
+    };
   }
 
   return null;

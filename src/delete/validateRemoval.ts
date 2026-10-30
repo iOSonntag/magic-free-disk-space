@@ -2,6 +2,7 @@ import { isAbsolute } from 'node:path';
 import type { Environment } from '../environment/buildEnvironment.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { Candidate } from '../scan/candidate.js';
+import type { FileIdentity } from '../system/loadFileIdentity.js';
 
 export type RefusalReason =
   | 'neverRisk'
@@ -17,20 +18,38 @@ export type RemovalDecisionRefused = { kind: 'refused'; path: string; reason: Re
 export type RemovalDecision = RemovalDecisionApproved | RemovalDecisionRefused;
 
 /**
- * Approves a candidate only when it is a plain file or folder strictly inside an allowed root,
- * is no protected folder and holds none, lies in no sensitive folder, and is not marked `never`.
+ * Refuses a candidate marked `never`. Approves a path item only when it is a plain file or folder
+ * strictly inside an allowed root, is no protected folder and holds none, and lies in no
+ * sensitive folder; a tool item passes, since its own tool removes it after a recheck.
  */
 export function validateRemoval(params: {
   candidate: Candidate;
   environment: Environment;
 }): RemovalDecision {
-  const path = params.candidate.path;
-  const realPath = params.candidate.identity.realPath;
-  const kind = params.candidate.identity.kind;
-
   if (params.candidate.risk === 'never') {
-    return { kind: 'refused', path: path, reason: 'neverRisk' };
+    return { kind: 'refused', path: params.candidate.path, reason: 'neverRisk' };
   }
+
+  switch (params.candidate.removal.kind) {
+    case 'deletePath':
+      return validatePathRemoval({
+        candidate: params.candidate,
+        identity: params.candidate.removal.identity,
+        environment: params.environment,
+      });
+    case 'runTool':
+      return { kind: 'approved', candidate: params.candidate };
+  }
+}
+
+function validatePathRemoval(params: {
+  candidate: Candidate;
+  identity: FileIdentity;
+  environment: Environment;
+}): RemovalDecision {
+  const path = params.candidate.path;
+  const realPath = params.identity.realPath;
+  const kind = params.identity.kind;
 
   if (kind === 'symbolicLink') {
     return { kind: 'refused', path: path, reason: 'symbolicLink' };

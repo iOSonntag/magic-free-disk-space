@@ -150,7 +150,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'simulatorDevices',
       advice:
         'Run `xcrun simctl delete unavailable` to remove simulators whose runtime is gone, or delete single simulators in Xcode under Window > Devices and Simulators.',
     },
@@ -327,7 +328,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     category: 'packages',
     title: 'Dart and Flutter packages',
     explanation:
-      'Packages that Dart and Flutter projects downloaded; clean them with `dart pub cache clean` or `flutter pub cache clean`.',
+      'Packages that Dart and Flutter projects downloaded; `dart pub cache gc` removes the ones no active project uses.',
     regeneration: 'Projects download their packages again on `pub get`.',
     risk: 'review',
     root: 'home',
@@ -336,9 +337,10 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'dartPubCache',
       advice:
-        'Run `dart pub cache clean` (or `flutter pub cache clean`); projects download their packages again on `pub get`.',
+        'Run `dart pub cache gc` to remove the packages no active project uses; a project downloads them again on `pub get`.',
     },
   },
   {
@@ -506,7 +508,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'miseVersions',
       advice:
         'Remove tool versions you no longer use with `mise uninstall <tool>@<version>` or `mise prune`.',
     },

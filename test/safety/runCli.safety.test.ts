@@ -4,7 +4,10 @@ import { join, relative } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { runCli } from '../../src/cli/runCli.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
+import {
+  buildTestCatalogEntry,
+  TOOL_INSTALL_LOCATIONS_NONE,
+} from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -115,6 +118,7 @@ async function runWithInput(params: {
     argv: params.argv,
     environment: environment,
     catalogEntries: TEST_CATALOG,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
     io: io,
   });
 
@@ -272,6 +276,7 @@ describe('runCli safety', () => {
       argv: [],
       environment: environment,
       catalogEntries: TEST_CATALOG,
+      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
       io: io,
     });
 
@@ -330,6 +335,7 @@ describe('runCli safety', () => {
       argv: [],
       environment: { ...environment, platform: 'linux' },
       catalogEntries: TEST_CATALOG,
+      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
       io: io,
     });
 
