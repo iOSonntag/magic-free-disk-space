@@ -1,6 +1,7 @@
 import { lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Result } from '../result.js';
+import { loadEntryStats } from '../system/loadEntryStats.js';
 import { loadFileText } from '../system/loadFileText.js';
 import { loadRealPath } from '../system/loadRealPath.js';
 import { decideDartBinaryPath, listFlutterWrapperPaths } from './decideDartBinaryPath.js';
@@ -168,12 +169,11 @@ async function loadDartBinaryPath(params: { realPath: string }): Promise<string 
 /** The given paths that something is at, a dangling link included. */
 async function loadPresentPaths(params: { paths: string[] }): Promise<string[]> {
   const presence = await Promise.all(
-    params.paths.map((path) =>
-      lstat(path).then(
-        () => true,
-        () => false,
-      ),
-    ),
+    params.paths.map(async (path) => {
+      const entryStats = await loadEntryStats({ path: path });
+
+      return entryStats.kind === 'succeeded';
+    }),
   );
 
   return params.paths.filter((_, index) => presence[index]);

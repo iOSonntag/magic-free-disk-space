@@ -1,8 +1,8 @@
-import { lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
+import { loadEntryStats } from '../system/loadEntryStats.js';
 import { loadFileText } from '../system/loadFileText.js';
 import { loadRealPath } from '../system/loadRealPath.js';
 import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
@@ -154,18 +154,9 @@ async function isFlutterRootAccepted(params: {
     return false;
   }
 
-  return isPathPresent({ path: join(flutterRealPath, '.git') });
-}
+  const gitEntryStats = await loadEntryStats({ path: join(flutterRealPath, '.git') });
 
-/** Whether something is at `path` itself, a folder, a file, or a link, without following it. */
-async function isPathPresent(params: { path: string }): Promise<boolean> {
-  try {
-    await lstat(params.path);
-
-    return true;
-  } catch {
-    return false;
-  }
+  return gitEntryStats.kind === 'succeeded';
 }
 
 function parseFileUrlField(params: { text: string; field: string }): string | null {

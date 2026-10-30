@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, realpath, symlink } from 'node:fs/promises';
+import { mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { findTrustedTool, loadTrustedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../src/tools/toolInstallLocations.js';
@@ -369,6 +369,26 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
 
   test('takes the binary of the SDK behind the wrapper', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [buildAbsoluteLocation(layout.linkPath)],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({
+      kind: 'succeeded',
+      value: { name: 'dart', path: await realpath(layout.sdkDartPath) },
+    });
+  });
+
+  test('takes the SDK binary while the Flutter script is a dangling link', async () => {
+    const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
+    const flutterScriptPath = join(fixtureRoot.rootDir, 'flutter', 'bin', 'flutter');
+
+    await rm(flutterScriptPath);
+    await symlink(join(fixtureRoot.rootDir, 'gone'), flutterScriptPath);
 
     const found = await findTrustedTool({
       name: 'dart',
