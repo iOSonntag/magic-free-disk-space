@@ -1,15 +1,9 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type {
-  ExploreFinding,
-  ExplorePathUnit,
-  ExploreToolUnit,
-  ExploreUnit,
-} from '../explore/exploreUnit.js';
+import type { ExploreFinding, ExplorePathUnit, ExploreToolUnit } from '../explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
-import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import { buildFailureIssues, buildReadIssue } from './buildReadIssue.js';
+import { buildReadIssue } from './buildReadIssue.js';
 import type {
   CandidateDecision,
   CandidateProbed,
@@ -18,11 +12,11 @@ import type {
 } from './candidate.js';
 import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
+import { loadMeasuredPhase } from './loadMeasuredPhase.js';
 import type { UnitMeasurement } from './loadUnitMeasurement.js';
 import { loadUnitMeasurement } from './loadUnitMeasurement.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
-import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 /**
  * The decisions of the probes that ran, and the entries the scan decides through its catalog path
@@ -212,86 +206,63 @@ async function loadToolFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
 }): Promise<ScanPhase> {
-  const measurement = await loadFindingMeasurement(params);
-  const removal: CandidateRemovalRunTool = { kind: 'runTool', unit: params.unit };
-
-  return buildOfferPhase(
-    buildExploreCandidate({
-      finding: params.finding,
-      path: params.finding.displayPath,
-      removal: removal,
-      category: params.category,
-      measurement: measurement,
+  const measurement = await params.runItemMeasurement(() =>
+    loadUnitMeasurement({
+      unit: params.unit,
+      deadlineMs: Date.now() + params.measureTimeoutMs,
     }),
   );
+  const removal: CandidateRemovalRunTool = { kind: 'runTool', unit: params.unit };
+  const candidate = buildExploreCandidate({
+    finding: params.finding,
+    path: params.finding.displayPath,
+    removal: removal,
+    category: params.category,
+    measurement: measurement,
+  });
+
+  return { decisions: [{ kind: 'offer', candidate: candidate }], issues: [] };
 }
 
 /**
  * Offers the unit's folder at any size with the identity it has now, which the deletion checks
- * again. A folder that vanished since the probe adds nothing, one that cannot be read adds a place
- * issue, and a symbolic link is skipped, since only the folder itself may be deleted. A folder
- * that is a mount point or holds one is skipped, since its removal would delete into that volume.
+ * again. A symbolic link is skipped, since only the folder itself may be deleted. A vanished,
+ * unreadable, or mounted folder is handled by `loadMeasuredPhase`, as every folder offer is.
  */
-async function loadPathFindingPhase(params: {
+function loadPathFindingPhase(params: {
   finding: ExploreFinding;
   unit: ExplorePathUnit;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
 }): Promise<ScanPhase> {
-  const identity = await loadFileIdentity({ path: params.unit.folderPath });
+  return loadMeasuredPhase({
+    path: params.unit.folderPath,
+    measureTimeoutMs: params.measureTimeoutMs,
+    runItemMeasurement: params.runItemMeasurement,
+    decide: async (measurement) => {
+      if (measurement.identity.kind === 'symbolicLink') {
+        return { kind: 'skip', path: params.unit.folderPath, reason: 'symbolicLink' };
+      }
 
-  if (identity.kind === 'failed') {
-    return {
-      decisions: [],
-      issues: buildFailureIssues({ path: params.unit.folderPath, failure: identity.failure }),
-    };
-  }
+      const removal: CandidateRemovalDeleteUnitFolder = {
+        kind: 'deleteUnitFolder',
+        identity: measurement.identity,
+        unit: params.unit,
+      };
 
-  if (identity.value.kind === 'symbolicLink') {
-    return {
-      decisions: [{ kind: 'skip', path: params.unit.folderPath, reason: 'symbolicLink' }],
-      issues: [],
-    };
-  }
-
-  const measurement = await loadFindingMeasurement(params);
-  const removal: CandidateRemovalDeleteUnitFolder = {
-    kind: 'deleteUnitFolder',
-    identity: identity.value,
-    unit: params.unit,
-  };
-
-  const offer: CandidateDecision = {
-    kind: 'offer',
-    candidate: buildExploreCandidate({
-      finding: params.finding,
-      path: params.unit.folderPath,
-      removal: removal,
-      category: params.category,
-      measurement: measurement,
-    }),
-  };
-  const decision = skipOfferHoldingOtherVolume({ decision: offer, measurement: measurement });
-
-  return { decisions: [decision], issues: [] };
-}
-
-function loadFindingMeasurement(params: {
-  unit: ExploreUnit;
-  measureTimeoutMs: number;
-  runItemMeasurement: ConcurrencyLimit;
-}): Promise<UnitMeasurement> {
-  return params.runItemMeasurement(() =>
-    loadUnitMeasurement({
-      unit: params.unit,
-      deadlineMs: Date.now() + params.measureTimeoutMs,
-    }),
-  );
-}
-
-function buildOfferPhase(candidate: CandidateProbed): ScanPhase {
-  return { decisions: [{ kind: 'offer', candidate: candidate }], issues: [] };
+      return {
+        kind: 'offer',
+        candidate: buildExploreCandidate({
+          finding: params.finding,
+          path: params.unit.folderPath,
+          removal: removal,
+          category: params.category,
+          measurement: measurement,
+        }),
+      };
+    },
+  });
 }
 
 function buildExploreCandidate(params: {

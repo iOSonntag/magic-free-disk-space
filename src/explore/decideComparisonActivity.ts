@@ -1,3 +1,4 @@
+import type { ResultFailed } from '../result.js';
 import type { UnitActivityFacts } from './decideUnitActivity.js';
 import { decideUnitActivity } from './decideUnitActivity.js';
 import type { ExploreProbeFailure } from './exploreUnit.js';
@@ -12,10 +13,8 @@ export type UnitComparisonBusy = { kind: 'busy' };
 /** The answer of a comparison of a fresh probe with the unit. */
 export type UnitComparison = UnitComparisonUnchanged | UnitComparisonChanged | UnitComparisonBusy;
 
-export type UnitRecheckFailed = { kind: 'failed'; failure: ExploreProbeFailure };
-
 /** The answer of a tool recheck: its comparison, or the failure of its fresh probe. */
-export type UnitRecheck = UnitComparison | UnitRecheckFailed;
+export type UnitRecheck = UnitComparison | ResultFailed<ExploreProbeFailure>;
 
 /**
  * The end of every compare once the unit is still offered: an unknown activity counts as busy, so

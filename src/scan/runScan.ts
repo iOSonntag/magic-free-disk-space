@@ -7,11 +7,10 @@ import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { FileFailure } from '../system/loadFileIdentity.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import { buildScanReport } from './buildScanReport.js';
-import type { Advice, Candidate, CandidateDecision, SkipReason } from './candidate.js';
+import type { Advice, Candidate, SkipReason } from './candidate.js';
 import { decideAppCandidate } from './decideAppCandidate.js';
 import { decideArtifactCandidate } from './decideArtifactCandidate.js';
 import { decideCatalogCandidate, isSystemOwnedTarget } from './decideCatalogCandidate.js';
@@ -35,8 +34,7 @@ import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
 import { loadExplorePhase } from './loadExplorePhase.js';
 import type { InstalledApp } from './loadInstalledApps.js';
 import { loadInstalledApps } from './loadInstalledApps.js';
-import type { Measurement } from './loadPathMeasurement.js';
-import { loadPathMeasurement } from './loadPathMeasurement.js';
+import { loadMeasuredPhase } from './loadMeasuredPhase.js';
 import { loadProcessCommands } from './loadProcessCommands.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
@@ -46,7 +44,6 @@ import {
 } from './resolveOwnerState.js';
 import type { ScanPhase } from './scanPhase.js';
 import { EMPTY_SCAN_PHASE, mergeScanPhases } from './scanPhase.js';
-import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 export type ScanOptions = {
   staleDays: number;
@@ -264,6 +261,8 @@ async function loadCatalogTargetPhase(params: {
 
   return loadMeasuredPhase({
     path: path,
+    measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
+    runItemMeasurement: runItemMeasurement,
     decide: async (measurement) => {
       const activity =
         entry.ageRule === 'staleDays'
@@ -320,6 +319,8 @@ function loadArtifactFindingPhase(params: {
 }): Promise<ScanPhase> {
   return loadMeasuredPhase({
     path: params.finding.artifactPath,
+    measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
+    runItemMeasurement: runItemMeasurement,
     decide: async (measurement) => {
       const activity = await loadTreeActivity({
         path: params.finding.projectRoot,
@@ -354,6 +355,8 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
 
   return loadMeasuredPhase({
     path: app.bundlePath,
+    measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
+    runItemMeasurement: runItemMeasurement,
     decide: async (measurement) => {
       const lastSignOfUseMs =
         app.bundleId === null
@@ -443,6 +446,8 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
 
       return loadMeasuredPhase({
         path: path,
+        measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
+        runItemMeasurement: runItemMeasurement,
         decide: async (measurement) =>
           decideOrphanCandidate({
             path: path,
@@ -458,51 +463,6 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
   );
 
   return mergeScanPhases({ phases: namePhases });
-}
-
-/**
- * Measures the path and decides with the measurement. A path that vanished adds nothing; one
- * that cannot be read adds an issue instead of a decision. An offer holding another mounted
- * volume becomes a skip.
- */
-function loadMeasuredPhase(params: {
-  path: string;
-  decide: (measurement: Measurement) => Promise<CandidateDecision>;
-}): Promise<ScanPhase> {
-  return runItemMeasurement(async () => {
-    const measured = await loadPathMeasurement({
-      path: params.path,
-      deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
-    });
-
-    return buildMeasuredPhase({ path: params.path, measured: measured, decide: params.decide });
-  });
-}
-
-async function buildMeasuredPhase(params: {
-  path: string;
-  measured: Result<Measurement, FileFailure>;
-  decide: (measurement: Measurement) => Promise<CandidateDecision>;
-}): Promise<ScanPhase> {
-  const measured = params.measured;
-
-  if (measured.kind === 'succeeded') {
-    const decision = skipOfferHoldingOtherVolume({
-      decision: await params.decide(measured.value),
-      measurement: measured.value,
-    });
-
-    return { decisions: [decision], issues: [] };
-  }
-
-  if (measured.failure.reason === 'missing') {
-    return EMPTY_SCAN_PHASE;
-  }
-
-  return {
-    decisions: [],
-    issues: [{ path: params.path, reason: measured.failure.reason, detail: measured.failure.code }],
-  };
 }
 
 /**
