@@ -42,4 +42,20 @@ describe('buildToolProcessEnvironment', () => {
 
     expect(Object.keys(environment).toSorted()).toEqual(['HOME', 'LANG', 'PATH', 'TMPDIR']);
   });
+
+  test('turns colour off for both brews, whatever their brew.env files say', () => {
+    const appleSilicon = buildToolProcessEnvironment({
+      tool: { name: 'brewAppleSilicon', path: '/opt/homebrew/bin/brew' },
+      homeDir: '/fixture/home',
+      tempDir: '/fixture/tmp',
+    });
+    const intel = buildToolProcessEnvironment({
+      tool: { name: 'brewIntel', path: '/usr/local/bin/brew' },
+      homeDir: '/fixture/home',
+      tempDir: '/fixture/tmp',
+    });
+
+    expect(appleSilicon.HOMEBREW_NO_COLOR).toBe('1');
+    expect(intel.HOMEBREW_NO_COLOR).toBe('1');
+  });
 });
