@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, realpath, symlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { findTrustedTool, loadTrustedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../support/fakeTool.js';
@@ -203,23 +203,11 @@ describe('findTrustedTool', () => {
   });
 
   test('finds the Dart binary of a Flutter SDK that an active root names', async () => {
-    const flutterRoot = join(fixtureRoot.rootDir, 'flutter');
-    const projectDir = join(fixtureRoot.homeDir, 'project');
-    const packageConfigPath = join(projectDir, '.dart_tool', 'package_config.json');
-    const dart = await createFakeTool({
-      folder: join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin'),
-      name: 'dart',
-      body: 'exit 0',
+    const dart = await createActiveFlutterSdk({
+      folder: 'flutter',
+      activeRootFileName: 'abcdef',
+      version: '3.11.0',
     });
-
-    await Bun.write(
-      packageConfigPath,
-      JSON.stringify({ flutterRoot: Bun.pathToFileURL(flutterRoot).href }),
-    );
-    await Bun.write(
-      join(fixtureRoot.homeDir, '.pub-cache', 'active_roots', 'ab', 'abcdef'),
-      JSON.stringify({ package_config: Bun.pathToFileURL(packageConfigPath).href }),
-    );
 
     const found = await findTrustedTool({
       name: 'dart',
@@ -231,6 +219,125 @@ describe('findTrustedTool', () => {
     expect(found).toEqual({
       kind: 'succeeded',
       value: { name: 'dart', path: await realpath(dart) },
+    });
+  });
+});
+
+/** Writes `version` as the version file of the Dart SDK whose binary is at `dartPath`. */
+async function writeDartVersionFile(params: { dartPath: string; version: string }): Promise<void> {
+  await Bun.write(join(dirname(dirname(params.dartPath)), 'version'), `${params.version}\n`);
+}
+
+/**
+ * A made-up Flutter root at `folder` with the Dart binary of its SDK, a project whose package
+ * config names it, and an active-roots file `ab/<activeRootFileName>` for that project; returns
+ * the binary's path. The SDK has a version file when `version` is not `null`.
+ */
+async function createActiveFlutterSdk(params: {
+  folder: string;
+  activeRootFileName: string;
+  version: string | null;
+}): Promise<string> {
+  const flutterRoot = join(fixtureRoot.rootDir, params.folder);
+  const packageConfigPath = join(
+    fixtureRoot.homeDir,
+    params.folder,
+    '.dart_tool',
+    'package_config.json',
+  );
+  const dart = await createFakeTool({
+    folder: join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin'),
+    name: 'dart',
+    body: 'exit 0',
+  });
+
+  if (params.version !== null) {
+    await writeDartVersionFile({ dartPath: dart, version: params.version });
+  }
+
+  await Bun.write(
+    packageConfigPath,
+    JSON.stringify({ flutterRoot: Bun.pathToFileURL(flutterRoot).href }),
+  );
+  await Bun.write(
+    join(fixtureRoot.homeDir, '.pub-cache', 'active_roots', 'ab', params.activeRootFileName),
+    JSON.stringify({ package_config: Bun.pathToFileURL(packageConfigPath).href }),
+  );
+
+  return dart;
+}
+
+describe('findTrustedTool with the version of dart', () => {
+  test('skips a Dart older than 3.11 whose active root sorts first', async () => {
+    await createActiveFlutterSdk({
+      folder: 'flutter-old',
+      activeRootFileName: 'aa',
+      version: '3.10.0',
+    });
+    const supported = await createActiveFlutterSdk({
+      folder: 'flutter-new',
+      activeRootFileName: 'bb',
+      version: '3.11.0',
+    });
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [{ kind: 'flutterSdkFromActiveRoots' }],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({
+      kind: 'succeeded',
+      value: { name: 'dart', path: await realpath(supported) },
+    });
+  });
+
+  test('fails as not found when only a Dart older than 3.11 exists', async () => {
+    await createActiveFlutterSdk({
+      folder: 'flutter-old',
+      activeRootFileName: 'aa',
+      version: '3.10.0',
+    });
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [{ kind: 'flutterSdkFromActiveRoots' }],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
+  });
+
+  test('skips a Dart without a version file and goes on to the next location', async () => {
+    await createActiveFlutterSdk({
+      folder: 'flutter-unknown',
+      activeRootFileName: 'aa',
+      version: null,
+    });
+    const homebrewDart = await createFakeTool({
+      folder: join(fixtureRoot.rootDir, 'Cellar', 'dart', 'libexec', 'bin'),
+      name: 'dart',
+      body: 'exit 0',
+    });
+    const linkFolder = join(fixtureRoot.rootDir, 'bin');
+    const link = join(linkFolder, 'dart');
+
+    await writeDartVersionFile({ dartPath: homebrewDart, version: '3.12.0' });
+    await mkdir(linkFolder);
+    await symlink(homebrewDart, link);
+
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [{ kind: 'flutterSdkFromActiveRoots' }, buildAbsoluteLocation(link)],
+      homeDir: fixtureRoot.homeDir,
+      userId: userId,
+    });
+
+    expect(found).toEqual({
+      kind: 'succeeded',
+      value: { name: 'dart', path: await realpath(homebrewDart) },
     });
   });
 });
@@ -266,6 +373,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
         body: 'exit 0',
         mode: params.sdkDartMode,
       });
+      await writeDartVersionFile({ dartPath: sdkDartPath, version: '3.11.0' });
     }
 
     return { linkPath: linkPath, sdkDartPath: sdkDartPath };
@@ -326,6 +434,8 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
       name: 'dart',
       body: 'exit 0',
     });
+
+    await writeDartVersionFile({ dartPath: dart, version: '3.11.0' });
 
     const found = await findTrustedTool({
       name: 'dart',

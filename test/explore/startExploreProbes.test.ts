@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { realpath } from 'node:fs/promises';
+import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
@@ -38,10 +38,17 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** Each tool touches its marker in the fixture root before it answers. */
+/**
+ * Each tool touches its marker in the fixture root before it answers. The dart stands in an SDK
+ * of 3.11, the first that has `pub cache gc`.
+ */
 async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise: string }> {
   const folder = join(fixtureRoot.rootDir, 'tools');
+  const dartSdkDir = join(fixtureRoot.rootDir, 'dart-sdk');
   const homeDir = environment.homeDir;
+
+  await mkdir(dartSdkDir, { recursive: true });
+  await writeFile(join(dartSdkDir, 'version'), '3.11.0\n');
 
   return {
     xcrun: await createProbeFakeTool({
@@ -52,7 +59,7 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
       prelude: `touch '${buildMarkerPath({ name: 'xcrun' })}'`,
     }),
     dart: await createProbeFakeTool({
-      folder: folder,
+      folder: join(dartSdkDir, 'bin'),
       name: 'dart',
       stdoutText: buildDartGcDryRunText({
         homeDir: homeDir,

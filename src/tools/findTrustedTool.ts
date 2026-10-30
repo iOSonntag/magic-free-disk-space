@@ -1,9 +1,11 @@
 import { lstat, realpath } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Result } from '../result.js';
+import { loadFileText } from '../system/loadFileText.js';
 import { decideDartBinaryPath, listFlutterWrapperPaths } from './decideDartBinaryPath.js';
 import type { ToolDistrustDetail, ToolFileStats } from './decideToolTrust.js';
 import { decideToolTrust } from './decideToolTrust.js';
+import { isDartVersionSupported } from './isDartVersionSupported.js';
 import { loadFlutterSdkDartPaths } from './loadFlutterSdkDartPaths.js';
 import type { ToolLocation, ToolLocationPath, ToolName } from './toolInstallLocations.js';
 
@@ -22,8 +24,8 @@ export type ToolLookupFailure = ToolLookupFailureNotFound | ToolLookupFailureUnt
 
 /**
  * Returns the first location whose binary is a regular executable file owned by `userId` or
- * root and writable by neither group nor others. Without one, it fails as `untrusted` for the
- * first binary that exists, else as `notFound`.
+ * root and writable by neither group nor others, and for `dart`, of an SDK of 3.11 or later.
+ * Without one, it fails as `untrusted` for the first binary that exists, else as `notFound`.
  */
 export async function findTrustedTool(params: {
   name: ToolName;
@@ -44,7 +46,13 @@ export async function findTrustedTool(params: {
       });
 
       if (checked.kind === 'succeeded') {
-        return checked;
+        const accepted = await isLocatedToolAccepted({ tool: checked.value });
+
+        if (accepted) {
+          return checked;
+        }
+
+        continue;
       }
 
       if (checked.failure.reason === 'untrusted' && firstUntrusted === null) {
@@ -89,6 +97,33 @@ export async function loadTrustedTool(params: {
   }
 
   return { kind: 'succeeded', value: { name: params.name, path: binaryPath } };
+}
+
+/** Whether a trusted binary can run the commands of its tool; only `dart` has a version rule. */
+async function isLocatedToolAccepted(params: { tool: LocatedTool }): Promise<boolean> {
+  switch (params.tool.name) {
+    case 'dart':
+      return isDartSdkSupported({ binaryPath: params.tool.path });
+    case 'xcrun':
+    case 'mise':
+      return true;
+  }
+}
+
+/**
+ * Reads the version file beside the `bin` folder of the binary's real path, which both a Flutter
+ * SDK's `dart-sdk` and Homebrew's `libexec` hold; `false` when it is missing or unreadable.
+ */
+async function isDartSdkSupported(params: { binaryPath: string }): Promise<boolean> {
+  const versionText = await loadFileText({
+    path: join(dirname(dirname(params.binaryPath)), 'version'),
+  });
+
+  if (versionText === null) {
+    return false;
+  }
+
+  return isDartVersionSupported(versionText);
 }
 
 /** The real path of the binary that the location at `path` stands for; `null` for none. */
