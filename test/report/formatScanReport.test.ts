@@ -317,7 +317,7 @@ describe('formatScanReport', () => {
       '- /fixture/locked: unexpected error (EIO)',
       '',
       'Could not ask 3 tools:',
-      '- /fixture/bin/mise: the tool is not trusted, never run (writableByOthers)',
+      '- /fixture/bin/mise: the tool is not trusted, never run (others can change it)',
       '- /usr/bin/xcrun: the tool failed (exited with code 1: xcrun: error: simctl broke)',
       '- /fixture/bin/dart: the tool failed (stopped at its time limit of 60 s)',
     ]);

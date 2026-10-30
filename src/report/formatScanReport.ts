@@ -3,6 +3,7 @@ import { buildUnitCommand } from '../explore/exploreUnit.js';
 import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
 import type { ScanIssue } from '../scan/issue.js';
 import type { ScanReport, SkippedItem } from '../scan/runScan.js';
+import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
 import { buildToolArguments } from '../tools/runToolCommand.js';
 import { formatSizeText } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
@@ -51,6 +52,12 @@ const issueReasonTexts: Record<ScanIssue['reason'], string> = {
   walkStopped: 'search stopped at its time limit',
   toolFailed: 'the tool failed',
   toolUntrusted: 'the tool is not trusted, never run',
+};
+
+const toolDistrustDetailTexts: Record<ToolDistrustDetail, string> = {
+  foreignOwner: 'owned by another user',
+  writableByOthers: 'others can change it',
+  notExecutableFile: 'not an executable file',
 };
 
 /** Issues of a tool that could not be asked, listed apart from the places that could not be read. */
@@ -302,8 +309,9 @@ function formatIssueDetail(params: { issue: ScanIssue }): string {
     case 'unexpected':
     case 'commandFailed':
     case 'walkStopped':
-    case 'toolUntrusted':
       return formatDisplayText({ text: params.issue.detail });
+    case 'toolUntrusted':
+      return toolDistrustDetailTexts[params.issue.detail];
     case 'toolFailed': {
       const summary = formatToolFailureSummary({ failure: params.issue.failure });
       const firstStderrLine = formatToolFailureFirstStderrLine({ failure: params.issue.failure });
