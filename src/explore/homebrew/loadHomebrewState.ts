@@ -8,7 +8,6 @@ import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import { loadProbeOutput } from '../loadProbeOutput.js';
 import type { HomebrewOldVersions } from './buildHomebrewOldVersions.js';
 import { buildHomebrewOldVersions } from './buildHomebrewOldVersions.js';
-import type { HomebrewOrphan } from './decideHomebrewOrphans.js';
 import { parseHomebrewAutoremoveDryRun } from './parseHomebrewAutoremoveDryRun.js';
 import { parseHomebrewCellarPath } from './parseHomebrewCellarPath.js';
 import { parseHomebrewCleanupDryRun } from './parseHomebrewCleanupDryRun.js';
@@ -22,6 +21,14 @@ export type HomebrewState = {
   cellarPath: AbsolutePath;
   oldVersions: HomebrewOldVersions[];
   orphans: HomebrewOrphan[];
+};
+
+/** A formula `brew autoremove -n` lists, with its rack `<cellar>/<formula>`. */
+export type HomebrewOrphan = {
+  formula: HomebrewFormulaName;
+  rackPath: AbsolutePath;
+  /** The keg folders in the rack; `null` when the rack is absent or no folder. */
+  kegCount: number | null;
 };
 
 /**

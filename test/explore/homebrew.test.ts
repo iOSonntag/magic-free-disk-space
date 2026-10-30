@@ -9,10 +9,12 @@ import type {
 } from '../../src/explore/exploreUnit.js';
 import { buildHomebrewFindings } from '../../src/explore/homebrew/buildHomebrewFindings.js';
 import { buildHomebrewOldVersions } from '../../src/explore/homebrew/buildHomebrewOldVersions.js';
-import type { HomebrewOrphan } from '../../src/explore/homebrew/decideHomebrewOrphans.js';
 import { decideHomebrewOrphans } from '../../src/explore/homebrew/decideHomebrewOrphans.js';
 import { loadHomebrewFindings } from '../../src/explore/homebrew/loadHomebrewFindings.js';
-import type { HomebrewState } from '../../src/explore/homebrew/loadHomebrewState.js';
+import type {
+  HomebrewOrphan,
+  HomebrewState,
+} from '../../src/explore/homebrew/loadHomebrewState.js';
 import { loadHomebrewState } from '../../src/explore/homebrew/loadHomebrewState.js';
 import { parseHomebrewAutoremoveDryRun } from '../../src/explore/homebrew/parseHomebrewAutoremoveDryRun.js';
 import { parseHomebrewCellarPath } from '../../src/explore/homebrew/parseHomebrewCellarPath.js';

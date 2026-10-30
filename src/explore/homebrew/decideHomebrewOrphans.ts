@@ -1,13 +1,4 @@
-import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import type { HomebrewFormulaName } from './parseHomebrewFormulaName.js';
-
-/** A formula `brew autoremove -n` lists, with its rack `<cellar>/<formula>`. */
-export type HomebrewOrphan = {
-  formula: HomebrewFormulaName;
-  rackPath: AbsolutePath;
-  /** The keg folders in the rack; `null` when the rack is absent or no folder. */
-  kegCount: number | null;
-};
+import type { HomebrewOrphan } from './loadHomebrewState.js';
 
 /** The orphans when each rack holds the one keg `brew autoremove` removes, none listed included. */
 export type HomebrewOrphansJudged = { kind: 'judged'; orphans: HomebrewOrphan[] };

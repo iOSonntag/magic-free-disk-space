@@ -3,9 +3,8 @@ import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings, UnitActivity } from '../exploreUnit.js';
 import type { HomebrewOldVersions } from './buildHomebrewOldVersions.js';
-import type { HomebrewOrphan } from './decideHomebrewOrphans.js';
 import { decideHomebrewOrphans } from './decideHomebrewOrphans.js';
-import type { HomebrewState } from './loadHomebrewState.js';
+import type { HomebrewOrphan, HomebrewState } from './loadHomebrewState.js';
 
 /**
  * One finding per formula with old versions, and one for all orphans when there are any; not
