@@ -68,24 +68,24 @@ export function toolPinsToPnpmPins(params: { toolPins: ToolPins }): PnpmPins {
  * version or range that `parsePnpmVersionMajor` does not read pins every store version.
  */
 export function parsePnpmPins(params: { files: ProjectPinFileText[] }): PnpmPins {
+  const pinTexts = mergePnpmPinTexts({
+    pinTexts: params.files.map((file) => parsePnpmPinTexts({ file: file })),
+  });
+
+  if (pinTexts.kind === 'everyStoreVersion') {
+    return EVERY_STORE_VERSION;
+  }
+
   const majors = new Set<number>();
 
-  for (const file of params.files) {
-    const pinTexts = parsePnpmPinTexts({ file: file });
+  for (const versionText of pinTexts.versionTexts) {
+    const major = parsePnpmVersionMajor({ text: versionText });
 
-    if (pinTexts.kind === 'everyStoreVersion') {
+    if (major === null) {
       return EVERY_STORE_VERSION;
     }
 
-    for (const versionText of pinTexts.versionTexts) {
-      const major = parsePnpmVersionMajor({ text: versionText });
-
-      if (major === null) {
-        return EVERY_STORE_VERSION;
-      }
-
-      majors.add(major);
-    }
+    majors.add(major);
   }
 
   return { kind: 'majors', majors: [...majors].toSorted((left, right) => left - right) };
@@ -172,19 +172,11 @@ function parseDevEnginesPins(params: { devEngines: unknown }): PnpmPinTexts {
     return NO_PIN_TEXTS;
   }
 
-  if (Array.isArray(packageManager)) {
-    const entryPins = packageManager.map((entry: unknown) =>
-      parseDevEnginesEntryPins({ entry: entry }),
-    );
+  const entries: unknown[] = Array.isArray(packageManager) ? packageManager : [packageManager];
 
-    return mergePnpmPinTexts({ pinTexts: entryPins });
-  }
-
-  if (!isJsonObject(packageManager)) {
-    return EVERY_STORE_VERSION;
-  }
-
-  return parseDevEnginesEntryPins({ entry: packageManager });
+  return mergePnpmPinTexts({
+    pinTexts: entries.map((entry) => parseDevEnginesEntryPins({ entry: entry })),
+  });
 }
 
 /**

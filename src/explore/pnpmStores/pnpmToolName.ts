@@ -2,8 +2,8 @@
 export const PNPM_TOOL_NAME = 'pnpm';
 
 /**
- * Whether a mise tool key, a `tools` value of keys, a folder of mise's installs, or a manager name
- * names pnpm: any text that holds it in any case, whatever its backend, such as `npm-pnpm`.
+ * Whether a text names pnpm: it holds `pnpm` in any case, as a backend key such as `npm:pnpm` or
+ * its folder `npm-pnpm` does.
  */
 export function hasPnpmToolName(params: { text: string }): boolean {
   return params.text.toLowerCase().includes(PNPM_TOOL_NAME);
