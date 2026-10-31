@@ -955,6 +955,26 @@ for (const probeCase of probeCases) {
           isComplete: false,
         });
       });
+
+      test(`keeps the store version the global package ${packageName} of pnpm 10's global virtual store links into`, async () => {
+        const storeRoot = await createStore({ folderNames: ['v10'] });
+        const packagePath = join(
+          storeRoot,
+          'v10/links/@',
+          packageName,
+          '1.0.0/0a1b2c/node_modules',
+          packageName,
+        );
+        const linkPath = join(homeDir, 'Library/pnpm/global/5/node_modules', packageName);
+        await createFixtureDirectory({ path: packagePath });
+        await createFixtureDirectory({ path: dirname(linkPath) });
+        await symlink(relative(dirname(linkPath), packagePath), linkPath);
+
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      });
     }
 
     const pinCases: { kind: ProjectPinFileKind; text: string }[] = [

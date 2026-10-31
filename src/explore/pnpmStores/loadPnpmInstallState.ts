@@ -36,17 +36,11 @@ export type PnpmInstall = PnpmInstallParsed | PnpmInstallUnparsed;
 export type PnpmInstallState = {
   installs: PnpmInstall[];
   /**
-   * The real paths of the global packages of pnpm's `global/v<digits>` layout, each a link into a
-   * store.
+   * The real paths of the global packages of pnpm that are links, such as those of pnpm 11 or of
+   * pnpm 10's global virtual store, which link into a store.
    */
   globalPackageRealPaths: AbsolutePath[];
 };
-
-/**
- * pnpm's global folders, each real path once; `installFolderPaths` are those of the
- * `global/v<digits>` layout.
- */
-type PnpmGlobalFolders = { folderPaths: AbsolutePath[]; installFolderPaths: AbsolutePath[] };
 
 const COREPACK_PNPM_PATH_NAMES = [
   ['.cache', 'node', 'corepack', 'v1', 'pnpm'],
@@ -90,7 +84,7 @@ const PACKAGE_JSON_FILE_NAME = 'package.json';
 /**
  * The pnpm installed in every place corepack, asdf, mise, Homebrew, the npm globals of a node, and
  * pnpm in each of its homes keep it (`.tools`, the global folders, the launcher `pnpm`), with the
- * real paths of the global packages of the `global/v<digits>` layout; a missing place holds none.
+ * real paths of the global packages that are links; a missing place holds none.
  * Each pnpm store probe and recheck loads it on its own, a known cost of one probe per store root.
  */
 export async function loadPnpmInstallState(params: {
@@ -128,7 +122,7 @@ export async function loadPnpmInstallState(params: {
   const packageFolders = await loadPnpmPackageFolders({
     homeDir: params.homeDir,
     homebrewPrefixPaths: params.homebrewPrefixPaths,
-    globalFolderPaths: globalFolders.value.folderPaths,
+    globalFolderPaths: globalFolders.value,
   });
 
   if (packageFolders.kind === 'failed') {
@@ -148,7 +142,7 @@ export async function loadPnpmInstallState(params: {
   }
 
   const globalPackageLinkPaths = await loadGlobalPackageLinkPaths({
-    installFolderPaths: globalFolders.value.installFolderPaths,
+    globalFolderPaths: globalFolders.value,
   });
 
   if (globalPackageLinkPaths.kind === 'failed') {
@@ -327,7 +321,7 @@ async function loadPnpmPackageFolders(params: {
  */
 async function loadPnpmGlobalFolders(params: {
   pnpmHomePaths: AbsolutePath[];
-}): Promise<Result<PnpmGlobalFolders, ExploreFileUnreadable>> {
+}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const entryPaths = await loadEntryPaths({
     folderPaths: params.pnpmHomePaths.map((pnpmHomePath) =>
       joinAbsolutePath({ parentPath: pnpmHomePath, names: [PNPM_GLOBAL_FOLDER_NAME] }),
@@ -358,10 +352,7 @@ async function loadPnpmGlobalFolders(params: {
 
   const folderPaths = new Set([...flatFolders.value, ...installFolders.value]);
 
-  return {
-    kind: 'succeeded',
-    value: { folderPaths: [...folderPaths], installFolderPaths: installFolders.value },
-  };
+  return { kind: 'succeeded', value: [...folderPaths] };
 }
 
 function isGlobalInstallsFolder(params: { entryPath: AbsolutePath }): boolean {
@@ -369,17 +360,17 @@ function isGlobalInstallsFolder(params: { entryPath: AbsolutePath }): boolean {
 }
 
 /**
- * The links in `node_modules` of each install folder, and one level below each `@<scope>` folder
+ * The links in `node_modules` of each global folder, and one level below each `@<scope>` folder
  * of it; a missing `node_modules` holds none.
  */
 async function loadGlobalPackageLinkPaths(params: {
-  installFolderPaths: AbsolutePath[];
+  globalFolderPaths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const linkPaths: AbsolutePath[] = [];
 
-  for (const installFolderPath of params.installFolderPaths) {
+  for (const globalFolderPath of params.globalFolderPaths) {
     const nodeModulesPath = joinAbsolutePath({
-      parentPath: installFolderPath,
+      parentPath: globalFolderPath,
       names: [NODE_MODULES_FOLDER_NAME],
     });
     const names = await loadExploreFolderNames({ path: nodeModulesPath });
