@@ -1,4 +1,3 @@
-import { isSameOrInsidePath } from '../../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PnpmInstallState } from './loadPnpmInstallState.js';
 import type { PnpmStoreState } from './loadPnpmStoreState.js';
@@ -7,8 +6,8 @@ import type { PnpmPins } from './parsePnpmPins.js';
 import type { PnpmStoreVersion } from './parsePnpmStoreVersion.js';
 
 /**
- * A store-version folder that no installed pnpm and no pinned pnpm uses, and that no global
- * package links into.
+ * A store-version folder that no installed pnpm and no pinned pnpm uses, and that holds no global
+ * virtual store.
  */
 export type PnpmStoreOffer = { folderPath: AbsolutePath; storeVersion: PnpmStoreVersion };
 
@@ -36,8 +35,8 @@ type StoreVersionsInUseEvery = { kind: 'every' };
 type StoreVersionsInUse = StoreVersionsInUseKnown | StoreVersionsInUseEvery;
 
 /**
- * Offers each store folder whose version no installed or pinned pnpm uses and that no global
- * package links into, judged by its real path.
+ * Offers each store folder whose version no installed or pinned pnpm uses and that holds no global
+ * virtual store.
  */
 export function decidePnpmStoreOffers(params: {
   storeState: PnpmStoreState;
@@ -55,18 +54,15 @@ export function decidePnpmStoreOffers(params: {
   const offers: PnpmStoreOffer[] = [];
 
   for (const folder of params.storeState.folders) {
-    if (folder.kind === 'unparsed' || inUse.storeVersions.has(folder.storeVersion)) {
+    if (
+      folder.kind === 'unparsed' ||
+      inUse.storeVersions.has(folder.storeVersion) ||
+      folder.hasGlobalVirtualStore
+    ) {
       continue;
     }
 
-    const isLinkedInto = isStoreFolderLinkedInto({
-      folderRealPath: folder.realPath,
-      globalPackageRealPaths: params.installState.globalPackageRealPaths,
-    });
-
-    if (!isLinkedInto) {
-      offers.push({ folderPath: folder.folderPath, storeVersion: folder.storeVersion });
-    }
+    offers.push({ folderPath: folder.folderPath, storeVersion: folder.storeVersion });
   }
 
   return {
@@ -74,15 +70,6 @@ export function decidePnpmStoreOffers(params: {
     installedVersions: inUse.installedVersions,
     isComplete: offers.length === params.storeState.folders.length,
   };
-}
-
-function isStoreFolderLinkedInto(params: {
-  folderRealPath: AbsolutePath;
-  globalPackageRealPaths: AbsolutePath[];
-}): boolean {
-  return params.globalPackageRealPaths.some((realPath) =>
-    isSameOrInsidePath({ path: realPath, parentPath: params.folderRealPath }),
-  );
 }
 
 function decideStoreVersionsInUse(params: {

@@ -57,7 +57,7 @@ const PROJECT_PATH = '/projects/app';
 
 const NO_PINS: PnpmPins = { kind: 'majors', majors: [] };
 
-const NO_INSTALLS: PnpmInstallState = { installs: [], globalPackageRealPaths: [] };
+const NO_INSTALLS: PnpmInstallState = { installs: [] };
 
 const PNPM_11_INSTALL_ID = '1375b-1a0a4cad7f8';
 
@@ -110,9 +110,14 @@ async function linkGlobalPackageIntoStore(params: {
     '1.0.0/0a1b2c/node_modules',
     params.packageName,
   );
-  await createFixtureDirectory({ path: packagePath });
+  await createPackageLink({ packagePath: packagePath, linkPath: params.linkPath });
+}
+
+/** A package folder at `packagePath` and a relative link to it at `linkPath`. */
+async function createPackageLink(params: { packagePath: string; linkPath: string }): Promise<void> {
+  await createFixtureDirectory({ path: params.packagePath });
   await createFixtureDirectory({ path: dirname(params.linkPath) });
-  await symlink(relative(dirname(params.linkPath), packagePath), params.linkPath);
+  await symlink(relative(dirname(params.linkPath), params.packagePath), params.linkPath);
 }
 
 function buildParsedInstall(params: { versionText: string; major: number }): PnpmInstall {
@@ -124,17 +129,16 @@ function buildParsedInstall(params: { versionText: string; major: number }): Pnp
   };
 }
 
-/** A store at `/store`, which is also its real path unless `storeRootRealPath` names another. */
+/** A store at `/store`, whose folders named in `globalVirtualStoreFolderNames` hold one. */
 function buildStoreState(params: {
   folderNames: string[];
-  storeRootRealPath?: string;
+  globalVirtualStoreFolderNames?: string[];
 }): PnpmStoreState {
-  const storeRootRealPath = params.storeRootRealPath ?? '/store';
+  const globalVirtualStoreFolderNames = params.globalVirtualStoreFolderNames ?? [];
 
   return {
     folders: params.folderNames.map((folderName) => {
       const folderPath = buildTestAbsolutePath({ text: `/store/${folderName}` });
-      const realPath = buildTestAbsolutePath({ text: `${storeRootRealPath}/${folderName}` });
 
       if (folderName === 'tmp') {
         return { kind: 'unparsed', folderPath: folderPath };
@@ -143,8 +147,8 @@ function buildStoreState(params: {
       return {
         kind: 'parsed',
         folderPath: folderPath,
-        realPath: realPath,
         storeVersion: buildTestPnpmStoreVersion({ text: folderName }),
+        hasGlobalVirtualStore: globalVirtualStoreFolderNames.includes(folderName),
       };
     }),
   };
@@ -218,6 +222,43 @@ describe('parsePnpmPins', () => {
     { kind: 'packageJson', text: '{"packageManager": "pnpm@11.1.2+sha512.0a1b"}', majors: [11] },
     { kind: 'packageJson', text: '{"packageManager": "yarn@4.1.0"}', majors: [] },
     { kind: 'packageJson', text: '{"name": "app"}', majors: [] },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({
+        devEngines: { packageManager: { name: 'pnpm', version: '10.14.0' } },
+      }),
+      majors: [10],
+    },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({
+        devEngines: {
+          packageManager: [
+            { name: 'npm', version: '10.9.0' },
+            { name: 'pnpm', version: '11.1.2', onFail: 'download' },
+          ],
+        },
+      }),
+      majors: [11],
+    },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({ devEngines: { packageManager: { name: 'npm', version: '10.9.0' } } }),
+      majors: [],
+    },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({ devEngines: { runtime: { name: 'node', version: '22.1.0' } } }),
+      majors: [],
+    },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({
+        packageManager: 'pnpm@11.1.2',
+        devEngines: { packageManager: { name: 'pnpm', version: '10.14.0' } },
+      }),
+      majors: [10, 11],
+    },
     { kind: 'toolVersions', text: 'nodejs 22.1.0\npnpm 10.8.1 9.15.9 # two\n', majors: [9, 10] },
     { kind: 'miseConfig', text: '[tools]\npnpm = "12"\n', majors: [12] },
     { kind: 'miseConfig', text: '[tools]\n"npm:pnpm" = ["11.1", "12"] # both\n', majors: [11, 12] },
@@ -268,6 +309,28 @@ describe('parsePnpmPins', () => {
     { kind: 'packageJson', text: '{"packageManager": "pnpm@latest"}' },
     { kind: 'packageJson', text: '{"packageManager": 10}' },
     { kind: 'packageJson', text: '{ not json' },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '>=12.0.0 <13.0.0', onFail: 'download' },
+        },
+      }),
+    },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({ devEngines: { packageManager: { name: 'pnpm' } } }),
+    },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({ devEngines: { packageManager: { name: 'PNPM', version: '^10' } } }),
+    },
+    { kind: 'packageJson', text: JSON.stringify({ devEngines: { packageManager: 'pnpm' } }) },
+    {
+      kind: 'packageJson',
+      text: JSON.stringify({ devEngines: { packageManager: { version: '10.14.0' } } }),
+    },
+    { kind: 'packageJson', text: JSON.stringify({ devEngines: 1 }) },
     { kind: 'toolVersions', text: 'pnpm latest' },
     { kind: 'toolVersions', text: 'pnpm ref:main' },
     { kind: 'toolVersions', text: 'pnpm system' },
@@ -310,7 +373,6 @@ describe('decidePnpmStoreOffers', () => {
           buildParsedInstall({ versionText: '10.14.0', major: 10 }),
           buildParsedInstall({ versionText: '10.14.0', major: 10 }),
         ],
-        globalPackageRealPaths: [],
       },
       pins: NO_PINS,
     });
@@ -351,47 +413,18 @@ describe('decidePnpmStoreOffers', () => {
     expect(offers.isComplete).toBe(false);
   });
 
-  const linkedFolderCases: { linkedFolderName: string; offeredFolderName: string }[] = [
-    { linkedFolderName: 'v1', offeredFolderName: 'v10' },
-    { linkedFolderName: 'v10', offeredFolderName: 'v1' },
-  ];
-
-  for (const linkedCase of linkedFolderCases) {
-    test(`keeps ${linkedCase.linkedFolderName} a global package links into, and offers ${linkedCase.offeredFolderName}`, () => {
-      const offers = decidePnpmStoreOffers({
-        storeState: buildStoreState({ folderNames: ['v1', 'v10'] }),
-        installState: {
-          installs: [],
-          globalPackageRealPaths: [
-            buildTestAbsolutePath({
-              text: `/store/${linkedCase.linkedFolderName}/links/@/some-cli/1.0.0/abc/node_modules/some-cli`,
-            }),
-          ],
-        },
-        pins: NO_PINS,
-      });
-
-      expect(listOfferedStoreVersions({ offers: offers })).toEqual([linkedCase.offeredFolderName]);
-      expect(offers.isComplete).toBe(false);
-    });
-  }
-
-  test("judges a link by the real path of the store folder, below the store root's real path", () => {
+  test('keeps a store folder that holds a global virtual store, and is not complete', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({
         folderNames: ['v10', 'v11'],
-        storeRootRealPath: '/private/store',
+        globalVirtualStoreFolderNames: ['v11'],
       }),
-      installState: {
-        installs: [],
-        globalPackageRealPaths: [
-          buildTestAbsolutePath({ text: '/private/store/v11/links/@/some-cli/1.0.0/abc' }),
-        ],
-      },
+      installState: NO_INSTALLS,
       pins: NO_PINS,
     });
 
     expect(listOfferedStoreVersions({ offers: offers })).toEqual(['v10']);
+    expect(offers.isComplete).toBe(false);
   });
 
   const heldBackCases: { name: string; installState: PnpmInstallState; pins: PnpmPins }[] = [
@@ -399,22 +432,14 @@ describe('decidePnpmStoreOffers', () => {
       name: 'an installed version that does not parse',
       installState: {
         installs: [
-          {
-            kind: 'unparsed',
-            path: buildTestAbsolutePath({ text: '/installs/pnpm/odd' }),
-            versionText: 'odd',
-          },
+          { kind: 'unparsed', path: buildTestAbsolutePath({ text: '/installs/pnpm/odd' }) },
         ],
-        globalPackageRealPaths: [],
       },
       pins: NO_PINS,
     },
     {
       name: 'an installed major outside the table',
-      installState: {
-        installs: [buildParsedInstall({ versionText: '13.0.0', major: 13 })],
-        globalPackageRealPaths: [],
-      },
+      installState: { installs: [buildParsedInstall({ versionText: '13.0.0', major: 13 })] },
       pins: NO_PINS,
     },
     {
@@ -556,10 +581,7 @@ describe('comparePnpmStoreUnit', () => {
       comparePnpmStoreUnit({
         unit: unit,
         storeState: buildStoreState({ folderNames: ['v3'] }),
-        installState: {
-          installs: [buildParsedInstall({ versionText: '9.15.9', major: 9 })],
-          globalPackageRealPaths: [],
-        },
+        installState: { installs: [buildParsedInstall({ versionText: '9.15.9', major: 9 })] },
         pins: NO_PINS,
         processCommands: [],
       }),
@@ -606,7 +628,6 @@ describe('loadPnpmInstallState', () => {
             major: 9,
           },
         ],
-        globalPackageRealPaths: [],
       },
     });
   });
@@ -624,10 +645,8 @@ describe('loadPnpmInstallState', () => {
           {
             kind: 'unparsed',
             path: expect.stringContaining('/Library/pnpm/global/5/node_modules/pnpm'),
-            versionText: null,
           },
         ],
-        globalPackageRealPaths: [],
       },
     });
   });
@@ -791,6 +810,18 @@ for (const probeCase of probeCases) {
         });
       });
     }
+
+    test("offers nothing beside a pnpm in mise's folder of the backend key npm:pnpm", async () => {
+      await createStore({ folderNames: ['v3'] });
+      await createFixtureDirectory({
+        path: join(homeDir, '.local/share/mise/installs/npm-pnpm/9.15.9'),
+      });
+
+      expect(await loadOfferedVersions({ files: [] })).toEqual({
+        storeVersions: [],
+        isComplete: false,
+      });
+    });
 
     test("keeps a store version a pnpm in Homebrew's Cellar uses", async () => {
       await createStore({ folderNames: ['v3', 'v10'] });
@@ -985,6 +1016,46 @@ for (const probeCase of probeCases) {
       });
     }
 
+    test('keeps the store version a project with the global virtual store links into', async () => {
+      const storeRoot = await createStore({ folderNames: ['v10'] });
+      await createPackageLink({
+        packagePath: join(storeRoot, 'v10/links/0a1b2c/node_modules/some-lib'),
+        linkPath: join(homeDir, 'projects/app/node_modules/some-lib'),
+      });
+
+      expect(await loadOfferedVersions({ files: [] })).toEqual({
+        storeVersions: [],
+        isComplete: false,
+      });
+    });
+
+    test('offers a store folder whose links folder holds only dot names', async () => {
+      const storeRoot = await createStore({ folderNames: ['v10'] });
+      await writeFixtureTextFile({ path: join(storeRoot, 'v10/links/.DS_Store'), text: '' });
+
+      expect(await loadOfferedVersions({ files: [] })).toEqual({
+        storeVersions: ['v10'],
+        isComplete: true,
+      });
+    });
+
+    test('answers unreadable at a links folder of a store folder it cannot list', async () => {
+      const storeRoot = await createStore({ folderNames: ['v10'] });
+      const linksPath = join(storeRoot, 'v10/links');
+      await createFixtureDirectory({ path: linksPath });
+      await chmod(linksPath, 0o000);
+
+      try {
+        expect(await runProbe({ files: [] })).toEqual({
+          kind: 'unreadable',
+          path: linksPath,
+          failure: { reason: 'permissionDenied', code: 'EACCES' },
+        });
+      } finally {
+        await chmod(linksPath, 0o755);
+      }
+    });
+
     const pinCases: { kind: ProjectPinFileKind; text: string }[] = [
       { kind: 'packageJson', text: '{"packageManager": "pnpm@10.14.0+sha512.0a1b"}' },
       { kind: 'toolVersions', text: 'pnpm 10.8.1\n' },
@@ -1006,6 +1077,22 @@ for (const probeCase of probeCases) {
         });
       });
     }
+
+    test('offers nothing beside a package.json that pins pnpm 10 by devEngines.packageManager alone', async () => {
+      await createStore({ folderNames: ['v10'] });
+      const pinFile = buildTestPinFileText({
+        path: `${PROJECT_PATH}/package.json`,
+        kind: 'packageJson',
+        text: JSON.stringify({
+          devEngines: { packageManager: { name: 'pnpm', version: '10.14.0' } },
+        }),
+      });
+
+      expect(await loadOfferedVersions({ files: [pinFile] })).toEqual({
+        storeVersions: [],
+        isComplete: false,
+      });
+    });
 
     test('offers nothing while an unfit pin file pins every store version', async () => {
       await createStore({ folderNames: ['v3'] });
@@ -1142,6 +1229,14 @@ describe('the recheck of a pnpm store unit', () => {
 
   test('is changed once a pnpm of its store version is installed', async () => {
     await createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/v1/pnpm/10.14.0') });
+
+    expect(
+      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+    ).toEqual({ kind: 'changed' });
+  });
+
+  test('is changed once its store folder holds a global virtual store', async () => {
+    await createFixtureDirectory({ path: join(storeRoot, 'v10/links/0a1b2c') });
 
     expect(
       await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),

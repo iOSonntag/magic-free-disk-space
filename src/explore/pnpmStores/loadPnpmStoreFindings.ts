@@ -10,7 +10,7 @@ import { PNPM_PIN_FILE_KINDS, toolPinsToPnpmPins } from './parsePnpmPins.js';
 
 /**
  * The store-version folders of the store at `storeRootPathNames` below the home folder that
- * neither an installed pnpm nor one a project pins uses, and that no global package links into.
+ * neither an installed pnpm nor one a project pins uses, and that hold no global virtual store.
  */
 export async function loadPnpmStoreFindings(params: {
   run: ExploreProbeRun;

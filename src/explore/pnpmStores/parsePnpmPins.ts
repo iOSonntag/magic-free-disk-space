@@ -3,7 +3,7 @@ import { parseToolVersionsText } from '../asdfVersions/parseToolVersionsText.js'
 import type { ProjectPinFileKind, ProjectPinFileText } from '../projectPins/projectPins.js';
 import type { ToolPins } from '../projectPins/selectToolPins.js';
 import { parsePnpmVersionMajor } from './parsePnpmVersionMajor.js';
-import { PNPM_TOOL_NAME } from './pnpmToolName.js';
+import { hasPnpmToolName, PNPM_TOOL_NAME } from './pnpmToolName.js';
 
 /** The pnpm majors the projects pin, or every store version when a pin cannot be read. */
 export type PnpmPins = PnpmPinsMajors | PnpmPinsEveryStoreVersion;
@@ -63,8 +63,9 @@ export function toolPinsToPnpmPins(params: { toolPins: ToolPins }): PnpmPins {
 }
 
 /**
- * The pnpm pins of `package.json` files, `.tool-versions`, and mise configs; files of other kinds
- * pin nothing. A pinned version `parsePnpmVersionMajor` does not read pins every store version.
+ * The pnpm pins of `package.json` files, by `packageManager` and `devEngines.packageManager`, of
+ * `.tool-versions`, and of mise configs, added up; files of other kinds pin nothing. A pinned
+ * version or range that `parsePnpmVersionMajor` does not read pins every store version.
  */
 export function parsePnpmPins(params: { files: ProjectPinFileText[] }): PnpmPins {
   const majors = new Set<number>();
@@ -93,7 +94,7 @@ export function parsePnpmPins(params: { files: ProjectPinFileText[] }): PnpmPins
 function parsePnpmPinTexts(params: { file: ProjectPinFileText }): PnpmPinTexts {
   switch (params.file.kind) {
     case 'packageJson':
-      return parsePackageManagerPin({ text: params.file.text });
+      return parsePackageJsonPins({ text: params.file.text });
     case 'toolVersions':
       return parseToolVersionsPins({ text: params.file.text });
     case 'miseConfig':
@@ -105,37 +106,121 @@ function parsePnpmPinTexts(params: { file: ProjectPinFileText }): PnpmPinTexts {
 }
 
 /**
- * `packageManager` `pnpm@<version>` pins that version, any other one naming pnpm or a text that is
- * no JSON object pins every store version, and one naming another manager pins nothing.
+ * The pnpm versions of `packageManager` and of `devEngines.packageManager`, added up; a text that
+ * is no JSON object, or a field that names pnpm without a version or is of another shape, pins
+ * every store version.
  */
-function parsePackageManagerPin(params: { text: string }): PnpmPinTexts {
+function parsePackageJsonPins(params: { text: string }): PnpmPinTexts {
   const json = parseJsonValue({ text: params.text });
 
   if (json.kind === 'failed' || !isJsonObject(json.value)) {
     return EVERY_STORE_VERSION;
   }
 
-  const packageManager = json.value.packageManager;
+  const packageManagerPins = parsePackageManagerPins({ packageManager: json.value.packageManager });
+  const devEnginesPins = parseDevEnginesPins({ devEngines: json.value.devEngines });
+
+  return mergePnpmPinTexts({ pinTexts: [packageManagerPins, devEnginesPins] });
+}
+
+/**
+ * `pnpm@<version>` gives its version; any other text naming pnpm, or a value that is no string,
+ * pins every store version.
+ */
+function parsePackageManagerPins(params: { packageManager: unknown }): PnpmPinTexts {
+  if (params.packageManager === undefined || params.packageManager === null) {
+    return NO_PIN_TEXTS;
+  }
+
+  if (typeof params.packageManager !== 'string') {
+    return EVERY_STORE_VERSION;
+  }
+
+  const hasPnpmVersion =
+    params.packageManager.startsWith(PNPM_PACKAGE_MANAGER_PREFIX) &&
+    params.packageManager.length > PNPM_PACKAGE_MANAGER_PREFIX.length;
+
+  if (hasPnpmVersion) {
+    const version = params.packageManager.slice(PNPM_PACKAGE_MANAGER_PREFIX.length);
+
+    return { kind: 'versionTexts', versionTexts: [version] };
+  }
+
+  if (hasPnpmToolName({ text: params.packageManager })) {
+    return EVERY_STORE_VERSION;
+  }
+
+  return NO_PIN_TEXTS;
+}
+
+/**
+ * The pnpm versions of `devEngines.packageManager`, one entry or an array of them; a `devEngines`
+ * or a `packageManager` of another shape pins every store version.
+ */
+function parseDevEnginesPins(params: { devEngines: unknown }): PnpmPinTexts {
+  if (params.devEngines === undefined || params.devEngines === null) {
+    return NO_PIN_TEXTS;
+  }
+
+  if (!isJsonObject(params.devEngines)) {
+    return EVERY_STORE_VERSION;
+  }
+
+  const packageManager = params.devEngines.packageManager;
 
   if (packageManager === undefined || packageManager === null) {
     return NO_PIN_TEXTS;
   }
 
-  if (typeof packageManager !== 'string') {
+  if (Array.isArray(packageManager)) {
+    const entryPins = packageManager.map((entry: unknown) =>
+      parseDevEnginesEntryPins({ entry: entry }),
+    );
+
+    return mergePnpmPinTexts({ pinTexts: entryPins });
+  }
+
+  if (!isJsonObject(packageManager)) {
     return EVERY_STORE_VERSION;
   }
 
-  const version = packageManager.slice(PNPM_PACKAGE_MANAGER_PREFIX.length);
+  return parseDevEnginesEntryPins({ entry: packageManager });
+}
 
-  if (packageManager.startsWith(PNPM_PACKAGE_MANAGER_PREFIX) && version !== '') {
-    return { kind: 'versionTexts', versionTexts: [version] };
-  }
-
-  if (packageManager.toLowerCase().includes(PNPM_TOOL_NAME)) {
+/**
+ * An entry whose `name` names pnpm gives its `version`, and one of another manager pins nothing;
+ * an entry that is no object, has no string `name`, or names pnpm with no string `version` pins
+ * every store version.
+ */
+function parseDevEnginesEntryPins(params: { entry: unknown }): PnpmPinTexts {
+  if (!isJsonObject(params.entry) || typeof params.entry.name !== 'string') {
     return EVERY_STORE_VERSION;
   }
 
-  return NO_PIN_TEXTS;
+  if (!hasPnpmToolName({ text: params.entry.name })) {
+    return NO_PIN_TEXTS;
+  }
+
+  if (typeof params.entry.version !== 'string') {
+    return EVERY_STORE_VERSION;
+  }
+
+  return { kind: 'versionTexts', versionTexts: [params.entry.version] };
+}
+
+/** The version texts of every part, or every store version when any part pins it. */
+function mergePnpmPinTexts(params: { pinTexts: PnpmPinTexts[] }): PnpmPinTexts {
+  const versionTexts: string[] = [];
+
+  for (const pinTexts of params.pinTexts) {
+    if (pinTexts.kind === 'everyStoreVersion') {
+      return EVERY_STORE_VERSION;
+    }
+
+    versionTexts.push(...pinTexts.versionTexts);
+  }
+
+  return { kind: 'versionTexts', versionTexts: versionTexts };
 }
 
 function parseToolVersionsPins(params: { text: string }): PnpmPinTexts {
@@ -225,7 +310,7 @@ function parseMiseEntryPins(params: { section: MiseSection; entry: TomlEntry }):
 }
 
 /**
- * A top-level `tools.<key>` naming pnpm reads as a `[tools]` line, and a `tools` value that holds
+ * A top-level `tools.<key>` reads as the `[tools]` line of `<key>`, and a `tools` value that holds
  * `pnpm` pins every store version.
  */
 function parseMiseRootEntryPins(params: { entry: TomlEntry }): PnpmPinTexts {
@@ -237,17 +322,16 @@ function parseMiseRootEntryPins(params: { entry: TomlEntry }): PnpmPinTexts {
     return NO_PIN_TEXTS;
   }
 
-  if (!params.entry.key.startsWith(MISE_TOOLS_SUBTABLE_PREFIX)) {
+  const subkey = parseMiseToolsSubkey({ text: params.entry.key });
+
+  if (subkey === null) {
     return NO_PIN_TEXTS;
   }
 
-  const keyText = params.entry.key.slice(MISE_TOOLS_SUBTABLE_PREFIX.length).trim();
-
-  if (!hasPnpmToolName({ text: keyText })) {
-    return NO_PIN_TEXTS;
-  }
-
-  return parseMiseVersionValue({ valueText: params.entry.value });
+  return parseMiseEntryPins({
+    section: { kind: 'tools' },
+    entry: { key: subkey, value: params.entry.value },
+  });
 }
 
 function parseMiseVersionValue(params: { valueText: string }): PnpmPinTexts {
@@ -265,25 +349,22 @@ function decideMiseSection(params: { header: string }): MiseSection {
     return { kind: 'tools' };
   }
 
-  if (!params.header.startsWith(MISE_TOOLS_SUBTABLE_PREFIX)) {
-    return { kind: 'other' };
-  }
+  const subkey = parseMiseToolsSubkey({ text: params.header });
 
-  const keyText = params.header.slice(MISE_TOOLS_SUBTABLE_PREFIX.length).trim();
-
-  if (!hasPnpmToolName({ text: keyText })) {
+  if (subkey === null || !hasPnpmToolName({ text: subkey })) {
     return { kind: 'other' };
   }
 
   return { kind: 'pnpmSubtable', hasVersion: false };
 }
 
-/**
- * Whether a mise tool key, or a `tools` value of keys, names pnpm: any text that holds it in any
- * case, whatever its backend, so a plugin's tool such as `asdf:<owner>/asdf-pnpm` names pnpm too.
- */
-function hasPnpmToolName(params: { text: string }): boolean {
-  return params.text.toLowerCase().includes(PNPM_TOOL_NAME);
+/** The trimmed key after `tools.` in a header or a dotted key; `null` when it does not start so. */
+function parseMiseToolsSubkey(params: { text: string }): string | null {
+  if (!params.text.startsWith(MISE_TOOLS_SUBTABLE_PREFIX)) {
+    return null;
+  }
+
+  return params.text.slice(MISE_TOOLS_SUBTABLE_PREFIX.length).trim();
 }
 
 function isMiseVersionKey(params: { keyText: string }): boolean {

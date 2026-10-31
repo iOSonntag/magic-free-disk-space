@@ -2,19 +2,19 @@ import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
-import { loadExploreFolderNames, loadExploreRealPath } from '../loadExploreRead.js';
+import { loadExploreDirectoryNames, loadExploreFolderNames } from '../loadExploreRead.js';
 import type { PnpmStoreVersion } from './parsePnpmStoreVersion.js';
 import { parsePnpmStoreVersion } from './parsePnpmStoreVersion.js';
 
 /**
- * A folder `<store root>/v<N>` whose name is a store version. `realPath` is its name below the
- * real path of the store root.
+ * A folder `<store root>/v<N>` whose name is a store version. `hasGlobalVirtualStore` is whether
+ * its `links` holds pnpm's global virtual store, which projects and global packages link into.
  */
 export type PnpmStoreFolderParsed = {
   kind: 'parsed';
   folderPath: AbsolutePath;
-  realPath: AbsolutePath;
   storeVersion: PnpmStoreVersion;
+  hasGlobalVirtualStore: boolean;
 };
 
 /** A folder of the store root whose name `parsePnpmStoreVersion` refuses, such as `tmp`. */
@@ -22,8 +22,12 @@ export type PnpmStoreFolderUnparsed = { kind: 'unparsed'; folderPath: AbsolutePa
 
 export type PnpmStoreFolder = PnpmStoreFolderParsed | PnpmStoreFolderUnparsed;
 
-/** The folders of one store root; none when the root or its real path is missing. */
+/** The folders of one store root; none when the root is missing. */
 export type PnpmStoreState = { folders: PnpmStoreFolder[] };
+
+const GLOBAL_VIRTUAL_STORE_FOLDER_NAME = 'links';
+
+const HIDDEN_NAME_PREFIX = '.';
 
 export async function loadPnpmStoreState(params: {
   storeRoot: AbsolutePath;
@@ -38,49 +42,78 @@ export async function loadPnpmStoreState(params: {
     return { kind: 'succeeded', value: { folders: [] } };
   }
 
-  const storeRootRealPathRead = await loadExploreRealPath({ path: params.storeRoot });
+  const folders = await loadPnpmStoreFolders({
+    storeRoot: params.storeRoot,
+    folderNames: names.value.folderNames,
+  });
 
-  if (storeRootRealPathRead.kind === 'failed') {
-    return storeRootRealPathRead;
+  if (folders.kind === 'failed') {
+    return folders;
   }
 
-  if (storeRootRealPathRead.value === null) {
-    return { kind: 'succeeded', value: { folders: [] } };
-  }
-
-  const storeRootRealPath = storeRootRealPathRead.value;
-  const folders = names.value.folderNames.map((folderName) =>
-    buildPnpmStoreFolder({
-      storeRoot: params.storeRoot,
-      storeRootRealPath: storeRootRealPath,
-      folderName: folderName,
-    }),
-  );
-
-  return { kind: 'succeeded', value: { folders: folders } };
+  return { kind: 'succeeded', value: { folders: folders.value } };
 }
 
-function buildPnpmStoreFolder(params: {
+async function loadPnpmStoreFolders(params: {
   storeRoot: AbsolutePath;
-  storeRootRealPath: AbsolutePath;
+  folderNames: string[];
+}): Promise<Result<PnpmStoreFolder[], ExploreFileUnreadable>> {
+  const folders: PnpmStoreFolder[] = [];
+
+  for (const folderName of params.folderNames) {
+    const folder = await loadPnpmStoreFolder({
+      storeRoot: params.storeRoot,
+      folderName: folderName,
+    });
+
+    if (folder.kind === 'failed') {
+      return folder;
+    }
+
+    folders.push(folder.value);
+  }
+
+  return { kind: 'succeeded', value: folders };
+}
+
+/**
+ * A store folder by its name; a parsed one holds a global virtual store when its `links` holds an
+ * entry of any type whose name does not start with `.`, and a missing `links` holds none.
+ */
+async function loadPnpmStoreFolder(params: {
+  storeRoot: AbsolutePath;
   folderName: string;
-}): PnpmStoreFolder {
+}): Promise<Result<PnpmStoreFolder, ExploreFileUnreadable>> {
   const folderPath = joinAbsolutePath({ parentPath: params.storeRoot, names: [params.folderName] });
-  const realPath = joinAbsolutePath({
-    parentPath: params.storeRootRealPath,
-    names: [params.folderName],
-  });
   const storeVersion = parsePnpmStoreVersion({ folderName: params.folderName });
 
   switch (storeVersion.kind) {
-    case 'succeeded':
-      return {
-        kind: 'parsed',
-        folderPath: folderPath,
-        realPath: realPath,
-        storeVersion: storeVersion.value,
-      };
     case 'failed':
-      return { kind: 'unparsed', folderPath: folderPath };
+      return { kind: 'succeeded', value: { kind: 'unparsed', folderPath: folderPath } };
+    case 'succeeded': {
+      const linksNames = await loadExploreDirectoryNames({
+        path: joinAbsolutePath({
+          parentPath: folderPath,
+          names: [GLOBAL_VIRTUAL_STORE_FOLDER_NAME],
+        }),
+      });
+
+      if (linksNames.kind === 'failed') {
+        return linksNames;
+      }
+
+      const entryNames = linksNames.value ?? [];
+      const hasGlobalVirtualStore = entryNames.some((name) => !name.startsWith(HIDDEN_NAME_PREFIX));
+
+      return {
+        kind: 'succeeded',
+        value: {
+          kind: 'parsed',
+          folderPath: folderPath,
+          storeVersion: storeVersion.value,
+          hasGlobalVirtualStore: hasGlobalVirtualStore,
+        },
+      };
+    }
   }
 }
