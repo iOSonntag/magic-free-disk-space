@@ -184,9 +184,12 @@ fixed environment that keeps it offline where the tool allows that.
   would be deleted with that folder.
 - An app's last use is read from the files the app writes, not from Spotlight, which does not
   record it reliably. An app with no such files is never offered.
-- An Android platform counts as pinned only by a project the search for project build folders
-  reaches in your home folder. A project more than 7 folders below your home folder, in a hidden
-  folder or in `Library`, or on another disk does not keep the platforms it pins.
+- An Android platform counts as pinned only by a `build.gradle` or `build.gradle.kts` file the
+  search for project build folders reaches in your home folder. The search does not reach a file
+  in a folder more than 7 folders below your home folder, in a hidden folder, in a folder named
+  like a project build folder, such as `node_modules`, in your `Applications`, `Library`, `Movies`,
+  `Music`, `Pictures`, or `Public` folder, or outside your home folder, such as on a disk mounted
+  elsewhere.
 - macOS only.
 
 ## Development
