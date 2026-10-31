@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExplorePathUnitPnpmStore } from '../../src/explore/exploreUnit.js';
 import { buildPnpmStoreFindings } from '../../src/explore/pnpmStores/buildPnpmStoreFindings.js';
@@ -20,7 +20,7 @@ import { parsePnpmVersionMajor } from '../../src/explore/pnpmStores/parsePnpmVer
 import {
   PNPM_STORE_ROOT_PATH_NAMES,
   PNPM_XDG_STORE_ROOT_PATH_NAMES,
-} from '../../src/explore/pnpmStores/pnpmStoreRoots.js';
+} from '../../src/explore/pnpmStores/pnpmHomes.js';
 import type {
   ProjectPinFile,
   ProjectPinFileKind,
@@ -57,7 +57,11 @@ const PROJECT_PATH = '/projects/app';
 
 const NO_PINS: PnpmPins = { kind: 'majors', majors: [] };
 
-const NO_INSTALLS: PnpmInstallState = { installs: [] };
+const NO_INSTALLS: PnpmInstallState = { installs: [], globalPackageRealPaths: [] };
+
+const STORE_ROOT = buildTestAbsolutePath({ text: '/store' });
+
+const PNPM_11_INSTALL_ID = '1375b-1a0a4cad7f8';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -264,6 +268,7 @@ describe('decidePnpmStoreOffers', () => {
   test('offers each store version no installed or pinned pnpm uses', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({ folderNames: ['v2', 'v3'] }),
+      storeRootRealPath: STORE_ROOT,
       installState: NO_INSTALLS,
       pins: NO_PINS,
     });
@@ -275,11 +280,13 @@ describe('decidePnpmStoreOffers', () => {
   test('keeps a store version an installed pnpm uses, and is not complete', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({ folderNames: ['v3', 'v10'] }),
+      storeRootRealPath: STORE_ROOT,
       installState: {
         installs: [
           buildParsedInstall({ versionText: '10.14.0', major: 10 }),
           buildParsedInstall({ versionText: '10.14.0', major: 10 }),
         ],
+        globalPackageRealPaths: [],
       },
       pins: NO_PINS,
     });
@@ -301,6 +308,7 @@ describe('decidePnpmStoreOffers', () => {
   test('keeps a store version a pinned pnpm uses', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({ folderNames: ['v3', 'v11'] }),
+      storeRootRealPath: STORE_ROOT,
       installState: NO_INSTALLS,
       pins: { kind: 'majors', majors: [12] },
     });
@@ -312,12 +320,55 @@ describe('decidePnpmStoreOffers', () => {
   test('never offers a folder whose name is no store version, and is not complete', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({ folderNames: ['tmp', 'v2'] }),
+      storeRootRealPath: STORE_ROOT,
       installState: NO_INSTALLS,
       pins: NO_PINS,
     });
 
     expect(listOfferedStoreVersions({ offers: offers })).toEqual(['v2']);
     expect(offers.isComplete).toBe(false);
+  });
+
+  const linkedFolderCases: { linkedFolderName: string; offeredFolderName: string }[] = [
+    { linkedFolderName: 'v1', offeredFolderName: 'v10' },
+    { linkedFolderName: 'v10', offeredFolderName: 'v1' },
+  ];
+
+  for (const linkedCase of linkedFolderCases) {
+    test(`keeps ${linkedCase.linkedFolderName} a global package links into, and offers ${linkedCase.offeredFolderName}`, () => {
+      const offers = decidePnpmStoreOffers({
+        storeState: buildStoreState({ folderNames: ['v1', 'v10'] }),
+        storeRootRealPath: STORE_ROOT,
+        installState: {
+          installs: [],
+          globalPackageRealPaths: [
+            buildTestAbsolutePath({
+              text: `/store/${linkedCase.linkedFolderName}/links/@/some-cli/1.0.0/abc/node_modules/some-cli`,
+            }),
+          ],
+        },
+        pins: NO_PINS,
+      });
+
+      expect(listOfferedStoreVersions({ offers: offers })).toEqual([linkedCase.offeredFolderName]);
+      expect(offers.isComplete).toBe(false);
+    });
+  }
+
+  test("judges a link by the real path of the store folder, below the store root's real path", () => {
+    const offers = decidePnpmStoreOffers({
+      storeState: buildStoreState({ folderNames: ['v10', 'v11'] }),
+      storeRootRealPath: buildTestAbsolutePath({ text: '/private/store' }),
+      installState: {
+        installs: [],
+        globalPackageRealPaths: [
+          buildTestAbsolutePath({ text: '/private/store/v11/links/@/some-cli/1.0.0/abc' }),
+        ],
+      },
+      pins: NO_PINS,
+    });
+
+    expect(listOfferedStoreVersions({ offers: offers })).toEqual(['v10']);
   });
 
   const heldBackCases: { name: string; installState: PnpmInstallState; pins: PnpmPins }[] = [
@@ -331,12 +382,16 @@ describe('decidePnpmStoreOffers', () => {
             versionText: 'odd',
           },
         ],
+        globalPackageRealPaths: [],
       },
       pins: NO_PINS,
     },
     {
       name: 'an installed major outside the table',
-      installState: { installs: [buildParsedInstall({ versionText: '13.0.0', major: 13 })] },
+      installState: {
+        installs: [buildParsedInstall({ versionText: '13.0.0', major: 13 })],
+        globalPackageRealPaths: [],
+      },
       pins: NO_PINS,
     },
     {
@@ -355,6 +410,7 @@ describe('decidePnpmStoreOffers', () => {
     test(`holds back every folder for ${heldBackCase.name}`, () => {
       const offers = decidePnpmStoreOffers({
         storeState: buildStoreState({ folderNames: ['v2'] }),
+        storeRootRealPath: STORE_ROOT,
         installState: heldBackCase.installState,
         pins: heldBackCase.pins,
       });
@@ -366,6 +422,7 @@ describe('decidePnpmStoreOffers', () => {
   test('is complete for an empty store, whatever is held back', () => {
     const offers = decidePnpmStoreOffers({
       storeState: { folders: [] },
+      storeRootRealPath: STORE_ROOT,
       installState: NO_INSTALLS,
       pins: { kind: 'everyStoreVersion' },
     });
@@ -466,6 +523,7 @@ describe('comparePnpmStoreUnit', () => {
       comparePnpmStoreUnit({
         unit: unit,
         storeState: buildStoreState({ folderNames: ['v3'] }),
+        storeRootRealPath: STORE_ROOT,
         installState: NO_INSTALLS,
         pins: NO_PINS,
         processCommands: [],
@@ -478,7 +536,11 @@ describe('comparePnpmStoreUnit', () => {
       comparePnpmStoreUnit({
         unit: unit,
         storeState: buildStoreState({ folderNames: ['v3'] }),
-        installState: { installs: [buildParsedInstall({ versionText: '9.15.9', major: 9 })] },
+        storeRootRealPath: STORE_ROOT,
+        installState: {
+          installs: [buildParsedInstall({ versionText: '9.15.9', major: 9 })],
+          globalPackageRealPaths: [],
+        },
         pins: NO_PINS,
         processCommands: [],
       }),
@@ -490,6 +552,7 @@ describe('comparePnpmStoreUnit', () => {
       comparePnpmStoreUnit({
         unit: unit,
         storeState: buildStoreState({ folderNames: ['v3'] }),
+        storeRootRealPath: STORE_ROOT,
         installState: NO_INSTALLS,
         pins: NO_PINS,
         processCommands: [PNPM_PROCESS_COMMAND],
@@ -525,6 +588,7 @@ describe('loadPnpmInstallState', () => {
             major: 9,
           },
         ],
+        globalPackageRealPaths: [],
       },
     });
   });
@@ -545,6 +609,7 @@ describe('loadPnpmInstallState', () => {
             versionText: null,
           },
         ],
+        globalPackageRealPaths: [],
       },
     });
   });
@@ -795,6 +860,102 @@ for (const probeCase of probeCases) {
         isComplete: true,
       });
     });
+
+    const pnpmHomeInstallCases: {
+      place: string;
+      storeFolderName: string;
+      createInstall: () => Promise<void>;
+    }[] = [
+      {
+        place: "the global folder of pnpm's XDG home",
+        storeFolderName: 'v10',
+        createInstall: () =>
+          writePnpmPackage({
+            packageFolder: join(homeDir, '.local/share/pnpm/global/5/node_modules/pnpm'),
+            version: '10.14.0',
+          }),
+      },
+      {
+        place: '.tools/pnpm-exe beside its launcher script',
+        storeFolderName: 'v10',
+        createInstall: async () => {
+          await writeFixtureTextFile({
+            path: join(homeDir, 'Library/pnpm/.tools/pnpm-exe/10.22.0/pnpm'),
+            text: 'Ïúíþ executable',
+          });
+          await writeFixtureTextFile({
+            path: join(homeDir, 'Library/pnpm/pnpm'),
+            text: '#!/bin/sh\nexec "$basedir/.tools/pnpm-exe/10.22.0/pnpm" "$@"\n',
+          });
+        },
+      },
+      {
+        place: "an install folder of pnpm 11's global layout",
+        storeFolderName: 'v11',
+        createInstall: () =>
+          writePnpmPackage({
+            packageFolder: join(
+              homeDir,
+              'Library/pnpm/global/v11',
+              PNPM_11_INSTALL_ID,
+              'node_modules/pnpm',
+            ),
+            version: '11.1.2',
+          }),
+      },
+      {
+        place: "an install folder of pnpm 11's global layout as @pnpm/exe",
+        storeFolderName: 'v11',
+        createInstall: () =>
+          writePnpmPackage({
+            packageFolder: join(
+              homeDir,
+              'Library/pnpm/global/v11',
+              PNPM_11_INSTALL_ID,
+              'node_modules/@pnpm/exe',
+            ),
+            version: '11.1.2',
+          }),
+      },
+    ];
+
+    for (const homeInstallCase of pnpmHomeInstallCases) {
+      test(`offers nothing beside a pnpm in ${homeInstallCase.place}`, async () => {
+        await createStore({ folderNames: [homeInstallCase.storeFolderName] });
+        await homeInstallCase.createInstall();
+
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      });
+    }
+
+    for (const packageName of ['some-cli', '@scope/some-cli']) {
+      test(`keeps the store version the global package ${packageName} of pnpm 11 links into`, async () => {
+        const storeRoot = await createStore({ folderNames: ['v11'] });
+        const globalInstallsPath = join(homeDir, 'Library/pnpm/global/v11');
+        const installFolderPath = join(globalInstallsPath, PNPM_11_INSTALL_ID);
+        const packagePath = join(
+          storeRoot,
+          'v11/links/@',
+          packageName,
+          '1.0.0/0a1b2c/node_modules',
+          packageName,
+        );
+        const linkPath = join(installFolderPath, 'node_modules', packageName);
+        await createFixtureDirectory({ path: packagePath });
+        await createFixtureDirectory({ path: dirname(linkPath) });
+        await symlink(relative(dirname(linkPath), packagePath), linkPath);
+        await symlink(installFolderPath, join(globalInstallsPath, 'sibling-install'));
+        await createFixtureDirectory({ path: join(globalInstallsPath, 'empty-install') });
+
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      });
+    }
 
     const pinCases: { kind: ProjectPinFileKind; text: string }[] = [
       { kind: 'packageJson', text: '{"packageManager": "pnpm@10.14.0+sha512.0a1b"}' },

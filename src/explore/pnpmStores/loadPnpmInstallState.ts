@@ -13,6 +13,7 @@ import {
 import { MISE_INSTALLS_PATH_NAMES } from '../miseVersions/miseInstallsRoot.js';
 import { NVM_NODE_VERSIONS_PATH_NAMES } from '../nvmVersions/nvmVersionsRoot.js';
 import { parsePnpmVersionMajor } from './parsePnpmVersionMajor.js';
+import { PNPM_HOMES_PATH_NAMES } from './pnpmHomes.js';
 import { PNPM_TOOL_NAME } from './pnpmToolName.js';
 
 /** An installed pnpm whose version names its major. */
@@ -32,7 +33,20 @@ export type PnpmInstallUnparsed = {
 
 export type PnpmInstall = PnpmInstallParsed | PnpmInstallUnparsed;
 
-export type PnpmInstallState = { installs: PnpmInstall[] };
+export type PnpmInstallState = {
+  installs: PnpmInstall[];
+  /**
+   * The real paths of the global packages of pnpm's `global/v<digits>` layout, each a link into a
+   * store.
+   */
+  globalPackageRealPaths: AbsolutePath[];
+};
+
+/**
+ * pnpm's global folders, each real path once; `installFolderPaths` are those of the
+ * `global/v<digits>` layout.
+ */
+type PnpmGlobalFolders = { folderPaths: AbsolutePath[]; installFolderPaths: AbsolutePath[] };
 
 const COREPACK_PNPM_PATH_NAMES = [
   ['.cache', 'node', 'corepack', 'v1', 'pnpm'],
@@ -40,13 +54,15 @@ const COREPACK_PNPM_PATH_NAMES = [
 ];
 
 const PNPM_TOOLS_PATH_NAMES = [
-  ['Library', 'pnpm', '.tools', 'pnpm'],
-  ['Library', 'pnpm', '.tools', '@pnpm+exe'],
+  ['.tools', PNPM_TOOL_NAME],
+  ['.tools', '@pnpm+exe'],
+  ['.tools', 'pnpm-exe'],
 ];
 
-const PNPM_GLOBAL_PATH_NAMES = ['Library', 'pnpm', 'global'];
+const PNPM_GLOBAL_FOLDER_NAME = 'global';
 
-const PNPM_STANDALONE_PATH_NAMES = ['Library', 'pnpm', PNPM_TOOL_NAME];
+/** An entry of pnpm's `global` folder that holds install folders, such as pnpm 11's `v11`. */
+const PNPM_GLOBAL_INSTALLS_FOLDER_PATTERN = /^v\d+$/;
 
 const SCRIPT_SHEBANG = '#!';
 
@@ -58,9 +74,13 @@ const HOMEBREW_CELLAR_FOLDER_NAME = 'Cellar';
 
 const HOMEBREW_VERSIONED_PNPM_PREFIX = `${PNPM_TOOL_NAME}@`;
 
+const NODE_MODULES_FOLDER_NAME = 'node_modules';
+
+const PACKAGE_SCOPE_PREFIX = '@';
+
 const PNPM_PACKAGE_PATH_NAMES = [
-  ['node_modules', PNPM_TOOL_NAME],
-  ['node_modules', '@pnpm', 'exe'],
+  [NODE_MODULES_FOLDER_NAME, PNPM_TOOL_NAME],
+  [NODE_MODULES_FOLDER_NAME, '@pnpm', 'exe'],
 ];
 
 const NPM_GLOBAL_FOLDER_NAME = 'lib';
@@ -68,14 +88,18 @@ const NPM_GLOBAL_FOLDER_NAME = 'lib';
 const PACKAGE_JSON_FILE_NAME = 'package.json';
 
 /**
- * The pnpm installed in every place pnpm, corepack, asdf, mise, Homebrew, and the npm globals of
- * a node keep it; a missing place holds none. Each pnpm store probe and recheck loads it on its
- * own, a known cost of one probe per store root.
+ * The pnpm installed in every place corepack, asdf, mise, Homebrew, the npm globals of a node, and
+ * pnpm in each of its homes keep it (`.tools`, the global folders, the launcher `pnpm`), with the
+ * real paths of the global packages of the `global/v<digits>` layout; a missing place holds none.
+ * Each pnpm store probe and recheck loads it on its own, a known cost of one probe per store root.
  */
 export async function loadPnpmInstallState(params: {
   homeDir: AbsolutePath;
   homebrewPrefixPaths: AbsolutePath[];
 }): Promise<Result<PnpmInstallState, ExploreFileUnreadable>> {
+  const pnpmHomePaths = PNPM_HOMES_PATH_NAMES.map((names) =>
+    joinAbsolutePath({ parentPath: params.homeDir, names: names }),
+  );
   const cellarRoots = await loadHomebrewCellarPnpmRoots({
     homebrewPrefixPaths: params.homebrewPrefixPaths,
   });
@@ -86,7 +110,7 @@ export async function loadPnpmInstallState(params: {
 
   const folderInstalls = await loadVersionFolderInstalls({
     versionsRoots: [
-      ...listHomePnpmVersionsRoots({ homeDir: params.homeDir }),
+      ...listHomePnpmVersionsRoots({ homeDir: params.homeDir, pnpmHomePaths: pnpmHomePaths }),
       ...cellarRoots.value,
     ],
   });
@@ -95,9 +119,16 @@ export async function loadPnpmInstallState(params: {
     return folderInstalls;
   }
 
+  const globalFolders = await loadPnpmGlobalFolders({ pnpmHomePaths: pnpmHomePaths });
+
+  if (globalFolders.kind === 'failed') {
+    return globalFolders;
+  }
+
   const packageFolders = await loadPnpmPackageFolders({
     homeDir: params.homeDir,
     homebrewPrefixPaths: params.homebrewPrefixPaths,
+    globalFolderPaths: globalFolders.value.folderPaths,
   });
 
   if (packageFolders.kind === 'failed') {
@@ -110,33 +141,54 @@ export async function loadPnpmInstallState(params: {
     return packageInstalls;
   }
 
-  const standaloneInstall = await loadStandaloneInstall({ homeDir: params.homeDir });
+  const standaloneInstalls = await loadStandaloneInstalls({ pnpmHomePaths: pnpmHomePaths });
 
-  if (standaloneInstall.kind === 'failed') {
-    return standaloneInstall;
+  if (standaloneInstalls.kind === 'failed') {
+    return standaloneInstalls;
   }
 
-  const standaloneInstalls = standaloneInstall.value === null ? [] : [standaloneInstall.value];
+  const globalPackageLinkPaths = await loadGlobalPackageLinkPaths({
+    installFolderPaths: globalFolders.value.installFolderPaths,
+  });
+
+  if (globalPackageLinkPaths.kind === 'failed') {
+    return globalPackageLinkPaths;
+  }
+
+  const globalPackageRealPaths = await loadRealPaths({ paths: globalPackageLinkPaths.value });
+
+  if (globalPackageRealPaths.kind === 'failed') {
+    return globalPackageRealPaths;
+  }
 
   return {
     kind: 'succeeded',
     value: {
-      installs: [...folderInstalls.value, ...packageInstalls.value, ...standaloneInstalls],
+      installs: [...folderInstalls.value, ...packageInstalls.value, ...standaloneInstalls.value],
+      globalPackageRealPaths: globalPackageRealPaths.value,
     },
   };
 }
 
-function listHomePnpmVersionsRoots(params: { homeDir: AbsolutePath }): AbsolutePath[] {
+function listHomePnpmVersionsRoots(params: {
+  homeDir: AbsolutePath;
+  pnpmHomePaths: AbsolutePath[];
+}): AbsolutePath[] {
   const homePathNames = [
     [...ASDF_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME],
     [...MISE_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME],
     ...COREPACK_PNPM_PATH_NAMES,
-    ...PNPM_TOOLS_PATH_NAMES,
   ];
-
-  return homePathNames.map((names) =>
+  const homeRoots = homePathNames.map((names) =>
     joinAbsolutePath({ parentPath: params.homeDir, names: names }),
   );
+  const pnpmToolsRoots = params.pnpmHomePaths.flatMap((pnpmHomePath) =>
+    PNPM_TOOLS_PATH_NAMES.map((names) =>
+      joinAbsolutePath({ parentPath: pnpmHomePath, names: names }),
+    ),
+  );
+
+  return [...homeRoots, ...pnpmToolsRoots];
 }
 
 /** The Cellar folders of the formula `pnpm` and of each versioned formula `pnpm@<major>`. */
@@ -241,15 +293,8 @@ async function loadVersionsRootInstalls(params: {
 async function loadPnpmPackageFolders(params: {
   homeDir: AbsolutePath;
   homebrewPrefixPaths: AbsolutePath[];
+  globalFolderPaths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
-  const globalFolders = await loadEntryRealPaths({
-    folderPaths: [joinAbsolutePath({ parentPath: params.homeDir, names: PNPM_GLOBAL_PATH_NAMES })],
-  });
-
-  if (globalFolders.kind === 'failed') {
-    return globalFolders;
-  }
-
   const nodeInstallsRoots = [
     [...ASDF_INSTALLS_PATH_NAMES, ASDF_NODE_TOOL_NAME],
     [...MISE_INSTALLS_PATH_NAMES, MISE_NODE_TOOL_NAME],
@@ -261,7 +306,7 @@ async function loadPnpmPackageFolders(params: {
     return nodeFolders;
   }
 
-  const globalPackageFolders = globalFolders.value.flatMap((globalFolder) =>
+  const globalPackageFolders = params.globalFolderPaths.flatMap((globalFolder) =>
     PNPM_PACKAGE_PATH_NAMES.map((names) =>
       joinAbsolutePath({ parentPath: globalFolder, names: names }),
     ),
@@ -277,14 +322,125 @@ async function loadPnpmPackageFolders(params: {
 }
 
 /**
- * The executable pnpm's `install.sh` and `pnpm setup` copy to `~/Library/pnpm/pnpm`, an install
+ * pnpm's global folders in each pnpm home: each entry of `global` by its real path, except that
+ * the entries of an entry named `v<digits>` are the global folders in its place.
+ */
+async function loadPnpmGlobalFolders(params: {
+  pnpmHomePaths: AbsolutePath[];
+}): Promise<Result<PnpmGlobalFolders, ExploreFileUnreadable>> {
+  const entryPaths = await loadEntryPaths({
+    folderPaths: params.pnpmHomePaths.map((pnpmHomePath) =>
+      joinAbsolutePath({ parentPath: pnpmHomePath, names: [PNPM_GLOBAL_FOLDER_NAME] }),
+    ),
+  });
+
+  if (entryPaths.kind === 'failed') {
+    return entryPaths;
+  }
+
+  const installsFolderPaths = entryPaths.value.filter((entryPath) =>
+    isGlobalInstallsFolder({ entryPath: entryPath }),
+  );
+  const flatFolderPaths = entryPaths.value.filter(
+    (entryPath) => !isGlobalInstallsFolder({ entryPath: entryPath }),
+  );
+  const flatFolders = await loadRealPaths({ paths: flatFolderPaths });
+
+  if (flatFolders.kind === 'failed') {
+    return flatFolders;
+  }
+
+  const installFolders = await loadEntryRealPaths({ folderPaths: installsFolderPaths });
+
+  if (installFolders.kind === 'failed') {
+    return installFolders;
+  }
+
+  const folderPaths = new Set([...flatFolders.value, ...installFolders.value]);
+
+  return {
+    kind: 'succeeded',
+    value: { folderPaths: [...folderPaths], installFolderPaths: installFolders.value },
+  };
+}
+
+function isGlobalInstallsFolder(params: { entryPath: AbsolutePath }): boolean {
+  return PNPM_GLOBAL_INSTALLS_FOLDER_PATTERN.test(basename(params.entryPath));
+}
+
+/**
+ * The links in `node_modules` of each install folder, and one level below each `@<scope>` folder
+ * of it; a missing `node_modules` holds none.
+ */
+async function loadGlobalPackageLinkPaths(params: {
+  installFolderPaths: AbsolutePath[];
+}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
+  const linkPaths: AbsolutePath[] = [];
+
+  for (const installFolderPath of params.installFolderPaths) {
+    const nodeModulesPath = joinAbsolutePath({
+      parentPath: installFolderPath,
+      names: [NODE_MODULES_FOLDER_NAME],
+    });
+    const names = await loadExploreFolderNames({ path: nodeModulesPath });
+
+    if (names.kind === 'failed') {
+      return names;
+    }
+
+    if (names.value === null) {
+      continue;
+    }
+
+    const scopeFolderPaths = names.value.folderNames
+      .filter((folderName) => folderName.startsWith(PACKAGE_SCOPE_PREFIX))
+      .map((folderName) => joinAbsolutePath({ parentPath: nodeModulesPath, names: [folderName] }));
+    const scopedLinkPaths = await loadLinkPaths({ folderPaths: scopeFolderPaths });
+
+    if (scopedLinkPaths.kind === 'failed') {
+      return scopedLinkPaths;
+    }
+
+    linkPaths.push(
+      ...names.value.linkNames.map((linkName) =>
+        joinAbsolutePath({ parentPath: nodeModulesPath, names: [linkName] }),
+      ),
+      ...scopedLinkPaths.value,
+    );
+  }
+
+  return { kind: 'succeeded', value: linkPaths };
+}
+
+async function loadStandaloneInstalls(params: {
+  pnpmHomePaths: AbsolutePath[];
+}): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
+  const installs: PnpmInstall[] = [];
+
+  for (const pnpmHomePath of params.pnpmHomePaths) {
+    const install = await loadStandaloneInstall({ pnpmHomePath: pnpmHomePath });
+
+    if (install.kind === 'failed') {
+      return install;
+    }
+
+    if (install.value !== null) {
+      installs.push(install.value);
+    }
+  }
+
+  return { kind: 'succeeded', value: installs };
+}
+
+/**
+ * The executable pnpm's `install.sh` and `pnpm setup` copy to `pnpm` in a pnpm home, an install
  * of no known version; `null` when nothing is there or it is a script, which runs a pnpm of a place
  * read on its own.
  */
 async function loadStandaloneInstall(params: {
-  homeDir: AbsolutePath;
+  pnpmHomePath: AbsolutePath;
 }): Promise<Result<PnpmInstall | null, ExploreFileUnreadable>> {
-  const path = joinAbsolutePath({ parentPath: params.homeDir, names: PNPM_STANDALONE_PATH_NAMES });
+  const path = joinAbsolutePath({ parentPath: params.pnpmHomePath, names: [PNPM_TOOL_NAME] });
   const file = await loadExploreFileText({ path: path });
 
   if (file.kind === 'failed') {
@@ -310,7 +466,20 @@ async function loadStandaloneInstall(params: {
 async function loadEntryRealPaths(params: {
   folderPaths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
-  const realPaths = new Set<AbsolutePath>();
+  const entryPaths = await loadEntryPaths({ folderPaths: params.folderPaths });
+
+  if (entryPaths.kind === 'failed') {
+    return entryPaths;
+  }
+
+  return loadRealPaths({ paths: entryPaths.value });
+}
+
+/** The folders and the links in each of `folderPaths`; a missing folder holds none. */
+async function loadEntryPaths(params: {
+  folderPaths: AbsolutePath[];
+}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
+  const entryPaths: AbsolutePath[] = [];
 
   for (const folderPath of params.folderPaths) {
     const names = await loadExploreFolderNames({ path: folderPath });
@@ -321,19 +490,55 @@ async function loadEntryRealPaths(params: {
 
     const entryNames =
       names.value === null ? [] : [...names.value.folderNames, ...names.value.linkNames];
+    entryPaths.push(
+      ...entryNames.map((entryName) =>
+        joinAbsolutePath({ parentPath: folderPath, names: [entryName] }),
+      ),
+    );
+  }
 
-    for (const entryName of entryNames) {
-      const realPath = await loadExploreRealPath({
-        path: joinAbsolutePath({ parentPath: folderPath, names: [entryName] }),
-      });
+  return { kind: 'succeeded', value: entryPaths };
+}
 
-      if (realPath.kind === 'failed') {
-        return realPath;
-      }
+/** The links in each of `folderPaths`; a missing folder holds none. */
+async function loadLinkPaths(params: {
+  folderPaths: AbsolutePath[];
+}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
+  const linkPaths: AbsolutePath[] = [];
 
-      if (realPath.value !== null) {
-        realPaths.add(realPath.value);
-      }
+  for (const folderPath of params.folderPaths) {
+    const names = await loadExploreFolderNames({ path: folderPath });
+
+    if (names.kind === 'failed') {
+      return names;
+    }
+
+    const linkNames = names.value === null ? [] : names.value.linkNames;
+    linkPaths.push(
+      ...linkNames.map((linkName) =>
+        joinAbsolutePath({ parentPath: folderPath, names: [linkName] }),
+      ),
+    );
+  }
+
+  return { kind: 'succeeded', value: linkPaths };
+}
+
+/** The real path of each of `paths`, each real path once; a dangling link adds nothing. */
+async function loadRealPaths(params: {
+  paths: AbsolutePath[];
+}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
+  const realPaths = new Set<AbsolutePath>();
+
+  for (const path of params.paths) {
+    const realPath = await loadExploreRealPath({ path: path });
+
+    if (realPath.kind === 'failed') {
+      return realPath;
+    }
+
+    if (realPath.value !== null) {
+      realPaths.add(realPath.value);
     }
   }
 

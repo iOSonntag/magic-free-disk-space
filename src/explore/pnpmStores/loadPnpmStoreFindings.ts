@@ -1,5 +1,6 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
+import { loadExploreRealPath } from '../loadExploreRead.js';
 import type { ProjectPins } from '../projectPins/projectPins.js';
 import { listToolPinFileRefs, selectToolPins } from '../projectPins/selectToolPins.js';
 import { buildPnpmStoreFindings } from './buildPnpmStoreFindings.js';
@@ -10,7 +11,7 @@ import { PNPM_PIN_FILE_KINDS, toolPinsToPnpmPins } from './parsePnpmPins.js';
 
 /**
  * The store-version folders of the store at `storeRootPathNames` below the home folder that
- * neither an installed pnpm nor one a project pins uses.
+ * neither an installed pnpm nor one a project pins uses, and that no global package links into.
  */
 export async function loadPnpmStoreFindings(params: {
   run: ExploreProbeRun;
@@ -37,6 +38,16 @@ export async function loadPnpmStoreFindings(params: {
     return { kind: 'succeeded', value: { findings: [], isComplete: true } };
   }
 
+  const storeRootRealPath = await loadExploreRealPath({ path: storeRoot });
+
+  if (storeRootRealPath.kind === 'failed') {
+    return storeRootRealPath;
+  }
+
+  if (storeRootRealPath.value === null) {
+    return { kind: 'succeeded', value: { findings: [], isComplete: true } };
+  }
+
   const installState = await loadPnpmInstallState({
     homeDir: params.run.environment.homeDir,
     homebrewPrefixPaths: params.run.environment.homebrewPrefixPaths,
@@ -48,6 +59,7 @@ export async function loadPnpmStoreFindings(params: {
 
   const offers = decidePnpmStoreOffers({
     storeState: storeState.value,
+    storeRootRealPath: storeRootRealPath.value,
     installState: installState.value,
     pins: toolPinsToPnpmPins({ toolPins: toolPins.value }),
   });

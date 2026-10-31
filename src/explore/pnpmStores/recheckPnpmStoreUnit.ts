@@ -1,6 +1,7 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitPnpmStore } from '../exploreUnit.js';
+import { loadExploreRealPath } from '../loadExploreRead.js';
 import { loadProjectPinFiles } from '../projectPins/loadProjectPins.js';
 import { selectToolPins } from '../projectPins/selectToolPins.js';
 import { comparePnpmStoreUnit } from './comparePnpmStoreUnit.js';
@@ -18,6 +19,16 @@ export async function recheckPnpmStoreUnit(params: {
 
   if (storeState.kind === 'failed') {
     return storeState;
+  }
+
+  const storeRootRealPath = await loadExploreRealPath({ path: params.unit.storeRoot });
+
+  if (storeRootRealPath.kind === 'failed') {
+    return storeRootRealPath;
+  }
+
+  if (storeRootRealPath.value === null) {
+    return { kind: 'changed' };
   }
 
   const installState = await loadPnpmInstallState({
@@ -39,6 +50,7 @@ export async function recheckPnpmStoreUnit(params: {
   return comparePnpmStoreUnit({
     unit: params.unit,
     storeState: storeState.value,
+    storeRootRealPath: storeRootRealPath.value,
     installState: installState.value,
     pins: toolPinsToPnpmPins({ toolPins: toolPins.value }),
     processCommands: params.processCommands,
