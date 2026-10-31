@@ -39,6 +39,15 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   }
 
   const applicationDirs = ['/Applications', join(homeDir.value, 'Applications')];
+  const homebrewPrefixPaths = ['/opt/homebrew', '/usr/local'].map((prefixText) => {
+    const prefixPath = parseAbsolutePath({ text: prefixText });
+
+    if (prefixPath.kind === 'failed') {
+      throw new Error('A Homebrew prefix is not absolute.');
+    }
+
+    return prefixPath.value;
+  });
 
   const homeRealPath = await loadRealPath({ path: homeDir.value });
 
@@ -92,6 +101,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
       tempRealPath: tempRealPath.value,
       applicationDirs: applicationDirs,
       applicationRealPaths: applicationRealPaths,
+      homebrewPrefixPaths: homebrewPrefixPaths,
     }),
   };
 }

@@ -16,6 +16,7 @@ const ENVIRONMENT = buildEnvironment({
   tempRealPath: '/private/tmp/tester',
   applicationDirs: ['/Applications'],
   applicationRealPaths: ['/Applications'],
+  homebrewPrefixPaths: [],
 });
 
 const VALID_CANDIDATES: Candidate[] = [1, 2, 3, 4, 5, 6].map((index) =>

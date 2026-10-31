@@ -37,11 +37,13 @@ instead. Explore offers:
 - Tool versions no project pins: mise versions, with `mise uninstall`, and asdf versions, with
   `asdf uninstall`. Node.js versions of nvm that neither its default alias nor any `.nvmrc`
   resolves to are deleted as their folder.
+- pnpm store versions that neither an installed pnpm nor a pnpm pinned by a project uses, and that
+  hold no global virtual store, deleted as their folder.
 - Visual Studio Code extensions that VS Code marked for removal or that a newer version of them
   replaced, deleted as their folder.
 
 Other places are only shown with advice, because the tool that owns them must clean them:
-Docker images, the pnpm store, Homebrew apps, iPhone backups, and more.
+Docker images, Homebrew apps, iPhone backups, Spotify offline music, and more.
 
 ## Usage
 
@@ -160,7 +162,9 @@ emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsole
 learn which tool versions your projects pin, it reads their `.tool-versions`, `.nvmrc`,
 `build.gradle`, `build.gradle.kts`, and mise config files, the `package.json` files that have a
 `pnpm-lock.yaml` beside them, those of the configs mise tracks, nvm's alias files, and asdf's
-`~/.asdfrc`. It only reads them.
+`~/.asdfrc`. To learn which pnpm versions are installed, it reads the `package.json` of each pnpm
+installed as a global package of pnpm or npm, and pnpm's launchers in `~/Library/pnpm` and
+`~/.local/share/pnpm`. It only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
 simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
@@ -186,10 +190,10 @@ fixed environment that keeps it offline where the tool allows that.
   would be deleted with that folder.
 - An app's last use is read from the files the app writes, not from Spotlight, which does not
   record it reliably. An app with no such files is never offered.
-- A tool version or Android platform counts as pinned only by a pin file, such as a
-  `.tool-versions` or `build.gradle`, that the search for project build folders reaches in your
-  home folder, by a config mise tracks, or, for nvm, by its default alias. The search does not
-  reach a file in a folder more than 7 folders below your home folder, in a hidden folder, in a
+- A tool version, Android platform, or pnpm store version counts as pinned only by a pin file,
+  such as a `.tool-versions` or `build.gradle`, that the search for project build folders reaches
+  in your home folder, by a config mise tracks, or, for nvm, by its default alias. The search does
+  not reach a file in a folder more than 7 folders below your home folder, in a hidden folder, in a
   folder named like a project build folder, such as `node_modules`, in your `Applications`,
   `Library`, `Movies`, `Music`, `Pictures`, or `Public` folder, or outside your home folder, such
   as on a disk mounted elsewhere.

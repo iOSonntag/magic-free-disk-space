@@ -33,7 +33,7 @@ import { loadPnpmStoreFindings } from './pnpmStores/loadPnpmStoreFindings.js';
 import {
   PNPM_STORE_ROOT_PATH_NAMES,
   PNPM_XDG_STORE_ROOT_PATH_NAMES,
-} from './pnpmStores/pnpmStoreRoots.js';
+} from './pnpmStores/pnpmHomes.js';
 import type { ProjectPinsLoad } from './projectPins/loadProjectPins.js';
 import { buildSimulatorDeviceFindings } from './simulatorDevices/buildSimulatorDeviceFindings.js';
 import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
