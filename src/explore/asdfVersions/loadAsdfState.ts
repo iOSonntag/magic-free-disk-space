@@ -50,12 +50,12 @@ const ASDFRC_FILE_NAME = '.asdfrc';
 const LEGACY_VERSION_FILE_KEY = 'legacy_version_file';
 
 // asdf reads `~/.asdfrc` as ini: `=` or `:` ends the key, `#` or `;` starts a comment anywhere on
-// the line, and one pair of quotes around the value goes.
+// the line, and one pair of quotes around the key or the value goes.
 const ASDFRC_COMMENT_PATTERN = /[#;]/;
 
 const ASDFRC_SEPARATOR_PATTERN = /[=:]/;
 
-const ASDFRC_QUOTED_VALUE_PATTERN = /^(["'])(.*)\1$/;
+const ASDFRC_QUOTED_TEXT_PATTERN = /^("""|["'`])(.*)\1$/;
 
 /**
  * Reads asdf's version folders, the links beside them, and `legacy_version_file`, for the probe and
@@ -124,11 +124,11 @@ export function isAsdfLegacyVersionFileOn(params: { text: string }): boolean {
       continue;
     }
 
-    const key = content.slice(0, separatorIndex).trim();
+    const key = content.slice(0, separatorIndex).trim().replace(ASDFRC_QUOTED_TEXT_PATTERN, '$2');
     const value = content
       .slice(separatorIndex + 1)
       .trim()
-      .replace(ASDFRC_QUOTED_VALUE_PATTERN, '$2');
+      .replace(ASDFRC_QUOTED_TEXT_PATTERN, '$2');
 
     if (key === LEGACY_VERSION_FILE_KEY && value.toLowerCase() === 'yes') {
       return true;

@@ -157,11 +157,15 @@ describe('isAsdfLegacyVersionFileOn', () => {
     expect(isAsdfLegacyVersionFileOn({ text: '  legacy_version_file =  yes  # on\n' })).toBe(true);
   });
 
-  test('reads the value as asdf does: in any case, in quotes, after a colon, before a ;', () => {
+  test('reads the line as asdf does: in any case, in quotes, after a colon, before a ;', () => {
     for (const text of [
       'legacy_version_file = Yes\n',
       'legacy_version_file = YES\n',
       'legacy_version_file = "yes"\n',
+      'legacy_version_file = `yes`\n',
+      'legacy_version_file = """yes"""\n',
+      '"legacy_version_file" = yes\n',
+      '`legacy_version_file` = yes\n',
       'legacy_version_file: yes\n',
       'legacy_version_file = yes ; on\n',
     ]) {
