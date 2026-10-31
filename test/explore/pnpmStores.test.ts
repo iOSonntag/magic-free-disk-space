@@ -243,6 +243,7 @@ describe('parsePnpmPins', () => {
     { kind: 'toolVersions', text: 'pnpm system' },
     { kind: 'miseConfig', text: '[tools]\npnpm = "latest"\n' },
     { kind: 'miseConfig', text: 'tools = { pnpm = "10" }\n' },
+    { kind: 'miseConfig', text: 'tools = { "aqua:PNPM/PNPM" = "10" }\n' },
     { kind: 'miseConfig', text: '[tools]\npnpm = "prefix:10"\n' },
     { kind: 'miseConfig', text: '[tools]\npnpm = { version = "10" }\n' },
     { kind: 'miseConfig', text: '[tools]\npnpm = [\n  "10",\n]\n' },

@@ -206,7 +206,7 @@ function parseMiseEntryPins(params: { section: MiseSection; entry: TomlEntry }):
     case 'root':
       return parseMiseRootEntryPins({ entry: params.entry });
     case 'tools': {
-      if (!isPnpmKeyText({ keyText: params.entry.key })) {
+      if (!hasPnpmToolName({ text: params.entry.key })) {
         return NO_PIN_TEXTS;
       }
 
@@ -230,7 +230,7 @@ function parseMiseEntryPins(params: { section: MiseSection; entry: TomlEntry }):
  */
 function parseMiseRootEntryPins(params: { entry: TomlEntry }): PnpmPinTexts {
   if (parseTomlKey({ text: params.entry.key }) === MISE_TOOLS_TABLE) {
-    if (params.entry.value.includes(PNPM_TOOL_NAME)) {
+    if (hasPnpmToolName({ text: params.entry.value })) {
       return EVERY_STORE_VERSION;
     }
 
@@ -243,7 +243,7 @@ function parseMiseRootEntryPins(params: { entry: TomlEntry }): PnpmPinTexts {
 
   const keyText = params.entry.key.slice(MISE_TOOLS_SUBTABLE_PREFIX.length).trim();
 
-  if (!isPnpmKeyText({ keyText: keyText })) {
+  if (!hasPnpmToolName({ text: keyText })) {
     return NO_PIN_TEXTS;
   }
 
@@ -271,7 +271,7 @@ function decideMiseSection(params: { header: string }): MiseSection {
 
   const keyText = params.header.slice(MISE_TOOLS_SUBTABLE_PREFIX.length).trim();
 
-  if (!isPnpmKeyText({ keyText: keyText })) {
+  if (!hasPnpmToolName({ text: keyText })) {
     return { kind: 'other' };
   }
 
@@ -279,11 +279,11 @@ function decideMiseSection(params: { header: string }): MiseSection {
 }
 
 /**
- * Whether a mise tool key names pnpm: any key whose text holds it, whatever its backend, so a
- * plugin's tool such as `asdf:<owner>/asdf-pnpm` names pnpm too.
+ * Whether a mise tool key, or a `tools` value of keys, names pnpm: any text that holds it in any
+ * case, whatever its backend, so a plugin's tool such as `asdf:<owner>/asdf-pnpm` names pnpm too.
  */
-function isPnpmKeyText(params: { keyText: string }): boolean {
-  return params.keyText.toLowerCase().includes(PNPM_TOOL_NAME);
+function hasPnpmToolName(params: { text: string }): boolean {
+  return params.text.toLowerCase().includes(PNPM_TOOL_NAME);
 }
 
 function isMiseVersionKey(params: { keyText: string }): boolean {
