@@ -21,8 +21,6 @@ import type { CatalogTarget } from './findCatalogTargets.js';
 import { findCatalogTargets } from './findCatalogTargets.js';
 import { findLargeUserFiles } from './findLargeUserFiles.js';
 import { findLastSignOfUse } from './findLastSignOfUse.js';
-import type { ArtifactFinding } from './findProjectArtifacts.js';
-import { findProjectArtifacts } from './findProjectArtifacts.js';
 import type { ScanIssue } from './issue.js';
 import {
   DAY_MS,
@@ -44,6 +42,8 @@ import {
 } from './resolveOwnerState.js';
 import type { ScanPhase } from './scanPhase.js';
 import { EMPTY_SCAN_PHASE, mergeScanPhases } from './scanPhase.js';
+import type { ArtifactFinding } from './walkProjects.js';
+import { walkProjects } from './walkProjects.js';
 
 export type ScanOptions = {
   staleDays: number;
@@ -301,7 +301,7 @@ async function loadCatalogTargetPhase(params: {
 }
 
 async function loadArtifactPhase(params: { context: ScanContext }): Promise<ScanPhase> {
-  const found = await findProjectArtifacts({
+  const found = await walkProjects({
     homeDir: params.context.environment.homeDir,
     excludedTopNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     rules: PROJECT_ARTIFACT_RULES,

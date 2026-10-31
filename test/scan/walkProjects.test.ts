@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
-import { findProjectArtifacts } from '../../src/scan/findProjectArtifacts.js';
+import { walkProjects } from '../../src/scan/walkProjects.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -17,7 +17,7 @@ async function createEmptyFile(params: { path: string }): Promise<void> {
   await createFixtureFile({ path: params.path, sizeBytes: 0, modifiedMs: Date.now() });
 }
 
-describe('findProjectArtifacts', () => {
+describe('walkProjects', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -34,7 +34,7 @@ describe('findProjectArtifacts', () => {
     await createFixtureDirectory({ path: artifactPath });
     await createEmptyFile({ path: join(projectPath, 'package.json') });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -57,7 +57,7 @@ describe('findProjectArtifacts', () => {
   test('does not report node_modules without a marker file', async () => {
     await createFixtureDirectory({ path: join(fixtureRoot.homeDir, 'app', 'node_modules') });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -78,7 +78,7 @@ describe('findProjectArtifacts', () => {
       path: join(projectPath, 'node_modules', 'dependency', 'package.json'),
     });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -101,7 +101,7 @@ describe('findProjectArtifacts', () => {
     await createFixtureDirectory({ path: join(hiddenPath, 'node_modules') });
     await createEmptyFile({ path: join(hiddenPath, 'package.json') });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -123,7 +123,7 @@ describe('findProjectArtifacts', () => {
     await createFixtureDirectory({ path: join(nestedLibraryProjectPath, 'node_modules') });
     await createEmptyFile({ path: join(nestedLibraryProjectPath, 'package.json') });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: ['Library'],
       rules: PROJECT_ARTIFACT_RULES,
@@ -141,7 +141,7 @@ describe('findProjectArtifacts', () => {
     await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
     await createEmptyFile({ path: join(projectPath, 'package.json') });
 
-    const tooShallow = await findProjectArtifacts({
+    const tooShallow = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -151,7 +151,7 @@ describe('findProjectArtifacts', () => {
 
     expect(tooShallow).toEqual({ findings: [], issues: [] });
 
-    const atMaxDepth = await findProjectArtifacts({
+    const atMaxDepth = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -170,7 +170,7 @@ describe('findProjectArtifacts', () => {
     await createEmptyFile({ path: join(outsideProjectPath, 'package.json') });
     await symlink(outsideProjectPath, join(fixtureRoot.homeDir, 'app-link'));
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -187,7 +187,7 @@ describe('findProjectArtifacts', () => {
     await createEmptyFile({ path: join(projectPath, 'package.json') });
     await createEmptyFile({ path: join(projectPath, 'node_modules') });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -207,7 +207,7 @@ describe('findProjectArtifacts', () => {
     await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
     await createEmptyFile({ path: join(projectPath, 'package.json') });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -224,7 +224,7 @@ describe('findProjectArtifacts', () => {
   });
 
   test('returns nothing when the home folder is missing', async () => {
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: join(fixtureRoot.rootDir, 'missing-home'),
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,
@@ -240,7 +240,7 @@ describe('findProjectArtifacts', () => {
     await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
     await createEmptyFile({ path: join(projectPath, 'package.json') });
 
-    const result = await findProjectArtifacts({
+    const result = await walkProjects({
       homeDir: fixtureRoot.homeDir,
       excludedTopNames: [],
       rules: PROJECT_ARTIFACT_RULES,

@@ -18,7 +18,7 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
  * sorted by path, with the issues of the walk. Symbolic links are never followed; a passed
  * `deadlineMs` stops the walk with one `walkStopped` issue.
  */
-export async function findProjectArtifacts(params: {
+export async function walkProjects(params: {
   homeDir: string;
   excludedTopNames: string[];
   rules: ProjectArtifactRule[];
