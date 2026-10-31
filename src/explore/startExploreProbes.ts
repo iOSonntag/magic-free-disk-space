@@ -4,16 +4,19 @@ import type { ReadFailure } from '../system/readFailure.js';
 import type { LocatedTool, ToolLookupFailureUntrusted } from '../tools/findTrustedTool.js';
 import { findTrustedTool } from '../tools/findTrustedTool.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
+import { loadAndroidPlatformFindings } from './android/loadAndroidPlatformFindings.js';
 import {
   loadAndroidAvdFindings,
   loadAndroidEmulatorFindings,
   loadAndroidSystemImageFindings,
 } from './android/loadAndroidProbeFindings.js';
+import { loadAsdfVersionFindings } from './asdfVersions/loadAsdfVersionFindings.js';
 import { buildDartPubCacheFindings } from './dartPubCache/buildDartPubCacheFindings.js';
 import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
 import type {
   ExploreProbe,
   ExploreProbeFiles,
+  ExploreProbePinned,
   ExploreProbeRun,
   ExploreProbeTool,
   ExploreProbeToolRun,
@@ -25,6 +28,13 @@ import type { ExploreProbeDefinition } from './loadProbeOutput.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
 import { buildMiseVersionFindings } from './miseVersions/buildMiseVersionFindings.js';
 import { MISE_PRUNABLE_LIST_PROBE } from './miseVersions/parseMisePrunableVersions.js';
+import { loadNvmVersionFindings } from './nvmVersions/loadNvmVersionFindings.js';
+import { loadPnpmStoreFindings } from './pnpmStores/loadPnpmStoreFindings.js';
+import {
+  PNPM_STORE_ROOT_PATH_NAMES,
+  PNPM_XDG_STORE_ROOT_PATH_NAMES,
+} from './pnpmStores/pnpmStoreRoots.js';
+import type { ProjectPinsLoad } from './projectPins/loadProjectPins.js';
 import { buildSimulatorDeviceFindings } from './simulatorDevices/buildSimulatorDeviceFindings.js';
 import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
 import { loadSimulatorRuntimeFindings } from './simulatorRuntimes/loadSimulatorRuntimeFindings.js';
@@ -77,6 +87,8 @@ type ExploreProbeStart = {
   timeoutMs: number;
   /** The scan's cutoff of last use, the same value the scan context holds. */
   unusedCutoffMs: number;
+  /** The end of the project walk and the pins it found, which every pinned probe waits for. */
+  projectPins: ProjectPinsLoad;
 };
 
 const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
@@ -132,6 +144,53 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
     loadFindings: loadHomebrewFindings,
   },
   vscodeExtensions: { kind: 'files', loadFindings: loadVscodeExtensionFindings },
+  asdfVersions: {
+    kind: 'pinned',
+    buildProbe: (pinned) => ({
+      kind: 'tool',
+      toolName: 'asdf',
+      loadFindings: (run) => loadAsdfVersionFindings({ run: run, projectPins: pinned.projectPins }),
+    }),
+  },
+  nvmVersions: {
+    kind: 'pinned',
+    buildProbe: (pinned) => ({
+      kind: 'files',
+      loadFindings: (run) => loadNvmVersionFindings({ run: run, projectPins: pinned.projectPins }),
+    }),
+  },
+  androidPlatforms: {
+    kind: 'pinned',
+    buildProbe: (pinned) => ({
+      kind: 'files',
+      loadFindings: (run) =>
+        loadAndroidPlatformFindings({ run: run, projectPins: pinned.projectPins }),
+    }),
+  },
+  pnpmStores: {
+    kind: 'pinned',
+    buildProbe: (pinned) => ({
+      kind: 'files',
+      loadFindings: (run) =>
+        loadPnpmStoreFindings({
+          run: run,
+          projectPins: pinned.projectPins,
+          storeRootPathNames: PNPM_STORE_ROOT_PATH_NAMES,
+        }),
+    }),
+  },
+  pnpmStoresXdg: {
+    kind: 'pinned',
+    buildProbe: (pinned) => ({
+      kind: 'files',
+      loadFindings: (run) =>
+        loadPnpmStoreFindings({
+          run: run,
+          projectPins: pinned.projectPins,
+          storeRootPathNames: PNPM_XDG_STORE_ROOT_PATH_NAMES,
+        }),
+    }),
+  },
 };
 
 /**
@@ -161,6 +220,11 @@ export function startExploreProbes(
     }),
     homebrewIntel: runExploreProbe({ probe: EXPLORE_PROBES.homebrewIntel, start: params }),
     vscodeExtensions: runExploreProbe({ probe: EXPLORE_PROBES.vscodeExtensions, start: params }),
+    asdfVersions: runExploreProbe({ probe: EXPLORE_PROBES.asdfVersions, start: params }),
+    nvmVersions: runExploreProbe({ probe: EXPLORE_PROBES.nvmVersions, start: params }),
+    androidPlatforms: runExploreProbe({ probe: EXPLORE_PROBES.androidPlatforms, start: params }),
+    pnpmStores: runExploreProbe({ probe: EXPLORE_PROBES.pnpmStores, start: params }),
+    pnpmStoresXdg: runExploreProbe({ probe: EXPLORE_PROBES.pnpmStoresXdg, start: params }),
   };
 }
 
@@ -192,9 +256,10 @@ function buildCommandProbe<T>(params: {
 }
 
 /**
- * Runs one probe once the processes are read. It answers `timedOut` when it is still running
- * `timeoutMs` plus the grace later: the Xcode wait, the tool lookup, and the loader all count. A
- * command still running at the deadline fails first, naming its tool.
+ * Runs one probe once the processes are read, and a pinned one once the project walk ended too. It
+ * answers `timedOut` when it is still running `timeoutMs` plus the grace later: the Xcode wait,
+ * the read of the pins, the tool lookup, and the loader all count. A command still running at the
+ * deadline fails first, naming its tool.
  */
 export async function runExploreProbe(params: {
   probe: ExploreProbe;
@@ -202,6 +267,12 @@ export async function runExploreProbe(params: {
 }): Promise<ExploreProbeOutcome> {
   // The processes are read before any tool starts, or a probe's own tool would show as running.
   const processCommands = await params.start.processCommands;
+
+  // The walk has a limit of its own, so a pinned probe's limit starts once it ended.
+  if (params.probe.kind === 'pinned') {
+    await params.start.projectPins.walkEnded;
+  }
+
   const run: ExploreProbeRun = {
     environment: params.start.environment,
     processCommands: processCommands,
@@ -225,7 +296,28 @@ function runExploreProbeOfKind(params: {
       return runExploreToolProbe({ probe: params.probe, start: params.start, run: params.run });
     case 'files':
       return runExploreFilesProbe({ probe: params.probe, run: params.run });
+    case 'pinned':
+      return runExplorePinnedProbe({ probe: params.probe, start: params.start, run: params.run });
   }
+}
+
+/** Builds the probe from the pins and runs it; pins that could not be read fail it at their path. */
+async function runExplorePinnedProbe(params: {
+  probe: ExploreProbePinned;
+  start: ExploreProbeStart;
+  run: ExploreProbeRun;
+}): Promise<ExploreProbeOutcome> {
+  const pins = await params.start.projectPins.pins;
+
+  if (pins.kind === 'failed') {
+    return { kind: 'unreadable', path: pins.failure.path, failure: pins.failure.failure };
+  }
+
+  return runExploreProbeOfKind({
+    probe: params.probe.buildProbe({ projectPins: pins.value }),
+    start: params.start,
+    run: params.run,
+  });
 }
 
 /**

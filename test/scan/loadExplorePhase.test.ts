@@ -17,6 +17,7 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
+import { buildEmptyProjectPinsLoad } from '../explore/projectPinsFixtures.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -86,6 +87,11 @@ function buildProbes(
     homebrewAppleSilicon: Promise.resolve(outcomes.homebrewAppleSilicon ?? toolMissing),
     homebrewIntel: Promise.resolve(outcomes.homebrewIntel ?? toolMissing),
     vscodeExtensions: Promise.resolve(outcomes.vscodeExtensions ?? toolMissing),
+    asdfVersions: Promise.resolve(outcomes.asdfVersions ?? toolMissing),
+    nvmVersions: Promise.resolve(outcomes.nvmVersions ?? toolMissing),
+    androidPlatforms: Promise.resolve(outcomes.androidPlatforms ?? toolMissing),
+    pnpmStores: Promise.resolve(outcomes.pnpmStores ?? toolMissing),
+    pnpmStoresXdg: Promise.resolve(outcomes.pnpmStoresXdg ?? toolMissing),
   };
 }
 
@@ -181,6 +187,7 @@ describe('loadExplorePhase', () => {
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: 10_000,
       unusedCutoffMs: 0,
     });

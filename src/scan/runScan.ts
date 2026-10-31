@@ -127,6 +127,10 @@ export async function runScan(params: {
     ),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
     unusedCutoffMs: unusedCutoffMs,
+    projectPins: {
+      walkEnded: Promise.resolve(),
+      pins: Promise.resolve({ kind: 'succeeded', value: { files: [], isWalkComplete: false } }),
+    },
   });
   const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
     processCommandsLoad,

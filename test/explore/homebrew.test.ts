@@ -48,6 +48,7 @@ import {
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import { FIXTURE_HOME_DIR } from './probeOutputFixtures.js';
+import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -602,6 +603,7 @@ describe('with fake brews', () => {
       }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: 0,
     });
@@ -644,6 +646,7 @@ describe('with fake brews', () => {
       toolInstallLocations: buildFixtureToolLocations({ brewIntel: intel.path }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: 0,
     });

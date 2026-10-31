@@ -16,6 +16,11 @@ const EXPLORE_PROBE_IDS: Record<ExploreProbeId, true> = {
   homebrewAppleSilicon: true,
   homebrewIntel: true,
   vscodeExtensions: true,
+  asdfVersions: true,
+  nvmVersions: true,
+  androidPlatforms: true,
+  pnpmStores: true,
+  pnpmStoresXdg: true,
 };
 
 function isBlankText(text: string): boolean {

@@ -18,6 +18,7 @@ import {
   buildMisePrunableJson,
   buildSimulatorDeviceListJson,
 } from './probeOutputFixtures.js';
+import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -109,6 +110,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -147,6 +149,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve(null),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -172,6 +175,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: processCommands.promise,
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -198,6 +202,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -227,6 +232,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -253,6 +259,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -275,6 +282,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations({ dart: dart }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -293,6 +301,7 @@ describe('startExploreProbes', () => {
       }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });
@@ -313,6 +322,7 @@ describe('startExploreProbes', () => {
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+        projectPins: buildEmptyProjectPinsLoad(),
         timeoutMs: 50,
         unusedCutoffMs: UNUSED_CUTOFF_MS,
       },
@@ -334,6 +344,7 @@ describe('startExploreProbes', () => {
       toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: 100,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
     });

@@ -9,6 +9,7 @@ import {
   loadExploreEntryStats,
   loadExploreFileText,
 } from '../loadExploreRead.js';
+import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
 import type { AndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidIniText } from './parseAndroidIniText.js';
@@ -72,8 +73,6 @@ export type AndroidSdkState = {
   avds: AndroidAvd[] | null;
 };
 
-const SDK_FOLDER_NAMES = ['Library', 'Android', 'sdk'];
-
 const AVD_HOME_FOLDER_NAMES = ['.android', 'avd'];
 
 const AVD_INI_SUFFIX = '.ini';
@@ -98,7 +97,7 @@ export async function loadAndroidSdkState(params: {
   homeDir: AbsolutePath;
 }): Promise<Result<AndroidSdkState, ExploreFileUnreadable>> {
   const sdk = await loadAndroidSdk({
-    sdkRoot: joinAbsolutePath({ parentPath: params.homeDir, names: SDK_FOLDER_NAMES }),
+    sdkRoot: joinAbsolutePath({ parentPath: params.homeDir, names: ANDROID_SDK_PATH_NAMES }),
   });
 
   if (sdk.kind === 'failed') {

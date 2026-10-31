@@ -69,6 +69,41 @@ export async function loadExploreDirectoryEntries(params: {
   return toNullWhenNotFound({ path: params.path, failure: entries.failure });
 }
 
+/** The real folders and the symbolic links of a folder, each sorted, without dot names. */
+export type ExploreFolderNames = { folderNames: string[]; linkNames: string[] };
+
+/**
+ * The install folders a tool keeps in a folder, the one rule of a tool's version list; `null`
+ * when nothing is there or it is no folder.
+ */
+export async function loadExploreFolderNames(params: {
+  path: string;
+}): Promise<Result<ExploreFolderNames | null, ExploreFileUnreadable>> {
+  const entries = await loadExploreDirectoryEntries({ path: params.path });
+
+  if (entries.kind === 'failed') {
+    return entries;
+  }
+
+  if (entries.value === null) {
+    return { kind: 'succeeded', value: null };
+  }
+
+  const visibleEntries = entries.value.filter((entry) => !entry.name.startsWith('.'));
+
+  return {
+    kind: 'succeeded',
+    value: {
+      folderNames: visibleEntries
+        .filter((entry) => entry.kind === 'directory')
+        .map((entry) => entry.name),
+      linkNames: visibleEntries
+        .filter((entry) => entry.kind === 'symbolicLink')
+        .map((entry) => entry.name),
+    },
+  };
+}
+
 /** The stats of the entry itself; `null` when nothing is there. */
 export async function loadExploreEntryStats(params: {
   path: string;

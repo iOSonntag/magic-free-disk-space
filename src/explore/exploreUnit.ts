@@ -5,8 +5,12 @@ import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolCommandFailure } from '../tools/runToolCommand.js';
 import { buildToolArguments } from '../tools/runToolCommand.js';
 import type { AndroidAvdName } from './android/parseAndroidAvdName.js';
+import type { AsdfToolName, AsdfToolVersion } from './asdfVersions/parseAsdfInstallNames.js';
 import type { HomebrewFormulaName } from './homebrew/parseHomebrewFormulaName.js';
 import type { MiseToolName, MiseToolVersion } from './miseVersions/parseMisePrunableVersions.js';
+import type { NvmNodeVersion } from './nvmVersions/parseNvmNodeVersion.js';
+import type { PnpmStoreVersion } from './pnpmStores/parsePnpmStoreVersion.js';
+import type { ProjectPinFileRef } from './projectPins/projectPins.js';
 import type { SimulatorDeviceUdid } from './simulatorDevices/parseSimulatorDeviceList.js';
 import type { SimulatorRuntimeId } from './simulatorRuntimes/parseSimulatorRuntimeId.js';
 
@@ -78,6 +82,19 @@ export type ExploreToolUnitHomebrew =
   | ExploreToolUnitHomebrewOldVersions
   | ExploreToolUnitHomebrewOrphans;
 
+/**
+ * An installed asdf version that no `.tool-versions` found names. `pinFiles` are the tool's pin
+ * files the scan read, which the recheck reads again with their kinds.
+ */
+export type ExploreToolUnitAsdfVersion = {
+  kind: 'asdfVersion';
+  tool: LocatedTool;
+  asdfToolName: AsdfToolName;
+  version: AsdfToolVersion;
+  installPath: AbsolutePath;
+  pinFiles: ProjectPinFileRef[];
+};
+
 /** An item a developer tool owns and removes with its own command. */
 export type ExploreToolUnit =
   | ExploreToolUnitSimulatorDevice
@@ -85,7 +102,8 @@ export type ExploreToolUnit =
   | ExploreToolUnitMiseVersion
   | ExploreToolUnitSimulatorRuntime
   | ExploreToolUnitAndroidAvd
-  | ExploreToolUnitHomebrew;
+  | ExploreToolUnitHomebrew
+  | ExploreToolUnitAsdfVersion;
 
 /** A system image folder of the SDK that no AVD names. */
 export type ExplorePathUnitAndroidSystemImage = {
@@ -119,10 +137,49 @@ export type ExplorePathUnitVscodeExtension = {
 };
 
 /**
+ * An nvm node version that neither the default alias nor any `.nvmrc` found resolves to.
+ * `pinFiles` are the `.nvmrc` files the scan read, which the recheck reads again.
+ */
+export type ExplorePathUnitNvmVersion = {
+  kind: 'nvmVersion';
+  folderPath: AbsolutePath;
+  version: NvmNodeVersion;
+  pinFiles: ProjectPinFileRef[];
+};
+
+/**
+ * A platform folder `platforms;android-<apiLevel>` of the SDK that no Gradle file found compiles
+ * against. `pinFiles` are the Gradle files the scan read, which the recheck reads again.
+ */
+export type ExplorePathUnitAndroidPlatform = {
+  kind: 'androidPlatform';
+  sdkRoot: AbsolutePath;
+  folderPath: AbsolutePath;
+  apiLevel: number;
+  pinFiles: ProjectPinFileRef[];
+};
+
+/**
+ * A store-version folder of pnpm that neither an installed pnpm nor one a project pins uses.
+ * `pinFiles` are the pnpm pin files the scan read, which the recheck reads again.
+ */
+export type ExplorePathUnitPnpmStore = {
+  kind: 'pnpmStore';
+  folderPath: AbsolutePath;
+  storeVersion: PnpmStoreVersion;
+  pinFiles: ProjectPinFileRef[];
+};
+
+/**
  * An item whose tool has no command for it, so the app deletes its one folder. `folderPath` is the
  * one home of that folder: the candidate's path and the deletion both take it from there.
  */
-export type ExplorePathUnit = ExplorePathUnitAndroidPackage | ExplorePathUnitVscodeExtension;
+export type ExplorePathUnit =
+  | ExplorePathUnitAndroidPackage
+  | ExplorePathUnitVscodeExtension
+  | ExplorePathUnitNvmVersion
+  | ExplorePathUnitAndroidPlatform
+  | ExplorePathUnitPnpmStore;
 
 export type ExploreUnit = ExploreToolUnit | ExplorePathUnit;
 
@@ -182,9 +239,14 @@ export function listUnitPaths(unit: ExploreUnit): AbsolutePath[] {
       return unit.kegPaths;
     case 'homebrewOrphans':
       return unit.rackPaths;
+    case 'asdfVersion':
+      return [unit.installPath];
     case 'androidSystemImage':
     case 'androidEmulator':
     case 'vscodeExtension':
+    case 'nvmVersion':
+    case 'androidPlatform':
+    case 'pnpmStore':
       return [unit.folderPath];
   }
 }
@@ -206,6 +268,8 @@ export function buildUnitCommand(unit: ExploreToolUnit): string[] {
       return ['cleanup', unit.formula];
     case 'homebrewOrphans':
       return ['autoremove'];
+    case 'asdfVersion':
+      return ['uninstall', unit.asdfToolName, unit.version];
   }
 }
 
