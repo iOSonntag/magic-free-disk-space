@@ -37,8 +37,8 @@ instead. Explore offers:
 - Tool versions no project pins: mise versions, with `mise uninstall`, and asdf versions, with
   `asdf uninstall`. Node.js versions of nvm that neither its default alias nor any `.nvmrc`
   resolves to are deleted as their folder.
-- pnpm store versions that neither an installed pnpm nor a pnpm a project pins uses, deleted as
-  their folder.
+- pnpm store versions that neither an installed pnpm nor a pnpm pinned by a project uses, and that
+  hold no global virtual store, deleted as their folder.
 - Visual Studio Code extensions that VS Code marked for removal or that a newer version of them
   replaced, deleted as their folder.
 
