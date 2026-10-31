@@ -7,6 +7,7 @@ import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
@@ -125,6 +126,7 @@ export async function runScan(params: {
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: SCAN_LIMITS.projectMaxDepth,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
+    isFolderEvicted: hasDatalessFlag,
   });
   const projectPins: ProjectPinsLoad = {
     walkEnded: projectWalk.then(() => undefined),

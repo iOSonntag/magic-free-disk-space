@@ -37,6 +37,7 @@ function walkTestProjects(params: {
   excludedTopNames?: string[];
   maxDepth?: number;
   deadlineMs?: number;
+  isFolderEvicted?: (folder: { path: string }) => boolean;
 }): Promise<ProjectWalk> {
   return walkProjects({
     homeDir: params.homeDir,
@@ -44,6 +45,7 @@ function walkTestProjects(params: {
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: params.maxDepth ?? 4,
     deadlineMs: params.deadlineMs ?? NO_DEADLINE_MS,
+    isFolderEvicted: params.isFolderEvicted ?? (() => false),
   });
 }
 
@@ -198,6 +200,21 @@ describe('walkProjects', () => {
     expect(result.issues).toEqual([
       { path: lockedPath, reason: 'permissionDenied', detail: 'EACCES' },
     ]);
+  });
+
+  test('skips an evicted project folder without an issue, and is not complete', async () => {
+    const evictedProjectPath = join(fixtureRoot.homeDir, 'old-app');
+    await createFixtureDirectory({ path: evictedProjectPath });
+    await createEmptyFile({ path: join(evictedProjectPath, '.nvmrc') });
+
+    const evictedWalk = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      isFolderEvicted: (folder) => folder.path === evictedProjectPath,
+    });
+    const residentWalk = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+
+    expect(evictedWalk).toEqual({ artifacts: [], pinFiles: [], isComplete: false, issues: [] });
+    expect(residentWalk.isComplete).toBe(true);
   });
 
   test('returns nothing, and is complete, when the home folder is missing', async () => {

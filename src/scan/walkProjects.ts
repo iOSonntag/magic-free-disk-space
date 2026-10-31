@@ -19,7 +19,7 @@ export type ProjectWalk = {
   /** Sorted by path. */
   artifacts: ArtifactFinding[];
   pinFiles: ProjectPinFileRef[];
-  /** False when the walk stopped at its deadline or could not read a folder. */
+  /** False when the walk stopped at its deadline, or could not read or skipped an evicted folder. */
   isComplete: boolean;
   issues: ScanIssue[];
 };
@@ -37,12 +37,14 @@ export async function walkProjects(params: {
   rules: ProjectArtifactRule[];
   maxDepth: number;
   deadlineMs: number;
+  isFolderEvicted: (folder: { path: string }) => boolean;
 }): Promise<ProjectWalk> {
   const artifactNames = new Set(params.rules.map((rule) => rule.artifactName));
   const artifacts: ArtifactFinding[] = [];
   const pinFiles: ProjectPinFileRef[] = [];
   const issues: ScanIssue[] = [];
   let hasUnreadableFolder = false;
+  let hasEvictedFolder = false;
 
   function visitProjectEntry(entry: TreeEntry): TreeEntryVisit {
     if (entry.kind === 'file' || entry.kind === 'symbolicLink') {
@@ -94,6 +96,7 @@ export async function walkProjects(params: {
     isStatsNeeded: false,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
+    isFolderEvicted: params.isFolderEvicted,
     visitEntry: visitProjectEntry,
     onUnreadable: (unreadable) => {
       const readIssues = buildFailureIssues({ path: unreadable.path, failure: unreadable.failure });
@@ -103,6 +106,10 @@ export async function walkProjects(params: {
       }
 
       issues.push(...readIssues);
+    },
+    // An evicted folder is no read failure, yet the pin files below it stay unknown.
+    onEvictedFolderSkipped: () => {
+      hasEvictedFolder = true;
     },
   });
 
@@ -115,7 +122,7 @@ export async function walkProjects(params: {
       left.artifactPath < right.artifactPath ? -1 : 1,
     ),
     pinFiles: pinFiles,
-    isComplete: walkEnd === 'completed' && !hasUnreadableFolder,
+    isComplete: walkEnd === 'completed' && !hasUnreadableFolder && !hasEvictedFolder,
     issues: issues,
   };
 }

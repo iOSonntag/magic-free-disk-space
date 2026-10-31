@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { hasDatalessFlag } from './hasDatalessFlag.js';
 import type { DirectoryEntry } from './loadDirectoryEntries.js';
 import { loadDirectoryEntries } from './loadDirectoryEntries.js';
 import type { DirectoryFailure } from './loadDirectoryNames.js';
@@ -33,15 +32,18 @@ type PendingDirectory = { path: string; depth: number };
  * once, and asks `visitEntry` about every entry. Waiting folders are kept as paths, so a wide
  * tree costs memory for its paths only. Returns `stopped` once `visitEntry` returned `stop` or
  * `isStopped` turned true. A vanished entry is left out; an unreadable one goes to `onUnreadable`.
- * An evicted iCloud folder is visited but never read, so the walk downloads nothing.
+ * A folder `isFolderEvicted` marks, such as an evicted iCloud folder, is visited but never read,
+ * so the walk downloads nothing, and goes to `onEvictedFolderSkipped`.
  */
 export function walkDirectoryTree(params: {
   rootPath: string;
   isStatsNeeded: boolean;
   maxConcurrentDirectories: number;
   isStopped: () => boolean;
+  isFolderEvicted: (folder: { path: string }) => boolean;
   visitEntry: (entry: TreeEntry) => TreeEntryVisit;
   onUnreadable: (unreadable: TreeUnreadable) => void;
+  onEvictedFolderSkipped: () => void;
 }): Promise<TreeWalkEnd> {
   const pendingDirectories: PendingDirectory[] = [{ path: params.rootPath, depth: 0 }];
   let activeCount = 0;
@@ -55,7 +57,9 @@ export function walkDirectoryTree(params: {
     }
 
     // An evicted iCloud folder holds nothing on this disk, and reading it would download it.
-    if (hasDatalessFlag({ path: directory.path })) {
+    if (params.isFolderEvicted({ path: directory.path })) {
+      params.onEvictedFolderSkipped();
+
       return;
     }
 

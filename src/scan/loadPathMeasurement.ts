@@ -1,5 +1,6 @@
 import { dirname } from 'node:path';
 import type { Result } from '../result.js';
+import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
@@ -72,6 +73,7 @@ export async function loadPathMeasurement(params: {
     isStatsNeeded: true,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
+    isFolderEvicted: hasDatalessFlag,
     visitEntry: (entry) => {
       if (entry.stats === null) {
         return 'skip';
@@ -99,6 +101,7 @@ export async function loadPathMeasurement(params: {
     onUnreadable: () => {
       unreadableCount += 1;
     },
+    onEvictedFolderSkipped: () => undefined,
   });
 
   return {
