@@ -1,6 +1,5 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
-import { loadExploreRealPath } from '../loadExploreRead.js';
 import type { ProjectPins } from '../projectPins/projectPins.js';
 import { listToolPinFileRefs, selectToolPins } from '../projectPins/selectToolPins.js';
 import { buildPnpmStoreFindings } from './buildPnpmStoreFindings.js';
@@ -38,16 +37,6 @@ export async function loadPnpmStoreFindings(params: {
     return { kind: 'succeeded', value: { findings: [], isComplete: true } };
   }
 
-  const storeRootRealPath = await loadExploreRealPath({ path: storeRoot });
-
-  if (storeRootRealPath.kind === 'failed') {
-    return storeRootRealPath;
-  }
-
-  if (storeRootRealPath.value === null) {
-    return { kind: 'succeeded', value: { findings: [], isComplete: true } };
-  }
-
   const installState = await loadPnpmInstallState({
     homeDir: params.run.environment.homeDir,
     homebrewPrefixPaths: params.run.environment.homebrewPrefixPaths,
@@ -59,7 +48,6 @@ export async function loadPnpmStoreFindings(params: {
 
   const offers = decidePnpmStoreOffers({
     storeState: storeState.value,
-    storeRootRealPath: storeRootRealPath.value,
     installState: installState.value,
     pins: toolPinsToPnpmPins({ toolPins: toolPins.value }),
   });

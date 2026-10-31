@@ -1,4 +1,3 @@
-import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitPnpmStore } from '../exploreUnit.js';
@@ -14,14 +13,12 @@ import type { PnpmPins } from './parsePnpmPins.js';
 export function comparePnpmStoreUnit(params: {
   unit: ExplorePathUnitPnpmStore;
   storeState: PnpmStoreState;
-  storeRootRealPath: AbsolutePath;
   installState: PnpmInstallState;
   pins: PnpmPins;
   processCommands: string[] | null;
 }): UnitComparison {
   const offers = decidePnpmStoreOffers({
     storeState: params.storeState,
-    storeRootRealPath: params.storeRootRealPath,
     installState: params.installState,
     pins: params.pins,
   });

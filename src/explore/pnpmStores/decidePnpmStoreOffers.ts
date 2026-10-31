@@ -1,6 +1,4 @@
-import { basename } from 'node:path';
 import { isSameOrInsidePath } from '../../path/isSameOrInsidePath.js';
-import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PnpmInstallState } from './loadPnpmInstallState.js';
 import type { PnpmStoreState } from './loadPnpmStoreState.js';
@@ -39,11 +37,10 @@ type StoreVersionsInUse = StoreVersionsInUseKnown | StoreVersionsInUseEvery;
 
 /**
  * Offers each store folder whose version no installed or pinned pnpm uses and that no global
- * package links into, judged by its real path: its name below `storeRootRealPath`.
+ * package links into, judged by its real path.
  */
 export function decidePnpmStoreOffers(params: {
   storeState: PnpmStoreState;
-  storeRootRealPath: AbsolutePath;
   installState: PnpmInstallState;
   pins: PnpmPins;
 }): PnpmStoreOffers {
@@ -63,10 +60,7 @@ export function decidePnpmStoreOffers(params: {
     }
 
     const isLinkedInto = isStoreFolderLinkedInto({
-      folderRealPath: joinAbsolutePath({
-        parentPath: params.storeRootRealPath,
-        names: [basename(folder.folderPath)],
-      }),
+      folderRealPath: folder.realPath,
       globalPackageRealPaths: params.installState.globalPackageRealPaths,
     });
 

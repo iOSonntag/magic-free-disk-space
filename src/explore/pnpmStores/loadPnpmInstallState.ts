@@ -332,10 +332,11 @@ async function loadPnpmGlobalFolders(params: {
     return entryPaths;
   }
 
-  const installsFolderPaths = entryPaths.value.filter((entryPath) =>
+  const globalEntryPaths = [...entryPaths.value.folderPaths, ...entryPaths.value.linkPaths];
+  const installsFolderPaths = globalEntryPaths.filter((entryPath) =>
     isGlobalInstallsFolder({ entryPath: entryPath }),
   );
-  const flatFolderPaths = entryPaths.value.filter(
+  const flatFolderPaths = globalEntryPaths.filter(
     (entryPath) => !isGlobalInstallsFolder({ entryPath: entryPath }),
   );
   const flatFolders = await loadRealPaths({ paths: flatFolderPaths });
@@ -369,35 +370,26 @@ async function loadGlobalPackageLinkPaths(params: {
   const linkPaths: AbsolutePath[] = [];
 
   for (const globalFolderPath of params.globalFolderPaths) {
-    const nodeModulesPath = joinAbsolutePath({
-      parentPath: globalFolderPath,
-      names: [NODE_MODULES_FOLDER_NAME],
+    const nodeModulesEntries = await loadEntryPaths({
+      folderPaths: [
+        joinAbsolutePath({ parentPath: globalFolderPath, names: [NODE_MODULES_FOLDER_NAME] }),
+      ],
     });
-    const names = await loadExploreFolderNames({ path: nodeModulesPath });
 
-    if (names.kind === 'failed') {
-      return names;
+    if (nodeModulesEntries.kind === 'failed') {
+      return nodeModulesEntries;
     }
 
-    if (names.value === null) {
-      continue;
-    }
-
-    const scopeFolderPaths = names.value.folderNames
-      .filter((folderName) => folderName.startsWith(PACKAGE_SCOPE_PREFIX))
-      .map((folderName) => joinAbsolutePath({ parentPath: nodeModulesPath, names: [folderName] }));
-    const scopedLinkPaths = await loadLinkPaths({ folderPaths: scopeFolderPaths });
-
-    if (scopedLinkPaths.kind === 'failed') {
-      return scopedLinkPaths;
-    }
-
-    linkPaths.push(
-      ...names.value.linkNames.map((linkName) =>
-        joinAbsolutePath({ parentPath: nodeModulesPath, names: [linkName] }),
-      ),
-      ...scopedLinkPaths.value,
+    const scopeFolderPaths = nodeModulesEntries.value.folderPaths.filter((folderPath) =>
+      basename(folderPath).startsWith(PACKAGE_SCOPE_PREFIX),
     );
+    const scopeEntries = await loadEntryPaths({ folderPaths: scopeFolderPaths });
+
+    if (scopeEntries.kind === 'failed') {
+      return scopeEntries;
+    }
+
+    linkPaths.push(...nodeModulesEntries.value.linkPaths, ...scopeEntries.value.linkPaths);
   }
 
   return { kind: 'succeeded', value: linkPaths };
@@ -463,38 +455,18 @@ async function loadEntryRealPaths(params: {
     return entryPaths;
   }
 
-  return loadRealPaths({ paths: entryPaths.value });
+  return loadRealPaths({
+    paths: [...entryPaths.value.folderPaths, ...entryPaths.value.linkPaths],
+  });
 }
+
+type EntryPaths = { folderPaths: AbsolutePath[]; linkPaths: AbsolutePath[] };
 
 /** The folders and the links in each of `folderPaths`; a missing folder holds none. */
 async function loadEntryPaths(params: {
   folderPaths: AbsolutePath[];
-}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
-  const entryPaths: AbsolutePath[] = [];
-
-  for (const folderPath of params.folderPaths) {
-    const names = await loadExploreFolderNames({ path: folderPath });
-
-    if (names.kind === 'failed') {
-      return names;
-    }
-
-    const entryNames =
-      names.value === null ? [] : [...names.value.folderNames, ...names.value.linkNames];
-    entryPaths.push(
-      ...entryNames.map((entryName) =>
-        joinAbsolutePath({ parentPath: folderPath, names: [entryName] }),
-      ),
-    );
-  }
-
-  return { kind: 'succeeded', value: entryPaths };
-}
-
-/** The links in each of `folderPaths`; a missing folder holds none. */
-async function loadLinkPaths(params: {
-  folderPaths: AbsolutePath[];
-}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
+}): Promise<Result<EntryPaths, ExploreFileUnreadable>> {
+  const folderPaths: AbsolutePath[] = [];
   const linkPaths: AbsolutePath[] = [];
 
   for (const folderPath of params.folderPaths) {
@@ -504,15 +476,23 @@ async function loadLinkPaths(params: {
       return names;
     }
 
-    const linkNames = names.value === null ? [] : names.value.linkNames;
+    if (names.value === null) {
+      continue;
+    }
+
+    folderPaths.push(
+      ...names.value.folderNames.map((folderName) =>
+        joinAbsolutePath({ parentPath: folderPath, names: [folderName] }),
+      ),
+    );
     linkPaths.push(
-      ...linkNames.map((linkName) =>
+      ...names.value.linkNames.map((linkName) =>
         joinAbsolutePath({ parentPath: folderPath, names: [linkName] }),
       ),
     );
   }
 
-  return { kind: 'succeeded', value: linkPaths };
+  return { kind: 'succeeded', value: { folderPaths: folderPaths, linkPaths: linkPaths } };
 }
 
 /** The real path of each of `paths`, each real path once; a dangling link adds nothing. */
