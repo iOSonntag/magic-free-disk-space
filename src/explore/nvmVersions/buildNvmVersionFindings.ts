@@ -4,7 +4,7 @@ import type { ProjectPinFileRef, ProjectPins } from '../projectPins/projectPins.
 import {
   buildProjectSearchEvidence,
   PINNED_VERSION_REINSTALL_EXPLANATION,
-} from '../projectPins/selectToolPins.js';
+} from '../projectPins/projectSearchEvidence.js';
 import type { NvmDefaultAlias, NvmVersionOffers } from './decideNvmVersionOffers.js';
 
 /** One finding for each offered version folder; complete exactly when the offers are. */

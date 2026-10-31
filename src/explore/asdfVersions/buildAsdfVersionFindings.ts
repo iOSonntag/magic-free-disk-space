@@ -1,12 +1,13 @@
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
-import type { ProjectPinFileRef, ProjectPins } from '../projectPins/projectPins.js';
-import type { ToolPins } from '../projectPins/selectToolPins.js';
+import type { ProjectPins } from '../projectPins/projectPins.js';
 import {
   buildProjectSearchEvidence,
   PINNED_VERSION_REINSTALL_EXPLANATION,
-} from '../projectPins/selectToolPins.js';
+} from '../projectPins/projectSearchEvidence.js';
+import type { ToolPins } from '../projectPins/selectToolPins.js';
+import { listToolPinFileRefs } from '../projectPins/selectToolPins.js';
 import type { AsdfVersionFolderParsed } from './loadAsdfState.js';
 
 export function buildAsdfVersionFindings(params: {
@@ -46,13 +47,4 @@ export function buildAsdfVersionFindings(params: {
 
     return finding;
   });
-}
-
-function listToolPinFileRefs(params: { toolPins: ToolPins }): ProjectPinFileRef[] {
-  switch (params.toolPins.kind) {
-    case 'everyVersionPinned':
-      return [];
-    case 'texts':
-      return params.toolPins.files.map((file) => ({ path: file.path, kind: file.kind }));
-  }
 }
