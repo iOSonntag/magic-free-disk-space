@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from '../../src/explore/limits.js';
+import type { ProjectPins } from '../../src/explore/projectPins/projectPins.js';
 import { runExploreProbe, startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -18,7 +20,12 @@ import {
   buildMisePrunableJson,
   buildSimulatorDeviceListJson,
 } from './probeOutputFixtures.js';
-import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
+import {
+  buildEmptyProjectPinsLoad,
+  buildSettledProjectPinsLoad,
+  buildTestPinFileText,
+  buildTestProjectPins,
+} from './projectPinsFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -323,6 +330,111 @@ describe('startExploreProbes', () => {
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
         projectPins: buildEmptyProjectPinsLoad(),
+        timeoutMs: 50,
+        unusedCutoffMs: UNUSED_CUTOFF_MS,
+      },
+    });
+
+    expect(outcome).toEqual({ kind: 'timedOut' });
+  });
+
+  test('starts the limit of a pinned probe once the walk ended', async () => {
+    const timeoutMs = 50;
+    const walkEnded = new Promise<void>((resolve) => {
+      setTimeout(resolve, timeoutMs + EXPLORE_PROBE_DEADLINE_GRACE_MS + 200);
+    });
+    const pinnedProjectPins = buildTestProjectPins({
+      files: [buildTestPinFileText({ path: '/work/app/.nvmrc', kind: 'nvmrc', text: '22\n' })],
+    });
+    const builtProjectPins: ProjectPins[] = [];
+
+    const outcome = await runExploreProbe({
+      probe: {
+        kind: 'pinned',
+        buildProbe: (pinned) => {
+          builtProjectPins.push(pinned.projectPins);
+
+          return {
+            kind: 'files',
+            loadFindings: () =>
+              Promise.resolve({ kind: 'succeeded', value: { findings: [], isComplete: true } }),
+          };
+        },
+      },
+      start: {
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({}),
+        processCommands: Promise.resolve([]),
+        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+        projectPins: {
+          walkEnded: walkEnded,
+          pins: walkEnded.then(() => ({ kind: 'succeeded', value: pinnedProjectPins })),
+        },
+        timeoutMs: timeoutMs,
+        unusedCutoffMs: UNUSED_CUTOFF_MS,
+      },
+    });
+
+    expect(outcome).toEqual({ kind: 'probed', findings: [], isComplete: true });
+    expect(builtProjectPins).toEqual([pinnedProjectPins]);
+  });
+
+  test('answers unreadable at the path of pins that failed, and builds no probe', async () => {
+    let isProbeBuilt = false;
+
+    const outcome = await runExploreProbe({
+      probe: {
+        kind: 'pinned',
+        buildProbe: () => {
+          isProbeBuilt = true;
+
+          return { kind: 'files', loadFindings: () => new Promise(() => {}) };
+        },
+      },
+      start: {
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({}),
+        processCommands: Promise.resolve([]),
+        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+        projectPins: buildSettledProjectPinsLoad({
+          pins: {
+            kind: 'failed',
+            failure: {
+              reason: 'fileUnreadable',
+              path: '/tracked-configs/link',
+              failure: { reason: 'permissionDenied', code: 'EACCES' },
+            },
+          },
+        }),
+        timeoutMs: TIMEOUT_MS,
+        unusedCutoffMs: UNUSED_CUTOFF_MS,
+      },
+    });
+
+    expect(outcome).toEqual({
+      kind: 'unreadable',
+      path: '/tracked-configs/link',
+      failure: { reason: 'permissionDenied', code: 'EACCES' },
+    });
+    expect(isProbeBuilt).toBe(false);
+  });
+
+  test('answers timedOut for a pinned probe whose pins never settle', async () => {
+    const outcome = await runExploreProbe({
+      probe: {
+        kind: 'pinned',
+        buildProbe: () => ({
+          kind: 'files',
+          loadFindings: () =>
+            Promise.resolve({ kind: 'succeeded', value: { findings: [], isComplete: true } }),
+        }),
+      },
+      start: {
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({}),
+        processCommands: Promise.resolve([]),
+        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+        projectPins: { walkEnded: Promise.resolve(), pins: new Promise(() => {}) },
         timeoutMs: 50,
         unusedCutoffMs: UNUSED_CUTOFF_MS,
       },

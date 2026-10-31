@@ -2,6 +2,8 @@ import { join, sep } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js';
+import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
@@ -42,7 +44,7 @@ import {
 } from './resolveOwnerState.js';
 import type { ScanPhase } from './scanPhase.js';
 import { EMPTY_SCAN_PHASE, mergeScanPhases } from './scanPhase.js';
-import type { ArtifactFinding } from './walkProjects.js';
+import type { ArtifactFinding, ProjectWalk } from './walkProjects.js';
 import { walkProjects } from './walkProjects.js';
 
 export type ScanOptions = {
@@ -116,6 +118,24 @@ export async function runScan(params: {
     commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
   });
   const unusedCutoffMs = params.environment.nowMs - params.options.unusedDays * DAY_MS;
+  // One walk serves the artifact phase and the pinned probes, its deadline counted from scan start.
+  const projectWalk = walkProjects({
+    homeDir: params.environment.homeDir,
+    excludedTopNames: PROJECT_SEARCH_EXCLUDED_NAMES,
+    rules: PROJECT_ARTIFACT_RULES,
+    maxDepth: SCAN_LIMITS.projectMaxDepth,
+    deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
+  });
+  const projectPins: ProjectPinsLoad = {
+    walkEnded: projectWalk.then(() => undefined),
+    pins: projectWalk.then((walk) =>
+      loadProjectPins({
+        homeDir: params.environment.homeDir,
+        walkedPinFiles: walk.pinFiles,
+        isWalkComplete: walk.isComplete,
+      }),
+    ),
+  };
   // The probes run beside every phase; the Explore phase waits for them last.
   const probes = startExploreProbes({
     environment: params.environment,
@@ -127,10 +147,7 @@ export async function runScan(params: {
     ),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
     unusedCutoffMs: unusedCutoffMs,
-    projectPins: {
-      walkEnded: Promise.resolve(),
-      pins: Promise.resolve({ kind: 'succeeded', value: { files: [], isWalkComplete: false } }),
-    },
+    projectPins: projectPins,
   });
   const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
     processCommandsLoad,
@@ -164,7 +181,7 @@ export async function runScan(params: {
   });
 
   params.onProgress('Searching your projects for old build folders…');
-  const artifacts = await loadArtifactPhase({ context: context });
+  const artifacts = await loadArtifactPhase({ context: context, projectWalk: projectWalk });
 
   params.onProgress('Measuring apps…');
   const apps = await loadAppPhase({ context: context });
@@ -300,16 +317,13 @@ async function loadCatalogTargetPhase(params: {
   });
 }
 
-async function loadArtifactPhase(params: { context: ScanContext }): Promise<ScanPhase> {
-  const found = await walkProjects({
-    homeDir: params.context.environment.homeDir,
-    excludedTopNames: PROJECT_SEARCH_EXCLUDED_NAMES,
-    rules: PROJECT_ARTIFACT_RULES,
-    maxDepth: SCAN_LIMITS.projectMaxDepth,
-    deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
-  });
+async function loadArtifactPhase(params: {
+  context: ScanContext;
+  projectWalk: Promise<ProjectWalk>;
+}): Promise<ScanPhase> {
+  const found = await params.projectWalk;
   const findingPhases = await Promise.all(
-    found.findings.map((finding) =>
+    found.artifacts.map((finding) =>
       loadArtifactFindingPhase({ context: params.context, finding: finding }),
     ),
   );
