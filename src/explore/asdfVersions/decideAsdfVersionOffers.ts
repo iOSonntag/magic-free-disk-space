@@ -30,9 +30,11 @@ export function decideAsdfVersionOffers(params: {
       break;
   }
 
+  const hasUnparsedFolder = params.state.folders.some((folder) => folder.kind === 'unparsed');
+
   switch (params.pins.kind) {
     case 'everyVersionPinned':
-      return { offers: [], isComplete: true };
+      return { offers: [], isComplete: !hasUnparsedFolder };
     case 'texts':
       break;
   }
@@ -41,27 +43,16 @@ export function decideAsdfVersionOffers(params: {
     pinnedFolders: parseAsdfToolVersionsPins({ files: params.pins.files }),
     links: params.state.links,
   });
-  const offers: AsdfVersionFolderParsed[] = [];
-  let isComplete = true;
+  const offers = params.state.folders.flatMap((folder) =>
+    folder.kind === 'parsed' &&
+    !pinnedFolderKeys.has(
+      buildFolderKey({ toolName: folder.asdfToolName, folderName: folder.version }),
+    )
+      ? [folder]
+      : [],
+  );
 
-  for (const folder of params.state.folders) {
-    switch (folder.kind) {
-      case 'unparsed':
-        isComplete = false;
-        break;
-      case 'parsed':
-        if (
-          !pinnedFolderKeys.has(
-            buildFolderKey({ toolName: folder.asdfToolName, folderName: folder.version }),
-          )
-        ) {
-          offers.push(folder);
-        }
-        break;
-    }
-  }
-
-  return { offers: offers, isComplete: isComplete };
+  return { offers: offers, isComplete: !hasUnparsedFolder };
 }
 
 /** The keys of the pinned folders, each pin of a link also pinning the folder the link resolves to. */

@@ -28,7 +28,7 @@ export type AsdfVersionFolder = AsdfVersionFolderParsed | AsdfVersionFolderUnpar
 /** A link in `installs/<tool>/` whose real path is the version folder `folderName` beside it. */
 export type AsdfVersionLink = { asdfToolName: AsdfToolName; linkName: string; folderName: string };
 
-/** Whether `~/.asdfrc` sets `legacy_version_file = yes`; `unknown` when the file is unfit. */
+/** Whether `~/.asdfrc` sets `legacy_version_file` to `yes`; `unknown` when the file is unfit. */
 export type AsdfLegacyVersionFile = 'off' | 'on' | 'unknown';
 
 /** `~/.asdf/installs` does not exist, so no version is installed. */
@@ -48,6 +48,14 @@ type AsdfToolFolderState = { folders: AsdfVersionFolder[]; links: AsdfVersionLin
 const ASDFRC_FILE_NAME = '.asdfrc';
 
 const LEGACY_VERSION_FILE_KEY = 'legacy_version_file';
+
+// asdf reads `~/.asdfrc` as ini: `=` or `:` ends the key, `#` or `;` starts a comment anywhere on
+// the line, and one pair of quotes around the value goes.
+const ASDFRC_COMMENT_PATTERN = /[#;]/;
+
+const ASDFRC_SEPARATOR_PATTERN = /[=:]/;
+
+const ASDFRC_QUOTED_VALUE_PATTERN = /^(["'])(.*)\1$/;
 
 /**
  * Reads asdf's version folders, the links beside them, and `legacy_version_file`, for the probe and
@@ -105,21 +113,24 @@ export async function loadAsdfState(params: {
   };
 }
 
-/** Whether a `~/.asdfrc` text sets `legacy_version_file = yes` on any of its `key = value` lines. */
+/** Whether any line of a `~/.asdfrc` text sets `legacy_version_file` to `yes` in any case. */
 export function isAsdfLegacyVersionFileOn(params: { text: string }): boolean {
   for (const line of params.text.split('\n')) {
-    const commentIndex = line.indexOf('#');
+    const commentIndex = line.search(ASDFRC_COMMENT_PATTERN);
     const content = commentIndex === -1 ? line : line.slice(0, commentIndex);
-    const separatorIndex = content.indexOf('=');
+    const separatorIndex = content.search(ASDFRC_SEPARATOR_PATTERN);
 
     if (separatorIndex === -1) {
       continue;
     }
 
     const key = content.slice(0, separatorIndex).trim();
-    const value = content.slice(separatorIndex + 1).trim();
+    const value = content
+      .slice(separatorIndex + 1)
+      .trim()
+      .replace(ASDFRC_QUOTED_VALUE_PATTERN, '$2');
 
-    if (key === LEGACY_VERSION_FILE_KEY && value === 'yes') {
+    if (key === LEGACY_VERSION_FILE_KEY && value.toLowerCase() === 'yes') {
       return true;
     }
   }

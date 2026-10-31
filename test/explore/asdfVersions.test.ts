@@ -7,6 +7,7 @@ import { compareAsdfVersionUnit } from '../../src/explore/asdfVersions/compareAs
 import { decideAsdfVersionOffers } from '../../src/explore/asdfVersions/decideAsdfVersionOffers.js';
 import type {
   AsdfState,
+  AsdfStateInstalled,
   AsdfVersionFolderParsed,
 } from '../../src/explore/asdfVersions/loadAsdfState.js';
 import { isAsdfLegacyVersionFileOn } from '../../src/explore/asdfVersions/loadAsdfState.js';
@@ -81,9 +82,7 @@ const pinFileText: ProjectPinFileText = {
 
 const textPins: ToolPins = { kind: 'texts', files: [pinFileText] };
 
-function buildInstalledState(
-  params: Partial<Extract<AsdfState, { kind: 'installed' }>>,
-): AsdfState {
+function buildInstalledState(params: Partial<AsdfStateInstalled>): AsdfState {
   return {
     kind: 'installed',
     folders: params.folders ?? [oldFolder, pinnedFolder],
@@ -158,6 +157,18 @@ describe('isAsdfLegacyVersionFileOn', () => {
     expect(isAsdfLegacyVersionFileOn({ text: '  legacy_version_file =  yes  # on\n' })).toBe(true);
   });
 
+  test('reads the value as asdf does: in any case, in quotes, after a colon, before a ;', () => {
+    for (const text of [
+      'legacy_version_file = Yes\n',
+      'legacy_version_file = YES\n',
+      'legacy_version_file = "yes"\n',
+      'legacy_version_file: yes\n',
+      'legacy_version_file = yes ; on\n',
+    ]) {
+      expect(isAsdfLegacyVersionFileOn({ text: text })).toBe(true);
+    }
+  });
+
   test('is off for no, a commented line, or another key', () => {
     expect(isAsdfLegacyVersionFileOn({ text: 'legacy_version_file = no\n' })).toBe(false);
     expect(isAsdfLegacyVersionFileOn({ text: '# legacy_version_file = yes\n' })).toBe(false);
@@ -192,6 +203,22 @@ describe('decideAsdfVersionOffers', () => {
         pins: { kind: 'everyVersionPinned' },
       }),
     ).toEqual({ offers: [], isComplete: true });
+  });
+
+  test('offers nothing and is not judged for a refused folder when every version is pinned', () => {
+    const state = buildInstalledState({
+      folders: [
+        oldFolder,
+        { kind: 'unparsed', folderPath: buildTestAbsolutePath({ text: '/home/example/x/_odd' }) },
+      ],
+    });
+
+    const pins: ToolPins = { kind: 'everyVersionPinned' };
+
+    expect(decideAsdfVersionOffers({ state: state, pins: pins })).toEqual({
+      offers: [],
+      isComplete: false,
+    });
   });
 
   test('offers nothing and is not judged while legacy_version_file is on or unknown', () => {
@@ -479,6 +506,17 @@ describe('the asdf probe and recheck against a fixture home', () => {
   test('is not judged while ~/.asdfrc sets legacy_version_file = yes', async () => {
     await writeInstalls();
     await writeFile(join(environment.homeDir, '.asdfrc'), 'legacy_version_file = yes\n');
+
+    expect(await runAsdfProbe({ files: [], asdfPath: await createAsdf() })).toEqual({
+      kind: 'probed',
+      findings: [],
+      isComplete: false,
+    });
+  });
+
+  test('is not judged while ~/.asdfrc sets legacy_version_file to Yes', async () => {
+    await writeInstalls();
+    await writeFile(join(environment.homeDir, '.asdfrc'), 'legacy_version_file = Yes\n');
 
     expect(await runAsdfProbe({ files: [], asdfPath: await createAsdf() })).toEqual({
       kind: 'probed',
