@@ -351,8 +351,8 @@ describe('startExploreProbes', () => {
     const outcome = await runExploreProbe({
       probe: {
         kind: 'pinned',
-        buildProbe: (pinned) => {
-          builtProjectPins.push(pinned.projectPins);
+        buildProbe: (params) => {
+          builtProjectPins.push(params.projectPins);
 
           return {
             kind: 'files',

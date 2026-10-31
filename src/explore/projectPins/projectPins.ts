@@ -1,5 +1,6 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { ReadFailure } from '../../system/readFailure.js';
+import type { ExploreFileReadText, ExploreFileReadUnfit } from '../loadExploreRead.js';
 
 /** What a pin file pins, decided by its name; each kind of unit selects its pins by these kinds. */
 export type ProjectPinFileKind = 'toolVersions' | 'nvmrc' | 'gradle' | 'packageJson' | 'miseConfig';
@@ -7,16 +8,11 @@ export type ProjectPinFileKind = 'toolVersions' | 'nvmrc' | 'gradle' | 'packageJ
 /** A pin file the project walk or mise's tracked configs found, with its kind matched once. */
 export type ProjectPinFileRef = { path: AbsolutePath; kind: ProjectPinFileKind };
 
-export type ProjectPinFileContentText = { kind: 'text'; text: string };
-
-/** Something is there, but no file to read: another kind, or over the read limit. */
-export type ProjectPinFileContentUnfit = { kind: 'unfit' };
-
 export type ProjectPinFileContentUnreadable = { kind: 'unreadable'; failure: ReadFailure };
 
 export type ProjectPinFileContent =
-  | ProjectPinFileContentText
-  | ProjectPinFileContentUnfit
+  | ExploreFileReadText
+  | ExploreFileReadUnfit
   | ProjectPinFileContentUnreadable;
 
 /** A pin file as its read found it; a file that is gone has none. */

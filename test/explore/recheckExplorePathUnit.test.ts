@@ -8,6 +8,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import {
   BETA_CURRENT_FOLDER_NAME,
@@ -22,7 +23,6 @@ import {
   LISTED_OBSOLETE_FOLDER_NAME,
   OBSOLETE_FOLDER_NAME,
   VSCODE_APP_COMMAND,
-  writeVscodeFile,
 } from './vscodeExtensionFixtures.js';
 
 let fixtureRoot: FixtureRoot;
@@ -57,7 +57,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
   });
 
   test('answers changed once a profile lists the folder', async () => {
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(
         buildVscodeProfilesPath({ homeDir: environment.homeDir }),
         FIXTURE_PROFILE_ID,
@@ -80,7 +80,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
   });
 
   test('answers changed once the scanned reason no longer holds', async () => {
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(extensionsPath, '.obsolete'),
       text: buildVscodeObsoleteText({ folderNames: [LISTED_OBSOLETE_FOLDER_NAME] }),
     });
@@ -101,7 +101,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
   });
 
   test('answers changed once the default registry no longer parses', async () => {
-    await writeVscodeFile({ path: join(extensionsPath, 'extensions.json'), text: '{' });
+    await writeFixtureTextFile({ path: join(extensionsPath, 'extensions.json'), text: '{' });
 
     expect(
       await recheckExplorePathUnit({

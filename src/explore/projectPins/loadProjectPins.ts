@@ -158,9 +158,8 @@ async function loadProjectPinFile(params: {
     case 'absent':
       return null;
     case 'unfit':
-      return { ...params.file, content: { kind: 'unfit' } };
     case 'text':
-      return { ...params.file, content: { kind: 'text', text: read.value.text } };
+      return { ...params.file, content: read.value };
   }
 }
 

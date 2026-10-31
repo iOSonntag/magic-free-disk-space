@@ -146,47 +146,47 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
   vscodeExtensions: { kind: 'files', loadFindings: loadVscodeExtensionFindings },
   asdfVersions: {
     kind: 'pinned',
-    buildProbe: (pinned) => ({
+    buildProbe: (params) => ({
       kind: 'tool',
       toolName: 'asdf',
-      loadFindings: (run) => loadAsdfVersionFindings({ run: run, projectPins: pinned.projectPins }),
+      loadFindings: (run) => loadAsdfVersionFindings({ run: run, projectPins: params.projectPins }),
     }),
   },
   nvmVersions: {
     kind: 'pinned',
-    buildProbe: (pinned) => ({
+    buildProbe: (params) => ({
       kind: 'files',
-      loadFindings: (run) => loadNvmVersionFindings({ run: run, projectPins: pinned.projectPins }),
+      loadFindings: (run) => loadNvmVersionFindings({ run: run, projectPins: params.projectPins }),
     }),
   },
   androidPlatforms: {
     kind: 'pinned',
-    buildProbe: (pinned) => ({
+    buildProbe: (params) => ({
       kind: 'files',
       loadFindings: (run) =>
-        loadAndroidPlatformFindings({ run: run, projectPins: pinned.projectPins }),
+        loadAndroidPlatformFindings({ run: run, projectPins: params.projectPins }),
     }),
   },
   pnpmStores: {
     kind: 'pinned',
-    buildProbe: (pinned) => ({
+    buildProbe: (params) => ({
       kind: 'files',
       loadFindings: (run) =>
         loadPnpmStoreFindings({
           run: run,
-          projectPins: pinned.projectPins,
+          projectPins: params.projectPins,
           storeRootPathNames: PNPM_STORE_ROOT_PATH_NAMES,
         }),
     }),
   },
   pnpmStoresXdg: {
     kind: 'pinned',
-    buildProbe: (pinned) => ({
+    buildProbe: (params) => ({
       kind: 'files',
       loadFindings: (run) =>
         loadPnpmStoreFindings({
           run: run,
-          projectPins: pinned.projectPins,
+          projectPins: params.projectPins,
           storeRootPathNames: PNPM_XDG_STORE_ROOT_PATH_NAMES,
         }),
     }),
