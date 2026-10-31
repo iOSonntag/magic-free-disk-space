@@ -157,8 +157,8 @@ dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getcon
 Android and VS Code items, it also reads their own records: the SDK's `package.xml` files, each
 emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. To
 learn which tool versions your projects pin, it reads their `.tool-versions`, `.nvmrc`,
-`build.gradle`, `build.gradle.kts`, mise config, and `package.json` files, and those of the
-configs mise tracks. It only reads them.
+`build.gradle`, `build.gradle.kts`, and mise config files, the `package.json` files that have a
+`pnpm-lock.yaml` beside them, and those of the configs mise tracks. It only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
 simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
