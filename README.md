@@ -162,7 +162,8 @@ emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsole
 learn which tool versions your projects pin, it reads their `.tool-versions`, `.nvmrc`,
 `build.gradle`, `build.gradle.kts`, and mise config files, the `package.json` files that have a
 `pnpm-lock.yaml` beside them, those of the configs mise tracks, nvm's alias files, asdf's
-`~/.asdfrc`, and the `package.json` of each installed pnpm. It only reads them.
+`~/.asdfrc`, the `package.json` of each installed pnpm, and pnpm's launcher
+`~/Library/pnpm/pnpm`. It only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
 simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
