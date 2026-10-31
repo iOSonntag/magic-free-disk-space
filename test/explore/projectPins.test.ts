@@ -18,6 +18,7 @@ import {
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import {
@@ -314,16 +315,15 @@ describe('loading the pins', () => {
       const globalConfigPath = join(fixtureRoot.homeDir, '.config', 'mise', 'config.toml');
       const pnpmProjectPath = join(fixtureRoot.homeDir, 'web');
       const npmProjectPath = join(fixtureRoot.homeDir, 'tool');
-      await createFixtureDirectory({ path: worktreePath });
-      await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '.config', 'mise') });
-      await createFixtureDirectory({ path: pnpmProjectPath });
-      await createFixtureDirectory({ path: npmProjectPath });
-      await writeFile(join(worktreePath, 'mise.toml'), '[tools]\nnode = "22"\n');
-      await writeFile(globalConfigPath, '[tools]\npnpm = "12"\n');
-      await writeFile(join(pnpmProjectPath, 'package.json'), '{}');
-      await writeFile(join(pnpmProjectPath, 'pnpm-lock.yaml'), '');
-      await writeFile(join(npmProjectPath, 'package.json'), '{}');
-      await writeFile(join(npmProjectPath, 'notes.txt'), '');
+      await writeFixtureTextFile({
+        path: join(worktreePath, 'mise.toml'),
+        text: '[tools]\nnode = "22"\n',
+      });
+      await writeFixtureTextFile({ path: globalConfigPath, text: '[tools]\npnpm = "12"\n' });
+      await writeFixtureTextFile({ path: join(pnpmProjectPath, 'package.json'), text: '{}' });
+      await writeFixtureTextFile({ path: join(pnpmProjectPath, 'pnpm-lock.yaml'), text: '' });
+      await writeFixtureTextFile({ path: join(npmProjectPath, 'package.json'), text: '{}' });
+      await writeFixtureTextFile({ path: join(npmProjectPath, 'notes.txt'), text: '' });
       await createTrackedConfigLink({ name: 'a1', targetPath: join(worktreePath, 'mise.toml') });
       await createTrackedConfigLink({ name: 'b2', targetPath: globalConfigPath });
       await createTrackedConfigLink({
@@ -374,8 +374,7 @@ describe('loading the pins', () => {
 
     test('reads a file both sources found once', async () => {
       const miseConfigPath = join(homeRealPath, 'app', 'mise.toml');
-      await createFixtureDirectory({ path: join(homeRealPath, 'app') });
-      await writeFile(miseConfigPath, '[tools]\n');
+      await writeFixtureTextFile({ path: miseConfigPath, text: '[tools]\n' });
       await createTrackedConfigLink({ name: 'a1', targetPath: miseConfigPath });
 
       const pins = await loadProjectPins({
@@ -422,8 +421,7 @@ describe('loading the pins', () => {
 
     test('fails at a link whose target cannot be resolved', async () => {
       const lockedPath = join(fixtureRoot.homeDir, 'locked');
-      await createFixtureDirectory({ path: join(lockedPath, 'app') });
-      await writeFile(join(lockedPath, 'app', 'mise.toml'), '[tools]\n');
+      await writeFixtureTextFile({ path: join(lockedPath, 'app', 'mise.toml'), text: '[tools]\n' });
       await createTrackedConfigLink({
         name: 'a1',
         targetPath: join(lockedPath, 'app', 'mise.toml'),
@@ -452,8 +450,7 @@ describe('loading the pins', () => {
 
     test('fails at the folder of a target it cannot list', async () => {
       const projectPath = join(fixtureRoot.homeDir, 'app');
-      await createFixtureDirectory({ path: projectPath });
-      await writeFile(join(projectPath, 'package.json'), '{}');
+      await writeFixtureTextFile({ path: join(projectPath, 'package.json'), text: '{}' });
       await createTrackedConfigLink({ name: 'a1', targetPath: join(projectPath, 'package.json') });
       // Searchable but not listable: the link resolves, the folder's names cannot be read.
       await chmod(projectPath, 0o100);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildAndroidPlatformFindings } from '../../src/explore/android/buildAndroidPlatformFindings.js';
@@ -28,6 +28,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import {
@@ -558,8 +559,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
   }> {
     const folderPath = await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
     const gradlePath = join(homeDir, 'code', 'app', 'build.gradle');
-    await mkdir(join(homeDir, 'code', 'app'), { recursive: true });
-    await writeFile(gradlePath, 'android {\n  compileSdk 35\n}\n');
+    await writeFixtureTextFile({ path: gradlePath, text: 'android {\n  compileSdk 35\n}\n' });
 
     return {
       unit: {
