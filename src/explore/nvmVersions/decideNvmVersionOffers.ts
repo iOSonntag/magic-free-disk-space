@@ -56,14 +56,16 @@ export function decideNvmVersionOffers(params: {
   const pinResolutions = params.toolPins.files.map((file) =>
     resolveNvmrcText({ text: file.text, aliases: aliases, versions: versions }),
   );
-  const resolutions = [defaultResolution, ...pinResolutions];
 
-  if (resolutions.some((resolution) => resolution.kind === 'unresolved')) {
+  if (
+    defaultResolution.kind === 'unresolved' ||
+    pinResolutions.some((resolution) => resolution.kind === 'unresolved')
+  ) {
     return { offers: [], isComplete: false, defaultAlias: { kind: 'none' } };
   }
 
   const pinnedVersions = new Set(
-    resolutions.flatMap((resolution) =>
+    [defaultResolution, ...pinResolutions].flatMap((resolution) =>
       resolution.kind === 'version' ? [resolution.version] : [],
     ),
   );
@@ -71,7 +73,7 @@ export function decideNvmVersionOffers(params: {
   return {
     offers: parsedFolders.filter((folder) => !pinnedVersions.has(folder.version)),
     isComplete: !hasUnparsedFolder,
-    defaultAlias: decideNvmDefaultAlias({ resolution: defaultResolution }),
+    defaultAlias: defaultResolution,
   };
 }
 
@@ -106,17 +108,4 @@ function resolveNvmrcText(params: {
     aliases: params.aliases,
     versions: params.versions,
   });
-}
-
-function decideNvmDefaultAlias(params: {
-  resolution: NvmDefaultAlias | NvmPinResolutionUnresolved;
-}): NvmDefaultAlias {
-  switch (params.resolution.kind) {
-    case 'none':
-    case 'noFolder':
-    case 'version':
-      return params.resolution;
-    case 'unresolved':
-      return { kind: 'noFolder' };
-  }
 }

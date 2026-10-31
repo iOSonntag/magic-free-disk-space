@@ -18,3 +18,8 @@ export function parseNvmNodeVersion(params: {
   // The brand records the check above, which the compiler cannot follow.
   return { kind: 'succeeded', value: params.folderName as NvmNodeVersion };
 }
+
+/** The dotted digits of a version without its `v`, `22.11.0` for `v22.11.0`. */
+export function nvmNodeVersionToDottedVersion(version: NvmNodeVersion): string {
+  return version.slice(1);
+}

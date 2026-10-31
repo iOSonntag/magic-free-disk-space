@@ -2,6 +2,7 @@ import { compareDottedVersions } from '../compareDottedVersions.js';
 import type { NvmAliases } from './loadNvmState.js';
 import { parseNvmAliasText } from './parseNvmAliasText.js';
 import type { NvmNodeVersion } from './parseNvmNodeVersion.js';
+import { nvmNodeVersionToDottedVersion } from './parseNvmNodeVersion.js';
 
 /** The pin names this installed version, the one nvm would use. */
 export type NvmPinResolutionVersion = { kind: 'version'; version: NvmNodeVersion };
@@ -112,7 +113,7 @@ function resolveNvmVersionName(params: {
 
   const pinGroups = (versionMatch[1] ?? '').split('.');
   const matching = params.versions.filter((version) => {
-    const versionGroups = version.slice(1).split('.');
+    const versionGroups = nvmNodeVersionToDottedVersion(version).split('.');
 
     return pinGroups.every((group, index) => versionGroups[index] === group);
   });
@@ -122,7 +123,12 @@ function resolveNvmVersionName(params: {
 
 function selectNewestNvmVersion(params: { versions: NvmNodeVersion[] }): NvmPinResolution {
   const newest = params.versions
-    .toSorted((left, right) => compareDottedVersions(left.slice(1), right.slice(1)))
+    .toSorted((left, right) =>
+      compareDottedVersions(
+        nvmNodeVersionToDottedVersion(left),
+        nvmNodeVersionToDottedVersion(right),
+      ),
+    )
     .at(-1);
 
   if (newest === undefined) {
