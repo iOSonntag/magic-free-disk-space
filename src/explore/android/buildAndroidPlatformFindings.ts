@@ -4,7 +4,7 @@ import type { ProjectPinFileText, ProjectPins } from '../projectPins/projectPins
 import {
   buildProjectSearchEvidence,
   PINNED_VERSION_REINSTALL_EXPLANATION,
-} from '../projectPins/selectToolPins.js';
+} from '../projectPins/projectSearchEvidence.js';
 import type { AndroidPlatformOffers } from './decideAndroidPlatformOffers.js';
 
 /**

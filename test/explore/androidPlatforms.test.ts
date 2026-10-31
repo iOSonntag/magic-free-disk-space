@@ -14,11 +14,11 @@ import type {
   ProjectPinFile,
   ProjectPinFileText,
 } from '../../src/explore/projectPins/projectPins.js';
-import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import {
   PINNED_VERSION_REINSTALL_EXPLANATION,
   PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/selectToolPins.js';
+} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';

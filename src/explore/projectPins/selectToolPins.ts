@@ -3,8 +3,8 @@ import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import type {
   ProjectPinFile,
   ProjectPinFileKind,
+  ProjectPinFileRef,
   ProjectPinFileText,
-  ProjectPins,
 } from './projectPins.js';
 
 /** A pin file of the tool could not be judged, so every version of the tool counts as pinned. */
@@ -14,12 +14,6 @@ export type ToolPinsEveryVersionPinned = { kind: 'everyVersionPinned' };
 export type ToolPinsTexts = { kind: 'texts'; files: ProjectPinFileText[] };
 
 export type ToolPins = ToolPinsEveryVersionPinned | ToolPinsTexts;
-
-export const PROJECT_SEARCH_INCOMPLETE_EVIDENCE =
-  'The project search stopped at its time limit or could not read some folders, so some projects were not searched.';
-
-export const PINNED_VERSION_REINSTALL_EXPLANATION =
-  'A project the search did not find would install this version again the next time it needs it.';
 
 /**
  * The pins of one tool, from the files of `kinds`: the first unreadable one fails, any unfit one
@@ -59,11 +53,15 @@ export function selectToolPins(params: {
   return { kind: 'succeeded', value: { kind: 'texts', files: files } };
 }
 
-/** The evidence lines every pinned unit adds after its own: one when the walk was not complete. */
-export function buildProjectSearchEvidence(params: { pins: ProjectPins }): string[] {
-  if (params.pins.isWalkComplete) {
-    return [];
+/**
+ * The pin files a unit was judged by: those whose text was read, and none when every version is
+ * pinned.
+ */
+export function listToolPinFileRefs(params: { toolPins: ToolPins }): ProjectPinFileRef[] {
+  switch (params.toolPins.kind) {
+    case 'everyVersionPinned':
+      return [];
+    case 'texts':
+      return params.toolPins.files.map((file) => ({ path: file.path, kind: file.kind }));
   }
-
-  return [PROJECT_SEARCH_INCOMPLETE_EVIDENCE];
 }

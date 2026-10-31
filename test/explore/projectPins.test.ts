@@ -11,8 +11,8 @@ import { matchProjectPinFile } from '../../src/explore/projectPins/projectPins.j
 import {
   buildProjectSearchEvidence,
   PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-  selectToolPins,
-} from '../../src/explore/projectPins/selectToolPins.js';
+} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { selectToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,

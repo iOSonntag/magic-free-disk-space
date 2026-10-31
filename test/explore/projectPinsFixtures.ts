@@ -60,9 +60,14 @@ export function buildSettledProjectPinsLoad(params: {
   return { walkEnded: Promise.resolve(), pins: Promise.resolve(params.pins) };
 }
 
+/** A load whose complete walk found `files`, all read. */
+export function buildFoundProjectPinsLoad(params: { files: ProjectPinFile[] }): ProjectPinsLoad {
+  return buildSettledProjectPinsLoad({
+    pins: { kind: 'succeeded', value: buildTestProjectPins({ files: params.files }) },
+  });
+}
+
 /** A load whose walk ended without finding any pin file. */
 export function buildEmptyProjectPinsLoad(): ProjectPinsLoad {
-  return buildSettledProjectPinsLoad({
-    pins: { kind: 'succeeded', value: buildTestProjectPins({ files: [] }) },
-  });
+  return buildFoundProjectPinsLoad({ files: [] });
 }
