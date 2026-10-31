@@ -179,6 +179,22 @@ describe('isAsdfLegacyVersionFileOn', () => {
     expect(isAsdfLegacyVersionFileOn({ text: '# legacy_version_file = yes\n' })).toBe(false);
     expect(isAsdfLegacyVersionFileOn({ text: 'always_keep_download = yes\n' })).toBe(false);
   });
+
+  test('reads a quoted key and a quoted value as go-ini does', () => {
+    for (const text of [
+      '" legacy_version_file " = yes\n',
+      '"legacy_version_file" x = yes\n',
+      'legacy_version_file = `yes` x\n',
+      "legacy_version_file = 'yes'\n",
+    ]) {
+      expect(isAsdfLegacyVersionFileOn({ text: text })).toBe(true);
+    }
+  });
+
+  test('is off for a key in single quotes or a quoted value with text after it', () => {
+    expect(isAsdfLegacyVersionFileOn({ text: "'legacy_version_file' = yes\n" })).toBe(false);
+    expect(isAsdfLegacyVersionFileOn({ text: 'legacy_version_file = "yes" x\n' })).toBe(false);
+  });
 });
 
 describe('decideAsdfVersionOffers', () => {
