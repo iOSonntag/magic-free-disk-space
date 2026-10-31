@@ -192,6 +192,9 @@ fixed environment that keeps it offline where the tool allows that.
   7 folders below your home folder, in a hidden folder, in a folder named like a project build
   folder, such as `node_modules`, in your `Applications`, `Library`, `Movies`, `Music`, `Pictures`,
   or `Public` folder, or outside your home folder, such as on a disk mounted elsewhere.
+- nvm's `NVM_ONLY` setting lives in your shell, which the scan does not see. Your default alias and
+  each `.nvmrc` resolve as if it were unset, so the Node.js version nvm picks under it may be
+  offered.
 - macOS only.
 
 ## Development
