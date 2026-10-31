@@ -22,7 +22,9 @@ It looks where space hides from people who are not storage experts:
 - **The Trash**.
 
 Under **Explore**, items a developer tool owns are offered with the reasons for each, and removed
-by the tool's own command where it has one:
+by the tool's own command where it has one. An item the scan cannot judge, such as a tool version
+a project may pin in a file the scan does not read, is not offered, and the tool's advice shows
+instead. Explore offers:
 
 - Simulators whose runtime is gone, with `xcrun simctl delete`, and simulator runtimes no
   available simulator uses and not used for 180 days, with `xcrun simctl runtime delete`.
