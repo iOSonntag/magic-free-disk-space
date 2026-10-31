@@ -278,7 +278,7 @@ describe('buildAndroidPlatformFindings', () => {
           ),
           regeneration: expect.stringContaining('SDK Manager'),
           risk: 'careful',
-          evidenceLines: ['None of the 1 Gradle files found sets `compileSdk` 34.'],
+          evidenceLines: ['None of the Gradle files found (1) sets `compileSdk` 34.'],
           displayPath: buildExamplePlatformPath('android-34'),
           activity: 'idle',
         },
@@ -297,7 +297,7 @@ describe('buildAndroidPlatformFindings', () => {
 
     expect(findings.findings[0]).toMatchObject({
       evidenceLines: [
-        'None of the 0 Gradle files found sets `compileSdk` 34.',
+        'None of the Gradle files found (0) sets `compileSdk` 34.',
         PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       ],
       activity: 'busy',

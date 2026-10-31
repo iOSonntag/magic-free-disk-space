@@ -38,7 +38,7 @@ export function buildAndroidPlatformFindings(params: {
         'The SDK Manager of Android Studio installs it again, as does the next Gradle build that compiles against it.',
       risk: 'careful',
       evidenceLines: [
-        `None of the ${params.gradleFiles.length} Gradle files found sets \`compileSdk\` ${offer.apiLevel}.`,
+        `None of the Gradle files found (${params.gradleFiles.length}) sets \`compileSdk\` ${offer.apiLevel}.`,
         ...searchEvidenceLines,
       ],
       displayPath: offer.folderPath,

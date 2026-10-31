@@ -27,8 +27,8 @@ by the tool's own command where it has one:
 - Simulators whose runtime is gone, with `xcrun simctl delete`, and simulator runtimes no
   available simulator uses and not used for 180 days, with `xcrun simctl runtime delete`.
 - Android emulators not used for 180 days, with `avdmanager delete avd`. Android system images
-  no emulator uses, and the Android emulator program while no emulator exists, are deleted as
-  their folder.
+  no emulator uses, the Android emulator program while no emulator exists, and Android platforms
+  whose API level no project's `compileSdk` names, are deleted as their folder.
 - Old versions of Homebrew packages, with `brew cleanup <package>`, and packages that nothing
   needs any more, with `brew autoremove`.
 - Unused Dart and Flutter packages, with `dart pub cache gc`, and mise tool versions no project
@@ -153,8 +153,10 @@ bun run app:run        # build and start a debug version
 The tool works offline. It sends nothing anywhere and has no telemetry. It reads file sizes,
 dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`. To judge
 Android and VS Code items, it also reads their own records: the SDK's `package.xml` files, each
-emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. It
-only reads them.
+emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. To
+learn which tool versions your projects pin, it reads their `.tool-versions`, `.nvmrc`,
+`build.gradle`, `build.gradle.kts`, mise config, and `package.json` files, and those of the
+configs mise tracks. It only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
 simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
@@ -180,6 +182,9 @@ fixed environment that keeps it offline where the tool allows that.
   would be deleted with that folder.
 - An app's last use is read from the files the app writes, not from Spotlight, which does not
   record it reliably. An app with no such files is never offered.
+- An Android platform counts as pinned only by a project the search for project build folders
+  reaches in your home folder. A project more than 7 folders below your home folder, in a hidden
+  folder or in `Library`, or on another disk does not keep the platforms it pins.
 - macOS only.
 
 ## Development
