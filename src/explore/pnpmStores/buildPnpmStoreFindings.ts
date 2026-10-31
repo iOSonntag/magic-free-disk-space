@@ -5,7 +5,7 @@ import type { ProjectPinFileRef, ProjectPins } from '../projectPins/projectPins.
 import {
   buildProjectSearchEvidence,
   PINNED_VERSION_REINSTALL_EXPLANATION,
-} from '../projectPins/selectToolPins.js';
+} from '../projectPins/projectSearchEvidence.js';
 import type { PnpmInstalledVersion, PnpmStoreOffers } from './decidePnpmStoreOffers.js';
 
 const PNPM_STORE_EXPLANATION = `A store-version folder of pnpm that neither an installed pnpm nor a pnpm a project pins uses. Projects keep their linked copies of its packages, so the space freed can be less than shown. A pnpm installed in a place this search does not know would fill it again. ${PINNED_VERSION_REINSTALL_EXPLANATION}`;
