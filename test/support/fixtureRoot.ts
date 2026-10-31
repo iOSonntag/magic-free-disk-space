@@ -63,6 +63,7 @@ export async function loadTestEnvironment(params: {
     tempRealPath,
     applicationDirs: [params.fixtureRoot.applicationDir],
     applicationRealPaths: [applicationRealPath],
+    homebrewPrefixPaths: [],
   });
 }
 

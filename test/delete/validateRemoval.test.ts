@@ -16,6 +16,7 @@ const ENVIRONMENT = buildEnvironment({
   tempRealPath: '/private/var/folders/xy/abc/T',
   applicationDirs: ['/Applications'],
   applicationRealPaths: ['/Applications'],
+  homebrewPrefixPaths: [],
 });
 
 function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
