@@ -12,10 +12,10 @@ import type { AndroidPlatformState } from './loadAndroidPlatformState.js';
 export function compareAndroidPlatformUnit(params: {
   unit: ExplorePathUnitAndroidPlatform;
   state: AndroidPlatformState;
-  pins: ToolPins;
+  toolPins: ToolPins;
   processCommands: string[] | null;
 }): UnitComparison {
-  const offers = decideAndroidPlatformOffers({ state: params.state, pins: params.pins });
+  const offers = decideAndroidPlatformOffers({ state: params.state, toolPins: params.toolPins });
   const isStillOffered = offers.offers.some(
     (offer) => offer.sdkRoot === params.unit.sdkRoot && offer.folderPath === params.unit.folderPath,
   );

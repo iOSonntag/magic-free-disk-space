@@ -22,17 +22,9 @@ const PLATFORM_PACKAGE_PATH_PATTERN = /^platforms;android-([1-9][0-9]*)$/;
  */
 export function decideAndroidPlatformOffers(params: {
   state: AndroidPlatformState;
-  pins: ToolPins;
+  toolPins: ToolPins;
 }): AndroidPlatformOffers {
-  const compileSdkPins = decideAndroidCompileSdkPins({ pins: params.pins });
-
-  switch (compileSdkPins.kind) {
-    case 'everyPlatform':
-      return { offers: [], isComplete: true };
-    case 'apiLevels':
-      break;
-  }
-
+  const compileSdkPins = decideAndroidCompileSdkPins({ toolPins: params.toolPins });
   const offers: AndroidPlatformOffer[] = [];
   let isComplete = true;
 
@@ -47,7 +39,7 @@ export function decideAndroidPlatformOffers(params: {
       continue;
     }
 
-    if (!compileSdkPins.apiLevels.has(apiLevel)) {
+    if (!isAndroidPlatformPinned({ compileSdkPins: compileSdkPins, apiLevel: apiLevel })) {
       offers.push({
         sdkRoot: params.state.sdkRoot,
         folderPath: platform.folderPath,
@@ -59,12 +51,24 @@ export function decideAndroidPlatformOffers(params: {
   return { offers: offers, isComplete: isComplete };
 }
 
-function decideAndroidCompileSdkPins(params: { pins: ToolPins }): AndroidCompileSdkPins {
-  switch (params.pins.kind) {
+function decideAndroidCompileSdkPins(params: { toolPins: ToolPins }): AndroidCompileSdkPins {
+  switch (params.toolPins.kind) {
     case 'everyVersionPinned':
       return { kind: 'everyPlatform' };
     case 'texts':
-      return parseAndroidCompileSdkPins({ files: params.pins.files });
+      return parseAndroidCompileSdkPins({ files: params.toolPins.files });
+  }
+}
+
+function isAndroidPlatformPinned(params: {
+  compileSdkPins: AndroidCompileSdkPins;
+  apiLevel: number;
+}): boolean {
+  switch (params.compileSdkPins.kind) {
+    case 'everyPlatform':
+      return true;
+    case 'apiLevels':
+      return params.compileSdkPins.apiLevels.has(params.apiLevel);
   }
 }
 

@@ -41,7 +41,7 @@ import {
 } from './androidFixtures.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
-  buildSettledProjectPinsLoad,
+  buildFoundProjectPinsLoad,
   buildTestPinFileText,
   buildTestPinFileUnfit,
   buildTestPinFileUnreadable,
@@ -183,7 +183,7 @@ describe('decideAndroidPlatformOffers', () => {
     expect(
       decideAndroidPlatformOffers({
         state: buildExampleState(),
-        pins: buildTextPins('android { compileSdk 35 }\n'),
+        toolPins: buildTextPins('android { compileSdk 35 }\n'),
       }),
     ).toEqual({
       offers: [
@@ -201,7 +201,7 @@ describe('decideAndroidPlatformOffers', () => {
     expect(
       decideAndroidPlatformOffers({
         state: buildExampleState(),
-        pins: { kind: 'everyVersionPinned' },
+        toolPins: { kind: 'everyVersionPinned' },
       }),
     ).toEqual({ offers: [], isComplete: true });
   });
@@ -210,9 +210,25 @@ describe('decideAndroidPlatformOffers', () => {
     expect(
       decideAndroidPlatformOffers({
         state: buildExampleState(),
-        pins: buildTextPins('android {\n  compileSdk flutter.compileSdkVersion\n}\n'),
+        toolPins: buildTextPins('android {\n  compileSdk flutter.compileSdkVersion\n}\n'),
       }),
     ).toEqual({ offers: [], isComplete: true });
+  });
+
+  test('leaves an extension platform not judged when a file pins every platform', () => {
+    const state = buildExampleState();
+    state.platforms.push({
+      kind: 'parsed',
+      folderPath: buildExamplePlatformPath('android-33-ext5'),
+      packagePath: 'platforms;android-33-ext5',
+    });
+
+    expect(
+      decideAndroidPlatformOffers({
+        state: state,
+        toolPins: buildTextPins('android {\n  compileSdk flutter.compileSdkVersion\n}\n'),
+      }),
+    ).toEqual({ offers: [], isComplete: false });
   });
 
   test('leaves an extension platform, a preview, and an unparsed folder not judged', () => {
@@ -234,7 +250,7 @@ describe('decideAndroidPlatformOffers', () => {
     expect(
       decideAndroidPlatformOffers({
         state: state,
-        pins: buildTextPins('android { compileSdk 34 }\n', 'android { compileSdk 35 }\n'),
+        toolPins: buildTextPins('android { compileSdk 34 }\n', 'android { compileSdk 35 }\n'),
       }),
     ).toEqual({ offers: [], isComplete: false });
   });
@@ -256,7 +272,7 @@ describe('buildAndroidPlatformFindings', () => {
     expect(
       buildAndroidPlatformFindings({
         offers: offers,
-        gradleFiles: [buildGradleText('android { compileSdk 35 }\n')],
+        pinFiles: [{ path: buildTestAbsolutePath({ text: EXAMPLE_GRADLE_PATH }), kind: 'gradle' }],
         projectPins: buildTestProjectPins({ files: [] }),
         processCommands: [],
       }),
@@ -290,7 +306,7 @@ describe('buildAndroidPlatformFindings', () => {
   test('adds the incomplete-search line and reads the emulator as busy', () => {
     const findings = buildAndroidPlatformFindings({
       offers: offers,
-      gradleFiles: [],
+      pinFiles: [],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
       processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
     });
@@ -319,7 +335,7 @@ describe('compareAndroidPlatformUnit', () => {
       compareAndroidPlatformUnit({
         unit: unit,
         state: buildExampleState(),
-        pins: buildTextPins('android { compileSdk 35 }\n'),
+        toolPins: buildTextPins('android { compileSdk 35 }\n'),
         processCommands: [],
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -330,7 +346,7 @@ describe('compareAndroidPlatformUnit', () => {
       compareAndroidPlatformUnit({
         unit: unit,
         state: buildExampleState(),
-        pins: buildTextPins('android { compileSdk 34 }\n'),
+        toolPins: buildTextPins('android { compileSdk 34 }\n'),
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -341,7 +357,7 @@ describe('compareAndroidPlatformUnit', () => {
       compareAndroidPlatformUnit({
         unit: unit,
         state: { sdkRoot: EXAMPLE_SDK_ROOT, platforms: [] },
-        pins: buildTextPins(),
+        toolPins: buildTextPins(),
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -353,7 +369,7 @@ describe('compareAndroidPlatformUnit', () => {
         compareAndroidPlatformUnit({
           unit: unit,
           state: buildExampleState(),
-          pins: buildTextPins(),
+          toolPins: buildTextPins(),
           processCommands: processCommands,
         }),
       ).toEqual({ kind: 'busy' });
@@ -393,9 +409,7 @@ async function loadAndroidProbeOutcomes(params: {
     toolInstallLocations: buildFixtureToolLocations({}),
     processCommands: Promise.resolve([]),
     activeXcodeBundlePath: Promise.resolve(null),
-    projectPins: buildSettledProjectPinsLoad({
-      pins: { kind: 'succeeded', value: buildTestProjectPins({ files: params.pinFiles }) },
-    }),
+    projectPins: buildFoundProjectPinsLoad({ files: params.pinFiles }),
     timeoutMs: 10_000,
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
   });

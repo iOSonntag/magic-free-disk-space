@@ -1,4 +1,7 @@
-import type { ProjectPinFileText } from '../projectPins/projectPins.js';
+import type { ProjectPinFileKind, ProjectPinFileText } from '../projectPins/projectPins.js';
+
+/** The kinds of the pin files that pin an Android platform. */
+export const ANDROID_PIN_FILE_KINDS: ProjectPinFileKind[] = ['gradle'];
 
 export type AndroidCompileSdkPinsApiLevels = { kind: 'apiLevels'; apiLevels: Set<number> };
 

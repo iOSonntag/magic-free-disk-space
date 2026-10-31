@@ -1,6 +1,6 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
-import type { ProjectPinFileText, ProjectPins } from '../projectPins/projectPins.js';
+import type { ProjectPinFileRef, ProjectPins } from '../projectPins/projectPins.js';
 import {
   buildProjectSearchEvidence,
   PINNED_VERSION_REINSTALL_EXPLANATION,
@@ -13,7 +13,7 @@ import type { AndroidPlatformOffers } from './decideAndroidPlatformOffers.js';
  */
 export function buildAndroidPlatformFindings(params: {
   offers: AndroidPlatformOffers;
-  gradleFiles: ProjectPinFileText[];
+  pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
   processCommands: string[] | null;
 }): ExploreProbeFindings {
@@ -21,7 +21,6 @@ export function buildAndroidPlatformFindings(params: {
     facts: { kind: 'android' },
     processCommands: params.processCommands,
   });
-  const pinFiles = params.gradleFiles.map((file) => ({ path: file.path, kind: file.kind }));
   const searchEvidenceLines = buildProjectSearchEvidence({ pins: params.projectPins });
   const findings = params.offers.offers.map((offer) => {
     const finding: ExploreFinding = {
@@ -30,7 +29,7 @@ export function buildAndroidPlatformFindings(params: {
         sdkRoot: offer.sdkRoot,
         folderPath: offer.folderPath,
         apiLevel: offer.apiLevel,
-        pinFiles: pinFiles,
+        pinFiles: params.pinFiles,
       },
       title: `Android SDK Platform ${offer.apiLevel}`,
       explanation: `A platform of the Android SDK, which apps compile against, that no Gradle file found sets as \`compileSdk\`. ${PINNED_VERSION_REINSTALL_EXPLANATION}`,
@@ -38,7 +37,7 @@ export function buildAndroidPlatformFindings(params: {
         'The SDK Manager of Android Studio installs it again, as does the next Gradle build that compiles against it.',
       risk: 'careful',
       evidenceLines: [
-        `None of the Gradle files found (${params.gradleFiles.length}) sets \`compileSdk\` ${offer.apiLevel}.`,
+        `None of the Gradle files found (${params.pinFiles.length}) sets \`compileSdk\` ${offer.apiLevel}.`,
         ...searchEvidenceLines,
       ],
       displayPath: offer.folderPath,

@@ -5,6 +5,7 @@ import { loadProjectPinFiles } from '../projectPins/loadProjectPins.js';
 import { selectToolPins } from '../projectPins/selectToolPins.js';
 import { compareAndroidPlatformUnit } from './compareAndroidPlatformUnit.js';
 import { loadAndroidPlatformState } from './loadAndroidPlatformState.js';
+import { ANDROID_PIN_FILE_KINDS } from './parseAndroidCompileSdkPins.js';
 
 /** Reads the platforms and the unit's pin files again and compares them with the unit. */
 export async function recheckAndroidPlatformUnit(params: {
@@ -19,16 +20,16 @@ export async function recheckAndroidPlatformUnit(params: {
   }
 
   const pinFiles = await loadProjectPinFiles({ files: params.unit.pinFiles });
-  const pins = selectToolPins({ pins: pinFiles, kinds: ['gradle'] });
+  const toolPins = selectToolPins({ pins: pinFiles, kinds: ANDROID_PIN_FILE_KINDS });
 
-  if (pins.kind === 'failed') {
-    return pins;
+  if (toolPins.kind === 'failed') {
+    return toolPins;
   }
 
   return compareAndroidPlatformUnit({
     unit: params.unit,
     state: state.value,
-    pins: pins.value,
+    toolPins: toolPins.value,
     processCommands: params.processCommands,
   });
 }

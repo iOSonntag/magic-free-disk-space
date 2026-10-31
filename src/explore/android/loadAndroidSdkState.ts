@@ -11,7 +11,11 @@ import {
 } from '../loadExploreRead.js';
 import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
 import type { AndroidPackageFolder } from './loadAndroidPackageFolder.js';
-import { loadAndroidPackageFolder } from './loadAndroidPackageFolder.js';
+import {
+  loadAndroidChildPaths,
+  loadAndroidPackageFolder,
+  loadAndroidPackageFolders,
+} from './loadAndroidPackageFolder.js';
 import type { AndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidIniText } from './parseAndroidIniText.js';
@@ -152,42 +156,7 @@ async function loadAndroidSystemImageFolders(params: {
     folderPaths = childPaths.value;
   }
 
-  const packageFolders: AndroidPackageFolder[] = [];
-
-  for (const folderPath of folderPaths) {
-    const packageFolder = await loadAndroidPackageFolder({ folderPath: folderPath });
-
-    if (packageFolder.kind === 'failed') {
-      return packageFolder;
-    }
-
-    if (packageFolder.value !== null) {
-      packageFolders.push(packageFolder.value);
-    }
-  }
-
-  return { kind: 'succeeded', value: packageFolders };
-}
-
-/** The entries of each parent folder; a parent that is absent or no folder has none. */
-async function loadAndroidChildPaths(params: {
-  parentPaths: AbsolutePath[];
-}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
-  const childPaths: AbsolutePath[] = [];
-
-  for (const parentPath of params.parentPaths) {
-    const names = await loadExploreDirectoryNames({ path: parentPath });
-
-    if (names.kind === 'failed') {
-      return names;
-    }
-
-    for (const name of names.value ?? []) {
-      childPaths.push(joinAbsolutePath({ parentPath: parentPath, names: [name] }));
-    }
-  }
-
-  return { kind: 'succeeded', value: childPaths };
+  return loadAndroidPackageFolders({ folderPaths: folderPaths });
 }
 
 async function loadAndroidAvds(params: {
