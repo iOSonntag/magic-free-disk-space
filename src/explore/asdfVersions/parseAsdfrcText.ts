@@ -1,5 +1,6 @@
 // asdf reads `~/.asdfrc` with go-ini under its default options: these readers follow the line
-// rules of go-ini's `readKeyName` and `readValue`, with `=` and `:` as the key delimiters.
+// rules of go-ini's `readKeyName`, `readValue`, and `readContinuationLines`, with `=` and `:` as
+// the key delimiters.
 
 const LEGACY_VERSION_FILE_KEY = 'legacy_version_file';
 
@@ -7,15 +8,29 @@ const TRIPLE_QUOTE = '"""';
 
 const DOUBLE_QUOTE = '"';
 
+const SINGLE_QUOTE = "'";
+
 const BACKTICK = '`';
 
-const SURROUNDING_QUOTES = ["'", '"'];
+const CONTINUATION_MARK = '\\';
+
+const TRIPLE_QUOTED_KEY_MIN_LINE_LENGTH = 7;
+
+const TRIPLE_QUOTED_VALUE_MIN_TEXT_LENGTH = 4;
 
 const NO_KEY_LINE_START_PATTERN = /^[#;[]/;
 
 const KEY_DELIMITER_PATTERN = /[=:]/;
 
 const INLINE_COMMENT_PATTERN = /[#;]/;
+
+type KeyOpeningQuote = typeof TRIPLE_QUOTE | typeof DOUBLE_QUOTE | typeof BACKTICK;
+
+type ValueOpeningQuote = typeof TRIPLE_QUOTE | typeof BACKTICK;
+
+type PlainValueSurroundingQuote = typeof SINGLE_QUOTE | typeof DOUBLE_QUOTE;
+
+const PLAIN_VALUE_SURROUNDING_QUOTES: PlainValueSurroundingQuote[] = [SINGLE_QUOTE, DOUBLE_QUOTE];
 
 type AsdfrcKeyLine = {
   key: string;
@@ -24,14 +39,19 @@ type AsdfrcKeyLine = {
 
 /** Whether any line of a `~/.asdfrc` text sets `legacy_version_file` to `yes` in any case. */
 export function isAsdfLegacyVersionFileOn(params: { text: string }): boolean {
-  for (const line of params.text.split('\n')) {
+  const lines = params.text.split('\n');
+
+  for (const [lineIndex, line] of lines.entries()) {
     const keyLine = readAsdfrcKeyLine({ line: line });
 
     if (keyLine === null || keyLine.key !== LEGACY_VERSION_FILE_KEY) {
       continue;
     }
 
-    const value = readAsdfrcValue({ valueText: keyLine.valueText });
+    const value = readAsdfrcValue({
+      valueText: keyLine.valueText,
+      followingLines: lines.slice(lineIndex + 1),
+    });
 
     if (value !== null && value.toLowerCase() === 'yes') {
       return true;
@@ -83,8 +103,11 @@ function readAsdfrcKeyLine(params: { line: string }): AsdfrcKeyLine | null {
   };
 }
 
-function findKeyQuote(params: { line: string }): string | null {
-  if (params.line.length > 6 && params.line.startsWith(TRIPLE_QUOTE)) {
+function findKeyQuote(params: { line: string }): KeyOpeningQuote | null {
+  if (
+    params.line.length >= TRIPLE_QUOTED_KEY_MIN_LINE_LENGTH &&
+    params.line.startsWith(TRIPLE_QUOTE)
+  ) {
     return TRIPLE_QUOTE;
   }
 
@@ -99,8 +122,11 @@ function findKeyQuote(params: { line: string }): string | null {
   return null;
 }
 
-/** The value of a key line, or `null` when a backtick or `"""` opens it and does not close it. */
-function readAsdfrcValue(params: { valueText: string }): string | null {
+/**
+ * The value of a key line, continued into the following lines when it ends in `\`, or `null`
+ * when a backtick or `"""` opens it and does not close it on its line.
+ */
+function readAsdfrcValue(params: { valueText: string; followingLines: string[] }): string | null {
   const text = params.valueText.trimStart();
   const valueQuote = findValueQuote({ text: text });
 
@@ -116,10 +142,18 @@ function readAsdfrcValue(params: { valueText: string }): string | null {
   }
 
   const trimmedText = text.trim();
+
+  if (trimmedText.endsWith(CONTINUATION_MARK)) {
+    return readContinuedValue({
+      firstText: trimmedText.slice(0, -CONTINUATION_MARK.length),
+      followingLines: params.followingLines,
+    });
+  }
+
   const commentIndex = trimmedText.search(INLINE_COMMENT_PATTERN);
   const value = commentIndex === -1 ? trimmedText : trimmedText.slice(0, commentIndex).trim();
 
-  for (const quote of SURROUNDING_QUOTES) {
+  for (const quote of PLAIN_VALUE_SURROUNDING_QUOTES) {
     if (isSurroundedByQuote({ value: value, quote: quote })) {
       return value.slice(1, -1);
     }
@@ -128,8 +162,11 @@ function readAsdfrcValue(params: { valueText: string }): string | null {
   return value;
 }
 
-function findValueQuote(params: { text: string }): string | null {
-  if (params.text.length > 3 && params.text.startsWith(TRIPLE_QUOTE)) {
+function findValueQuote(params: { text: string }): ValueOpeningQuote | null {
+  if (
+    params.text.length >= TRIPLE_QUOTED_VALUE_MIN_TEXT_LENGTH &&
+    params.text.startsWith(TRIPLE_QUOTE)
+  ) {
     return TRIPLE_QUOTE;
   }
 
@@ -140,7 +177,36 @@ function findValueQuote(params: { text: string }): string | null {
   return null;
 }
 
-function isSurroundedByQuote(params: { value: string; quote: string }): boolean {
+/**
+ * The continued value: each trimmed following line joins it, until a blank line, the end of the
+ * text, or a line that leaves no trailing `\`.
+ */
+function readContinuedValue(params: { firstText: string; followingLines: string[] }): string {
+  let value = params.firstText;
+
+  for (const line of params.followingLines) {
+    const nextText = line.trim();
+
+    if (nextText === '') {
+      return value;
+    }
+
+    value += nextText;
+
+    if (!value.endsWith(CONTINUATION_MARK)) {
+      return value;
+    }
+
+    value = value.slice(0, -CONTINUATION_MARK.length);
+  }
+
+  return value;
+}
+
+function isSurroundedByQuote(params: {
+  value: string;
+  quote: PlainValueSurroundingQuote;
+}): boolean {
   return (
     params.value.length >= 2 &&
     params.value.startsWith(params.quote) &&

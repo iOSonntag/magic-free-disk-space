@@ -21,6 +21,7 @@ import { recheckAsdfVersionUnit } from '../../src/explore/asdfVersions/recheckAs
 import type { ExploreToolUnitAsdfVersion } from '../../src/explore/exploreUnit.js';
 import type {
   ProjectPinFile,
+  ProjectPinFileRef,
   ProjectPinFileText,
 } from '../../src/explore/projectPins/projectPins.js';
 import {
@@ -81,6 +82,8 @@ const pinFileText: ProjectPinFileText = {
   text: 'nodejs 20.11.1\n',
 };
 
+const pinFileRef: ProjectPinFileRef = { path: pinFileText.path, kind: pinFileText.kind };
+
 const textPins: ToolPins = { kind: 'texts', files: [pinFileText] };
 
 function buildInstalledState(params: Partial<AsdfStateInstalled>): AsdfState {
@@ -99,7 +102,7 @@ function buildOldVersionUnit(): ExploreToolUnitAsdfVersion {
     asdfToolName: nodeToolName,
     version: oldVersion,
     installPath: oldFolder.folderPath,
-    pinFiles: [{ path: pinFileText.path, kind: 'toolVersions' }],
+    pinFiles: [pinFileRef],
   };
 }
 
@@ -195,6 +198,25 @@ describe('isAsdfLegacyVersionFileOn', () => {
     expect(isAsdfLegacyVersionFileOn({ text: "'legacy_version_file' = yes\n" })).toBe(false);
     expect(isAsdfLegacyVersionFileOn({ text: 'legacy_version_file = "yes" x\n' })).toBe(false);
   });
+
+  test('follows a value a trailing \\ continues, as go-ini does', () => {
+    for (const text of [
+      'legacy_version_file = yes\\\n\n',
+      'legacy_version_file = yes\\',
+      'legacy_version_file = \\\nyes\n',
+      'legacy_version_file = ye\\\n  s\n',
+      'legacy_version_file = y\\\ne\\\ns\n',
+    ]) {
+      expect(isAsdfLegacyVersionFileOn({ text: text })).toBe(true);
+    }
+
+    for (const text of [
+      'legacy_version_file = yes\\\nx = y\n',
+      'legacy_version_file = yes # c\\\n\n',
+    ]) {
+      expect(isAsdfLegacyVersionFileOn({ text: text })).toBe(false);
+    }
+  });
 });
 
 describe('decideAsdfVersionOffers', () => {
@@ -282,7 +304,7 @@ describe('buildAsdfVersionFindings', () => {
     const findings = buildAsdfVersionFindings({
       tool: tool,
       offers: [oldFolder],
-      pinFiles: [{ path: pinFileText.path, kind: pinFileText.kind }],
+      pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
       processCommands: [],
     });
@@ -308,7 +330,7 @@ describe('buildAsdfVersionFindings', () => {
     const findings = buildAsdfVersionFindings({
       tool: tool,
       offers: [oldFolder],
-      pinFiles: [{ path: pinFileText.path, kind: pinFileText.kind }],
+      pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [] }),
       processCommands: [`${oldFolder.folderPath}/bin/node server.js`],
     });
