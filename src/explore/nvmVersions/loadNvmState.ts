@@ -2,6 +2,7 @@ import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
+import type { ExploreFileReadText, ExploreFileReadUnfit } from '../loadExploreRead.js';
 import {
   loadExploreDirectoryEntries,
   loadExploreFileText,
@@ -22,12 +23,7 @@ export type NvmVersionFolderUnparsed = { kind: 'unparsed'; folderPath: AbsoluteP
 
 export type NvmVersionFolder = NvmVersionFolderParsed | NvmVersionFolderUnparsed;
 
-export type NvmAliasFileText = { kind: 'text'; text: string };
-
-/** Something is there, but no file to read: another kind, or over the read limit. */
-export type NvmAliasFileUnfit = { kind: 'unfit' };
-
-export type NvmAliasFile = NvmAliasFileText | NvmAliasFileUnfit;
+export type NvmAliasFile = ExploreFileReadText | ExploreFileReadUnfit;
 
 /** The alias files by their name below `~/.nvm/alias`, such as `default` or `lts/iron`, unparsed. */
 export type NvmAliases = ReadonlyMap<string, NvmAliasFile>;
@@ -64,8 +60,9 @@ export async function loadNvmState(params: {
     return { kind: 'succeeded', value: { kind: 'noVersions' } };
   }
 
-  const aliases = await loadNvmAliases({
-    aliasPath: joinAbsolutePath({ parentPath: params.homeDir, names: NVM_ALIAS_PATH_NAMES }),
+  const aliases = await loadNvmAliasFolder({
+    folderPath: joinAbsolutePath({ parentPath: params.homeDir, names: NVM_ALIAS_PATH_NAMES }),
+    namePrefix: '',
   });
 
   if (aliases.kind === 'failed') {
@@ -78,7 +75,7 @@ export async function loadNvmState(params: {
 
   return {
     kind: 'succeeded',
-    value: { kind: 'installed', versionFolders: versionFolders, aliases: aliases.value },
+    value: { kind: 'installed', versionFolders: versionFolders, aliases: new Map(aliases.value) },
   };
 }
 
@@ -97,18 +94,6 @@ function buildNvmVersionFolder(params: {
   }
 
   return { kind: 'parsed', folderPath: folderPath, version: version.value };
-}
-
-async function loadNvmAliases(params: {
-  aliasPath: AbsolutePath;
-}): Promise<Result<NvmAliases, ExploreFileUnreadable>> {
-  const aliases = await loadNvmAliasFolder({ folderPath: params.aliasPath, namePrefix: '' });
-
-  if (aliases.kind === 'failed') {
-    return aliases;
-  }
-
-  return { kind: 'succeeded', value: new Map(aliases.value) };
 }
 
 type NvmAliasEntry = [aliasName: string, file: NvmAliasFile];
@@ -159,11 +144,7 @@ async function loadNvmAliasFile(params: {
     case 'absent':
       return { kind: 'succeeded', value: [] };
     case 'unfit':
-      return { kind: 'succeeded', value: [[params.aliasName, { kind: 'unfit' }]] };
     case 'text':
-      return {
-        kind: 'succeeded',
-        value: [[params.aliasName, { kind: 'text', text: file.value.text }]],
-      };
+      return { kind: 'succeeded', value: [[params.aliasName, file.value]] };
   }
 }

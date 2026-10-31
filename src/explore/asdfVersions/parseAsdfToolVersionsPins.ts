@@ -1,5 +1,8 @@
-import type { ProjectPinFileText } from '../projectPins/projectPins.js';
+import type { ProjectPinFileKind, ProjectPinFileText } from '../projectPins/projectPins.js';
 import { parseToolVersionsText } from './parseToolVersionsText.js';
+
+/** The kinds of the pin files that pin an asdf tool version. */
+export const ASDF_PIN_FILE_KINDS: ProjectPinFileKind[] = ['toolVersions'];
 
 /** A folder name in `installs/<toolName>/` that a `.tool-versions` names, as asdf would use it. */
 export type AsdfPinnedFolder = { toolName: string; folderName: string };

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { chmod, mkdir, symlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type {
   ExplorePathUnitNvmVersion,
@@ -20,10 +20,7 @@ import { parseNvmNodeVersion } from '../../src/explore/nvmVersions/parseNvmNodeV
 import { parseNvmrcPin } from '../../src/explore/nvmVersions/parseNvmrcPin.js';
 import { resolveNvmVersionPin } from '../../src/explore/nvmVersions/resolveNvmVersionPin.js';
 import type { ProjectPinsLoad } from '../../src/explore/projectPins/loadProjectPins.js';
-import type {
-  ProjectPinFile,
-  ProjectPinFileRef,
-} from '../../src/explore/projectPins/projectPins.js';
+import type { ProjectPinFileRef } from '../../src/explore/projectPins/projectPins.js';
 import {
   PINNED_VERSION_REINSTALL_EXPLANATION,
   PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
@@ -37,12 +34,13 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath, buildTestNvmNodeVersion } from '../support/parsedValueFixtures.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
   buildEmptyProjectPinsLoad,
-  buildSettledProjectPinsLoad,
+  buildFoundProjectPinsLoad,
   buildTestPinFileText,
   buildTestPinFileUnreadable,
   buildTestProjectPins,
@@ -574,8 +572,7 @@ describe('the nvm probe and recheck against a fixture home', () => {
   async function writeAlias(params: { name: string; text: string }): Promise<string> {
     const path = join(aliasPath, params.name);
 
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, params.text);
+    await writeFixtureTextFile({ path: path, text: params.text });
 
     return path;
   }
@@ -583,16 +580,9 @@ describe('the nvm probe and recheck against a fixture home', () => {
   async function writeNvmrc(params: { projectName: string; text: string }): Promise<string> {
     const path = join(environment.homeDir, params.projectName, '.nvmrc');
 
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, params.text);
+    await writeFixtureTextFile({ path: path, text: params.text });
 
     return path;
-  }
-
-  function buildPinsLoad(files: ProjectPinFile[]): ProjectPinsLoad {
-    return buildSettledProjectPinsLoad({
-      pins: { kind: 'succeeded', value: buildTestProjectPins({ files: files }) },
-    });
   }
 
   async function probeNvmVersions(projectPins: ProjectPinsLoad): Promise<unknown> {
@@ -622,7 +612,9 @@ describe('the nvm probe and recheck against a fixture home', () => {
 
     expect(
       await probeNvmVersions(
-        buildPinsLoad([buildTestPinFileText({ path: nvmrcPath, kind: 'nvmrc', text: '22\n' })]),
+        buildFoundProjectPinsLoad({
+          files: [buildTestPinFileText({ path: nvmrcPath, kind: 'nvmrc', text: '22\n' })],
+        }),
       ),
     ).toEqual({
       kind: 'probed',
@@ -677,7 +669,7 @@ describe('the nvm probe and recheck against a fixture home', () => {
       kind: 'nvmrc',
     });
 
-    expect(await probeNvmVersions(buildPinsLoad([pinFile]))).toEqual({
+    expect(await probeNvmVersions(buildFoundProjectPinsLoad({ files: [pinFile] }))).toEqual({
       kind: 'unreadable',
       path: pinFile.path,
       failure: { reason: 'permissionDenied', code: 'EACCES' },

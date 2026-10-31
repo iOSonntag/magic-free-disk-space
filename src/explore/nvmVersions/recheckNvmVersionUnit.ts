@@ -5,6 +5,7 @@ import { loadProjectPinFiles } from '../projectPins/loadProjectPins.js';
 import { selectToolPins } from '../projectPins/selectToolPins.js';
 import { compareNvmVersionUnit } from './compareNvmVersionUnit.js';
 import { loadNvmState } from './loadNvmState.js';
+import { NVM_PIN_FILE_KINDS } from './parseNvmrcPin.js';
 
 /** Reads the versions, the aliases, and the unit's pin files again and compares them with it. */
 export async function recheckNvmVersionUnit(params: {
@@ -19,7 +20,7 @@ export async function recheckNvmVersionUnit(params: {
   }
 
   const pinFiles = await loadProjectPinFiles({ files: params.unit.pinFiles });
-  const toolPins = selectToolPins({ pins: pinFiles, kinds: ['nvmrc'] });
+  const toolPins = selectToolPins({ pins: pinFiles, kinds: NVM_PIN_FILE_KINDS });
 
   if (toolPins.kind === 'failed') {
     return toolPins;

@@ -13,7 +13,7 @@ export type AsdfVersionOffers = { offers: AsdfVersionFolderParsed[]; isComplete:
  */
 export function decideAsdfVersionOffers(params: {
   state: AsdfState;
-  pins: ToolPins;
+  toolPins: ToolPins;
 }): AsdfVersionOffers {
   switch (params.state.kind) {
     case 'noInstalls':
@@ -32,7 +32,7 @@ export function decideAsdfVersionOffers(params: {
 
   const hasUnparsedFolder = params.state.folders.some((folder) => folder.kind === 'unparsed');
 
-  switch (params.pins.kind) {
+  switch (params.toolPins.kind) {
     case 'everyVersionPinned':
       return { offers: [], isComplete: !hasUnparsedFolder };
     case 'texts':
@@ -40,7 +40,7 @@ export function decideAsdfVersionOffers(params: {
   }
 
   const pinnedFolderKeys = buildPinnedFolderKeys({
-    pinnedFolders: parseAsdfToolVersionsPins({ files: params.pins.files }),
+    pinnedFolders: parseAsdfToolVersionsPins({ files: params.toolPins.files }),
     links: params.state.links,
   });
   const offers = params.state.folders.flatMap((folder) =>

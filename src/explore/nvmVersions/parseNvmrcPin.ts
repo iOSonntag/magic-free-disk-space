@@ -1,3 +1,8 @@
+import type { ProjectPinFileKind } from '../projectPins/projectPins.js';
+
+/** The kinds of the pin files that pin an nvm Node.js. */
+export const NVM_PIN_FILE_KINDS: ProjectPinFileKind[] = ['nvmrc'];
+
 // The POSIX `[[:space:]]` class that nvm's `sed` trims with.
 const EDGE_SPACE_PATTERN = /^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$/g;
 

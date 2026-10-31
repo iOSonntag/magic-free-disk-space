@@ -10,11 +10,11 @@ import type {
   AsdfStateInstalled,
   AsdfVersionFolderParsed,
 } from '../../src/explore/asdfVersions/loadAsdfState.js';
-import { isAsdfLegacyVersionFileOn } from '../../src/explore/asdfVersions/loadAsdfState.js';
 import {
   parseAsdfToolName,
   parseAsdfToolVersion,
 } from '../../src/explore/asdfVersions/parseAsdfInstallNames.js';
+import { isAsdfLegacyVersionFileOn } from '../../src/explore/asdfVersions/parseAsdfrcText.js';
 import { parseAsdfToolVersionsPins } from '../../src/explore/asdfVersions/parseAsdfToolVersionsPins.js';
 import { parseToolVersionsText } from '../../src/explore/asdfVersions/parseToolVersionsText.js';
 import { recheckAsdfVersionUnit } from '../../src/explore/asdfVersions/recheckAsdfVersionUnit.js';
@@ -35,6 +35,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import {
   buildTestAbsolutePath,
@@ -43,7 +44,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
-  buildSettledProjectPinsLoad,
+  buildFoundProjectPinsLoad,
   buildTestPinFileText,
   buildTestPinFileUnfit,
   buildTestPinFileUnreadable,
@@ -182,19 +183,21 @@ describe('isAsdfLegacyVersionFileOn', () => {
 
 describe('decideAsdfVersionOffers', () => {
   test('offers each version no .tool-versions names', () => {
-    expect(decideAsdfVersionOffers({ state: buildInstalledState({}), pins: textPins })).toEqual({
-      offers: [oldFolder],
-      isComplete: true,
-    });
+    const offers = decideAsdfVersionOffers({ state: buildInstalledState({}), toolPins: textPins });
+
+    expect(offers).toEqual({ offers: [oldFolder], isComplete: true });
   });
 
   test('a pin of a link pins the folder it resolves to', () => {
     const state = buildInstalledState({
       links: [{ asdfToolName: nodeToolName, linkName: 'lts', folderName: '18.0.0' }],
     });
-    const pins: ToolPins = { kind: 'texts', files: [{ ...pinFileText, text: 'nodejs lts\n' }] };
+    const toolPins: ToolPins = {
+      kind: 'texts',
+      files: [{ ...pinFileText, text: 'nodejs lts\n' }],
+    };
 
-    expect(decideAsdfVersionOffers({ state: state, pins: pins })).toEqual({
+    expect(decideAsdfVersionOffers({ state: state, toolPins: toolPins })).toEqual({
       offers: [pinnedFolder],
       isComplete: true,
     });
@@ -204,7 +207,7 @@ describe('decideAsdfVersionOffers', () => {
     expect(
       decideAsdfVersionOffers({
         state: buildInstalledState({}),
-        pins: { kind: 'everyVersionPinned' },
+        toolPins: { kind: 'everyVersionPinned' },
       }),
     ).toEqual({ offers: [], isComplete: true });
   });
@@ -217,9 +220,9 @@ describe('decideAsdfVersionOffers', () => {
       ],
     });
 
-    const pins: ToolPins = { kind: 'everyVersionPinned' };
+    const toolPins: ToolPins = { kind: 'everyVersionPinned' };
 
-    expect(decideAsdfVersionOffers({ state: state, pins: pins })).toEqual({
+    expect(decideAsdfVersionOffers({ state: state, toolPins: toolPins })).toEqual({
       offers: [],
       isComplete: false,
     });
@@ -230,7 +233,7 @@ describe('decideAsdfVersionOffers', () => {
       expect(
         decideAsdfVersionOffers({
           state: buildInstalledState({ legacyVersionFile: legacyVersionFile }),
-          pins: textPins,
+          toolPins: textPins,
         }),
       ).toEqual({ offers: [], isComplete: false });
     }
@@ -244,14 +247,14 @@ describe('decideAsdfVersionOffers', () => {
       ],
     });
 
-    expect(decideAsdfVersionOffers({ state: state, pins: textPins })).toEqual({
+    expect(decideAsdfVersionOffers({ state: state, toolPins: textPins })).toEqual({
       offers: [oldFolder],
       isComplete: false,
     });
   });
 
   test('is judged with no offers when nothing is installed', () => {
-    expect(decideAsdfVersionOffers({ state: { kind: 'noInstalls' }, pins: textPins })).toEqual({
+    expect(decideAsdfVersionOffers({ state: { kind: 'noInstalls' }, toolPins: textPins })).toEqual({
       offers: [],
       isComplete: true,
     });
@@ -263,7 +266,7 @@ describe('buildAsdfVersionFindings', () => {
     const findings = buildAsdfVersionFindings({
       tool: tool,
       offers: [oldFolder],
-      toolPins: textPins,
+      pinFiles: [{ path: pinFileText.path, kind: pinFileText.kind }],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
       processCommands: [],
     });
@@ -289,7 +292,7 @@ describe('buildAsdfVersionFindings', () => {
     const findings = buildAsdfVersionFindings({
       tool: tool,
       offers: [oldFolder],
-      toolPins: textPins,
+      pinFiles: [{ path: pinFileText.path, kind: pinFileText.kind }],
       projectPins: buildTestProjectPins({ files: [] }),
       processCommands: [`${oldFolder.folderPath}/bin/node server.js`],
     });
@@ -305,7 +308,7 @@ describe('compareAsdfVersionUnit', () => {
       compareAsdfVersionUnit({
         unit: buildOldVersionUnit(),
         state: buildInstalledState({}),
-        pins: textPins,
+        toolPins: textPins,
         processCommands: [],
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -322,7 +325,7 @@ describe('compareAsdfVersionUnit', () => {
       compareAsdfVersionUnit({
         unit: unit,
         state: buildInstalledState({}),
-        pins: nowPinned,
+        toolPins: nowPinned,
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -330,7 +333,7 @@ describe('compareAsdfVersionUnit', () => {
       compareAsdfVersionUnit({
         unit: unit,
         state: buildInstalledState({ legacyVersionFile: 'on' }),
-        pins: textPins,
+        toolPins: textPins,
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -341,7 +344,7 @@ describe('compareAsdfVersionUnit', () => {
       compareAsdfVersionUnit({
         unit: buildOldVersionUnit(),
         state: buildInstalledState({ folders: [pinnedFolder] }),
-        pins: textPins,
+        toolPins: textPins,
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -352,7 +355,7 @@ describe('compareAsdfVersionUnit', () => {
       compareAsdfVersionUnit({
         unit: buildOldVersionUnit(),
         state: buildInstalledState({}),
-        pins: textPins,
+        toolPins: textPins,
         processCommands: null,
       }),
     ).toEqual({ kind: 'busy' });
@@ -383,16 +386,16 @@ describe('the asdf probe and recheck against a fixture home', () => {
   async function writeInstalls(): Promise<void> {
     await writeVersionFolder({ toolName: 'nodejs', version: '18.0.0' });
     await writeVersionFolder({ toolName: 'nodejs', version: '20.11.1' });
-    await mkdir(join(environment.homeDir, '.asdf', 'installs', 'flutter'), { recursive: true });
-    await writeFile(join(environment.homeDir, '.asdf', 'installs', 'flutter', '.DS_Store'), '');
+    await writeFixtureTextFile({
+      path: join(environment.homeDir, '.asdf', 'installs', 'flutter', '.DS_Store'),
+      text: '',
+    });
   }
 
   async function writePinFile(params: { text: string }): Promise<string> {
-    const projectPath = join(environment.homeDir, 'project');
-    const path = join(projectPath, '.tool-versions');
+    const path = join(environment.homeDir, 'project', '.tool-versions');
 
-    await mkdir(projectPath, { recursive: true });
-    await writeFile(path, params.text);
+    await writeFixtureTextFile({ path: path, text: params.text });
 
     return path;
   }
@@ -413,9 +416,7 @@ describe('the asdf probe and recheck against a fixture home', () => {
       ),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
-      projectPins: buildSettledProjectPinsLoad({
-        pins: { kind: 'succeeded', value: buildTestProjectPins({ files: params.files }) },
-      }),
+      projectPins: buildFoundProjectPinsLoad({ files: params.files }),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: 0,
     });

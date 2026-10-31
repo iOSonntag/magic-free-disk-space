@@ -12,10 +12,10 @@ import type { AsdfState } from './loadAsdfState.js';
 export function compareAsdfVersionUnit(params: {
   unit: ExploreToolUnitAsdfVersion;
   state: AsdfState;
-  pins: ToolPins;
+  toolPins: ToolPins;
   processCommands: string[] | null;
 }): UnitComparison {
-  const offers = decideAsdfVersionOffers({ state: params.state, pins: params.pins });
+  const offers = decideAsdfVersionOffers({ state: params.state, toolPins: params.toolPins });
   const isStillOffered = offers.offers.some(
     (offer) =>
       offer.folderPath === params.unit.installPath &&
