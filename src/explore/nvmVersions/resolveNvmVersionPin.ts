@@ -1,3 +1,4 @@
+import { compareDottedVersions } from '../compareDottedVersions.js';
 import type { NvmAliases } from './loadNvmState.js';
 import { parseNvmAliasText } from './parseNvmAliasText.js';
 import type { NvmNodeVersion } from './parseNvmNodeVersion.js';
@@ -120,26 +121,13 @@ function resolveNvmVersionName(params: {
 }
 
 function selectNewestNvmVersion(params: { versions: NvmNodeVersion[] }): NvmPinResolution {
-  const newest = params.versions.toSorted(compareNvmVersions).at(-1);
+  const newest = params.versions
+    .toSorted((left, right) => compareDottedVersions(left.slice(1), right.slice(1)))
+    .at(-1);
 
   if (newest === undefined) {
     return { kind: 'noFolder' };
   }
 
   return { kind: 'version', version: newest };
-}
-
-function compareNvmVersions(left: NvmNodeVersion, right: NvmNodeVersion): number {
-  const leftGroups = left.slice(1).split('.').map(Number);
-  const rightGroups = right.slice(1).split('.').map(Number);
-
-  for (const [index, leftGroup] of leftGroups.entries()) {
-    const difference = leftGroup - (rightGroups[index] ?? 0);
-
-    if (difference !== 0) {
-      return difference;
-    }
-  }
-
-  return 0;
 }

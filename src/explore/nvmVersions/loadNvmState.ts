@@ -7,11 +7,9 @@ import {
   loadExploreFileText,
   loadExploreFolderNames,
 } from '../loadExploreRead.js';
-import { NVM_NODE_VERSIONS_PATH_NAMES } from './nvmVersionsRoot.js';
+import { NVM_ALIAS_PATH_NAMES, NVM_NODE_VERSIONS_PATH_NAMES } from './nvmVersionsRoot.js';
 import type { NvmNodeVersion } from './parseNvmNodeVersion.js';
 import { parseNvmNodeVersion } from './parseNvmNodeVersion.js';
-
-const NVM_ALIAS_PATH_NAMES = ['.nvm', 'alias'];
 
 export type NvmVersionFolderParsed = {
   kind: 'parsed';

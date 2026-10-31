@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { ExplorePathUnitNvmVersion } from '../../src/explore/exploreUnit.js';
+import type {
+  ExplorePathUnitNvmVersion,
+  ExploreProbeFindings,
+} from '../../src/explore/exploreUnit.js';
 import { buildNvmVersionFindings } from '../../src/explore/nvmVersions/buildNvmVersionFindings.js';
 import { compareNvmVersionUnit } from '../../src/explore/nvmVersions/compareNvmVersionUnit.js';
 import type { NvmVersionOffers } from '../../src/explore/nvmVersions/decideNvmVersionOffers.js';
@@ -60,23 +63,22 @@ function buildFixtureFolder(params: { folderName: string }): NvmVersionFolder {
   return { kind: 'parsed', folderPath: folderPath, version: version.value };
 }
 
+function buildAliasTexts(texts: Record<string, string>): Record<string, NvmAliasFile> {
+  return Object.fromEntries(
+    Object.entries(texts).map(([name, text]) => [name, { kind: 'text', text: text }]),
+  );
+}
+
 function buildFixtureState(params: {
   folderNames: string[];
   aliases?: Record<string, string>;
 }): NvmState {
-  const aliases = new Map<string, NvmAliasFile>(
-    Object.entries(params.aliases ?? {}).map(([name, text]) => [
-      name,
-      { kind: 'text', text: text },
-    ]),
-  );
-
   return {
     kind: 'installed',
     versionFolders: params.folderNames.map((folderName) =>
       buildFixtureFolder({ folderName: folderName }),
     ),
-    aliases: aliases,
+    aliases: new Map(Object.entries(buildAliasTexts(params.aliases ?? {}))),
   };
 }
 
@@ -180,12 +182,6 @@ describe('resolveNvmVersionPin', () => {
 
   function buildVersionResolution(text: string): unknown {
     return { kind: 'version', version: buildTestNvmNodeVersion({ text: text }) };
-  }
-
-  function buildAliasTexts(texts: Record<string, string>): Record<string, NvmAliasFile> {
-    return Object.fromEntries(
-      Object.entries(texts).map(([name, text]) => [name, { kind: 'text', text: text }]),
-    );
   }
 
   test('resolves a partial version to the newest installed one it matches', () => {
@@ -406,7 +402,7 @@ describe('buildNvmVersionFindings', () => {
     offers: NvmVersionOffers;
     isWalkComplete: boolean;
     processCommands: string[] | null;
-  }): ReturnType<typeof buildNvmVersionFindings> {
+  }): ExploreProbeFindings {
     return buildNvmVersionFindings({
       offers: params.offers,
       pinFiles: pinFiles,
@@ -418,7 +414,7 @@ describe('buildNvmVersionFindings', () => {
   test('builds a careful unit with its pin files and the evidence of the default', () => {
     const built = buildFindings({
       offers: {
-        offers: [{ folderPath: folderPath, version: version }],
+        offers: [{ kind: 'parsed', folderPath: folderPath, version: version }],
         isComplete: true,
         defaultAlias: {
           kind: 'version',
@@ -464,7 +460,7 @@ describe('buildNvmVersionFindings', () => {
     ] as const) {
       const built = buildFindings({
         offers: {
-          offers: [{ folderPath: folderPath, version: version }],
+          offers: [{ kind: 'parsed', folderPath: folderPath, version: version }],
           isComplete: true,
           defaultAlias: defaultAlias,
         },
@@ -482,7 +478,7 @@ describe('buildNvmVersionFindings', () => {
 
   test('is busy while a process runs from the version folder, and unknown without processes', () => {
     const offers: NvmVersionOffers = {
-      offers: [{ folderPath: folderPath, version: version }],
+      offers: [{ kind: 'parsed', folderPath: folderPath, version: version }],
       isComplete: true,
       defaultAlias: { kind: 'none' },
     };

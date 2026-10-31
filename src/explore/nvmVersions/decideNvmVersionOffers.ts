@@ -1,29 +1,26 @@
-import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { ToolPins } from '../projectPins/selectToolPins.js';
-import type { NvmState, NvmStateInstalled } from './loadNvmState.js';
+import type { NvmAliases, NvmState, NvmVersionFolderParsed } from './loadNvmState.js';
 import type { NvmNodeVersion } from './parseNvmNodeVersion.js';
 import { parseNvmrcPin } from './parseNvmrcPin.js';
-import type { NvmPinResolution } from './resolveNvmVersionPin.js';
+import type {
+  NvmPinResolution,
+  NvmPinResolutionNoFolder,
+  NvmPinResolutionUnresolved,
+  NvmPinResolutionVersion,
+} from './resolveNvmVersionPin.js';
 import { resolveNvmVersionPin } from './resolveNvmVersionPin.js';
 
-export type NvmVersionOffer = { folderPath: AbsolutePath; version: NvmNodeVersion };
-
 export type NvmDefaultAliasNone = { kind: 'none' };
-
-/** The default alias names no installed folder, such as `system` or a version not installed. */
-export type NvmDefaultAliasNoFolder = { kind: 'noFolder' };
-
-export type NvmDefaultAliasVersion = { kind: 'version'; version: NvmNodeVersion };
 
 /** What the default alias resolved to, for the evidence of an offered version. */
 export type NvmDefaultAlias =
   | NvmDefaultAliasNone
-  | NvmDefaultAliasNoFolder
-  | NvmDefaultAliasVersion;
+  | NvmPinResolutionNoFolder
+  | NvmPinResolutionVersion;
 
 /** The offered versions; `isComplete` is false when a folder or a pin could not be judged. */
 export type NvmVersionOffers = {
-  offers: NvmVersionOffer[];
+  offers: NvmVersionFolderParsed[];
   isComplete: boolean;
   defaultAlias: NvmDefaultAlias;
 };
@@ -42,24 +39,24 @@ export function decideNvmVersionOffers(params: {
     return { offers: [], isComplete: true, defaultAlias: { kind: 'none' } };
   }
 
-  // A local keeps the narrowing to `installed` inside the callbacks below.
-  const state = params.state;
-  const hasUnparsedFolder = state.versionFolders.some((folder) => folder.kind === 'unparsed');
+  const hasUnparsedFolder = params.state.versionFolders.some(
+    (folder) => folder.kind === 'unparsed',
+  );
 
   if (params.toolPins.kind === 'everyVersionPinned') {
     return { offers: [], isComplete: !hasUnparsedFolder, defaultAlias: { kind: 'none' } };
   }
 
-  const parsedFolders = state.versionFolders.flatMap((folder) =>
+  const aliases = params.state.aliases;
+  const parsedFolders = params.state.versionFolders.flatMap((folder) =>
     folder.kind === 'parsed' ? [folder] : [],
   );
   const versions = parsedFolders.map((folder) => folder.version);
-  const defaultResolution = resolveNvmDefaultAlias({ state: state, versions: versions });
+  const defaultResolution = resolveNvmDefaultAlias({ aliases: aliases, versions: versions });
   const pinResolutions = params.toolPins.files.map((file) =>
-    resolveNvmrcText({ text: file.text, state: state, versions: versions }),
+    resolveNvmrcText({ text: file.text, aliases: aliases, versions: versions }),
   );
-  const resolutions =
-    defaultResolution === null ? pinResolutions : [defaultResolution, ...pinResolutions];
+  const resolutions = [defaultResolution, ...pinResolutions];
 
   if (resolutions.some((resolution) => resolution.kind === 'unresolved')) {
     return { offers: [], isComplete: false, defaultAlias: { kind: 'none' } };
@@ -70,36 +67,32 @@ export function decideNvmVersionOffers(params: {
       resolution.kind === 'version' ? [resolution.version] : [],
     ),
   );
-  const offers = parsedFolders
-    .filter((folder) => !pinnedVersions.has(folder.version))
-    .map((folder) => ({ folderPath: folder.folderPath, version: folder.version }));
 
   return {
-    offers: offers,
+    offers: parsedFolders.filter((folder) => !pinnedVersions.has(folder.version)),
     isComplete: !hasUnparsedFolder,
     defaultAlias: decideNvmDefaultAlias({ resolution: defaultResolution }),
   };
 }
 
-/** `null` without a default alias file, which pins no folder. */
 function resolveNvmDefaultAlias(params: {
-  state: NvmStateInstalled;
+  aliases: NvmAliases;
   versions: NvmNodeVersion[];
-}): NvmPinResolution | null {
-  if (!params.state.aliases.has(DEFAULT_ALIAS_NAME)) {
-    return null;
+}): NvmDefaultAlias | NvmPinResolutionUnresolved {
+  if (!params.aliases.has(DEFAULT_ALIAS_NAME)) {
+    return { kind: 'none' };
   }
 
   return resolveNvmVersionPin({
     pin: DEFAULT_ALIAS_NAME,
-    aliases: params.state.aliases,
+    aliases: params.aliases,
     versions: params.versions,
   });
 }
 
 function resolveNvmrcText(params: {
   text: string;
-  state: NvmStateInstalled;
+  aliases: NvmAliases;
   versions: NvmNodeVersion[];
 }): NvmPinResolution {
   const pin = parseNvmrcPin({ text: params.text });
@@ -110,20 +103,19 @@ function resolveNvmrcText(params: {
 
   return resolveNvmVersionPin({
     pin: pin,
-    aliases: params.state.aliases,
+    aliases: params.aliases,
     versions: params.versions,
   });
 }
 
-function decideNvmDefaultAlias(params: { resolution: NvmPinResolution | null }): NvmDefaultAlias {
-  if (params.resolution === null) {
-    return { kind: 'none' };
-  }
-
+function decideNvmDefaultAlias(params: {
+  resolution: NvmDefaultAlias | NvmPinResolutionUnresolved;
+}): NvmDefaultAlias {
   switch (params.resolution.kind) {
-    case 'version':
-      return { kind: 'version', version: params.resolution.version };
+    case 'none':
     case 'noFolder':
+    case 'version':
+      return params.resolution;
     case 'unresolved':
       return { kind: 'noFolder' };
   }
