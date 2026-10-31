@@ -45,7 +45,7 @@ export function buildPnpmStoreFindings(params: {
       risk: 'careful',
       evidenceLines: [
         installedEvidence,
-        `None of the ${params.pinFiles.length} \`package.json\`, \`.tool-versions\`, and mise configs found pins a pnpm that uses ${offer.storeVersion}.`,
+        `None of the \`package.json\`, \`.tool-versions\`, and mise configs found (${params.pinFiles.length}) pins a pnpm that uses ${offer.storeVersion}.`,
         ...searchEvidence,
       ],
       displayPath: offer.folderPath,

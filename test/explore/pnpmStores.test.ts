@@ -406,7 +406,7 @@ describe('buildPnpmStoreFindings', () => {
           risk: 'careful',
           evidenceLines: [
             'Installed pnpm: 10.14.0 (store v10), 11.1.2 (store v11).',
-            'None of the 1 `package.json`, `.tool-versions`, and mise configs found pins a pnpm that uses v3.',
+            'None of the `package.json`, `.tool-versions`, and mise configs found (1) pins a pnpm that uses v3.',
             PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
           ],
           displayPath: '/store/v3',
@@ -434,7 +434,7 @@ describe('buildPnpmStoreFindings', () => {
       expect.objectContaining({
         evidenceLines: [
           'Installed pnpm: none found.',
-          'None of the 0 `package.json`, `.tool-versions`, and mise configs found pins a pnpm that uses v3.',
+          'None of the `package.json`, `.tool-versions`, and mise configs found (0) pins a pnpm that uses v3.',
         ],
         activity: 'busy',
       }),
