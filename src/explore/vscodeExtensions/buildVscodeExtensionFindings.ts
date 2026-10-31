@@ -1,3 +1,4 @@
+import { compareDottedVersions } from '../compareDottedVersions.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type {
   ExploreFinding,
@@ -133,28 +134,12 @@ function findNewestVersion(params: {
   const newerVersions = params.state.folders
     .filter((other) => other.extensionId.toLowerCase() === extensionId)
     .map((other) => other.version)
-    .filter((version) => compareVersions({ left: version, right: params.folder.version }) > 0);
+    .filter((version) => compareDottedVersions(version, params.folder.version) > 0);
   const [newestVersion] = newerVersions.toSorted((left, right) =>
-    compareVersions({ left: right, right: left }),
+    compareDottedVersions(right, left),
   );
 
   return newestVersion ?? null;
-}
-
-/** Below zero when `left` is older, above when newer; both are `<major>.<minor>.<patch>`. */
-function compareVersions(params: { left: string; right: string }): number {
-  const leftParts = params.left.split('.').map(Number);
-  const rightParts = params.right.split('.').map(Number);
-
-  for (const [index, leftPart] of leftParts.entries()) {
-    const difference = leftPart - (rightParts[index] ?? 0);
-
-    if (difference !== 0) {
-      return difference;
-    }
-  }
-
-  return 0;
 }
 
 function buildVscodeExtensionFinding(params: {

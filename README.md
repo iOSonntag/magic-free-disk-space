@@ -33,14 +33,15 @@ instead. Explore offers:
   whose API level no project's `compileSdk` names, are deleted as their folder.
 - Old versions of Homebrew packages, with `brew cleanup <package>`, and packages that nothing
   needs any more, with `brew autoremove`.
-- Unused Dart and Flutter packages, with `dart pub cache gc`, and mise tool versions no project
-  pins, with `mise uninstall`.
+- Unused Dart and Flutter packages, with `dart pub cache gc`.
+- Tool versions no project pins: mise versions, with `mise uninstall`, and asdf versions, with
+  `asdf uninstall`. Node.js versions of nvm that neither its default alias nor any `.nvmrc`
+  resolves to are deleted as their folder.
 - Visual Studio Code extensions that VS Code marked for removal or that a newer version of them
   replaced, deleted as their folder.
 
 Other places are only shown with advice, because the tool that owns them must clean them:
-Docker images, the pnpm store, Homebrew apps, Node.js versions not installed with mise, iPhone
-backups, and more.
+Docker images, the pnpm store, Homebrew apps, iPhone backups, and more.
 
 ## Usage
 
@@ -158,7 +159,8 @@ Android and VS Code items, it also reads their own records: the SDK's `package.x
 emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. To
 learn which tool versions your projects pin, it reads their `.tool-versions`, `.nvmrc`,
 `build.gradle`, `build.gradle.kts`, and mise config files, the `package.json` files that have a
-`pnpm-lock.yaml` beside them, and those of the configs mise tracks. It only reads them.
+`pnpm-lock.yaml` beside them, those of the configs mise tracks, nvm's alias files, and asdf's
+`~/.asdfrc`. It only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
 simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
@@ -184,12 +186,16 @@ fixed environment that keeps it offline where the tool allows that.
   would be deleted with that folder.
 - An app's last use is read from the files the app writes, not from Spotlight, which does not
   record it reliably. An app with no such files is never offered.
-- An Android platform counts as pinned only by a `build.gradle` or `build.gradle.kts` file the
-  search for project build folders reaches in your home folder. The search does not reach a file
-  in a folder more than 7 folders below your home folder, in a hidden folder, in a folder named
-  like a project build folder, such as `node_modules`, in your `Applications`, `Library`, `Movies`,
-  `Music`, `Pictures`, or `Public` folder, or outside your home folder, such as on a disk mounted
-  elsewhere.
+- A tool version or Android platform counts as pinned only by a pin file, such as a
+  `.tool-versions` or `build.gradle`, that the search for project build folders reaches in your
+  home folder, by a config mise tracks, or, for nvm, by its default alias. The search does not
+  reach a file in a folder more than 7 folders below your home folder, in a hidden folder, in a
+  folder named like a project build folder, such as `node_modules`, in your `Applications`,
+  `Library`, `Movies`, `Music`, `Pictures`, or `Public` folder, or outside your home folder, such
+  as on a disk mounted elsewhere.
+- nvm's `NVM_ONLY` setting lives in your shell, which the scan does not see. Your default alias and
+  each `.nvmrc` resolve as if it were unset, so the Node.js version nvm picks under it may be
+  offered.
 - macOS only.
 
 ## Development
