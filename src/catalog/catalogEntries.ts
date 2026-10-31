@@ -266,7 +266,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'androidPlatforms',
       advice:
         'Remove platform versions you no longer build for with `sdkmanager --uninstall "platforms;android-<api>"`.',
     },
@@ -403,7 +404,28 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'pnpmStores',
+      advice:
+        'Run `pnpm store prune` to drop packages no project uses. Do not delete the store by hand: projects link their packages into it.',
+    },
+  },
+  {
+    id: 'pnpm-store-xdg',
+    category: 'packages',
+    title: 'pnpm package store in .local/share',
+    explanation:
+      'The store of pnpm in its XDG data folder, into which projects link their packages; do not delete it by hand.',
+    regeneration: 'Projects download their packages again on their next install.',
+    risk: 'review',
+    root: 'home',
+    path: '.local/share/pnpm/store',
+    scope: 'self',
+    ageRule: 'none',
+    ownerBundleId: null,
+    removal: {
+      kind: 'explore',
+      probe: 'pnpmStoresXdg',
       advice:
         'Run `pnpm store prune` to drop packages no project uses. Do not delete the store by hand: projects link their packages into it.',
     },
@@ -477,7 +499,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'nvmVersions',
       advice:
         'Keep the version you use (`nvm current`) and remove the others with `nvm uninstall <version>`.',
     },
@@ -495,7 +518,8 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     ageRule: 'none',
     ownerBundleId: null,
     removal: {
-      kind: 'advice',
+      kind: 'explore',
+      probe: 'asdfVersions',
       advice: 'Remove tool versions you no longer use with `asdf uninstall <tool> <version>`.',
     },
   },

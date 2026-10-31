@@ -113,6 +113,7 @@ async function isLocatedToolAccepted(params: { tool: LocatedTool }): Promise<boo
     case 'brewAppleSilicon':
     case 'brewIntel':
     case 'avdmanager':
+    case 'asdf':
       return true;
   }
 }
@@ -153,6 +154,7 @@ async function loadToolBinaryPath(params: {
     case 'brewAppleSilicon':
     case 'brewIntel':
     case 'avdmanager':
+    case 'asdf':
       return realPath;
   }
 }

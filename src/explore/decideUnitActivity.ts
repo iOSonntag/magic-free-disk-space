@@ -1,3 +1,4 @@
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { UnitActivity } from './exploreUnit.js';
 
 /** What a probe saw of a simulator device; `state` as `simctl` reports it, such as `Shutdown`. */
@@ -9,13 +10,18 @@ export type UnitActivityFactsMiseVersion = { kind: 'miseVersion' };
 
 export type UnitActivityFactsSimulatorRuntime = { kind: 'simulatorRuntime' };
 
-/** Every Android unit: an AVD, a system image, and the emulator package. */
+/** Every Android unit: an AVD, a system image, the emulator package, and a platform. */
 export type UnitActivityFactsAndroid = { kind: 'android' };
 
 /** Both Homebrew units: the old versions of a formula, and the orphans. */
 export type UnitActivityFactsHomebrew = { kind: 'homebrew' };
 
 export type UnitActivityFactsVscodeExtension = { kind: 'vscodeExtension' };
+
+/** The install folder of one version, an asdf version's or an nvm version's. */
+export type UnitActivityFactsVersionFolder = { kind: 'versionFolder'; folderPath: AbsolutePath };
+
+export type UnitActivityFactsPnpmStore = { kind: 'pnpmStore' };
 
 /** The facts of a probe that the busy rule of each unit kind reads. */
 export type UnitActivityFacts =
@@ -25,7 +31,9 @@ export type UnitActivityFacts =
   | UnitActivityFactsSimulatorRuntime
   | UnitActivityFactsAndroid
   | UnitActivityFactsHomebrew
-  | UnitActivityFactsVscodeExtension;
+  | UnitActivityFactsVscodeExtension
+  | UnitActivityFactsVersionFolder
+  | UnitActivityFactsPnpmStore;
 
 const SIMULATOR_APP_EXECUTABLE_PATH_PART = '/Simulator.app/Contents/MacOS/Simulator';
 
@@ -42,6 +50,9 @@ const HOMEBREW_RUBY_ENTRY_PATH_PART = '/Library/Homebrew/brew.rb';
 
 // The app and each of its helpers run from inside the bundle, wherever it is installed.
 const VSCODE_BUNDLE_PATH_PART = '/Visual Studio Code.app/Contents/';
+
+// pnpm or pnpx as the last segment of a path or the whole program, its launcher or its script.
+const PNPM_PROGRAM_PATTERN = /(^|\/)pnp[mx](\.[cm]?js)?( |$)/;
 
 /**
  * The one busy rule of the explore units, at the scan and right before a run. `unknown` only for
@@ -78,6 +89,19 @@ export function decideUnitActivity(params: {
       return decideProcessActivity({
         processCommands: params.processCommands,
         isOwnerProcess: (command) => command.includes(VSCODE_BUNDLE_PATH_PART),
+      });
+    case 'versionFolder': {
+      const folderPathPrefix = `${params.facts.folderPath}/`;
+
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) => command.includes(folderPathPrefix),
+      });
+    }
+    case 'pnpmStore':
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) => PNPM_PROGRAM_PATTERN.test(command),
       });
   }
 }

@@ -22,13 +22,15 @@ It looks where space hides from people who are not storage experts:
 - **The Trash**.
 
 Under **Explore**, items a developer tool owns are offered with the reasons for each, and removed
-by the tool's own command where it has one:
+by the tool's own command where it has one. An item the scan cannot judge, such as a tool version
+a project may pin in a file the scan does not read, is not offered, and the tool's advice shows
+instead. Explore offers:
 
 - Simulators whose runtime is gone, with `xcrun simctl delete`, and simulator runtimes no
   available simulator uses and not used for 180 days, with `xcrun simctl runtime delete`.
 - Android emulators not used for 180 days, with `avdmanager delete avd`. Android system images
-  no emulator uses, and the Android emulator program while no emulator exists, are deleted as
-  their folder.
+  no emulator uses, the Android emulator program while no emulator exists, and Android platforms
+  whose API level no project's `compileSdk` names, are deleted as their folder.
 - Old versions of Homebrew packages, with `brew cleanup <package>`, and packages that nothing
   needs any more, with `brew autoremove`.
 - Unused Dart and Flutter packages, with `dart pub cache gc`, and mise tool versions no project
@@ -153,8 +155,10 @@ bun run app:run        # build and start a debug version
 The tool works offline. It sends nothing anywhere and has no telemetry. It reads file sizes,
 dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`. To judge
 Android and VS Code items, it also reads their own records: the SDK's `package.xml` files, each
-emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. It
-only reads them.
+emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. To
+learn which tool versions your projects pin, it reads their `.tool-versions`, `.nvmrc`,
+`build.gradle`, `build.gradle.kts`, and mise config files, the `package.json` files that have a
+`pnpm-lock.yaml` beside them, and those of the configs mise tracks. It only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
 simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
@@ -180,6 +184,12 @@ fixed environment that keeps it offline where the tool allows that.
   would be deleted with that folder.
 - An app's last use is read from the files the app writes, not from Spotlight, which does not
   record it reliably. An app with no such files is never offered.
+- An Android platform counts as pinned only by a `build.gradle` or `build.gradle.kts` file the
+  search for project build folders reaches in your home folder. The search does not reach a file
+  in a folder more than 7 folders below your home folder, in a hidden folder, in a folder named
+  like a project build folder, such as `node_modules`, in your `Applications`, `Library`, `Movies`,
+  `Music`, `Pictures`, or `Public` folder, or outside your home folder, such as on a disk mounted
+  elsewhere.
 - macOS only.
 
 ## Development

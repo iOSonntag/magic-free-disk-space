@@ -10,7 +10,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
@@ -78,6 +78,12 @@ export async function createFixtureFile(params: {
 
 export async function createFixtureDirectory(params: { path: string }): Promise<void> {
   await mkdir(params.path, { recursive: true });
+}
+
+/** Writes `text` to the file at `path`, creating its missing parent folders. */
+export async function writeFixtureTextFile(params: { path: string; text: string }): Promise<void> {
+  await mkdir(dirname(params.path), { recursive: true });
+  await writeFile(params.path, params.text);
 }
 
 /** Whether anything is at `path`; a symbolic link counts itself, whatever its target. */

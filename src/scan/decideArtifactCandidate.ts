@@ -1,8 +1,8 @@
 import { basename } from 'node:path';
 import type { CandidateDecision } from './candidate.js';
-import type { ArtifactFinding } from './findProjectArtifacts.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import type { ActivityProbe } from './loadTreeActivity.js';
+import type { ArtifactFinding } from './walkProjects.js';
 
 /** Offers a project build folder when its project has been quiet for the stale period. */
 export function decideArtifactCandidate(params: {

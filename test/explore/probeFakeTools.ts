@@ -113,6 +113,7 @@ export function buildFixtureToolLocations(
     brewAppleSilicon: buildFixtureToolLocation(paths.brewAppleSilicon),
     brewIntel: buildFixtureToolLocation(paths.brewIntel),
     avdmanager: buildFixtureToolLocation(paths.avdmanager),
+    asdf: buildFixtureToolLocation(paths.asdf),
   };
 }
 

@@ -1,9 +1,12 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { ExplorePathUnitVscodeExtension } from '../../src/explore/exploreUnit.js';
 import type { CandidateProbed } from '../../src/scan/candidate.js';
 import { buildTestIdentity } from '../support/candidateFixtures.js';
-import { createFixtureDirectory, createFixtureFile } from '../support/fixtureRoot.js';
+import {
+  createFixtureDirectory,
+  createFixtureFile,
+  writeFixtureTextFile,
+} from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 /** A command line of VS Code's app, which keeps its extension folders busy. */
@@ -95,11 +98,6 @@ export async function createVscodeExtensionFolders(params: {
   }
 }
 
-export async function writeVscodeFile(params: { path: string; text: string }): Promise<void> {
-  await mkdir(dirname(params.path), { recursive: true });
-  await writeFile(params.path, params.text);
-}
-
 /**
  * The installation every test starts from: every folder above, the default registry listing the
  * epsilon, a profile listing the current beta and gamma by location only, and `.obsolete`
@@ -119,7 +117,7 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
       STRAY_FOLDER_NAME,
     ],
   });
-  await writeVscodeFile({
+  await writeFixtureTextFile({
     path: join(extensionsPath, 'extensions.json'),
     text: buildVscodeRegistryText({
       extensionsPath: extensionsPath,
@@ -127,7 +125,7 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
       form: 'current',
     }),
   });
-  await writeVscodeFile({
+  await writeFixtureTextFile({
     path: join(buildVscodeProfilesPath(params), FIXTURE_PROFILE_ID, 'extensions.json'),
     text: buildVscodeRegistryText({
       extensionsPath: extensionsPath,
@@ -135,7 +133,7 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
       form: 'locationOnly',
     }),
   });
-  await writeVscodeFile({
+  await writeFixtureTextFile({
     path: join(extensionsPath, '.obsolete'),
     text: buildVscodeObsoleteText({
       folderNames: [OBSOLETE_FOLDER_NAME, LISTED_OBSOLETE_FOLDER_NAME],

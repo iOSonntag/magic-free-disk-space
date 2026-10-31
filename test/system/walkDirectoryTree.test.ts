@@ -28,14 +28,17 @@ async function collectEntries(params: {
   isStatsNeeded: boolean;
   visit?: (entry: TreeEntry) => 'descend' | 'skip' | 'stop';
   isStopped?: () => boolean;
+  isFolderEvicted?: (folder: { path: string }) => boolean;
 }) {
   const entries: TreeEntry[] = [];
   const unreadables: TreeUnreadable[] = [];
+  let evictedFolderCount = 0;
   const walkEnd = await walkDirectoryTree({
     rootPath: treeRoot,
     isStatsNeeded: params.isStatsNeeded,
     maxConcurrentDirectories: 2,
     isStopped: params.isStopped ?? (() => false),
+    isFolderEvicted: params.isFolderEvicted ?? (() => false),
     visitEntry: (entry) => {
       entries.push(entry);
 
@@ -43,6 +46,9 @@ async function collectEntries(params: {
     },
     onUnreadable: (unreadable) => {
       unreadables.push(unreadable);
+    },
+    onEvictedFolderSkipped: () => {
+      evictedFolderCount += 1;
     },
   });
   const relativePaths = entries.map((entry) => relative(treeRoot, entry.path)).toSorted();
@@ -52,10 +58,26 @@ async function collectEntries(params: {
     entries: entries,
     relativePaths: relativePaths,
     unreadables: unreadables,
+    evictedFolderCount: evictedFolderCount,
   };
 }
 
 describe('walkDirectoryTree', () => {
+  test('visits an evicted folder but never reads it, and reports it as skipped', async () => {
+    const evictedPath = join(treeRoot, 'b');
+
+    const walk = await collectEntries({
+      isStatsNeeded: false,
+      isFolderEvicted: (folder) => folder.path === evictedPath,
+    });
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.relativePaths).toContain('b');
+    expect(walk.relativePaths).not.toContain('b/marker.json');
+    expect(walk.evictedFolderCount).toBe(1);
+    expect(walk.unreadables).toEqual([]);
+  });
+
   test('visits every entry once, with its depth, never entering a symbolic link', async () => {
     const walk = await collectEntries({ isStatsNeeded: false });
 
