@@ -10,10 +10,11 @@ import {
   loadExploreFileText,
 } from '../loadExploreRead.js';
 import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
+import type { AndroidPackageFolder } from './loadAndroidPackageFolder.js';
+import { loadAndroidPackageFolder } from './loadAndroidPackageFolder.js';
 import type { AndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidIniText } from './parseAndroidIniText.js';
-import { parseAndroidPackagePath } from './parseAndroidPackagePath.js';
 
 /** An AVD whose `<name>.ini` is unfit or names no absolute `path`, so nothing more of it is known. */
 export type AndroidAvdUnlocated = {
@@ -44,18 +45,6 @@ export type AndroidAvdPresent = {
 
 /** One `*.ini` of `~/.android/avd`, and what its folder told. */
 export type AndroidAvd = AndroidAvdUnlocated | AndroidAvdMissing | AndroidAvdPresent;
-
-/** A package folder of the SDK with the id its `package.xml` names. */
-export type AndroidPackageFolderParsed = {
-  kind: 'parsed';
-  folderPath: AbsolutePath;
-  packagePath: string;
-};
-
-/** A package folder whose `package.xml` is unfit or names no `localPackage path`. */
-export type AndroidPackageFolderUnparsed = { kind: 'unparsed'; folderPath: AbsolutePath };
-
-export type AndroidPackageFolder = AndroidPackageFolderParsed | AndroidPackageFolderUnparsed;
 
 /** The SDK at `~/Library/Android/sdk`, with its package folders that hold a `package.xml`. */
 export type AndroidSdk = {
@@ -199,36 +188,6 @@ async function loadAndroidChildPaths(params: {
   }
 
   return { kind: 'succeeded', value: childPaths };
-}
-
-/** `null` when the folder holds no `package.xml`, so it is no package. */
-async function loadAndroidPackageFolder(params: {
-  folderPath: AbsolutePath;
-}): Promise<Result<AndroidPackageFolder | null, ExploreFileUnreadable>> {
-  const packageXml = await loadExploreFileText({ path: join(params.folderPath, 'package.xml') });
-
-  if (packageXml.kind === 'failed') {
-    return packageXml;
-  }
-
-  switch (packageXml.value.kind) {
-    case 'absent':
-      return { kind: 'succeeded', value: null };
-    case 'unfit':
-      return { kind: 'succeeded', value: { kind: 'unparsed', folderPath: params.folderPath } };
-    case 'text': {
-      const packagePath = parseAndroidPackagePath({ packageXmlText: packageXml.value.text });
-
-      if (packagePath === null) {
-        return { kind: 'succeeded', value: { kind: 'unparsed', folderPath: params.folderPath } };
-      }
-
-      return {
-        kind: 'succeeded',
-        value: { kind: 'parsed', folderPath: params.folderPath, packagePath: packagePath },
-      };
-    }
-  }
 }
 
 async function loadAndroidAvds(params: {
