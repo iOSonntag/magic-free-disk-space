@@ -1,12 +1,12 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
 import type { ProjectPins } from '../projectPins/projectPins.js';
-import { selectToolPins } from '../projectPins/selectToolPins.js';
+import { listToolPinFileRefs, selectToolPins } from '../projectPins/selectToolPins.js';
 import { buildPnpmStoreFindings } from './buildPnpmStoreFindings.js';
 import { decidePnpmStoreOffers } from './decidePnpmStoreOffers.js';
 import { loadPnpmInstallState } from './loadPnpmInstallState.js';
 import { loadPnpmStoreState } from './loadPnpmStoreState.js';
-import { PNPM_PIN_FILE_KINDS, readPnpmToolPins } from './parsePnpmPins.js';
+import { PNPM_PIN_FILE_KINDS, toolPinsToPnpmPins } from './parsePnpmPins.js';
 
 /**
  * The store-version folders of the store at `storeRootPathNames` below the home folder that
@@ -49,19 +49,15 @@ export async function loadPnpmStoreFindings(params: {
   const offers = decidePnpmStoreOffers({
     storeState: storeState.value,
     installState: installState.value,
-    pins: readPnpmToolPins({ toolPins: toolPins.value }),
+    pins: toolPinsToPnpmPins({ toolPins: toolPins.value }),
   });
-  const pinFiles =
-    toolPins.value.kind === 'texts'
-      ? toolPins.value.files.map((file) => ({ path: file.path, kind: file.kind }))
-      : [];
 
   return {
     kind: 'succeeded',
     value: buildPnpmStoreFindings({
       offers: offers,
       storeRoot: storeRoot,
-      pinFiles: pinFiles,
+      pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
       projectPins: params.projectPins,
       processCommands: params.run.processCommands,
     }),

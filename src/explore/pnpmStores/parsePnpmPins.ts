@@ -3,6 +3,7 @@ import { parseToolVersionsText } from '../asdfVersions/parseToolVersionsText.js'
 import type { ProjectPinFileKind, ProjectPinFileText } from '../projectPins/projectPins.js';
 import type { ToolPins } from '../projectPins/selectToolPins.js';
 import { parsePnpmVersionMajor } from './parsePnpmVersionMajor.js';
+import { PNPM_TOOL_NAME } from './pnpmToolName.js';
 
 /** The pnpm majors the projects pin, or every store version when a pin cannot be read. */
 export type PnpmPins = PnpmPinsMajors | PnpmPinsEveryStoreVersion;
@@ -33,11 +34,7 @@ export const PNPM_PIN_FILE_KINDS: ProjectPinFileKind[] = [
   'miseConfig',
 ];
 
-const PNPM_TOOL_NAME = 'pnpm';
-
-const PNPM_PACKAGE_MANAGER_PREFIX = 'pnpm@';
-
-const MISE_PNPM_KEY_PATTERN = /^(?:[\w-]+:)?(?:[\w.-]+\/)?pnpm$|^npm:@pnpm\/exe$/;
+const PNPM_PACKAGE_MANAGER_PREFIX = `${PNPM_TOOL_NAME}@`;
 
 const MISE_TOOLS_TABLE = 'tools';
 
@@ -56,7 +53,7 @@ const NO_PIN_TEXTS: PnpmPinTexts = { kind: 'versionTexts', versionTexts: [] };
 const EVERY_STORE_VERSION: PnpmPinsEveryStoreVersion = { kind: 'everyStoreVersion' };
 
 /** The pnpm pins of the selected pin files; a pin file that was unfit pins every store version. */
-export function readPnpmToolPins(params: { toolPins: ToolPins }): PnpmPins {
+export function toolPinsToPnpmPins(params: { toolPins: ToolPins }): PnpmPins {
   switch (params.toolPins.kind) {
     case 'everyVersionPinned':
       return EVERY_STORE_VERSION;
@@ -73,7 +70,7 @@ export function parsePnpmPins(params: { files: ProjectPinFileText[] }): PnpmPins
   const majors = new Set<number>();
 
   for (const file of params.files) {
-    const pinTexts = readPnpmPinTexts({ file: file });
+    const pinTexts = parsePnpmPinTexts({ file: file });
 
     if (pinTexts.kind === 'everyStoreVersion') {
       return EVERY_STORE_VERSION;
@@ -93,14 +90,14 @@ export function parsePnpmPins(params: { files: ProjectPinFileText[] }): PnpmPins
   return { kind: 'majors', majors: [...majors].toSorted((left, right) => left - right) };
 }
 
-function readPnpmPinTexts(params: { file: ProjectPinFileText }): PnpmPinTexts {
+function parsePnpmPinTexts(params: { file: ProjectPinFileText }): PnpmPinTexts {
   switch (params.file.kind) {
     case 'packageJson':
-      return readPackageManagerPin({ text: params.file.text });
+      return parsePackageManagerPin({ text: params.file.text });
     case 'toolVersions':
-      return readToolVersionsPins({ text: params.file.text });
+      return parseToolVersionsPins({ text: params.file.text });
     case 'miseConfig':
-      return readMiseConfigPins({ text: params.file.text });
+      return parseMiseConfigPins({ text: params.file.text });
     case 'nvmrc':
     case 'gradle':
       return NO_PIN_TEXTS;
@@ -111,7 +108,7 @@ function readPnpmPinTexts(params: { file: ProjectPinFileText }): PnpmPinTexts {
  * `packageManager` `pnpm@<version>` pins that version, any other one naming pnpm or a text that is
  * no JSON object pins every store version, and one naming another manager pins nothing.
  */
-function readPackageManagerPin(params: { text: string }): PnpmPinTexts {
+function parsePackageManagerPin(params: { text: string }): PnpmPinTexts {
   const json = parseJsonValue({ text: params.text });
 
   if (json.kind === 'failed' || !isJsonObject(json.value)) {
@@ -141,7 +138,7 @@ function readPackageManagerPin(params: { text: string }): PnpmPinTexts {
   return NO_PIN_TEXTS;
 }
 
-function readToolVersionsPins(params: { text: string }): PnpmPinTexts {
+function parseToolVersionsPins(params: { text: string }): PnpmPinTexts {
   const versionTexts = parseToolVersionsText({ text: params.text })
     .filter((line) => line.toolName === PNPM_TOOL_NAME)
     .flatMap((line) => line.versions);
@@ -154,7 +151,7 @@ function readToolVersionsPins(params: { text: string }): PnpmPinTexts {
  * `[tools.<key>]` subtables, not a full TOML parser: a pnpm entry it cannot read, or a pnpm
  * subtable without a `version`, pins every store version.
  */
-function readMiseConfigPins(params: { text: string }): PnpmPinTexts {
+function parseMiseConfigPins(params: { text: string }): PnpmPinTexts {
   const versionTexts: string[] = [];
   let section: MiseSection = { kind: 'root' };
 
@@ -182,7 +179,7 @@ function readMiseConfigPins(params: { text: string }): PnpmPinTexts {
       continue;
     }
 
-    const entryPins = readMiseEntryPins({ section: section, entry: entry });
+    const entryPins = parseMiseEntryPins({ section: section, entry: entry });
 
     switch (entryPins.kind) {
       case 'everyStoreVersion':
@@ -204,23 +201,23 @@ function readMiseConfigPins(params: { text: string }): PnpmPinTexts {
   return { kind: 'versionTexts', versionTexts: versionTexts };
 }
 
-function readMiseEntryPins(params: { section: MiseSection; entry: TomlEntry }): PnpmPinTexts {
+function parseMiseEntryPins(params: { section: MiseSection; entry: TomlEntry }): PnpmPinTexts {
   switch (params.section.kind) {
     case 'root':
-      return readMiseRootEntryPins({ entry: params.entry });
+      return parseMiseRootEntryPins({ entry: params.entry });
     case 'tools': {
       if (!isPnpmKeyText({ keyText: params.entry.key })) {
         return NO_PIN_TEXTS;
       }
 
-      return readMiseVersionValue({ valueText: params.entry.value });
+      return parseMiseVersionValue({ valueText: params.entry.value });
     }
     case 'pnpmSubtable': {
       if (!isMiseVersionKey({ keyText: params.entry.key })) {
         return NO_PIN_TEXTS;
       }
 
-      return readMiseVersionValue({ valueText: params.entry.value });
+      return parseMiseVersionValue({ valueText: params.entry.value });
     }
     case 'other':
       return NO_PIN_TEXTS;
@@ -231,7 +228,7 @@ function readMiseEntryPins(params: { section: MiseSection; entry: TomlEntry }): 
  * A top-level `tools.<key>` naming pnpm reads as a `[tools]` line, and a `tools` value that holds
  * `pnpm` pins every store version.
  */
-function readMiseRootEntryPins(params: { entry: TomlEntry }): PnpmPinTexts {
+function parseMiseRootEntryPins(params: { entry: TomlEntry }): PnpmPinTexts {
   if (parseTomlKey({ text: params.entry.key }) === MISE_TOOLS_TABLE) {
     if (params.entry.value.includes(PNPM_TOOL_NAME)) {
       return EVERY_STORE_VERSION;
@@ -250,10 +247,10 @@ function readMiseRootEntryPins(params: { entry: TomlEntry }): PnpmPinTexts {
     return NO_PIN_TEXTS;
   }
 
-  return readMiseVersionValue({ valueText: params.entry.value });
+  return parseMiseVersionValue({ valueText: params.entry.value });
 }
 
-function readMiseVersionValue(params: { valueText: string }): PnpmPinTexts {
+function parseMiseVersionValue(params: { valueText: string }): PnpmPinTexts {
   const versions = parseTomlVersionValues({ text: params.valueText });
 
   if (versions === null) {
@@ -281,15 +278,12 @@ function decideMiseSection(params: { header: string }): MiseSection {
   return { kind: 'pnpmSubtable', hasVersion: false };
 }
 
-/** Whether a mise tool key names pnpm; a key this reader cannot read names pnpm when it holds it. */
+/**
+ * Whether a mise tool key names pnpm: any key whose text holds it, whatever its backend, so a
+ * plugin's tool such as `asdf:<owner>/asdf-pnpm` names pnpm too.
+ */
 function isPnpmKeyText(params: { keyText: string }): boolean {
-  const key = parseTomlKey({ text: params.keyText });
-
-  if (key === null) {
-    return params.keyText.includes(PNPM_TOOL_NAME);
-  }
-
-  return MISE_PNPM_KEY_PATTERN.test(key);
+  return params.keyText.toLowerCase().includes(PNPM_TOOL_NAME);
 }
 
 function isMiseVersionKey(params: { keyText: string }): boolean {

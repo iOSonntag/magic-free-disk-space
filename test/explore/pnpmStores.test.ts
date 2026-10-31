@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { chmod, symlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExplorePathUnitPnpmStore } from '../../src/explore/exploreUnit.js';
 import { buildPnpmStoreFindings } from '../../src/explore/pnpmStores/buildPnpmStoreFindings.js';
@@ -21,7 +21,6 @@ import {
   PNPM_STORE_ROOT_PATH_NAMES,
   PNPM_XDG_STORE_ROOT_PATH_NAMES,
 } from '../../src/explore/pnpmStores/pnpmStoreRoots.js';
-import type { ProjectPinsLoad } from '../../src/explore/projectPins/loadProjectPins.js';
 import type {
   ProjectPinFile,
   ProjectPinFileKind,
@@ -37,6 +36,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import {
   buildTestAbsolutePath,
@@ -44,7 +44,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
-  buildSettledProjectPinsLoad,
+  buildFoundProjectPinsLoad,
   buildTestPinFileText,
   buildTestPinFileUnfit,
   buildTestPinFileUnreadable,
@@ -73,11 +73,6 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-async function writeTextFile(params: { path: string; text: string }): Promise<void> {
-  await mkdir(dirname(params.path), { recursive: true });
-  await writeFile(params.path, params.text);
-}
-
 async function createStoreFolders(params: {
   rootNames: string[];
   folderNames: string[];
@@ -92,7 +87,7 @@ async function createStoreFolders(params: {
 }
 
 async function writePnpmPackage(params: { packageFolder: string; version: string }): Promise<void> {
-  await writeTextFile({
+  await writeFixtureTextFile({
     path: join(params.packageFolder, 'package.json'),
     text: JSON.stringify({ name: 'pnpm', version: params.version }),
   });
@@ -127,12 +122,6 @@ function buildStoreState(params: { folderNames: string[] }): PnpmStoreState {
 
 function listOfferedStoreVersions(params: { offers: PnpmStoreOffers }): string[] {
   return params.offers.offers.map((offer) => offer.storeVersion);
-}
-
-function buildPinsLoad(params: { files: ProjectPinFile[] }): ProjectPinsLoad {
-  return buildSettledProjectPinsLoad({
-    pins: { kind: 'succeeded', value: buildTestProjectPins({ files: params.files }) },
-  });
 }
 
 function parseOnePin(params: { kind: ProjectPinFileKind; text: string }): PnpmPins {
@@ -214,6 +203,26 @@ describe('parsePnpmPins', () => {
     { kind: 'miseConfig', text: '[settings]\ntools.pnpm = "latest"\n', majors: [] },
     { kind: 'nvmrc', text: 'pnpm@latest', majors: [] },
   ];
+  const pluginKeyCases: { key: string; version: string }[] = [
+    { key: '"asdf:jonathanmorley/asdf-pnpm"', version: '8.15.9' },
+    { key: '"ubi:pnpm/pnpm[exe=pnpm]"', version: '8' },
+    { key: '"vfox:version-fox/vfox-pnpm"', version: '8' },
+  ];
+
+  for (const pluginKeyCase of pluginKeyCases) {
+    majorsCases.push(
+      {
+        kind: 'miseConfig',
+        text: `[tools]\n${pluginKeyCase.key} = "${pluginKeyCase.version}"\n`,
+        majors: [8],
+      },
+      {
+        kind: 'miseConfig',
+        text: `[tools.${pluginKeyCase.key}]\nversion = "${pluginKeyCase.version}"\n`,
+        majors: [8],
+      },
+    );
+  }
 
   for (const majorsCase of majorsCases) {
     test(`reads the ${majorsCase.kind} ${JSON.stringify(majorsCase.text)}`, () => {
@@ -520,7 +529,7 @@ describe('loadPnpmInstallState', () => {
   });
 
   test('keeps a global package.json with no version as an install without a version', async () => {
-    await writeTextFile({
+    await writeFixtureTextFile({
       path: join(homeDir, 'Library/pnpm/global/5/node_modules/pnpm/package.json'),
       text: '{"name": "pnpm"}',
     });
@@ -555,7 +564,7 @@ for (const probeCase of probeCases) {
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(null),
-        projectPins: buildPinsLoad({ files: params.files }),
+        projectPins: buildFoundProjectPinsLoad({ files: params.files }),
         timeoutMs: 10_000,
         unusedCutoffMs: 0,
       });
@@ -711,6 +720,81 @@ for (const probeCase of probeCases) {
       });
     });
 
+    const homebrewPrefixPlaces: { place: string; installPathNames: string[] }[] = [
+      { place: "Homebrew's versioned formula", installPathNames: ['Cellar', 'pnpm@10', '10.14.0'] },
+      {
+        place: "Homebrew's npm globals of @pnpm/exe",
+        installPathNames: ['lib', 'node_modules', '@pnpm', 'exe'],
+      },
+    ];
+
+    for (const prefixPlace of homebrewPrefixPlaces) {
+      test(`offers nothing beside a pnpm in ${prefixPlace.place}`, async () => {
+        await createStore({ folderNames: ['v10'] });
+        const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
+        const installPath = join(prefixPath, ...prefixPlace.installPathNames);
+        await writePnpmPackage({ packageFolder: installPath, version: '10.14.0' });
+        environment = { ...environment, homebrewPrefixPaths: [prefixPath] };
+
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      });
+    }
+
+    const exePackagePlaces: { place: string; packageFolderNames: string[] }[] = [
+      {
+        place: "pnpm's global folder",
+        packageFolderNames: ['Library/pnpm/global/5/node_modules/@pnpm/exe'],
+      },
+      {
+        place: 'the npm globals of an nvm node',
+        packageFolderNames: ['.nvm/versions/node/v22.1.0/lib/node_modules/@pnpm/exe'],
+      },
+    ];
+
+    for (const exePlace of exePackagePlaces) {
+      test(`offers nothing beside a @pnpm/exe in ${exePlace.place}`, async () => {
+        await createStore({ folderNames: ['v10'] });
+        await writePnpmPackage({
+          packageFolder: join(homeDir, ...exePlace.packageFolderNames),
+          version: '10.14.0',
+        });
+
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      });
+    }
+
+    test('offers nothing and is not judged beside the standalone pnpm executable', async () => {
+      await createStore({ folderNames: ['v10'] });
+      await writeFixtureTextFile({
+        path: join(homeDir, 'Library/pnpm/pnpm'),
+        text: 'Ïúíþ executable',
+      });
+
+      expect(await loadOfferedVersions({ files: [] })).toEqual({
+        storeVersions: [],
+        isComplete: false,
+      });
+    });
+
+    test('counts a pnpm shell script in pnpm home for nothing', async () => {
+      await createStore({ folderNames: ['v10'] });
+      await writeFixtureTextFile({
+        path: join(homeDir, 'Library/pnpm/pnpm'),
+        text: '#!/bin/sh\nexec "$basedir/.tools/pnpm/10.14.0/bin/pnpm" "$@"\n',
+      });
+
+      expect(await loadOfferedVersions({ files: [] })).toEqual({
+        storeVersions: ['v10'],
+        isComplete: true,
+      });
+    });
+
     const pinCases: { kind: ProjectPinFileKind; text: string }[] = [
       { kind: 'packageJson', text: '{"packageManager": "pnpm@10.14.0+sha512.0a1b"}' },
       { kind: 'toolVersions', text: 'pnpm 10.8.1\n' },
@@ -842,7 +926,7 @@ describe('the recheck of a pnpm store unit', () => {
       folderNames: ['v10'],
     });
     pinPath = buildTestAbsolutePath({ text: join(homeDir, 'projects/app/package.json') });
-    await writeTextFile({ path: pinPath, text: '{"packageManager": "yarn@4.1.0"}' });
+    await writeFixtureTextFile({ path: pinPath, text: '{"packageManager": "yarn@4.1.0"}' });
     unit = {
       kind: 'pnpmStore',
       storeRoot: storeRoot,

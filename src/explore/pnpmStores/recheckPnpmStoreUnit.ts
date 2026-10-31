@@ -6,7 +6,7 @@ import { selectToolPins } from '../projectPins/selectToolPins.js';
 import { comparePnpmStoreUnit } from './comparePnpmStoreUnit.js';
 import { loadPnpmInstallState } from './loadPnpmInstallState.js';
 import { loadPnpmStoreState } from './loadPnpmStoreState.js';
-import { PNPM_PIN_FILE_KINDS, readPnpmToolPins } from './parsePnpmPins.js';
+import { PNPM_PIN_FILE_KINDS, toolPinsToPnpmPins } from './parsePnpmPins.js';
 
 /** Reads the unit's store, the installed pnpm, and its pin files again and compares them. */
 export async function recheckPnpmStoreUnit(params: {
@@ -40,7 +40,7 @@ export async function recheckPnpmStoreUnit(params: {
     unit: params.unit,
     storeState: storeState.value,
     installState: installState.value,
-    pins: readPnpmToolPins({ toolPins: toolPins.value }),
+    pins: toolPinsToPnpmPins({ toolPins: toolPins.value }),
     processCommands: params.processCommands,
   });
 }

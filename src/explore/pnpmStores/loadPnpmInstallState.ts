@@ -13,6 +13,7 @@ import {
 import { MISE_INSTALLS_PATH_NAMES } from '../miseVersions/miseInstallsRoot.js';
 import { NVM_NODE_VERSIONS_PATH_NAMES } from '../nvmVersions/nvmVersionsRoot.js';
 import { parsePnpmVersionMajor } from './parsePnpmVersionMajor.js';
+import { PNPM_TOOL_NAME } from './pnpmToolName.js';
 
 /** An installed pnpm whose version names its major. */
 export type PnpmInstallParsed = {
@@ -33,8 +34,6 @@ export type PnpmInstall = PnpmInstallParsed | PnpmInstallUnparsed;
 
 export type PnpmInstallState = { installs: PnpmInstall[] };
 
-const PNPM_TOOL_NAME = 'pnpm';
-
 const COREPACK_PNPM_PATH_NAMES = [
   ['.cache', 'node', 'corepack', 'v1', 'pnpm'],
   ['.cache', 'node', 'corepack', 'pnpm'],
@@ -47,15 +46,24 @@ const PNPM_TOOLS_PATH_NAMES = [
 
 const PNPM_GLOBAL_PATH_NAMES = ['Library', 'pnpm', 'global'];
 
+const PNPM_STANDALONE_PATH_NAMES = ['Library', 'pnpm', PNPM_TOOL_NAME];
+
+const SCRIPT_SHEBANG = '#!';
+
 const ASDF_NODE_TOOL_NAME = 'nodejs';
 
 const MISE_NODE_TOOL_NAME = 'node';
 
-const HOMEBREW_CELLAR_PNPM_PATH_NAMES = ['Cellar', PNPM_TOOL_NAME];
+const HOMEBREW_CELLAR_FOLDER_NAME = 'Cellar';
 
-const PNPM_PACKAGE_PATH_NAMES = ['node_modules', PNPM_TOOL_NAME];
+const HOMEBREW_VERSIONED_PNPM_PREFIX = `${PNPM_TOOL_NAME}@`;
 
-const NPM_GLOBAL_PNPM_PATH_NAMES = ['lib', ...PNPM_PACKAGE_PATH_NAMES];
+const PNPM_PACKAGE_PATH_NAMES = [
+  ['node_modules', PNPM_TOOL_NAME],
+  ['node_modules', '@pnpm', 'exe'],
+];
+
+const NPM_GLOBAL_FOLDER_NAME = 'lib';
 
 const PACKAGE_JSON_FILE_NAME = 'package.json';
 
@@ -68,11 +76,19 @@ export async function loadPnpmInstallState(params: {
   homeDir: AbsolutePath;
   homebrewPrefixPaths: AbsolutePath[];
 }): Promise<Result<PnpmInstallState, ExploreFileUnreadable>> {
+  const cellarRoots = await loadHomebrewCellarPnpmRoots({
+    homebrewPrefixPaths: params.homebrewPrefixPaths,
+  });
+
+  if (cellarRoots.kind === 'failed') {
+    return cellarRoots;
+  }
+
   const folderInstalls = await loadVersionFolderInstalls({
-    versionsRoots: listPnpmVersionsRoots({
-      homeDir: params.homeDir,
-      homebrewPrefixPaths: params.homebrewPrefixPaths,
-    }),
+    versionsRoots: [
+      ...listHomePnpmVersionsRoots({ homeDir: params.homeDir }),
+      ...cellarRoots.value,
+    ],
   });
 
   if (folderInstalls.kind === 'failed') {
@@ -94,30 +110,66 @@ export async function loadPnpmInstallState(params: {
     return packageInstalls;
   }
 
+  const standaloneInstall = await loadStandaloneInstall({ homeDir: params.homeDir });
+
+  if (standaloneInstall.kind === 'failed') {
+    return standaloneInstall;
+  }
+
+  const standaloneInstalls = standaloneInstall.value === null ? [] : [standaloneInstall.value];
+
   return {
     kind: 'succeeded',
-    value: { installs: [...folderInstalls.value, ...packageInstalls.value] },
+    value: {
+      installs: [...folderInstalls.value, ...packageInstalls.value, ...standaloneInstalls],
+    },
   };
 }
 
-function listPnpmVersionsRoots(params: {
-  homeDir: AbsolutePath;
-  homebrewPrefixPaths: AbsolutePath[];
-}): AbsolutePath[] {
+function listHomePnpmVersionsRoots(params: { homeDir: AbsolutePath }): AbsolutePath[] {
   const homePathNames = [
     [...ASDF_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME],
     [...MISE_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME],
     ...COREPACK_PNPM_PATH_NAMES,
     ...PNPM_TOOLS_PATH_NAMES,
   ];
-  const homeRoots = homePathNames.map((names) =>
+
+  return homePathNames.map((names) =>
     joinAbsolutePath({ parentPath: params.homeDir, names: names }),
   );
-  const cellarRoots = params.homebrewPrefixPaths.map((prefixPath) =>
-    joinAbsolutePath({ parentPath: prefixPath, names: HOMEBREW_CELLAR_PNPM_PATH_NAMES }),
-  );
+}
 
-  return [...homeRoots, ...cellarRoots];
+/** The Cellar folders of the formula `pnpm` and of each versioned formula `pnpm@<major>`. */
+async function loadHomebrewCellarPnpmRoots(params: {
+  homebrewPrefixPaths: AbsolutePath[];
+}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
+  const roots: AbsolutePath[] = [];
+
+  for (const prefixPath of params.homebrewPrefixPaths) {
+    const cellarPath = joinAbsolutePath({
+      parentPath: prefixPath,
+      names: [HOMEBREW_CELLAR_FOLDER_NAME],
+    });
+    const names = await loadExploreFolderNames({ path: cellarPath });
+
+    if (names.kind === 'failed') {
+      return names;
+    }
+
+    const formulaNames =
+      names.value === null ? [] : [...names.value.folderNames, ...names.value.linkNames];
+    const pnpmFormulaNames = formulaNames.filter(
+      (formulaName) =>
+        formulaName === PNPM_TOOL_NAME || formulaName.startsWith(HOMEBREW_VERSIONED_PNPM_PREFIX),
+    );
+    roots.push(
+      ...pnpmFormulaNames.map((formulaName) =>
+        joinAbsolutePath({ parentPath: cellarPath, names: [formulaName] }),
+      ),
+    );
+  }
+
+  return { kind: 'succeeded', value: roots };
 }
 
 async function loadVersionFolderInstalls(params: {
@@ -182,7 +234,10 @@ async function loadVersionsRootInstalls(params: {
   return { kind: 'succeeded', value: installs };
 }
 
-/** The `node_modules/pnpm` folders of pnpm's global folders and of each node's npm globals. */
+/**
+ * The `node_modules/pnpm` and `node_modules/@pnpm/exe` folders of pnpm's global folders and of
+ * each node's npm globals.
+ */
 async function loadPnpmPackageFolders(params: {
   homeDir: AbsolutePath;
   homebrewPrefixPaths: AbsolutePath[];
@@ -206,14 +261,49 @@ async function loadPnpmPackageFolders(params: {
     return nodeFolders;
   }
 
-  const globalPackageFolders = globalFolders.value.map((globalFolder) =>
-    joinAbsolutePath({ parentPath: globalFolder, names: PNPM_PACKAGE_PATH_NAMES }),
+  const globalPackageFolders = globalFolders.value.flatMap((globalFolder) =>
+    PNPM_PACKAGE_PATH_NAMES.map((names) =>
+      joinAbsolutePath({ parentPath: globalFolder, names: names }),
+    ),
   );
-  const npmGlobalPackageFolders = [...params.homebrewPrefixPaths, ...nodeFolders.value].map(
-    (nodeFolder) => joinAbsolutePath({ parentPath: nodeFolder, names: NPM_GLOBAL_PNPM_PATH_NAMES }),
+  const npmGlobalPackageFolders = [...params.homebrewPrefixPaths, ...nodeFolders.value].flatMap(
+    (nodeFolder) =>
+      PNPM_PACKAGE_PATH_NAMES.map((names) =>
+        joinAbsolutePath({ parentPath: nodeFolder, names: [NPM_GLOBAL_FOLDER_NAME, ...names] }),
+      ),
   );
 
   return { kind: 'succeeded', value: [...globalPackageFolders, ...npmGlobalPackageFolders] };
+}
+
+/**
+ * The executable pnpm's `install.sh` and `pnpm setup` copy to `~/Library/pnpm/pnpm`, an install
+ * of no known version; `null` when nothing is there or it is a script, which runs a pnpm of a place
+ * read on its own.
+ */
+async function loadStandaloneInstall(params: {
+  homeDir: AbsolutePath;
+}): Promise<Result<PnpmInstall | null, ExploreFileUnreadable>> {
+  const path = joinAbsolutePath({ parentPath: params.homeDir, names: PNPM_STANDALONE_PATH_NAMES });
+  const file = await loadExploreFileText({ path: path });
+
+  if (file.kind === 'failed') {
+    return file;
+  }
+
+  switch (file.value.kind) {
+    case 'absent':
+      return { kind: 'succeeded', value: null };
+    case 'unfit':
+      return { kind: 'succeeded', value: { kind: 'unparsed', path: path, versionText: null } };
+    case 'text': {
+      if (file.value.text.startsWith(SCRIPT_SHEBANG)) {
+        return { kind: 'succeeded', value: null };
+      }
+
+      return { kind: 'succeeded', value: { kind: 'unparsed', path: path, versionText: null } };
+    }
+  }
 }
 
 /** The real paths of the folders and the live links in each of `folderPaths`, each path once. */
