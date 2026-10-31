@@ -18,11 +18,7 @@ export type PnpmStoreFolderParsed = {
 };
 
 /** A folder of the store root whose name `parsePnpmStoreVersion` refuses, such as `tmp`. */
-export type PnpmStoreFolderUnparsed = {
-  kind: 'unparsed';
-  folderPath: AbsolutePath;
-  realPath: AbsolutePath;
-};
+export type PnpmStoreFolderUnparsed = { kind: 'unparsed'; folderPath: AbsolutePath };
 
 export type PnpmStoreFolder = PnpmStoreFolderParsed | PnpmStoreFolderUnparsed;
 
@@ -42,21 +38,21 @@ export async function loadPnpmStoreState(params: {
     return { kind: 'succeeded', value: { folders: [] } };
   }
 
-  const storeRootRealPath = await loadExploreRealPath({ path: params.storeRoot });
+  const storeRootRealPathRead = await loadExploreRealPath({ path: params.storeRoot });
 
-  if (storeRootRealPath.kind === 'failed') {
-    return storeRootRealPath;
+  if (storeRootRealPathRead.kind === 'failed') {
+    return storeRootRealPathRead;
   }
 
-  if (storeRootRealPath.value === null) {
+  if (storeRootRealPathRead.value === null) {
     return { kind: 'succeeded', value: { folders: [] } };
   }
 
-  const realStoreRoot = storeRootRealPath.value;
+  const storeRootRealPath = storeRootRealPathRead.value;
   const folders = names.value.folderNames.map((folderName) =>
     buildPnpmStoreFolder({
       storeRoot: params.storeRoot,
-      storeRootRealPath: realStoreRoot,
+      storeRootRealPath: storeRootRealPath,
       folderName: folderName,
     }),
   );
@@ -85,6 +81,6 @@ function buildPnpmStoreFolder(params: {
         storeVersion: storeVersion.value,
       };
     case 'failed':
-      return { kind: 'unparsed', folderPath: folderPath, realPath: realPath };
+      return { kind: 'unparsed', folderPath: folderPath };
   }
 }

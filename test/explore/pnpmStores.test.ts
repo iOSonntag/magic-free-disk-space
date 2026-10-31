@@ -137,7 +137,7 @@ function buildStoreState(params: {
       const realPath = buildTestAbsolutePath({ text: `${storeRootRealPath}/${folderName}` });
 
       if (folderName === 'tmp') {
-        return { kind: 'unparsed', folderPath: folderPath, realPath: realPath };
+        return { kind: 'unparsed', folderPath: folderPath };
       }
 
       return {
