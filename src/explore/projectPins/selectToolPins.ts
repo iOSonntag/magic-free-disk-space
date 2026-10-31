@@ -39,7 +39,10 @@ export function selectToolPins(params: {
 
     switch (file.content.kind) {
       case 'unreadable':
-        return { kind: 'failed', failure: file.content.failure };
+        return {
+          kind: 'failed',
+          failure: { reason: 'fileUnreadable', path: file.path, failure: file.content.failure },
+        };
       case 'unfit':
         isEveryVersionPinned = true;
         break;

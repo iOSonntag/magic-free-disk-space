@@ -50,7 +50,7 @@ async function loadProjectPinFile(params: {
   const read = await loadExploreFileText({ path: params.file.path });
 
   if (read.kind === 'failed') {
-    return { ...params.file, content: { kind: 'unreadable', failure: read.failure } };
+    return { ...params.file, content: { kind: 'unreadable', failure: read.failure.failure } };
   }
 
   switch (read.value.kind) {

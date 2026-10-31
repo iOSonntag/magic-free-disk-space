@@ -161,10 +161,11 @@ export type ExplorePathUnitAndroidPlatform = {
 
 /**
  * A store-version folder of pnpm that neither an installed pnpm nor one a project pins uses.
- * `pinFiles` are the pnpm pin files the scan read, which the recheck reads again.
+ * `storeRoot` is the store it lies in, which the recheck reads again with the unit's pin files.
  */
 export type ExplorePathUnitPnpmStore = {
   kind: 'pnpmStore';
+  storeRoot: AbsolutePath;
   folderPath: AbsolutePath;
   storeVersion: PnpmStoreVersion;
   pinFiles: ProjectPinFileRef[];

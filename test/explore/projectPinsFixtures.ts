@@ -41,14 +41,7 @@ export function buildTestPinFileUnreadable(params: {
   return {
     path: buildTestAbsolutePath({ text: params.path }),
     kind: params.kind,
-    content: {
-      kind: 'unreadable',
-      failure: {
-        reason: 'fileUnreadable',
-        path: params.path,
-        failure: { reason: 'permissionDenied', code: 'EACCES' },
-      },
-    },
+    content: { kind: 'unreadable', failure: { reason: 'permissionDenied', code: 'EACCES' } },
   };
 }
 
