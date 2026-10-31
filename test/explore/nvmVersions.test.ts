@@ -444,7 +444,7 @@ describe('buildNvmVersionFindings', () => {
           risk: 'careful',
           evidenceLines: [
             'The default alias resolves to v24.19.1.',
-            'None of the 1 `.nvmrc` found resolves to v20.11.1.',
+            'None of the `.nvmrc` found (1) resolves to v20.11.1.',
           ],
           displayPath: folderPath,
           activity: 'idle',
@@ -474,7 +474,7 @@ describe('buildNvmVersionFindings', () => {
 
       expect(built.findings[0]?.evidenceLines).toEqual([
         line,
-        'None of the 1 `.nvmrc` found resolves to v20.11.1.',
+        'None of the `.nvmrc` found (1) resolves to v20.11.1.',
         PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       ]);
     }
@@ -640,7 +640,7 @@ describe('the nvm probe and recheck against a fixture home', () => {
           },
           evidenceLines: [
             'The default alias resolves to v20.11.1.',
-            'None of the 1 `.nvmrc` found resolves to v24.19.1.',
+            'None of the `.nvmrc` found (1) resolves to v24.19.1.',
           ],
           activity: 'idle',
         }),

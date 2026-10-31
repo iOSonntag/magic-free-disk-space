@@ -245,7 +245,7 @@ describe('buildAsdfVersionFindings', () => {
         regeneration: 'asdf installs it again when a project asks for it.',
         risk: 'careful',
         evidenceLines: [
-          'None of the 1 `.tool-versions` found names nodejs 18.0.0.',
+          'None of the `.tool-versions` found (1) names nodejs 18.0.0.',
           PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
         ],
         displayPath: oldFolder.folderPath,

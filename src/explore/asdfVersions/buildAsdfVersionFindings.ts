@@ -34,7 +34,7 @@ export function buildAsdfVersionFindings(params: {
       regeneration: 'asdf installs it again when a project asks for it.',
       risk: 'careful',
       evidenceLines: [
-        `None of the ${pinFiles.length} \`.tool-versions\` found names ${offer.asdfToolName} ${offer.version}.`,
+        `None of the \`.tool-versions\` found (${pinFiles.length}) names ${offer.asdfToolName} ${offer.version}.`,
         ...searchEvidenceLines,
       ],
       displayPath: offer.folderPath,

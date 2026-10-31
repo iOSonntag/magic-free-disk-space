@@ -28,7 +28,7 @@ export function buildNvmVersionFindings(params: {
       risk: 'careful',
       evidenceLines: [
         buildNvmDefaultAliasEvidence({ defaultAlias: params.offers.defaultAlias }),
-        `None of the ${params.pinFiles.length} \`.nvmrc\` found resolves to ${offer.version}.`,
+        `None of the \`.nvmrc\` found (${params.pinFiles.length}) resolves to ${offer.version}.`,
         ...buildProjectSearchEvidence({ pins: params.projectPins }),
       ],
       displayPath: offer.folderPath,
