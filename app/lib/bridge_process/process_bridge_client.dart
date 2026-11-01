@@ -81,8 +81,15 @@ class ProcessBridgeClient implements CleanerBridge {
   }
 
   @override
-  Future<StatusAnswer> status() {
-    return _send<StatusAnswer>(buildStatusRequest());
+  Future<StatusAnswer> status() async {
+    final StatusAnswer answer = await _send<StatusAnswer>(buildStatusRequest());
+    // A running bridge answers a status only with a status event; a failure
+    // comes from a bridge that could not start and exits, so the next request
+    // goes to a new bridge, which tells its reason again.
+    if (answer is FailedEvent) {
+      _stopBridge();
+    }
+    return answer;
   }
 
   /// Stops the bridge for good and fails a pending request with a

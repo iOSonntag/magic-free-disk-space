@@ -183,4 +183,23 @@ done
     expect(status.fullDiskAccess, FullDiskAccess.granted);
     expect(status.notices, isEmpty);
   });
+
+  test('a failed status stops the bridge, so the next request starts one that answers', () async {
+    client = await createClientOverScript('''
+if [ "\$start" = 1 ]; then
+  echo '{"kind":"failed","message":"The bridge could not start.","isScanDropped":false}'
+  sleep 0.3
+  exit 2
+fi
+while read -r request; do
+  echo '${buildScannedLine('fresh')}'
+done
+''');
+
+    final StatusAnswer status = await client.status();
+    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+
+    expect(status, isA<FailedEvent>());
+    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+  });
 }
