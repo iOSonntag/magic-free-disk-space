@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadFullDiskAccess } from '../../src/system/loadFullDiskAccess.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -32,5 +32,17 @@ describe('loadFullDiskAccess', () => {
     await mkdir(join(fixtureRoot.homeDir, 'Library/Safari'), { recursive: true });
 
     expect(await loadFullDiskAccess({ homeDir: fixtureRoot.homeDir })).toBe('granted');
+  });
+
+  test('is unknown when the TCC database is missing and the Safari folder refuses the open by its permissions', async () => {
+    const safariDir = join(fixtureRoot.homeDir, 'Library/Safari');
+    await mkdir(safariDir, { recursive: true });
+    await chmod(safariDir, 0o000);
+
+    try {
+      expect(await loadFullDiskAccess({ homeDir: fixtureRoot.homeDir })).toBe('unknown');
+    } finally {
+      await chmod(safariDir, 0o755);
+    }
   });
 });

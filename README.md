@@ -195,8 +195,9 @@ fixed environment that keeps it offline where the tool allows that.
 
 At start the app asks its bridge whether it has Full Disk Access. The bridge opens
 `~/Library/Application Support/com.apple.TCC/TCC.db`, or else `~/Library/Safari`, and closes it
-at once, reading nothing: macOS refuses the open itself while the app lacks the access. The
-banner's Open System Settings button runs `open` with the link of the Full Disk Access pane.
+at once, reading no byte and listing no name: macOS refuses the open itself while the app lacks
+the access. The banner's Open System Settings button runs `open` with the link of the Full Disk
+Access pane.
 
 ## Limits
 
