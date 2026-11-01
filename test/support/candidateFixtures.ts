@@ -1,4 +1,4 @@
-import type { CatalogEntry, Risk } from '../../src/catalog/catalog.js';
+import type { CandidateCategory, CatalogEntry, Risk } from '../../src/catalog/catalog.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
@@ -44,21 +44,26 @@ export function buildTestMeasurement(params: {
 
 export function buildTestCandidate(params: {
   path: string;
+  title?: string;
+  category?: CandidateCategory;
   risk?: Risk;
   kind?: FileKind;
+  explanation?: string;
+  regeneration?: string;
   allocatedBytes?: number;
+  isComplete?: boolean;
 }): Candidate {
   return {
     path: params.path,
-    title: `Test item ${params.path}`,
-    category: 'caches',
+    title: params.title ?? `Test item ${params.path}`,
+    category: params.category ?? 'caches',
     risk: params.risk ?? 'safe',
     origin: 'catalog',
-    explanation: 'A test item.',
-    regeneration: 'Rebuilt by the test.',
+    explanation: params.explanation ?? 'A test item.',
+    regeneration: params.regeneration ?? 'Rebuilt by the test.',
     allocatedBytes: params.allocatedBytes ?? 4096,
     entryCount: 1,
-    isComplete: true,
+    isComplete: params.isComplete ?? true,
     removal: {
       kind: 'deletePath',
       identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),

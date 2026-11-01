@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatBytes, formatSizeText } from '../../src/report/formatBytes.js';
+import { formatBytes, formatSizeText, formatTotalSizeText } from '../../src/report/formatBytes.js';
 
 describe('formatBytes', () => {
   test('shows counts under one KiB in bytes', () => {
@@ -40,5 +40,29 @@ describe('formatSizeText', () => {
 
   test('prefixes an incomplete size with at least', () => {
     expect(formatSizeText({ allocatedBytes: 1536, isComplete: false })).toBe('at least 1.5 KiB');
+  });
+});
+
+describe('formatTotalSizeText', () => {
+  test('adds up the sizes of complete items', () => {
+    const items = [
+      { allocatedBytes: 1024, isComplete: true },
+      { allocatedBytes: 512, isComplete: true },
+    ];
+
+    expect(formatTotalSizeText({ items: items })).toBe('1.5 KiB');
+  });
+
+  test('reads at least when any item is incomplete', () => {
+    const items = [
+      { allocatedBytes: 1024, isComplete: true },
+      { allocatedBytes: 512, isComplete: false },
+    ];
+
+    expect(formatTotalSizeText({ items: items })).toBe('at least 1.5 KiB');
+  });
+
+  test('gives zero bytes for no item', () => {
+    expect(formatTotalSizeText({ items: [] })).toBe('0 B');
   });
 });

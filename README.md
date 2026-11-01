@@ -1,7 +1,7 @@
 # magic-free-disk-space
 
-Finds the storage leftovers on a Mac, ranks them by the space they take, and permanently
-deletes the ones you select. Nothing is deleted unless you pick it and then type `DELETE`.
+Finds the storage leftovers on a Mac, sorts them into sections, and permanently deletes the ones
+you select. Nothing is deleted unless you pick it and then type `DELETE`.
 
 It looks where space hides from people who are not storage experts:
 
@@ -42,8 +42,8 @@ instead. Explore offers:
 - Visual Studio Code extensions that VS Code marked for removal or that a newer version of them
   replaced, deleted as their folder.
 
-Other places are only shown with advice, because the tool that owns them must clean them:
-Docker images, Homebrew apps, iPhone backups, Spotify offline music, and more.
+Other places are only shown, under Explore with advice, because the tool that owns them must
+clean them: Docker images, Homebrew apps, iPhone backups, Spotify offline music, and more.
 
 ## Usage
 
@@ -56,8 +56,8 @@ bun start --list           # scan and show the list; deletes nothing
 bun start --dry-run --select "1-3,7"   # show what a selection would delete; deletes nothing
 ```
 
-The selection takes numbers and ranges (`1-3, 7`), `safe` for every item marked safe, or `none`.
-Pressing Enter alone cancels.
+The selection takes numbers and ranges (`1-3, 7`), `safe` for every item marked safe outside
+Explore, or `none`. Pressing Enter alone cancels.
 
 | Option                 | Meaning                                                                        |
 | ---------------------- | ------------------------------------------------------------------------------ |
@@ -77,11 +77,26 @@ Pressing Enter alone cancels.
 | 4                  | The deletion log could not be created, so nothing was deleted.                    |
 | 129, 130, 131, 143 | Stopped by SIGHUP, SIGINT, SIGQUIT, or SIGTERM; a tool it ran is stopped with it. |
 
+### What the scan shows
+
+The list starts with a summary: how many items the scan found and their total size, then how
+much is safe to free, how much to check before deleting, and how much is in Explore. Items marked
+`never` count in the total only.
+
+The items follow in sections: Caches, Developer tools, Apps, Large files, and Trash, each with
+its size. A section lists its `safe` items first and its other items under "Check before
+deleting". Explore comes last, with the places to handle yourself after its items. The numbers
+count from top to bottom across the sections and Explore. Last come the skipped items, the places
+the scan could not read, and the tools it could not ask.
+
 ### Full Disk Access
 
-macOS hides some folders, such as the Trash and the caches of Apple's apps, from programs
-without Full Disk Access. The scan lists what it could not read. To scan those places too, give
-your terminal app Full Disk Access in System Settings > Privacy & Security.
+macOS privacy protection keeps programs without Full Disk Access out of some folders, such as the
+Trash and the caches of Apple's apps. The scan names each place it blocked as "blocked by macOS
+privacy protection", and only then suggests Full Disk Access. A place that reads "permission
+denied" is closed by its own permissions, which Full Disk Access does not change. To scan the
+protected places too, give your terminal app Full Disk Access in System Settings > Privacy &
+Security > Full Disk Access.
 
 ## App
 
@@ -95,10 +110,16 @@ bun run app:run        # build and start a debug version
 ```
 
 - The app scans with the default days: 10 without changes, 180 without use.
+- It shows the same summary, sections, and Explore as the CLI. "Select safe" ticks the items
+  `safe` selects.
 - A scan older than an hour must be redone before anything is deleted, since the app may stay
   open for days.
-- Full Disk Access goes to the app, not the terminal. Grant it again after each install: every
-  build changes the signature macOS knows the app by.
+- Full Disk Access goes to the app, not the terminal. At start the app checks whether it has it;
+  without it, a banner says what a scan misses, and its Open System Settings button opens the
+  Full Disk Access pane. Turn the app on there, then quit the app and open it again: macOS applies
+  the grant from the next start.
+- Grant Full Disk Access again after each install: every build changes the signature macOS knows
+  the app by.
 - The app runs `magic-free-disk-space-bridge` from inside its bundle, a build of
   `src/bridgeMain.ts` that answers the app over a pipe. It is part of the app, not a tool to run
   yourself.
@@ -171,6 +192,12 @@ simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; t
 change nothing. Only after you type `DELETE` does it run their cleanup commands, such as
 `brew cleanup` or `avdmanager delete avd`, one for each item you selected. A tool runs with a
 fixed environment that keeps it offline where the tool allows that.
+
+At start the app asks its bridge whether it has Full Disk Access. The bridge opens
+`~/Library/Application Support/com.apple.TCC/TCC.db`, or else `~/Library/Safari`, and closes it
+at once, reading no byte and listing no name: macOS refuses the open itself while the app lacks
+the access. The banner's Open System Settings button runs `open` with the link of the Full Disk
+Access pane.
 
 ## Limits
 

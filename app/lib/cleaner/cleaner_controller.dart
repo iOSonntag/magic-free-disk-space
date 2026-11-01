@@ -63,14 +63,26 @@ const String _deletionStoppedText =
     'gone. Scan again to see what is left.';
 
 class CleanerController extends ChangeNotifier {
-  CleanerController({required this._bridge});
+  /// Asks the bridge for its status at once; every later request waits for
+  /// that answer.
+  CleanerController({required this._bridge}) {
+    _statusLoad = _loadStatusNotices();
+  }
 
   final CleanerBridge _bridge;
+
+  /// Completes when the status answered or failed; never throws.
+  late final Future<void> _statusLoad;
   CleanerState _state = const IdleState();
+  List<NoticeView> _statusNotices = const [];
   bool _isRequestPending = false;
   bool _isDisposed = false;
 
   CleanerState get state => _state;
+
+  /// The notices of the bridge's status, shown over every state; empty while
+  /// it loads and when it failed.
+  List<NoticeView> get statusNotices => _statusNotices;
 
   @override
   void dispose() {
@@ -111,12 +123,7 @@ class CleanerController extends ChangeNotifier {
   }
 
   void selectSafeCandidates() {
-    _select(
-      (ScannedState current) => {
-        for (final CandidateView candidate in current.scan.candidates)
-          if (candidate.risk == Risk.safe) candidate.number,
-      },
-    );
+    _select((ScannedState current) => {...current.scan.safeNumbers});
   }
 
   void clearSelection() {
@@ -202,6 +209,8 @@ class CleanerController extends ChangeNotifier {
   }) async {
     _isRequestPending = true;
     try {
+      // The bridge takes one request at a time, and the status goes first.
+      await _statusLoad;
       return await send();
     } catch (error) {
       final String notice = errorLead == null ? '$error' : '$errorLead\n$error';
@@ -212,12 +221,30 @@ class CleanerController extends ChangeNotifier {
     }
   }
 
-  void _setFailedAnswer(FailedEvent answer, ListedState listed) {
-    if (answer.isScanDropped) {
-      _setState(IdleState(notice: answer.message));
+  /// A status that failed or threw leaves the notices empty and the state as
+  /// it is; the next request starts the bridge again.
+  Future<void> _loadStatusNotices() async {
+    final StatusAnswer answer;
+    try {
+      answer = await _bridge.status();
+    } catch (_) {
       return;
     }
-    _showList(listed, notice: answer.message);
+    switch (answer) {
+      case StatusEvent():
+        _setStatusNotices(answer.notices);
+      case FailedEvent():
+        return;
+    }
+  }
+
+  void _setFailedAnswer(FailedEvent answer, ListedState listed) {
+    switch (answer.effect) {
+      case FailureEffect.scanKept:
+        _showList(listed, notice: answer.message);
+      case FailureEffect.scanDropped || FailureEffect.bridgeStopping:
+        _setState(IdleState(notice: answer.message));
+    }
   }
 
   /// Shows the list of [listed] with its selection and no plan.
@@ -238,6 +265,16 @@ class CleanerController extends ChangeNotifier {
       return;
     }
     _state = state;
+    notifyListeners();
+  }
+
+  void _setStatusNotices(List<NoticeView> notices) {
+    // The status may answer after the page that held the controller went
+    // away.
+    if (_isDisposed) {
+      return;
+    }
+    _statusNotices = notices;
     notifyListeners();
   }
 }

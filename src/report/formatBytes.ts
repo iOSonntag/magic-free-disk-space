@@ -38,6 +38,16 @@ export function formatSizeText(params: { allocatedBytes: number; isComplete: boo
   return `at least ${bytesText}`;
 }
 
+/** The size of all the items together, "at least" when any of them is a lower bound. */
+export function formatTotalSizeText(params: {
+  items: { allocatedBytes: number; isComplete: boolean }[];
+}): string {
+  return formatSizeText({
+    allocatedBytes: params.items.reduce((sum, item) => sum + item.allocatedBytes, 0),
+    isComplete: params.items.every((item) => item.isComplete),
+  });
+}
+
 function bytesToBinaryUnitValue(params: { bytes: number }): BinaryUnitValue {
   for (const scale of binaryUnitScales) {
     const value = params.bytes / scale.bytesPerUnit;

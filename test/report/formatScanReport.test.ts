@@ -1,44 +1,19 @@
 import { describe, expect, test } from 'bun:test';
-import type { Risk } from '../../src/catalog/catalog.js';
-import { formatCandidateView, formatScanReport } from '../../src/report/formatScanReport.js';
-import type { Advice, Candidate } from '../../src/scan/candidate.js';
+import { formatScanReport } from '../../src/report/formatScanReport.js';
+import type { Advice } from '../../src/scan/candidate.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import {
+  buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const fullDiskAccessLine =
-  'Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
+  '- Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
 
-const EXPLORE_HEADING =
-  'Explore: their own tools remove these, or this tool deletes the folder shown where a tool has no command for it. "safe" never selects them; read the reasons first:';
-
-function buildCandidate(params: {
-  title: string;
-  path: string;
-  risk: Risk;
-  allocatedBytes: number;
-  isComplete: boolean;
-}): Candidate {
-  return {
-    path: params.path,
-    title: params.title,
-    category: 'caches',
-    risk: params.risk,
-    origin: 'catalog',
-    explanation: 'Cached files.',
-    regeneration: 'Rebuilt when needed.',
-    allocatedBytes: params.allocatedBytes,
-    entryCount: 1,
-    isComplete: params.isComplete,
-    removal: {
-      kind: 'deletePath',
-      identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
-      ownerBundlePaths: [],
-    },
-  };
-}
+const EXPLORE_INTRO =
+  'Their own tools remove these, or the folder shown is deleted where a tool has no command for it. They are never selected for you; read the reasons first.';
 
 function buildAdvice(params: {
   title: string;
@@ -60,77 +35,104 @@ function buildAdvice(params: {
 
 describe('formatScanReport', () => {
   test('says that nothing was found for an empty report', () => {
-    const lines = formatScanReport({
-      report: { candidates: [], safeNumbers: [], advice: [], skipped: [], issues: [] },
-    });
-
-    expect(lines).toEqual(['Nothing to delete was found.']);
+    expect(formatScanReport({ report: EMPTY_REPORT })).toEqual(['Nothing to delete was found.']);
   });
 
-  test('lists candidates in the given order with size, risk, title, path, and explanation', () => {
+  test('prints the summary, then each section with its numbered items and its check group', () => {
     const lines = formatScanReport({
       report: {
+        ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
-          buildCandidate({
+          buildTestCandidate({
             title: 'Archives',
             path: '/fixture/b',
             risk: 'careful',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 2048,
             isComplete: true,
           }),
+          buildTestCandidate({
+            title: 'Old video',
+            path: '/fixture/movie.mov',
+            risk: 'careful',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
+            allocatedBytes: 4096,
+            isComplete: true,
+            category: 'userFiles',
+          }),
         ],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
-        issues: [],
+        safeNumbers: [1],
       },
     });
 
     expect(lines).toEqual([
-      'Found 2 items, 3.0 KiB in total:',
+      'Found 3 items, 7.0 KiB in total:',
+      '- 1.0 KiB safe to free',
+      '- 6.0 KiB to check before deleting',
+      '',
+      'Caches (3.0 KiB):',
       '1. 1.0 KiB [safe] Derived data',
       '   /fixture/a',
-      '   Cached files. Rebuilt when needed.',
+      '   Cached files.',
+      '   Rebuilt when needed.',
+      'Check before deleting:',
       '2. 2.0 KiB [careful] Archives',
       '   /fixture/b',
-      '   Cached files. Rebuilt when needed.',
+      '   Cached files.',
+      '   Rebuilt when needed.',
+      '',
+      'Large files (4.0 KiB):',
+      'Check before deleting:',
+      '3. 4.0 KiB [careful] Old video',
+      '   /fixture/movie.mov',
+      '   Cached files.',
+      '   Rebuilt when needed.',
     ]);
   });
 
-  test('marks an incomplete candidate size as at least', () => {
+  test('marks an incomplete size as at least, in the item, its section, and the summary', () => {
     const lines = formatScanReport({
       report: {
+        ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: false,
           }),
         ],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
-        issues: [],
+        safeNumbers: [1],
       },
     });
 
-    expect(lines[1]).toBe('1. at least 1.0 KiB [safe] Derived data');
+    expect(lines.slice(0, 5)).toEqual([
+      'Found 1 item, at least 1.0 KiB in total:',
+      '- at least 1.0 KiB safe to free',
+      '',
+      'Caches (at least 1.0 KiB):',
+      '1. at least 1.0 KiB [safe] Derived data',
+    ]);
   });
 
-  test('shows advice under a heading after a blank line', () => {
+  test('shows advice unnumbered under Explore, after its intro', () => {
     const lines = formatScanReport({
       report: {
-        candidates: [],
-        safeNumbers: [],
+        ...EMPTY_REPORT,
         advice: [
           buildAdvice({
             title: 'Simulator runtimes',
@@ -139,17 +141,18 @@ describe('formatScanReport', () => {
             isComplete: true,
           }),
         ],
-        skipped: [],
-        issues: [],
       },
     });
 
     expect(lines).toEqual([
       'Nothing to delete was found.',
       '',
+      'Explore:',
+      EXPLORE_INTRO,
       'Handle these yourself; this tool never deletes them:',
       '- 3.0 GiB [careful] Simulator runtimes',
       '   /fixture/runtimes',
+      '   Installed simulator runtimes.',
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
     ]);
   });
@@ -157,15 +160,12 @@ describe('formatScanReport', () => {
   test('counts skipped items and names each reason that occurs', () => {
     const lines = formatScanReport({
       report: {
-        candidates: [],
-        safeNumbers: [],
-        advice: [],
+        ...EMPTY_REPORT,
         skipped: [
           { path: '/fixture/a', reason: 'ownerRunning' },
           { path: '/fixture/b', reason: 'belowSizeThreshold' },
           { path: '/fixture/c', reason: 'belowSizeThreshold' },
         ],
-        issues: [],
       },
     });
 
@@ -181,9 +181,7 @@ describe('formatScanReport', () => {
   test('names every skip reason in table order, one line each', () => {
     const lines = formatScanReport({
       report: {
-        candidates: [],
-        safeNumbers: [],
-        advice: [],
+        ...EMPTY_REPORT,
         skipped: [
           { path: '/fixture/overlap', reason: 'overlapsEarlierCandidate' },
           { path: '/fixture/holdsOtherVolume', reason: 'holdsOtherVolume' },
@@ -200,7 +198,6 @@ describe('formatScanReport', () => {
           { path: '/fixture/symbolicLink', reason: 'symbolicLink' },
           { path: '/fixture/belowSizeThreshold', reason: 'belowSizeThreshold' },
         ],
-        issues: [],
       },
     });
 
@@ -228,36 +225,32 @@ describe('formatScanReport', () => {
   test('writes out control characters in a title and a path, so no line can be forged', () => {
     const lines = formatScanReport({
       report: {
+        ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'movie.mov\n2. 1.0 KiB [safe] Xcode build data',
             path: '/fixture/Downloads/movie.mov\n2. 1.0 KiB [safe] Xcode build data',
             risk: 'careful',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
         ],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
-        issues: [],
       },
     });
 
-    expect(lines.slice(1, 3)).toEqual([
+    expect(lines.slice(5, 7)).toEqual([
       '1. 1.0 KiB [careful] movie.mov\\u{a}2. 1.0 KiB [safe] Xcode build data',
       '   /fixture/Downloads/movie.mov\\u{a}2. 1.0 KiB [safe] Xcode build data',
     ]);
     expect(lines.join('\n').split('\n')).toHaveLength(lines.length);
   });
 
-  test('lists every issue with its reason and detail', () => {
+  test('lists every issue with its reason and detail, and names Full Disk Access for no denial by permissions', () => {
     const lines = formatScanReport({
       report: {
-        candidates: [],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
+        ...EMPTY_REPORT,
         issues: [
           { path: '/fixture/locked', reason: 'permissionDenied', detail: 'EACCES' },
           { path: '/fixture/broken', reason: 'unexpected', detail: 'EIO' },
@@ -275,6 +268,26 @@ describe('formatScanReport', () => {
       '- /fixture/broken: unexpected error (EIO)',
       '- /fixture/tool: a system command failed (timedOut)',
       '- /fixture/deep: search stopped at its time limit (deadline)',
+    ]);
+  });
+
+  test('names Full Disk Access for the terminal after a place macOS privacy protection blocked', () => {
+    const lines = formatScanReport({
+      report: {
+        ...EMPTY_REPORT,
+        issues: [
+          { path: '/fixture/Mail', reason: 'privacyDenied', detail: 'EPERM' },
+          { path: '/fixture/locked', reason: 'permissionDenied', detail: 'EACCES' },
+        ],
+      },
+    });
+
+    expect(lines).toEqual([
+      'Nothing to delete was found.',
+      '',
+      'Could not read 2 places:',
+      '- /fixture/Mail: blocked by macOS privacy protection (EPERM)',
+      '- /fixture/locked: permission denied (EACCES)',
       fullDiskAccessLine,
     ]);
   });
@@ -282,10 +295,7 @@ describe('formatScanReport', () => {
   test('lists the tools it could not ask apart from the places it could not read', () => {
     const lines = formatScanReport({
       report: {
-        candidates: [],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
+        ...EMPTY_REPORT,
         issues: [
           { path: '/fixture/locked', reason: 'unexpected', detail: 'EIO' },
           { path: '/fixture/bin/mise', reason: 'toolUntrusted', detail: 'writableByOthers' },
@@ -329,10 +339,7 @@ describe('formatScanReport', () => {
   test('writes out control characters in the detail of an issue and in the stderr of a tool', () => {
     const lines = formatScanReport({
       report: {
-        candidates: [],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
+        ...EMPTY_REPORT,
         issues: [
           { path: '/fixture/broken', reason: 'unexpected', detail: 'EIO\r- /fixture/forged' },
           {
@@ -353,7 +360,7 @@ describe('formatScanReport', () => {
     );
   });
 
-  test('lists the Explore items last under their heading, with evidence and command', () => {
+  test('lists the Explore items last, numbered on, with their evidence and command', () => {
     const toolCandidate = buildTestToolCandidate({
       homeDir: '/fixture/home',
       version: '20.1.0',
@@ -361,33 +368,40 @@ describe('formatScanReport', () => {
     });
     const lines = formatScanReport({
       report: {
+        ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
           toolCandidate,
         ],
         safeNumbers: [1],
-        advice: [],
-        skipped: [],
-        issues: [],
       },
     });
 
     expect(lines).toEqual([
       'Found 2 items, 3.0 KiB in total:',
+      '- 1.0 KiB safe to free',
+      '- 2.0 KiB in Explore',
+      '',
+      'Caches (1.0 KiB):',
       '1. 1.0 KiB [safe] Derived data',
       '   /fixture/a',
-      '   Cached files. Rebuilt when needed.',
+      '   Cached files.',
+      '   Rebuilt when needed.',
       '',
-      EXPLORE_HEADING,
+      'Explore:',
+      EXPLORE_INTRO,
       '2. 2.0 KiB [safe] node 20.1.0',
       '   /fixture/home/.local/share/mise/installs/node/20.1.0',
-      `   ${toolCandidate.explanation} ${toolCandidate.regeneration}`,
+      `   ${toolCandidate.explanation}`,
+      `   ${toolCandidate.regeneration}`,
       '   - mise prune would remove node@20.1.0',
       '   Runs: mise uninstall node@20.1.0',
     ]);
@@ -396,11 +410,8 @@ describe('formatScanReport', () => {
   test('shows the command of a tool item with the leading arguments of its tool', () => {
     const lines = formatScanReport({
       report: {
+        ...EMPTY_REPORT,
         candidates: [buildTestDartToolCandidate({ homeDir: '/fixture/home' })],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
-        issues: [],
       },
     });
 
@@ -410,58 +421,41 @@ describe('formatScanReport', () => {
   test('lists a unit folder as an Explore item with its evidence and no command', () => {
     const lines = formatScanReport({
       report: {
+        ...EMPTY_REPORT,
         candidates: [buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' })],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
-        issues: [],
       },
     });
 
     expect(lines).toEqual([
       'Found 1 item, 4.0 KiB in total:',
+      '- 4.0 KiB in Explore',
       '',
-      EXPLORE_HEADING,
+      'Explore:',
+      EXPLORE_INTRO,
       '1. 4.0 KiB [review] VS Code extension example.alpha 1.0.0',
       '   /Users/example/.vscode/extensions/example.alpha-1.0.0',
-      '   An extension folder VS Code marked for removal after an uninstall or an update. VS Code downloads it again only if you install this version again.',
+      '   An extension folder VS Code marked for removal after an uninstall or an update.',
+      '   VS Code downloads it again only if you install this version again.',
       "   - Neither VS Code's default registry nor any profile's lists this folder.",
       "   - VS Code's .obsolete file marks it for removal.",
     ]);
   });
 
-  test('omits the Full Disk Access line when no issue is a permission problem', () => {
-    const lines = formatScanReport({
-      report: {
-        candidates: [],
-        safeNumbers: [],
-        advice: [],
-        skipped: [],
-        issues: [{ path: '/fixture/broken', reason: 'unexpected', detail: 'EIO' }],
-      },
-    });
-
-    expect(lines).toEqual([
-      'Nothing to delete was found.',
-      '',
-      'Could not read 1 place:',
-      '- /fixture/broken: unexpected error (EIO)',
-    ]);
-  });
-
-  test('shows the candidates, advice, skipped items, and issues in that order', () => {
+  test('shows the summary, the sections, Explore, the skipped items, and the notices in that order', () => {
     const lines = formatScanReport({
       report: {
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
         ],
-        safeNumbers: [],
+        safeNumbers: [1],
         advice: [
           buildAdvice({
             title: 'Simulator runtimes',
@@ -471,19 +465,29 @@ describe('formatScanReport', () => {
           }),
         ],
         skipped: [{ path: '/fixture/b', reason: 'ownerRunning' }],
-        issues: [{ path: '/fixture/c', reason: 'unexpected', detail: 'EIO' }],
+        issues: [
+          { path: '/fixture/c', reason: 'unexpected', detail: 'EIO' },
+          { path: '/fixture/bin/mise', reason: 'toolUntrusted', detail: 'foreignOwner' },
+        ],
       },
     });
 
     expect(lines).toEqual([
       'Found 1 item, 1.0 KiB in total:',
+      '- 1.0 KiB safe to free',
+      '',
+      'Caches (1.0 KiB):',
       '1. 1.0 KiB [safe] Derived data',
       '   /fixture/a',
-      '   Cached files. Rebuilt when needed.',
+      '   Cached files.',
+      '   Rebuilt when needed.',
       '',
+      'Explore:',
+      EXPLORE_INTRO,
       'Handle these yourself; this tool never deletes them:',
       '- 3.0 GiB [careful] Simulator runtimes',
       '   /fixture/runtimes',
+      '   Installed simulator runtimes.',
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
       '',
       'Skipped 1 item:',
@@ -491,31 +495,9 @@ describe('formatScanReport', () => {
       '',
       'Could not read 1 place:',
       '- /fixture/c: unexpected error (EIO)',
+      '',
+      'Could not ask 1 tool:',
+      '- /fixture/bin/mise: the tool is not trusted, never run (owned by another user)',
     ]);
-  });
-});
-
-describe('formatCandidateView', () => {
-  test('gives a unit folder its evidence and no command, as the app receives it', () => {
-    expect(
-      formatCandidateView({
-        candidate: buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' }),
-        number: 3,
-      }),
-    ).toEqual({
-      number: 3,
-      title: 'VS Code extension example.alpha 1.0.0',
-      path: '/Users/example/.vscode/extensions/example.alpha-1.0.0',
-      risk: 'review',
-      explanation:
-        'An extension folder VS Code marked for removal after an uninstall or an update.',
-      regeneration: 'VS Code downloads it again only if you install this version again.',
-      sizeText: '4.0 KiB',
-      evidenceLines: [
-        "Neither VS Code's default registry nor any profile's lists this folder.",
-        "VS Code's .obsolete file marks it for removal.",
-      ],
-      commandText: null,
-    });
   });
 });

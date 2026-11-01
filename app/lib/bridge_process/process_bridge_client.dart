@@ -80,6 +80,11 @@ class ProcessBridgeClient implements CleanerBridge {
     );
   }
 
+  @override
+  Future<StatusAnswer> status() {
+    return _send<StatusAnswer>(buildStatusRequest());
+  }
+
   /// Stops the bridge for good and fails a pending request with a
   /// [BridgeClientDisposedException]; a later request throws a [StateError].
   void dispose() {
@@ -178,6 +183,9 @@ class ProcessBridgeClient implements CleanerBridge {
     if (event is ProgressEvent) {
       pending.onProgress(event.message);
       return;
+    }
+    if (event case FailedEvent(effect: FailureEffect.bridgeStopping)) {
+      _stopBridge();
     }
     _pending = null;
     pending.completer.complete(event);

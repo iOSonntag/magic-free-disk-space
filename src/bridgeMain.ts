@@ -2,6 +2,7 @@ import { createBridgeIo } from './bridge/bridgeIo.js';
 import { runBridge } from './bridge/runBridge.js';
 import { CATALOG_ENTRIES } from './catalog/catalogEntries.js';
 import { loadEnvironment } from './environment/loadEnvironment.js';
+import { loadFullDiskAccess } from './system/loadFullDiskAccess.js';
 import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
 import { TOOL_INSTALL_LOCATIONS } from './tools/toolInstallLocations.js';
 
@@ -27,6 +28,7 @@ async function main(): Promise<number> {
     catalogEntries: CATALOG_ENTRIES,
     toolInstallLocations: TOOL_INSTALL_LOCATIONS,
     loadEnvironment: loadEnvironment,
+    loadFullDiskAccess: loadFullDiskAccess,
     clock: () => Date.now(),
   });
 
