@@ -145,8 +145,8 @@ void main() {
       'a failed status shows no banner and no error, and a scan still runs',
       () async {
         bridge.answerStatus = () async => const FailedEvent(
-          message: 'The bridge could not read the status.',
-          isScanDropped: false,
+          message: 'This tool runs on macOS only.',
+          effect: FailureEffect.bridgeStopping,
         );
 
         controller = CleanerController(bridge: bridge);
@@ -320,7 +320,7 @@ void main() {
     test('failed with the scan dropped goes back to idle', () async {
       bridge.deleteAnswer = const FailedEvent(
         message: 'The scan is older than an hour; scan again.',
-        isScanDropped: true,
+        effect: FailureEffect.scanDropped,
       );
       await scanAndSelectSafe();
       await controller.requestPlan();
@@ -333,10 +333,25 @@ void main() {
       );
     });
 
+    test('failed with the bridge stopping goes back to idle', () async {
+      bridge.planAnswer = const FailedEvent(
+        message: 'This tool runs on macOS only.',
+        effect: FailureEffect.bridgeStopping,
+      );
+      await scanAndSelectSafe();
+
+      await controller.requestPlan();
+
+      expect(
+        (controller.state as IdleState).notice,
+        'This tool runs on macOS only.',
+      );
+    });
+
     test('failed with the scan kept keeps the list with the message', () async {
       bridge.planAnswer = const FailedEvent(
         message: 'No item has the number 4.',
-        isScanDropped: false,
+        effect: FailureEffect.scanKept,
       );
       await scanAndSelectSafe();
 

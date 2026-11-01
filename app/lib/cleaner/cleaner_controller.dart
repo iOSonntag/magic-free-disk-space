@@ -239,11 +239,12 @@ class CleanerController extends ChangeNotifier {
   }
 
   void _setFailedAnswer(FailedEvent answer, ListedState listed) {
-    if (answer.isScanDropped) {
-      _setState(IdleState(notice: answer.message));
-      return;
+    switch (answer.effect) {
+      case FailureEffect.scanKept:
+        _showList(listed, notice: answer.message);
+      case FailureEffect.scanDropped || FailureEffect.bridgeStopping:
+        _setState(IdleState(notice: answer.message));
     }
-    _showList(listed, notice: answer.message);
   }
 
   /// Shows the list of [listed] with its selection and no plan.

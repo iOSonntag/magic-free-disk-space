@@ -230,13 +230,16 @@ final class CancelledEvent extends BridgeEvent implements DeleteAnswer {
 
 final class FailedEvent extends BridgeEvent
     implements ScanAnswer, PlanAnswer, DeleteAnswer, StatusAnswer {
-  const FailedEvent({required this.message, required this.isScanDropped});
+  const FailedEvent({required this.message, required this.effect});
 
   final String message;
-
-  /// True when the bridge no longer holds a scan, so the app must scan again.
-  final bool isScanDropped;
+  final FailureEffect effect;
 }
+
+/// What a failure did to the bridge: after [scanDropped] the app must scan
+/// again; after [bridgeStopping] the bridge exits, so the next request needs
+/// a new one.
+enum FailureEffect { scanKept, scanDropped, bridgeStopping }
 
 /// Parses one decoded line of the bridge; throws [FormatException] on any
 /// shape it does not know.
@@ -293,9 +296,12 @@ BridgeEvent parseBridgeEvent(Object? json) {
     {
       'kind': 'failed',
       'message': final String message,
-      'isScanDropped': final bool isScanDropped,
+      'effect': final String effect,
     } =>
-      FailedEvent(message: message, isScanDropped: isScanDropped),
+      FailedEvent(
+        message: message,
+        effect: _parseEnumName(FailureEffect.values, effect),
+      ),
     {'kind': final String kind} => throw FormatException(
       'Unknown shape of the bridge event "$kind".',
     ),

@@ -202,7 +202,7 @@ void main() {
     expect(notice.settingsLink!.url.text, fullDiskAccessSettingsUrl);
   });
 
-  test('parses the plan, the answers, and both failures', () {
+  test('parses the plan, the answers, and the three failures', () {
     final PlannedEvent planned = events.whereType<PlannedEvent>().single;
     expect(planned.planId, 1);
     expect(
@@ -218,9 +218,13 @@ void main() {
     );
     expect(
       events.whereType<FailedEvent>().map(
-        (FailedEvent failed) => failed.isScanDropped,
+        (FailedEvent failed) => failed.effect,
       ),
-      [false, true],
+      [
+        FailureEffect.scanKept,
+        FailureEffect.scanDropped,
+        FailureEffect.bridgeStopping,
+      ],
     );
   });
 
@@ -241,6 +245,13 @@ void main() {
       final Map<String, Object?> json = decodeSample('scanned');
       getMapAt(json, ['explore', 'adviceGroup', 'items', 0])['risk'] =
           'harmless';
+
+      expect(() => parseBridgeEvent(json), throwsFormatException);
+    });
+
+    test('on an unknown effect of a failure', () {
+      final Map<String, Object?> json = decodeSample('failed');
+      json['effect'] = 'scanLost';
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });

@@ -5,5 +5,6 @@
 {"kind":"nothingApproved","lines":["Nothing of the selection can be deleted.","","Refused 1 selected item:","- 3. /Applications/Xcode.app: marked never-delete"]}
 {"kind":"deleted","lines":["- deleted: /Users/me/Library/Caches/ToolCache","Freed about 6.0 MiB in 1 item.","The deletion log is at /Users/me/Library/Logs/magic-free-disk-space/deletions.jsonl"]}
 {"kind":"cancelled","message":"Cancelled. Nothing was deleted."}
-{"kind":"failed","message":"This is not the deletion that waits for its confirmation; review it again.","isScanDropped":false}
-{"kind":"failed","message":"The scan is older than an hour; scan again.","isScanDropped":true}
+{"kind":"failed","message":"This is not the deletion that waits for its confirmation; review it again.","effect":"scanKept"}
+{"kind":"failed","message":"The scan is older than an hour; scan again.","effect":"scanDropped"}
+{"kind":"failed","message":"Run this tool as yourself, not as root or with sudo: it deletes in the home folder of the user who runs it.","effect":"bridgeStopping"}

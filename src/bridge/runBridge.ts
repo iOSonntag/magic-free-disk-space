@@ -52,11 +52,16 @@ type BridgeEventDeleted = { kind: 'deleted'; lines: string[] };
 
 type BridgeEventCancelled = { kind: 'cancelled'; message: string };
 
+/**
+ * What a failure did to the bridge: `scanDropped` leaves it without a scan, so the next request
+ * must be a scan; `bridgeStopping` means it exits, so the next request needs a new bridge.
+ */
+type BridgeFailureEffect = 'scanKept' | 'scanDropped' | 'bridgeStopping';
+
 type BridgeEventFailed = {
   kind: 'failed';
   message: string;
-  /** True when the bridge holds no scan anymore, so the next request must be a scan. */
-  isScanDropped: boolean;
+  effect: BridgeFailureEffect;
 };
 
 /** The final event of a request; progress events may come before it. */
@@ -122,12 +127,11 @@ export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
   const startEnvironment = await params.loadEnvironment();
 
   if (startEnvironment.kind === 'failed') {
-    params.io.writeEvent(
-      buildFailedStep({
-        message: formatEnvironmentFailure({ failure: startEnvironment.failure }),
-        nextState: AWAITING_SCAN,
-      }).answer,
-    );
+    params.io.writeEvent({
+      kind: 'failed',
+      message: formatEnvironmentFailure({ failure: startEnvironment.failure }),
+      effect: 'bridgeStopping',
+    });
 
     return 'cannotStart';
   }
@@ -386,7 +390,7 @@ function buildFailedStep(params: { message: string; nextState: BridgeState }): B
     answer: {
       kind: 'failed',
       message: params.message,
-      isScanDropped: params.nextState.kind === 'awaitingScan',
+      effect: params.nextState.kind === 'awaitingScan' ? 'scanDropped' : 'scanKept',
     },
     nextState: params.nextState,
   };

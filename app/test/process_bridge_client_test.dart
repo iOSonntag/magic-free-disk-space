@@ -172,7 +172,7 @@ while read -r request; do
   if [ "\$request" = '{"kind":"status"}' ]; then
     echo '{"kind":"status","fullDiskAccess":"granted","notices":[]}'
   else
-    echo '{"kind":"failed","message":"Unknown request.","isScanDropped":false}'
+    echo '{"kind":"failed","message":"Unknown request.","effect":"scanKept"}'
   fi
 done
 ''');
@@ -184,22 +184,44 @@ done
     expect(status.notices, isEmpty);
   });
 
-  test('a failed status stops the bridge, so the next request starts one that answers', () async {
-    client = await createClientOverScript('''
+  /// A bridge that cannot start on its first run and answers every request
+  /// with a scan on later runs.
+  final String failingFirstStartScript =
+      '''
 if [ "\$start" = 1 ]; then
-  echo '{"kind":"failed","message":"The bridge could not start.","isScanDropped":false}'
+  echo '{"kind":"failed","message":"The bridge could not start.","effect":"bridgeStopping"}'
   sleep 0.3
   exit 2
 fi
 while read -r request; do
   echo '${buildScannedLine('fresh')}'
 done
-''');
+''';
+
+  test('a failed status whose bridge stops leads the next request to a new bridge that answers', () async {
+    client = await createClientOverScript(failingFirstStartScript);
 
     final StatusAnswer status = await client.status();
     final ScanAnswer answer = await client.scan(onProgress: (String _) {});
 
-    expect(status, isA<FailedEvent>());
+    expect(
+      status,
+      isA<FailedEvent>().having(
+        (failed) => failed.effect,
+        'effect',
+        FailureEffect.bridgeStopping,
+      ),
+    );
+    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+  });
+
+  test('a failed scan whose bridge stops leads the next request to a new bridge that answers', () async {
+    client = await createClientOverScript(failingFirstStartScript);
+
+    final ScanAnswer failed = await client.scan(onProgress: (String _) {});
+    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+
+    expect(failed, isA<FailedEvent>());
     expect((answer as ScannedEvent).summary.titleText, 'fresh');
   });
 }

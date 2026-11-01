@@ -413,7 +413,7 @@ describe('runBridge', () => {
 
     expect(events).toEqual([
       { kind: 'status', fullDiskAccess: 'unknown', notices: [] },
-      { kind: 'failed', message: 'Scan first.', isScanDropped: true },
+      { kind: 'failed', message: 'Scan first.', effect: 'scanDropped' },
     ]);
     expect(await listFixturePaths()).toEqual(before);
   });
@@ -445,7 +445,7 @@ describe('runBridge', () => {
         'Anything else cancels.',
       ],
     });
-    expect(answers[3]).toMatchObject({ isScanDropped: true });
+    expect(answers[3]).toMatchObject({ effect: 'scanDropped' });
     expect(before.filter((path) => !after.includes(path))).toEqual([
       'home/Library/Caches/AppCache',
       'home/Library/Caches/AppCache/blob.bin',
@@ -466,11 +466,11 @@ describe('runBridge', () => {
 
     expect(findAnswers({ events: events }).slice(1)).toEqual([
       expect.objectContaining({ kind: 'planned', planId: 1 }),
-      { kind: 'failed', message: 'No item has the number 99.', isScanDropped: false },
+      { kind: 'failed', message: 'No item has the number 99.', effect: 'scanKept' },
       {
         kind: 'failed',
         message: 'No deletion waits for its confirmation; review it again.',
-        isScanDropped: false,
+        effect: 'scanKept',
       },
     ]);
     expect(await listFixturePaths()).toEqual(before);
@@ -489,7 +489,7 @@ describe('runBridge', () => {
 
     expect(findAnswers({ events: events }).at(-1)).toMatchObject({
       kind: 'failed',
-      isScanDropped: false,
+      effect: 'scanKept',
     });
     expect(await listFixturePaths()).toEqual(before);
   });
@@ -512,7 +512,7 @@ describe('runBridge', () => {
         {
           kind: 'failed',
           message: 'No deletion waits for its confirmation; review it again.',
-          isScanDropped: false,
+          effect: 'scanKept',
         },
       ]);
     }
@@ -532,7 +532,7 @@ describe('runBridge', () => {
     const answers = findAnswers({ events: events });
 
     expect(answers[1]).toMatchObject({ kind: 'nothingApproved' });
-    expect(answers[2]).toMatchObject({ kind: 'failed', isScanDropped: false });
+    expect(answers[2]).toMatchObject({ kind: 'failed', effect: 'scanKept' });
     expect(await listFixturePaths()).toEqual(before);
   });
 
@@ -546,7 +546,7 @@ describe('runBridge', () => {
     expect(findAnswers({ events: events })[1]).toEqual({
       kind: 'failed',
       message: 'The scan is older than an hour; scan again.',
-      isScanDropped: true,
+      effect: 'scanDropped',
     });
     expect(await listFixturePaths()).toEqual(before);
   });
@@ -574,7 +574,7 @@ describe('runBridge', () => {
     expect(answers[4]).toEqual({
       kind: 'failed',
       message: 'No item has the number 4.',
-      isScanDropped: false,
+      effect: 'scanKept',
     });
     expect(await listFixturePaths()).toEqual(before);
   });
@@ -592,7 +592,7 @@ describe('runBridge', () => {
     });
     const answers = findAnswers({ events: events });
 
-    expect(answers[2]).toMatchObject({ kind: 'failed', isScanDropped: false });
+    expect(answers[2]).toMatchObject({ kind: 'failed', effect: 'scanKept' });
     expect(answers[2]).toHaveProperty('message', expect.stringContaining('Nothing was deleted.'));
     expect(await listFixturePaths()).toEqual(before);
   });
@@ -612,7 +612,7 @@ describe('runBridge', () => {
 
     expect(end).toBe('cannotStart');
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ kind: 'failed', isScanDropped: true });
+    expect(events[0]).toMatchObject({ kind: 'failed', effect: 'bridgeStopping' });
     expect(await listFixturePaths()).toEqual(before);
   });
 
