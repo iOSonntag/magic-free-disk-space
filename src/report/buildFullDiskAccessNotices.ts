@@ -1,4 +1,4 @@
-import type { FullDiskAccess } from '../system/decideFullDiskAccess.js';
+import type { FullDiskAccess } from '../system/fullDiskAccess.js';
 import type { NoticeView } from './noticeView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from './noticeView.js';
 

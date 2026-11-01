@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { BridgeEvent } from '../../src/bridge/runBridge.js';
 
 /** Every event of the protocol fixture the app is tested with, parsed, in the order of its lines. */
 export async function loadProtocolFixtureEvents(): Promise<unknown[]> {
@@ -12,7 +13,7 @@ export async function loadProtocolFixtureEvents(): Promise<unknown[]> {
 }
 
 /** The first event of `kind` in the protocol fixture; throws when the fixture has none. */
-export async function loadProtocolFixtureEventOfKind(kind: string): Promise<unknown> {
+export async function loadProtocolFixtureEventOfKind(kind: BridgeEvent['kind']): Promise<unknown> {
   const events = await loadProtocolFixtureEvents();
   const event = events.find(
     (fixtureEvent) =>

@@ -24,7 +24,7 @@ import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
-import type { FullDiskAccess } from '../system/decideFullDiskAccess.js';
+import type { FullDiskAccess } from '../system/fullDiskAccess.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { parseBridgeRequest } from './parseBridgeRequest.js';
 

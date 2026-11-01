@@ -1,8 +1,8 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { FullDiskAccess } from './decideFullDiskAccess.js';
-import { readFailureVerdictToFullDiskAccess } from './decideFullDiskAccess.js';
+import type { FullDiskAccess } from './fullDiskAccess.js';
+import { readFailureVerdictToFullDiskAccess } from './fullDiskAccess.js';
 import { getErrorCode } from './getErrorCode.js';
 import type { DirectoryFailure } from './loadDirectoryNames.js';
 import { getDirectoryFailure } from './loadDirectoryNames.js';

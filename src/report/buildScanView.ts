@@ -32,7 +32,7 @@ export type ScanView = {
   notices: NoticeView[];
 };
 
-export type SummaryView = { titleText: string; lines: string[] };
+type SummaryView = { titleText: string; lines: string[] };
 
 export type SectionView = {
   titleText: string;
@@ -57,7 +57,7 @@ export type ExploreView = {
 };
 
 /** What the tool never removes: places the person handles with the owning tool. */
-export type AdviceGroupView = { titleText: string; items: AdviceItemView[] };
+type AdviceGroupView = { titleText: string; items: AdviceItemView[] };
 
 /** A selectable item; `number` is what the selection names. */
 export type ItemView = {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readFailureVerdictToFullDiskAccess } from '../../src/system/decideFullDiskAccess.js';
+import { readFailureVerdictToFullDiskAccess } from '../../src/system/fullDiskAccess.js';
 
 describe('readFailureVerdictToFullDiskAccess', () => {
   test('a privacy denial is denied', () => {

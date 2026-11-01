@@ -8,7 +8,7 @@ import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../../src/environment/loadEnvironment.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
-import type { FullDiskAccess } from '../../src/system/decideFullDiskAccess.js';
+import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
