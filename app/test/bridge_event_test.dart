@@ -63,7 +63,7 @@ void main() {
     test('parses the summary', () {
       expect(
         scanned.summary.titleText,
-        'Found 5 items, at least 18.0 MiB in total',
+        'Found 5 items, at least 18 MiB in total',
       );
       expect(scanned.summary.lines, hasLength(3));
     });
@@ -106,7 +106,7 @@ void main() {
         scanned.sections.first.checkGroup!.titleText,
         'Check before deleting',
       );
-      expect(scanned.sections.first.sizeText, 'at least 10.0 MiB');
+      expect(scanned.sections.first.sizeText, 'at least 10 MiB');
 
       final ItemView toolCache = scanned.sections.first.items.single;
       expect(toolCache.risk, Risk.safe);
@@ -134,7 +134,7 @@ void main() {
       ]);
       expect(
         explore.items.single.detailLines.last.text,
-        'xcrun simctl delete 0A1B2C3D',
+        'xcrun simctl delete 0A1B2C3D-0000-4000-8000-000000000001',
       );
 
       final AdviceGroupView adviceGroup = explore.adviceGroup!;

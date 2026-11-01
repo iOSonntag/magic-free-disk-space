@@ -75,8 +75,9 @@ async function createSizedFile(path: string, sizeBytes: number): Promise<void> {
 }
 
 /**
- * Builds a home where the ranking is fixed: 1 the tool cache (4 MiB, safe), 2 another app's
- * cache (3 MiB, review), 3 a stale temp folder (2 MiB, safe). Plus things never offered.
+ * Builds a home where the ranking is fixed, all in Caches: 1 the tool cache (4 MiB, safe), 2 a
+ * stale temp folder (2 MiB, safe), then under "Check before deleting" 3 another app's cache
+ * (3 MiB, review). Plus things never offered.
  */
 async function createFixtureHome(): Promise<void> {
   const home = fixtureRoot.homeDir;
@@ -131,10 +132,15 @@ describe('runCli safety', () => {
     const out = io.outText();
 
     expect(exitCode).toBe(0);
-    expect(out).toContain('1. 4.0 MiB [safe] Tool cache');
-    expect(out).toContain('2. 3.0 MiB [review] App cache');
-    expect(out).toContain('3. 2.0 MiB [safe] Temporary files');
-    expect(out).not.toContain('4. ');
+    expect(
+      out.split('\n').filter((line) => /^(\d+\. |Caches|Check before deleting)/.test(line)),
+    ).toEqual([
+      'Caches (9.0 MiB):',
+      '1. 4.0 MiB [safe] Tool cache',
+      '2. 2.0 MiB [safe] Temporary files',
+      'Check before deleting:',
+      '3. 3.0 MiB [review] App cache',
+    ]);
     expect(out).toContain('Run the tool prune command.');
     expect(out).not.toContain('com.apple.system');
   });
@@ -181,7 +187,7 @@ describe('runCli safety', () => {
 
   test('deletes exactly the selected item after DELETE, and logs it', async () => {
     const before = await listFixturePaths();
-    const { exitCode } = await runWithInput({ argv: [], inputLines: ['2', 'DELETE'] });
+    const { exitCode } = await runWithInput({ argv: [], inputLines: ['3', 'DELETE'] });
     const after = await listFixturePaths();
     const removedPaths = before.filter((path) => !after.includes(path));
     const log = await readFile(environment.deletionLogPath, 'utf8');

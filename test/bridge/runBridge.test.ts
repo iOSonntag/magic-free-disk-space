@@ -1,18 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { BridgeEnd, BridgeEvent } from '../../src/bridge/runBridge.js';
 import { runBridge } from '../../src/bridge/runBridge.js';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../../src/environment/loadEnvironment.js';
+import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
+import type { FullDiskAccess } from '../../src/system/decideFullDiskAccess.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
 } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
+  createFixtureDirectory,
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
@@ -23,7 +26,8 @@ const MIB = 1_048_576;
 const HOUR_MS = 3_600_000;
 const NOW_MS = Date.now();
 
-// Ranked by size: 1 the tool cache (safe), 2 the app cache (review), 3 the kept store (never).
+// One section, Caches: 1 the tool cache (safe), then under "Check before deleting" 2 the app cache
+// (review) and 3 the kept store (never). The tool store is advice; the tiny cache is skipped.
 const BRIDGE_CATALOG: CatalogEntry[] = [
   buildTestCatalogEntry({
     id: 'tool-cache',
@@ -50,9 +54,17 @@ const BRIDGE_CATALOG: CatalogEntry[] = [
     risk: 'review',
     removal: { kind: 'advice', advice: 'Run the tool prune command.' },
   }),
+  buildTestCatalogEntry({
+    id: 'tiny-cache',
+    title: 'Tiny cache',
+    path: 'Library/Caches/TinyCache',
+    risk: 'safe',
+  }),
 ];
 
 const SCAN_LINE = '{"kind":"scan"}';
+
+const STATUS_LINE = '{"kind":"status"}';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -67,6 +79,7 @@ beforeEach(async () => {
   await createSizedFile({ path: join(home, 'Library/Caches/AppCache/blob.bin'), mib: 3 });
   await createSizedFile({ path: join(home, 'Library/KeptStore/blob.bin'), mib: 2 });
   await createSizedFile({ path: join(home, 'Library/ToolStore/store.bin'), mib: 5 });
+  await createSizedFile({ path: join(home, 'Library/Caches/TinyCache/blob.bin'), mib: 0.5 });
 });
 
 afterEach(async () => {
@@ -104,12 +117,15 @@ async function loadJournalTimes(): Promise<unknown[]> {
     .map((line) => JSON.parse(line).atMs);
 }
 
+/** Runs the bridge on the fixture home; its Full Disk Access probe is a fake that answers as told. */
 async function runBridgeWithLines(params: {
   lines: string[];
   nowMs?: number;
   environmentResult?: Result<Environment, EnvironmentFailure>;
-}): Promise<{ end: BridgeEnd; events: BridgeEvent[] }> {
+  fullDiskAccess?: FullDiskAccess;
+}): Promise<{ end: BridgeEnd; events: BridgeEvent[]; probedHomeDirs: string[] }> {
   const events: BridgeEvent[] = [];
+  const probedHomeDirs: string[] = [];
   const environmentResult: Result<Environment, EnvironmentFailure> = params.environmentResult ?? {
     kind: 'succeeded',
     value: environment,
@@ -124,10 +140,15 @@ async function runBridgeWithLines(params: {
     catalogEntries: BRIDGE_CATALOG,
     toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
     loadEnvironment: async () => environmentResult,
+    loadFullDiskAccess: async (probe) => {
+      probedHomeDirs.push(probe.homeDir);
+
+      return params.fullDiskAccess ?? 'unknown';
+    },
     clock: () => params.nowMs ?? NOW_MS,
   });
 
-  return { end: end, events: events };
+  return { end: end, events: events, probedHomeDirs: probedHomeDirs };
 }
 
 /** The final events, one per request, without the progress events of a scan. */
@@ -148,8 +169,9 @@ function buildDeleteLine(params: { planId: number; confirmation: string }): stri
 }
 
 /**
- * Checks every produced event against the fixture line of its kind, key by key at every depth,
- * so the Dart parser, whose test reads the same fixture, cannot drift from the bridge.
+ * Checks every produced event, as it goes over the wire, against the fixture lines of its kind,
+ * key by key at every depth, so the Dart parser, whose test reads the same fixture, cannot drift
+ * from the bridge.
  */
 async function expectEventsMatchProtocolFixture(params: { events: BridgeEvent[] }): Promise<void> {
   const fixtureText = await readFile(join(import.meta.dir, 'bridgeEvents.jsonl'), 'utf8');
@@ -167,40 +189,130 @@ async function expectEventsMatchProtocolFixture(params: { events: BridgeEvent[] 
     'planned',
     'progress',
     'scanned',
+    'status',
   ]);
 
-  for (const event of params.events) {
-    const fixtureEvent = fixtureEvents.find((candidate) => hasKind(candidate, event.kind));
+  const mismatches = params.events.flatMap((event) =>
+    listShapeMismatches({
+      value: JSON.parse(JSON.stringify(event)),
+      fixtureValues: fixtureEvents.filter(
+        (fixtureEvent) => isJsonRecord(fixtureEvent) && fixtureEvent.kind === event.kind,
+      ),
+      place: event.kind,
+    }),
+  );
 
-    expect(buildKeyShape(event)).toEqual(buildKeyShape(fixtureEvent));
-  }
+  expect(mismatches).toEqual([]);
 }
 
-function hasKind(value: unknown, kind: string): boolean {
-  return typeof value === 'object' && value !== null && 'kind' in value && value.kind === kind;
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The keys of a value at every depth with the type of each leaf; an array by its first item. */
-function buildKeyShape(value: unknown): Record<string, unknown> | string {
-  if (Array.isArray(value)) {
-    return value.length === 0 ? 'array' : { items: buildKeyShape(value[0]) };
+/**
+ * Compares a value with every fixture value at its place, the items of all the fixture's arrays
+ * there included: an object by its keys and each field, a leaf by its type. `null` passes only
+ * where the fixture shows `null` at that place too; an empty array holds nothing to compare.
+ */
+function listShapeMismatches(params: {
+  value: unknown;
+  fixtureValues: unknown[];
+  place: string;
+}): string[] {
+  if (params.value === null) {
+    return params.fixtureValues.includes(null)
+      ? []
+      : [`${params.place}: null, which the fixture never shows here`];
   }
 
-  if (typeof value === 'object' && value !== null) {
-    const shape: Record<string, unknown> = {};
+  const filledFixtureValues = params.fixtureValues.filter((fixtureValue) => fixtureValue !== null);
 
-    for (const [key, fieldValue] of Object.entries(value)) {
-      shape[key] = buildKeyShape(fieldValue);
-    }
-
-    return shape;
+  if (filledFixtureValues.length === 0) {
+    return [`${params.place}: a value, where the fixture shows none filled`];
   }
 
-  return typeof value;
+  if (Array.isArray(params.value)) {
+    return listArrayShapeMismatches({
+      items: params.value,
+      fixtureValues: filledFixtureValues,
+      place: params.place,
+    });
+  }
+
+  if (isJsonRecord(params.value)) {
+    return listRecordShapeMismatches({
+      record: params.value,
+      fixtureValues: filledFixtureValues,
+      place: params.place,
+    });
+  }
+
+  const valueType = typeof params.value;
+  const hasSameType = filledFixtureValues.every(
+    (fixtureValue) => typeof fixtureValue === valueType,
+  );
+
+  return hasSameType ? [] : [`${params.place}: a ${valueType}, unlike the fixture`];
+}
+
+function listArrayShapeMismatches(params: {
+  items: unknown[];
+  fixtureValues: unknown[];
+  place: string;
+}): string[] {
+  const fixtureArrays = params.fixtureValues.filter((fixtureValue) => Array.isArray(fixtureValue));
+
+  if (fixtureArrays.length !== params.fixtureValues.length) {
+    return [`${params.place}: an array, unlike the fixture`];
+  }
+
+  const fixtureItems = fixtureArrays.flat();
+
+  return params.items.flatMap((item, index) =>
+    listShapeMismatches({
+      value: item,
+      fixtureValues: fixtureItems,
+      place: `${params.place}[${index}]`,
+    }),
+  );
+}
+
+function listRecordShapeMismatches(params: {
+  record: Record<string, unknown>;
+  fixtureValues: unknown[];
+  place: string;
+}): string[] {
+  const fixtureRecords = params.fixtureValues.filter(isJsonRecord);
+
+  if (fixtureRecords.length !== params.fixtureValues.length) {
+    return [`${params.place}: an object, unlike the fixture`];
+  }
+
+  const keysText = Object.keys(params.record).toSorted().join(', ');
+  const fixtureKeysTexts = new Set(
+    fixtureRecords.map((fixtureRecord) => Object.keys(fixtureRecord).toSorted().join(', ')),
+  );
+  const keyMismatches = [...fixtureKeysTexts].flatMap((fixtureKeysText) =>
+    fixtureKeysText === keysText
+      ? []
+      : [`${params.place}: keys ${keysText}, the fixture has ${fixtureKeysText}`],
+  );
+
+  if (keyMismatches.length > 0) {
+    return keyMismatches;
+  }
+
+  return Object.entries(params.record).flatMap(([key, fieldValue]) =>
+    listShapeMismatches({
+      value: fieldValue,
+      fixtureValues: fixtureRecords.map((fixtureRecord) => fixtureRecord[key]),
+      place: `${params.place}.${key}`,
+    }),
+  );
 }
 
 describe('runBridge', () => {
-  test('scans and answers with the display texts of the ranking', async () => {
+  test('scans and answers with the view of the scan, numbered top to bottom', async () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
 
@@ -209,13 +321,104 @@ describe('runBridge', () => {
     expect(answers).toHaveLength(1);
     expect(answers[0]).toMatchObject({
       kind: 'scanned',
-      summaryText: 'Found 3 items, 9.0 MiB in total',
-      candidates: [
-        { number: 1, title: 'Tool cache', risk: 'safe', sizeText: '4.0 MiB' },
-        { number: 2, title: 'App cache', risk: 'review', sizeText: '3.0 MiB' },
-        { number: 3, title: 'Kept store', risk: 'never', sizeText: '2.0 MiB' },
+      summary: {
+        titleText: 'Found 3 items, 9.0 MiB in total',
+        lines: ['4.0 MiB safe to free', '3.0 MiB to check before deleting'],
+      },
+      sections: [
+        {
+          titleText: 'Caches',
+          sizeText: '9.0 MiB',
+          isInitiallyExpanded: true,
+          items: [{ number: 1, title: 'Tool cache', riskText: 'safe', sizeText: '4.0 MiB' }],
+          checkGroup: {
+            titleText: 'Check before deleting',
+            items: [
+              { number: 2, title: 'App cache', riskText: 'review', sizeText: '3.0 MiB' },
+              { number: 3, title: 'Kept store', riskText: 'never', sizeText: '2.0 MiB' },
+            ],
+          },
+        },
       ],
+      explore: {
+        items: [],
+        adviceGroup: { items: [{ title: 'Tool store', sizeText: '5.0 MiB' }] },
+      },
+      safeNumbers: [1],
+      skipped: { titleText: 'Skipped 1 item', lines: ['too small to matter: 1'] },
+      notices: [],
     });
+  });
+
+  test('answers status from its probe, with the home the bridge started in', async () => {
+    const answers = new Map<FullDiskAccess, BridgeEvent[]>();
+
+    for (const fullDiskAccess of ['granted', 'denied', 'unknown'] as const) {
+      const { events, probedHomeDirs } = await runBridgeWithLines({
+        lines: [STATUS_LINE],
+        fullDiskAccess: fullDiskAccess,
+      });
+
+      expect(probedHomeDirs).toEqual([environment.homeDir]);
+      answers.set(fullDiskAccess, events);
+    }
+
+    expect(answers.get('granted')).toEqual([
+      { kind: 'status', fullDiskAccess: 'granted', notices: [] },
+    ]);
+    expect(answers.get('unknown')).toEqual([
+      { kind: 'status', fullDiskAccess: 'unknown', notices: [] },
+    ]);
+    expect(answers.get('denied')).toEqual([
+      {
+        kind: 'status',
+        fullDiskAccess: 'denied',
+        notices: [
+          expect.objectContaining({
+            titleText: 'Full Disk Access is off',
+            settingsLink: FULL_DISK_ACCESS_SETTINGS_LINK,
+          }),
+        ],
+      },
+    ]);
+  });
+
+  test('a status between the plan and its confirmation keeps the plan to delete', async () => {
+    const before = await listFixturePaths();
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildPlanLine({ numbers: [2] }),
+        STATUS_LINE,
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+      ],
+      fullDiskAccess: 'denied',
+    });
+    const after = await listFixturePaths();
+
+    expect(findAnswers({ events: events }).map((answer) => answer.kind)).toEqual([
+      'scanned',
+      'planned',
+      'status',
+      'deleted',
+    ]);
+    expect(before.filter((path) => !after.includes(path))).toEqual([
+      'home/Library/Caches/AppCache',
+      'home/Library/Caches/AppCache/blob.bin',
+    ]);
+  });
+
+  test('a status before a scan leaves the bridge waiting for one', async () => {
+    const before = await listFixturePaths();
+    const { events } = await runBridgeWithLines({
+      lines: [STATUS_LINE, buildPlanLine({ numbers: [1] })],
+    });
+
+    expect(events).toEqual([
+      { kind: 'status', fullDiskAccess: 'unknown', notices: [] },
+      { kind: 'failed', message: 'Scan first.', isScanDropped: true },
+    ]);
+    expect(await listFixturePaths()).toEqual(before);
   });
 
   test('deletes exactly the confirmed plan, then needs a new scan', async () => {
@@ -417,8 +620,15 @@ describe('runBridge', () => {
   });
 
   test('every event matches the protocol fixture the app is tested with', async () => {
+    const containersPath = join(fixtureRoot.homeDir, 'Library/Containers');
+
+    // A place the scan cannot read, so the scan answers with a notice.
+    await createFixtureDirectory({ path: containersPath });
+    await chmod(containersPath, 0o000);
+
     const { events } = await runBridgeWithLines({
       lines: [
+        STATUS_LINE,
         SCAN_LINE,
         buildPlanLine({ numbers: [3] }),
         buildPlanLine({ numbers: [1] }),
@@ -427,8 +637,48 @@ describe('runBridge', () => {
         buildPlanLine({ numbers: [1] }),
         buildDeleteLine({ planId: 2, confirmation: 'DELETE' }),
       ],
+      fullDiskAccess: 'denied',
     });
 
+    expect(findAnswers({ events: events })[1]).toMatchObject({
+      kind: 'scanned',
+      notices: [{ titleText: 'Could not read 1 place', settingsLink: null }],
+    });
     await expectEventsMatchProtocolFixture({ events: events });
+  });
+
+  test('the protocol check finds a missing key, another type, and a null the fixture never shows', () => {
+    const fixtureValues = [
+      { kind: 'status', notices: [{ titleText: 'A', settingsLink: null }] },
+      { kind: 'status', notices: [{ titleText: 'B', settingsLink: { url: 'x' } }] },
+    ];
+
+    expect(
+      listShapeMismatches({
+        value: {
+          kind: 'status',
+          notices: [{ titleText: 'C', settingsLink: null }, { titleText: 1 }],
+        },
+        fixtureValues: fixtureValues,
+        place: 'status',
+      }),
+    ).toEqual(['status.notices[1]: keys titleText, the fixture has settingsLink, titleText']);
+    expect(
+      listShapeMismatches({
+        value: { kind: 'status', notices: [{ titleText: 1, settingsLink: { url: 2 } }] },
+        fixtureValues: fixtureValues,
+        place: 'status',
+      }),
+    ).toEqual([
+      'status.notices[0].titleText: a number, unlike the fixture',
+      'status.notices[0].settingsLink.url: a number, unlike the fixture',
+    ]);
+    expect(
+      listShapeMismatches({
+        value: { kind: null, notices: [] },
+        fixtureValues: fixtureValues,
+        place: 'status',
+      }),
+    ).toEqual(['status.kind: null, which the fixture never shows here']);
   });
 });

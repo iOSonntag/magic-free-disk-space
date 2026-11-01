@@ -1,29 +1,28 @@
 import type { Advice, Candidate, CandidateDecision } from './candidate.js';
 import type { ScanIssue } from './issue.js';
-import { rankBySize } from './rankCandidates.js';
+import { placeCandidate } from './placeCandidate.js';
+import { rankByPlace, rankBySize } from './rankCandidates.js';
 import type { ScanReport, SkippedItem } from './runScan.js';
 
 /** The share of one decision in each part of the report; all but one part are empty. */
 type DecisionPartition = {
   offered: Candidate[];
-  explored: Candidate[];
   advice: Advice[];
   skipped: SkippedItem[];
 };
 
 /**
- * Splits the decisions into candidates ranked by size with the Explore ones after all others,
- * ranked advice, and skipped items, and numbers the safe candidates outside Explore.
+ * Splits the decisions into candidates ranked by their place with Explore last, advice ranked by
+ * size, and skipped items, and numbers the candidates placed in a safe group.
  */
 export function buildScanReport(params: {
   decisions: CandidateDecision[];
   issues: ScanIssue[];
 }): ScanReport {
   const partitions = params.decisions.map(partitionDecision);
-  const candidates = [
-    ...rankBySize({ items: partitions.flatMap((partition) => partition.offered) }),
-    ...rankBySize({ items: partitions.flatMap((partition) => partition.explored) }),
-  ];
+  const candidates = rankByPlace({
+    candidates: partitions.flatMap((partition) => partition.offered),
+  });
 
   return {
     candidates: candidates,
@@ -37,24 +36,26 @@ export function buildScanReport(params: {
 function partitionDecision(decision: CandidateDecision): DecisionPartition {
   switch (decision.kind) {
     case 'offer':
-      if (decision.candidate.origin === 'explore') {
-        return { offered: [], explored: [decision.candidate], advice: [], skipped: [] };
-      }
-
-      return { offered: [decision.candidate], explored: [], advice: [], skipped: [] };
+      return { offered: [decision.candidate], advice: [], skipped: [] };
     case 'advice':
-      return { offered: [], explored: [], advice: [decision.advice], skipped: [] };
+      return { offered: [], advice: [decision.advice], skipped: [] };
     case 'skip': {
       const skippedItem: SkippedItem = { path: decision.path, reason: decision.reason };
 
-      return { offered: [], explored: [], advice: [], skipped: [skippedItem] };
+      return { offered: [], advice: [], skipped: [skippedItem] };
     }
   }
 }
 
-/** An Explore item is never picked by "safe": it waits for the user to read its reasons. */
+/** An Explore item is in no safe group: it waits for the user to read its reasons. */
 function listSafeNumbers(params: { candidates: Candidate[] }): number[] {
   return params.candidates.flatMap((candidate, index) =>
-    candidate.risk === 'safe' && candidate.origin !== 'explore' ? [index + 1] : [],
+    isPlacedInSafeGroup({ candidate: candidate }) ? [index + 1] : [],
   );
+}
+
+function isPlacedInSafeGroup(params: { candidate: Candidate }): boolean {
+  const place = placeCandidate(params.candidate);
+
+  return place.kind === 'section' && place.group === 'safe';
 }

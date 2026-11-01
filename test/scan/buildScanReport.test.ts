@@ -1,7 +1,30 @@
 import { describe, expect, test } from 'bun:test';
+import type { CandidateCategory, Risk } from '../../src/catalog/catalog.js';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
-import type { CandidateDecision } from '../../src/scan/candidate.js';
+import type { Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+
+function buildPlacedCandidate(params: {
+  path: string;
+  category: CandidateCategory;
+  risk: Risk;
+  allocatedBytes: number;
+}): Candidate {
+  return {
+    ...buildTestCandidate({
+      path: params.path,
+      risk: params.risk,
+      allocatedBytes: params.allocatedBytes,
+    }),
+    category: params.category,
+  };
+}
+
+function buildOffers(candidates: Candidate[]): CandidateDecision[] {
+  return candidates.map(
+    (candidate): CandidateDecision => ({ kind: 'offer', candidate: candidate }),
+  );
+}
 
 describe('buildScanReport', () => {
   test('ranks offers and advice by size and keeps every skip and issue', () => {
@@ -25,7 +48,7 @@ describe('buildScanReport', () => {
         },
       },
     ];
-    const issue = { path: '/home/locked', reason: 'permissionDenied' as const, detail: 'EPERM' };
+    const issue = { path: '/home/locked', reason: 'permissionDenied' as const, detail: 'EACCES' };
 
     const report = buildScanReport({ decisions: decisions, issues: [issue] });
 
@@ -35,7 +58,7 @@ describe('buildScanReport', () => {
     expect(report.issues).toEqual([issue]);
   });
 
-  test('ranks the Explore items after all others and numbers only safe items outside Explore', () => {
+  test('ranks safe before check within a section, Explore last, and numbers only the safe groups', () => {
     const safeSmall = buildTestCandidate({ path: '/home/safe-small', allocatedBytes: 10 });
     const careful = buildTestCandidate({
       path: '/home/careful',
@@ -53,17 +76,66 @@ describe('buildScanReport', () => {
       version: '20.1.0',
       allocatedBytes: 5000,
     });
-    const decisions: CandidateDecision[] = [
-      toolSmall,
-      safeSmall,
-      toolLarge,
-      careful,
-      safeLarge,
-    ].map((candidate): CandidateDecision => ({ kind: 'offer', candidate: candidate }));
 
-    const report = buildScanReport({ decisions: decisions, issues: [] });
+    const report = buildScanReport({
+      decisions: buildOffers([toolSmall, safeSmall, toolLarge, careful, safeLarge]),
+      issues: [],
+    });
 
-    expect(report.candidates).toEqual([safeLarge, careful, safeSmall, toolLarge, toolSmall]);
-    expect(report.safeNumbers).toEqual([1, 3]);
+    expect(report.candidates).toEqual([safeLarge, safeSmall, careful, toolLarge, toolSmall]);
+    expect(report.safeNumbers).toEqual([1, 2]);
+  });
+
+  test('numbers the items top to bottom across the sections, so the safe numbers follow them', () => {
+    const trashSafe = buildPlacedCandidate({
+      path: '/home/.Trash',
+      category: 'trash',
+      risk: 'safe',
+      allocatedBytes: 9000,
+    });
+    const appNever = buildPlacedCandidate({
+      path: '/Applications/Kept.app',
+      category: 'applications',
+      risk: 'never',
+      allocatedBytes: 8000,
+    });
+    const appSafe = buildPlacedCandidate({
+      path: '/home/Library/Containers/gone',
+      category: 'containers',
+      risk: 'safe',
+      allocatedBytes: 10,
+    });
+    const developerReview = buildPlacedCandidate({
+      path: '/home/project/node_modules',
+      category: 'projects',
+      risk: 'review',
+      allocatedBytes: 7000,
+    });
+    const cacheSafe = buildPlacedCandidate({
+      path: '/home/Library/Caches/Tool',
+      category: 'caches',
+      risk: 'safe',
+      allocatedBytes: 20,
+    });
+    const toolSafe = buildTestToolCandidate({
+      homeDir: '/home',
+      version: '20.1.0',
+      allocatedBytes: 99_000,
+    });
+
+    const report = buildScanReport({
+      decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, developerReview, cacheSafe]),
+      issues: [],
+    });
+
+    expect(report.candidates).toEqual([
+      cacheSafe,
+      developerReview,
+      appSafe,
+      appNever,
+      trashSafe,
+      toolSafe,
+    ]);
+    expect(report.safeNumbers).toEqual([1, 3, 5]);
   });
 });

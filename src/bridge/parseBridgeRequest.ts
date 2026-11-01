@@ -7,11 +7,17 @@ type BridgeRequestPlan = { kind: 'plan'; numbers: number[] };
 
 type BridgeRequestDelete = { kind: 'delete'; planId: number; confirmation: string };
 
-type BridgeRequest = BridgeRequestScan | BridgeRequestPlan | BridgeRequestDelete;
+type BridgeRequestStatus = { kind: 'status' };
+
+type BridgeRequest =
+  | BridgeRequestScan
+  | BridgeRequestPlan
+  | BridgeRequestDelete
+  | BridgeRequestStatus;
 
 type BridgeRequestFailure = { reason: 'invalidJson' | 'unknownRequest' };
 
-/** Parses one line the app sent; any shape but the three requests fails. */
+/** Parses one line the app sent; any shape but the four requests fails. */
 export function parseBridgeRequest(params: {
   line: string;
 }): Result<BridgeRequest, BridgeRequestFailure> {
@@ -55,6 +61,10 @@ function toBridgeRequest(params: { value: unknown }): BridgeRequest | null {
       planId: params.value.planId,
       confirmation: params.value.confirmation,
     };
+  }
+
+  if (params.value.kind === 'status') {
+    return { kind: 'status' };
   }
 
   return null;

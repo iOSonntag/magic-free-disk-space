@@ -1,10 +1,10 @@
 import type { RefusedRemoval, RemovalPlan } from '../delete/planRemoval.js';
 import type { RefusalReason } from '../delete/validateRemoval.js';
 import type { Candidate } from '../scan/candidate.js';
-import { formatSizeText } from './formatBytes.js';
+import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
+import { formatCandidateCommandText } from './formatCandidateCommandText.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
-import { formatCandidateCommandText } from './formatScanReport.js';
 
 const refusalReasonTexts: Record<RefusalReason, string> = {
   neverRisk: 'marked never-delete',
@@ -26,10 +26,7 @@ function formatApprovedLines(params: { approved: Candidate[] }): string[] {
     return ['Nothing of the selection can be deleted.'];
   }
 
-  const totalSizeText = formatSizeText({
-    allocatedBytes: params.approved.reduce((sum, candidate) => sum + candidate.allocatedBytes, 0),
-    isComplete: params.approved.every((candidate) => candidate.isComplete),
-  });
+  const totalSizeText = formatTotalSizeText({ items: params.approved });
   const subjectText =
     params.approved.length === 1 ? 'This item' : `These ${params.approved.length} items`;
 

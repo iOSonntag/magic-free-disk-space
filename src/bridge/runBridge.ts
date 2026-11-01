@@ -5,6 +5,7 @@ import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../environment/loadEnvironment.js';
+import { buildScanView } from '../report/buildScanView.js';
 import {
   CANCELLED_TEXT,
   formatDeletionWarningLines,
@@ -14,30 +15,28 @@ import {
   formatJournalUnavailableText,
 } from '../report/formatDeletionLog.js';
 import { formatEnvironmentFailure } from '../report/formatEnvironmentFailure.js';
+import { formatFullDiskAccessNotices } from '../report/formatFullDiskAccessNotices.js';
 import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
 import { formatRemovalRun } from '../report/formatRemovalRun.js';
-import type { CandidateView } from '../report/formatScanReport.js';
-import {
-  formatCandidateSummary,
-  formatCandidateView,
-  formatScanReportNotes,
-} from '../report/formatScanReport.js';
+import type { NoticeView } from '../report/noticeView.js';
+import type { ScanView } from '../report/scanView.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
+import type { FullDiskAccess } from '../system/decideFullDiskAccess.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { parseBridgeRequest } from './parseBridgeRequest.js';
 
 type BridgeEventProgress = { kind: 'progress'; message: string };
 
-type BridgeEventScanned = {
-  kind: 'scanned';
-  summaryText: string;
-  candidates: CandidateView[];
-  /** The numbers "Select safe" picks; older app builds ignore it and pick by risk. */
-  safeNumbers: number[];
-  notesLines: string[];
+type BridgeEventScanned = { kind: 'scanned' } & ScanView;
+
+/** Whether the app has Full Disk Access, with the banner the app shows; `notices` is empty unless it is off. */
+type BridgeEventStatus = {
+  kind: 'status';
+  fullDiskAccess: FullDiskAccess;
+  notices: NoticeView[];
 };
 
 type BridgeEventPlanned = {
@@ -63,6 +62,7 @@ type BridgeEventFailed = {
 /** The final event of a request; progress events may come before it. */
 type BridgeAnswer =
   | BridgeEventScanned
+  | BridgeEventStatus
   | BridgeEventPlanned
   | BridgeEventNothingApproved
   | BridgeEventDeleted
@@ -100,6 +100,8 @@ type BridgeContext = {
   catalogEntries: CatalogEntry[];
   toolInstallLocations: ToolInstallLocations;
   loadEnvironment: () => Promise<Result<Environment, EnvironmentFailure>>;
+  /** Never throws. */
+  loadFullDiskAccess: (params: { homeDir: string }) => Promise<FullDiskAccess>;
   clock: () => number;
 };
 
@@ -141,6 +143,7 @@ export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
 
     const step = await answerRequestLine({
       context: params,
+      homeDir: startEnvironment.value.homeDir,
       line: line,
       state: state,
       nextPlanId: lastPlanId + 1,
@@ -159,6 +162,8 @@ export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
 
 async function answerRequestLine(params: {
   context: BridgeContext;
+  /** The home of the environment the bridge started in. */
+  homeDir: string;
   line: string;
   state: BridgeState;
   nextPlanId: number;
@@ -189,6 +194,12 @@ async function answerRequestLine(params: {
         planId: parsed.value.planId,
         confirmation: parsed.value.confirmation,
       });
+    case 'status':
+      return answerStatus({
+        context: params.context,
+        homeDir: params.homeDir,
+        state: params.state,
+      });
   }
 }
 
@@ -217,16 +228,26 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
   });
 
   return {
-    answer: {
-      kind: 'scanned',
-      summaryText: formatCandidateSummary({ candidates: report.candidates }),
-      candidates: report.candidates.map((candidate, index) =>
-        formatCandidateView({ candidate: candidate, number: index + 1 }),
-      ),
-      safeNumbers: report.safeNumbers,
-      notesLines: formatScanReportNotes({ report: report, fullDiskAccessHolder: 'app' }),
-    },
+    answer: { kind: 'scanned', ...buildScanView({ report: report, fullDiskAccessHolder: 'app' }) },
     nextState: { kind: 'scanned', report: report, environment: environment.value },
+  };
+}
+
+/** Keeps the held scan and plan, so the app may ask at any time between its other requests. */
+async function answerStatus(params: {
+  context: BridgeContext;
+  homeDir: string;
+  state: BridgeState;
+}): Promise<BridgeStep> {
+  const fullDiskAccess = await params.context.loadFullDiskAccess({ homeDir: params.homeDir });
+
+  return {
+    answer: {
+      kind: 'status',
+      fullDiskAccess: fullDiskAccess,
+      notices: formatFullDiskAccessNotices(fullDiskAccess),
+    },
+    nextState: params.state,
   };
 }
 
