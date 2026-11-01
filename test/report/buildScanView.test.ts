@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import type { CandidateCategory, Risk } from '../../src/catalog/catalog.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
@@ -15,32 +14,6 @@ import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 const MIB = 1_048_576;
 
 const SIMULATOR_UDID = '0A1B2C3D-0000-4000-8000-000000000001';
-
-function buildMatchedCandidate(params: {
-  path: string;
-  title: string;
-  category: CandidateCategory;
-  risk: Risk;
-  explanation?: string;
-  regeneration?: string;
-  allocatedBytes: number;
-  isComplete?: boolean;
-}): Candidate {
-  const candidate = buildTestCandidate({
-    path: params.path,
-    category: params.category,
-    risk: params.risk,
-    allocatedBytes: params.allocatedBytes,
-  });
-
-  return {
-    ...candidate,
-    title: params.title,
-    explanation: params.explanation ?? candidate.explanation,
-    regeneration: params.regeneration ?? candidate.regeneration,
-    isComplete: params.isComplete ?? candidate.isComplete,
-  };
-}
 
 function buildSimulatorCandidate(): Candidate {
   const path = `/Users/me/Library/Developer/CoreSimulator/Devices/${SIMULATOR_UDID}`;
@@ -125,7 +98,7 @@ describe('buildScanView', () => {
     const report = buildRankedReport({
       candidates: [
         buildSimulatorCandidate(),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/Users/me/Movies/holiday.mov',
           title: 'Old video',
           category: 'userFiles',
@@ -134,7 +107,7 @@ describe('buildScanView', () => {
           regeneration: 'It does not come back.',
           allocatedBytes: 3 * MIB,
         }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/Applications/Xcode.app',
           title: 'Xcode',
           category: 'applications',
@@ -143,7 +116,7 @@ describe('buildScanView', () => {
           regeneration: 'Installing it again takes a long download.',
           allocatedBytes: 2 * MIB,
         }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/Users/me/Library/Caches/com.example.other',
           title: 'App cache',
           category: 'caches',
@@ -153,7 +126,7 @@ describe('buildScanView', () => {
           allocatedBytes: 4 * MIB,
           isComplete: false,
         }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/Users/me/Library/Caches/ToolCache',
           title: 'Tool cache',
           category: 'caches',
@@ -207,7 +180,7 @@ describe('buildScanView', () => {
     const view = buildScanView({
       report: buildRankedReport({
         candidates: [
-          buildMatchedCandidate({
+          buildTestCandidate({
             path: '/fixture/.Trash',
             title: 'Trash',
             category: 'trash',
@@ -238,7 +211,7 @@ describe('buildScanView', () => {
     const view = buildScanView({
       report: buildRankedReport({
         candidates: [
-          buildMatchedCandidate({
+          buildTestCandidate({
             path: '/Applications/Kept.app',
             title: 'Kept',
             category: 'applications',
@@ -307,7 +280,7 @@ describe('buildScanView', () => {
     const view = buildScanView({
       report: buildRankedReport({
         candidates: [
-          buildMatchedCandidate({
+          buildTestCandidate({
             path: '/fixture/a',
             title: 'Partly read',
             category: 'caches',
@@ -315,7 +288,7 @@ describe('buildScanView', () => {
             allocatedBytes: MIB,
             isComplete: false,
           }),
-          buildMatchedCandidate({
+          buildTestCandidate({
             path: '/fixture/b',
             title: 'Fully read',
             category: 'caches',
@@ -342,35 +315,35 @@ describe('buildScanView', () => {
     const report = buildRankedReport({
       candidates: [
         buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0', allocatedBytes: 9 * MIB }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/fixture/.Trash',
           title: 'Trash',
           category: 'trash',
           risk: 'safe',
           allocatedBytes: 8 * MIB,
         }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/fixture/movie.mov',
           title: 'Movie',
           category: 'userFiles',
           risk: 'careful',
           allocatedBytes: 7 * MIB,
         }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/fixture/node_modules',
           title: 'Build folder',
           category: 'projects',
           risk: 'review',
           allocatedBytes: 6 * MIB,
         }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/fixture/Library/Caches/Tool',
           title: 'Tool cache',
           category: 'caches',
           risk: 'review',
           allocatedBytes: 5 * MIB,
         }),
-        buildMatchedCandidate({
+        buildTestCandidate({
           path: '/fixture/tmp/build',
           title: 'Temporary files',
           category: 'temporary',
@@ -443,7 +416,7 @@ describe('buildScanView', () => {
     const view = buildScanView({
       report: buildRankedReport({
         candidates: [
-          buildMatchedCandidate({
+          buildTestCandidate({
             path: '/fixture/movie\n.mov',
             title: 'movie\u001b[2J',
             category: 'userFiles',

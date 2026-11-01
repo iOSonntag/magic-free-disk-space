@@ -44,22 +44,26 @@ export function buildTestMeasurement(params: {
 
 export function buildTestCandidate(params: {
   path: string;
+  title?: string;
   category?: CandidateCategory;
   risk?: Risk;
   kind?: FileKind;
+  explanation?: string;
+  regeneration?: string;
   allocatedBytes?: number;
+  isComplete?: boolean;
 }): Candidate {
   return {
     path: params.path,
-    title: `Test item ${params.path}`,
+    title: params.title ?? `Test item ${params.path}`,
     category: params.category ?? 'caches',
     risk: params.risk ?? 'safe',
     origin: 'catalog',
-    explanation: 'A test item.',
-    regeneration: 'Rebuilt by the test.',
+    explanation: params.explanation ?? 'A test item.',
+    regeneration: params.regeneration ?? 'Rebuilt by the test.',
     allocatedBytes: params.allocatedBytes ?? 4096,
     entryCount: 1,
-    isComplete: true,
+    isComplete: params.isComplete ?? true,
     removal: {
       kind: 'deletePath',
       identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),

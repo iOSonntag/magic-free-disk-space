@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import type { CandidateCategory, Risk } from '../../src/catalog/catalog.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
-import type { Advice, Candidate } from '../../src/scan/candidate.js';
+import type { Advice } from '../../src/scan/candidate.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import {
+  buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
@@ -14,33 +14,6 @@ const fullDiskAccessLine =
 
 const EXPLORE_INTRO =
   'Their own tools remove these, or the folder shown is deleted where a tool has no command for it. They are never selected for you; read the reasons first.';
-
-function buildCandidate(params: {
-  title: string;
-  path: string;
-  risk: Risk;
-  allocatedBytes: number;
-  isComplete: boolean;
-  category?: CandidateCategory;
-}): Candidate {
-  return {
-    path: params.path,
-    title: params.title,
-    category: params.category ?? 'caches',
-    risk: params.risk,
-    origin: 'catalog',
-    explanation: 'Cached files.',
-    regeneration: 'Rebuilt when needed.',
-    allocatedBytes: params.allocatedBytes,
-    entryCount: 1,
-    isComplete: params.isComplete,
-    removal: {
-      kind: 'deletePath',
-      identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
-      ownerBundlePaths: [],
-    },
-  };
-}
 
 function buildAdvice(params: {
   title: string;
@@ -70,24 +43,30 @@ describe('formatScanReport', () => {
       report: {
         ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
-          buildCandidate({
+          buildTestCandidate({
             title: 'Archives',
             path: '/fixture/b',
             risk: 'careful',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 2048,
             isComplete: true,
           }),
-          buildCandidate({
+          buildTestCandidate({
             title: 'Old video',
             path: '/fixture/movie.mov',
             risk: 'careful',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 4096,
             isComplete: true,
             category: 'userFiles',
@@ -127,10 +106,12 @@ describe('formatScanReport', () => {
       report: {
         ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: false,
           }),
@@ -246,10 +227,12 @@ describe('formatScanReport', () => {
       report: {
         ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'movie.mov\n2. 1.0 KiB [safe] Xcode build data',
             path: '/fixture/Downloads/movie.mov\n2. 1.0 KiB [safe] Xcode build data',
             risk: 'careful',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
@@ -387,10 +370,12 @@ describe('formatScanReport', () => {
       report: {
         ...EMPTY_REPORT,
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
@@ -460,10 +445,12 @@ describe('formatScanReport', () => {
     const lines = formatScanReport({
       report: {
         candidates: [
-          buildCandidate({
+          buildTestCandidate({
             title: 'Derived data',
             path: '/fixture/a',
             risk: 'safe',
+            explanation: 'Cached files.',
+            regeneration: 'Rebuilt when needed.',
             allocatedBytes: 1024,
             isComplete: true,
           }),
