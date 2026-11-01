@@ -19,14 +19,14 @@ class NoticeBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final LinkView? link = this.link;
+    final LinkView? shownLink = link;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SelectableText(lines.join('\n')),
-        if (link != null) ...[
+        if (shownLink != null) ...[
           const SizedBox(height: 8),
-          LinkButton(link: link, urlOpener: urlOpener),
+          LinkButton(link: shownLink, urlOpener: urlOpener),
         ],
       ],
     );

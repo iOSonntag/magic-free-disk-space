@@ -10,6 +10,7 @@ import 'package:magic_free_disk_space/update/update_controller.dart';
 import 'support/fake_update_bridge.dart';
 import 'support/fake_url_opener.dart';
 import 'support/sample_events.dart';
+import 'support/update_matchers.dart';
 
 void main() {
   final UpdateCheckedEvent sampleCheck = loadSampleEvents()
@@ -119,14 +120,7 @@ void main() {
       await tapAndSettle(tester, find.text(updateCheckItemText));
 
       expect(bridge.savedValues, [false]);
-      expect(
-        controller.updateCheckSwitch,
-        isA<UpdateCheckSwitchConfirmed>().having(
-          (confirmed) => confirmed.isEnabled,
-          'isEnabled',
-          isFalse,
-        ),
-      );
+      expect(controller.updateCheckSwitch, isConfirmedSwitch(isEnabled: false));
       await openMenu(tester);
       expect(findMenuItem(tester).checked, isFalse);
     });

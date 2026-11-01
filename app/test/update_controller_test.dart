@@ -6,17 +6,10 @@ import 'package:magic_free_disk_space/update/update_controller.dart';
 
 import 'support/fake_update_bridge.dart';
 import 'support/sample_events.dart';
+import 'support/update_matchers.dart';
 
 Future<void> waitForAnswers() {
   return Future<void>.delayed(Duration.zero);
-}
-
-Matcher isConfirmedSwitch({required bool isEnabled}) {
-  return isA<UpdateCheckSwitchConfirmed>().having(
-    (confirmed) => confirmed.isEnabled,
-    'isEnabled',
-    isEnabled,
-  );
 }
 
 void main() {
