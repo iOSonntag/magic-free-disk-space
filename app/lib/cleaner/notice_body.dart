@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
+import 'error_text.dart';
 import 'settings_opener.dart';
 
 /// The lines of a notice, and the button of its settings link when it has
@@ -68,10 +69,7 @@ class _SettingsLinkButtonState extends State<_SettingsLinkButton> {
         ),
         if (_isOpenFailed) ...[
           const SizedBox(height: 4),
-          SelectableText(
-            widget.link.failedText,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
+          ErrorText(text: widget.link.failedText),
         ],
       ],
     );

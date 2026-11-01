@@ -4,8 +4,8 @@ import '../bridge/bridge_event.dart';
 import 'text_styles.dart';
 
 /// A selectable item, ticked by a tap anywhere on it.
-class CandidateTile extends StatelessWidget {
-  const CandidateTile({
+class ItemTile extends StatelessWidget {
+  const ItemTile({
     super.key,
     required this.item,
     required this.isSelected,
@@ -20,25 +20,16 @@ class CandidateTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onToggle,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Checkbox(value: isSelected, onChanged: (bool? _) => onToggle()),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ItemDetails(
-                titleText: '${item.number}. ${item.title}',
-                risk: item.risk,
-                riskText: item.riskText,
-                detailLines: item.detailLines,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(item.sizeText, style: Theme.of(context).textTheme.titleSmall),
-          ],
+      child: _ItemRow(
+        leading: Checkbox(
+          value: isSelected,
+          onChanged: (bool? _) => onToggle(),
         ),
+        titleText: '${item.number}. ${item.title}',
+        risk: item.risk,
+        riskText: item.riskText,
+        sizeText: item.sizeText,
+        detailLines: item.detailLines,
       ),
     );
   }
@@ -52,61 +43,69 @@ class AdviceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _ItemRow(
+      leading: null,
+      titleText: item.title,
+      risk: item.risk,
+      riskText: item.riskText,
+      sizeText: item.sizeText,
+      detailLines: item.detailLines,
+    );
+  }
+}
+
+class _ItemRow extends StatelessWidget {
+  const _ItemRow({
+    required this.leading,
+    required this.titleText,
+    required this.risk,
+    required this.riskText,
+    required this.sizeText,
+    required this.detailLines,
+  });
+
+  final Widget? leading;
+  final String titleText;
+  final Risk risk;
+  final String riskText;
+  final String sizeText;
+  final List<ItemDetailLine> detailLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget? leading = this.leading;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (leading != null) ...[leading, const SizedBox(width: 8)],
           Expanded(
-            child: _ItemDetails(
-              titleText: item.title,
-              risk: item.risk,
-              riskText: item.riskText,
-              detailLines: item.detailLines,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        titleText,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _RiskChip(risk: risk, riskText: riskText),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                for (final ItemDetailLine line in detailLines)
+                  _DetailLineText(line: line),
+              ],
             ),
           ),
           const SizedBox(width: 12),
-          Text(item.sizeText, style: Theme.of(context).textTheme.titleSmall),
+          Text(sizeText, style: Theme.of(context).textTheme.titleSmall),
         ],
       ),
-    );
-  }
-}
-
-class _ItemDetails extends StatelessWidget {
-  const _ItemDetails({
-    required this.titleText,
-    required this.risk,
-    required this.riskText,
-    required this.detailLines,
-  });
-
-  final String titleText;
-  final Risk risk;
-  final String riskText;
-  final List<ItemDetailLine> detailLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Flexible(
-              child: Text(
-                titleText,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            const SizedBox(width: 8),
-            _RiskChip(risk: risk, riskText: riskText),
-          ],
-        ),
-        const SizedBox(height: 4),
-        for (final ItemDetailLine line in detailLines)
-          _DetailLineText(line: line),
-      ],
     );
   }
 }

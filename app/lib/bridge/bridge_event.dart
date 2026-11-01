@@ -1,3 +1,5 @@
+import 'system_settings_url.dart';
+
 /// Picks the colour of an item; its `riskText` is what shows.
 enum Risk { safe, review, careful, never }
 
@@ -128,10 +130,7 @@ final class SettingsLinkView {
   });
 
   final String labelText;
-
-  /// Always of the scheme of System Settings, so the button opens nothing
-  /// else.
-  final Uri url;
+  final SystemSettingsUrl url;
   final String failedText;
 }
 
@@ -238,9 +237,6 @@ final class FailedEvent extends BridgeEvent
   /// True when the bridge no longer holds a scan, so the app must scan again.
   final bool isScanDropped;
 }
-
-/// The one scheme a settings link may have: the panes of System Settings.
-const String _systemSettingsScheme = 'x-apple.systempreferences';
 
 /// Parses one decoded line of the bridge; throws [FormatException] on any
 /// shape it does not know.
@@ -464,22 +460,11 @@ SettingsLinkView _parseSettingsLink(Object? json) {
     } =>
       SettingsLinkView(
         labelText: labelText,
-        url: _parseSystemSettingsUrl(url),
+        url: SystemSettingsUrl.parse(url),
         failedText: failedText,
       ),
     _ => throw const FormatException('Unknown shape of a settings link.'),
   };
-}
-
-Uri _parseSystemSettingsUrl(String text) {
-  final Uri url = Uri.parse(text);
-  if (url.scheme != _systemSettingsScheme) {
-    throw FormatException(
-      'A settings link has the scheme "${url.scheme}", not '
-      '"$_systemSettingsScheme".',
-    );
-  }
-  return url;
 }
 
 TValue _parseEnumName<TValue extends Enum>(List<TValue> values, String name) {

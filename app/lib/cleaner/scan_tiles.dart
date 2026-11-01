@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
-import 'candidate_tile.dart';
+import 'item_tile.dart';
 import 'notice_body.dart';
 import 'settings_opener.dart';
 
@@ -47,7 +47,7 @@ class SectionTile extends StatelessWidget {
         ],
       ),
       children: [
-        _CandidateList(
+        _ItemList(
           items: section.items,
           selectedNumbers: selectedNumbers,
           onToggle: onToggle,
@@ -58,7 +58,7 @@ class SectionTile extends StatelessWidget {
             title: Text(checkGroup.titleText),
             childrenPadding: _nestedChildrenPadding,
             children: [
-              _CandidateList(
+              _ItemList(
                 items: checkGroup.items,
                 selectedNumbers: selectedNumbers,
                 onToggle: onToggle,
@@ -97,7 +97,7 @@ class ExploreTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(explore.introText),
         ),
-        _CandidateList(
+        _ItemList(
           items: explore.items,
           selectedNumbers: selectedNumbers,
           onToggle: onToggle,
@@ -191,8 +191,8 @@ class _StoredExpansionTile extends StatelessWidget {
   }
 }
 
-class _CandidateList extends StatelessWidget {
-  const _CandidateList({
+class _ItemList extends StatelessWidget {
+  const _ItemList({
     required this.items,
     required this.selectedNumbers,
     required this.onToggle,
@@ -207,7 +207,7 @@ class _CandidateList extends StatelessWidget {
     return Column(
       children: [
         for (final ItemView item in items)
-          CandidateTile(
+          ItemTile(
             item: item,
             isSelected: selectedNumbers.contains(item.number),
             onToggle: () => onToggle(item.number),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../bridge/bridge_event.dart';
 import 'cleaner_controller.dart';
 import 'confirmation_view.dart';
+import 'error_text.dart';
 import 'scan_tiles.dart';
 import 'settings_opener.dart';
 import 'status_banner.dart';
@@ -88,7 +89,7 @@ class _IdleView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (notice != null) ...[
-              _NoticeText(notice: notice),
+              ErrorText(text: notice),
               const SizedBox(height: 16),
             ],
             const Text('Find what takes space on this Mac.'),
@@ -144,7 +145,7 @@ class _ScannedView extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         if (notice != null) ...[
-          _NoticeText(notice: notice),
+          ErrorText(text: notice),
           const SizedBox(height: 12),
         ],
         Text(
@@ -246,20 +247,6 @@ class _DeletedView extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _NoticeText extends StatelessWidget {
-  const _NoticeText({required this.notice});
-
-  final String notice;
-
-  @override
-  Widget build(BuildContext context) {
-    return SelectableText(
-      notice,
-      style: TextStyle(color: Theme.of(context).colorScheme.error),
     );
   }
 }

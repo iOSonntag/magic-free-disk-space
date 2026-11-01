@@ -1,8 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
+import 'package:magic_free_disk_space/bridge/system_settings_url.dart';
+
+import 'support/sample_events.dart';
 
 const String fullDiskAccessSettingsUrl =
     'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
@@ -30,15 +32,8 @@ Map<String, Object?> getMapAt(Object? json, List<Object> path) {
 }
 
 void main() {
-  final List<String> sampleLines = [
-    for (final String line in File(
-      '../test/bridge/bridgeEvents.jsonl',
-    ).readAsLinesSync())
-      if (line.trim().isNotEmpty) line,
-  ];
-  final List<BridgeEvent> events = [
-    for (final String line in sampleLines) parseBridgeEvent(jsonDecode(line)),
-  ];
+  final List<String> sampleLines = loadSampleLines();
+  final List<BridgeEvent> events = loadSampleEvents();
 
   /// A fresh copy of the sample line of [kind], to change one value of.
   Map<String, Object?> decodeSample(String kind) {
@@ -165,8 +160,7 @@ void main() {
       );
       final SettingsLinkView link = scanned.notices.first.settingsLink!;
       expect(link.labelText, 'Open System Settings');
-      expect(link.url.scheme, 'x-apple.systempreferences');
-      expect(link.url.toString(), fullDiskAccessSettingsUrl);
+      expect(link.url.text, fullDiskAccessSettingsUrl);
       expect(link.failedText, startsWith('System Settings did not open.'));
       expect(scanned.notices.last.settingsLink, isNull);
     });
@@ -205,7 +199,7 @@ void main() {
     final NoticeView notice = status.notices.single;
     expect(notice.titleText, 'Full Disk Access is off');
     expect(notice.lines, hasLength(2));
-    expect(notice.settingsLink!.url.toString(), fullDiskAccessSettingsUrl);
+    expect(notice.settingsLink!.url.text, fullDiskAccessSettingsUrl);
   });
 
   test('parses the plan, the answers, and both failures', () {
@@ -278,6 +272,7 @@ void main() {
 
         expect(() => parseBridgeEvent(scanned), throwsFormatException);
         expect(() => parseBridgeEvent(status), throwsFormatException);
+        expect(() => SystemSettingsUrl.parse(url), throwsFormatException);
       });
     }
 

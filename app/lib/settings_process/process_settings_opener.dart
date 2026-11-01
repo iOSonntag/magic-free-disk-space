@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../bridge/system_settings_url.dart';
 import '../cleaner/settings_opener.dart';
 
 const String _openExecutablePath = '/usr/bin/open';
@@ -10,10 +11,10 @@ final class ProcessSettingsOpener implements SettingsOpener {
   const ProcessSettingsOpener();
 
   @override
-  Future<bool> open(Uri url) async {
+  Future<bool> open(SystemSettingsUrl url) async {
     try {
       final ProcessResult result = await Process.run(_openExecutablePath, [
-        url.toString(),
+        url.text,
       ]);
       return result.exitCode == 0;
     } on ProcessException {

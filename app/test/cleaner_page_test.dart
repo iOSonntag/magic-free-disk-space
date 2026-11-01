@@ -1,15 +1,14 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/cleaner/candidate_tile.dart';
+import 'package:magic_free_disk_space/bridge/system_settings_url.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_page.dart';
+import 'package:magic_free_disk_space/cleaner/item_tile.dart';
 import 'package:magic_free_disk_space/cleaner/settings_opener.dart';
 
 import 'support/fake_cleaner_bridge.dart';
+import 'support/sample_events.dart';
 
 /// Records each URL it is asked to open and answers [isOpening]; it opens
 /// nothing.
@@ -17,10 +16,10 @@ final class FakeSettingsOpener implements SettingsOpener {
   FakeSettingsOpener({required this.isOpening});
 
   final bool isOpening;
-  final List<Uri> requestedUrls = [];
+  final List<SystemSettingsUrl> requestedUrls = [];
 
   @override
-  Future<bool> open(Uri url) async {
+  Future<bool> open(SystemSettingsUrl url) async {
     requestedUrls.add(url);
     return isOpening;
   }
@@ -28,20 +27,19 @@ final class FakeSettingsOpener implements SettingsOpener {
 
 /// The numbers of the item tiles built, top to bottom; a collapsed tile
 /// builds none of its items.
-List<int> getBuiltCandidateNumbers(WidgetTester tester) {
+List<int> getBuiltItemNumbers(WidgetTester tester) {
   return [
-    for (final CandidateTile tile in tester.widgetList<CandidateTile>(
-      find.byType(CandidateTile),
+    for (final ItemTile tile in tester.widgetList<ItemTile>(
+      find.byType(ItemTile),
     ))
       tile.item.number,
   ];
 }
 
-bool isCandidateTicked(WidgetTester tester, int number) {
+bool isItemTicked(WidgetTester tester, int number) {
   final Finder checkbox = find.descendant(
     of: find.byWidgetPredicate(
-      (Widget widget) =>
-          widget is CandidateTile && widget.item.number == number,
+      (Widget widget) => widget is ItemTile && widget.item.number == number,
     ),
     matching: find.byType(Checkbox),
   );
@@ -53,12 +51,7 @@ double getTopOfText(WidgetTester tester, String text) {
 }
 
 void main() {
-  final List<BridgeEvent> sampleEvents = [
-    for (final String line in File(
-      '../test/bridge/bridgeEvents.jsonl',
-    ).readAsLinesSync())
-      if (line.trim().isNotEmpty) parseBridgeEvent(jsonDecode(line)),
-  ];
+  final List<BridgeEvent> sampleEvents = loadSampleEvents();
   final ScannedEvent sampleScan = sampleEvents.whereType<ScannedEvent>().single;
   final StatusEvent sampleStatus = sampleEvents.whereType<StatusEvent>().single;
   final NothingApprovedEvent sampleNothingApproved = sampleEvents
@@ -170,7 +163,7 @@ void main() {
       for (final SectionView section in sampleScan.sections) {
         expect(find.text(section.titleText), findsOneWidget);
       }
-      expect(getBuiltCandidateNumbers(tester), [1]);
+      expect(getBuiltItemNumbers(tester), [1]);
       expect(find.text(checkGroupTitleText), findsOneWidget);
       expect(find.text(explore.introText), findsNothing);
       expect(find.text(sampleScan.skipped!.lines.join('\n')), findsNothing);
@@ -191,7 +184,7 @@ void main() {
 
       await tapAndSettle(tester, find.text(checkGroupTitleText));
 
-      expect(getBuiltCandidateNumbers(tester), [1, 2]);
+      expect(getBuiltItemNumbers(tester), [1, 2]);
     },
   );
 
@@ -204,7 +197,7 @@ void main() {
       await tapAndSettle(tester, find.text(explore.titleText));
 
       expect(find.text(explore.introText), findsOneWidget);
-      expect(getBuiltCandidateNumbers(tester), [1, 5]);
+      expect(getBuiltItemNumbers(tester), [1, 5]);
       expect(find.byType(AdviceTile), findsNothing);
 
       await tapAndSettle(tester, find.text(explore.adviceGroup!.titleText));
@@ -244,10 +237,10 @@ void main() {
       (controller.state as ScannedState).selectedNumbers,
       sampleScan.safeNumbers.toSet(),
     );
-    expect(getBuiltCandidateNumbers(tester), [1, 2, 5]);
-    expect(isCandidateTicked(tester, 1), isTrue);
-    expect(isCandidateTicked(tester, 2), isFalse);
-    expect(isCandidateTicked(tester, 5), isFalse);
+    expect(getBuiltItemNumbers(tester), [1, 2, 5]);
+    expect(isItemTicked(tester, 1), isTrue);
+    expect(isItemTicked(tester, 2), isFalse);
+    expect(isItemTicked(tester, 5), isFalse);
     expect(
       find.text('${sampleScan.safeNumbers.length} selected'),
       findsOneWidget,
@@ -302,8 +295,8 @@ void main() {
         find.textContaining(sampleNothingApproved.lines.first),
         findsOneWidget,
       );
-      expect(getBuiltCandidateNumbers(tester), [1, 2]);
-      expect(isCandidateTicked(tester, 2), isTrue);
+      expect(getBuiltItemNumbers(tester), [1, 2]);
+      expect(isItemTicked(tester, 2), isTrue);
     },
   );
 
@@ -321,8 +314,8 @@ void main() {
 
       await tapAndSettle(tester, find.widgetWithText(TextButton, 'Cancel'));
 
-      expect(getBuiltCandidateNumbers(tester), [1, 2]);
-      expect(isCandidateTicked(tester, 2), isTrue);
+      expect(getBuiltItemNumbers(tester), [1, 2]);
+      expect(isItemTicked(tester, 2), isTrue);
     },
   );
 }
