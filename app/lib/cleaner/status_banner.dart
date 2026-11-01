@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
+import '../link/url_opener.dart';
 import 'notice_body.dart';
-import 'settings_opener.dart';
 
 /// The notices of the bridge's status, shown open at the top of the page.
 class StatusBanner extends StatelessWidget {
   const StatusBanner({
     super.key,
     required this.notices,
-    required this.settingsOpener,
+    required this.urlOpener,
   });
 
   final List<NoticeView> notices;
-  final SettingsOpener settingsOpener;
+  final UrlOpener urlOpener;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +29,7 @@ class StatusBanner extends StatelessWidget {
               if (index > 0) const SizedBox(height: 16),
               Text(notice.titleText, style: theme.textTheme.titleSmall),
               const SizedBox(height: 4),
-              NoticeBody(notice: notice, settingsOpener: settingsOpener),
+              NoticeBody(notice: notice, urlOpener: urlOpener),
             ],
           ],
         ),

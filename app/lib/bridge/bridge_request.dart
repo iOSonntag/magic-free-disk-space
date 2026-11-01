@@ -19,3 +19,11 @@ Map<String, Object> buildDeleteRequest({
 Map<String, Object> buildStatusRequest() {
   return {'kind': 'status'};
 }
+
+Map<String, Object> buildCheckUpdateRequest() {
+  return {'kind': 'checkUpdate'};
+}
+
+Map<String, Object> buildSetUpdateCheckRequest(bool isEnabled) {
+  return {'kind': 'setUpdateCheck', 'isEnabled': isEnabled};
+}

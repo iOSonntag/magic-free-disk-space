@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
+import '../link/url_opener.dart';
 import 'item_tile.dart';
 import 'notice_body.dart';
-import 'settings_opener.dart';
 
 const EdgeInsetsGeometry _nestedChildrenPadding = EdgeInsetsDirectional.only(
   start: 16,
@@ -134,21 +134,17 @@ class SkippedTile extends StatelessWidget {
 
 /// A notice of the scan, collapsed under its title.
 class NoticeTile extends StatelessWidget {
-  const NoticeTile({
-    super.key,
-    required this.notice,
-    required this.settingsOpener,
-  });
+  const NoticeTile({super.key, required this.notice, required this.urlOpener});
 
   final NoticeView notice;
-  final SettingsOpener settingsOpener;
+  final UrlOpener urlOpener;
 
   @override
   Widget build(BuildContext context) {
     return _StoredExpansionTile(
       title: Text(notice.titleText),
       childrenPadding: _textChildrenPadding,
-      children: [NoticeBody(notice: notice, settingsOpener: settingsOpener)],
+      children: [NoticeBody(notice: notice, urlOpener: urlOpener)],
     );
   }
 }

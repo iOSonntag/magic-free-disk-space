@@ -151,6 +151,78 @@ done
     },
   );
 
+  test('sends a second request only after the answer of the first, and answers both in order', () async {
+    // A line that is already waiting while the first request is answered
+    // means the client sent the second request too early.
+    client = await createClientOverScript('''
+while read -r request; do
+  if read -t 1 early_request; then
+    echo "\$early_request" >> "\$(dirname "\$0")/early"
+  fi
+  if [ "\$request" = '{"kind":"status"}' ]; then
+    echo '{"kind":"status","fullDiskAccess":"granted","notices":[]}'
+  else
+    echo '{"kind":"updateChecked","isUpdateCheckEnabled":true,"notice":null}'
+  fi
+done
+''');
+    final List<String> answeredKinds = [];
+
+    final Future<StatusAnswer> status = client.status().then((answer) {
+      answeredKinds.add('status');
+      return answer;
+    });
+    final Future<UpdateCheckAnswer> check = client.checkUpdate().then((answer) {
+      answeredKinds.add('checkUpdate');
+      return answer;
+    });
+
+    expect(await status, isA<StatusEvent>());
+    expect(await check, isA<UpdateCheckedEvent>());
+    expect(answeredKinds, ['status', 'checkUpdate']);
+    expect(File('${directory.path}/early').existsSync(), isFalse);
+  });
+
+  test('a request queued behind one whose answer stops the bridge goes to a new bridge', () async {
+    client = await createClientOverScript('''
+while read -r request; do
+  if [ "\$start" = 1 ]; then
+    echo '{"kind":"cancelled","message":"Cancelled. Nothing was deleted."}'
+  else
+    echo '{"kind":"updateCheckSet","isUpdateCheckEnabled":false}'
+  fi
+done
+''');
+
+    final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+    final Future<UpdateCheckSetAnswer> save = client.setUpdateCheck(false);
+
+    await expectLater(scan, throwsFormatException);
+    expect(
+      await save,
+      isA<UpdateCheckSetEvent>().having(
+        (event) => event.isUpdateCheckEnabled,
+        'isUpdateCheckEnabled',
+        isFalse,
+      ),
+    );
+  });
+
+  test('dispose fails every waiting request', () async {
+    client = await createClientOverScript('''
+while read -r request; do
+  sleep 5
+done
+''');
+    final Future<StatusAnswer> status = client.status();
+    final Future<UpdateCheckAnswer> check = client.checkUpdate();
+
+    client.dispose();
+
+    await expectLater(status, throwsA(isA<BridgeClientDisposedException>()));
+    await expectLater(check, throwsA(isA<BridgeClientDisposedException>()));
+  });
+
   test('passes the progress on and answers with the final event', () async {
     client = await createClientOverScript('''
 while read -r request; do

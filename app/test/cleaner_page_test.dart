@@ -1,29 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/bridge/system_settings_url.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_page.dart';
 import 'package:magic_free_disk_space/cleaner/item_tile.dart';
-import 'package:magic_free_disk_space/cleaner/settings_opener.dart';
+import 'package:magic_free_disk_space/link/url_opener.dart';
 
 import 'support/fake_cleaner_bridge.dart';
+import 'support/fake_url_opener.dart';
 import 'support/sample_events.dart';
-
-/// Records each URL it is asked to open and answers [isOpening]; it opens
-/// nothing.
-final class FakeSettingsOpener implements SettingsOpener {
-  FakeSettingsOpener({required this.isOpening});
-
-  final bool isOpening;
-  final List<SystemSettingsUrl> requestedUrls = [];
-
-  @override
-  Future<bool> open(SystemSettingsUrl url) async {
-    requestedUrls.add(url);
-    return isOpening;
-  }
-}
 
 /// The numbers of the item tiles built, top to bottom; a collapsed tile
 /// builds none of its items.
@@ -58,7 +43,7 @@ void main() {
       .whereType<NothingApprovedEvent>()
       .single;
   final NoticeView bannerNotice = sampleStatus.notices.single;
-  final SettingsLinkView bannerLink = bannerNotice.settingsLink!;
+  final LinkView bannerLink = bannerNotice.settingsLink!;
   final SectionView cachesSection = sampleScan.sections.first;
   final String checkGroupTitleText = cachesSection.checkGroup!.titleText;
   final ExploreView explore = sampleScan.explore!;
@@ -75,7 +60,7 @@ void main() {
   /// scan, and lets the status arrive.
   Future<CleanerController> pumpCleanerPage(
     WidgetTester tester,
-    SettingsOpener settingsOpener,
+    UrlOpener urlOpener,
   ) async {
     tester.view.physicalSize = const Size(1200, 4000);
     tester.view.devicePixelRatio = 1;
@@ -83,10 +68,7 @@ void main() {
     final CleanerController controller = CleanerController(bridge: bridge);
     await tester.pumpWidget(
       MaterialApp(
-        home: CleanerPage(
-          controller: controller,
-          settingsOpener: settingsOpener,
-        ),
+        home: CleanerPage(controller: controller, urlOpener: urlOpener),
       ),
     );
     await tester.pumpAndSettle();
@@ -105,10 +87,8 @@ void main() {
   testWidgets(
     'shows the banner over the idle state, and its button opens the link of its notice',
     (WidgetTester tester) async {
-      final FakeSettingsOpener settingsOpener = FakeSettingsOpener(
-        isOpening: true,
-      );
-      await pumpCleanerPage(tester, settingsOpener);
+      final FakeUrlOpener urlOpener = FakeUrlOpener(isOpening: true);
+      await pumpCleanerPage(tester, urlOpener);
 
       expect(find.text(bannerNotice.titleText), findsOneWidget);
       expect(find.text(bannerNotice.lines.join('\n')), findsOneWidget);
@@ -119,7 +99,7 @@ void main() {
         find.widgetWithText(OutlinedButton, bannerLink.labelText),
       );
 
-      expect(settingsOpener.requestedUrls, [bannerLink.url]);
+      expect(urlOpener.requestedUrls, [bannerLink.url]);
       expect(find.text(bannerLink.failedText), findsNothing);
     },
   );
@@ -127,17 +107,15 @@ void main() {
   testWidgets(
     'shows the failed text of the link when System Settings did not open',
     (WidgetTester tester) async {
-      final FakeSettingsOpener settingsOpener = FakeSettingsOpener(
-        isOpening: false,
-      );
-      await pumpCleanerPage(tester, settingsOpener);
+      final FakeUrlOpener urlOpener = FakeUrlOpener(isOpening: false);
+      await pumpCleanerPage(tester, urlOpener);
 
       await tapAndSettle(
         tester,
         find.widgetWithText(OutlinedButton, bannerLink.labelText),
       );
 
-      expect(settingsOpener.requestedUrls, [bannerLink.url]);
+      expect(urlOpener.requestedUrls, [bannerLink.url]);
       expect(find.text(bannerLink.failedText), findsOneWidget);
     },
   );
@@ -145,7 +123,7 @@ void main() {
   testWidgets('a granted status shows no banner', (WidgetTester tester) async {
     bridge.answerStatus = () async => grantedStatus;
 
-    await pumpCleanerPage(tester, FakeSettingsOpener(isOpening: true));
+    await pumpCleanerPage(tester, FakeUrlOpener(isOpening: true));
 
     expect(find.text(bannerNotice.titleText), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Scan'), findsOneWidget);
@@ -154,7 +132,7 @@ void main() {
   testWidgets(
     'shows the sections with their safe items open and each check group collapsed, then Explore, skipped, and the notices collapsed',
     (WidgetTester tester) async {
-      await pumpCleanerPage(tester, FakeSettingsOpener(isOpening: true));
+      await pumpCleanerPage(tester, FakeUrlOpener(isOpening: true));
 
       await scanOnPage(tester);
 
@@ -191,7 +169,7 @@ void main() {
   testWidgets(
     'opens Explore with its selectable items and its advice, which has no checkbox',
     (WidgetTester tester) async {
-      await pumpCleanerPage(tester, FakeSettingsOpener(isOpening: true));
+      await pumpCleanerPage(tester, FakeUrlOpener(isOpening: true));
       await scanOnPage(tester);
 
       await tapAndSettle(tester, find.text(explore.titleText));
@@ -222,7 +200,7 @@ void main() {
   ) async {
     final CleanerController controller = await pumpCleanerPage(
       tester,
-      FakeSettingsOpener(isOpening: true),
+      FakeUrlOpener(isOpening: true),
     );
     await scanOnPage(tester);
     await tapAndSettle(tester, find.text(checkGroupTitleText));
@@ -251,14 +229,12 @@ void main() {
     'shows the notices of the scan with the settings button where one has a link',
     (WidgetTester tester) async {
       bridge.answerStatus = () async => grantedStatus;
-      final FakeSettingsOpener settingsOpener = FakeSettingsOpener(
-        isOpening: true,
-      );
-      await pumpCleanerPage(tester, settingsOpener);
+      final FakeUrlOpener urlOpener = FakeUrlOpener(isOpening: true);
+      await pumpCleanerPage(tester, urlOpener);
       await scanOnPage(tester);
       final NoticeView linkedNotice = sampleScan.notices.first;
       final NoticeView plainNotice = sampleScan.notices.last;
-      final SettingsLinkView link = linkedNotice.settingsLink!;
+      final LinkView link = linkedNotice.settingsLink!;
 
       expect(find.widgetWithText(OutlinedButton, link.labelText), findsNothing);
 
@@ -277,14 +253,14 @@ void main() {
         find.widgetWithText(OutlinedButton, link.labelText),
       );
 
-      expect(settingsOpener.requestedUrls, [link.url]);
+      expect(urlOpener.requestedUrls, [link.url]);
     },
   );
 
   testWidgets(
     'an opened check group stays open when a notice comes above the list',
     (WidgetTester tester) async {
-      await pumpCleanerPage(tester, FakeSettingsOpener(isOpening: true));
+      await pumpCleanerPage(tester, FakeUrlOpener(isOpening: true));
       await scanOnPage(tester);
       await tapAndSettle(tester, find.text(checkGroupTitleText));
       await tapAndSettle(tester, find.text('2. App cache'));
@@ -304,7 +280,7 @@ void main() {
     'an opened check group stays open through the confirmation and its cancel',
     (WidgetTester tester) async {
       bridge.planAnswer = sampleEvents.whereType<PlannedEvent>().single;
-      await pumpCleanerPage(tester, FakeSettingsOpener(isOpening: true));
+      await pumpCleanerPage(tester, FakeUrlOpener(isOpening: true));
       await scanOnPage(tester);
       await tapAndSettle(tester, find.text(checkGroupTitleText));
       await tapAndSettle(tester, find.text('2. App cache'));

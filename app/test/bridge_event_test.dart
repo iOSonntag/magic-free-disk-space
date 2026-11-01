@@ -2,12 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/bridge/system_settings_url.dart';
+import 'package:magic_free_disk_space/bridge/openable_url.dart';
 
 import 'support/sample_events.dart';
 
 const String fullDiskAccessSettingsUrl =
     'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
+const String releasePageUrl =
+    'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0';
 
 List<ItemDetailLineKind> getDetailLineKinds(List<ItemDetailLine> lines) {
   return [for (final ItemDetailLine line in lines) line.kind];
@@ -158,7 +160,8 @@ void main() {
         [for (final NoticeView notice in scanned.notices) notice.titleText],
         ['Could not read 2 places', 'Could not ask 1 tool'],
       );
-      final SettingsLinkView link = scanned.notices.first.settingsLink!;
+      final LinkView link = scanned.notices.first.settingsLink!;
+      expect(link.url, isA<SystemSettingsUrl>());
       expect(link.labelText, 'Open System Settings');
       expect(link.url.text, fullDiskAccessSettingsUrl);
       expect(link.failedText, startsWith('System Settings did not open.'));
@@ -200,6 +203,32 @@ void main() {
     expect(notice.titleText, 'Full Disk Access is off');
     expect(notice.lines, hasLength(2));
     expect(notice.settingsLink!.url.text, fullDiskAccessSettingsUrl);
+  });
+
+  test('parses the update check with its notice and the saved switch', () {
+    final UpdateCheckedEvent checked = events
+        .whereType<UpdateCheckedEvent>()
+        .single;
+
+    expect(checked.isUpdateCheckEnabled, isTrue);
+    final UpdateNoticeView notice = checked.notice!;
+    expect(notice.titleText, 'Version 1.3.0 is available');
+    expect(notice.lines, hasLength(2));
+    expect(notice.downloadLink.labelText, 'Open the download page');
+    expect(notice.downloadLink.url, isA<ReleasePageUrl>());
+    expect(notice.downloadLink.url.text, releasePageUrl);
+    expect(notice.downloadLink.failedText, startsWith('The browser did not'));
+    expect(
+      events.whereType<UpdateCheckSetEvent>().single.isUpdateCheckEnabled,
+      isFalse,
+    );
+  });
+
+  test('parses an update check without a notice', () {
+    final Map<String, Object?> json = decodeSample('updateChecked')
+      ..['notice'] = null;
+
+    expect((parseBridgeEvent(json) as UpdateCheckedEvent).notice, isNull);
   });
 
   test('parses the plan, the answers, and the three failures', () {
@@ -286,6 +315,54 @@ void main() {
         expect(() => SystemSettingsUrl.parse(url), throwsFormatException);
       });
     }
+
+    test('on a download link to a pane of System Settings', () {
+      final Map<String, Object?> json = decodeSample('updateChecked');
+      getMapAt(json, ['notice', 'downloadLink'])['url'] =
+          fullDiskAccessSettingsUrl;
+
+      expect(() => parseBridgeEvent(json), throwsFormatException);
+    });
+
+    test('on a settings link to a release page', () {
+      final Map<String, Object?> json = decodeSample('status');
+      getMapAt(json, ['notices', 0, 'settingsLink'])['url'] = releasePageUrl;
+
+      expect(() => parseBridgeEvent(json), throwsFormatException);
+    });
+
+    for (final String url in [
+      'http://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0',
+      'https://example.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0',
+      'https://user@github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0',
+      'https://github.com:8443/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0',
+      'https://github.com:443/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0',
+      'https://GitHub.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0',
+      'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0?x=1',
+      'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0#notes',
+      'https://github.com/someone/magic-free-disk-space/releases/tag/v1.3.0',
+      'https://github.com/iOSonntag/magic-free-disk-space/releases/latest',
+      'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/1.3.0',
+      'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3',
+      'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0-beta',
+      'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0/',
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+    ]) {
+      test('on a download link to $url', () {
+        final Map<String, Object?> json = decodeSample('updateChecked');
+        getMapAt(json, ['notice', 'downloadLink'])['url'] = url;
+
+        expect(() => parseBridgeEvent(json), throwsFormatException);
+        expect(() => ReleasePageUrl.parse(url), throwsFormatException);
+      });
+    }
+
+    test('on an update check without its switch', () {
+      final Map<String, Object?> json = decodeSample('updateChecked')
+        ..remove('isUpdateCheckEnabled');
+
+      expect(() => parseBridgeEvent(json), throwsFormatException);
+    });
 
     test('on a missing key', () {
       final Map<String, Object?> withoutSafeNumbers = decodeSample('scanned')

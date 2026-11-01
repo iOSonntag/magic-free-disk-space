@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
+import '../feedback/error_text.dart';
+import '../link/url_opener.dart';
 import 'cleaner_controller.dart';
 import 'confirmation_view.dart';
-import 'error_text.dart';
 import 'scan_tiles.dart';
-import 'settings_opener.dart';
 import 'status_banner.dart';
 import 'text_styles.dart';
 
@@ -13,29 +13,40 @@ class CleanerPage extends StatelessWidget {
   const CleanerPage({
     super.key,
     required this.controller,
-    required this.settingsOpener,
+    required this.urlOpener,
+    this.appBarActions = const [],
+    this.banner,
   });
 
   final CleanerController controller;
-  final SettingsOpener settingsOpener;
+  final UrlOpener urlOpener;
+
+  /// Widgets of the app bar that the page shows without knowing them.
+  final List<Widget> appBarActions;
+
+  /// A widget above the status banner that the page shows without knowing
+  /// it.
+  final Widget? banner;
 
   @override
   Widget build(BuildContext context) {
+    final Widget? banner = this.banner;
     return ListenableBuilder(
       listenable: controller,
       builder: (BuildContext context, Widget? _) {
         final CleanerState state = controller.state;
         final List<NoticeView> statusNotices = controller.statusNotices;
         return Scaffold(
-          appBar: AppBar(title: const Text('Magic Free Disk Space')),
+          appBar: AppBar(
+            title: const Text('Magic Free Disk Space'),
+            actions: appBarActions,
+          ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              ?banner,
               if (statusNotices.isNotEmpty)
-                StatusBanner(
-                  notices: statusNotices,
-                  settingsOpener: settingsOpener,
-                ),
+                StatusBanner(notices: statusNotices, urlOpener: urlOpener),
               Expanded(
                 child: switch (state) {
                   IdleState() => _IdleView(
@@ -48,7 +59,7 @@ class CleanerPage extends StatelessWidget {
                   ScannedState() => _ScannedView(
                     state: state,
                     controller: controller,
-                    settingsOpener: settingsOpener,
+                    urlOpener: urlOpener,
                   ),
                   ConfirmingState() => ConfirmationView(
                     plan: state.plan,
@@ -128,12 +139,12 @@ class _ScannedView extends StatelessWidget {
   const _ScannedView({
     required this.state,
     required this.controller,
-    required this.settingsOpener,
+    required this.urlOpener,
   });
 
   final ScannedState state;
   final CleanerController controller;
-  final SettingsOpener settingsOpener;
+  final UrlOpener urlOpener;
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +206,7 @@ class _ScannedView extends StatelessWidget {
           NoticeTile(
             key: PageStorageKey<String>('notice $index'),
             notice: scanNotice,
-            settingsOpener: settingsOpener,
+            urlOpener: urlOpener,
           ),
       ],
     );

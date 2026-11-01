@@ -18,6 +18,8 @@ void main() {
       buildPlanRequest([1, 3]),
       buildDeleteRequest(planId: 2, confirmation: 'DELETE'),
       buildStatusRequest(),
+      buildCheckUpdateRequest(),
+      buildSetUpdateCheckRequest(false),
     ], fixtureRequests);
   });
 }
