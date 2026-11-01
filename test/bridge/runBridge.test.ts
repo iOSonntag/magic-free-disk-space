@@ -6,9 +6,12 @@ import { runBridge } from '../../src/bridge/runBridge.js';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../../src/environment/loadEnvironment.js';
+import type { PreferencesSaveFailure } from '../../src/preferences/preferencesFile.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
 import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
+import type { LatestReleaseFetchResult } from '../../src/update/fetchLatestReleaseVersion.js';
+import type { ReleaseVersion } from '../../src/update/releaseVersion.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -67,6 +70,16 @@ const SCAN_LINE = '{"kind":"scan"}';
 
 const STATUS_LINE = '{"kind":"status"}';
 
+const CHECK_UPDATE_LINE = '{"kind":"checkUpdate"}';
+
+const RELEASE_1_2_0: ReleaseVersion = { major: 1, minor: 2, patch: 0 };
+
+const RELEASE_1_3_0: ReleaseVersion = { major: 1, minor: 3, patch: 0 };
+
+function buildSetUpdateCheckLine(params: { isEnabled: boolean }): string {
+  return JSON.stringify({ kind: 'setUpdateCheck', isEnabled: params.isEnabled });
+}
+
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
 
@@ -118,15 +131,32 @@ async function loadJournalTimes(): Promise<unknown[]> {
     .map((line) => JSON.parse(line).atMs);
 }
 
-/** Runs the bridge on the fixture home; its Full Disk Access probe is a fake that answers as told. */
+/**
+ * Runs the bridge on the fixture home. Its Full Disk Access probe, the latest release, and the
+ * preference file are fakes that answer as told and record their calls.
+ */
 async function runBridgeWithLines(params: {
   lines: string[];
   nowMs?: number;
   environmentResult?: Result<Environment, EnvironmentFailure>;
   fullDiskAccess?: FullDiskAccess;
-}): Promise<{ end: BridgeEnd; events: BridgeEvent[]; probedHomeDirs: string[] }> {
+  releaseVersion?: ReleaseVersion | null;
+  latestRelease?: LatestReleaseFetchResult;
+  isUpdateCheckEnabled?: boolean;
+  saveResult?: Result<null, PreferencesSaveFailure>;
+}): Promise<{
+  end: BridgeEnd;
+  events: BridgeEvent[];
+  probedHomeDirs: string[];
+  fetchCount: number;
+  preferenceHomeDirs: string[];
+  savedValues: boolean[];
+}> {
   const events: BridgeEvent[] = [];
   const probedHomeDirs: string[] = [];
+  const preferenceHomeDirs: string[] = [];
+  const savedValues: boolean[] = [];
+  let fetchCount = 0;
   const environmentResult: Result<Environment, EnvironmentFailure> = params.environmentResult ?? {
     kind: 'succeeded',
     value: environment,
@@ -147,9 +177,33 @@ async function runBridgeWithLines(params: {
       return params.fullDiskAccess ?? 'unknown';
     },
     clock: () => params.nowMs ?? NOW_MS,
+    releaseVersion: params.releaseVersion === undefined ? RELEASE_1_2_0 : params.releaseVersion,
+    fetchLatestReleaseVersion: async () => {
+      fetchCount += 1;
+
+      return params.latestRelease ?? { kind: 'succeeded', value: RELEASE_1_3_0 };
+    },
+    loadPreferences: async (load) => {
+      preferenceHomeDirs.push(load.homeDir);
+
+      return { isUpdateCheckEnabled: params.isUpdateCheckEnabled ?? true };
+    },
+    saveIsUpdateCheckEnabled: async (save) => {
+      preferenceHomeDirs.push(save.homeDir);
+      savedValues.push(save.isEnabled);
+
+      return params.saveResult ?? { kind: 'succeeded', value: null };
+    },
   });
 
-  return { end: end, events: events, probedHomeDirs: probedHomeDirs };
+  return {
+    end: end,
+    events: events,
+    probedHomeDirs: probedHomeDirs,
+    fetchCount: fetchCount,
+    preferenceHomeDirs: preferenceHomeDirs,
+    savedValues: savedValues,
+  };
 }
 
 /** The final events, one per request, without the progress events of a scan. */
@@ -187,6 +241,8 @@ async function expectEventsMatchProtocolFixture(params: { events: BridgeEvent[] 
     'progress',
     'scanned',
     'status',
+    'updateCheckSet',
+    'updateChecked',
   ]);
 
   const mismatches = params.events.flatMap((event) =>
@@ -616,6 +672,109 @@ describe('runBridge', () => {
     expect(await listFixturePaths()).toEqual(before);
   });
 
+  test('answers checkUpdate with the notice of a newer release, from the home it started in', async () => {
+    const { events, fetchCount, preferenceHomeDirs } = await runBridgeWithLines({
+      lines: [CHECK_UPDATE_LINE],
+    });
+
+    expect(fetchCount).toBe(1);
+    expect(preferenceHomeDirs).toEqual([environment.homeDir]);
+    expect(events).toEqual([
+      {
+        kind: 'updateChecked',
+        isUpdateCheckEnabled: true,
+        notice: expect.objectContaining({ titleText: 'Version 1.3.0 is available' }),
+      },
+    ]);
+  });
+
+  test('answers checkUpdate without a notice when current, failed, off, or unversioned', async () => {
+    const current = await runBridgeWithLines({
+      lines: [CHECK_UPDATE_LINE],
+      latestRelease: { kind: 'succeeded', value: RELEASE_1_2_0 },
+    });
+    const failed = await runBridgeWithLines({
+      lines: [CHECK_UPDATE_LINE],
+      latestRelease: { kind: 'failed', failure: { reason: 'timedOut' } },
+    });
+    const off = await runBridgeWithLines({
+      lines: [CHECK_UPDATE_LINE],
+      isUpdateCheckEnabled: false,
+    });
+    const unversioned = await runBridgeWithLines({
+      lines: [CHECK_UPDATE_LINE],
+      releaseVersion: null,
+    });
+
+    expect(current.events).toEqual([
+      { kind: 'updateChecked', isUpdateCheckEnabled: true, notice: null },
+    ]);
+    expect(failed.events).toEqual(current.events);
+    expect(unversioned.events).toEqual(current.events);
+    expect(off.events).toEqual([
+      { kind: 'updateChecked', isUpdateCheckEnabled: false, notice: null },
+    ]);
+    expect([current, failed, off, unversioned].map((run) => run.fetchCount)).toEqual([1, 1, 0, 0]);
+  });
+
+  test('saves the switch without fetching and answers with the saved value', async () => {
+    const { events, fetchCount, preferenceHomeDirs, savedValues } = await runBridgeWithLines({
+      lines: [
+        buildSetUpdateCheckLine({ isEnabled: false }),
+        buildSetUpdateCheckLine({ isEnabled: true }),
+      ],
+    });
+
+    expect(events).toEqual([
+      { kind: 'updateCheckSet', isUpdateCheckEnabled: false },
+      { kind: 'updateCheckSet', isUpdateCheckEnabled: true },
+    ]);
+    expect(savedValues).toEqual([false, true]);
+    expect(preferenceHomeDirs).toEqual([environment.homeDir, environment.homeDir]);
+    expect(fetchCount).toBe(0);
+  });
+
+  test('a switch that cannot be saved fails and keeps the held plan', async () => {
+    const before = await listFixturePaths();
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildPlanLine({ numbers: [2] }),
+        buildSetUpdateCheckLine({ isEnabled: false }),
+        CHECK_UPDATE_LINE,
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+      ],
+      saveResult: { kind: 'failed', failure: { reason: 'writeFailed', code: 'EACCES' } },
+    });
+    const after = await listFixturePaths();
+
+    expect(findAnswers({ events: events }).slice(1)).toEqual([
+      expect.objectContaining({ kind: 'planned', planId: 1 }),
+      {
+        kind: 'failed',
+        message:
+          'The setting could not be saved in the support folder of the app; it stays as it was.',
+        effect: 'scanKept',
+      },
+      expect.objectContaining({ kind: 'updateChecked' }),
+      expect.objectContaining({ kind: 'deleted' }),
+    ]);
+    expect(before.filter((path) => !after.includes(path))).toEqual([
+      'home/Library/Caches/AppCache',
+      'home/Library/Caches/AppCache/blob.bin',
+    ]);
+  });
+
+  test('a failed save before any scan tells the app the bridge still waits for one', async () => {
+    const { events } = await runBridgeWithLines({
+      lines: [buildSetUpdateCheckLine({ isEnabled: true }), buildPlanLine({ numbers: [1] })],
+      saveResult: { kind: 'failed', failure: { reason: 'directoryUnavailable', code: 'ENOTDIR' } },
+    });
+
+    expect(events.map((event) => event.kind)).toEqual(['failed', 'failed']);
+    expect(events[0]).toMatchObject({ effect: 'scanDropped' });
+  });
+
   test('every event matches the protocol fixture the app is tested with', async () => {
     const containersPath = join(fixtureRoot.homeDir, 'Library/Containers');
 
@@ -633,6 +792,8 @@ describe('runBridge', () => {
         buildPlanLine({ numbers: [99] }),
         buildPlanLine({ numbers: [1] }),
         buildDeleteLine({ planId: 2, confirmation: 'DELETE' }),
+        CHECK_UPDATE_LINE,
+        buildSetUpdateCheckLine({ isEnabled: false }),
       ],
       fullDiskAccess: 'denied',
     });

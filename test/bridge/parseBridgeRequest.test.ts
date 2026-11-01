@@ -5,7 +5,7 @@ import { parseBridgeRequest } from '../../src/bridge/parseBridgeRequest.js';
 
 describe('parseBridgeRequest', () => {
   // The app's test builds its requests against the same fixture.
-  test('parses the four requests of the protocol fixture', async () => {
+  test('parses the six requests of the protocol fixture', async () => {
     const fixtureText = await readFile(join(import.meta.dir, 'bridgeRequests.jsonl'), 'utf8');
     const lines = fixtureText.split('\n').filter((line) => line !== '');
 
@@ -14,6 +14,8 @@ describe('parseBridgeRequest', () => {
       { kind: 'succeeded', value: { kind: 'plan', numbers: [1, 3] } },
       { kind: 'succeeded', value: { kind: 'delete', planId: 2, confirmation: 'DELETE' } },
       { kind: 'succeeded', value: { kind: 'status' } },
+      { kind: 'succeeded', value: { kind: 'checkUpdate' } },
+      { kind: 'succeeded', value: { kind: 'setUpdateCheck', isEnabled: false } },
     ]);
   });
 
@@ -41,6 +43,12 @@ describe('parseBridgeRequest', () => {
       '{"kind":"delete","planId":1}',
       '{"kind":"delete","planId":"1","confirmation":"DELETE"}',
       '{"kind":"delete","planId":1,"confirmation":true}',
+      '{"kind":"CheckUpdate"}',
+      '{"kind":"setUpdateCheck"}',
+      '{"kind":"setUpdateCheck","isEnabled":"false"}',
+      '{"kind":"setUpdateCheck","isEnabled":0}',
+      '{"kind":"setUpdateCheck","isEnabled":null}',
+      '{"kind":"setUpdateCheck","enabled":true}',
     ];
 
     for (const line of lines) {

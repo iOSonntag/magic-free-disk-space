@@ -5,9 +5,12 @@ import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../environment/loadEnvironment.js';
+import type { Preferences, PreferencesSaveFailure } from '../preferences/preferencesFile.js';
 import { buildFullDiskAccessNotices } from '../report/buildFullDiskAccessNotices.js';
 import type { ScanView } from '../report/buildScanView.js';
 import { buildScanView } from '../report/buildScanView.js';
+import type { UpdateNoticeView } from '../report/buildUpdateNotice.js';
+import { buildUpdateNotice } from '../report/buildUpdateNotice.js';
 import {
   CANCELLED_TEXT,
   formatDeletionWarningLines,
@@ -26,6 +29,9 @@ import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
 import type { FullDiskAccess } from '../system/fullDiskAccess.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
+import type { LatestReleaseFetchResult } from '../update/fetchLatestReleaseVersion.js';
+import type { ReleaseVersion } from '../update/releaseVersion.js';
+import { runUpdateCheck } from '../update/runUpdateCheck.js';
 import { parseBridgeRequest } from './parseBridgeRequest.js';
 
 type BridgeEventProgress = { kind: 'progress'; message: string };
@@ -52,6 +58,15 @@ type BridgeEventDeleted = { kind: 'deleted'; lines: string[] };
 
 type BridgeEventCancelled = { kind: 'cancelled'; message: string };
 
+/** The answer of every update check: `notice` only when a newer release exists. */
+type BridgeEventUpdateChecked = {
+  kind: 'updateChecked';
+  isUpdateCheckEnabled: boolean;
+  notice: UpdateNoticeView | null;
+};
+
+type BridgeEventUpdateCheckSet = { kind: 'updateCheckSet'; isUpdateCheckEnabled: boolean };
+
 /**
  * What a failure did to the bridge: `scanDropped` leaves it without a scan, so the next request
  * must be a scan; `bridgeStopping` means it exits, so the next request needs a new bridge.
@@ -72,6 +87,8 @@ type BridgeAnswer =
   | BridgeEventNothingApproved
   | BridgeEventDeleted
   | BridgeEventCancelled
+  | BridgeEventUpdateChecked
+  | BridgeEventUpdateCheckSet
   | BridgeEventFailed;
 
 export type BridgeEvent = BridgeEventProgress | BridgeAnswer;
@@ -108,6 +125,17 @@ type BridgeContext = {
   /** Never throws. */
   loadFullDiskAccess: (params: { homeDir: string }) => Promise<FullDiskAccess>;
   clock: () => number;
+  /** `null` for a development build, which never looks for an update. */
+  releaseVersion: ReleaseVersion | null;
+  /** Never throws. */
+  fetchLatestReleaseVersion: () => Promise<LatestReleaseFetchResult>;
+  /** Never throws. */
+  loadPreferences: (params: { homeDir: string }) => Promise<Preferences>;
+  /** Never throws. */
+  saveIsUpdateCheckEnabled: (params: {
+    homeDir: string;
+    isEnabled: boolean;
+  }) => Promise<Result<null, PreferencesSaveFailure>>;
 };
 
 /**
@@ -204,7 +232,68 @@ async function answerRequestLine(params: {
         homeDir: params.homeDir,
         state: params.state,
       });
+    case 'checkUpdate':
+      return answerCheckUpdate({
+        context: params.context,
+        homeDir: params.homeDir,
+        state: params.state,
+      });
+    case 'setUpdateCheck':
+      return answerSetUpdateCheck({
+        context: params.context,
+        homeDir: params.homeDir,
+        state: params.state,
+        isEnabled: parsed.value.isEnabled,
+      });
   }
+}
+
+/** Keeps the held scan and plan; any failure of the check answers without a notice. */
+async function answerCheckUpdate(params: {
+  context: BridgeContext;
+  homeDir: string;
+  state: BridgeState;
+}): Promise<BridgeStep> {
+  const outcome = await runUpdateCheck({
+    preferences: await params.context.loadPreferences({ homeDir: params.homeDir }),
+    releaseVersion: params.context.releaseVersion,
+    fetchLatestReleaseVersion: params.context.fetchLatestReleaseVersion,
+  });
+
+  return {
+    answer: {
+      kind: 'updateChecked',
+      isUpdateCheckEnabled: outcome.kind !== 'off',
+      notice: buildUpdateNotice(outcome),
+    },
+    nextState: params.state,
+  };
+}
+
+/** Keeps the held scan and plan; saves the switch and never fetches. */
+async function answerSetUpdateCheck(params: {
+  context: BridgeContext;
+  homeDir: string;
+  state: BridgeState;
+  isEnabled: boolean;
+}): Promise<BridgeStep> {
+  const saved = await params.context.saveIsUpdateCheckEnabled({
+    homeDir: params.homeDir,
+    isEnabled: params.isEnabled,
+  });
+
+  if (saved.kind === 'failed') {
+    return buildFailedStep({
+      message:
+        'The setting could not be saved in the support folder of the app; it stays as it was.',
+      nextState: params.state,
+    });
+  }
+
+  return {
+    answer: { kind: 'updateCheckSet', isUpdateCheckEnabled: params.isEnabled },
+    nextState: params.state,
+  };
 }
 
 /** Loads the environment afresh, so the age cutoffs count from this scan. */

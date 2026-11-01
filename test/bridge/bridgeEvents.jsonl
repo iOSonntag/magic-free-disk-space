@@ -8,3 +8,5 @@
 {"kind":"failed","message":"This is not the deletion that waits for its confirmation; review it again.","effect":"scanKept"}
 {"kind":"failed","message":"The scan is older than an hour; scan again.","effect":"scanDropped"}
 {"kind":"failed","message":"Run this tool as yourself, not as root or with sudo: it deletes in the home folder of the user who runs it.","effect":"bridgeStopping"}
+{"kind":"updateChecked","isUpdateCheckEnabled":true,"notice":{"titleText":"Version 1.3.0 is available","lines":["You have version 1.2.0.","Download the new version, quit this app, and move the new one into Applications in its place."],"downloadLink":{"labelText":"Open the download page","url":"https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0","failedText":"The browser did not open. The download page is https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0."}}}
+{"kind":"updateCheckSet","isUpdateCheckEnabled":false}
