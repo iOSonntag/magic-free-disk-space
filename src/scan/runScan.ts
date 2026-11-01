@@ -12,6 +12,7 @@ import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
+import { buildFailureIssues } from './buildReadIssue.js';
 import { buildScanReport } from './buildScanReport.js';
 import type { Advice, Candidate, SkipReason } from './candidate.js';
 import { decideAppCandidate } from './decideAppCandidate.js';
@@ -44,7 +45,7 @@ import {
   resolveOwnerState,
 } from './resolveOwnerState.js';
 import type { ScanPhase } from './scanPhase.js';
-import { EMPTY_SCAN_PHASE, mergeScanPhases } from './scanPhase.js';
+import { mergeScanPhases } from './scanPhase.js';
 import type { ArtifactFinding, ProjectWalk } from './walkProjects.js';
 import { walkProjects } from './walkProjects.js';
 
@@ -435,13 +436,9 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
   const names = await loadDirectoryNames({ path: containersPath });
 
   if (names.kind === 'failed') {
-    if (names.failure.reason === 'missing' || names.failure.reason === 'notDirectory') {
-      return EMPTY_SCAN_PHASE;
-    }
-
     return {
       decisions: [],
-      issues: [{ path: containersPath, reason: names.failure.reason, detail: names.failure.code }],
+      issues: buildFailureIssues({ path: containersPath, failure: names.failure }),
     };
   }
 

@@ -14,10 +14,17 @@ describe('decideReadFailure', () => {
     expect(decideReadFailure({ reason: 'tooLarge', maxBytes: 8 })).toEqual({ kind: 'unfit' });
   });
 
-  test('a denied or unexpected read fails with its reason and code', () => {
+  test('a denial by macOS privacy protection fails as privacyDenied', () => {
     expect(decideReadFailure({ reason: 'permissionDenied', code: 'EPERM' })).toEqual({
       kind: 'failed',
-      failure: { reason: 'permissionDenied', code: 'EPERM' },
+      failure: { reason: 'privacyDenied', code: 'EPERM' },
+    });
+  });
+
+  test('a denied or unexpected read fails with its reason and code', () => {
+    expect(decideReadFailure({ reason: 'permissionDenied', code: 'EACCES' })).toEqual({
+      kind: 'failed',
+      failure: { reason: 'permissionDenied', code: 'EACCES' },
     });
     expect(decideReadFailure({ reason: 'unexpected', code: 'EIO' })).toEqual({
       kind: 'failed',

@@ -25,7 +25,10 @@ export type ReadFailureVerdict =
   | ReadFailureVerdictUnfit
   | ReadFailureVerdictFailed;
 
-/** The one split of every read failure into what is absent, what is unfit, and what failed. */
+/**
+ * The one split of every read failure into what is absent, what is unfit, and what failed; a
+ * permission failure fails as `privacyDenied` when its code is the one of macOS privacy protection.
+ */
 export function decideReadFailure(
   failure: FileFailure | DirectoryFailure | FileContentFailure,
 ): ReadFailureVerdict {
@@ -37,7 +40,20 @@ export function decideReadFailure(
     case 'tooLarge':
       return { kind: 'unfit' };
     case 'permissionDenied':
+      return {
+        kind: 'failed',
+        failure: { reason: getPermissionFailureReason(failure.code), code: failure.code },
+      };
     case 'unexpected':
-      return { kind: 'failed', failure: { reason: failure.reason, code: failure.code } };
+      return { kind: 'failed', failure: { reason: 'unexpected', code: failure.code } };
   }
+}
+
+// macOS privacy protection (TCC) refuses with EPERM; a denial by the file's own mode is EACCES.
+function getPermissionFailureReason(code: string): 'privacyDenied' | 'permissionDenied' {
+  if (code === 'EPERM') {
+    return 'privacyDenied';
+  }
+
+  return 'permissionDenied';
 }
