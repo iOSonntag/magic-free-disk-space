@@ -1,0 +1,20 @@
+// Settings of a Developer ID build, read only by the release workflow.
+//
+// The workflow writes a temporary xcconfig that includes this file and adds DEVELOPMENT_TEAM, and
+// passes it to the build through XCODE_XCCONFIG_FILE, whose settings override all others for every
+// target. Local builds never read this file and stay signed ad hoc.
+
+// Sign with the Developer ID certificate the workflow imports into its temporary keychain.
+CODE_SIGN_IDENTITY = Developer ID Application
+
+// Use exactly that certificate; automatic signing would look for an Apple Development one.
+CODE_SIGN_STYLE = Manual
+
+// Notarization requires the hardened runtime; the Copy Bridge phase reads it for the bridge too.
+ENABLE_HARDENED_RUNTIME = YES
+
+// Notarization requires a secure timestamp on every signature.
+OTHER_CODE_SIGN_FLAGS = --timestamp
+
+// An app distributed outside the App Store with Developer ID needs no provisioning profile.
+PROVISIONING_PROFILE_SPECIFIER =

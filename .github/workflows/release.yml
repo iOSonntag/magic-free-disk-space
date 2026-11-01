@@ -1,0 +1,234 @@
+name: Release
+
+# Builds cost money, so only a version tag or a rehearsal started by hand runs this workflow.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version a rehearsal builds, X.Y.Z. A rehearsal publishes nothing.
+        type: string
+        default: '0.0.0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build, sign, and notarize
+    runs-on: macos-26
+    # The environment holds the signing secrets and admits only main and v* tags, so no other
+    # branch can sign; a check in this file could not, since a branch runs its own copy of it.
+    environment: release
+    # Room for the step limits: two notarizations of up to 30 minutes each, and four bridge runs of
+    # up to 10 minutes each in the smoke test.
+    timeout-minutes: 120
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      APP_PATH: app/build/macos/Build/Products/Release/Magic Free Disk Space.app
+      SIGNING_IDENTITY: Developer ID Application
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$INPUT_VERSION"
+          fi
+          # The bridge parses its RELEASE_VERSION by the same rule and refuses to start otherwise.
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            printf 'error: the version %q is not X.Y.Z without leading zeros\n' "$version" >&2
+            exit 1
+          fi
+          echo "Building version $version, build number $GITHUB_RUN_NUMBER"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "DMG_PATH=$RUNNER_TEMP/release/Magic-Free-Disk-Space-$version.dmg" >> "$GITHUB_ENV"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install the dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test the command line tool and the bridge
+        run: bun test
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.7
+          channel: stable
+
+      - name: Test the app
+        working-directory: app
+        run: flutter test
+
+      - name: Create the signing keychain
+        env:
+          DEVELOPER_ID_CERTIFICATE_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          certificate="$RUNNER_TEMP/developer-id.p12"
+          trap 'rm -f "$certificate"' EXIT
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$keychain"
+          # A new keychain locks after 5 minutes; this one stays open through both notarizations.
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          (umask 077 && printf '%s' "$DEVELOPER_ID_CERTIFICATE_P12_BASE64" | base64 --decode > "$certificate")
+          security import "$certificate" -k "$keychain" -f pkcs12 \
+            -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm -f "$certificate"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain"
+          echo "KEYCHAIN_PATH=$keychain" >> "$GITHUB_ENV"
+
+      - name: Write the Developer ID build settings
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [[ ! "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+            echo "error: the secret APPLE_TEAM_ID is not a team id of 10 capital letters and digits" >&2
+            exit 1
+          fi
+          xcconfig="$RUNNER_TEMP/developer-id.xcconfig"
+          {
+            echo "#include \"$GITHUB_WORKSPACE/app/macos/Runner/Configs/DeveloperIdRelease.xcconfig\""
+            echo "DEVELOPMENT_TEAM = $APPLE_TEAM_ID"
+          } > "$xcconfig"
+          echo "DEVELOPER_ID_XCCONFIG=$xcconfig" >> "$GITHUB_ENV"
+
+      - name: Build the universal bridge
+        run: scripts/release/buildUniversalBridge.sh "$VERSION"
+
+      - name: Build the app
+        working-directory: app
+        env:
+          # Its settings override all others for every target, so only this build signs with
+          # Developer ID; local builds stay ad hoc.
+          XCODE_XCCONFIG_FILE: ${{ env.DEVELOPER_ID_XCCONFIG }}
+        run: flutter build macos --release --build-name "$VERSION" --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Verify the signatures
+        run: scripts/release/verifyAppSignature.sh "$APP_PATH"
+
+      - name: Install Rosetta
+        run: |
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            echo "Rosetta is installed."
+          else
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+
+      - name: Smoke-test the signed bridge on both architectures
+        run: |
+          scripts/release/smokeTestBridge.sh \
+            "$APP_PATH/Contents/MacOS/magic-free-disk-space-bridge" "$SIGNING_IDENTITY"
+
+      # The app is notarized on its own so that its stapled ticket travels with it out of the disk
+      # image and Gatekeeper accepts it offline; the disk image gets its own ticket below.
+      - name: Notarize and staple the app
+        env:
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          export APP_STORE_CONNECT_API_KEY_PATH="$RUNNER_TEMP/app-store-connect-api-key.p8"
+          trap 'rm -f "$APP_STORE_CONNECT_API_KEY_PATH"' EXIT
+          (umask 077 && printf '%s\n' "$APP_STORE_CONNECT_API_KEY_P8" > "$APP_STORE_CONNECT_API_KEY_PATH")
+          zip="$RUNNER_TEMP/release/Magic-Free-Disk-Space-app.zip"
+          mkdir -p "$(dirname "$zip")"
+          ditto -c -k --keepParent "$APP_PATH" "$zip"
+          scripts/release/notarizeAndStaple.sh "$zip" "$APP_PATH"
+
+      - name: Build the disk image
+        run: scripts/release/buildDmg.sh "$APP_PATH" "$DMG_PATH" "$SIGNING_IDENTITY"
+
+      - name: Notarize and staple the disk image
+        env:
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          export APP_STORE_CONNECT_API_KEY_PATH="$RUNNER_TEMP/app-store-connect-api-key.p8"
+          trap 'rm -f "$APP_STORE_CONNECT_API_KEY_PATH"' EXIT
+          (umask 077 && printf '%s\n' "$APP_STORE_CONNECT_API_KEY_P8" > "$APP_STORE_CONNECT_API_KEY_PATH")
+          scripts/release/notarizeAndStaple.sh "$DMG_PATH" "$DMG_PATH"
+
+      - name: Assess the disk image and the app inside it with Gatekeeper
+        run: |
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_PATH"
+          mount_point="$(mktemp -d)"
+          hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "$mount_point"
+          trap 'hdiutil detach "$mount_point"' EXIT
+          spctl --assess --type execute --verbose=2 "$mount_point/$(basename "$APP_PATH")"
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dmg
+          path: ${{ env.DMG_PATH }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Remove the keychain and the key files
+        if: always()
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/app-store-connect-api-key.p8" \
+            "$RUNNER_TEMP/developer-id.xcconfig"
+
+  publish:
+    name: Publish the release
+    needs: build
+    # A rehearsal stops after the build; only a pushed tag publishes.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the disk image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dmg
+          path: dist
+
+      # --verify-tag refuses to create a missing tag, so the release names the commit this run built.
+      - name: Create the release with the disk image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "$TAG" "dist/Magic-Free-Disk-Space-$VERSION.dmg" --verify-tag \
+            --title "Magic Free Disk Space $VERSION" --generate-notes --repo "$GITHUB_REPOSITORY"
