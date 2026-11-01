@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'bridge_process/process_bridge_client.dart';
 import 'cleaner/cleaner_controller.dart';
 import 'cleaner/cleaner_page.dart';
+import 'settings_process/process_settings_opener.dart';
 
 void main() {
   runApp(const MagicFreeDiskSpaceApp());
@@ -41,7 +42,10 @@ class _MagicFreeDiskSpaceAppState extends State<MagicFreeDiskSpaceApp> {
         colorSchemeSeed: Colors.teal,
         brightness: Brightness.dark,
       ),
-      home: CleanerPage(controller: _controller),
+      home: CleanerPage(
+        controller: _controller,
+        settingsOpener: const ProcessSettingsOpener(),
+      ),
     );
   }
 }

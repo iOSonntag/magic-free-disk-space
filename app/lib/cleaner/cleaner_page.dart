@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
-import 'candidate_tile.dart';
 import 'cleaner_controller.dart';
 import 'confirmation_view.dart';
+import 'scan_tiles.dart';
+import 'settings_opener.dart';
+import 'status_banner.dart';
 import 'text_styles.dart';
 
 class CleanerPage extends StatelessWidget {
-  const CleanerPage({super.key, required this.controller});
+  const CleanerPage({
+    super.key,
+    required this.controller,
+    required this.settingsOpener,
+  });
 
   final CleanerController controller;
+  final SettingsOpener settingsOpener;
 
   @override
   Widget build(BuildContext context) {
@@ -17,29 +24,45 @@ class CleanerPage extends StatelessWidget {
       listenable: controller,
       builder: (BuildContext context, Widget? _) {
         final CleanerState state = controller.state;
+        final List<NoticeView> statusNotices = controller.statusNotices;
         return Scaffold(
           appBar: AppBar(title: const Text('Magic Free Disk Space')),
-          body: switch (state) {
-            IdleState() => _IdleView(
-              notice: state.notice,
-              onScan: controller.scan,
-            ),
-            ScanningState() => _ProgressView(message: state.progressMessage),
-            ScannedState() => _ScannedView(
-              state: state,
-              controller: controller,
-            ),
-            ConfirmingState() => ConfirmationView(
-              plan: state.plan,
-              onConfirm: controller.confirmDeletion,
-              onCancel: controller.cancelConfirmation,
-            ),
-            DeletingState() => const _ProgressView(message: 'Deleting…'),
-            DeletedState() => _DeletedView(
-              lines: state.lines,
-              onScan: controller.scan,
-            ),
-          },
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (statusNotices.isNotEmpty)
+                StatusBanner(
+                  notices: statusNotices,
+                  settingsOpener: settingsOpener,
+                ),
+              Expanded(
+                child: switch (state) {
+                  IdleState() => _IdleView(
+                    notice: state.notice,
+                    onScan: controller.scan,
+                  ),
+                  ScanningState() => _ProgressView(
+                    message: state.progressMessage,
+                  ),
+                  ScannedState() => _ScannedView(
+                    state: state,
+                    controller: controller,
+                    settingsOpener: settingsOpener,
+                  ),
+                  ConfirmingState() => ConfirmationView(
+                    plan: state.plan,
+                    onConfirm: controller.confirmDeletion,
+                    onCancel: controller.cancelConfirmation,
+                  ),
+                  DeletingState() => const _ProgressView(message: 'Deleting…'),
+                  DeletedState() => _DeletedView(
+                    lines: state.lines,
+                    onScan: controller.scan,
+                  ),
+                },
+              ),
+            ],
+          ),
           bottomNavigationBar: state is ScannedState
               ? _SelectionBar(state: state, controller: controller)
               : null,
@@ -98,16 +121,25 @@ class _ProgressView extends StatelessWidget {
   }
 }
 
+/// The scan top to bottom; each expansion tile has a [PageStorageKey], so it
+/// keeps its open or collapsed state when the list is built again.
 class _ScannedView extends StatelessWidget {
-  const _ScannedView({required this.state, required this.controller});
+  const _ScannedView({
+    required this.state,
+    required this.controller,
+    required this.settingsOpener,
+  });
 
   final ScannedState state;
   final CleanerController controller;
+  final SettingsOpener settingsOpener;
 
   @override
   Widget build(BuildContext context) {
     final String? notice = state.notice;
-    final List<String> notesLines = state.scan.notesLines;
+    final ScannedEvent scan = state.scan;
+    final ExploreView? explore = scan.explore;
+    final SkippedView? skipped = scan.skipped;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -116,9 +148,10 @@ class _ScannedView extends StatelessWidget {
           const SizedBox(height: 12),
         ],
         Text(
-          state.scan.summaryText,
+          scan.summary.titleText,
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        for (final String line in scan.summary.lines) Text(line),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -138,19 +171,30 @@ class _ScannedView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        for (final CandidateView candidate in state.scan.candidates)
-          CandidateTile(
-            candidate: candidate,
-            isSelected: state.selectedNumbers.contains(candidate.number),
-            onToggle: () => controller.toggleCandidate(candidate.number),
+        for (final SectionView section in scan.sections)
+          SectionTile(
+            key: PageStorageKey<String>('section ${section.titleText}'),
+            section: section,
+            selectedNumbers: state.selectedNumbers,
+            onToggle: controller.toggleCandidate,
           ),
-        if (notesLines.isNotEmpty)
-          ExpansionTile(
-            title: const Text('Notes'),
-            expandedAlignment: Alignment.centerLeft,
-            children: [
-              SelectableText(notesLines.join('\n'), style: monospaceStyle),
-            ],
+        if (explore != null)
+          ExploreTile(
+            key: const PageStorageKey<String>('explore'),
+            explore: explore,
+            selectedNumbers: state.selectedNumbers,
+            onToggle: controller.toggleCandidate,
+          ),
+        if (skipped != null)
+          SkippedTile(
+            key: const PageStorageKey<String>('skipped'),
+            skipped: skipped,
+          ),
+        for (final (int index, NoticeView scanNotice) in scan.notices.indexed)
+          NoticeTile(
+            key: PageStorageKey<String>('notice $index'),
+            notice: scanNotice,
+            settingsOpener: settingsOpener,
           ),
       ],
     );

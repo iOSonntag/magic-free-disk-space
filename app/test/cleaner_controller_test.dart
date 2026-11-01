@@ -1,31 +1,85 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_bridge.dart';
+import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
 
-const ScannedEvent scannedEvent = ScannedEvent(
-  summaryText: 'Found 2 items',
-  candidates: [
-    CandidateView(
-      number: 1,
-      title: 'Tool cache',
-      path: '/Users/me/Library/Caches/ToolCache',
-      risk: Risk.safe,
-      explanation: '',
-      regeneration: '',
-      sizeText: '6.0 MiB',
-    ),
-    CandidateView(
-      number: 2,
-      title: 'Old video',
-      path: '/Users/me/Movies/holiday.mov',
-      risk: Risk.careful,
-      explanation: '',
-      regeneration: '',
-      sizeText: '3.0 MiB',
+import 'support/fake_cleaner_bridge.dart';
+
+const ItemView toolCacheItem = ItemView(
+  number: 1,
+  title: 'Tool cache',
+  risk: Risk.safe,
+  riskText: 'safe',
+  sizeText: '6.0 MiB',
+  detailLines: [
+    ItemDetailLine(
+      kind: ItemDetailLineKind.path,
+      text: '/Users/me/Library/Caches/ToolCache',
     ),
   ],
-  notesLines: [],
+);
+
+const ItemView oldVideoItem = ItemView(
+  number: 2,
+  title: 'Old video',
+  risk: Risk.careful,
+  riskText: 'careful',
+  sizeText: '3.0 MiB',
+  detailLines: [
+    ItemDetailLine(
+      kind: ItemDetailLineKind.path,
+      text: '/Users/me/Movies/holiday.mov',
+    ),
+  ],
+);
+
+/// Safe by risk, yet in Explore, so "Select safe" leaves it out.
+const ItemView simulatorItem = ItemView(
+  number: 3,
+  title: 'Simulator iPhone 15',
+  risk: Risk.safe,
+  riskText: 'safe',
+  sizeText: '1.0 MiB',
+  detailLines: [
+    ItemDetailLine(
+      kind: ItemDetailLineKind.command,
+      text: 'xcrun simctl delete 0A1B2C3D',
+    ),
+  ],
+);
+
+const ScannedEvent scannedEvent = ScannedEvent(
+  summary: SummaryView(titleText: 'Found 3 items', lines: []),
+  sections: [
+    SectionView(
+      titleText: 'Caches',
+      sizeText: '6.0 MiB',
+      isInitiallyExpanded: true,
+      items: [toolCacheItem],
+      checkGroup: null,
+    ),
+    SectionView(
+      titleText: 'Large files',
+      sizeText: '3.0 MiB',
+      isInitiallyExpanded: false,
+      items: [],
+      checkGroup: CheckGroupView(
+        titleText: 'Check before deleting',
+        items: [oldVideoItem],
+      ),
+    ),
+  ],
+  explore: ExploreView(
+    titleText: 'Explore',
+    introText: 'They are never selected for you.',
+    items: [simulatorItem],
+    adviceGroup: null,
+  ),
+  safeNumbers: [1],
+  skipped: null,
+  notices: [],
 );
 
 const PlannedEvent plannedEvent = PlannedEvent(
@@ -34,44 +88,20 @@ const PlannedEvent plannedEvent = PlannedEvent(
   warningLines: ['Type DELETE to delete them permanently.'],
 );
 
-final class FakeCleanerBridge implements CleanerBridge {
-  PlanAnswer planAnswer = plannedEvent;
-  DeleteAnswer deleteAnswer = const DeletedEvent(lines: ['Freed 6.0 MiB.']);
-  Object? scanError;
-  Object? deleteError;
-  List<int>? plannedNumbers;
-  ({int planId, String confirmation})? deleteRequest;
+const StatusEvent deniedStatus = StatusEvent(
+  fullDiskAccess: FullDiskAccess.denied,
+  notices: [
+    NoticeView(
+      titleText: 'Full Disk Access is off',
+      lines: ['A scan misses the protected folders.'],
+      settingsLink: null,
+    ),
+  ],
+);
 
-  @override
-  Future<ScanAnswer> scan({
-    required void Function(String message) onProgress,
-  }) async {
-    final Object? error = scanError;
-    if (error != null) {
-      throw error;
-    }
-    onProgress('Measuring apps…');
-    return scannedEvent;
-  }
-
-  @override
-  Future<PlanAnswer> plan(List<int> numbers) async {
-    plannedNumbers = numbers;
-    return planAnswer;
-  }
-
-  @override
-  Future<DeleteAnswer> delete({
-    required int planId,
-    required String confirmation,
-  }) async {
-    deleteRequest = (planId: planId, confirmation: confirmation);
-    final Object? error = deleteError;
-    if (error != null) {
-      throw error;
-    }
-    return deleteAnswer;
-  }
+/// Lets every answer of the fake bridge, which come as microtasks, arrive.
+Future<void> waitForAnswers() {
+  return Future<void>.delayed(Duration.zero);
 }
 
 void main() {
@@ -79,170 +109,276 @@ void main() {
   late CleanerController controller;
 
   setUp(() {
-    bridge = FakeCleanerBridge();
-    controller = CleanerController(bridge: bridge);
+    bridge = FakeCleanerBridge(scanAnswer: scannedEvent)
+      ..planAnswer = plannedEvent
+      ..deleteAnswer = const DeletedEvent(lines: ['Freed 6.0 MiB.']);
   });
 
-  Future<void> scanAndSelectSafe() async {
-    await controller.scan();
-    controller.selectSafeCandidates();
-  }
+  group('the status at start', () {
+    test('a denied status gives the banner its notices', () async {
+      bridge.answerStatus = () async => deniedStatus;
 
-  test('a scan reaches the scanned state through its progress', () async {
-    final List<String> progressMessages = [];
-    controller.addListener(() {
-      final CleanerState state = controller.state;
-      if (state is ScanningState) {
-        progressMessages.add(state.progressMessage);
-      }
+      controller = CleanerController(bridge: bridge);
+      await waitForAnswers();
+
+      expect(bridge.requestKinds, ['status']);
+      expect(controller.statusNotices, deniedStatus.notices);
+      expect((controller.state as IdleState).notice, isNull);
     });
 
-    await controller.scan();
+    for (final FullDiskAccess fullDiskAccess in [
+      FullDiskAccess.granted,
+      FullDiskAccess.unknown,
+    ]) {
+      test('a status of ${fullDiskAccess.name} shows no banner', () async {
+        bridge.answerStatus = () async =>
+            StatusEvent(fullDiskAccess: fullDiskAccess, notices: const []);
 
-    expect(progressMessages, contains('Measuring apps…'));
-    final ScannedState state = controller.state as ScannedState;
-    expect(state.scan, same(scannedEvent));
-    expect(state.selectedNumbers, isEmpty);
+        controller = CleanerController(bridge: bridge);
+        await waitForAnswers();
+
+        expect(controller.statusNotices, isEmpty);
+      });
+    }
+
+    test(
+      'a failed status shows no banner and no error, and a scan still runs',
+      () async {
+        bridge.answerStatus = () async => const FailedEvent(
+          message: 'The bridge could not read the status.',
+          isScanDropped: false,
+        );
+
+        controller = CleanerController(bridge: bridge);
+        await waitForAnswers();
+
+        expect(controller.statusNotices, isEmpty);
+        expect((controller.state as IdleState).notice, isNull);
+        await controller.scan();
+        expect(controller.state, isA<ScannedState>());
+      },
+    );
+
+    test(
+      'a status whose bridge stopped shows no banner and no error',
+      () async {
+        bridge.answerStatus = () async => throw const BridgeStoppedException(
+          exitCode: 1,
+          stderrText: 'It wrote nothing to stderr.',
+        );
+
+        controller = CleanerController(bridge: bridge);
+        await waitForAnswers();
+
+        expect(controller.statusNotices, isEmpty);
+        expect((controller.state as IdleState).notice, isNull);
+      },
+    );
+
+    test(
+      'a scan asked for while the status loads waits for it, then runs',
+      () async {
+        final Completer<StatusAnswer> pendingStatus = Completer<StatusAnswer>();
+        bridge.answerStatus = () => pendingStatus.future;
+        controller = CleanerController(bridge: bridge);
+
+        final Future<void> scan = controller.scan();
+        await waitForAnswers();
+
+        expect(bridge.requestKinds, ['status']);
+        expect(controller.state, isA<ScanningState>());
+
+        pendingStatus.complete(deniedStatus);
+        await scan;
+
+        expect(bridge.requestKinds, ['status', 'scan']);
+        expect(controller.statusNotices, deniedStatus.notices);
+        expect((controller.state as ScannedState).scan, same(scannedEvent));
+      },
+    );
+
+    test('a status that answers after dispose changes nothing', () async {
+      final Completer<StatusAnswer> pendingStatus = Completer<StatusAnswer>();
+      bridge.answerStatus = () => pendingStatus.future;
+      controller = CleanerController(bridge: bridge);
+
+      controller.dispose();
+      pendingStatus.complete(deniedStatus);
+      await waitForAnswers();
+
+      expect(controller.statusNotices, isEmpty);
+    });
   });
 
-  test('select safe selects the numbers of safe risk only', () async {
-    await scanAndSelectSafe();
+  group('over a granted status', () {
+    setUp(() {
+      controller = CleanerController(bridge: bridge);
+    });
 
-    expect((controller.state as ScannedState).selectedNumbers, {1});
-  });
+    Future<void> scanAndSelectSafe() async {
+      await controller.scan();
+      controller.selectSafeCandidates();
+    }
 
-  test('a plan waits for its confirmation, and the word deletes the plan it showed', () async {
-    await scanAndSelectSafe();
-    controller.toggleCandidate(2);
+    test('a scan reaches the scanned state through its progress', () async {
+      final List<String> progressMessages = [];
+      controller.addListener(() {
+        final CleanerState state = controller.state;
+        if (state is ScanningState) {
+          progressMessages.add(state.progressMessage);
+        }
+      });
 
-    await controller.requestPlan();
+      await controller.scan();
 
-    expect(bridge.plannedNumbers, [1, 2]);
-    expect((controller.state as ConfirmingState).plan, same(plannedEvent));
+      expect(progressMessages, contains('Measuring apps…'));
+      final ScannedState state = controller.state as ScannedState;
+      expect(state.scan, same(scannedEvent));
+      expect(state.selectedNumbers, isEmpty);
+    });
 
-    await controller.confirmDeletion('DELETE');
-
-    expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
-    expect((controller.state as DeletedState).lines, ['Freed 6.0 MiB.']);
-  });
-
-  test('a tick while the plan request is pending changes nothing', () async {
-    await scanAndSelectSafe();
-
-    final Future<void> planRequest = controller.requestPlan();
-    controller.toggleCandidate(2);
-
-    expect((controller.state as ScannedState).selectedNumbers, {1});
-    await planRequest;
-    expect(bridge.plannedNumbers, [1]);
-  });
-
-  test(
-    'cancelling the confirmation sends nothing and keeps the selection',
-    () async {
+    test('select safe selects the safe numbers of the scan, not each item of safe risk', () async {
       await scanAndSelectSafe();
+
+      expect((controller.state as ScannedState).selectedNumbers, {1});
+    });
+
+    test('a plan waits for its confirmation, and the word deletes the plan it showed', () async {
+      await scanAndSelectSafe();
+      controller.toggleCandidate(2);
+
       await controller.requestPlan();
 
-      controller.cancelConfirmation();
+      expect(bridge.plannedNumbers, [1, 2]);
+      expect((controller.state as ConfirmingState).plan, same(plannedEvent));
 
-      expect(bridge.deleteRequest, isNull);
-      final ScannedState state = controller.state as ScannedState;
-      expect(state.selectedNumbers, {1});
-      expect(state.notice, isNull);
-    },
-  );
+      await controller.confirmDeletion('DELETE');
 
-  test('cancelled keeps the list with the message of the bridge', () async {
-    bridge.deleteAnswer = const CancelledEvent(
-      message: 'Cancelled. Nothing was deleted.',
+      expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
+      expect((controller.state as DeletedState).lines, ['Freed 6.0 MiB.']);
+      expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete']);
+    });
+
+    test('a tick while the plan request is pending changes nothing', () async {
+      await scanAndSelectSafe();
+
+      final Future<void> planRequest = controller.requestPlan();
+      controller.toggleCandidate(2);
+
+      expect((controller.state as ScannedState).selectedNumbers, {1});
+      await planRequest;
+      expect(bridge.plannedNumbers, [1]);
+    });
+
+    test(
+      'cancelling the confirmation sends nothing and keeps the selection',
+      () async {
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+
+        controller.cancelConfirmation();
+
+        expect(bridge.deleteRequest, isNull);
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, {1});
+        expect(state.notice, isNull);
+      },
     );
-    await scanAndSelectSafe();
-    await controller.requestPlan();
 
-    await controller.confirmDeletion('delete');
-
-    final ScannedState state = controller.state as ScannedState;
-    expect(state.scan, same(scannedEvent));
-    expect(state.selectedNumbers, {1});
-    expect(state.notice, 'Cancelled. Nothing was deleted.');
-  });
-
-  test(
-    'nothing approved keeps the list with the lines of the bridge',
-    () async {
-      bridge.planAnswer = const NothingApprovedEvent(
-        lines: ['Nothing of the selection can be deleted.'],
+    test('cancelled keeps the list with the message of the bridge', () async {
+      bridge.deleteAnswer = const CancelledEvent(
+        message: 'Cancelled. Nothing was deleted.',
       );
       await scanAndSelectSafe();
-
       await controller.requestPlan();
+
+      await controller.confirmDeletion('delete');
+
+      final ScannedState state = controller.state as ScannedState;
+      expect(state.scan, same(scannedEvent));
+      expect(state.selectedNumbers, {1});
+      expect(state.notice, 'Cancelled. Nothing was deleted.');
+    });
+
+    test(
+      'nothing approved keeps the list with the lines of the bridge',
+      () async {
+        bridge.planAnswer = const NothingApprovedEvent(
+          lines: ['Nothing of the selection can be deleted.'],
+        );
+        await scanAndSelectSafe();
+
+        await controller.requestPlan();
+
+        expect(
+          (controller.state as ScannedState).notice,
+          'Nothing of the selection can be deleted.',
+        );
+      },
+    );
+
+    test('failed with the scan dropped goes back to idle', () async {
+      bridge.deleteAnswer = const FailedEvent(
+        message: 'The scan is older than an hour; scan again.',
+        isScanDropped: true,
+      );
+      await scanAndSelectSafe();
+      await controller.requestPlan();
+
+      await controller.confirmDeletion('DELETE');
 
       expect(
-        (controller.state as ScannedState).notice,
-        'Nothing of the selection can be deleted.',
+        (controller.state as IdleState).notice,
+        'The scan is older than an hour; scan again.',
       );
-    },
-  );
+    });
 
-  test('failed with the scan dropped goes back to idle', () async {
-    bridge.deleteAnswer = const FailedEvent(
-      message: 'The scan is older than an hour; scan again.',
-      isScanDropped: true,
-    );
-    await scanAndSelectSafe();
-    await controller.requestPlan();
+    test('failed with the scan kept keeps the list with the message', () async {
+      bridge.planAnswer = const FailedEvent(
+        message: 'No item has the number 4.',
+        isScanDropped: false,
+      );
+      await scanAndSelectSafe();
 
-    await controller.confirmDeletion('DELETE');
+      await controller.requestPlan();
 
-    expect(
-      (controller.state as IdleState).notice,
-      'The scan is older than an hour; scan again.',
-    );
-  });
+      final ScannedState state = controller.state as ScannedState;
+      expect(state.notice, 'No item has the number 4.');
+    });
 
-  test('failed with the scan kept keeps the list with the message', () async {
-    bridge.planAnswer = const FailedEvent(
-      message: 'No item has the number 4.',
-      isScanDropped: false,
-    );
-    await scanAndSelectSafe();
+    test('a request that throws goes back to idle with the error', () async {
+      bridge.scanError = const FormatException(
+        'A bridge line is not an event.',
+      );
 
-    await controller.requestPlan();
+      await controller.scan();
 
-    final ScannedState state = controller.state as ScannedState;
-    expect(state.notice, 'No item has the number 4.');
-  });
+      expect(
+        (controller.state as IdleState).notice,
+        contains('A bridge line is not an event.'),
+      );
+    });
 
-  test('a request that throws goes back to idle with the error', () async {
-    bridge.scanError = const FormatException('A bridge line is not an event.');
+    test('a deletion that throws warns that some items may be gone', () async {
+      bridge.deleteError = const FormatException('The bridge stopped.');
+      await scanAndSelectSafe();
+      await controller.requestPlan();
 
-    await controller.scan();
+      await controller.confirmDeletion('DELETE');
 
-    expect(
-      (controller.state as IdleState).notice,
-      contains('A bridge line is not an event.'),
-    );
-  });
+      final String? notice = (controller.state as IdleState).notice;
+      expect(notice, startsWith('The deletion stopped before its answer'));
+      expect(notice, contains('The bridge stopped.'));
+    });
 
-  test('a deletion that throws warns that some items may be gone', () async {
-    bridge.deleteError = const FormatException('The bridge stopped.');
-    await scanAndSelectSafe();
-    await controller.requestPlan();
+    test('an answer after dispose changes nothing', () async {
+      bridge.scanError = const FormatException('The bridge was stopped.');
 
-    await controller.confirmDeletion('DELETE');
+      final Future<void> scan = controller.scan();
+      controller.dispose();
+      await scan;
 
-    final String? notice = (controller.state as IdleState).notice;
-    expect(notice, startsWith('The deletion stopped before its answer'));
-    expect(notice, contains('The bridge stopped.'));
-  });
-
-  test('an answer after dispose changes nothing', () async {
-    bridge.scanError = const FormatException('The bridge was stopped.');
-
-    final Future<void> scan = controller.scan();
-    controller.dispose();
-    await scan;
-
-    expect(controller.state, isA<ScanningState>());
+      expect(controller.state, isA<ScanningState>());
+    });
   });
 }

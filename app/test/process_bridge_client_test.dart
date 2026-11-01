@@ -6,7 +6,8 @@ import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart';
 
 const String _scannedLine =
-    '{"kind":"scanned","summaryText":"%s","candidates":[],"notesLines":[]}';
+    '{"kind":"scanned","summary":{"titleText":"%s","lines":[]},"sections":[],'
+    '"explore":null,"safeNumbers":[],"skipped":null,"notices":[]}';
 
 void main() {
   late Directory directory;
@@ -35,8 +36,8 @@ $body
     return ProcessBridgeClient(executablePath: script.path);
   }
 
-  String buildScannedLine(String summaryText) {
-    return _scannedLine.replaceFirst('%s', summaryText);
+  String buildScannedLine(String summaryTitleText) {
+    return _scannedLine.replaceFirst('%s', summaryTitleText);
   }
 
   test('a line that is no event fails the request, and its bridge answers no later one', () async {
@@ -58,7 +59,7 @@ done
     );
     final ScanAnswer answer = await client.scan(onProgress: (String _) {});
 
-    expect((answer as ScannedEvent).summaryText, 'fresh');
+    expect((answer as ScannedEvent).summary.titleText, 'fresh');
   });
 
   test('a bridge that exits fails the request with its stderr, and the next request starts it again', () async {
@@ -106,7 +107,7 @@ done
     );
     final ScanAnswer answer = await client.scan(onProgress: (String _) {});
 
-    expect((answer as ScannedEvent).summaryText, 'fresh');
+    expect((answer as ScannedEvent).summary.titleText, 'fresh');
   });
 
   test('dispose fails the pending request', () async {
@@ -162,6 +163,24 @@ done
     final ScanAnswer answer = await client.scan(onProgress: progress.add);
 
     expect(progress, ['Measuring apps…']);
-    expect((answer as ScannedEvent).summaryText, 'done');
+    expect((answer as ScannedEvent).summary.titleText, 'done');
+  });
+
+  test('sends the status request and answers with the status event', () async {
+    client = await createClientOverScript('''
+while read -r request; do
+  if [ "\$request" = '{"kind":"status"}' ]; then
+    echo '{"kind":"status","fullDiskAccess":"granted","notices":[]}'
+  else
+    echo '{"kind":"failed","message":"Unknown request.","isScanDropped":false}'
+  fi
+done
+''');
+
+    final StatusAnswer answer = await client.status();
+
+    final StatusEvent status = answer as StatusEvent;
+    expect(status.fullDiskAccess, FullDiskAccess.granted);
+    expect(status.notices, isEmpty);
   });
 }

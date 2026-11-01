@@ -15,3 +15,7 @@ Map<String, Object> buildDeleteRequest({
 }) {
   return {'kind': 'delete', 'planId': planId, 'confirmation': confirmation};
 }
+
+Map<String, Object> buildStatusRequest() {
+  return {'kind': 'status'};
+}

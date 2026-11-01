@@ -80,6 +80,11 @@ class ProcessBridgeClient implements CleanerBridge {
     );
   }
 
+  @override
+  Future<StatusAnswer> status() {
+    return _send<StatusAnswer>(buildStatusRequest());
+  }
+
   /// Stops the bridge for good and fails a pending request with a
   /// [BridgeClientDisposedException]; a later request throws a [StateError].
   void dispose() {
