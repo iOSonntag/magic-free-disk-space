@@ -119,7 +119,14 @@ void main() {
       await tapAndSettle(tester, find.text(updateCheckItemText));
 
       expect(bridge.savedValues, [false]);
-      expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchDisabled>());
+      expect(
+        controller.updateCheckSwitch,
+        isA<UpdateCheckSwitchConfirmed>().having(
+          (confirmed) => confirmed.isEnabled,
+          'isEnabled',
+          isFalse,
+        ),
+      );
       await openMenu(tester);
       expect(findMenuItem(tester).checked, isFalse);
     });

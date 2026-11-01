@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
 import '../feedback/error_text.dart';
-import '../link/link_button.dart';
 import '../link/url_opener.dart';
+import '../notice/notice_body.dart';
 import 'update_controller.dart';
 
 /// The notice of a newer release in neutral colours, and below it why a
@@ -60,9 +60,11 @@ class _UpdateNoticeBox extends StatelessWidget {
           children: [
             Text(notice.titleText, style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
-            SelectableText(notice.lines.join('\n')),
-            const SizedBox(height: 8),
-            LinkButton(link: notice.downloadLink, urlOpener: urlOpener),
+            NoticeBody(
+              lines: notice.lines,
+              link: notice.downloadLink,
+              urlOpener: urlOpener,
+            ),
           ],
         ),
       ),

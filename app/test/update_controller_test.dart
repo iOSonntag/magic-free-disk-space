@@ -11,6 +11,14 @@ Future<void> waitForAnswers() {
   return Future<void>.delayed(Duration.zero);
 }
 
+Matcher isConfirmedSwitch({required bool isEnabled}) {
+  return isA<UpdateCheckSwitchConfirmed>().having(
+    (confirmed) => confirmed.isEnabled,
+    'isEnabled',
+    isEnabled,
+  );
+}
+
 void main() {
   final UpdateCheckedEvent sampleCheck = loadSampleEvents()
       .whereType<UpdateCheckedEvent>()
@@ -44,7 +52,7 @@ void main() {
       pendingCheck.complete(sampleCheck);
       await waitForAnswers();
 
-      expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchEnabled>());
+      expect(controller.updateCheckSwitch, isConfirmedSwitch(isEnabled: true));
       expect(controller.notice, same(sampleCheck.notice));
       expect(controller.saveFailureText, isNull);
     });
@@ -55,7 +63,7 @@ void main() {
       controller = UpdateController(bridge: bridge);
       await waitForAnswers();
 
-      expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchDisabled>());
+      expect(controller.updateCheckSwitch, isConfirmedSwitch(isEnabled: false));
       expect(controller.notice, isNull);
     });
 
@@ -111,7 +119,10 @@ void main() {
         await save;
 
         expect(bridge.savedValues, [false]);
-        expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchDisabled>());
+        expect(
+          controller.updateCheckSwitch,
+          isConfirmedSwitch(isEnabled: false),
+        );
         expect(controller.notice, same(sampleCheck.notice));
       },
     );
@@ -126,7 +137,10 @@ void main() {
 
         await controller.setUpdateCheck(false);
 
-        expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchEnabled>());
+        expect(
+          controller.updateCheckSwitch,
+          isConfirmedSwitch(isEnabled: true),
+        );
         expect(
           controller.saveFailureText,
           'The preference could not be saved.',
@@ -142,7 +156,10 @@ void main() {
 
         await controller.setUpdateCheck(false);
 
-        expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchEnabled>());
+        expect(
+          controller.updateCheckSwitch,
+          isConfirmedSwitch(isEnabled: true),
+        );
         expect(controller.saveFailureText, contains('Not an event.'));
       },
     );
@@ -156,7 +173,7 @@ void main() {
       await controller.setUpdateCheck(false);
 
       expect(controller.saveFailureText, isNull);
-      expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchDisabled>());
+      expect(controller.updateCheckSwitch, isConfirmedSwitch(isEnabled: false));
     });
 
     test('a second change while saving is ignored', () async {
@@ -178,7 +195,7 @@ void main() {
       await controller.setUpdateCheck(true);
 
       expect(bridge.savedValues, isEmpty);
-      expect(controller.updateCheckSwitch, isA<UpdateCheckSwitchEnabled>());
+      expect(controller.updateCheckSwitch, isConfirmedSwitch(isEnabled: true));
     });
   });
 
@@ -204,5 +221,6 @@ void main() {
     await waitForAnswers();
 
     expect(disposed.updateCheckSwitch, isA<UpdateCheckSwitchLoading>());
+    expect(disposed.notice, isNull);
   });
 }

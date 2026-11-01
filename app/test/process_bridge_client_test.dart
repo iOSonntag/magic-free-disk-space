@@ -90,6 +90,45 @@ done
     expect(answer, isA<NothingApprovedEvent>());
   });
 
+  test(
+    'the stderr of a stopped bridge stays out of the next bridge\'s failure',
+    () async {
+      // The stopped bridge writes its line only once the next bridge runs, and
+      // the next bridge exits only after that line was written.
+      client = await createClientOverScript('''
+marker="\$(dirname "\$0")/old-written"
+if [ "\$start" = 1 ]; then
+  trap 'sleep 0.2; echo old >&2; touch "\$marker"; kill \$! 2>/dev/null; exit 0' TERM
+  echo 'not json'
+  sleep 5 &
+  wait
+  exit 0
+fi
+read -r request
+while [ ! -f "\$marker" ]; do sleep 0.05; done
+sleep 0.2
+exit 1
+''');
+
+      final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+      final Future<StatusAnswer> status = client.status();
+
+      await expectLater(scan, throwsFormatException);
+      await expectLater(
+        status,
+        throwsA(
+          isA<BridgeStoppedException>()
+              .having((error) => error.exitCode, 'exitCode', 1)
+              .having(
+                (error) => error.stderrText,
+                'stderrText',
+                'It wrote nothing to stderr.',
+              ),
+        ),
+      );
+    },
+  );
+
   test('an answer of another request fails with a FormatException, and the next request goes to a new bridge', () async {
     client = await createClientOverScript('''
 while read -r request; do

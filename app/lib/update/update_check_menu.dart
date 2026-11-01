@@ -29,9 +29,8 @@ class UpdateCheckMenu extends StatelessWidget {
                 isChecked: updateCheckSwitch.isEnabled,
                 isEnabled: false,
               ),
-              UpdateCheckSwitchEnabled() => (isChecked: true, isEnabled: true),
-              UpdateCheckSwitchDisabled() => (
-                isChecked: false,
+              UpdateCheckSwitchConfirmed() => (
+                isChecked: updateCheckSwitch.isEnabled,
                 isEnabled: true,
               ),
             };

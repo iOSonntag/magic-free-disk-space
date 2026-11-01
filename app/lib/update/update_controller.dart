@@ -15,12 +15,11 @@ final class UpdateCheckSwitchLoading extends UpdateCheckSwitch {
   const UpdateCheckSwitchLoading();
 }
 
-final class UpdateCheckSwitchEnabled extends UpdateCheckSwitch {
-  const UpdateCheckSwitchEnabled();
-}
+/// The bridge answered the stored value.
+final class UpdateCheckSwitchConfirmed extends UpdateCheckSwitch {
+  const UpdateCheckSwitchConfirmed({required this.isEnabled});
 
-final class UpdateCheckSwitchDisabled extends UpdateCheckSwitch {
-  const UpdateCheckSwitchDisabled();
+  final bool isEnabled;
 }
 
 final class UpdateCheckSwitchSaving extends UpdateCheckSwitch {
@@ -33,12 +32,6 @@ final class UpdateCheckSwitchSaving extends UpdateCheckSwitch {
 /// The check at start threw, or the bridge is older than the update check.
 final class UpdateCheckSwitchUnavailable extends UpdateCheckSwitch {
   const UpdateCheckSwitchUnavailable();
-}
-
-UpdateCheckSwitch _buildConfirmedSwitch(bool isEnabled) {
-  return isEnabled
-      ? const UpdateCheckSwitchEnabled()
-      : const UpdateCheckSwitchDisabled();
 }
 
 class UpdateController extends ChangeNotifier {
@@ -77,16 +70,12 @@ class UpdateController extends ChangeNotifier {
           UpdateCheckSwitchSaving() ||
           UpdateCheckSwitchUnavailable():
         return;
-      case UpdateCheckSwitchEnabled():
-        if (isEnabled) {
-          return;
-        }
-      case UpdateCheckSwitchDisabled():
-        if (!isEnabled) {
+      case UpdateCheckSwitchConfirmed(isEnabled: final bool confirmedValue):
+        if (confirmedValue == isEnabled) {
           return;
         }
     }
-    _update(
+    _setShownState(
       updateCheckSwitch: UpdateCheckSwitchSaving(isEnabled: isEnabled),
       saveFailureText: null,
     );
@@ -94,21 +83,23 @@ class UpdateController extends ChangeNotifier {
     try {
       answer = await _bridge.setUpdateCheck(isEnabled);
     } catch (error) {
-      _update(
-        updateCheckSwitch: _buildConfirmedSwitch(!isEnabled),
+      _setShownState(
+        updateCheckSwitch: UpdateCheckSwitchConfirmed(isEnabled: !isEnabled),
         saveFailureText: '$error',
       );
       return;
     }
     switch (answer) {
       case UpdateCheckSetEvent():
-        _update(
-          updateCheckSwitch: _buildConfirmedSwitch(answer.isUpdateCheckEnabled),
+        _setShownState(
+          updateCheckSwitch: UpdateCheckSwitchConfirmed(
+            isEnabled: answer.isUpdateCheckEnabled,
+          ),
           saveFailureText: null,
         );
       case FailedEvent():
-        _update(
-          updateCheckSwitch: _buildConfirmedSwitch(!isEnabled),
+        _setShownState(
+          updateCheckSwitch: UpdateCheckSwitchConfirmed(isEnabled: !isEnabled),
           saveFailureText: answer.message,
         );
     }
@@ -119,7 +110,7 @@ class UpdateController extends ChangeNotifier {
     try {
       answer = await _bridge.checkUpdate();
     } catch (_) {
-      _update(
+      _setShownState(
         updateCheckSwitch: const UpdateCheckSwitchUnavailable(),
         saveFailureText: null,
       );
@@ -127,22 +118,27 @@ class UpdateController extends ChangeNotifier {
     }
     switch (answer) {
       case UpdateCheckedEvent():
-        _notice = answer.notice;
-        _update(
-          updateCheckSwitch: _buildConfirmedSwitch(answer.isUpdateCheckEnabled),
+        _setShownState(
+          updateCheckSwitch: UpdateCheckSwitchConfirmed(
+            isEnabled: answer.isUpdateCheckEnabled,
+          ),
           saveFailureText: null,
+          notice: answer.notice,
         );
       case FailedEvent():
-        _update(
+        _setShownState(
           updateCheckSwitch: const UpdateCheckSwitchUnavailable(),
           saveFailureText: null,
         );
     }
   }
 
-  void _update({
+  /// Sets what the menu and the banner show; keeps the notice unless
+  /// [notice] is given.
+  void _setShownState({
     required UpdateCheckSwitch updateCheckSwitch,
     required String? saveFailureText,
+    UpdateNoticeView? notice,
   }) {
     // An answer may come after the app that held the controller went away.
     if (_isDisposed) {
@@ -150,6 +146,7 @@ class UpdateController extends ChangeNotifier {
     }
     _switch = updateCheckSwitch;
     _saveFailureText = saveFailureText;
+    _notice = notice ?? _notice;
     notifyListeners();
   }
 }

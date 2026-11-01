@@ -206,7 +206,7 @@ class ProcessBridgeClient implements CleanerBridge, UpdateBridge {
     final Future<void> stderrDone = process.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
-        .listen(_keepStderrLine)
+        .listen((String line) => _keepStderrLine(process, line))
         .asFuture<void>();
     unawaited(_watchExit(process, stdoutDone, stderrDone));
     return process;
@@ -248,7 +248,12 @@ class ProcessBridgeClient implements CleanerBridge, UpdateBridge {
     _sendNextRequest();
   }
 
-  void _keepStderrLine(String line) {
+  /// Keeps [line] only while [process] is the current bridge, so a stopped
+  /// bridge's last lines never reach the tail of the next one.
+  void _keepStderrLine(Process process, String line) {
+    if (!identical(_process, process)) {
+      return;
+    }
     _stderrTail.add(line);
     if (_stderrTail.length > _stderrTailLength) {
       _stderrTail.removeAt(0);

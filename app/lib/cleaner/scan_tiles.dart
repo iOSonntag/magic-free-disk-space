@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../bridge/bridge_event.dart';
 import '../link/url_opener.dart';
+import '../notice/notice_body.dart';
 import 'item_tile.dart';
-import 'notice_body.dart';
 
 const EdgeInsetsGeometry _nestedChildrenPadding = EdgeInsetsDirectional.only(
   start: 16,
@@ -144,7 +144,13 @@ class NoticeTile extends StatelessWidget {
     return _StoredExpansionTile(
       title: Text(notice.titleText),
       childrenPadding: _textChildrenPadding,
-      children: [NoticeBody(notice: notice, urlOpener: urlOpener)],
+      children: [
+        NoticeBody(
+          lines: notice.lines,
+          link: notice.settingsLink,
+          urlOpener: urlOpener,
+        ),
+      ],
     );
   }
 }
