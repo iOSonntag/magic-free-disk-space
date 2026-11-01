@@ -2,26 +2,18 @@ import { describe, expect, test } from 'bun:test';
 import type { CandidateCategory, Risk } from '../../src/catalog/catalog.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice, Candidate } from '../../src/scan/candidate.js';
-import type { ScanReport } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const fullDiskAccessLine =
   '- Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
 
 const EXPLORE_INTRO =
   'Their own tools remove these, or the folder shown is deleted where a tool has no command for it. They are never selected for you; read the reasons first.';
-
-const EMPTY_REPORT: ScanReport = {
-  candidates: [],
-  safeNumbers: [],
-  advice: [],
-  skipped: [],
-  issues: [],
-};
 
 function buildCandidate(params: {
   title: string;

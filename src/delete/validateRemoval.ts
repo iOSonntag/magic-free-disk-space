@@ -1,4 +1,5 @@
 import { isAbsolute } from 'node:path';
+import type { Risk } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { Candidate } from '../scan/candidate.js';
@@ -17,6 +18,18 @@ export type RemovalDecisionRefused = { kind: 'refused'; path: string; reason: Re
 
 export type RemovalDecision = RemovalDecisionApproved | RemovalDecisionRefused;
 
+/** Whether the tool may ever remove an item of this risk; a `never` item it refuses. */
+export function isRemovableRisk(risk: Risk): boolean {
+  switch (risk) {
+    case 'safe':
+    case 'review':
+    case 'careful':
+      return true;
+    case 'never':
+      return false;
+  }
+}
+
 /**
  * Refuses a candidate marked `never`. Approves a path item or a unit's folder only when it is a
  * plain file or folder strictly inside an allowed root, is no protected folder and holds none, and
@@ -26,7 +39,7 @@ export function validateRemoval(params: {
   candidate: Candidate;
   environment: Environment;
 }): RemovalDecision {
-  if (params.candidate.risk === 'never') {
+  if (!isRemovableRisk(params.candidate.risk)) {
     return { kind: 'refused', path: params.candidate.path, reason: 'neverRisk' };
   }
 

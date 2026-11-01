@@ -5,9 +5,9 @@ import type { Candidate } from './candidate.js';
 export type ConsumerSection = 'caches' | 'developerTools' | 'apps' | 'largeFiles' | 'trash';
 
 /** `safe` items show open in their section; the others wait under "Check before deleting". */
-export type CandidateGroup = 'safe' | 'check';
+type CandidateGroup = 'safe' | 'check';
 
-export type CandidatePlaceExplore = { kind: 'explore' };
+type CandidatePlaceExplore = { kind: 'explore' };
 
 export type CandidatePlaceSection = {
   kind: 'section';

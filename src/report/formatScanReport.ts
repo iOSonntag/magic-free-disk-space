@@ -1,6 +1,4 @@
 import type { ScanReport } from '../scan/runScan.js';
-import { buildScanView } from './buildScanView.js';
-import type { NoticeView } from './noticeView.js';
 import type {
   AdviceItemView,
   CheckGroupView,
@@ -10,7 +8,9 @@ import type {
   ItemView,
   SectionView,
   SkippedView,
-} from './scanView.js';
+} from './buildScanView.js';
+import { buildScanView } from './buildScanView.js';
+import type { NoticeView } from './noticeView.js';
 
 /** What leads a detail line below its item, after the indent. */
 const detailLinePrefixes: Record<ItemDetailLineKind, string> = {
@@ -33,8 +33,8 @@ export function formatScanReport(params: { report: ScanReport }): string[] {
     ...formatListBlockLines({ titleText: view.summary.titleText, lines: view.summary.lines }),
     ...view.sections.flatMap((section) => formatSectionLines({ section: section })),
     ...formatExploreLines({ explore: view.explore }),
-    ...formatSkippedLines({ skipped: view.skipped }),
-    ...view.notices.flatMap((notice) => formatNoticeLines({ notice: notice })),
+    ...formatSeparatedBlockLines({ block: view.skipped }),
+    ...view.notices.flatMap((notice) => formatSeparatedBlockLines({ block: notice })),
   ];
 }
 
@@ -42,7 +42,7 @@ function formatSectionLines(params: { section: SectionView }): string[] {
   return [
     '',
     `${params.section.titleText} (${params.section.sizeText}):`,
-    ...params.section.items.flatMap((item) => formatItemLines({ item: item })),
+    ...params.section.items.flatMap((item) => formatNumberedItemLines({ item: item })),
     ...formatCheckGroupLines({ checkGroup: params.section.checkGroup }),
   ];
 }
@@ -54,7 +54,7 @@ function formatCheckGroupLines(params: { checkGroup: CheckGroupView | null }): s
 
   return [
     `${params.checkGroup.titleText}:`,
-    ...params.checkGroup.items.flatMap((item) => formatItemLines({ item: item })),
+    ...params.checkGroup.items.flatMap((item) => formatNumberedItemLines({ item: item })),
   ];
 }
 
@@ -68,29 +68,29 @@ function formatExploreLines(params: { explore: ExploreView | null }): string[] {
     '',
     `${params.explore.titleText}:`,
     params.explore.introText,
-    ...params.explore.items.flatMap((item) => formatItemLines({ item: item })),
+    ...params.explore.items.flatMap((item) => formatNumberedItemLines({ item: item })),
   ];
 
   if (params.explore.adviceGroup !== null) {
     lines.push(
       `${params.explore.adviceGroup.titleText}:`,
-      ...params.explore.adviceGroup.items.flatMap((item) => formatAdviceItemLines({ item: item })),
+      ...params.explore.adviceGroup.items.flatMap((item) =>
+        formatItemLines({ leadText: '-', item: item }),
+      ),
     );
   }
 
   return lines;
 }
 
-function formatItemLines(params: { item: ItemView }): string[] {
-  return [
-    `${params.item.number}. ${params.item.sizeText} [${params.item.riskText}] ${params.item.title}`,
-    ...params.item.detailLines.map((line) => formatDetailLine({ line: line })),
-  ];
+function formatNumberedItemLines(params: { item: ItemView }): string[] {
+  return formatItemLines({ leadText: `${params.item.number}.`, item: params.item });
 }
 
-function formatAdviceItemLines(params: { item: AdviceItemView }): string[] {
+/** The lead is the number of a selectable item, or `-` for an advice item. */
+function formatItemLines(params: { leadText: string; item: AdviceItemView }): string[] {
   return [
-    `- ${params.item.sizeText} [${params.item.riskText}] ${params.item.title}`,
+    `${params.leadText} ${params.item.sizeText} [${params.item.riskText}] ${params.item.title}`,
     ...params.item.detailLines.map((line) => formatDetailLine({ line: line })),
   ];
 }
@@ -99,21 +99,15 @@ function formatDetailLine(params: { line: ItemDetailLine }): string {
   return `   ${detailLinePrefixes[params.line.kind]}${params.line.text}`;
 }
 
-function formatSkippedLines(params: { skipped: SkippedView | null }): string[] {
-  if (params.skipped === null) {
+/** The skipped items or a notice: a list block after a blank line, nothing for `null`. */
+function formatSeparatedBlockLines(params: { block: SkippedView | NoticeView | null }): string[] {
+  if (params.block === null) {
     return [];
   }
 
   return [
     '',
-    ...formatListBlockLines({ titleText: params.skipped.titleText, lines: params.skipped.lines }),
-  ];
-}
-
-function formatNoticeLines(params: { notice: NoticeView }): string[] {
-  return [
-    '',
-    ...formatListBlockLines({ titleText: params.notice.titleText, lines: params.notice.lines }),
+    ...formatListBlockLines({ titleText: params.block.titleText, lines: params.block.lines }),
   ];
 }
 

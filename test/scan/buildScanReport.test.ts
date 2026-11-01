@@ -1,24 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import type { CandidateCategory, Risk } from '../../src/catalog/catalog.js';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
-
-function buildPlacedCandidate(params: {
-  path: string;
-  category: CandidateCategory;
-  risk: Risk;
-  allocatedBytes: number;
-}): Candidate {
-  return {
-    ...buildTestCandidate({
-      path: params.path,
-      risk: params.risk,
-      allocatedBytes: params.allocatedBytes,
-    }),
-    category: params.category,
-  };
-}
 
 function buildOffers(candidates: Candidate[]): CandidateDecision[] {
   return candidates.map(
@@ -87,31 +70,31 @@ describe('buildScanReport', () => {
   });
 
   test('numbers the items top to bottom across the sections, so the safe numbers follow them', () => {
-    const trashSafe = buildPlacedCandidate({
+    const trashSafe = buildTestCandidate({
       path: '/home/.Trash',
       category: 'trash',
       risk: 'safe',
       allocatedBytes: 9000,
     });
-    const appNever = buildPlacedCandidate({
+    const appNever = buildTestCandidate({
       path: '/Applications/Kept.app',
       category: 'applications',
       risk: 'never',
       allocatedBytes: 8000,
     });
-    const appSafe = buildPlacedCandidate({
+    const appSafe = buildTestCandidate({
       path: '/home/Library/Containers/gone',
       category: 'containers',
       risk: 'safe',
       allocatedBytes: 10,
     });
-    const developerReview = buildPlacedCandidate({
+    const developerReview = buildTestCandidate({
       path: '/home/project/node_modules',
       category: 'projects',
       risk: 'review',
       allocatedBytes: 7000,
     });
-    const cacheSafe = buildPlacedCandidate({
+    const cacheSafe = buildTestCandidate({
       path: '/home/Library/Caches/Tool',
       category: 'caches',
       risk: 'safe',

@@ -3,7 +3,7 @@ import type { NoticeView } from './noticeView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from './noticeView.js';
 
 /** The banner of the app: one notice while Full Disk Access is off, none when on or unknown. */
-export function formatFullDiskAccessNotices(fullDiskAccess: FullDiskAccess): NoticeView[] {
+export function buildFullDiskAccessNotices(fullDiskAccess: FullDiskAccess): NoticeView[] {
   switch (fullDiskAccess) {
     case 'granted':
     case 'unknown':

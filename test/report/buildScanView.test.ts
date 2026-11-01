@@ -1,26 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { CandidateCategory, Risk } from '../../src/catalog/catalog.js';
+import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
-import type { ScanView } from '../../src/report/scanView.js';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Advice, Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
-import { buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
 import { buildTestAbsolutePath, buildTestUdid } from '../support/parsedValueFixtures.js';
+import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
+import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const MIB = 1_048_576;
-
-const EMPTY_REPORT: ScanReport = {
-  candidates: [],
-  safeNumbers: [],
-  advice: [],
-  skipped: [],
-  issues: [],
-};
 
 const SIMULATOR_UDID = '0A1B2C3D-0000-4000-8000-000000000001';
 
@@ -34,22 +26,19 @@ function buildMatchedCandidate(params: {
   allocatedBytes: number;
   isComplete?: boolean;
 }): Candidate {
-  return {
+  const candidate = buildTestCandidate({
     path: params.path,
-    title: params.title,
     category: params.category,
     risk: params.risk,
-    origin: 'catalog',
-    explanation: params.explanation ?? 'A test item.',
-    regeneration: params.regeneration ?? 'Rebuilt by the test.',
     allocatedBytes: params.allocatedBytes,
-    entryCount: 1,
-    isComplete: params.isComplete ?? true,
-    removal: {
-      kind: 'deletePath',
-      identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
-      ownerBundlePaths: [],
-    },
+  });
+
+  return {
+    ...candidate,
+    title: params.title,
+    explanation: params.explanation ?? candidate.explanation,
+    regeneration: params.regeneration ?? candidate.regeneration,
+    isComplete: params.isComplete ?? candidate.isComplete,
   };
 }
 
@@ -118,17 +107,6 @@ function listNumbersTopToBottom(params: { view: ScanView }): number[] {
   const exploreNumbers = (params.view.explore?.items ?? []).map((item) => item.number);
 
   return [...sectionNumbers, ...exploreNumbers];
-}
-
-async function loadFixtureScannedLine(): Promise<string> {
-  const fixtureText = await readFile(join(import.meta.dir, '../bridge/bridgeEvents.jsonl'), 'utf8');
-  const scannedLine = fixtureText.split('\n').find((line) => line.includes('"kind":"scanned"'));
-
-  if (scannedLine === undefined) {
-    throw new Error('The protocol fixture has no scanned event');
-  }
-
-  return scannedLine;
 }
 
 describe('buildScanView', () => {
@@ -215,14 +193,14 @@ describe('buildScanView', () => {
         reason: 'ownerRunning' as const,
       })),
     ];
-    const fixtureLine = await loadFixtureScannedLine();
+    const fixtureEvent = await loadProtocolFixtureEventOfKind('scanned');
 
     const view = buildScanView({
       report: { ...report, skipped: skipped },
       fullDiskAccessHolder: 'app',
     });
 
-    expect({ kind: 'scanned', ...view }).toEqual(JSON.parse(fixtureLine));
+    expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
   });
 
   test('puts a section of check items only into its closed check group', () => {

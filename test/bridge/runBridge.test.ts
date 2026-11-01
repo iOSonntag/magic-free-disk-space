@@ -21,6 +21,7 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { loadProtocolFixtureEvents } from '../support/protocolFixture.js';
 
 const MIB = 1_048_576;
 const HOUR_MS = 3_600_000;
@@ -174,11 +175,7 @@ function buildDeleteLine(params: { planId: number; confirmation: string }): stri
  * from the bridge.
  */
 async function expectEventsMatchProtocolFixture(params: { events: BridgeEvent[] }): Promise<void> {
-  const fixtureText = await readFile(join(import.meta.dir, 'bridgeEvents.jsonl'), 'utf8');
-  const fixtureEvents: unknown[] = fixtureText
-    .split('\n')
-    .filter((line) => line !== '')
-    .map((line) => JSON.parse(line));
+  const fixtureEvents = await loadProtocolFixtureEvents();
   const producedKinds = new Set(params.events.map((event) => event.kind));
 
   expect([...producedKinds].toSorted()).toEqual([

@@ -1,4 +1,4 @@
-import type { CatalogEntry, Risk } from '../../src/catalog/catalog.js';
+import type { CandidateCategory, CatalogEntry, Risk } from '../../src/catalog/catalog.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
@@ -44,6 +44,7 @@ export function buildTestMeasurement(params: {
 
 export function buildTestCandidate(params: {
   path: string;
+  category?: CandidateCategory;
   risk?: Risk;
   kind?: FileKind;
   allocatedBytes?: number;
@@ -51,7 +52,7 @@ export function buildTestCandidate(params: {
   return {
     path: params.path,
     title: `Test item ${params.path}`,
-    category: 'caches',
+    category: params.category ?? 'caches',
     risk: params.risk ?? 'safe',
     origin: 'catalog',
     explanation: 'A test item.',

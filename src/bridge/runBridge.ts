@@ -5,6 +5,8 @@ import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../environment/loadEnvironment.js';
+import { buildFullDiskAccessNotices } from '../report/buildFullDiskAccessNotices.js';
+import type { ScanView } from '../report/buildScanView.js';
 import { buildScanView } from '../report/buildScanView.js';
 import {
   CANCELLED_TEXT,
@@ -15,11 +17,9 @@ import {
   formatJournalUnavailableText,
 } from '../report/formatDeletionLog.js';
 import { formatEnvironmentFailure } from '../report/formatEnvironmentFailure.js';
-import { formatFullDiskAccessNotices } from '../report/formatFullDiskAccessNotices.js';
 import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
 import { formatRemovalRun } from '../report/formatRemovalRun.js';
 import type { NoticeView } from '../report/noticeView.js';
-import type { ScanView } from '../report/scanView.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { ScanReport } from '../scan/runScan.js';
@@ -245,7 +245,7 @@ async function answerStatus(params: {
     answer: {
       kind: 'status',
       fullDiskAccess: fullDiskAccess,
-      notices: formatFullDiskAccessNotices(fullDiskAccess),
+      notices: buildFullDiskAccessNotices(fullDiskAccess),
     },
     nextState: params.state,
   };
