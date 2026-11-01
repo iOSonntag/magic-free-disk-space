@@ -4,7 +4,7 @@
 # stapled as the .app; a disk image is submitted and stapled as itself.
 #
 # The App Store Connect API key comes from the environment:
-#   APP_STORE_CONNECT_API_KEY_PATH  the path of the .p8 key file
+#   APP_STORE_CONNECT_API_KEY_P8    the text of the .p8 key file
 #   APP_STORE_CONNECT_API_KEY_ID    the key's id
 #   APP_STORE_CONNECT_ISSUER_ID     the issuer id of the team's keys
 set -euo pipefail
@@ -16,16 +16,12 @@ fi
 submitted="$1"
 stapled="$2"
 
-for name in APP_STORE_CONNECT_API_KEY_PATH APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_ISSUER_ID; do
+for name in APP_STORE_CONNECT_API_KEY_P8 APP_STORE_CONNECT_API_KEY_ID APP_STORE_CONNECT_ISSUER_ID; do
   if [[ -z "${!name:-}" ]]; then
     echo "error: $name is empty" >&2
     exit 1
   fi
 done
-if [[ ! -f "$APP_STORE_CONNECT_API_KEY_PATH" ]]; then
-  echo "error: the key file APP_STORE_CONNECT_API_KEY_PATH names does not exist" >&2
-  exit 1
-fi
 for file in "$submitted" "$stapled"; do
   if [[ ! -e "$file" ]]; then
     echo "error: $file does not exist" >&2
@@ -33,8 +29,14 @@ for file in "$submitted" "$stapled"; do
   fi
 done
 
+# notarytool reads the key only from a file, which lives no longer than this script.
+key_folder="$(mktemp -d)"
+trap 'rm -rf "$key_folder"' EXIT
+key_file="$key_folder/app-store-connect-api-key.p8"
+(umask 077 && printf '%s\n' "$APP_STORE_CONNECT_API_KEY_P8" >"$key_file")
+
 credentials=(
-  --key "$APP_STORE_CONNECT_API_KEY_PATH"
+  --key "$key_file"
   --key-id "$APP_STORE_CONNECT_API_KEY_ID"
   --issuer "$APP_STORE_CONNECT_ISSUER_ID"
 )

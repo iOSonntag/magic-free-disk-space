@@ -160,9 +160,6 @@ jobs:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          export APP_STORE_CONNECT_API_KEY_PATH="$RUNNER_TEMP/app-store-connect-api-key.p8"
-          trap 'rm -f "$APP_STORE_CONNECT_API_KEY_PATH"' EXIT
-          (umask 077 && printf '%s\n' "$APP_STORE_CONNECT_API_KEY_P8" > "$APP_STORE_CONNECT_API_KEY_PATH")
           zip="$RUNNER_TEMP/release/Magic-Free-Disk-Space-app.zip"
           mkdir -p "$(dirname "$zip")"
           ditto -c -k --keepParent "$APP_PATH" "$zip"
@@ -176,11 +173,7 @@ jobs:
           APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          export APP_STORE_CONNECT_API_KEY_PATH="$RUNNER_TEMP/app-store-connect-api-key.p8"
-          trap 'rm -f "$APP_STORE_CONNECT_API_KEY_PATH"' EXIT
-          (umask 077 && printf '%s\n' "$APP_STORE_CONNECT_API_KEY_P8" > "$APP_STORE_CONNECT_API_KEY_PATH")
-          scripts/release/notarizeAndStaple.sh "$DMG_PATH" "$DMG_PATH"
+        run: scripts/release/notarizeAndStaple.sh "$DMG_PATH" "$DMG_PATH"
 
       - name: Assess the disk image and the app inside it with Gatekeeper
         run: |
@@ -198,14 +191,13 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-      - name: Remove the keychain and the key files
+      - name: Remove the keychain and the signing files
         if: always()
         run: |
           if [[ -n "${KEYCHAIN_PATH:-}" ]]; then
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
-          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/app-store-connect-api-key.p8" \
-            "$RUNNER_TEMP/developer-id.xcconfig"
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/developer-id.xcconfig"
 
   publish:
     name: Publish the release
