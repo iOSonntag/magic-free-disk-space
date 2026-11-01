@@ -15,7 +15,7 @@ async function runCheck(params: {
 }): Promise<{ outcome: unknown; fetchCount: number }> {
   let fetchCount = 0;
   const outcome = await runUpdateCheck({
-    preferences: { isUpdateCheckEnabled: params.isUpdateCheckEnabled },
+    isUpdateCheckEnabled: params.isUpdateCheckEnabled,
     releaseVersion: params.releaseVersion,
     fetchLatestReleaseVersion: async () => {
       fetchCount += 1;
@@ -28,7 +28,7 @@ async function runCheck(params: {
 }
 
 describe('runUpdateCheck', () => {
-  test('is off without fetching when the preference is off', async () => {
+  test('is off without fetching when the check is off', async () => {
     expect(
       await runCheck({
         isUpdateCheckEnabled: false,

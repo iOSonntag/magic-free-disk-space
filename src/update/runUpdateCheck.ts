@@ -1,4 +1,3 @@
-import type { Preferences } from '../preferences/preferencesFile.js';
 import type {
   LatestReleaseFetchFailure,
   LatestReleaseFetchResult,
@@ -26,12 +25,12 @@ export type UpdateCheckOutcome =
 
 /** Fetches the latest release only when the check is on and the build has a version. */
 export async function runUpdateCheck(params: {
-  preferences: Preferences;
+  isUpdateCheckEnabled: boolean;
   releaseVersion: ReleaseVersion | null;
   /** Never throws. */
   fetchLatestReleaseVersion: () => Promise<LatestReleaseFetchResult>;
 }): Promise<UpdateCheckOutcome> {
-  if (!params.preferences.isUpdateCheckEnabled) {
+  if (!params.isUpdateCheckEnabled) {
     return { kind: 'off' };
   }
 

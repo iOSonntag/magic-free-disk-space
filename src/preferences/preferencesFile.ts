@@ -29,8 +29,7 @@ export async function loadPreferences(params: { homeDir: string }): Promise<Pref
   return parsePreferences(fileJson);
 }
 
-/** The preferences in the file's JSON object; `{}` stands for a file that holds none. */
-export function parsePreferences(fileJson: Record<string, unknown>): Preferences {
+function parsePreferences(fileJson: Record<string, unknown>): Preferences {
   const isUpdateCheckEnabled =
     typeof fileJson.isUpdateCheckEnabled === 'boolean'
       ? fileJson.isUpdateCheckEnabled

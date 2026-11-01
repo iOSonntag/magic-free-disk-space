@@ -20,6 +20,7 @@ import {
   formatJournalUnavailableText,
 } from '../report/formatDeletionLog.js';
 import { formatEnvironmentFailure } from '../report/formatEnvironmentFailure.js';
+import { formatPreferencesSaveFailure } from '../report/formatPreferencesSaveFailure.js';
 import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
 import { formatRemovalRun } from '../report/formatRemovalRun.js';
 import type { NoticeView } from '../report/noticeView.js';
@@ -254,8 +255,9 @@ async function answerCheckUpdate(params: {
   homeDir: string;
   state: BridgeState;
 }): Promise<BridgeStep> {
+  const preferences = await params.context.loadPreferences({ homeDir: params.homeDir });
   const outcome = await runUpdateCheck({
-    preferences: await params.context.loadPreferences({ homeDir: params.homeDir }),
+    isUpdateCheckEnabled: preferences.isUpdateCheckEnabled,
     releaseVersion: params.context.releaseVersion,
     fetchLatestReleaseVersion: params.context.fetchLatestReleaseVersion,
   });
@@ -263,7 +265,7 @@ async function answerCheckUpdate(params: {
   return {
     answer: {
       kind: 'updateChecked',
-      isUpdateCheckEnabled: outcome.kind !== 'off',
+      isUpdateCheckEnabled: preferences.isUpdateCheckEnabled,
       notice: buildUpdateNotice(outcome),
     },
     nextState: params.state,
@@ -284,8 +286,7 @@ async function answerSetUpdateCheck(params: {
 
   if (saved.kind === 'failed') {
     return buildFailedStep({
-      message:
-        'The setting could not be saved in the support folder of the app; it stays as it was.',
+      message: formatPreferencesSaveFailure({ failure: saved.failure }),
       nextState: params.state,
     });
   }

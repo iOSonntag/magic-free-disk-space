@@ -717,6 +717,17 @@ describe('runBridge', () => {
     expect([current, failed, off, unversioned].map((run) => run.fetchCount)).toEqual([1, 1, 0, 0]);
   });
 
+  test('answers checkUpdate with the stored switch for a development build', async () => {
+    const { events, fetchCount } = await runBridgeWithLines({
+      lines: [CHECK_UPDATE_LINE],
+      releaseVersion: null,
+      isUpdateCheckEnabled: false,
+    });
+
+    expect(events).toEqual([{ kind: 'updateChecked', isUpdateCheckEnabled: false, notice: null }]);
+    expect(fetchCount).toBe(0);
+  });
+
   test('saves the switch without fetching and answers with the saved value', async () => {
     const { events, fetchCount, preferenceHomeDirs, savedValues } = await runBridgeWithLines({
       lines: [
@@ -753,7 +764,7 @@ describe('runBridge', () => {
       {
         kind: 'failed',
         message:
-          'The setting could not be saved in the support folder of the app; it stays as it was.',
+          'Cannot write the setting file in the support folder of the app (EACCES), so the setting stays as it was.',
         effect: 'scanKept',
       },
       expect.objectContaining({ kind: 'updateChecked' }),
