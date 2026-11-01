@@ -26,6 +26,7 @@ import {
   buildSimulatorDeviceListJson,
   FIXTURE_HOME_DIR,
 } from './probeOutputFixtures.js';
+import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
 import {
   buildRuntimeEntry,
   buildRuntimeImagePath,
@@ -326,6 +327,7 @@ describe('the simulator runtime probe with a fake xcrun', () => {
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun.path }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
     });

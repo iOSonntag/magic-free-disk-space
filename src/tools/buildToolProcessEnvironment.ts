@@ -22,6 +22,7 @@ const TOOL_ENVIRONMENT_ENTRIES: Record<ToolName, Record<string, string>> = {
   brewAppleSilicon: HOMEBREW_ENVIRONMENT_ENTRIES,
   brewIntel: HOMEBREW_ENVIRONMENT_ENTRIES,
   avdmanager: {},
+  asdf: {},
 };
 
 /**

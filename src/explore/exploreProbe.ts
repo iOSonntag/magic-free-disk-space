@@ -7,6 +7,7 @@ import type {
   ExploreProbeFailure,
   ExploreProbeFindings,
 } from './exploreUnit.js';
+import type { ProjectPins } from './projectPins/projectPins.js';
 
 /**
  * What every probe gets: the processes read before any tool started, the time its commands and
@@ -41,7 +42,16 @@ export type ExploreProbeFiles = {
 /** The answer of a files probe, which may fail only by a file it could not read. */
 export type ExploreProbeFilesResult = Result<ExploreProbeFindings, ExploreFileUnreadable>;
 
-export type ExploreProbe = ExploreProbeTool | ExploreProbeFiles;
+/**
+ * A probe judged also by the pins of the projects: it is built from them once the project walk
+ * ended and they are read, and then runs as the probe it builds.
+ */
+export type ExploreProbePinned = {
+  kind: 'pinned';
+  buildProbe: (params: { projectPins: ProjectPins }) => ExploreProbeTool | ExploreProbeFiles;
+};
+
+export type ExploreProbe = ExploreProbeTool | ExploreProbeFiles | ExploreProbePinned;
 
 /** What the commands of a located tool need: its environment, and the time they must end by. */
 export type ExploreToolCommandRun = {

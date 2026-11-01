@@ -30,7 +30,12 @@ export type ExploreProbeId =
   | 'androidEmulator'
   | 'homebrewAppleSilicon'
   | 'homebrewIntel'
-  | 'vscodeExtensions';
+  | 'vscodeExtensions'
+  | 'asdfVersions'
+  | 'nvmVersions'
+  | 'androidPlatforms'
+  | 'pnpmStores'
+  | 'pnpmStoresXdg';
 
 /** Offered as the units its probe finds; the advice stands when the probe cannot run. */
 export type CatalogRemovalExplore = { kind: 'explore'; probe: ExploreProbeId; advice: string };

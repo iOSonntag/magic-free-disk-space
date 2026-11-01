@@ -187,10 +187,14 @@ async function loadIdleFindingPhase(params: {
     case 'androidAvd':
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
+    case 'asdfVersion':
       return loadToolFindingPhase({ ...params, unit: unit });
     case 'androidSystemImage':
     case 'androidEmulator':
     case 'vscodeExtension':
+    case 'nvmVersion':
+    case 'androidPlatform':
+    case 'pnpmStore':
       return loadPathFindingPhase({ ...params, unit: unit });
   }
 }

@@ -74,6 +74,7 @@ function buildToolPath(name: ToolName): string {
     case 'brewAppleSilicon':
     case 'brewIntel':
     case 'avdmanager':
+    case 'asdf':
       return join(fixtureRoot.rootDir, 'tools', name);
   }
 }
@@ -91,6 +92,7 @@ function getRecheckCommand(unit: ExploreToolUnit): ProbeCommandName {
     case 'androidAvd':
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
+    case 'asdfVersion':
       throw new Error(`These tests run no ${unit.kind} unit.`);
   }
 }

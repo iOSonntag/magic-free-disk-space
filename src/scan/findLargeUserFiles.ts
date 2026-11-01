@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
@@ -83,6 +84,7 @@ export async function findLargeUserFiles(params: {
       isStatsNeeded: true,
       maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
       isStopped: () => Date.now() >= params.deadlineMs,
+      isFolderEvicted: hasDatalessFlag,
       visitEntry: (entry): TreeEntryVisit => {
         if (
           entry.stats === null ||
@@ -107,6 +109,7 @@ export async function findLargeUserFiles(params: {
       onUnreadable: (unreadable) => {
         issues.push(...buildFailureIssues({ path: unreadable.path, failure: unreadable.failure }));
       },
+      onEvictedFolderSkipped: () => undefined,
     });
 
     if (walkEnd === 'stopped') {

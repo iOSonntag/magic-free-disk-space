@@ -7,6 +7,7 @@ import {
   loadExploreDirectoryNames,
   loadExploreEntryStats,
   loadExploreFileText,
+  loadExploreFolderNames,
   loadExploreRealPath,
 } from '../../src/explore/loadExploreRead.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -147,6 +148,58 @@ describe('loadExploreRead', () => {
         ],
       });
       expect(missing).toEqual({ kind: 'succeeded', value: null });
+    });
+  });
+
+  describe('loadExploreFolderNames', () => {
+    test('keeps folders apart from links, each sorted, and leaves out dot names and files', async () => {
+      await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '22.1.0') });
+      await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '20.11.1') });
+      await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '.hidden') });
+      await writeFile(join(fixtureRoot.homeDir, '.DS_Store'), '');
+      await writeFile(join(fixtureRoot.homeDir, 'notes.txt'), '');
+      await symlink('./22.1.0', join(fixtureRoot.homeDir, 'latest'));
+      await symlink('./20.11.1', join(fixtureRoot.homeDir, '20'));
+      await symlink('./gone', join(fixtureRoot.homeDir, '.dangling'));
+
+      const names = await loadExploreFolderNames({ path: fixtureRoot.homeDir });
+
+      expect(names).toEqual({
+        kind: 'succeeded',
+        value: { folderNames: ['20.11.1', '22.1.0'], linkNames: ['20', 'latest'] },
+      });
+    });
+
+    test('returns null for a missing folder and for a file', async () => {
+      const filePath = join(fixtureRoot.homeDir, 'file');
+      await writeFile(filePath, '');
+
+      const missing = await loadExploreFolderNames({ path: join(fixtureRoot.homeDir, 'gone') });
+      const file = await loadExploreFolderNames({ path: filePath });
+
+      expect(missing).toEqual({ kind: 'succeeded', value: null });
+      expect(file).toEqual({ kind: 'succeeded', value: null });
+    });
+
+    test('fails as fileUnreadable at its path when the folder cannot be listed', async () => {
+      const folderPath = join(fixtureRoot.homeDir, 'locked');
+      await createFixtureDirectory({ path: folderPath });
+      await chmod(folderPath, 0o000);
+
+      try {
+        const names = await loadExploreFolderNames({ path: folderPath });
+
+        expect(names).toEqual({
+          kind: 'failed',
+          failure: {
+            reason: 'fileUnreadable',
+            path: folderPath,
+            failure: { reason: 'permissionDenied', code: 'EACCES' },
+          },
+        });
+      } finally {
+        await chmod(folderPath, 0o700);
+      }
     });
   });
 

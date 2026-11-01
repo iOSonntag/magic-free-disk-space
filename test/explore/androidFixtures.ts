@@ -112,6 +112,26 @@ export async function writeAndroidEmulator(params: { homeDir: string }): Promise
   return buildTestAbsolutePath({ text: folderPath });
 }
 
+/**
+ * Writes `<sdk>/platforms/<folderName>/package.xml` naming `packagePath`, by default
+ * `platforms;<folderName>`; returns the folder.
+ */
+export async function writeAndroidPlatform(params: {
+  homeDir: string;
+  folderName: string;
+  packagePath?: string;
+}): Promise<AbsolutePath> {
+  const folderPath = join(buildAndroidSdkRoot(params), 'platforms', params.folderName);
+
+  await mkdir(folderPath, { recursive: true });
+  await writeFile(
+    join(folderPath, 'package.xml'),
+    buildAndroidPackageXml({ packagePath: params.packagePath ?? `platforms;${params.folderName}` }),
+  );
+
+  return buildTestAbsolutePath({ text: folderPath });
+}
+
 export function buildAndroidPackageXml(params: { packagePath: string }): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <ns2:repository xmlns:ns2="http://schemas.android.com/repository/android/common/02">

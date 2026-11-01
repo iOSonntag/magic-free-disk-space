@@ -1,3 +1,4 @@
+import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
@@ -40,6 +41,7 @@ export async function loadTreeActivity(params: {
     isStatsNeeded: true,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
+    isFolderEvicted: hasDatalessFlag,
     visitEntry: (entry) => {
       if (entry.stats === null || params.excludedNames.includes(entry.name)) {
         return 'skip';
@@ -62,6 +64,7 @@ export async function loadTreeActivity(params: {
     onUnreadable: () => {
       hasUnreadableEntry = true;
     },
+    onEvictedFolderSkipped: () => undefined,
   });
 
   if (hasRecentEntry) {

@@ -29,6 +29,7 @@ import {
   writeAndroidSystemImage,
 } from './androidFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
+import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -80,6 +81,7 @@ describe('startExploreProbes with the Android probes', () => {
       toolInstallLocations: buildFixtureToolLocations({ avdmanager: avdmanager }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
+      projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: 10_000,
       unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
     });

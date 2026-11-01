@@ -1,17 +1,17 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
-import type { ResultFailed } from '../result.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { compareAndroidPathUnit } from './android/compareAndroidPathUnit.js';
 import { loadAndroidSdkState } from './android/loadAndroidSdkState.js';
 import { recheckAndroidAvdUnit } from './android/recheckAndroidAvdUnit.js';
+import { recheckAndroidPlatformUnit } from './android/recheckAndroidPlatformUnit.js';
+import { recheckAsdfVersionUnit } from './asdfVersions/recheckAsdfVersionUnit.js';
 import { isDartGcSetOffered } from './dartPubCache/buildDartPubCacheFindings.js';
 import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
-import type { UnitComparison, UnitRecheck } from './decideComparisonActivity.js';
+import type { PathUnitRecheck, UnitComparison, UnitRecheck } from './decideComparisonActivity.js';
 import { decideComparisonActivity } from './decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from './exploreProbe.js';
 import type {
-  ExploreFileUnreadable,
   ExplorePathUnit,
   ExploreToolUnit,
   ExploreToolUnitDartPubCache,
@@ -22,15 +22,14 @@ import { recheckHomebrewUnit } from './homebrew/recheckHomebrewUnit.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
 import type { MisePrunableVersion } from './miseVersions/parseMisePrunableVersions.js';
 import { MISE_PRUNABLE_LIST_PROBE } from './miseVersions/parseMisePrunableVersions.js';
+import { recheckNvmVersionUnit } from './nvmVersions/recheckNvmVersionUnit.js';
+import { recheckPnpmStoreUnit } from './pnpmStores/recheckPnpmStoreUnit.js';
 import { isSimulatorDeviceOffered } from './simulatorDevices/buildSimulatorDeviceFindings.js';
 import type { SimulatorDevice } from './simulatorDevices/parseSimulatorDeviceList.js';
 import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
 import { recheckSimulatorRuntimeUnit } from './simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { compareVscodeExtensionUnit } from './vscodeExtensions/compareVscodeExtensionUnit.js';
 import { loadVscodeExtensionState } from './vscodeExtensions/loadVscodeExtensionState.js';
-
-/** A path recheck runs no command, so it has no tool failure. */
-export type PathUnitRecheck = UnitComparison | ResultFailed<ExploreFileUnreadable>;
 
 /**
  * Runs the unit's probe again with `tool`, the unit's tool as `loadTrustedTool` just returned it,
@@ -98,6 +97,8 @@ export async function recheckExploreUnit(params: {
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
       return recheckHomebrewUnit({ unit: params.unit, run: run });
+    case 'asdfVersion':
+      return recheckAsdfVersionUnit({ unit: params.unit, run: run });
   }
 }
 
@@ -138,6 +139,12 @@ export async function recheckExplorePathUnit(params: {
         processCommands: params.processCommands,
       });
     }
+    case 'nvmVersion':
+      return recheckNvmVersionUnit({ ...params, unit: params.unit });
+    case 'androidPlatform':
+      return recheckAndroidPlatformUnit({ ...params, unit: params.unit });
+    case 'pnpmStore':
+      return recheckPnpmStoreUnit({ ...params, unit: params.unit });
   }
 }
 

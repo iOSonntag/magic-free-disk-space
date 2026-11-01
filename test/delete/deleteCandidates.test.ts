@@ -36,7 +36,6 @@ import {
   OLDER_FOLDER_NAME,
   VSCODE_APP_COMMAND,
   VSCODE_FOLDER_SIZE_BYTES,
-  writeVscodeFile,
 } from '../explore/vscodeExtensionFixtures.js';
 import {
   buildTestDartToolCandidate,
@@ -49,6 +48,7 @@ import {
   deleteFixtureRoot,
   isPresent,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
@@ -845,7 +845,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
   test('leaves the folder alone once a profile lists it after the scan', async () => {
     const candidate = await scanVscodeCandidate();
 
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(
         buildVscodeProfilesPath({ homeDir: environment.homeDir }),
         FIXTURE_PROFILE_ID,

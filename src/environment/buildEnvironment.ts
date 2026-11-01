@@ -14,6 +14,8 @@ export type Environment = {
   homeDir: AbsolutePath;
   tempDir: string;
   applicationDirs: string[];
+  /** Homebrew's prefixes, Apple silicon's first, read as files by a probe that runs no `brew`. */
+  homebrewPrefixPaths: AbsolutePath[];
   /** Real paths under which a removal is allowed. */
   allowedRealRoots: string[];
   /** Real paths that are refused as a whole; their children may still go. */
@@ -33,6 +35,7 @@ export function buildEnvironment(params: {
   tempRealPath: string;
   applicationDirs: string[];
   applicationRealPaths: string[];
+  homebrewPrefixPaths: AbsolutePath[];
 }): Environment {
   return {
     platform: params.platform,
@@ -41,6 +44,7 @@ export function buildEnvironment(params: {
     homeDir: params.homeDir,
     tempDir: params.tempDir,
     applicationDirs: params.applicationDirs,
+    homebrewPrefixPaths: params.homebrewPrefixPaths,
     allowedRealRoots: [params.homeRealPath, params.tempRealPath, ...params.applicationRealPaths],
     protectedRealPaths: [
       ...PROTECTED_HOME_RELATIVE_PATHS.map((relativePath) =>

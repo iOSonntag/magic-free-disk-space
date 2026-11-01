@@ -20,6 +20,7 @@ const TOOL_LEADING_ARGUMENTS: Record<ToolName, string[]> = {
   brewAppleSilicon: [],
   brewIntel: [],
   avdmanager: [],
+  asdf: [],
 };
 
 /** The output of a run that exited with 0. */

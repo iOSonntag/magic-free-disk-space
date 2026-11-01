@@ -1,7 +1,7 @@
 import type { ResultFailed } from '../result.js';
 import type { UnitActivityFacts } from './decideUnitActivity.js';
 import { decideUnitActivity } from './decideUnitActivity.js';
-import type { ExploreProbeFailure } from './exploreUnit.js';
+import type { ExploreFileUnreadable, ExploreProbeFailure } from './exploreUnit.js';
 
 export type UnitComparisonUnchanged = { kind: 'unchanged' };
 
@@ -15,6 +15,9 @@ export type UnitComparison = UnitComparisonUnchanged | UnitComparisonChanged | U
 
 /** The answer of a tool recheck: its comparison, or the failure of its fresh probe. */
 export type UnitRecheck = UnitComparison | ResultFailed<ExploreProbeFailure>;
+
+/** A path recheck runs no command, so it has no tool failure. */
+export type PathUnitRecheck = UnitComparison | ResultFailed<ExploreFileUnreadable>;
 
 /**
  * The end of every compare once the unit is still offered: an unknown activity counts as busy, so

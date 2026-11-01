@@ -141,6 +141,7 @@ export const TOOL_INSTALL_LOCATIONS_NONE: ToolInstallLocations = {
   brewAppleSilicon: [],
   brewIntel: [],
   avdmanager: [],
+  asdf: [],
 };
 
 export function buildTestCatalogEntry(overrides: Partial<CatalogEntry>): CatalogEntry {

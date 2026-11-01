@@ -11,6 +11,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import {
   buildObsoleteVscodeUnit,
@@ -27,7 +28,6 @@ import {
   OBSOLETE_FOLDER_NAME,
   OLDER_FOLDER_NAME,
   VSCODE_APP_COMMAND,
-  writeVscodeFile,
 } from './vscodeExtensionFixtures.js';
 
 const LINKED_OLDER_FOLDER_NAME = 'pub.ext-1.0.0';
@@ -81,7 +81,7 @@ async function createLinkedVscodeInstallation(
     homeDir: environment.homeDir,
     folderNames: [LINKED_OLDER_FOLDER_NAME, LINKED_NEWER_FOLDER_NAME],
   });
-  await writeVscodeFile({
+  await writeFixtureTextFile({
     path: join(extensionsPath, 'extensions.json'),
     text: buildVscodeRegistryText({
       extensionsPath: extensionsPath,
@@ -89,7 +89,7 @@ async function createLinkedVscodeInstallation(
       form: 'current',
     }),
   });
-  await writeVscodeFile({
+  await writeFixtureTextFile({
     path: join(
       buildVscodeProfilesPath({ homeDir: environment.homeDir }),
       FIXTURE_PROFILE_ID,
@@ -147,7 +147,7 @@ describe('loadVscodeExtensionFindings', () => {
 
   test('offers a folder that is both obsolete and outdated as obsolete', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(extensionsPath, '.obsolete'),
       text: buildVscodeObsoleteText({ folderNames: [OLDER_FOLDER_NAME] }),
     });
@@ -161,7 +161,7 @@ describe('loadVscodeExtensionFindings', () => {
 
   test('never offers a folder a registry lists, matched without case', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(extensionsPath, 'extensions.json'),
       text: buildVscodeRegistryText({
         extensionsPath: extensionsPath,
@@ -177,7 +177,7 @@ describe('loadVscodeExtensionFindings', () => {
 
   test('takes an entry whose only location is a string as listing nothing, as VS Code does', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(extensionsPath, 'extensions.json'),
       text: JSON.stringify([
         { identifier: { id: 'example.alpha' }, version: '1.0.0', location: OBSOLETE_FOLDER_NAME },
@@ -202,7 +202,10 @@ describe('loadVscodeExtensionFindings', () => {
 
   test('ignores a file and a name that is no extension folder', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
-    await writeVscodeFile({ path: join(extensionsPath, 'example.alpha-0.1.0'), text: 'a file' });
+    await writeFixtureTextFile({
+      path: join(extensionsPath, 'example.alpha-0.1.0'),
+      text: 'a file',
+    });
     await createFixtureDirectory({ path: join(extensionsPath, 'example.alpha-0.2.0.vsctmp') });
 
     const probed = await loadFindings();
@@ -276,14 +279,14 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
 
   test('judges nothing when the default registry does not parse or is unfit', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(extensionsPath, 'extensions.json'),
       text: '{"not": "a list"}',
     });
 
     expect(await loadFindings()).toEqual({ findings: [], isComplete: false });
 
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(extensionsPath, 'extensions.json'),
       text: JSON.stringify([{ identifier: { id: 'example.alpha' }, version: '1.2.0' }]),
     });
@@ -312,14 +315,14 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
     const profilesPath = buildVscodeProfilesPath({ homeDir: environment.homeDir });
 
     await createFixtureDirectory({ path: join(profilesPath, 'empty-profile') });
-    await writeVscodeFile({ path: join(profilesPath, '.DS_Store'), text: 'stray' });
+    await writeFixtureTextFile({ path: join(profilesPath, '.DS_Store'), text: 'stray' });
 
     expect(await loadFindings()).toEqual(withoutProfiles);
   });
 
   test("judges nothing when a profile's registry does not parse", async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
-    await writeVscodeFile({
+    await writeFixtureTextFile({
       path: join(
         buildVscodeProfilesPath({ homeDir: environment.homeDir }),
         FIXTURE_PROFILE_ID,
@@ -343,7 +346,7 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
 
   test('still offers older versions when .obsolete does not parse, but not as complete', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
-    await writeVscodeFile({ path: join(extensionsPath, '.obsolete'), text: '["no object"]' });
+    await writeFixtureTextFile({ path: join(extensionsPath, '.obsolete'), text: '["no object"]' });
 
     const probed = await loadFindings();
 
@@ -394,7 +397,7 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
 
   test('offers no folder of an empty extensions folder', async () => {
     await createFixtureDirectory({ path: extensionsPath });
-    await writeVscodeFile({ path: join(extensionsPath, 'extensions.json'), text: '[]' });
+    await writeFixtureTextFile({ path: join(extensionsPath, 'extensions.json'), text: '[]' });
 
     expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
   });
