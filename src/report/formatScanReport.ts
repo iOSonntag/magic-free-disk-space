@@ -45,6 +45,7 @@ const skipReasonTexts: Record<SkipReason, string> = {
 };
 
 const issueReasonTexts: Record<ScanIssue['reason'], string> = {
+  privacyDenied: 'blocked by macOS privacy protection',
   permissionDenied: 'permission denied',
   unexpected: 'unexpected error',
   commandFailed: 'a system command failed',
@@ -61,6 +62,7 @@ const toolDistrustDetailTexts: Record<ToolDistrustDetail, string> = {
 
 /** Issues of a tool that could not be asked are listed apart from the places that could not be read. */
 const issueBlocks: Record<ScanIssue['reason'], 'place' | 'tool'> = {
+  privacyDenied: 'place',
   permissionDenied: 'place',
   unexpected: 'place',
   commandFailed: 'place',
@@ -299,9 +301,9 @@ function formatPlaceIssueBlock(params: {
     `Could not read ${formatCount({ count: params.issues.length, singular: 'place', plural: 'places' })}:`,
     ...params.issues.map((issue) => formatIssueLine({ issue: issue })),
   ];
-  const hasPermissionDenied = params.issues.some((issue) => issue.reason === 'permissionDenied');
+  const hasPrivacyDenied = params.issues.some((issue) => issue.reason === 'privacyDenied');
 
-  if (hasPermissionDenied) {
+  if (hasPrivacyDenied) {
     lines.push(
       `Give ${fullDiskAccessHolderTexts[params.fullDiskAccessHolder]} Full Disk Access in System Settings > Privacy & Security to scan protected folders.`,
     );
@@ -320,6 +322,7 @@ function formatIssueLine(params: { issue: ScanIssue }): string {
 /** A failed tool reads as its summary, then the first line of its stderr when it wrote one. */
 function formatIssueDetail(params: { issue: ScanIssue }): string {
   switch (params.issue.reason) {
+    case 'privacyDenied':
     case 'permissionDenied':
     case 'unexpected':
     case 'commandFailed':

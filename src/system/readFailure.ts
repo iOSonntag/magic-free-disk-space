@@ -2,8 +2,15 @@ import type { DirectoryFailure } from './loadDirectoryNames.js';
 import type { FileContentFailure } from './loadFileBytes.js';
 import type { FileFailure } from './loadFileIdentity.js';
 
-/** A read that failed for a reason a place issue reports, with the code the system gave. */
-export type ReadFailure = { reason: 'permissionDenied' | 'unexpected'; code: string };
+/**
+ * A read that failed for a reason a place issue reports, with the code the system gave.
+ * `privacyDenied` is macOS privacy protection, which Full Disk Access lifts; `permissionDenied`
+ * is a denial by the file's own permissions.
+ */
+export type ReadFailure = {
+  reason: 'privacyDenied' | 'permissionDenied' | 'unexpected';
+  code: string;
+};
 
 /** Nothing is there: the path is missing, or a part of it is no folder. */
 export type ReadFailureVerdictAbsent = { kind: 'absent' };

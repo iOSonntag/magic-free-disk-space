@@ -362,6 +362,8 @@ async function deleteUnitFolderCandidate(params: {
 
 function readFailureToOutcomeKind(failure: ReadFailure): RemovalOutcomeCodedKind {
   switch (failure.reason) {
+    // The outcome shows the code, which already tells a privacy denial from a POSIX one.
+    case 'privacyDenied':
     case 'permissionDenied':
       return 'permissionDenied';
     case 'unexpected':
