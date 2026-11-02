@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { decideReleaseTag } from '../../scripts/release/decideReleaseTag.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import type { FixtureCommandRun } from './releaseScriptFixtures.js';
 import { runFixtureCommand } from './releaseScriptFixtures.js';
 
 const decideReleaseTagPath = join(import.meta.dir, '../../scripts/release/decideReleaseTag.ts');
@@ -17,12 +18,6 @@ describe('decideReleaseTag', () => {
     }
   });
 
-  test('refuses a tag that exists on origin', () => {
-    expect(
-      decideReleaseTag({ versionText: '1.2.0', remoteTagNames: ['v1.1.0', 'v1.2.0'] }),
-    ).toEqual({ kind: 'refused', reason: 'tagExists', tag: 'v1.2.0' });
-  });
-
   test('refuses a version older than the latest release tag, ignoring other tags', () => {
     const remoteTagNames = ['v1.0.0', 'v1.2.0', 'v1.02.0', 'v1.30.0-beta', 'nightly', '9.0.0'];
 
@@ -33,7 +28,7 @@ describe('decideReleaseTag', () => {
     });
   });
 
-  test('refuses a version equal to the latest release tag as a tag that exists', () => {
+  test('refuses a tag that exists on origin, also when it is the latest', () => {
     // Only the canonical vX.Y.Z counts as a release tag, so an equal version always finds its tag.
     expect(
       decideReleaseTag({ versionText: '1.2.0', remoteTagNames: ['v1.0.0', 'v1.2.0', 'nightly'] }),
@@ -77,7 +72,7 @@ describe('the command decideReleaseTag.ts', () => {
 
   async function runDecideReleaseTagCommand(
     commandArguments: string[],
-  ): Promise<{ exitCode: number; stdoutText: string; stderrText: string }> {
+  ): Promise<FixtureCommandRun> {
     return runFixtureCommand({
       fixtureRoot: fixtureRoot,
       workingDir: fixtureRoot.rootDir,

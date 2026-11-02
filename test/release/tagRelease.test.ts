@@ -244,6 +244,19 @@ describe('tagRelease.sh', () => {
     });
   });
 
+  test('refuses a local tag that origin lacks before the confirmation', async () => {
+    await runGit({ workingDir: cloneDir, args: ['tag', 'v1.0.0'] });
+
+    const run = await runTagRelease({ args: ['1.0.0'], stdinText: 'v1.0.0\n' });
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stderrText).toContain(
+      'error: a local tag v1.0.0 exists that origin lacks; delete it with git tag --delete v1.0.0, nothing was tagged',
+    );
+    expect(run.stdoutText).not.toContain('Type v1.0.0');
+    expect(await loadTagNames(originDir)).toEqual([]);
+  });
+
   test('deletes the local tag again when origin rejects the push', async () => {
     const hookPath = join(originDir, 'hooks/pre-receive');
 

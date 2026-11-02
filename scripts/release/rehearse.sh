@@ -14,6 +14,7 @@ fi
 
 poll_attempts=12
 poll_interval_seconds=5
+watch_attempts=3
 
 repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
 if [[ ! "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
@@ -49,7 +50,8 @@ if [[ "$dispatch_output" =~ /actions/runs/([0-9]+) ]]; then
   run_id="${BASH_REMATCH[1]}"
 else
   for ((attempt = 1; attempt <= poll_attempts; attempt++)); do
-    listed_run_id="$(find_newest_dispatch_run_id)"
+    # The run exists once the dispatch succeeded, so a failed list only means it is not listed yet.
+    listed_run_id="$(find_newest_dispatch_run_id)" || listed_run_id=""
     if [[ "$listed_run_id" =~ ^[0-9]+$ && "$listed_run_id" != "$previous_run_id" ]]; then
       run_id="$listed_run_id"
       break
@@ -65,8 +67,31 @@ if [[ -z "$run_id" ]]; then
 fi
 echo "Watching run $run_id of the workflow Release"
 
-if ! gh run watch "$run_id" --repo "$repo" --exit-status; then
-  echo "error: the rehearsal run $run_id failed; its failed steps: gh run view $run_id --repo $repo --log-failed" >&2
+# gh run watch also exits non-zero when its connection to GitHub fails, so the state of the run
+# decides; a rerun of this script would start a second build.
+run_succeeded=false
+run_status=""
+for ((watch_attempt = 1; watch_attempt <= watch_attempts; watch_attempt++)); do
+  if gh run watch "$run_id" --repo "$repo" --exit-status; then
+    run_succeeded=true
+    break
+  fi
+  run_state="$(gh run view "$run_id" --repo "$repo" --json status,conclusion --jq '"\(.status) \(.conclusion)"')" || run_state="unknown"
+  run_status="${run_state%% *}"
+  if [[ "$run_state" == "completed success" ]]; then
+    run_succeeded=true
+    break
+  fi
+  if [[ "$run_status" == "completed" ]]; then
+    echo "error: the rehearsal run $run_id failed; its failed steps: gh run view $run_id --repo $repo --log-failed" >&2
+    exit 1
+  fi
+  if [[ $watch_attempt -lt $watch_attempts ]]; then
+    echo "The watch of run $run_id stopped while the run is still $run_status; watching it again"
+  fi
+done
+if [[ "$run_succeeded" != true ]]; then
+  echo "error: the run $run_id is still $run_status after $watch_attempts watches; follow it under Actions > Release or with gh run watch $run_id --repo $repo" >&2
   exit 1
 fi
 

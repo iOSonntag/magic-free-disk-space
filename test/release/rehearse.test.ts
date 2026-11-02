@@ -7,6 +7,7 @@ import {
   createFakeGh,
   loadFakeGhCalls,
   loadReleaseWorkflowContract,
+  REPO_VIEW_ARGUMENTS,
   runReleaseScript,
 } from './releaseScriptFixtures.js';
 
@@ -17,15 +18,15 @@ const REPOSITORY = 'iOSonntag/magic-free-disk-space';
 const PREVIOUS_RUN_ID = '111';
 const NEW_RUN_ID = '222';
 
-const repoViewArguments = 'repo view --json nameWithOwner --jq .nameWithOwner';
-const runListArguments = `run list --repo ${REPOSITORY} --workflow release.yml --event workflow_dispatch --branch main --limit 1 --json databaseId --jq .[0].databaseId // empty`;
-const dispatchArguments = `workflow run release.yml --repo ${REPOSITORY} --ref main`;
-const watchArguments = `run watch ${NEW_RUN_ID} --repo ${REPOSITORY} --exit-status`;
-const dispatchOutputWithUrl = `✓ Created workflow_dispatch event for release.yml at main
+const RUN_LIST_ARGUMENTS = `run list --repo ${REPOSITORY} --workflow release.yml --event workflow_dispatch --branch main --limit 1 --json databaseId --jq .[0].databaseId // empty`;
+const DISPATCH_ARGUMENTS = `workflow run release.yml --repo ${REPOSITORY} --ref main`;
+const WATCH_ARGUMENTS = `run watch ${NEW_RUN_ID} --repo ${REPOSITORY} --exit-status`;
+const VIEW_ARGUMENTS = `run view ${NEW_RUN_ID} --repo ${REPOSITORY} --json status,conclusion --jq "\\(.status) \\(.conclusion)"`;
+const DISPATCH_OUTPUT_WITH_URL = `✓ Created workflow_dispatch event for release.yml at main
 
 https://github.com/${REPOSITORY}/actions/runs/${NEW_RUN_ID}
 `;
-const dispatchOutputWithoutUrl = '✓ Created workflow_dispatch event for release.yml at main\n';
+const DISPATCH_OUTPUT_WITHOUT_URL = '✓ Created workflow_dispatch event for release.yml at main\n';
 
 describe('rehearse.sh', () => {
   let fixtureRoot: FixtureRoot;
@@ -51,20 +52,47 @@ describe('rehearse.sh', () => {
     dispatchOutputText: string;
     runListOutputTexts: [string, ...string[]];
     watchExitCode: number;
+    viewOutputText: string | null;
   }): Promise<void> {
     const answers: FakeGhAnswer[] = [
-      { argumentsText: repoViewArguments, stdoutTexts: [`${REPOSITORY}\n`], exitCode: 0 },
-      { argumentsText: runListArguments, stdoutTexts: params.runListOutputTexts, exitCode: 0 },
+      { argumentsText: REPO_VIEW_ARGUMENTS, stdoutTexts: [`${REPOSITORY}\n`], exitCode: 0 },
+      { argumentsText: RUN_LIST_ARGUMENTS, stdoutTexts: params.runListOutputTexts, exitCode: 0 },
       {
         argumentsText: params.dispatchArgumentsText,
         stdoutTexts: [params.dispatchOutputText],
         exitCode: 0,
       },
-      { argumentsText: watchArguments, stdoutTexts: [''], exitCode: params.watchExitCode },
+      { argumentsText: WATCH_ARGUMENTS, stdoutTexts: [''], exitCode: params.watchExitCode },
       { argumentsText: buildDownloadArguments(), stdoutTexts: [''], exitCode: 0 },
     ];
 
+    if (params.viewOutputText !== null) {
+      answers.push({
+        argumentsText: VIEW_ARGUMENTS,
+        stdoutTexts: [params.viewOutputText],
+        exitCode: 0,
+      });
+    }
+
     await createFakeGh({ fixtureRoot: fixtureRoot, answers: answers });
+  }
+
+  async function runInterruptedWatch(viewOutputText: string): Promise<FixtureCommandRun> {
+    await createRehearsalGh({
+      dispatchArgumentsText: DISPATCH_ARGUMENTS,
+      dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
+      runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
+      watchExitCode: 1,
+      viewOutputText: viewOutputText,
+    });
+
+    return runRehearse([]);
+  }
+
+  async function hasDownloadCall(): Promise<boolean> {
+    const callArguments = await loadCallArguments();
+
+    return callArguments.some((argumentsText) => argumentsText.startsWith('run download '));
   }
 
   async function runRehearse(args: string[]): Promise<FixtureCommandRun> {
@@ -85,66 +113,57 @@ describe('rehearse.sh', () => {
 
   test('takes the run id from the URL of the dispatch and downloads its disk image', async () => {
     await createRehearsalGh({
-      dispatchArgumentsText: `${dispatchArguments} -f version=1.2.3`,
-      dispatchOutputText: dispatchOutputWithUrl,
+      dispatchArgumentsText: `${DISPATCH_ARGUMENTS} -f version=1.2.3`,
+      dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
       runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
       watchExitCode: 0,
+      viewOutputText: null,
     });
 
     const run = await runRehearse(['1.2.3']);
 
     expect(run.exitCode).toBe(0);
-    expect(run.stdoutText).toContain(dispatchOutputWithUrl);
+    expect(run.stdoutText).toContain(DISPATCH_OUTPUT_WITH_URL);
     expect(run.stdoutText).toContain(buildDownloadDir());
     expect(await loadCallArguments()).toEqual([
-      repoViewArguments,
-      runListArguments,
-      `${dispatchArguments} -f version=1.2.3`,
-      watchArguments,
+      REPO_VIEW_ARGUMENTS,
+      RUN_LIST_ARGUMENTS,
+      `${DISPATCH_ARGUMENTS} -f version=1.2.3`,
+      WATCH_ARGUMENTS,
       buildDownloadArguments(),
     ]);
   });
 
   test('polls the run list for a new run when the dispatch prints no URL', async () => {
     await createRehearsalGh({
-      dispatchArgumentsText: dispatchArguments,
-      dispatchOutputText: dispatchOutputWithoutUrl,
+      dispatchArgumentsText: DISPATCH_ARGUMENTS,
+      dispatchOutputText: DISPATCH_OUTPUT_WITHOUT_URL,
       runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`, `${PREVIOUS_RUN_ID}\n`, `${NEW_RUN_ID}\n`],
       watchExitCode: 0,
+      viewOutputText: null,
     });
 
     const run = await runRehearse([]);
 
     expect(run.exitCode).toBe(0);
     expect(await loadCallArguments()).toEqual([
-      repoViewArguments,
-      runListArguments,
-      dispatchArguments,
-      runListArguments,
-      runListArguments,
-      watchArguments,
+      REPO_VIEW_ARGUMENTS,
+      RUN_LIST_ARGUMENTS,
+      DISPATCH_ARGUMENTS,
+      RUN_LIST_ARGUMENTS,
+      RUN_LIST_ARGUMENTS,
+      WATCH_ARGUMENTS,
       buildDownloadArguments(),
     ]);
   });
 
-  test('dispatches a given version as the input version', async () => {
-    await createRehearsalGh({
-      dispatchArgumentsText: `${dispatchArguments} -f version=1.2.3`,
-      dispatchOutputText: dispatchOutputWithUrl,
-      runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
-      watchExitCode: 0,
-    });
-
-    expect((await runRehearse(['1.2.3'])).exitCode).toBe(0);
-    expect(await loadCallArguments()).toContain(`${dispatchArguments} -f version=1.2.3`);
-  });
-
   test('dispatches no input without a version, leaving the default to the workflow', async () => {
     await createRehearsalGh({
-      dispatchArgumentsText: dispatchArguments,
-      dispatchOutputText: dispatchOutputWithUrl,
+      dispatchArgumentsText: DISPATCH_ARGUMENTS,
+      dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
       runListOutputTexts: [''],
       watchExitCode: 0,
+      viewOutputText: null,
     });
 
     expect((await runRehearse([])).exitCode).toBe(0);
@@ -153,30 +172,51 @@ describe('rehearse.sh', () => {
       argumentsText.startsWith('workflow run '),
     );
 
-    expect(dispatchCalls).toEqual([dispatchArguments]);
+    expect(dispatchCalls).toEqual([DISPATCH_ARGUMENTS]);
+  });
+
+  test('downloads the disk image when the watch fails but the run succeeded', async () => {
+    const run = await runInterruptedWatch('completed success\n');
+
+    expect(run.exitCode).toBe(0);
+    expect(await loadCallArguments()).toEqual([
+      REPO_VIEW_ARGUMENTS,
+      RUN_LIST_ARGUMENTS,
+      DISPATCH_ARGUMENTS,
+      WATCH_ARGUMENTS,
+      VIEW_ARGUMENTS,
+      buildDownloadArguments(),
+    ]);
   });
 
   test('downloads nothing when the run fails', async () => {
-    await createRehearsalGh({
-      dispatchArgumentsText: dispatchArguments,
-      dispatchOutputText: dispatchOutputWithUrl,
-      runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
-      watchExitCode: 1,
-    });
-
-    const run = await runRehearse([]);
+    const run = await runInterruptedWatch('completed failure\n');
 
     expect(run.exitCode).toBe(1);
     expect(run.stderrText).toContain(
       `error: the rehearsal run ${NEW_RUN_ID} failed; its failed steps: gh run view ${NEW_RUN_ID} --repo ${REPOSITORY} --log-failed`,
     );
+    expect(await loadCallArguments()).toContain(VIEW_ARGUMENTS);
+    expect(await hasDownloadCall()).toBe(false);
+  });
 
-    const callArguments = await loadCallArguments();
+  test('watches a run that is not completed again, three times at most', async () => {
+    const run = await runInterruptedWatch('in_progress \n');
 
-    expect(callArguments).toContain(watchArguments);
-    expect(callArguments.some((argumentsText) => argumentsText.startsWith('run download '))).toBe(
-      false,
+    expect(run.exitCode).toBe(1);
+    expect(run.stdoutText).toContain(
+      `The watch of run ${NEW_RUN_ID} stopped while the run is still in_progress; watching it again`,
     );
+    expect(run.stderrText).toContain(
+      `error: the run ${NEW_RUN_ID} is still in_progress after 3 watches; follow it under Actions > Release or with gh run watch ${NEW_RUN_ID} --repo ${REPOSITORY}`,
+    );
+
+    const watchCalls = (await loadCallArguments()).filter(
+      (argumentsText) => argumentsText === WATCH_ARGUMENTS,
+    );
+
+    expect(watchCalls.length).toBe(3);
+    expect(await hasDownloadCall()).toBe(false);
   });
 
   test('refuses more than one argument', async () => {
@@ -191,10 +231,11 @@ describe('rehearse.sh', () => {
 
   test('sends only the dispatch inputs and artifact names the workflow declares', async () => {
     await createRehearsalGh({
-      dispatchArgumentsText: `${dispatchArguments} -f version=1.2.3`,
-      dispatchOutputText: dispatchOutputWithUrl,
+      dispatchArgumentsText: `${DISPATCH_ARGUMENTS} -f version=1.2.3`,
+      dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
       runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
       watchExitCode: 0,
+      viewOutputText: null,
     });
 
     expect((await runRehearse(['1.2.3'])).exitCode).toBe(0);

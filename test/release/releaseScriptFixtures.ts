@@ -1,5 +1,6 @@
 import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isJsonObject } from '../../src/system/parseJsonValue.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { isPresent } from '../support/fixtureRoot.js';
@@ -31,6 +32,9 @@ export type ReleaseWorkflowContract = {
   uploadedArtifactNames: string[];
 };
 
+/** The arguments of the `gh` call by which a release script names the repository it works on. */
+export const REPO_VIEW_ARGUMENTS = 'repo view --json nameWithOwner --jq .nameWithOwner';
+
 const repositoryDir = join(import.meta.dir, '../..');
 const releaseScriptsDir = join(repositoryDir, 'scripts/release');
 const releaseWorkflowPath = join(repositoryDir, '.github/workflows/release.yml');
@@ -60,7 +64,7 @@ export async function runFixtureCommand(params: {
   command: string[];
   stdinText: string | null;
 }): Promise<FixtureCommandRun> {
-  const binDir = await prepareFixtureBinDir({ fixtureRoot: params.fixtureRoot });
+  const binDir = await createFixtureBinDir({ fixtureRoot: params.fixtureRoot });
   const child = Bun.spawn(params.command, {
     cwd: params.workingDir,
     env: {
@@ -107,7 +111,7 @@ export async function createFakeGh(params: {
   fixtureRoot: FixtureRoot;
   answers: FakeGhAnswer[];
 }): Promise<void> {
-  const binDir = await prepareFixtureBinDir({ fixtureRoot: params.fixtureRoot });
+  const binDir = await createFixtureBinDir({ fixtureRoot: params.fixtureRoot });
   const logDir = join(params.fixtureRoot.rootDir, 'gh-log');
   const answersDir = join(params.fixtureRoot.rootDir, 'gh-answers');
 
@@ -160,7 +164,7 @@ export async function loadReleaseWorkflowContract(): Promise<ReleaseWorkflowCont
   };
 }
 
-async function prepareFixtureBinDir(params: { fixtureRoot: FixtureRoot }): Promise<string> {
+async function createFixtureBinDir(params: { fixtureRoot: FixtureRoot }): Promise<string> {
   const binDir = join(params.fixtureRoot.rootDir, 'bin');
   const bunPath = join(binDir, 'bun');
 
@@ -249,14 +253,14 @@ function findUploadedArtifactNames(workflow: unknown): string[] {
   }
 
   return Object.values(jobs).flatMap((job) => {
-    const steps = isRecord(job) ? job.steps : null;
+    const steps = isJsonObject(job) ? job.steps : null;
 
     if (!Array.isArray(steps)) {
       return [];
     }
 
     return steps.flatMap((step: unknown) => {
-      const uses = isRecord(step) ? step.uses : null;
+      const uses = isJsonObject(step) ? step.uses : null;
       const name = readRecordField(step, 'with')?.name;
 
       if (typeof uses !== 'string' || !uses.startsWith('actions/upload-artifact@')) {
@@ -269,15 +273,11 @@ function findUploadedArtifactNames(workflow: unknown): string[] {
 }
 
 function readRecordField(value: unknown, key: string): Record<string, unknown> | null {
-  if (!isRecord(value)) {
+  if (!isJsonObject(value)) {
     return null;
   }
 
   const field = value[key];
 
-  return isRecord(field) ? field : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return isJsonObject(field) ? field : null;
 }

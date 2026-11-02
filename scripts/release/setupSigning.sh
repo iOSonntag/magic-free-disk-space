@@ -11,20 +11,22 @@
 #     password in developer-id.p12.password. Then, on the repository of the current checkout, it
 #     sets up the environment `release` with its branch and tag policies, stores the six secrets
 #     the release workflow reads, and protects the release tags with the ruleset "Release tags".
-#     Only once all of it succeeded does it delete the key and the request and move the .p8 into
-#     the folder, which then holds every secret, for the password manager. A failed step leaves
+#     Only once all of it succeeded does it move the .p8 into the folder and delete the key and the
+#     request, so the folder then holds every secret, for the password manager. A failed step leaves
 #     every file in place, so a rerun picks up from there.
 set -euo pipefail
 
-email_pattern='^[^@/[:space:]]+@[^@/[:space:]]+$'
+# ASCII alone, since `openssl req -subj` fails on other bytes and reads `\` and `/` as syntax.
+email_pattern='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$'
 apple_id_pattern='^[A-Z0-9]{10}$'
 issuer_id_pattern='^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
 repository_pattern='^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
 script="scripts/release/setupSigning.sh"
 
-print_usage() {
+exit_with_usage() {
   echo "usage: $0 request <folder> <email>" >&2
   echo "       $0 install <folder> <certificate.cer> <AuthKey_XXXXXXXXXX.p8> <key-id> <issuer-id>" >&2
+  exit 2
 }
 
 exit_with_error() {
@@ -49,17 +51,21 @@ create_signing_request() {
     exit_with_error "$parent lies inside a git work tree; name a folder outside every repository"
   fi
   if [[ ! "$email" =~ $email_pattern ]]; then
-    printf 'error: %q is not an email address\n' "$email" >&2
-    exit 1
+    exit_with_error "'$email' is not an email address of ASCII letters, digits, and ._%+-"
   fi
 
   local absolute_folder
   absolute_folder="$(cd "$parent" && pwd -P)/$(basename "$folder")"
   mkdir -m 0700 "$absolute_folder"
-  (umask 077 && openssl req -new -newkey rsa:2048 -nodes \
+  # OpenSSL 3 reads a bare `+` in -subj as the start of a second value of the same name.
+  # A folder left behind would refuse the rerun as existing.
+  if ! (umask 077 && openssl req -new -newkey rsa:2048 -nodes \
     -keyout "$absolute_folder/developer-id.key" \
     -out "$absolute_folder/developer-id.certSigningRequest" \
-    -subj "/emailAddress=$email/CN=Developer ID signing key")
+    -subj "/emailAddress=${email//+/\\+}/CN=Developer ID signing key"); then
+    rm -rf "$absolute_folder"
+    exit_with_error "openssl could not create the key and the request; $absolute_folder is removed again"
+  fi
 
   cat <<EOF
 
@@ -179,6 +185,12 @@ protect_release_on_github() {
     gh api --method POST "repos/$repo/environments/release/deployment-branch-policies" \
       -f "name=$policy_name" -f "type=$policy_type" >/dev/null
   done
+  while IFS= read -r policy; do
+    if [[ -z "$policy" || "$policy" == "branch main" || "$policy" == "tag v*" ]]; then
+      continue
+    fi
+    echo "warning: the environment release also admits $policy; its refs can read the signing secrets too. Remove it under Settings > Environments > release unless intended." >&2
+  done <<<"$policies"
 
   # Each value reaches gh on stdin; printf is a builtin, so no value lands on a process argv.
   local secret_target=(--env release --repo "$repo")
@@ -222,14 +234,15 @@ install_signing() {
   prepare_apple_material "$folder" "$certificate" "$api_key" "$key_id" "$issuer_id" "$work"
   protect_release_on_github "$folder" "$api_key" "$team_id" "$key_id" "$issuer_id"
 
-  rm -f "$folder/developer-id.key" "$folder/developer-id.certSigningRequest"
   local api_key_name api_key_folder folder_absolute
   api_key_name="$(basename "$api_key")"
   api_key_folder="$(cd "$(dirname "$api_key")" && pwd -P)"
   folder_absolute="$(cd "$folder" && pwd -P)"
+  # The .p8 moves before the key goes, so a failed move leaves what a rerun needs.
   if [[ "$api_key_folder" != "$folder_absolute" ]]; then
     mv -f "$api_key" "$folder_absolute/$api_key_name"
   fi
+  rm -f "$folder/developer-id.key" "$folder/developer-id.certSigningRequest"
 
   cat <<EOF
 
@@ -243,26 +256,22 @@ EOF
 }
 
 if [[ $# -lt 1 ]]; then
-  print_usage
-  exit 2
+  exit_with_usage
 fi
 case "$1" in
   request)
     if [[ $# -ne 3 ]]; then
-      print_usage
-      exit 2
+      exit_with_usage
     fi
     create_signing_request "$2" "$3"
     ;;
   install)
     if [[ $# -ne 6 ]]; then
-      print_usage
-      exit 2
+      exit_with_usage
     fi
     install_signing "$2" "$3" "$4" "$5" "$6"
     ;;
   *)
-    print_usage
-    exit 2
+    exit_with_usage
     ;;
 esac

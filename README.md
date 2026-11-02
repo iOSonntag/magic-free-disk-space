@@ -306,9 +306,9 @@ downloads its disk image into `~/Downloads`. The disk image also stays an artifa
 7 days. A rehearsal at `0.0.0` shows the update notice once any release exists.
 
 A release: `scripts/release/tagRelease.sh X.Y.Z` on `main`. It refuses a version with a leading
-zero, one that is not newer than the latest tag `v*` on origin, uncommitted changes, and a `main`
-that differs from origin's. It shows the commit, and once you type the tag, it pushes the
-annotated tag `vX.Y.Z`. The tag names the version, and the run number the build number. Once the
+zero, a tag that exists, a version not newer than the latest tag `v*` on origin, a checkout off
+`main`, changes to tracked files, and a `main` that differs from origin's. It shows the commit,
+and once you type the tag, it pushes the annotated tag `vX.Y.Z`. The tag names the version, and the run number the build number. Once the
 build passed, the workflow creates the GitHub release with the disk image and generated notes. A
 release is never rolled back: the next tag fixes a fault.
 

@@ -16,8 +16,6 @@ fi
 version="$1"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-top_dir="$(git rev-parse --show-toplevel)"
-cd "$top_dir"
 
 remote_refs="$(git ls-remote --tags --refs origin)"
 remote_tag_names=()
@@ -53,6 +51,11 @@ if [[ "$head_commit" != "$origin_commit" ]]; then
   fi
   exit 1
 fi
+# The decision refused a tag on origin already, so a local one is left from an interrupted run.
+if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+  echo "error: a local tag $tag exists that origin lacks; delete it with git tag --delete $tag, nothing was tagged" >&2
+  exit 1
+fi
 
 echo "Commit: $(git log -1 --format='%h %s')"
 echo "Tag:    $tag"
@@ -66,12 +69,22 @@ if [[ "$answer" != "$tag" ]]; then
   exit 1
 fi
 
+delete_interrupted_tag() {
+  git tag --delete "$tag" >/dev/null 2>&1 || true
+  echo "error: the push of $tag was interrupted; the local tag is deleted again" >&2
+  exit "$1"
+}
+
 git tag --annotate "$tag" --message "Magic Free Disk Space $version"
+# A Ctrl-C ends bash before the failure branch below runs, so the signal deletes the tag itself.
+trap 'delete_interrupted_tag 130' INT
+trap 'delete_interrupted_tag 143' TERM
 if ! git push origin "refs/tags/$tag"; then
   # A local tag left behind would make the tagging of the next attempt of this version fail.
   git tag --delete "$tag" >/dev/null
   echo "error: the push of $tag to origin failed; the local tag is deleted again, nothing was published" >&2
   exit 1
 fi
+trap - INT TERM
 
 echo "Pushed $tag. The workflow Release now builds, signs, notarizes, and publishes it (Actions > Release)."

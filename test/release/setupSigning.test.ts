@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import {
+  chmod,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { join } from 'node:path';
+import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 import type { FakeGhAnswer, FakeGhCall, FixtureCommandRun } from './releaseScriptFixtures.js';
@@ -8,6 +19,7 @@ import {
   createFakeGh,
   loadFakeGhCalls,
   loadReleaseWorkflowContract,
+  REPO_VIEW_ARGUMENTS,
   runFixtureCommand,
   runReleaseScript,
 } from './releaseScriptFixtures.js';
@@ -26,7 +38,6 @@ const ENVIRONMENT_BODY =
 const RULESET_BODY =
   '{"name":"Release tags","target":"tag","enforcement":"active","bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}],"conditions":{"ref_name":{"include":["refs/tags/v*"],"exclude":[]}},"rules":[{"type":"creation"},{"type":"update"},{"type":"deletion"}]}';
 const POLICIES_PATH = `repos/${REPOSITORY}/environments/release/deployment-branch-policies`;
-const REPO_VIEW_ARGUMENTS = 'repo view --json nameWithOwner --jq .nameWithOwner';
 const ENVIRONMENT_ARGUMENTS = `api --method PUT repos/${REPOSITORY}/environments/release --input -`;
 const POLICIES_LIST_ARGUMENTS = `api ${POLICIES_PATH} --jq .branch_policies[] | "\\(.type) \\(.name)"`;
 const BRANCH_POLICY_ARGUMENTS = `api --method POST ${POLICIES_PATH} -f name=main -f type=branch`;
@@ -48,6 +59,20 @@ type SigningFixture = {
   certificatePath: string;
   apiKeyPath: string;
 };
+
+type OpensslBuild = {
+  name: 'LibreSSL' | 'OpenSSL 3';
+  path: string;
+  /** What `pkcs12 -info` prints once the MAC verified; it exits non-zero when it does not. */
+  macVerifiedText: string;
+};
+
+// macOS ships LibreSSL; Homebrew's OpenSSL 3 comes first on a developer's PATH and parses -subj
+// and pkcs12 differently, so each test of those runs under every build the machine has.
+const opensslBuilds: OpensslBuild[] = [
+  { name: 'LibreSSL', path: '/usr/bin/openssl', macVerifiedText: 'MAC verified OK' },
+  { name: 'OpenSSL 3', path: '/opt/homebrew/bin/openssl', macVerifiedText: 'MAC: sha1' },
+];
 
 let fixtureRoot: FixtureRoot;
 
@@ -82,6 +107,14 @@ async function runOpenssl(args: string[]): Promise<string> {
   }
 
   return `${run.stdoutText}${run.stderrText}`;
+}
+
+/** Links `build` as `openssl` into the fixture's bin folder, which the fixture PATH reads first. */
+async function selectOpensslBuild(build: OpensslBuild): Promise<void> {
+  const binDir = join(fixtureRoot.rootDir, 'bin');
+
+  await mkdir(binDir, { recursive: true });
+  await symlink(build.path, join(binDir, 'openssl'));
 }
 
 function buildSecretArguments(name: string): string {
@@ -239,6 +272,56 @@ describe('setupSigning.sh request', () => {
     expect(requestText).toContain('Developer ID signing key');
   });
 
+  for (const build of opensslBuilds) {
+    test.skipIf(!existsSync(build.path))(
+      `keeps a plus in the email whole in the request (${build.name})`,
+      async () => {
+        await selectOpensslBuild(build);
+
+        const folder = join(fixtureRoot.rootDir, 'signing');
+        const run = await runSetupSigning(['request', folder, 'oliver+apple@example.com']);
+
+        expect(run.exitCode).toBe(0);
+
+        const requestText = await runOpenssl([
+          'req',
+          '-in',
+          join(folder, 'developer-id.certSigningRequest'),
+          '-noout',
+          '-subject',
+        ]);
+
+        expect(requestText).toContain('oliver+apple@example.com');
+        expect(requestText).toContain('Developer ID signing key');
+      },
+    );
+  }
+
+  test('refuses an email beyond ASCII before it creates the folder', async () => {
+    const folder = join(fixtureRoot.rootDir, 'signing');
+    const run = await runSetupSigning(['request', folder, 'jürgen@example.com']);
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stderrText).toContain('error:');
+    expect(await isPresent(folder)).toBe(false);
+  });
+
+  test('removes the folder again when openssl fails', async () => {
+    const folder = join(fixtureRoot.rootDir, 'signing');
+
+    await createFakeTool({
+      folder: join(fixtureRoot.rootDir, 'bin'),
+      name: 'openssl',
+      body: 'exit 1',
+    });
+
+    const run = await runSetupSigning(['request', folder, 'oliver@example.com']);
+
+    expect(run.exitCode).toBe(1);
+    expect(run.stderrText).toContain('error: openssl could not create the key and the request');
+    expect(await isPresent(folder)).toBe(false);
+  });
+
   test('refuses a folder that exists', async () => {
     const folder = join(fixtureRoot.rootDir, 'signing');
 
@@ -288,7 +371,7 @@ describe('setupSigning.sh request', () => {
 });
 
 describe('setupSigning.sh install', () => {
-  test('a first run builds the p12, protects the releases, and leaves only the secrets', async () => {
+  async function expectFirstRunSetsUpSigning(build: OpensslBuild): Promise<void> {
     const fixture = await createSigningFixture({ subject: DEVELOPER_ID_SUBJECT });
 
     await createFakeGh({
@@ -348,7 +431,7 @@ describe('setupSigning.sh install', () => {
       decodedP12Path,
     ]);
 
-    expect(p12InfoText).toContain('MAC verified OK');
+    expect(p12InfoText).toContain(build.macVerifiedText);
     expect(p12InfoText).toContain('pbeWithSHA1And3-KeyTripleDES-CBC');
     expect(p12StructureText).toMatch(/OBJECT\s+:sha1\s*$/m);
 
@@ -374,15 +457,25 @@ describe('setupSigning.sh install', () => {
     expect(await loadModeBits(join(fixture.folder, 'developer-id.p12.password'))).toBe(0o600);
     expect(await isPresent(fixture.apiKeyPath)).toBe(false);
     expect(await isPresent(fixture.certificatePath)).toBe(true);
-  });
+  }
 
-  test('a rerun keeps the listed policies and updates the ruleset', async () => {
+  for (const build of opensslBuilds) {
+    test.skipIf(!existsSync(build.path))(
+      `a first run builds the p12, protects the releases, and leaves only the secrets (${build.name})`,
+      async () => {
+        await selectOpensslBuild(build);
+        await expectFirstRunSetsUpSigning(build);
+      },
+    );
+  }
+
+  test('a rerun keeps the listed policies, warns of any other, and updates the ruleset', async () => {
     const fixture = await createSigningFixture({ subject: DEVELOPER_ID_SUBJECT });
 
     await createFakeGh({
       fixtureRoot: fixtureRoot,
       answers: buildGhAnswers({
-        policiesText: 'branch main\ntag v*\n',
+        policiesText: 'branch main\ntag v*\nbranch develop\n',
         rulesetIdText: '42\n',
         failingSecretName: null,
       }),
@@ -391,15 +484,45 @@ describe('setupSigning.sh install', () => {
     const run = await runInstall({ fixture: fixture, keyId: KEY_ID, issuerId: ISSUER_ID });
 
     expect(run.exitCode).toBe(0);
+    expect(run.stderrText).toContain(
+      'warning: the environment release also admits branch develop; its refs can read the signing secrets too',
+    );
+    expect(run.stderrText).not.toContain('admits branch main');
+    expect(run.stderrText).not.toContain('admits tag v*');
 
     const calls = await loadFakeGhCalls({ fixtureRoot: fixtureRoot });
     const argumentTexts = calls.map((call) => call.argumentsText);
 
     expect(argumentTexts).not.toContain(BRANCH_POLICY_ARGUMENTS);
     expect(argumentTexts).not.toContain(TAG_POLICY_ARGUMENTS);
+    expect(
+      argumentTexts.filter((text) => text.startsWith(`api --method POST ${POLICIES_PATH}`)),
+    ).toEqual([]);
     expect(argumentTexts).not.toContain(RULESET_POST_ARGUMENTS);
     expect(argumentTexts.at(-1)).toBe(RULESET_PUT_ARGUMENTS);
     expect(calls.at(-1)?.stdinText).toBe(RULESET_BODY);
+  });
+
+  test('a failed move of the .p8 keeps the key, the request, and the .p8 in place', async () => {
+    const fixture = await createSigningFixture({ subject: DEVELOPER_ID_SUBJECT });
+    const downloadsDir = join(fixtureRoot.rootDir, 'downloads');
+
+    await createFakeGh({
+      fixtureRoot: fixtureRoot,
+      answers: buildGhAnswers({ policiesText: '', rulesetIdText: '', failingSecretName: null }),
+    });
+    await chmod(downloadsDir, 0o555);
+
+    try {
+      const run = await runInstall({ fixture: fixture, keyId: KEY_ID, issuerId: ISSUER_ID });
+
+      expect(run.exitCode).not.toBe(0);
+    } finally {
+      await chmod(downloadsDir, 0o755);
+    }
+
+    await expectRequestKept(fixture.folder);
+    expect(await isPresent(fixture.apiKeyPath)).toBe(true);
   });
 
   test('a failed gh call keeps the key, the request, and the .p8 in place', async () => {
