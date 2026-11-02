@@ -21,7 +21,7 @@ const NEW_RUN_ID = '222';
 const RUN_LIST_ARGUMENTS = `run list --repo ${REPOSITORY} --workflow release.yml --event workflow_dispatch --branch main --limit 1 --json databaseId --jq .[0].databaseId // empty`;
 const DISPATCH_ARGUMENTS = `workflow run release.yml --repo ${REPOSITORY} --ref main`;
 const WATCH_ARGUMENTS = `run watch ${NEW_RUN_ID} --repo ${REPOSITORY} --exit-status`;
-const VIEW_ARGUMENTS = `run view ${NEW_RUN_ID} --repo ${REPOSITORY} --json status,conclusion --jq "\\(.status) \\(.conclusion)"`;
+const RUN_STATE_ARGUMENTS = `run view ${NEW_RUN_ID} --repo ${REPOSITORY} --json status,conclusion --jq "\\(.status) \\(.conclusion)"`;
 const DISPATCH_OUTPUT_WITH_URL = `✓ Created workflow_dispatch event for release.yml at main
 
 https://github.com/${REPOSITORY}/actions/runs/${NEW_RUN_ID}
@@ -51,8 +51,8 @@ describe('rehearse.sh', () => {
     dispatchArgumentsText: string;
     dispatchOutputText: string;
     runListOutputTexts: [string, ...string[]];
-    watchExitCode: number;
-    viewOutputText: string | null;
+    /** What `gh run view` answers after a failed watch; `null` when the watch succeeds. */
+    runStateText: string | null;
   }): Promise<void> {
     const answers: FakeGhAnswer[] = [
       { argumentsText: REPO_VIEW_ARGUMENTS, stdoutTexts: [`${REPOSITORY}\n`], exitCode: 0 },
@@ -62,14 +62,18 @@ describe('rehearse.sh', () => {
         stdoutTexts: [params.dispatchOutputText],
         exitCode: 0,
       },
-      { argumentsText: WATCH_ARGUMENTS, stdoutTexts: [''], exitCode: params.watchExitCode },
+      {
+        argumentsText: WATCH_ARGUMENTS,
+        stdoutTexts: [''],
+        exitCode: params.runStateText === null ? 0 : 1,
+      },
       { argumentsText: buildDownloadArguments(), stdoutTexts: [''], exitCode: 0 },
     ];
 
-    if (params.viewOutputText !== null) {
+    if (params.runStateText !== null) {
       answers.push({
-        argumentsText: VIEW_ARGUMENTS,
-        stdoutTexts: [params.viewOutputText],
+        argumentsText: RUN_STATE_ARGUMENTS,
+        stdoutTexts: [params.runStateText],
         exitCode: 0,
       });
     }
@@ -77,13 +81,12 @@ describe('rehearse.sh', () => {
     await createFakeGh({ fixtureRoot: fixtureRoot, answers: answers });
   }
 
-  async function runInterruptedWatch(viewOutputText: string): Promise<FixtureCommandRun> {
+  async function runInterruptedWatch(runStateText: string): Promise<FixtureCommandRun> {
     await createRehearsalGh({
       dispatchArgumentsText: DISPATCH_ARGUMENTS,
       dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
       runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
-      watchExitCode: 1,
-      viewOutputText: viewOutputText,
+      runStateText: runStateText,
     });
 
     return runRehearse([]);
@@ -116,8 +119,7 @@ describe('rehearse.sh', () => {
       dispatchArgumentsText: `${DISPATCH_ARGUMENTS} -f version=1.2.3`,
       dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
       runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
-      watchExitCode: 0,
-      viewOutputText: null,
+      runStateText: null,
     });
 
     const run = await runRehearse(['1.2.3']);
@@ -139,8 +141,7 @@ describe('rehearse.sh', () => {
       dispatchArgumentsText: DISPATCH_ARGUMENTS,
       dispatchOutputText: DISPATCH_OUTPUT_WITHOUT_URL,
       runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`, `${PREVIOUS_RUN_ID}\n`, `${NEW_RUN_ID}\n`],
-      watchExitCode: 0,
-      viewOutputText: null,
+      runStateText: null,
     });
 
     const run = await runRehearse([]);
@@ -162,8 +163,7 @@ describe('rehearse.sh', () => {
       dispatchArgumentsText: DISPATCH_ARGUMENTS,
       dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
       runListOutputTexts: [''],
-      watchExitCode: 0,
-      viewOutputText: null,
+      runStateText: null,
     });
 
     expect((await runRehearse([])).exitCode).toBe(0);
@@ -184,7 +184,7 @@ describe('rehearse.sh', () => {
       RUN_LIST_ARGUMENTS,
       DISPATCH_ARGUMENTS,
       WATCH_ARGUMENTS,
-      VIEW_ARGUMENTS,
+      RUN_STATE_ARGUMENTS,
       buildDownloadArguments(),
     ]);
   });
@@ -196,7 +196,7 @@ describe('rehearse.sh', () => {
     expect(run.stderrText).toContain(
       `error: the rehearsal run ${NEW_RUN_ID} failed; its failed steps: gh run view ${NEW_RUN_ID} --repo ${REPOSITORY} --log-failed`,
     );
-    expect(await loadCallArguments()).toContain(VIEW_ARGUMENTS);
+    expect(await loadCallArguments()).toContain(RUN_STATE_ARGUMENTS);
     expect(await hasDownloadCall()).toBe(false);
   });
 
@@ -234,8 +234,7 @@ describe('rehearse.sh', () => {
       dispatchArgumentsText: `${DISPATCH_ARGUMENTS} -f version=1.2.3`,
       dispatchOutputText: DISPATCH_OUTPUT_WITH_URL,
       runListOutputTexts: [`${PREVIOUS_RUN_ID}\n`],
-      watchExitCode: 0,
-      viewOutputText: null,
+      runStateText: null,
     });
 
     expect((await runRehearse(['1.2.3'])).exitCode).toBe(0);

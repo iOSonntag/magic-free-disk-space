@@ -17,6 +17,7 @@ import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixt
 import type { FakeGhAnswer, FakeGhCall, FixtureCommandRun } from './releaseScriptFixtures.js';
 import {
   createFakeGh,
+  createFixtureBinDir,
   loadFakeGhCalls,
   loadReleaseWorkflowContract,
   REPO_VIEW_ARGUMENTS,
@@ -109,11 +110,9 @@ async function runOpenssl(args: string[]): Promise<string> {
   return `${run.stdoutText}${run.stderrText}`;
 }
 
-/** Links `build` as `openssl` into the fixture's bin folder, which the fixture PATH reads first. */
-async function selectOpensslBuild(build: OpensslBuild): Promise<void> {
-  const binDir = join(fixtureRoot.rootDir, 'bin');
+async function createOpensslLink(build: OpensslBuild): Promise<void> {
+  const binDir = await createFixtureBinDir({ fixtureRoot: fixtureRoot });
 
-  await mkdir(binDir, { recursive: true });
   await symlink(build.path, join(binDir, 'openssl'));
 }
 
@@ -276,7 +275,7 @@ describe('setupSigning.sh request', () => {
     test.skipIf(!existsSync(build.path))(
       `keeps a plus in the email whole in the request (${build.name})`,
       async () => {
-        await selectOpensslBuild(build);
+        await createOpensslLink(build);
 
         const folder = join(fixtureRoot.rootDir, 'signing');
         const run = await runSetupSigning(['request', folder, 'oliver+apple@example.com']);
@@ -310,7 +309,7 @@ describe('setupSigning.sh request', () => {
     const folder = join(fixtureRoot.rootDir, 'signing');
 
     await createFakeTool({
-      folder: join(fixtureRoot.rootDir, 'bin'),
+      folder: await createFixtureBinDir({ fixtureRoot: fixtureRoot }),
       name: 'openssl',
       body: 'exit 1',
     });
@@ -463,7 +462,7 @@ describe('setupSigning.sh install', () => {
     test.skipIf(!existsSync(build.path))(
       `a first run builds the p12, protects the releases, and leaves only the secrets (${build.name})`,
       async () => {
-        await selectOpensslBuild(build);
+        await createOpensslLink(build);
         await expectFirstRunSetsUpSigning(build);
       },
     );
@@ -493,8 +492,6 @@ describe('setupSigning.sh install', () => {
     const calls = await loadFakeGhCalls({ fixtureRoot: fixtureRoot });
     const argumentTexts = calls.map((call) => call.argumentsText);
 
-    expect(argumentTexts).not.toContain(BRANCH_POLICY_ARGUMENTS);
-    expect(argumentTexts).not.toContain(TAG_POLICY_ARGUMENTS);
     expect(
       argumentTexts.filter((text) => text.startsWith(`api --method POST ${POLICIES_PATH}`)),
     ).toEqual([]);

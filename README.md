@@ -308,9 +308,10 @@ downloads its disk image into `~/Downloads`. The disk image also stays an artifa
 A release: `scripts/release/tagRelease.sh X.Y.Z` on `main`. It refuses a version with a leading
 zero, a tag that exists, a version not newer than the latest tag `v*` on origin, a checkout off
 `main`, changes to tracked files, and a `main` that differs from origin's. It shows the commit,
-and once you type the tag, it pushes the annotated tag `vX.Y.Z`. The tag names the version, and the run number the build number. Once the
-build passed, the workflow creates the GitHub release with the disk image and generated notes. A
-release is never rolled back: the next tag fixes a fault.
+and once you type the tag, it pushes the annotated tag `vX.Y.Z`. The tag names the version, and
+the run number the build number. Once the build passed, the workflow creates the GitHub release
+with the disk image and generated notes. A release is never rolled back: the next tag fixes a
+fault.
 
 Check the first releases once on a Mac that is not your development Mac: install the disk image
 of one published tag, grant Full Disk Access, and see that the app opens with no warning from

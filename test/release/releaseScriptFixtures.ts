@@ -164,7 +164,11 @@ export async function loadReleaseWorkflowContract(): Promise<ReleaseWorkflowCont
   };
 }
 
-async function createFixtureBinDir(params: { fixtureRoot: FixtureRoot }): Promise<string> {
+/**
+ * Creates the fixture's bin folder, which the fixture PATH reads first, with `bun` linked into it,
+ * and returns its path; a tool a test writes there shadows the system one.
+ */
+export async function createFixtureBinDir(params: { fixtureRoot: FixtureRoot }): Promise<string> {
   const binDir = join(params.fixtureRoot.rootDir, 'bin');
   const bunPath = join(binDir, 'bun');
 

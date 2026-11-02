@@ -69,31 +69,25 @@ echo "Watching run $run_id of the workflow Release"
 
 # gh run watch also exits non-zero when its connection to GitHub fails, so the state of the run
 # decides; a rerun of this script would start a second build.
-run_succeeded=false
-run_status=""
 for ((watch_attempt = 1; watch_attempt <= watch_attempts; watch_attempt++)); do
   if gh run watch "$run_id" --repo "$repo" --exit-status; then
-    run_succeeded=true
     break
   fi
   run_state="$(gh run view "$run_id" --repo "$repo" --json status,conclusion --jq '"\(.status) \(.conclusion)"')" || run_state="unknown"
   run_status="${run_state%% *}"
   if [[ "$run_state" == "completed success" ]]; then
-    run_succeeded=true
     break
   fi
   if [[ "$run_status" == "completed" ]]; then
     echo "error: the rehearsal run $run_id failed; its failed steps: gh run view $run_id --repo $repo --log-failed" >&2
     exit 1
   fi
-  if [[ $watch_attempt -lt $watch_attempts ]]; then
-    echo "The watch of run $run_id stopped while the run is still $run_status; watching it again"
+  if [[ $watch_attempt -eq $watch_attempts ]]; then
+    echo "error: the run $run_id is still $run_status after $watch_attempts watches; follow it under Actions > Release or with gh run watch $run_id --repo $repo" >&2
+    exit 1
   fi
+  echo "The watch of run $run_id stopped while the run is still $run_status; watching it again"
 done
-if [[ "$run_succeeded" != true ]]; then
-  echo "error: the run $run_id is still $run_status after $watch_attempts watches; follow it under Actions > Release or with gh run watch $run_id --repo $repo" >&2
-  exit 1
-fi
 
 download_dir="$HOME/Downloads/magic-free-disk-space-rehearsal-$run_id"
 gh run download "$run_id" --repo "$repo" --name dmg --dir "$download_dir"

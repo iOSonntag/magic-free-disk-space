@@ -173,20 +173,22 @@ protect_release_on_github() {
   printf '%s' '{"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' |
     gh api --method PUT "repos/$repo/environments/release" --input - >/dev/null
 
+  local release_policies=$'branch main\ntag v*'
   local policies policy policy_type policy_name
   policies="$(gh api "repos/$repo/environments/release/deployment-branch-policies" \
     --jq '.branch_policies[] | "\(.type) \(.name)"')"
-  for policy in "branch main" "tag v*"; do
+  while IFS= read -r policy; do
     if grep -qxF -- "$policy" <<<"$policies"; then
       continue
     fi
     policy_type="${policy%% *}"
     policy_name="${policy#* }"
+    # The loop feeds its own stdin, which gh must not read.
     gh api --method POST "repos/$repo/environments/release/deployment-branch-policies" \
-      -f "name=$policy_name" -f "type=$policy_type" >/dev/null
-  done
+      -f "name=$policy_name" -f "type=$policy_type" >/dev/null </dev/null
+  done <<<"$release_policies"
   while IFS= read -r policy; do
-    if [[ -z "$policy" || "$policy" == "branch main" || "$policy" == "tag v*" ]]; then
+    if [[ -z "$policy" ]] || grep -qxF -- "$policy" <<<"$release_policies"; then
       continue
     fi
     echo "warning: the environment release also admits $policy; its refs can read the signing secrets too. Remove it under Settings > Environments > release unless intended." >&2

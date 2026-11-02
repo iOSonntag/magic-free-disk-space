@@ -69,16 +69,26 @@ if [[ "$answer" != "$tag" ]]; then
   exit 1
 fi
 
-delete_interrupted_tag() {
-  git tag --delete "$tag" >/dev/null 2>&1 || true
-  echo "error: the push of $tag was interrupted; the local tag is deleted again" >&2
+# Bash runs the trap once git push has ended, which may be after origin took the tag. git
+# ls-remote --exit-code exits 2 when origin lacks the ref, and any other failure means no answer.
+settle_interrupted_push() {
+  local remote_exit_code=0
+  git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null 2>&1 || remote_exit_code=$?
+  if [[ $remote_exit_code -eq 0 ]]; then
+    echo "error: the push of $tag was interrupted after origin took it; the workflow Release publishes it (Actions > Release)" >&2
+  elif [[ $remote_exit_code -eq 2 ]]; then
+    git tag --delete "$tag" >/dev/null 2>&1 || true
+    echo "error: the push of $tag was interrupted before origin took it; the local tag is deleted again, nothing was published" >&2
+  else
+    echo "error: the push of $tag was interrupted, and origin could not say whether it took it; see Actions > Release, and run git tag --delete $tag before a retry if it did not" >&2
+  fi
   exit "$1"
 }
 
 git tag --annotate "$tag" --message "Magic Free Disk Space $version"
-# A Ctrl-C ends bash before the failure branch below runs, so the signal deletes the tag itself.
-trap 'delete_interrupted_tag 130' INT
-trap 'delete_interrupted_tag 143' TERM
+# A Ctrl-C ends bash before the failure branch below runs, so the trap settles the tag itself.
+trap 'settle_interrupted_push 130' INT
+trap 'settle_interrupted_push 143' TERM
 if ! git push origin "refs/tags/$tag"; then
   # A local tag left behind would make the tagging of the next attempt of this version fail.
   git tag --delete "$tag" >/dev/null
