@@ -90,6 +90,45 @@ done
     expect(answer, isA<NothingApprovedEvent>());
   });
 
+  test(
+    'the stderr of a stopped bridge stays out of the next bridge\'s failure',
+    () async {
+      // The stopped bridge writes its line only once the next bridge runs, and
+      // the next bridge exits only after that line was written.
+      client = await createClientOverScript('''
+marker="\$(dirname "\$0")/old-written"
+if [ "\$start" = 1 ]; then
+  trap 'sleep 0.2; echo old >&2; touch "\$marker"; kill \$! 2>/dev/null; exit 0' TERM
+  echo 'not json'
+  sleep 5 &
+  wait
+  exit 0
+fi
+read -r request
+while [ ! -f "\$marker" ]; do sleep 0.05; done
+sleep 0.2
+exit 1
+''');
+
+      final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+      final Future<StatusAnswer> status = client.status();
+
+      await expectLater(scan, throwsFormatException);
+      await expectLater(
+        status,
+        throwsA(
+          isA<BridgeStoppedException>()
+              .having((error) => error.exitCode, 'exitCode', 1)
+              .having(
+                (error) => error.stderrText,
+                'stderrText',
+                'It wrote nothing to stderr.',
+              ),
+        ),
+      );
+    },
+  );
+
   test('an answer of another request fails with a FormatException, and the next request goes to a new bridge', () async {
     client = await createClientOverScript('''
 while read -r request; do
@@ -150,6 +189,78 @@ done
       expect(search.exitCode, 1, reason: 'the bridge still runs');
     },
   );
+
+  test('sends a second request only after the answer of the first, and answers both in order', () async {
+    // A line that is already waiting while the first request is answered
+    // means the client sent the second request too early.
+    client = await createClientOverScript('''
+while read -r request; do
+  if read -t 1 early_request; then
+    echo "\$early_request" >> "\$(dirname "\$0")/early"
+  fi
+  if [ "\$request" = '{"kind":"status"}' ]; then
+    echo '{"kind":"status","fullDiskAccess":"granted","notices":[]}'
+  else
+    echo '{"kind":"updateChecked","isUpdateCheckEnabled":true,"notice":null}'
+  fi
+done
+''');
+    final List<String> answeredKinds = [];
+
+    final Future<StatusAnswer> status = client.status().then((answer) {
+      answeredKinds.add('status');
+      return answer;
+    });
+    final Future<UpdateCheckAnswer> check = client.checkUpdate().then((answer) {
+      answeredKinds.add('checkUpdate');
+      return answer;
+    });
+
+    expect(await status, isA<StatusEvent>());
+    expect(await check, isA<UpdateCheckedEvent>());
+    expect(answeredKinds, ['status', 'checkUpdate']);
+    expect(File('${directory.path}/early').existsSync(), isFalse);
+  });
+
+  test('a request queued behind one whose answer stops the bridge goes to a new bridge', () async {
+    client = await createClientOverScript('''
+while read -r request; do
+  if [ "\$start" = 1 ]; then
+    echo '{"kind":"cancelled","message":"Cancelled. Nothing was deleted."}'
+  else
+    echo '{"kind":"updateCheckSet","isUpdateCheckEnabled":false}'
+  fi
+done
+''');
+
+    final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+    final Future<UpdateCheckSetAnswer> save = client.setUpdateCheck(false);
+
+    await expectLater(scan, throwsFormatException);
+    expect(
+      await save,
+      isA<UpdateCheckSetEvent>().having(
+        (event) => event.isUpdateCheckEnabled,
+        'isUpdateCheckEnabled',
+        isFalse,
+      ),
+    );
+  });
+
+  test('dispose fails every waiting request', () async {
+    client = await createClientOverScript('''
+while read -r request; do
+  sleep 5
+done
+''');
+    final Future<StatusAnswer> status = client.status();
+    final Future<UpdateCheckAnswer> check = client.checkUpdate();
+
+    client.dispose();
+
+    await expectLater(status, throwsA(isA<BridgeClientDisposedException>()));
+    await expectLater(check, throwsA(isA<BridgeClientDisposedException>()));
+  });
 
   test('passes the progress on and answers with the final event', () async {
     client = await createClientOverScript('''

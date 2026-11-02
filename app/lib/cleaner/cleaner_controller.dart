@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../bridge/bridge_event.dart';
@@ -63,16 +65,12 @@ const String _deletionStoppedText =
     'gone. Scan again to see what is left.';
 
 class CleanerController extends ChangeNotifier {
-  /// Asks the bridge for its status at once; every later request waits for
-  /// that answer.
+  /// Asks the bridge for its status at once.
   CleanerController({required this._bridge}) {
-    _statusLoad = _loadStatusNotices();
+    unawaited(_loadStatusNotices());
   }
 
   final CleanerBridge _bridge;
-
-  /// Completes when the status answered or failed; never throws.
-  late final Future<void> _statusLoad;
   CleanerState _state = const IdleState();
   List<NoticeView> _statusNotices = const [];
   bool _isRequestPending = false;
@@ -209,8 +207,6 @@ class CleanerController extends ChangeNotifier {
   }) async {
     _isRequestPending = true;
     try {
-      // The bridge takes one request at a time, and the status goes first.
-      await _statusLoad;
       return await send();
     } catch (error) {
       final String notice = errorLead == null ? '$error' : '$errorLead\n$error';

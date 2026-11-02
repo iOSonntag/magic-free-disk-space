@@ -1,0 +1,148 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { chmod, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import {
+  buildPreferencesPath,
+  loadPreferences,
+  saveIsUpdateCheckEnabled,
+} from '../../src/preferences/preferencesFile.js';
+import type { FixtureRoot } from '../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+
+let fixtureRoot: FixtureRoot;
+let preferencesPath: string;
+let preferencesDir: string;
+
+beforeEach(async () => {
+  fixtureRoot = await createFixtureRoot();
+  preferencesPath = buildPreferencesPath({ homeDir: fixtureRoot.homeDir });
+  preferencesDir = join(preferencesPath, '..');
+});
+
+afterEach(async () => {
+  await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
+});
+
+async function writePreferencesFile(text: string): Promise<void> {
+  await mkdir(preferencesDir, { recursive: true });
+  await writeFile(preferencesPath, text);
+}
+
+describe('loadPreferences', () => {
+  test('lives in the support folder of the app', () => {
+    expect(preferencesPath).toBe(
+      join(
+        fixtureRoot.homeDir,
+        'Library/Application Support/magic-free-disk-space/preferences.json',
+      ),
+    );
+  });
+
+  test('is on without a file', async () => {
+    expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+      isUpdateCheckEnabled: true,
+    });
+  });
+
+  test('is on for a file it cannot use', async () => {
+    const texts = [
+      '',
+      'not json',
+      '[false]',
+      'false',
+      '{}',
+      '{"isUpdateCheckEnabled":"false"}',
+      '{"isUpdateCheckEnabled":0}',
+      '{"isUpdateCheckEnabled":null}',
+      `{"isUpdateCheckEnabled":false,"padding":"${'x'.repeat(70_000)}"}`,
+    ];
+
+    for (const text of texts) {
+      await writePreferencesFile(text);
+
+      expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+        isUpdateCheckEnabled: true,
+      });
+    }
+  });
+
+  test('is on for a file it may not read', async () => {
+    await writePreferencesFile('{"isUpdateCheckEnabled":false}');
+    await chmod(preferencesPath, 0o000);
+
+    expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+      isUpdateCheckEnabled: true,
+    });
+  });
+
+  test('reads the saved value', async () => {
+    await writePreferencesFile('{"isUpdateCheckEnabled":false}');
+
+    expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+      isUpdateCheckEnabled: false,
+    });
+  });
+});
+
+describe('saveIsUpdateCheckEnabled', () => {
+  test('saves the value for the next load, in a private folder and file', async () => {
+    expect(
+      await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false }),
+    ).toEqual({ kind: 'succeeded', value: null });
+    expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+      isUpdateCheckEnabled: false,
+    });
+    expect((await stat(preferencesDir)).mode & 0o777).toBe(0o700);
+    expect((await stat(preferencesPath)).mode & 0o777).toBe(0o600);
+    expect(await readdir(preferencesDir)).toEqual(['preferences.json']);
+
+    await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: true });
+
+    expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+      isUpdateCheckEnabled: true,
+    });
+  });
+
+  test('keeps every key it does not know', async () => {
+    await writePreferencesFile('{"isUpdateCheckEnabled":true,"theme":"dark","limits":{"days":30}}');
+
+    await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false });
+
+    expect(JSON.parse(await readFile(preferencesPath, 'utf8'))).toEqual({
+      isUpdateCheckEnabled: false,
+      theme: 'dark',
+      limits: { days: 30 },
+    });
+  });
+
+  test('replaces a file that holds no object', async () => {
+    await writePreferencesFile('[1, 2]');
+
+    await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false });
+
+    expect(JSON.parse(await readFile(preferencesPath, 'utf8'))).toEqual({
+      isUpdateCheckEnabled: false,
+    });
+  });
+
+  test('fails with writeFailed in a folder it may not write, and keeps the file', async () => {
+    await writePreferencesFile('{"isUpdateCheckEnabled":true}');
+    await chmod(preferencesDir, 0o500);
+
+    expect(
+      await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false }),
+    ).toEqual({ kind: 'failed', failure: { reason: 'writeFailed', code: 'EACCES' } });
+    expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+      isUpdateCheckEnabled: true,
+    });
+  });
+
+  test('fails with directoryUnavailable when a file stands where the folder belongs', async () => {
+    await mkdir(join(preferencesDir, '..'), { recursive: true });
+    await writeFile(preferencesDir, 'a file where the folder belongs');
+
+    expect(
+      await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false }),
+    ).toMatchObject({ kind: 'failed', failure: { reason: 'directoryUnavailable' } });
+  });
+});

@@ -64,7 +64,7 @@ describe('validateRemoval', () => {
     }
   });
 
-  test('refuses keys, keychains, and the deletion log, whole and in every part', () => {
+  test('refuses keys, keychains, the deletion log, and the preferences, whole and in every part', () => {
     for (const path of [
       '/Users/tester/.ssh',
       '/Users/tester/.ssh/id_ed25519',
@@ -73,11 +73,17 @@ describe('validateRemoval', () => {
       '/Users/tester/Library/Logs/magic-free-disk-space',
       '/Users/tester/Library/Logs/magic-free-disk-space/deletions.jsonl',
       '/Users/tester/Library/Logs',
+      '/Users/tester/Library/Application Support/magic-free-disk-space',
+      '/Users/tester/Library/Application Support/magic-free-disk-space/preferences.json',
+      '/Users/tester/Library/Application Support',
     ]) {
       expect(validate({ path: path, kind: 'file' })).toMatchObject({ reason: 'protectedRoot' });
     }
 
     expect(validate({ path: '/Users/tester/Library/Logs/OtherApp' }).kind).toBe('approved');
+    expect(validate({ path: '/Users/tester/Library/Application Support/OtherApp' }).kind).toBe(
+      'approved',
+    );
   });
 
   test('refuses a protected folder written in another letter case', () => {

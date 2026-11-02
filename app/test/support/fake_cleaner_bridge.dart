@@ -7,8 +7,8 @@ const StatusEvent grantedStatus = StatusEvent(
 );
 
 /// A bridge that answers with what the test set on it and records the kind
-/// of each request; like the process client, it throws a [StateError] on a
-/// request sent while another is pending.
+/// of each request when it is sent; like the process client, it sends each
+/// request only after the answer of the one before.
 final class FakeCleanerBridge implements CleanerBridge {
   FakeCleanerBridge({required this.scanAnswer});
 
@@ -21,7 +21,7 @@ final class FakeCleanerBridge implements CleanerBridge {
   List<int>? plannedNumbers;
   ({int planId, String confirmation})? deleteRequest;
   final List<String> requestKinds = [];
-  bool _isRequestPending = false;
+  Future<void>? _previousRequest;
 
   @override
   Future<StatusAnswer> status() {
@@ -66,16 +66,20 @@ final class FakeCleanerBridge implements CleanerBridge {
   Future<TAnswer> _answerRequest<TAnswer>(
     String kind,
     Future<TAnswer> Function() answer,
-  ) async {
-    if (_isRequestPending) {
-      throw StateError('A request to the bridge is still pending.');
+  ) {
+    // A future made in setUp would answer outside the fake time of a widget
+    // test, so the first request awaits nothing.
+    final Future<void>? previous = _previousRequest;
+    Future<TAnswer> sendAfterPrevious() async {
+      if (previous != null) {
+        await previous;
+      }
+      requestKinds.add(kind);
+      return answer();
     }
-    requestKinds.add(kind);
-    _isRequestPending = true;
-    try {
-      return await answer();
-    } finally {
-      _isRequestPending = false;
-    }
+
+    final Future<TAnswer> result = sendAfterPrevious();
+    _previousRequest = result.then<void>((TAnswer _) {}, onError: (_) {});
+    return result;
   }
 }

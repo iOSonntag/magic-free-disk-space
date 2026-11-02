@@ -9,15 +9,21 @@ type BridgeRequestDelete = { kind: 'delete'; planId: number; confirmation: strin
 
 type BridgeRequestStatus = { kind: 'status' };
 
+type BridgeRequestCheckUpdate = { kind: 'checkUpdate' };
+
+type BridgeRequestSetUpdateCheck = { kind: 'setUpdateCheck'; isEnabled: boolean };
+
 type BridgeRequest =
   | BridgeRequestScan
   | BridgeRequestPlan
   | BridgeRequestDelete
-  | BridgeRequestStatus;
+  | BridgeRequestStatus
+  | BridgeRequestCheckUpdate
+  | BridgeRequestSetUpdateCheck;
 
 type BridgeRequestFailure = { reason: 'invalidJson' | 'unknownRequest' };
 
-/** Parses one line the app sent; any shape but the four requests fails. */
+/** Parses one line the app sent; any shape but the six requests fails. */
 export function parseBridgeRequest(params: {
   line: string;
 }): Result<BridgeRequest, BridgeRequestFailure> {
@@ -65,6 +71,14 @@ function toBridgeRequest(params: { value: unknown }): BridgeRequest | null {
 
   if (params.value.kind === 'status') {
     return { kind: 'status' };
+  }
+
+  if (params.value.kind === 'checkUpdate') {
+    return { kind: 'checkUpdate' };
+  }
+
+  if (params.value.kind === 'setUpdateCheck' && typeof params.value.isEnabled === 'boolean') {
+    return { kind: 'setUpdateCheck', isEnabled: params.value.isEnabled };
   }
 
   return null;

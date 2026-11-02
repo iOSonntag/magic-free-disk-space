@@ -45,6 +45,14 @@ instead. Explore offers:
 Other places are only shown, under Explore with advice, because the tool that owns them must
 clean them: Docker images, Homebrew apps, iPhone backups, Spotify offline music, and more.
 
+## Download
+
+The app is on the [Releases](https://github.com/iOSonntag/magic-free-disk-space/releases) page
+as a disk image, `Magic-Free-Disk-Space-<version>.dmg`. It runs on macOS 13 or later, on Apple
+silicon and Intel. Open the disk image and drag the app into Applications. Then grant it Full
+Disk Access once, as [App](#app) describes. The grant stays across updates: every release is
+signed with the same Developer ID, by which macOS knows the app.
+
 ## Usage
 
 Requires macOS and [Bun](https://bun.sh).
@@ -101,8 +109,9 @@ Security > Full Disk Access.
 ## App
 
 A Mac app with the same scan and the same guards: tick the items, review the plan, type `DELETE`.
-Building it needs Bun, [Flutter](https://flutter.dev), and Xcode; no developer certificate, because
-the app is signed for this Mac only.
+It runs on macOS 13 or later. A release, under [Download](#download), is signed with Developer ID
+and notarized by Apple. A local build needs Bun, [Flutter](https://flutter.dev), and Xcode, and no
+developer certificate: it is signed ad hoc, for this Mac only.
 
 ```sh
 bun run app:install    # build the app and replace it in /Applications; quit the app first
@@ -118,8 +127,11 @@ bun run app:run        # build and start a debug version
   without it, a banner says what a scan misses, and its Open System Settings button opens the
   Full Disk Access pane. Turn the app on there, then quit the app and open it again: macOS applies
   the grant from the next start.
-- Grant Full Disk Access again after each install: every build changes the signature macOS knows
-  the app by.
+- A local build needs Full Disk Access again after each install: its ad hoc signature changes
+  with every build, and macOS knows the app by it. A release keeps the grant across updates.
+- At start the app looks for a newer release on GitHub. When there is one, a banner names it, and
+  its download link opens the release's page. "Look for updates at start" in the app's menu turns
+  the check off.
 - The app runs `magic-free-disk-space-bridge` from inside its bundle, a build of
   `src/bridgeMain.ts` that answers the app over a pipe. It is part of the app, not a tool to run
   yourself.
@@ -176,16 +188,23 @@ bun run app:run        # build and start a debug version
 
 ## Privacy
 
-The tool works offline. It sends nothing anywhere and has no telemetry. It reads file sizes,
-dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`, and `getconf`. To judge
-Android and VS Code items, it also reads their own records: the SDK's `package.xml` files, each
-emulator's `.ini` and `config.ini`, and VS Code's `extensions.json` and `.obsolete` files. To
-learn which tool versions your projects pin, it reads their `.tool-versions`, `.nvmrc`,
-`build.gradle`, `build.gradle.kts`, and mise config files, the `package.json` files that have a
-`pnpm-lock.yaml` beside them, those of the configs mise tracks, nvm's alias files, and asdf's
-`~/.asdfrc`. To learn which pnpm versions are installed, it reads the `package.json` of each pnpm
-installed as a global package of pnpm or npm, and pnpm's launchers in `~/Library/pnpm` and
-`~/.local/share/pnpm`. It only reads them.
+The command line tool works offline and sends nothing anywhere. The app looks for a new version on
+GitHub at start unless you turn that off; it sends nothing else. For that check its bridge asks
+GitHub's API for the latest release of this repository,
+`https://api.github.com/repos/iOSonntag/magic-free-disk-space/releases/latest`, reads only the
+release's version tag from the answer, and builds the link to the release's page from it. GitHub
+sees the request as it sees any visit, with your IP address. "Look for updates at start" in the
+app's menu turns the check off. Neither has telemetry.
+
+The tool reads file sizes, dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`,
+and `getconf`. To judge Android and VS Code items, it also reads their own records: the SDK's
+`package.xml` files, each emulator's `.ini` and `config.ini`, and VS Code's `extensions.json`
+and `.obsolete` files. To learn which tool versions your projects pin, it reads their
+`.tool-versions`, `.nvmrc`, `build.gradle`, `build.gradle.kts`, and mise config files, the
+`package.json` files that have a `pnpm-lock.yaml` beside them, those of the configs mise tracks,
+nvm's alias files, and asdf's `~/.asdfrc`. To learn which pnpm versions are installed, it reads
+the `package.json` of each pnpm installed as a global package of pnpm or npm, and pnpm's
+launchers in `~/Library/pnpm` and `~/.local/share/pnpm`. It only reads them.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
 simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
@@ -197,7 +216,7 @@ At start the app asks its bridge whether it has Full Disk Access. The bridge ope
 `~/Library/Application Support/com.apple.TCC/TCC.db`, or else `~/Library/Safari`, and closes it
 at once, reading no byte and listing no name: macOS refuses the open itself while the app lacks
 the access. The banner's Open System Settings button runs `open` with the link of the Full Disk
-Access pane.
+Access pane, and the update banner's download link runs it with the release's page.
 
 ## Limits
 
@@ -227,7 +246,7 @@ Access pane.
 - nvm's `NVM_ONLY` setting lives in your shell, which the scan does not see. Your default alias and
   each `.nvmrc` resolve as if it were unset, so the Node.js version nvm picks under it may be
   offered.
-- macOS only.
+- macOS only, version 13 or later.
 
 ## Development
 
@@ -240,6 +259,45 @@ cd app && flutter analyze && flutter test   # the app
 
 Tests never touch your real home folder: each one builds its own folders in a temporary
 directory and removes them afterwards.
+
+### Releasing
+
+The workflow `.github/workflows/release.yml` builds the app for Apple silicon and Intel, signs it
+with Developer ID under the hardened runtime, runs the signed bridge on both architectures,
+notarizes and staples the app and its disk image, and publishes the disk image. Only a pushed
+version tag or a rehearsal started by hand runs it.
+
+Set it up once in the repository's settings:
+
+- An environment `release` whose deployment branches and tags are `main` and tags `v*`. Only runs
+  from these refs get its secrets, so no other branch can sign.
+- The environment's six secrets:
+  - `DEVELOPER_ID_CERTIFICATE_P12_BASE64`: the Developer ID Application certificate with its
+    private key, exported as `.p12`, in base64 (`base64 -i id.p12`).
+  - `DEVELOPER_ID_CERTIFICATE_PASSWORD`: the password of that `.p12`.
+  - `APPLE_TEAM_ID`: the team id of the developer account, 10 capital letters and digits.
+  - `APP_STORE_CONNECT_API_KEY_P8`: the text of an App Store Connect API key file (`.p8`) with
+    the Developer role, for notarization.
+  - `APP_STORE_CONNECT_API_KEY_ID`: the id of that key.
+  - `APP_STORE_CONNECT_ISSUER_ID`: the issuer id shown above the team's API keys.
+- A tag ruleset for tags `v*` that lets only you create, move, or delete them, since a pushed tag
+  publishes a release.
+
+A rehearsal runs every step but publishing: Actions > Release > Run workflow on `main`, with a
+version or the default `0.0.0`. Its disk image is an artifact of the run for 7 days. A rehearsal
+at `0.0.0` shows the update notice once any release exists.
+
+A release: push a tag `vX.Y.Z` on a commit of `main`, such as
+`git tag v1.2.0 && git push origin v1.2.0`. The tag names the version, and the run number the
+build number. Once the build passed, the workflow creates the GitHub release with the disk image
+and generated notes. A release is never rolled back: the next tag fixes a fault.
+
+Check the first releases once on a Mac that is not your development Mac: install the disk image
+of one published tag, grant Full Disk Access, and see that the app opens with no warning from
+Gatekeeper. Then publish the next tag, see the update notice in the app, install the new disk
+image over the old app, and see that Full Disk Access is still granted.
+
+`scripts/buildAppIcons.sh <logo.png>` makes the app's icon set from a 1024 x 1024 PNG.
 
 ## License
 

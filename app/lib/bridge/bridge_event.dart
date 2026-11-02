@@ -1,4 +1,4 @@
-import 'system_settings_url.dart';
+import 'openable_url.dart';
 
 /// Picks the colour of an item; its `riskText` is what shows.
 enum Risk { safe, review, careful, never }
@@ -120,17 +120,16 @@ final class SkippedView {
   final List<String> lines;
 }
 
-/// A button that opens a pane of System Settings; [failedText] shows when it
-/// did not open.
-final class SettingsLinkView {
-  const SettingsLinkView({
+/// A button that opens [url]; [failedText] shows when it did not open.
+final class LinkView {
+  const LinkView({
     required this.labelText,
     required this.url,
     required this.failedText,
   });
 
   final String labelText;
-  final SystemSettingsUrl url;
+  final OpenableUrl url;
   final String failedText;
 }
 
@@ -143,7 +142,24 @@ final class NoticeView {
 
   final String titleText;
   final List<String> lines;
-  final SettingsLinkView? settingsLink;
+
+  /// Opens a pane of System Settings.
+  final LinkView? settingsLink;
+}
+
+/// A newer release than this build, with the link to its page.
+final class UpdateNoticeView {
+  const UpdateNoticeView({
+    required this.titleText,
+    required this.lines,
+    required this.downloadLink,
+  });
+
+  final String titleText;
+  final List<String> lines;
+
+  /// Opens the release page on GitHub.
+  final LinkView downloadLink;
 }
 
 sealed class BridgeEvent {
@@ -161,6 +177,12 @@ sealed class DeleteAnswer implements BridgeEvent {}
 
 /// The final event that answers a status request.
 sealed class StatusAnswer implements BridgeEvent {}
+
+/// The final event that answers a check for updates.
+sealed class UpdateCheckAnswer implements BridgeEvent {}
+
+/// The final event that answers the change of the update check's preference.
+sealed class UpdateCheckSetAnswer implements BridgeEvent {}
 
 final class ProgressEvent extends BridgeEvent {
   const ProgressEvent({required this.message});
@@ -228,8 +250,35 @@ final class CancelledEvent extends BridgeEvent implements DeleteAnswer {
   final String message;
 }
 
+final class UpdateCheckedEvent extends BridgeEvent
+    implements UpdateCheckAnswer {
+  const UpdateCheckedEvent({
+    required this.isUpdateCheckEnabled,
+    required this.notice,
+  });
+
+  final bool isUpdateCheckEnabled;
+
+  /// Set only when a newer release exists.
+  final UpdateNoticeView? notice;
+}
+
+final class UpdateCheckSetEvent extends BridgeEvent
+    implements UpdateCheckSetAnswer {
+  const UpdateCheckSetEvent({required this.isUpdateCheckEnabled});
+
+  final bool isUpdateCheckEnabled;
+}
+
+/// Also the answer of a bridge older than a request it does not know.
 final class FailedEvent extends BridgeEvent
-    implements ScanAnswer, PlanAnswer, DeleteAnswer, StatusAnswer {
+    implements
+        ScanAnswer,
+        PlanAnswer,
+        DeleteAnswer,
+        StatusAnswer,
+        UpdateCheckAnswer,
+        UpdateCheckSetAnswer {
   const FailedEvent({required this.message, required this.effect});
 
   final String message;
@@ -293,6 +342,20 @@ BridgeEvent parseBridgeEvent(Object? json) {
     {'kind': 'cancelled', 'message': final String message} => CancelledEvent(
       message: message,
     ),
+    {
+      'kind': 'updateChecked',
+      'isUpdateCheckEnabled': final bool isUpdateCheckEnabled,
+      'notice': final Object? notice,
+    } =>
+      UpdateCheckedEvent(
+        isUpdateCheckEnabled: isUpdateCheckEnabled,
+        notice: notice == null ? null : _parseUpdateNotice(notice),
+      ),
+    {
+      'kind': 'updateCheckSet',
+      'isUpdateCheckEnabled': final bool isUpdateCheckEnabled,
+    } =>
+      UpdateCheckSetEvent(isUpdateCheckEnabled: isUpdateCheckEnabled),
     {
       'kind': 'failed',
       'message': final String message,
@@ -451,25 +514,45 @@ NoticeView _parseNotice(Object? json) {
         lines: _parseLines(lines),
         settingsLink: settingsLink == null
             ? null
-            : _parseSettingsLink(settingsLink),
+            : _parseLink(settingsLink, parseUrl: SystemSettingsUrl.parse),
       ),
     _ => throw const FormatException('Unknown shape of a notice.'),
   };
 }
 
-SettingsLinkView _parseSettingsLink(Object? json) {
+UpdateNoticeView _parseUpdateNotice(Object? json) {
+  return switch (json) {
+    {
+      'titleText': final String titleText,
+      'lines': final List<Object?> lines,
+      'downloadLink': final Object? downloadLink,
+    } =>
+      UpdateNoticeView(
+        titleText: titleText,
+        lines: _parseLines(lines),
+        downloadLink: _parseLink(downloadLink, parseUrl: ReleasePageUrl.parse),
+      ),
+    _ => throw const FormatException('Unknown shape of an update notice.'),
+  };
+}
+
+/// [parseUrl] is the one kind of URL the field of the link may hold.
+LinkView _parseLink(
+  Object? json, {
+  required OpenableUrl Function(String text) parseUrl,
+}) {
   return switch (json) {
     {
       'labelText': final String labelText,
       'url': final String url,
       'failedText': final String failedText,
     } =>
-      SettingsLinkView(
+      LinkView(
         labelText: labelText,
-        url: SystemSettingsUrl.parse(url),
+        url: parseUrl(url),
         failedText: failedText,
       ),
-    _ => throw const FormatException('Unknown shape of a settings link.'),
+    _ => throw const FormatException('Unknown shape of a link.'),
   };
 }
 

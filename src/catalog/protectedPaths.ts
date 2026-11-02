@@ -24,10 +24,14 @@ export const PROTECTED_HOME_RELATIVE_PATHS: string[] = [
 /** Folder of the deletion log, relative to the home folder. */
 export const DELETION_LOG_HOME_RELATIVE_DIR = 'Library/Logs/magic-free-disk-space';
 
+/** Folder of the bridge's preference file, relative to the home folder. */
+export const PREFERENCES_HOME_RELATIVE_DIR = 'Library/Application Support/magic-free-disk-space';
+
 /** Folders relative to the home folder that are never removed, neither whole nor in part. */
 export const SENSITIVE_HOME_RELATIVE_PATHS: string[] = [
   '.ssh',
   '.gnupg',
   'Library/Keychains',
   DELETION_LOG_HOME_RELATIVE_DIR,
+  PREFERENCES_HOME_RELATIVE_DIR,
 ];
