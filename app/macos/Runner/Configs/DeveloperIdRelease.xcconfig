@@ -16,5 +16,8 @@ ENABLE_HARDENED_RUNTIME = YES
 // Notarization requires a secure timestamp on every signature.
 OTHER_CODE_SIGN_FLAGS = --timestamp
 
+// Notarization refuses an executable that requests get-task-allow, which Xcode otherwise injects.
+CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO
+
 // An app distributed outside the App Store with Developer ID needs no provisioning profile.
 PROVISIONING_PROFILE_SPECIFIER =

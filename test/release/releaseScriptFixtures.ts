@@ -6,7 +6,11 @@ import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { isPresent } from '../support/fixtureRoot.js';
 
 /** A release script the tests run, by its file name in `scripts/release`. */
-export type ReleaseScriptName = 'setupSigning.sh' | 'rehearse.sh' | 'tagRelease.sh';
+export type ReleaseScriptName =
+  | 'setupSigning.sh'
+  | 'rehearse.sh'
+  | 'tagRelease.sh'
+  | 'verifyAppSignature.sh';
 
 export type FixtureCommandRun = { exitCode: number; stdoutText: string; stderrText: string };
 
