@@ -2,3 +2,10 @@ node_modules/
 coverage/
 .DS_Store
 /.claude/worktrees/
+
+# The signing material of scripts/release/setupSigning.sh lives outside every repository; these
+# patterns keep a copy that strays into this one out of git.
+*.p12
+*.p8
+*.certSigningRequest
+developer-id.key

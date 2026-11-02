@@ -267,30 +267,50 @@ with Developer ID under the hardened runtime, runs the signed bridge on both arc
 notarizes and staples the app and its disk image, and publishes the disk image. Only a pushed
 version tag or a rehearsal started by hand runs it.
 
-Set it up once in the repository's settings:
+The scripts in `scripts/release/` set it up and start it from this checkout, with `gh` logged in
+as an admin of the repository.
 
-- An environment `release` whose deployment branches and tags are `main` and tags `v*`. Only runs
-  from these refs get its secrets, so no other branch can sign.
-- The environment's six secrets:
-  - `DEVELOPER_ID_CERTIFICATE_P12_BASE64`: the Developer ID Application certificate with its
-    private key, exported as `.p12`, in base64 (`base64 -i id.p12`).
-  - `DEVELOPER_ID_CERTIFICATE_PASSWORD`: the password of that `.p12`.
-  - `APPLE_TEAM_ID`: the team id of the developer account, 10 capital letters and digits.
-  - `APP_STORE_CONNECT_API_KEY_P8`: the text of an App Store Connect API key file (`.p8`) with
-    the Developer role, for notarization.
-  - `APP_STORE_CONNECT_API_KEY_ID`: the id of that key.
-  - `APP_STORE_CONNECT_ISSUER_ID`: the issuer id shown above the team's API keys.
-- A tag ruleset for tags `v*` that lets only you create, move, or delete them, since a pushed tag
-  publishes a release.
+Set it up once, and again when the certificate expires after five years:
 
-A rehearsal runs every step but publishing: Actions > Release > Run workflow on `main`, with a
-version or the default `0.0.0`. Its disk image is an artifact of the run for 7 days. A rehearsal
-at `0.0.0` shows the update notice once any release exists.
+1. `scripts/release/setupSigning.sh request <folder> <email>` makes a private key and a certificate
+   signing request in a new folder outside any git repository, and prints where they go.
+2. The Account Holder of the Apple developer team uploads the request on developer.apple.com as a
+   Developer ID Application certificate and downloads the `.cer`. An Admin can only make a
+   certificate whose key stays at Apple, which a runner cannot import. In App Store Connect, under
+   Users and Access > Integrations > App Store Connect API > Team Keys, create a key with the
+   Developer role and download its `.p8`. An Individual Key cannot notarize for the team.
+3. The `install` step checks that the certificate belongs to the folder's key, builds a `.p12`
+   with a random password, and sets up the repository:
 
-A release: push a tag `vX.Y.Z` on a commit of `main`, such as
-`git tag v1.2.0 && git push origin v1.2.0`. The tag names the version, and the run number the
-build number. Once the build passed, the workflow creates the GitHub release with the disk image
-and generated notes. A release is never rolled back: the next tag fixes a fault.
+   ```sh
+   scripts/release/setupSigning.sh install <folder> <certificate.cer> <AuthKey.p8> <key id> <issuer id>
+   ```
+
+   - An environment `release` whose deployment branches and tags are `main` and tags `v*`. Only
+     runs from these refs get its secrets, so no other branch can sign.
+   - The environment's six secrets, each passed to `gh` on stdin, never on a command line or the
+     clipboard: `DEVELOPER_ID_CERTIFICATE_P12_BASE64` and `DEVELOPER_ID_CERTIFICATE_PASSWORD` for
+     signing, `APPLE_TEAM_ID` from the certificate, and `APP_STORE_CONNECT_API_KEY_P8`,
+     `APP_STORE_CONNECT_API_KEY_ID`, and `APP_STORE_CONNECT_ISSUER_ID` for notarization.
+   - A tag ruleset "Release tags" that lets only repository admins create, move, or delete tags
+     `v*`, since a pushed tag publishes a release.
+
+   It removes the private key and the request, and moves the `.p8` into the folder, which then
+   holds every secret: the `.p12`, its password, and the `.p8`. Keep them in your password manager
+   and delete the folder. A failed `install` leaves every file in place, so running it again picks
+   up from there.
+
+A rehearsal runs every step but publishing: `scripts/release/rehearse.sh [X.Y.Z]` starts the
+workflow on `main` with that version or the workflow's default `0.0.0`, waits for the run, and
+downloads its disk image into `~/Downloads`. The disk image also stays an artifact of the run for
+7 days. A rehearsal at `0.0.0` shows the update notice once any release exists.
+
+A release: `scripts/release/tagRelease.sh X.Y.Z` on `main`. It refuses a version with a leading
+zero, one that is not newer than the latest tag `v*` on origin, uncommitted changes, and a `main`
+that differs from origin's. It shows the commit, and once you type the tag, it pushes the
+annotated tag `vX.Y.Z`. The tag names the version, and the run number the build number. Once the
+build passed, the workflow creates the GitHub release with the disk image and generated notes. A
+release is never rolled back: the next tag fixes a fault.
 
 Check the first releases once on a Mac that is not your development Mac: install the disk image
 of one published tag, grant Full Disk Access, and see that the app opens with no warning from
