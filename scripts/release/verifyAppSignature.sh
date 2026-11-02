@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Verifies the Developer ID signatures of the built app before it goes to notarization: the bundle
-# as a whole, every architecture of every Mach-O file in it, and the hardened runtime and both
-# architectures on the app's executable and the bridge.
+# as a whole, every architecture of every Mach-O file in it, the absence of get-task-allow on every
+# architecture of every executable, and the hardened runtime and both architectures on the app's
+# executable and the bridge.
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
@@ -21,10 +22,27 @@ fail() {
   failures=$((failures + 1))
 }
 
+# Fails when an architecture of an executable requests com.apple.security.get-task-allow, which
+# notarization refuses.
+check_entitlements() {
+  local file="$1" arch="$2" entitlements errors
+  errors="$(mktemp)"
+  if ! entitlements="$(codesign -d --entitlements - --xml --architecture "$arch" "$file" 2>"$errors")"; then
+    fail "$file ($arch): cannot read its entitlements: $(cat "$errors")"
+    rm -f "$errors"
+    return
+  fi
+  rm -f "$errors"
+  if [[ "${entitlements//[[:space:]]/}" == *"<key>com.apple.security.get-task-allow</key><true/>"* ]]; then
+    fail "$file ($arch) requests com.apple.security.get-task-allow, which notarization refuses; look at CODE_SIGN_INJECT_BASE_ENTITLEMENTS of the build configuration"
+  fi
+}
+
 # Checks that each architecture of a Mach-O file carries a Developer ID signature with a secure
-# timestamp, as notarization requires.
+# timestamp, as notarization requires, and that no architecture of an executable requests
+# com.apple.security.get-task-allow. The second argument is "true" for an executable.
 check_signature() {
-  local file="$1" archs arch details
+  local file="$1" is_executable="$2" archs arch details
   if ! archs="$(lipo -archs "$file" 2>&1)"; then
     fail "$file: lipo cannot read its architectures: $archs"
     return
@@ -39,6 +57,9 @@ check_signature() {
     fi
     if [[ "$details" != *"Timestamp="* ]]; then
       fail "$file ($arch) carries no secure timestamp"
+    fi
+    if [[ "$is_executable" == true ]]; then
+      check_entitlements "$file" "$arch"
     fi
   done
 }
@@ -72,12 +93,17 @@ codesign -dvv "$app" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Times
 echo "Checking the signature of every Mach-O file in $app"
 count=0
 while IFS= read -r -d '' file; do
-  if [[ "$(file -b "$file")" != Mach-O* ]]; then
+  kind="$(file -b "$file")"
+  if [[ "$kind" != Mach-O* ]]; then
     continue
+  fi
+  is_executable=false
+  if [[ "$kind" == *executable* ]]; then
+    is_executable=true
   fi
   count=$((count + 1))
   echo "  ${file#"$app/"}"
-  check_signature "$file"
+  check_signature "$file" "$is_executable"
 done < <(find "$app" -type f -print0)
 if [[ $count -eq 0 ]]; then
   fail "$app holds no Mach-O file"
@@ -99,4 +125,4 @@ if [[ $failures -gt 0 ]]; then
   echo "error: $failures signature checks of $app failed" >&2
   exit 1
 fi
-echo "All $count Mach-O files of $app carry a Developer ID signature with a secure timestamp."
+echo "All $count Mach-O files of $app carry a Developer ID signature with a secure timestamp, and no executable requests get-task-allow."
