@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
@@ -10,10 +10,10 @@ import { createFixtureBinDir, runReleaseScript } from './releaseScriptFixtures.j
 const EXECUTABLE_NAME = 'Magic Free Disk Space';
 const BRIDGE_NAME = 'magic-free-disk-space-bridge';
 const DYLIB_NAME = 'FlutterMacOS';
-const EXECUTABLE_KIND =
-  'Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit executable x86_64] [arm64]';
-const DYLIB_KIND =
-  'Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit dynamically linked shared library x86_64] [arm64]';
+const EXECUTABLE_TYPE = 'Mach-O 64-bit executable';
+const DYLIB_TYPE = 'Mach-O 64-bit dynamically linked shared library';
+const EXECUTABLE_KIND = `Mach-O universal binary with 2 architectures: [x86_64:${EXECUTABLE_TYPE} x86_64] [arm64]`;
+const DYLIB_KIND = `Mach-O universal binary with 2 architectures: [x86_64:${DYLIB_TYPE} x86_64] [arm64]`;
 const SUCCESS_TEXT = 'and no executable requests get-task-allow.';
 const INFO_PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -32,6 +32,8 @@ const BRIDGE_ENTITLEMENT_LINES = [
 ];
 const GET_TASK_ALLOW_TRUE_LINES = ['\t<key>com.apple.security.get-task-allow</key>', '\t<true/>'];
 const GET_TASK_ALLOW_FALSE_LINES = ['\t<key>com.apple.security.get-task-allow</key>', '\t<false/>'];
+/** In the order the fake `lipo` names them. */
+const FIXTURE_ARCHITECTURES = ['x86_64', 'arm64'] as const;
 
 type FixtureApp = {
   appDir: string;
@@ -42,7 +44,7 @@ type FixtureApp = {
   entitlementsDir: string;
 };
 
-type Architecture = 'arm64' | 'x86_64';
+type Architecture = (typeof FIXTURE_ARCHITECTURES)[number];
 
 describe('verifyAppSignature.sh', () => {
   let fixtureRoot: FixtureRoot;
@@ -60,7 +62,9 @@ describe('verifyAppSignature.sh', () => {
   });
 
   async function createFixtureApp(): Promise<FixtureApp> {
-    const appDir = join(fixtureRoot.rootDir, `${EXECUTABLE_NAME}.app`);
+    // The folder name holds the word "executable": file -b repeats the path on each architecture line,
+    // so the script must tell an executable by its type, not by the path.
+    const appDir = join(fixtureRoot.rootDir, 'executables', `${EXECUTABLE_NAME}.app`);
     const macosDir = join(appDir, 'Contents/MacOS');
     const dylibDir = join(appDir, `Contents/Frameworks/${DYLIB_NAME}.framework/Versions/A`);
     const app: FixtureApp = {
@@ -126,7 +130,7 @@ exit 64`;
   function buildFakeLipoBody(): string {
     return `case "$*" in
   "-archs "*)
-    echo 'x86_64 arm64'
+    echo '${FIXTURE_ARCHITECTURES.join(' ')}'
     exit 0 ;;
 esac
 echo "unexpected arguments: $*" >&2
@@ -137,12 +141,18 @@ exit 64`;
     return `executable='${fixtureApp.executablePath}'
 bridge='${fixtureApp.bridgePath}'
 dylib='${fixtureApp.dylibPath}'
+print_universal() {
+  printf '%s\\n' "$1"
+  for arch in ${FIXTURE_ARCHITECTURES.join(' ')}; do
+    printf '%s (for architecture %s):\\t%s %s\\n' "$2" "$arch" "$3" "$arch"
+  done
+}
 case "$*" in
   "-b $executable" | "-b $bridge")
-    echo '${EXECUTABLE_KIND}'
+    print_universal '${EXECUTABLE_KIND}' "$2" '${EXECUTABLE_TYPE}'
     exit 0 ;;
   "-b $dylib")
-    echo '${DYLIB_KIND}'
+    print_universal '${DYLIB_KIND}' "$2" '${DYLIB_TYPE}'
     exit 0 ;;
   "-b "*)
     echo 'data'
@@ -163,15 +173,29 @@ ${entryLines.join('\n')}
 `;
   }
 
+  /** Builds the path the fake `codesign` reads as `<basename>-<arch>.<extension>`. */
+  function buildEntitlementsFixturePath(params: {
+    path: string;
+    architecture: Architecture;
+    extension: 'plist' | 'unreadable';
+  }): string {
+    return join(
+      fixtureApp.entitlementsDir,
+      `${basename(params.path)}-${params.architecture}.${params.extension}`,
+    );
+  }
+
   async function writeEntitlements(params: {
     path: string;
     architecture: Architecture;
     entryLines: string[];
   }): Promise<void> {
-    const key = `${params.path.split('/').at(-1)}-${params.architecture}`;
-
     await writeFile(
-      join(fixtureApp.entitlementsDir, `${key}.plist`),
+      buildEntitlementsFixturePath({
+        path: params.path,
+        architecture: params.architecture,
+        extension: 'plist',
+      }),
       buildEntitlementsPlist(params.entryLines),
     );
   }
@@ -180,18 +204,19 @@ ${entryLines.join('\n')}
     path: string;
     architecture: Architecture;
   }): Promise<void> {
-    const key = `${params.path.split('/').at(-1)}-${params.architecture}`;
-
-    await writeFile(join(fixtureApp.entitlementsDir, `${key}.unreadable`), '');
+    await writeFile(
+      buildEntitlementsFixturePath({
+        path: params.path,
+        architecture: params.architecture,
+        extension: 'unreadable',
+      }),
+      '',
+    );
   }
 
+  /** The executable requests no entitlement, so the fake prints nothing for it; the bridge its own. */
   async function writeCleanEntitlements(): Promise<void> {
-    for (const architecture of ['arm64', 'x86_64'] satisfies Architecture[]) {
-      await writeEntitlements({
-        path: fixtureApp.executablePath,
-        architecture: architecture,
-        entryLines: [],
-      });
+    for (const architecture of FIXTURE_ARCHITECTURES) {
       await writeEntitlements({
         path: fixtureApp.bridgePath,
         architecture: architecture,
@@ -264,7 +289,7 @@ ${entryLines.join('\n')}
   });
 
   test('does not check the entitlements of a dylib', async () => {
-    for (const architecture of ['arm64', 'x86_64'] satisfies Architecture[]) {
+    for (const architecture of FIXTURE_ARCHITECTURES) {
       await writeEntitlements({
         path: fixtureApp.dylibPath,
         architecture: architecture,

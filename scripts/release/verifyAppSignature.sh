@@ -16,6 +16,8 @@ if [[ ! -f "$app/Contents/Info.plist" ]]; then
 fi
 
 failures=0
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 
 fail() {
   echo "error: $1" >&2
@@ -25,14 +27,12 @@ fail() {
 # Fails when an architecture of an executable requests com.apple.security.get-task-allow, which
 # notarization refuses.
 check_entitlements() {
-  local file="$1" arch="$2" entitlements errors
-  errors="$(mktemp)"
-  if ! entitlements="$(codesign -d --entitlements - --xml --architecture "$arch" "$file" 2>"$errors")"; then
-    fail "$file ($arch): cannot read its entitlements: $(cat "$errors")"
-    rm -f "$errors"
+  local file="$1" arch="$2" entitlements
+  # Only stdout holds the entitlements; codesign writes an Executable= line to stderr.
+  if ! entitlements="$(codesign -d --entitlements - --xml --architecture "$arch" "$file" 2>"$work/entitlements-errors")"; then
+    fail "$file ($arch): cannot read its entitlements: $(cat "$work/entitlements-errors")"
     return
   fi
-  rm -f "$errors"
   if [[ "${entitlements//[[:space:]]/}" == *"<key>com.apple.security.get-task-allow</key><true/>"* ]]; then
     fail "$file ($arch) requests com.apple.security.get-task-allow, which notarization refuses; look at CODE_SIGN_INJECT_BASE_ENTITLEMENTS of the build configuration"
   fi
@@ -98,7 +98,8 @@ while IFS= read -r -d '' file; do
     continue
   fi
   is_executable=false
-  if [[ "$kind" == *executable* ]]; then
+  # file -b repeats the path in the line of each architecture, so match the type text, not the bare word.
+  if [[ "$kind" == *"Mach-O 64-bit executable"* ]]; then
     is_executable=true
   fi
   count=$((count + 1))
