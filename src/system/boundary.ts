@@ -10,6 +10,7 @@ export const moduleBoundary = {
     'getErrorCode.ts',
     'hasDatalessFlag.ts',
     'isAnyBundleRunning.ts',
+    'limits.ts',
     'loadCommandOutput.ts',
     'loadDirectoryEntries.ts',
     'loadDirectoryNames.ts',

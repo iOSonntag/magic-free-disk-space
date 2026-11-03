@@ -20,6 +20,9 @@ export type UnneededSuppression = {
   violationCount: number;
 };
 
+/** The baseline file of the boundary lint, by its path from the repository root. */
+export const BOUNDARY_SUPPRESSIONS_PATH = 'boundary-suppressions.json';
+
 /** Parses the text of a baseline file; the failure names what is wrong with it. */
 export function parseSuppressionBaseline(text: string): Result<SuppressionBaseline, string> {
   const json = parseJsonValue({ text: text });

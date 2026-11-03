@@ -7,7 +7,6 @@ export const moduleBoundary = {
   exposes: [
     'decideToolTrust.ts',
     'findTrustedTool.ts',
-    'limits.ts',
     'runToolCommand.ts',
     'toolInstallLocations.ts',
   ],

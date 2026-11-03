@@ -9,7 +9,7 @@
     "start": "bun src/main.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "check": "biome check . && bun test test/architecture && bun scripts/check/guardBaselineGrowth.ts boundary-suppressions.json",
+    "check": "biome check . && bun test test/architecture && bun scripts/check/guardBaselineGrowth.ts",
     "format": "biome check --write .",
     "app:bridge": "bun build src/bridgeMain.ts --compile --outfile app/build/bridge/magic-free-disk-space-bridge",
     "app:build": "bun run app:bridge && cd app && flutter build macos",

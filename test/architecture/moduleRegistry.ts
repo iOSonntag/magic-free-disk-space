@@ -32,7 +32,7 @@ export const moduleRegistry: Record<ModuleName, ModuleBoundary> = {
 };
 
 /** The modules of `src/` and its root files, as the boundary rules read them. */
-export const boundaryConfig: BoundaryConfig = {
+export const boundaryConfig: BoundaryConfig<ModuleName> = {
   modules: moduleRegistry,
   compositionRootFiles: ['bridgeMain.ts', 'main.ts'],
   sharedRootFiles: ['moduleBoundary.ts', 'result.ts'],

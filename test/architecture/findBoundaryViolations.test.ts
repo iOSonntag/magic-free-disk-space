@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import type { BoundaryConfig } from './findBoundaryViolations.js';
-import { findBoundaryViolations, findUnusedModuleEdges } from './findBoundaryViolations.js';
+import {
+  findBoundaryViolations,
+  findUnusedModuleEdges,
+  findUnusedModuleExposes,
+} from './findBoundaryViolations.js';
 import type { SourceImport } from './loadSourceImports.js';
 
-const fixtureConfig: BoundaryConfig = {
+type FixtureModuleName = 'cli' | 'report' | 'report/notices' | 'update';
+
+const fixtureConfig: BoundaryConfig<FixtureModuleName> = {
   modules: {
     cli: { imports: ['report'], readsTablesOf: [], exposes: ['runCli.ts'] },
     report: { imports: [], readsTablesOf: [], exposes: ['formatUsage.ts'] },
@@ -100,7 +106,7 @@ describe('findBoundaryViolations', () => {
 
 describe('findUnusedModuleEdges', () => {
   test('returns each declared edge no import follows', () => {
-    const config: BoundaryConfig = {
+    const config: BoundaryConfig<FixtureModuleName> = {
       ...fixtureConfig,
       modules: {
         ...fixtureConfig.modules,
@@ -112,6 +118,21 @@ describe('findUnusedModuleEdges', () => {
     expect(findUnusedModuleEdges({ imports: imports, config: config })).toEqual([
       { importerName: 'cli', importedName: 'update' },
       { importerName: 'report/notices', importedName: 'report' },
+    ]);
+  });
+});
+
+describe('findUnusedModuleExposes', () => {
+  test('returns each exposed file no other module and no entry point imports', () => {
+    const imports = [
+      buildFixtureImport('src/cli/runCli.ts', 'src/report/formatUsage.ts'),
+      buildFixtureImport('src/main.ts', 'src/cli/runCli.ts'),
+      buildFixtureImport('src/report/notices/helper.ts', 'src/report/notices/noticeView.ts'),
+    ];
+
+    expect(findUnusedModuleExposes({ imports: imports, config: fixtureConfig })).toEqual([
+      { moduleName: 'report/notices', internalPath: 'noticeView.ts' },
+      { moduleName: 'update', internalPath: 'releaseVersion.ts' },
     ]);
   });
 });

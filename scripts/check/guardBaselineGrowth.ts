@@ -1,6 +1,10 @@
 import type { Result } from '../../src/result.js';
 import type { SuppressionBaseline } from './suppressionBaseline.js';
-import { loadSuppressionBaseline, parseSuppressionBaseline } from './suppressionBaseline.js';
+import {
+  BOUNDARY_SUPPRESSIONS_PATH,
+  loadSuppressionBaseline,
+  parseSuppressionBaseline,
+} from './suppressionBaseline.js';
 
 type BaselineGrowthRuleTotal = {
   kind: 'ruleTotal';
@@ -26,7 +30,6 @@ type BaselineBase = { commit: string; baselineText: string | null };
 type GitRun = { exitCode: number; stdoutText: string; stderrText: string };
 
 const DEFAULT_BASE_REF = 'origin/main';
-const USAGE_EXIT_CODE = 2;
 const FAILURE_EXIT_CODE = 1;
 const SHORT_COMMIT_LENGTH = 7;
 
@@ -148,15 +151,8 @@ function formatBaselineGrowth(growth: BaselineGrowth): string {
   }
 }
 
-async function runGuardBaselineGrowthCommand(commandArguments: string[]): Promise<number> {
-  const [baselinePath, ...extraArguments] = commandArguments;
-
-  if (baselinePath === undefined || extraArguments.length > 0) {
-    console.error('usage: bun scripts/check/guardBaselineGrowth.ts <baseline file>');
-
-    return USAGE_EXIT_CODE;
-  }
-
+async function runGuardBaselineGrowthCommand(): Promise<number> {
+  const baselinePath = BOUNDARY_SUPPRESSIONS_PATH;
   const configuredBaseRef = process.env.BASELINE_BASE_REF;
   const baseRef =
     configuredBaseRef === undefined || configuredBaseRef === ''
@@ -171,14 +167,12 @@ async function runGuardBaselineGrowthCommand(commandArguments: string[]): Promis
   }
 
   const baseName = `${base.value.commit.slice(0, SHORT_COMMIT_LENGTH)} of ${baseRef}`;
-
-  if (base.value.baselineText === null) {
-    console.log(`${baselinePath} is not in its base ${baseName}, so it has no count to grow from`);
-
-    return 0;
-  }
-
-  const baseBaseline = parseSuppressionBaseline(base.value.baselineText);
+  // A base without the file counts as empty, so a change that deletes the file and the next one
+  // that adds it back with counts cannot grow it in two steps.
+  const baseBaseline: Result<SuppressionBaseline, string> =
+    base.value.baselineText === null
+      ? { kind: 'succeeded', value: {} }
+      : parseSuppressionBaseline(base.value.baselineText);
 
   if (baseBaseline.kind === 'failed') {
     console.error(
@@ -212,5 +206,5 @@ The baseline may only shrink: fix the new violations instead of freezing them.`)
 }
 
 if (import.meta.main) {
-  process.exit(await runGuardBaselineGrowthCommand(process.argv.slice(2)));
+  process.exit(await runGuardBaselineGrowthCommand());
 }

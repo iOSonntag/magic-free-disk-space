@@ -1,7 +1,7 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { Result } from '../result.js';
 import { loadProcessCommands } from '../scan/loadProcessCommands.js';
-import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/loadCommandOutput.js';
+import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { RemovalRun } from './deleteCandidates.js';
 import { deleteCandidates } from './deleteCandidates.js';
 import type { JournalFailure } from './deletionJournal.js';

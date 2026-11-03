@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join, posix, sep } from 'node:path';
-import type { EcmaScriptModule } from 'oxc-parser';
-import { parseSync } from 'oxc-parser';
+import type { EcmaScriptModule, Program } from 'oxc-parser';
+import { parseSync, Visitor } from 'oxc-parser';
 
 /** One import of a file of `src/` by another, both by their path from the repository root. */
 export type SourceImport = { importerPath: string; importedPath: string; line: number };
@@ -9,17 +9,16 @@ export type SourceImport = { importerPath: string; importedPath: string; line: n
 /** The text of a module specifier, and where it starts in its file. */
 type ModuleSpecifier = { text: string; start: number };
 
-const stringLiteralPattern = /^(['"])(.*)\1$/;
-
 /**
  * Reads every import between the files of `src/` below `repositoryDir`: static imports and
- * exports, type-only ones included, and dynamic imports. Throws on a file that does not parse, on
- * a dynamic import of a computed path, and on a relative path that names no file of `src/`.
+ * exports, type-only ones included, import types, and dynamic imports. Throws on a file that does
+ * not parse, on a dynamic import of a computed path, and on a relative path that names no file of
+ * `src/`.
  */
 export async function loadSourceImports(params: {
   repositoryDir: string;
 }): Promise<SourceImport[]> {
-  const sourcePaths = await listSourcePaths({ repositoryDir: params.repositoryDir });
+  const sourcePaths = await loadSourcePaths({ repositoryDir: params.repositoryDir });
   const knownPaths = new Set(sourcePaths);
   const importsByFile = await Promise.all(
     sourcePaths.map((sourcePath) =>
@@ -35,7 +34,7 @@ export async function loadSourceImports(params: {
 }
 
 /** Every TypeScript file of `src/` below `repositoryDir`, by its path from it with `/`, sorted. */
-export async function listSourcePaths(params: { repositoryDir: string }): Promise<string[]> {
+export async function loadSourcePaths(params: { repositoryDir: string }): Promise<string[]> {
   const scannedPaths = await Array.fromAsync(
     new Bun.Glob('src/**/*.ts').scan({ cwd: params.repositoryDir }),
   );
@@ -57,16 +56,19 @@ async function loadFileImports(params: {
     throw new Error(`${params.sourcePath} does not parse: ${firstError.message}`);
   }
 
-  const specifiers = listModuleSpecifiers({
-    module: parsed.module,
-    sourceText: sourceText,
-    sourcePath: params.sourcePath,
-  });
+  const specifiers = [
+    ...listStaticSpecifiers(parsed.module),
+    ...findExpressionSpecifiers({
+      program: parsed.program,
+      sourceText: sourceText,
+      sourcePath: params.sourcePath,
+    }),
+  ];
 
   return specifiers
     .filter((specifier) => specifier.text.startsWith('./') || specifier.text.startsWith('../'))
     .map((specifier) => {
-      const line = sourceText.slice(0, specifier.start).split('\n').length;
+      const line = findLineAt(sourceText, specifier.start);
 
       return {
         importerPath: params.sourcePath,
@@ -81,38 +83,54 @@ async function loadFileImports(params: {
     });
 }
 
-function listModuleSpecifiers(params: {
-  module: EcmaScriptModule;
-  sourceText: string;
-  sourcePath: string;
-}): ModuleSpecifier[] {
-  const staticImports = params.module.staticImports.map((staticImport) => ({
+function listStaticSpecifiers(module: EcmaScriptModule): ModuleSpecifier[] {
+  const staticImports = module.staticImports.map((staticImport) => ({
     text: staticImport.moduleRequest.value,
     start: staticImport.moduleRequest.start,
   }));
   // The entries of one export statement share its request, or hold none for a local export.
-  const staticExports = params.module.staticExports.flatMap((staticExport) => {
+  const staticExports = module.staticExports.flatMap((staticExport) => {
     const request = staticExport.entries[0]?.moduleRequest ?? null;
 
     return request === null ? [] : [{ text: request.value, start: request.start }];
   });
-  const dynamicImports = params.module.dynamicImports.map((dynamicImport) => {
-    const requestText = params.sourceText.slice(
-      dynamicImport.moduleRequest.start,
-      dynamicImport.moduleRequest.end,
-    );
-    const specifierText = stringLiteralPattern.exec(requestText)?.[2];
 
-    if (specifierText === undefined) {
-      throw new Error(
-        `${params.sourcePath} imports ${requestText}, a computed path, which no boundary rule can follow`,
-      );
-    }
+  return [...staticImports, ...staticExports];
+}
 
-    return { text: specifierText, start: dynamicImport.moduleRequest.start };
+/**
+ * The specifiers of the dynamic imports and the import types of `program`, which the module record
+ * of oxc-parser does not list in full: it holds no import type. Throws on a dynamic import whose
+ * specifier is no string literal, since no boundary rule can follow it.
+ */
+function findExpressionSpecifiers(params: {
+  program: Program;
+  sourceText: string;
+  sourcePath: string;
+}): ModuleSpecifier[] {
+  const specifiers: ModuleSpecifier[] = [];
+  const visitor = new Visitor({
+    ImportExpression(node) {
+      if (node.source.type !== 'Literal' || typeof node.source.value !== 'string') {
+        throw new Error(
+          `${params.sourcePath}:${findLineAt(params.sourceText, node.source.start)} imports a computed path, which no boundary rule can follow: import a string literal`,
+        );
+      }
+
+      specifiers.push({ text: node.source.value, start: node.source.start });
+    },
+    TSImportType(node) {
+      specifiers.push({ text: node.source.value, start: node.source.start });
+    },
   });
 
-  return [...staticImports, ...staticExports, ...dynamicImports];
+  visitor.visit(params.program);
+
+  return specifiers;
+}
+
+function findLineAt(sourceText: string, offset: number): number {
+  return sourceText.slice(0, offset).split('\n').length;
 }
 
 function resolveImportedPath(params: {

@@ -3,14 +3,20 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SuppressionBaseline } from '../../scripts/check/suppressionBaseline.js';
-
-type CommandRun = { exitCode: number; stdoutText: string; stderrText: string };
+import { BOUNDARY_SUPPRESSIONS_PATH } from '../../scripts/check/suppressionBaseline.js';
+import type { FixtureCommandRun } from '../support/fixtureCommand.js';
+import { buildFixtureGitEnvironment, spawnFixtureCommand } from '../support/fixtureCommand.js';
 
 /** A git repository in a folder of its own, beside the empty global config its git calls read. */
 type BaselineRepository = { repositoryDir: string; gitEnvironment: Record<string, string> };
 
 const guardPath = join(import.meta.dir, '../../scripts/check/guardBaselineGrowth.ts');
-const baselineFileName = 'boundary-suppressions.json';
+// Without the GIT_ variables of this process, no git call of a fixture reaches another repository.
+const inheritedEnvironment = Object.fromEntries(
+  Object.entries(process.env).flatMap(([name, value]): [string, string][] =>
+    value === undefined || name.startsWith('GIT_') ? [] : [[name, value]],
+  ),
+);
 
 /**
  * Runs `run` in a new repository under the temporary folder: one commit on `main` that holds
@@ -43,10 +49,14 @@ async function createBaselineRepository(params: {
   const globalConfigPath = join(params.rootDir, 'gitconfig');
   const repository: BaselineRepository = {
     repositoryDir: repositoryDir,
-    gitEnvironment: buildGitEnvironment({ globalConfigPath: globalConfigPath }),
+    gitEnvironment: buildFixtureGitEnvironment({
+      baseEnvironment: inheritedEnvironment,
+      globalConfigPath: globalConfigPath,
+    }),
   };
 
   await mkdir(repositoryDir);
+  // An empty file rather than /dev/null, which git on Windows cannot read as its global config.
   await writeFile(globalConfigPath, '');
   await runGit({ repository: repository, args: ['init', '--quiet', '--initial-branch=main'] });
   await writeFile(join(repositoryDir, 'README.md'), 'A fixture of the baseline growth guard.\n');
@@ -62,44 +72,22 @@ async function createBaselineRepository(params: {
   return repository;
 }
 
-/**
- * The environment of this process without any `GIT_` variable, so no git call reaches another
- * repository, with an empty global config and no system config, so no hook or signing of the
- * machine runs.
- */
-function buildGitEnvironment(params: { globalConfigPath: string }): Record<string, string> {
-  const inheritedVariables = Object.entries(process.env).flatMap(
-    ([name, value]): [string, string][] =>
-      value === undefined || name.startsWith('GIT_') ? [] : [[name, value]],
-  );
-
-  return {
-    ...Object.fromEntries(inheritedVariables),
-    GIT_CONFIG_GLOBAL: params.globalConfigPath,
-    GIT_CONFIG_NOSYSTEM: '1',
-    GIT_TERMINAL_PROMPT: '0',
-    GIT_AUTHOR_NAME: 'Baseline Test',
-    GIT_AUTHOR_EMAIL: 'baseline-test@example.com',
-    GIT_COMMITTER_NAME: 'Baseline Test',
-    GIT_COMMITTER_EMAIL: 'baseline-test@example.com',
-  };
-}
-
 async function writeBaseline(params: {
   repository: BaselineRepository;
   baseline: SuppressionBaseline;
 }): Promise<void> {
   await writeFile(
-    join(params.repository.repositoryDir, baselineFileName),
+    join(params.repository.repositoryDir, BOUNDARY_SUPPRESSIONS_PATH),
     `${JSON.stringify(params.baseline, null, 2)}\n`,
   );
 }
 
 async function runGit(params: { repository: BaselineRepository; args: string[] }): Promise<void> {
-  const run = await runCommand({
-    repository: params.repository,
+  const run = await spawnFixtureCommand({
     command: ['git', ...params.args],
+    workingDir: params.repository.repositoryDir,
     environment: params.repository.gitEnvironment,
+    stdinText: null,
   });
 
   if (run.exitCode !== 0) {
@@ -112,37 +100,17 @@ async function runGuard(params: {
   repository: BaselineRepository;
   baseRef: string;
   currentBaseline: SuppressionBaseline | null;
-}): Promise<CommandRun> {
+}): Promise<FixtureCommandRun> {
   if (params.currentBaseline !== null) {
     await writeBaseline({ repository: params.repository, baseline: params.currentBaseline });
   }
 
-  return runCommand({
-    repository: params.repository,
-    command: [process.execPath, guardPath, baselineFileName],
+  return spawnFixtureCommand({
+    command: [process.execPath, guardPath],
+    workingDir: params.repository.repositoryDir,
     environment: { ...params.repository.gitEnvironment, BASELINE_BASE_REF: params.baseRef },
+    stdinText: null,
   });
-}
-
-async function runCommand(params: {
-  repository: BaselineRepository;
-  command: string[];
-  environment: Record<string, string>;
-}): Promise<CommandRun> {
-  const child = Bun.spawn(params.command, {
-    cwd: params.repository.repositoryDir,
-    env: params.environment,
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  const [stdoutText, stderrText, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-
-  return { exitCode: exitCode, stdoutText: stdoutText, stderrText: stderrText };
 }
 
 describe('the command guardBaselineGrowth.ts', () => {
@@ -204,17 +172,32 @@ describe('the command guardBaselineGrowth.ts', () => {
     });
   });
 
-  test('passes when the base holds no baseline file', async () => {
+  test('fails when the base holds no baseline file and the change adds a count', async () => {
     await withBaselineRepository({ baseBaseline: null }, async (repository) => {
       const run = await runGuard({
         repository: repository,
         baseRef: 'main',
-        currentBaseline: { 'src/a.ts': { 'boundaries/edge': { count: 3 } } },
+        currentBaseline: { 'src/a.ts': { 'boundaries/edge': { count: 1 } } },
+      });
+
+      expect(run.exitCode).toBe(1);
+      expect(run.stderrText).toMatch(
+        /^error: boundary-suppressions\.json grew against its base [0-9a-f]{7} of main:\n {2}boundaries\/edge: 1 in total, 0 at the base\n {2}src\/a\.ts: 1 of boundaries\/edge, 0 at the base\n/,
+      );
+    });
+  });
+
+  test('passes when the base holds no baseline file and the change adds an empty one', async () => {
+    await withBaselineRepository({ baseBaseline: null }, async (repository) => {
+      const run = await runGuard({
+        repository: repository,
+        baseRef: 'main',
+        currentBaseline: {},
       });
 
       expect(run.exitCode).toBe(0);
       expect(run.stdoutText).toMatch(
-        /^boundary-suppressions\.json is not in its base [0-9a-f]{7} of main, so it has no count to grow from\n$/,
+        /^boundary-suppressions\.json did not grow against its base [0-9a-f]{7} of main\n$/,
       );
     });
   });

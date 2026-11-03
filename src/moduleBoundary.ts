@@ -17,10 +17,11 @@ export type ModuleName =
 /**
  * The manifest a module declares in its `boundary.ts`: the modules its files import, the modules
  * whose stored data it reads, and its surface, the files another module may import, by their path
- * inside its folder. `test/architecture` fails every import that the manifests do not allow.
+ * inside its folder. `test/architecture` fails every import that the manifests do not allow; its
+ * fixtures name modules of their own through `TModuleName`.
  */
-export type ModuleBoundary = {
-  imports: ModuleName[];
-  readsTablesOf: ModuleName[];
+export type ModuleBoundary<TModuleName extends string = ModuleName> = {
+  imports: TModuleName[];
+  readsTablesOf: TModuleName[];
   exposes: string[];
 };

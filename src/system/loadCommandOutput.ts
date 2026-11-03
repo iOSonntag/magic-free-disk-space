@@ -38,9 +38,6 @@ const COMMAND_PATHS: Record<AllowedCommand, string> = {
   getconf: '/usr/bin/getconf',
 };
 
-/** The longest a command of the allow-list, such as `ps`, `getconf`, or `plutil`, may run. */
-export const SYSTEM_COMMAND_TIMEOUT_MS = 10_000;
-
 /** Runs a command from the allow-list and returns its standard output; any other end is a failure. */
 export async function loadCommandOutput(params: {
   command: AllowedCommand;
