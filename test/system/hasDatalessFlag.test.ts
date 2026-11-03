@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { hasDatalessFlag } from '../../src/system/hasDatalessFlag.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -16,7 +17,7 @@ afterEach(async () => {
 });
 
 // A test cannot create an iCloud placeholder; the flag offset was checked against `ls -lO` on one.
-describe.skipIf(process.platform === 'win32')('hasDatalessFlag', () => {
+describeOnPosix('hasDatalessFlag', () => {
   test('is false for a folder and a file on this disk', async () => {
     const folder = join(fixtureRoot.homeDir, 'local');
     const file = join(folder, 'file.txt');

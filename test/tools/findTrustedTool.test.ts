@@ -1,13 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { findTrustedTool, loadTrustedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../src/tools/toolInstallLocations.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { createActiveProject, writeDartVersionFile } from '../support/flutterSdkFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -34,10 +35,7 @@ async function createMise(params: { folder: string; mode?: number }): Promise<st
   });
 }
 
-/** Skips on Windows a test that needs POSIX permissions, owners, symbolic links, or shell scripts. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('findTrustedTool', () => {
+describeAwaitingWin32Platform('findTrustedTool', () => {
   test('returns the real path of a trusted binary', async () => {
     const path = await createMise({ folder: 'trusted' });
 
@@ -259,7 +257,7 @@ async function createActiveFlutterSdk(params: {
   return dart;
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('findTrustedTool with the version of dart', () => {
+describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => {
   test('skips a Dart older than 3.11 whose active root sorts first', async () => {
     await createActiveFlutterSdk({
       folder: 'flutter-old',
@@ -334,7 +332,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('findTrustedTool with the version of dart
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)("findTrustedTool with Flutter's wrapper of dart", () => {
+describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", () => {
   /**
    * A made-up Flutter root with its `bin/dart` wrapper and `bin/flutter` script, the SDK binary
    * when `sdkDartMode` is given, and a link to the wrapper at a fixed location, which it returns.

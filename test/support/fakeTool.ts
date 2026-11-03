@@ -9,7 +9,8 @@ let windowsLauncherPath: Promise<string> | null = null;
  * Writes a fake tool named `name` into `folder`, creating the folder, and returns the path to
  * spawn. Its `body` is TypeScript that the Bun of the tests runs with the tool's arguments and
  * environment. On POSIX it is a script at `mode` (0o755 without it); on Windows a launcher `.exe`
- * that runs the body beside it, where `mode` has no effect.
+ * that runs the body beside it as a child, where `mode` has no effect: there the spawned pid is
+ * the launcher's, and a kill of it does not reach the body.
  */
 export async function createFakeTool(params: {
   folder: string;
@@ -60,6 +61,10 @@ const bodyPath = process.execPath.replace(/\\.exe$/i, '.ts');
 const run = spawnSync(${JSON.stringify(process.execPath)}, [bodyPath, ...process.argv.slice(2)], {
   stdio: 'inherit',
 });
+
+if (run.error) {
+  console.error(run.error);
+}
 
 process.exit(run.status ?? 1);
 `;

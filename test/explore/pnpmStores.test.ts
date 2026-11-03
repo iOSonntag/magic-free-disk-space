@@ -30,7 +30,7 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -43,6 +43,7 @@ import {
   buildTestAbsolutePath,
   buildTestPnpmStoreVersion,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
   buildFoundProjectPinsLoad,
@@ -171,10 +172,7 @@ function parseOnePin(params: { kind: ProjectPinFileKind; text: string }): PnpmPi
   });
 }
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('parsePnpmVersionMajor', () => {
+describeAwaitingWin32Platform('parsePnpmVersionMajor', () => {
   const majorCases: { text: string; major: number }[] = [
     { text: '10.22.0_1', major: 10 },
     { text: '11.0.0-rc.1', major: 11 },
@@ -196,7 +194,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('parsePnpmVersionMajor', () => {
   }
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('mapPnpmMajorToStoreVersion', () => {
+describeAwaitingWin32Platform('mapPnpmMajorToStoreVersion', () => {
   const storeVersionCases: { major: number; storeVersion: string }[] = [
     { major: 7, storeVersion: 'v3' },
     { major: 9, storeVersion: 'v3' },
@@ -220,7 +218,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('mapPnpmMajorToStoreVersion', () => {
   }
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('parsePnpmPins', () => {
+describeAwaitingWin32Platform('parsePnpmPins', () => {
   const majorsCases: { kind: ProjectPinFileKind; text: string; majors: number[] }[] = [
     { kind: 'packageJson', text: '{"packageManager": "pnpm@10.14.0"}', majors: [10] },
     { kind: 'packageJson', text: '{"packageManager": "pnpm@11.1.2+sha512.0a1b"}', majors: [11] },
@@ -357,7 +355,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('parsePnpmPins', () => {
   }
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('decidePnpmStoreOffers', () => {
+describeAwaitingWin32Platform('decidePnpmStoreOffers', () => {
   test('offers each store version no installed or pinned pnpm uses', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({ folderNames: ['v2', 'v3'] }),
@@ -481,7 +479,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('decidePnpmStoreOffers', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildPnpmStoreFindings', () => {
+describeAwaitingWin32Platform('buildPnpmStoreFindings', () => {
   const storeRoot = buildTestAbsolutePath({ text: '/store' });
   const folderPath = buildTestAbsolutePath({ text: '/store/v3' });
   const storeVersion = buildTestPnpmStoreVersion({ text: 'v3' });
@@ -559,7 +557,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('buildPnpmStoreFindings', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('comparePnpmStoreUnit', () => {
+describeAwaitingWin32Platform('comparePnpmStoreUnit', () => {
   const unit: ExplorePathUnitPnpmStore = {
     kind: 'pnpmStore',
     storeRoot: buildTestAbsolutePath({ text: '/store' }),
@@ -605,7 +603,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('comparePnpmStoreUnit', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPnpmInstallState', () => {
+describeAwaitingWin32Platform('loadPnpmInstallState', () => {
   test('reads the Cellar folders and the npm globals of each Homebrew prefix', async () => {
     const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
     const cellarPath = join(prefixPath, 'Cellar', 'pnpm', '10.14.0_1');
@@ -1208,7 +1206,7 @@ for (const probeCase of probeCases) {
   });
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('the recheck of a pnpm store unit', () => {
+describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
   let storeRoot: AbsolutePath;
   let pinPath: AbsolutePath;
   let unit: ExplorePathUnitPnpmStore;

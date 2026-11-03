@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, lutimes, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -11,6 +11,7 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -29,10 +30,7 @@ async function updateModifiedMsInOrder(params: {
   }
 }
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadTreeActivity', () => {
+describeAwaitingWin32Platform('loadTreeActivity', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

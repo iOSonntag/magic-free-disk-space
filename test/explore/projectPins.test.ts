@@ -13,7 +13,7 @@ import {
   PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
 } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import { selectToolPins } from '../../src/explore/projectPins/selectToolPins.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -22,6 +22,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import {
   buildTestPinFileText,
   buildTestPinFileUnfit,
@@ -33,10 +34,7 @@ const NO_SIBLINGS: ReadonlySet<string> = new Set();
 
 const PNPM_LOCK_SIBLINGS: ReadonlySet<string> = new Set(['package.json', 'pnpm-lock.yaml']);
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('matchProjectPinFile', () => {
+describeAwaitingWin32Platform('matchProjectPinFile', () => {
   const sharedNameKinds: [string, ProjectPinFileKind][] = [
     ['.tool-versions', 'toolVersions'],
     ['.nvmrc', 'nvmrc'],
@@ -97,7 +95,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('matchProjectPinFile', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('selectToolPins', () => {
+describeAwaitingWin32Platform('selectToolPins', () => {
   test('keeps the texts of the files of its kinds, each with its kind', () => {
     const selected = selectToolPins({
       pins: [
@@ -198,7 +196,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('selectToolPins', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildProjectSearchEvidence', () => {
+describeAwaitingWin32Platform('buildProjectSearchEvidence', () => {
   test('adds the incomplete-search line only when the walk was not complete', () => {
     expect(
       buildProjectSearchEvidence({
@@ -213,7 +211,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('buildProjectSearchEvidence', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loading the pins', () => {
+describeAwaitingWin32Platform('loading the pins', () => {
   let fixtureRoot: FixtureRoot;
   let homeRealPath: string;
   let trackedConfigsPath: string;

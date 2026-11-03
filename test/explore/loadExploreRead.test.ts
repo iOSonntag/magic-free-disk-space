@@ -10,7 +10,7 @@ import {
   loadExploreFolderNames,
   loadExploreRealPath,
 } from '../../src/explore/loadExploreRead.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -19,11 +19,9 @@ import {
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadExploreRead', () => {
+describeAwaitingWin32Platform('loadExploreRead', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

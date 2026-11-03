@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import type { FakeGhAnswer, FakeGhCall, FixtureCommandRun } from './releaseScriptFixtures.js';
 import {
   createFakeGh,
@@ -246,7 +247,7 @@ async function expectRequestKept(folder: string): Promise<void> {
   expect(await isPresent(join(folder, 'developer-id.certSigningRequest'))).toBe(true);
 }
 
-describe.skipIf(process.platform === 'win32')('setupSigning.sh request', () => {
+describeOnPosix('setupSigning.sh request', () => {
   test('creates a private folder with the key and a request for the email', async () => {
     const folder = join(fixtureRoot.rootDir, 'signing');
     const run = await runSetupSigning(['request', folder, 'oliver@example.com']);
@@ -369,7 +370,7 @@ describe.skipIf(process.platform === 'win32')('setupSigning.sh request', () => {
   });
 });
 
-describe.skipIf(process.platform === 'win32')('setupSigning.sh install', () => {
+describeOnPosix('setupSigning.sh install', () => {
   async function expectFirstRunSetsUpSigning(build: OpensslBuild): Promise<void> {
     const fixture = await createSigningFixture({ subject: DEVELOPER_ID_SUBJECT });
 

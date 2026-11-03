@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import type { FixtureCommandRun } from './releaseScriptFixtures.js';
 import { createFixtureBinDir, runReleaseScript } from './releaseScriptFixtures.js';
 
@@ -41,7 +42,7 @@ type FixtureApp = {
 
 type Architecture = (typeof FIXTURE_ARCHITECTURES)[number];
 
-describe.skipIf(process.platform === 'win32')('verifyAppSignature.sh', () => {
+describeOnPosix('verifyAppSignature.sh', () => {
   let fixtureRoot: FixtureRoot;
   let fixtureApp: FixtureApp;
 

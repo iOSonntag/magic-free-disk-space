@@ -1,8 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
 import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 
 const HOME_DIR = '/Users/example';
 
@@ -21,7 +21,7 @@ const vscodeCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR })
 
 const vscodeOffer: CandidateDecision = { kind: 'offer', candidate: vscodeCandidate };
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildScanReportOfPhases', () => {
+describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
   test('keeps the offers of an incomplete probe and shows the advice of its entry', () => {
     const report = buildScanReportOfPhases({
       phases: [{ decisions: [vscodeOffer], issues: [] }],

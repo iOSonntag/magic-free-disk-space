@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -8,10 +8,11 @@ import {
   TOOL_MAX_OUTPUT_BYTES,
 } from '../../src/tools/runToolCommand.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -99,10 +100,7 @@ async function waitUntilPresent(path: string): Promise<void> {
   throw new Error(`${path} did not appear.`);
 }
 
-/** Skips on Windows a test that needs POSIX signals. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('runToolCommand', () => {
+describeAwaitingWin32Platform('runToolCommand', () => {
   test('returns the output and the stderr tail of a run that exits with 0', async () => {
     const result = await runFakeTool({
       name: 'xcrun',

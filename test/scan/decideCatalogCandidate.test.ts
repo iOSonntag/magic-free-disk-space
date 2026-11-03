@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry, buildTestMeasurement } from '../support/candidateFixtures.js';
 
 const MIB = 1_048_576;
@@ -30,7 +30,7 @@ function decide(params: {
   });
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('decideCatalogCandidate', () => {
+describeAwaitingWin32Platform('decideCatalogCandidate', () => {
   test('offers a large entry with its catalog texts', () => {
     const decision = decide({});
 

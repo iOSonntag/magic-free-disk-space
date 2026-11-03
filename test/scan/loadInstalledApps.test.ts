@@ -1,15 +1,16 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import { loadInstalledApps } from '../../src/scan/loadInstalledApps.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 function buildInfoPlistText(params: { bundleId: string }): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -35,10 +36,7 @@ async function createFixtureBundle(params: {
   );
 }
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadInstalledApps', () => {
+describeAwaitingWin32Platform('loadInstalledApps', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

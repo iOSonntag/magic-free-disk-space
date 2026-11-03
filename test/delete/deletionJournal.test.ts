@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDeletionJournal, formatJournalLine } from '../../src/delete/deletionJournal.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -16,10 +17,7 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('formatJournalLine', () => {
+describeAwaitingWin32Platform('formatJournalLine', () => {
   test('writes one JSON object per line', () => {
     expect(formatJournalLine({ entry: { kind: 'sessionStart', atMs: 5 } })).toBe(
       '{"kind":"sessionStart","atMs":5}\n',
@@ -27,7 +25,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('formatJournalLine', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('createDeletionJournal', () => {
+describeAwaitingWin32Platform('createDeletionJournal', () => {
   test('creates the log folder, records the session start, and appends entries', async () => {
     const logPath = join(fixtureRoot.homeDir, 'Library/Logs/magic-free-disk-space/deletions.jsonl');
     const journal = await createDeletionJournal({ logPath: logPath, nowMs: 100 });

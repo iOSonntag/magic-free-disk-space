@@ -1,9 +1,14 @@
-import { loadFileAttributes, loadMachineRegistryDword } from '../win32Bindings.js';
+import {
+  loadFileAttributes,
+  loadMachineRegistryDword,
+  loadRtlAreLongPathsEnabled,
+} from '../win32Bindings.js';
 
-// Runs the plain kernel32 and advapi32 calls in a process of its own, so a crash of bun:ffi
+// Runs the plain kernel32, advapi32 and ntdll calls in a process of its own, so a crash of bun:ffi
 // shows as an exit code in the annotation instead of ending the test run. Writes one JSON line.
 //   kernelProbe.ts file-attributes <path>...
 //   kernelProbe.ts long-paths-setting
+//   kernelProbe.ts long-paths-of-process
 
 const command = process.argv[2];
 
@@ -18,6 +23,10 @@ if (command === 'file-attributes') {
   });
 
   process.stdout.write(`${JSON.stringify(reading)}\n`);
+} else if (command === 'long-paths-of-process') {
+  const rtlAreLongPathsEnabled = loadRtlAreLongPathsEnabled();
+
+  process.stdout.write(`${JSON.stringify({ rtlAreLongPathsEnabled: rtlAreLongPathsEnabled })}\n`);
 } else {
   process.stderr.write(`Unknown command: ${command}\n`);
   process.exit(2);

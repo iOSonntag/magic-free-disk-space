@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Candidate, CandidateDecision } from '../../src/scan/candidate.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
 
 function buildOffers(candidates: Candidate[]): CandidateDecision[] {
@@ -10,7 +10,7 @@ function buildOffers(candidates: Candidate[]): CandidateDecision[] {
   );
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildScanReport', () => {
+describeAwaitingWin32Platform('buildScanReport', () => {
   test('ranks offers and advice by size and keeps every skip and issue', () => {
     const small = buildTestCandidate({ path: '/home/small', allocatedBytes: 10 });
     const large = buildTestCandidate({ path: '/home/large', allocatedBytes: 1000 });

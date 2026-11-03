@@ -3,6 +3,7 @@ import {
   loadProcessCommands,
   parseProcessCommandLines,
 } from '../../src/scan/loadProcessCommands.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 describe('parseProcessCommandLines', () => {
   test('trims each line and drops the empty ones', () => {
@@ -20,7 +21,7 @@ describe('parseProcessCommandLines', () => {
   });
 });
 
-describe.skipIf(process.platform === 'win32')('loadProcessCommands', () => {
+describeOnPosix('loadProcessCommands', () => {
   test('lists the running processes, one of them bun', async () => {
     const result = await loadProcessCommands({ commandTimeoutMs: 5_000 });
 

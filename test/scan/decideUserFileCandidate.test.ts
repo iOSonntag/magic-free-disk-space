@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { decideUserFileCandidate } from '../../src/scan/decideUserFileCandidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestIdentity } from '../support/candidateFixtures.js';
 
 const MIB = 1_048_576;
@@ -21,7 +21,7 @@ function decide(params: { allocatedBytes?: number; modifiedMs?: number; kind?: F
   });
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('decideUserFileCandidate', () => {
+describeAwaitingWin32Platform('decideUserFileCandidate', () => {
   test('offers an old large file as careful', () => {
     const decision = decide({});
 

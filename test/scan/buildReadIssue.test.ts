@@ -3,14 +3,12 @@ import { chmod, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildFailureIssues, buildReadIssue } from '../../src/scan/buildReadIssue.js';
 import { loadDirectoryNames } from '../../src/system/loadDirectoryNames.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildReadIssue', () => {
+describeAwaitingWin32Platform('buildReadIssue', () => {
   test('reports the path with the reason of the failure and its code as the detail', () => {
     expect(
       buildReadIssue({
@@ -31,7 +29,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('buildReadIssue', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildFailureIssues', () => {
+describeAwaitingWin32Platform('buildFailureIssues', () => {
   test('reports a denial by macOS privacy protection as privacyDenied', () => {
     expect(
       buildFailureIssues({

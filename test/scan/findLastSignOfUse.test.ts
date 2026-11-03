@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { buildSignOfUsePaths, findLastSignOfUse } from '../../src/scan/findLastSignOfUse.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -17,7 +17,7 @@ const OLDEST_MS = 1_600_000_000_000;
 const MIDDLE_MS = 1_650_000_000_000;
 const NEWEST_MS = 1_700_000_000_000;
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildSignOfUsePaths', () => {
+describeAwaitingWin32Platform('buildSignOfUsePaths', () => {
   test('lists the bundle id places and the display-name place, in and outside the container', () => {
     const paths = buildSignOfUsePaths({
       homeDir: '/fixture/home',
@@ -52,7 +52,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('buildSignOfUsePaths', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('findLastSignOfUse', () => {
+describeAwaitingWin32Platform('findLastSignOfUse', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

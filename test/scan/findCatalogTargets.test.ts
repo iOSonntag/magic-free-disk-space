@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, CatalogRoot } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { findCatalogTargets } from '../../src/scan/findCatalogTargets.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -13,13 +13,11 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const TEST_NOW_MS = 1_700_000_000_000;
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('findCatalogTargets', () => {
+describeAwaitingWin32Platform('findCatalogTargets', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

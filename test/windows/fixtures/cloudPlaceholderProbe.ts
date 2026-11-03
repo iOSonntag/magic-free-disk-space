@@ -1,7 +1,7 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
-import { lstat, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { describeThrownError } from '../observations.js';
+import { loadLstatText, observeSafely } from '../observations.js';
 import { formatHex, loadFileAttributes, loadFindData, toWideString } from '../win32Bindings.js';
 
 // Registers a sync root in the given empty folder, creates cloud placeholders in it and converts
@@ -230,27 +230,17 @@ const convertToHydratedPlaceholder = async (
 };
 
 const observeEntry = async (label: string, path: string): Promise<void> => {
-  const observations: Record<string, unknown> = {};
-
-  try {
-    const stats = await lstat(path);
-
-    observations.lstat = `isSymbolicLink=${stats.isSymbolicLink()} isDirectory=${stats.isDirectory()} isFile=${stats.isFile()}`;
-  } catch (error) {
-    observations.lstat = describeThrownError(error);
-  }
-
+  const lstatText = await observeSafely(() => loadLstatText(path));
   const attributes = loadFileAttributes(path);
-
-  observations.attributes = `${attributes.attributesHex} ${attributes.attributeNames}`;
-
   const findData = loadFindData(path);
 
-  observations.findFirstFile = findData.found
-    ? `attributes=${findData.attributesHex} dwReserved0=${findData.reparseTagHex}`
-    : `failed lastError=${findData.lastError}`;
-
-  writeStage(label, observations);
+  writeStage(label, {
+    lstat: lstatText,
+    attributes: `${attributes.attributesHex} ${attributes.attributeNames}`,
+    findFirstFile: findData.isFound
+      ? `attributes=${findData.attributesHex} dwReserved0=${findData.reparseTagHex}`
+      : `failed lastError=${findData.lastError}`,
+  });
 };
 
 const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {

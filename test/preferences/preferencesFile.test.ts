@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -6,9 +6,10 @@ import {
   loadPreferences,
   saveIsUpdateCheckEnabled,
 } from '../../src/preferences/preferencesFile.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 let preferencesPath: string;
@@ -29,10 +30,7 @@ async function writePreferencesFile(text: string): Promise<void> {
   await writeFile(preferencesPath, text);
 }
 
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPreferences', () => {
+describeAwaitingWin32Platform('loadPreferences', () => {
   test('lives in the support folder of the app', () => {
     expect(preferencesPath).toBe(
       join(
@@ -88,7 +86,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPreferences', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('saveIsUpdateCheckEnabled', () => {
+describeAwaitingWin32Platform('saveIsUpdateCheckEnabled', () => {
   test('saves the value for the next load, in a private folder and file', async () => {
     expect(
       await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false }),

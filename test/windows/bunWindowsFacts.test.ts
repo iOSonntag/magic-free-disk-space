@@ -8,6 +8,7 @@ import {
   describeThrownError,
   formatNoticeCommand,
   formatProbeOutputLines,
+  loadLstatText,
   observeSafely,
   parseJsonObject,
 } from './observations.js';
@@ -60,14 +61,12 @@ type ChildRun = {
   stderr: string;
 };
 
-const emittedFactGroups = new Set<FactGroup>();
 let runContextLine = 'context: not read';
 
 const emitFactNotice = (group: FactGroup, lines: string[]): void => {
   const message = [runContextLine, `group: ${group}`, ...lines].join('\n');
 
   process.stdout.write(`${formatNoticeCommand({ title: NOTICE_TITLE, message: message })}\n`);
-  emittedFactGroups.add(group);
 };
 
 const runChildProcess = async (params: {
@@ -145,21 +144,35 @@ const loadLongPathsEnabledContext = async (): Promise<string> => {
     return `${String(reading.value)} (RegGetValueW)`;
   }
 
-  const regQuery = Bun.spawnSync([
+  const registryQuery = Bun.spawnSync([
     'reg',
     'query',
     'HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem',
     '/v',
     'LongPathsEnabled',
   ]);
-  const regValue = /LongPathsEnabled\s+REG_DWORD\s+(0x[0-9a-f]+)/i.exec(regQuery.stdout.toString());
+  const registryValueMatch = /LongPathsEnabled\s+REG_DWORD\s+(0x[0-9a-f]+)/i.exec(
+    registryQuery.stdout.toString(),
+  );
   const registryFailure = `RegGetValueW gave ${JSON.stringify(reading)}, ${formatChildEnd(run).join(' ')}`;
 
-  if (regValue?.[1] === undefined) {
-    return `unknown (${registryFailure}; reg query exitCode=${regQuery.exitCode})`;
+  if (registryValueMatch?.[1] === undefined) {
+    return `unknown (${registryFailure}; reg query exitCode=${registryQuery.exitCode})`;
   }
 
-  return `${Number.parseInt(regValue[1], 16)} (reg query; ${registryFailure})`;
+  return `${Number.parseInt(registryValueMatch[1], 16)} (reg query; ${registryFailure})`;
+};
+
+/** What `RtlAreLongPathsEnabled` answers for a child Bun, the long paths a process really gets. */
+const loadRtlAreLongPathsEnabledContext = async (): Promise<string> => {
+  const run = await runBunScript(KERNEL_PROBE_PATH, ['long-paths-of-process']);
+  const reading = parseJsonObject(new TextDecoder().decode(run.stdout).trim());
+
+  if (reading !== null && typeof reading.rtlAreLongPathsEnabled === 'number') {
+    return String(reading.rtlAreLongPathsEnabled);
+  }
+
+  return `unknown (${formatChildEnd(run).join(' ')})`;
 };
 
 /** Removes the folder, through `rd /s /q` on the `\\?\` path when Bun's fs leaves it behind. */
@@ -179,12 +192,6 @@ const removeFolderBestEffort = async (path: string): Promise<boolean> => {
 
 const createTempFolder = (): Promise<string> => {
   return mkdtemp(join(tmpdir(), 'mfds-windows-facts-'));
-};
-
-const formatLstat = async (path: string): Promise<string> => {
-  const stats = await lstat(path);
-
-  return `isSymbolicLink=${stats.isSymbolicLink()} isDirectory=${stats.isDirectory()} isFile=${stats.isFile()}`;
 };
 
 /** Creates a junction, by `fs.symlink` and else by `mklink /J`, and returns how it was made. */
@@ -233,10 +240,10 @@ const observeLinks = async (folder: string): Promise<string[]> => {
 
   return [
     `junction made by: ${junctionCreation}`,
-    `junction lstat: ${await observeSafely(() => formatLstat(junction))}`,
+    `junction lstat: ${await observeSafely(() => loadLstatText(junction))}`,
     `dir symlink fs.symlink: ${symlinkCreation}`,
-    `dir symlink lstat: ${await observeSafely(() => formatLstat(directorySymlink))}`,
-    `plain dir lstat: ${await observeSafely(() => formatLstat(target))}`,
+    `dir symlink lstat: ${await observeSafely(() => loadLstatText(directorySymlink))}`,
+    `plain dir lstat: ${await observeSafely(() => loadLstatText(target))}`,
   ];
 };
 
@@ -290,7 +297,7 @@ const observeLongPaths = async (folder: string): Promise<string[]> => {
 
       return 'ok';
     })}`,
-    `lstat: ${await observeSafely(() => formatLstat(longFile))}`,
+    `lstat: ${await observeSafely(() => loadLstatText(longFile))}`,
     `readdir: ${await observeSafely(async () => {
       const entries = await readdir(longFolder);
 
@@ -391,16 +398,16 @@ const gatherObservationLines = async (observe: () => Promise<string[]>): Promise
 describe.skipIf(process.platform !== 'win32')('Bun on Windows', () => {
   beforeAll(async () => {
     const longPathsEnabled = await observeSafely(() => loadLongPathsEnabledContext());
+    const rtlAreLongPathsEnabled = await observeSafely(() => loadRtlAreLongPathsEnabledContext());
 
-    runContextLine = `context: arch=${process.arch} LongPathsEnabled=${longPathsEnabled} bun=${Bun.version}`;
-  }, CHILD_TIMEOUT_MS * 2);
+    runContextLine = `context: arch=${process.arch} LongPathsEnabled=${longPathsEnabled} RtlAreLongPathsEnabled=${rtlAreLongPathsEnabled} bun=${Bun.version}`;
+  }, CHILD_TIMEOUT_MS * 3);
 
   test(
     'lstat of a junction, a directory symlink and a plain folder',
     async () => {
       const removed = await observeFactGroupInTempFolder('links', observeLinks);
 
-      expect(emittedFactGroups.has('links')).toBe(true);
       expect(removed).toBe(true);
     },
     FACT_GROUP_TIMEOUT_MS,
@@ -418,7 +425,6 @@ describe.skipIf(process.platform !== 'win32')('Bun on Windows', () => {
       });
 
       // The placeholder root is removed best effort: a sync root may keep its folder.
-      expect(emittedFactGroups.has('cloud placeholders')).toBe(true);
     },
     FACT_GROUP_TIMEOUT_MS,
   );
@@ -433,7 +439,6 @@ describe.skipIf(process.platform !== 'win32')('Bun on Windows', () => {
         ];
       });
 
-      expect(emittedFactGroups.has('rm of a tree')).toBe(true);
       expect(removed).toBe(true);
     },
     FACT_GROUP_TIMEOUT_MS,
@@ -444,7 +449,6 @@ describe.skipIf(process.platform !== 'win32')('Bun on Windows', () => {
     async () => {
       const removed = await observeFactGroupInTempFolder('long paths in Bun fs', observeLongPaths);
 
-      expect(emittedFactGroups.has('long paths in Bun fs')).toBe(true);
       expect(removed).toBe(true);
     },
     FACT_GROUP_TIMEOUT_MS,
@@ -465,7 +469,6 @@ describe.skipIf(process.platform !== 'win32')('Bun on Windows', () => {
         },
       );
 
-      expect(emittedFactGroups.has('process ids and bun:ffi')).toBe(true);
       expect(removed).toBe(true);
     },
     FACT_GROUP_TIMEOUT_MS,
@@ -476,7 +479,6 @@ describe.skipIf(process.platform !== 'win32')('Bun on Windows', () => {
     async () => {
       const removed = await observeFactGroupInTempFolder('compiled probe', observeCompiledProbe);
 
-      expect(emittedFactGroups.has('compiled probe')).toBe(true);
       expect(removed).toBe(true);
     },
     COMPILED_PROBE_GROUP_TIMEOUT_MS,

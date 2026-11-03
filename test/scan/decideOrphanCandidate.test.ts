@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { decideOrphanCandidate } from '../../src/scan/decideOrphanCandidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 
 const MIB = 1_048_576;
@@ -34,7 +34,7 @@ function decide(params: {
   });
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('decideOrphanCandidate', () => {
+describeAwaitingWin32Platform('decideOrphanCandidate', () => {
   test('offers the container of an app that is not installed as careful leftovers', () => {
     const decision = decide({ name: 'com.example.removed' });
 

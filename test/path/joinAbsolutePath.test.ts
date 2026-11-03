@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('joinAbsolutePath', () => {
+describeAwaitingWin32Platform('joinAbsolutePath', () => {
   test('joins each name as one folder level below the parent', () => {
     expect(
       joinAbsolutePath({

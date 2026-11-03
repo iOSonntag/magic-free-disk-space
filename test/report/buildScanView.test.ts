@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
@@ -6,7 +6,7 @@ import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Advice, Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
 import { buildTestAbsolutePath, buildTestUdid } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
@@ -83,7 +83,7 @@ function listNumbersTopToBottom(params: { view: ScanView }): number[] {
   return [...sectionNumbers, ...exploreNumbers];
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildScanView', () => {
+describeAwaitingWin32Platform('buildScanView', () => {
   test('shows an empty scan as its summary alone', () => {
     expect(buildScanView({ report: EMPTY_REPORT, fullDiskAccessHolder: 'app' })).toEqual({
       summary: { titleText: 'Nothing to delete was found.', lines: [] },

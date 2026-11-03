@@ -50,16 +50,6 @@ jobs:
       - name: Test the command line tool and the bridge
         run: bun test
 
-      # Consumer Windows ships with long paths off, while the runner may have them on, so the facts
-      # of a path past 260 characters are measured once more with them off. A process reads the
-      # setting when it starts, so the tests started after this step see it.
-      - name: Measure the Bun Windows facts with long paths off
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 0 -Type DWord
-          bun test test/windows/bunWindowsFacts.test.ts
-
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -69,6 +59,16 @@ jobs:
       - name: Test the app
         working-directory: app
         run: flutter test
+
+      # Consumer Windows ships with long paths off, while the runner may have them on, so the facts
+      # of a path past 260 characters are measured once more with them off. A process reads the
+      # setting when it starts, so the tests started after this step see it.
+      - name: Measure the Bun Windows facts with long paths off
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 0 -Type DWord
+          bun test test/windows/bunWindowsFacts.test.ts
 
   # The release ships a native arm64 build for Windows, and every Win32 call goes through bun:ffi,
   # so the facts are measured on arm64 too, long before a release proof would show them.

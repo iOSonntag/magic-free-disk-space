@@ -94,6 +94,11 @@ ${params.commandBody}
   return path;
 }
 
+/** A body statement that removes the folder at `path` with all it holds, for a body with `fs` in scope. */
+export function buildRemoveFolderBody(path: string): string {
+  return `fs.rmSync(${JSON.stringify(path)}, { recursive: true });`;
+}
+
 /** Each tool at the one absolute path given, and every tool not given nowhere. */
 export function buildFixtureToolLocations(
   paths: Partial<Record<ToolName, string>>,

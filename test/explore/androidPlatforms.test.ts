@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -23,7 +23,7 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -32,6 +32,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_UNUSED_CUTOFF_MS,
@@ -95,11 +96,6 @@ function buildExampleState(): AndroidPlatformState {
 function buildTextPins(...texts: string[]): ToolPins {
   return { kind: 'texts', files: texts.map((text) => buildGradleText(text)) };
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
-
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
 
 describeAwaitingWin32Platform('parseAndroidCompileSdkPins', () => {
   test('reads a compileSdk indented in an android block', () => {

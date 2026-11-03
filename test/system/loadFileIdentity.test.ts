@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, realpath, symlink } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { basename, dirname, join } from 'node:path';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -11,6 +11,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const fixtureModifiedMs = Date.UTC(2024, 0, 15, 12, 0, 0);
 
@@ -20,10 +21,7 @@ async function loadExpectedRealPath(params: { path: string }): Promise<string> {
   return join(parentRealPath, basename(params.path));
 }
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadFileIdentity', () => {
+describeAwaitingWin32Platform('loadFileIdentity', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

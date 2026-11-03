@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { buildUpdateNotice } from '../../src/report/buildUpdateNotice.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildUpdateNotice', () => {
+describeAwaitingWin32Platform('buildUpdateNotice', () => {
   test('builds the notice of the protocol fixture for a newer release', async () => {
     const notice = buildUpdateNotice({
       kind: 'newer',

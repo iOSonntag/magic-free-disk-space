@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -15,7 +15,7 @@ import {
 } from '../../src/explore/recheckExploreUnit.js';
 import type { SimulatorDevice } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -98,7 +98,7 @@ const miseUnit: ExploreToolUnitMiseVersion = {
   installPath: nodeInstallPath,
 };
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('compareSimulatorDevice', () => {
+describeAwaitingWin32Platform('compareSimulatorDevice', () => {
   test('is unchanged while the device is still listed and offered', () => {
     expect(
       compareSimulatorDevice({
@@ -151,7 +151,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('compareSimulatorDevice', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('compareDartPubCache', () => {
+describeAwaitingWin32Platform('compareDartPubCache', () => {
   test('is unchanged for the same set or a subset, even when ps failed', () => {
     expect(
       compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths, processCommands: null }),
@@ -180,7 +180,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('compareDartPubCache', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('compareMiseVersion', () => {
+describeAwaitingWin32Platform('compareMiseVersion', () => {
   test('is unchanged while the version is still prunable at the same path, even when ps failed', () => {
     expect(
       compareMiseVersion({
@@ -218,7 +218,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('compareMiseVersion', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('recheckExploreUnit', () => {
+describeAwaitingWin32Platform('recheckExploreUnit', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
@@ -9,7 +9,7 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -18,6 +18,7 @@ import {
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const NO_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
@@ -50,10 +51,7 @@ function walkTestProjects(params: {
   });
 }
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('walkProjects', () => {
+describeAwaitingWin32Platform('walkProjects', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

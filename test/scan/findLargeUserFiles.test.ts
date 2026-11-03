@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -10,6 +10,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const MIN_ALLOCATED_BYTES = 1024 * 1024;
 const LARGE_FILE_BYTES = 2 * 1024 * 1024;
@@ -17,10 +18,7 @@ const SMALL_FILE_BYTES = 1024;
 const TEST_MODIFIED_MS = 1_600_000_000_000;
 const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('findLargeUserFiles', () => {
+describeAwaitingWin32Platform('findLargeUserFiles', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

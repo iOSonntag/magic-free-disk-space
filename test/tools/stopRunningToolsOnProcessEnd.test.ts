@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getErrorCode } from '../../src/system/getErrorCode.js';
 import type { ProcessEndSignal } from '../../src/tools/runToolCommand.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import { FIXTURE_SIGNAL_EXIT_CODES } from './stopRunningToolsOnProcessEndFixture.js';
 
 const FIXTURE_SCRIPT_PATH = join(import.meta.dir, 'stopRunningToolsOnProcessEndFixture.ts');
@@ -72,7 +73,7 @@ async function waitUntilPresent(path: string): Promise<void> {
 
 const signals: ProcessEndSignal[] = ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGTERM'];
 
-describe.skipIf(process.platform === 'win32')('stopRunningToolsOnProcessEnd', () => {
+describeOnPosix('stopRunningToolsOnProcessEnd', () => {
   test.each(signals)('on %s stops the running tool and exits with its code', async (signal) => {
     const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
     const script = Bun.spawn(

@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { buildFullDiskAccessNotices } from '../../src/report/buildFullDiskAccessNotices.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildFullDiskAccessNotices', () => {
+describeAwaitingWin32Platform('buildFullDiskAccessNotices', () => {
   test('gives the banner of the protocol fixture, with the Settings link, while access is denied', async () => {
     const notices = buildFullDiskAccessNotices('denied');
 

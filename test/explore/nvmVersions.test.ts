@@ -29,7 +29,7 @@ import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -38,6 +38,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath, buildTestNvmNodeVersion } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
   buildEmptyProjectPinsLoad,
@@ -95,11 +96,6 @@ function buildNvmrcPins(params: { texts: string[] }): ToolPins {
 function listOfferedVersions(offers: NvmVersionOffers): string[] {
   return offers.offers.map((offer) => offer.version);
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
-
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
 
 describeAwaitingWin32Platform('parseNvmNodeVersion', () => {
   test('passes a v<x.y.z> folder name and refuses any other', () => {

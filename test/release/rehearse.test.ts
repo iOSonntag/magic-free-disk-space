@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test';
+import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test';
 import { join } from 'node:path';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import type { FakeGhAnswer, FakeGhCall, FixtureCommandRun } from './releaseScriptFixtures.js';
 import {
   createFakeGh,
@@ -28,7 +29,7 @@ https://github.com/${REPOSITORY}/actions/runs/${NEW_RUN_ID}
 `;
 const DISPATCH_OUTPUT_WITHOUT_URL = '✓ Created workflow_dispatch event for release.yml at main\n';
 
-describe.skipIf(process.platform === 'win32')('rehearse.sh', () => {
+describeOnPosix('rehearse.sh', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

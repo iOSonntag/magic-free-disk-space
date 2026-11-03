@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
@@ -31,7 +31,7 @@ function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
   });
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('validateRemoval', () => {
+describeAwaitingWin32Platform('validateRemoval', () => {
   test('approves files and folders strictly inside an allowed root', () => {
     expect(validate({ path: '/Users/tester/Library/Caches/com.example.app' }).kind).toBe(
       'approved',

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -27,7 +27,7 @@ import type {
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -36,6 +36,7 @@ import {
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -134,11 +135,6 @@ async function loadFreshState() {
 
   return state.value;
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
-
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
 
 describeAwaitingWin32Platform('parseAndroidIniText and parseAndroidPackagePath', () => {
   test('reads keys with and without spaces around the equals sign', () => {

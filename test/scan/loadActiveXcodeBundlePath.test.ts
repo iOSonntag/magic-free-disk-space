@@ -3,6 +3,7 @@ import {
   getXcodeBundlePath,
   loadActiveXcodeBundlePath,
 } from '../../src/scan/loadActiveXcodeBundlePath.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 describe('getXcodeBundlePath', () => {
   test('returns the app bundle above the developer directory', () => {
@@ -38,7 +39,7 @@ describe('getXcodeBundlePath', () => {
   });
 });
 
-describe.skipIf(process.platform === 'win32')('loadActiveXcodeBundlePath', () => {
+describeOnPosix('loadActiveXcodeBundlePath', () => {
   test('reads the active developer directory of this Mac', async () => {
     const result = await loadActiveXcodeBundlePath({ commandTimeoutMs: 5_000 });
 

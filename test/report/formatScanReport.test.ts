@@ -1,8 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestDartToolCandidate,
@@ -34,7 +34,7 @@ function buildAdvice(params: {
   };
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('formatScanReport', () => {
+describeAwaitingWin32Platform('formatScanReport', () => {
   test('says that nothing was found for an empty report', () => {
     expect(formatScanReport({ report: EMPTY_REPORT })).toEqual(['Nothing to delete was found.']);
   });

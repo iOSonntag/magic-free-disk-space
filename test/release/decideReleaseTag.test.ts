@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { decideReleaseTag } from '../../scripts/release/decideReleaseTag.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import type { FixtureCommandRun } from './releaseScriptFixtures.js';
 import { runFixtureCommand } from './releaseScriptFixtures.js';
 
@@ -59,7 +60,7 @@ describe('decideReleaseTag', () => {
   });
 });
 
-describe.skipIf(process.platform === 'win32')('the command decideReleaseTag.ts', () => {
+describeOnPosix('the command decideReleaseTag.ts', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -9,7 +9,7 @@ import type {
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -49,8 +49,6 @@ afterEach(async () => {
 function buildSdkRoot(): AbsolutePath {
   return buildAndroidSdkRoot({ homeDir: homeDir });
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
 
 describeAwaitingWin32Platform('startExploreProbes with the Android probes', () => {
   test('offers the unused AVD with the located avdmanager, and the image no AVD names', async () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -27,7 +27,7 @@ import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -38,6 +38,7 @@ import {
   buildTestAbsolutePath,
   buildTestHomebrewFormulaName,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import {
   APPLE_SILICON_CELLAR_PATH,
   buildHomebrewCleanupDryRunText,
@@ -132,10 +133,7 @@ function buildOrphansUnit(params: { cellarPath: string }): ExploreToolUnitHomebr
   };
 }
 
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('parseHomebrewCellarPath', () => {
+describeAwaitingWin32Platform('parseHomebrewCellarPath', () => {
   test('reads the one path brew prints', () => {
     expect(parseHomebrewCellarPath({ stdoutText: '/opt/homebrew/Cellar\n' })).toEqual({
       kind: 'succeeded',
@@ -150,7 +148,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('parseHomebrewCellarPath', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('parseHomebrewCleanupDryRun', () => {
+describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
   test('reads every Would remove line with its size, and skips the closing line', () => {
     const removals = parseHomebrewCleanupDryRun({
       stdoutText: buildHomebrewCleanupDryRunText({
@@ -200,7 +198,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('parseHomebrewCleanupDryRun', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildHomebrewOldVersions', () => {
+describeAwaitingWin32Platform('buildHomebrewOldVersions', () => {
   test('groups the kegs of its own Cellar by formula and ignores every other line', () => {
     const removals = parseHomebrewCleanupDryRun({
       stdoutText: buildHomebrewCleanupDryRunText({
@@ -323,7 +321,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('buildHomebrewOldVersions', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('parseHomebrewAutoremoveDryRun', () => {
+describeAwaitingWin32Platform('parseHomebrewAutoremoveDryRun', () => {
   test('reads each listed formula, a tap formula by its name', () => {
     expect(parseHomebrewAutoremoveDryRun({ stdoutText: HOMEBREW_AUTOREMOVE_DRY_RUN_TEXT })).toEqual(
       { kind: 'succeeded', value: [libyaml, libfoo] },
@@ -354,7 +352,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('parseHomebrewAutoremoveDryRun', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('decideHomebrewOrphans', () => {
+describeAwaitingWin32Platform('decideHomebrewOrphans', () => {
   test('judges no orphans when none is listed', () => {
     expect(decideHomebrewOrphans({ orphans: [] })).toEqual({ kind: 'judged', orphans: [] });
   });
@@ -383,7 +381,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('decideHomebrewOrphans', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('buildHomebrewFindings', () => {
+describeAwaitingWin32Platform('buildHomebrewFindings', () => {
   test('offers each formula with old versions and the orphans together', () => {
     const probeFindings = buildHomebrewFindings({ tool: brew, state: state, processCommands: [] });
     const findings = probeFindings.findings;
@@ -445,7 +443,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('buildHomebrewFindings', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('compareHomebrewUnit', () => {
+describeAwaitingWin32Platform('compareHomebrewUnit', () => {
   test('is unchanged while the fresh kegs are a subset of the scanned ones and brew is idle', () => {
     const oneKegLeft: HomebrewState = {
       ...state,
@@ -513,7 +511,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('compareHomebrewUnit', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('with fake brews', () => {
+describeAwaitingWin32Platform('with fake brews', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let appleSiliconCellarPath: string;

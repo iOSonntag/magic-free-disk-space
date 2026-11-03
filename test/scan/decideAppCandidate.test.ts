@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { decideAppCandidate } from '../../src/scan/decideAppCandidate.js';
 import type { InstalledApp } from '../../src/scan/loadInstalledApps.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 
@@ -36,7 +36,7 @@ function decide(params: {
   });
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('decideAppCandidate', () => {
+describeAwaitingWin32Platform('decideAppCandidate', () => {
   test('offers a large unused app as review with its last use date', () => {
     const decision = decide({});
 

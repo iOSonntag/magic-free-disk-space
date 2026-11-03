@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { runToolCandidate } from '../../src/delete/runToolCandidate.js';
@@ -13,7 +13,7 @@ import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import type { ProbeCommandName } from '../explore/probeFakeTools.js';
-import { createUnitRunFakeTool } from '../explore/probeFakeTools.js';
+import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDartGcDryRunText,
   buildDartGcPaths,
@@ -23,7 +23,7 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -34,6 +34,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -174,11 +175,7 @@ async function createDartUnit(): Promise<ExploreToolUnitDartPubCache> {
 }
 
 function buildRemoveCommands(paths: AbsolutePath[]): string {
-  return paths.map((path) => buildRemoveCommand(path)).join('\n');
-}
-
-function buildRemoveCommand(path: string): string {
-  return `fs.rmSync(${JSON.stringify(path)}, { recursive: true });`;
+  return paths.map((path) => buildRemoveFolderBody(path)).join('\n');
 }
 
 async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
@@ -191,17 +188,14 @@ async function loadNoProcessCommands(): Promise<string[] | null> {
   return [];
 }
 
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('runToolCandidate', () => {
+describeAwaitingWin32Platform('runToolCandidate', () => {
   test('runs the command of an unchanged unit and reports the measured drop', async () => {
     const unit = await createMiseUnit('20.1.0');
 
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `${buildRemoveCommand(unit.installPath)}
+      commandBody: `${buildRemoveFolderBody(unit.installPath)}
 fs.writeSync(2, 'uninstalled node@20.1.0\\n');
 process.exit(0);`,
     });
@@ -307,7 +301,7 @@ process.exit(0);`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `${buildRemoveCommand(unit.installPath)}
+      commandBody: `${buildRemoveFolderBody(unit.installPath)}
 process.exit(0);`,
     });
     await chmod(buildToolPath('mise'), 0o777);
@@ -359,7 +353,7 @@ process.exit(0);`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `${buildRemoveCommand(unit.installPath)}
+      commandBody: `${buildRemoveFolderBody(unit.installPath)}
 process.exit(0);`,
     });
 
@@ -381,7 +375,7 @@ process.exit(0);`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildSimulatorDeviceListJson({ homeDir: environment.homeDir }),
-      commandBody: `${buildRemoveCommand(unit.dataPath)}
+      commandBody: `${buildRemoveFolderBody(unit.dataPath)}
 process.exit(0);`,
     });
 
@@ -460,7 +454,7 @@ process.exit(0);`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `${buildRemoveCommand(removedPart)}
+      commandBody: `${buildRemoveFolderBody(removedPart)}
 fs.writeSync(2, 'cannot remove bin\\n');
 process.exit(3);`,
     });
@@ -497,7 +491,7 @@ process.exit(3);`,
       await createUnitTool({
         unit: unit,
         probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-        commandBody: `${buildRemoveCommand(join(unit.installPath, 'bin'))}
+        commandBody: `${buildRemoveFolderBody(join(unit.installPath, 'bin'))}
 fs.chmodSync(${JSON.stringify(unreadablePart)}, 0o000);
 process.exit(0);`,
       });

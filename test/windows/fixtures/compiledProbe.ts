@@ -3,7 +3,7 @@ import { lstat, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildLongPathSegments } from '../longPath.js';
 import { describeThrownError, observeSafely } from '../observations.js';
-import { loadFileAttributes } from '../win32Bindings.js';
+import { loadFileAttributes, loadRtlAreLongPathsEnabled } from '../win32Bindings.js';
 
 // Compiled by bunWindowsFacts.test.ts the way the bridge is. Echoes every stdin line to stdout as
 // it came, then, once stdin ends, writes one JSON line per finding, so a crash in a later finding
@@ -41,6 +41,7 @@ const observeLongPathInsideProbe = async (folder: string): Promise<void> => {
   const longFile = join(longFolder, 'file.txt');
 
   writeFinding('long path in the compiled probe', {
+    rtlAreLongPathsEnabled: await observeSafely(() => String(loadRtlAreLongPathsEnabled())),
     pathLength: longFile.length,
     mkdir: await observeSafely(async () => {
       await mkdir(longFolder, { recursive: true });

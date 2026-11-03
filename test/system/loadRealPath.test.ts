@@ -1,19 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadRealPath } from '../../src/system/loadRealPath.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
-/** Skips on Windows a test that needs symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadRealPath', () => {
+describeAwaitingWin32Platform('loadRealPath', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

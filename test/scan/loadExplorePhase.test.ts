@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, realpath, rename, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, ExploreProbeId } from '../../src/catalog/catalog.js';
@@ -25,7 +25,7 @@ import {
   createVscodeInstallation,
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -39,6 +39,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
 
@@ -158,10 +159,7 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadExplorePhase', () => {
+describeAwaitingWin32Platform('loadExplorePhase', () => {
   test('offers each idle device the fake simctl finds, measured, and skips the booted one', async () => {
     const unavailableDataPath = buildDeviceDataPath({
       homeDir: environment.homeDir,

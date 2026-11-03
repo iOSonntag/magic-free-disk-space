@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -13,7 +13,7 @@ import { parseSimulatorRuntimeList } from '../../src/explore/simulatorRuntimes/p
 import { compareSimulatorRuntime } from '../../src/explore/simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -83,8 +83,6 @@ function buildWorkingAnswers(params: { homeDir: string }): ProbeFakeAnswer[] {
     },
   ];
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
 
 describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
   test('reads each runtime with its id, identifier, image, and last use', () => {

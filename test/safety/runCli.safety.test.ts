@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { runCli } from '../../src/cli/runCli.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -127,7 +127,7 @@ async function runWithInput(params: {
   return { exitCode: exitCode, io: io };
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('runCli safety', () => {
+describeAwaitingWin32Platform('runCli safety', () => {
   test('the ranking of the fixture home is the one these tests rely on', async () => {
     const { exitCode, io } = await runWithInput({ argv: ['--list'], inputLines: [] });
     const out = io.outText();

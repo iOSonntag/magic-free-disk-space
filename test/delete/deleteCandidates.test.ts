@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { RemovalOutcomeKind, RemovalRun } from '../../src/delete/deleteCandidates.js';
@@ -17,7 +17,7 @@ import type {
 import type { Candidate } from '../../src/scan/candidate.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
-import { createUnitRunFakeTool } from '../explore/probeFakeTools.js';
+import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDeviceDataPath,
   buildMisePrunableJson,
@@ -37,7 +37,7 @@ import {
   VSCODE_APP_COMMAND,
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
@@ -51,6 +51,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
 
@@ -242,7 +243,7 @@ async function createSimulatorCandidate(): Promise<Candidate> {
       },
     ],
     commandBody: `fs.writeFileSync(${JSON.stringify(markerPath)}, '');
-fs.rmSync(${JSON.stringify(dataPath)}, { recursive: true });
+${buildRemoveFolderBody(dataPath)}
 process.exit(0);`,
   });
 
@@ -281,11 +282,6 @@ function buildExpectedToolIntent(params: { candidate: Candidate; version: string
     args: ['uninstall', `node@${params.version}`],
   };
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
-
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
 
 describeAwaitingWin32Platform('deleteCandidates', () => {
   test('deletes exactly the given items and records intent before outcome', async () => {
@@ -584,16 +580,11 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
   });
 });
 
-/** The line of a fake tool's body that removes the folder at `path`. */
-function buildRemoveFolderCommand(path: string): string {
-  return `fs.rmSync(${JSON.stringify(path)}, { recursive: true });`;
-}
-
 describeAwaitingWin32Platform('deleteCandidates with a tool item', () => {
   test('records the intent and then the outcome of a completed run', async () => {
     const candidate = await createToolCandidate({
       version: '20.1.0',
-      buildCommandBody: (installPath) => `${buildRemoveFolderCommand(installPath)}
+      buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
 fs.writeSync(2, 'uninstalled node@20.1.0\\n');
 process.exit(0);`,
     });
@@ -639,7 +630,7 @@ process.exit(0);`,
   test('records the intent and then the skip of a unit that changed since the scan', async () => {
     const candidate = await createToolCandidate({
       version: '18.0.0',
-      buildCommandBody: (installPath) => `${buildRemoveFolderCommand(installPath)}
+      buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
 process.exit(0);`,
     });
     const journal = await createTestJournal();
@@ -724,7 +715,7 @@ process.exit(1);`,
 
     const toolCandidate = await createToolCandidate({
       version: '20.1.0',
-      buildCommandBody: (installPath) => `${buildRemoveFolderCommand(installPath)}
+      buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
 process.exit(0);`,
     });
     const toolAllocatedBytes = await measureAllocatedBytes(toolCandidate);

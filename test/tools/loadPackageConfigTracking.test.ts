@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { PackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
 import { PACKAGE_CONFIG_CANDIDATES_MAX_COUNT } from '../../src/tools/decidePackageConfigTracking.js';
 import { loadPackageConfigTracking } from '../../src/tools/loadPackageConfigTracking.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 import {
@@ -14,6 +14,7 @@ import {
   createGitIndex,
   createUntrackedProjectRepository,
 } from '../support/flutterSdkFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const PACKAGE_CONFIG_PATH = '.dart_tool/package_config.json';
 
@@ -74,10 +75,7 @@ async function createUntrackedProject(projectRoot: string): Promise<string> {
   return await createDartTool(projectRoot);
 }
 
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPackageConfigTracking', () => {
+describeAwaitingWin32Platform('loadPackageConfigTracking', () => {
   test('returns untracked for a repository whose index does not name the package config', async () => {
     const dartToolPath = await createUntrackedProject(join(fixtureRoot.rootDir, 'app'));
 

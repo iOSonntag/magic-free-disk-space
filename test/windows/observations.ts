@@ -1,3 +1,5 @@
+import { lstat } from 'node:fs/promises';
+
 /** A thrown error as its raw fields, such as `code=EPERM errno=-4048 syscall=rm`. */
 export const describeThrownError = (error: unknown): string => {
   if (!(error instanceof Error)) {
@@ -22,6 +24,13 @@ export const observeSafely = async (observe: () => Promise<string> | string): Pr
   } catch (error) {
     return describeThrownError(error);
   }
+};
+
+/** What `lstat` reports of the path's kind, such as `isSymbolicLink=false isDirectory=true isFile=false`. */
+export const loadLstatText = async (path: string): Promise<string> => {
+  const stats = await lstat(path);
+
+  return `isSymbolicLink=${stats.isSymbolicLink()} isDirectory=${stats.isDirectory()} isFile=${stats.isFile()}`;
 };
 
 /** A GitHub notice workflow command with the message escaped as the runner requires. */

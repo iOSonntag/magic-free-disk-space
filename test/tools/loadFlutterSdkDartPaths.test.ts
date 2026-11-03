@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rename, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
@@ -8,7 +8,7 @@ import {
   parseActiveRootPackageConfigPath,
   parsePackageConfigFlutterRoot,
 } from '../../src/tools/loadFlutterSdkDartPaths.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -18,6 +18,7 @@ import {
   createGitIndex,
   writeActiveRoot,
 } from '../support/flutterSdkFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const PACKAGE_CONFIG_PATH = '.dart_tool/package_config.json';
 
@@ -35,10 +36,7 @@ function buildSdkDartPath(flutterRoot: string): string {
   return join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
 }
 
-/** Skips on Windows a test that needs symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadFlutterSdkDartPaths', () => {
+describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
   test('returns the SDK binary of each distinct Flutter root, in the sorted order of the files', async () => {
     const stableRoot = join(fixtureRoot.rootDir, 'flutter-stable');
     const betaRoot = join(fixtureRoot.rootDir, 'flutter-beta');
@@ -330,7 +328,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('loadFlutterSdkDartPaths', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('isFlutterRootApartFromProject', () => {
+describeAwaitingWin32Platform('isFlutterRootApartFromProject', () => {
   test('accepts disjoint paths, a shared name prefix included', () => {
     expect(
       isFlutterRootApartFromProject({ flutterRoot: '/sdk/flutter', projectRoot: '/p/app' }),
@@ -351,7 +349,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('isFlutterRootApartFromProject', () => {
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('parseActiveRootPackageConfigPath', () => {
+describeAwaitingWin32Platform('parseActiveRootPackageConfigPath', () => {
   test('reads the path of a file URL, and nothing else', () => {
     expect(
       parseActiveRootPackageConfigPath(
@@ -365,7 +363,7 @@ describe.skipIf(AWAITS_WIN32_PLATFORM)('parseActiveRootPackageConfigPath', () =>
   });
 });
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('parsePackageConfigFlutterRoot', () => {
+describeAwaitingWin32Platform('parsePackageConfigFlutterRoot', () => {
   test('reads the path of the flutterRoot file URL', () => {
     expect(parsePackageConfigFlutterRoot('{"flutterRoot":"file:///sdk/flutter"}')).toBe(
       '/sdk/flutter',

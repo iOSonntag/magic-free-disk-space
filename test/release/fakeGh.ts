@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 
 const UNEXPECTED_ARGUMENTS_EXIT_CODE = 64;
@@ -26,10 +26,6 @@ export const runFakeGh = (params: { logDir: string; answersDir: string }): never
 
   for (const answerName of answerNames) {
     const answerDir = join(params.answersDir, answerName);
-
-    if (!statSync(answerDir).isDirectory()) {
-      continue;
-    }
 
     if (readFileSync(join(answerDir, 'arguments'), 'utf8') !== argumentsText) {
       continue;

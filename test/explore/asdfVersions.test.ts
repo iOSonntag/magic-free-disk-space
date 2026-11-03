@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -31,7 +31,7 @@ import {
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -44,6 +44,7 @@ import {
   buildTestAsdfToolName,
   buildTestAsdfToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildFoundProjectPinsLoad,
@@ -106,11 +107,6 @@ function buildOldVersionUnit(): ExploreToolUnitAsdfVersion {
     pinFiles: [pinFileRef],
   };
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
-
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
 
 describeAwaitingWin32Platform('parseAsdfToolName and parseAsdfToolVersion', () => {
   test('accept the names asdf installs', () => {

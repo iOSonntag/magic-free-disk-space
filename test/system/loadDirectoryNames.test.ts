@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadDirectoryNames } from '../../src/system/loadDirectoryNames.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -10,13 +10,11 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const fixtureModifiedMs = Date.UTC(2024, 0, 15, 12, 0, 0);
 
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('loadDirectoryNames', () => {
+describeAwaitingWin32Platform('loadDirectoryNames', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from '../../src/explore/limits.js';
 import type { ProjectPins } from '../../src/explore/projectPins/projectPins.js';
 import { runExploreProbe, startExploreProbes } from '../../src/explore/startExploreProbes.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -14,6 +14,7 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -114,10 +115,7 @@ function buildMarkerPrelude(params: { name: string }): string {
   return `fs.writeFileSync(${JSON.stringify(buildMarkerPath({ name: params.name }))}, '');`;
 }
 
-/** Skips on Windows a test that needs POSIX permissions. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
-
-describe.skipIf(AWAITS_WIN32_PLATFORM)('startExploreProbes', () => {
+describeAwaitingWin32Platform('startExploreProbes', () => {
   test('finds the units of every tool with the activity of each, all judged', async () => {
     const tools = await createWorkingTools();
 

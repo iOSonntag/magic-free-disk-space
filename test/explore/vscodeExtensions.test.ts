@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../../src/explore/exploreUnit.js';
 import { loadVscodeExtensionFindings } from '../../src/explore/vscodeExtensions/loadVscodeExtensionFindings.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -14,6 +14,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -107,11 +108,6 @@ async function createLinkedVscodeInstallation(
 function listFolderPaths(findings: ExploreFinding[]): string[] {
   return findings.map((finding) => finding.displayPath);
 }
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
-
-/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
-const testOnPosix = test.skipIf(process.platform === 'win32');
 
 describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
   test('offers the obsolete folder and the older version that no registry lists', async () => {

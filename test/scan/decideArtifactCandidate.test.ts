@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
 import { decideArtifactCandidate } from '../../src/scan/decideArtifactCandidate.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 
 const MIB = 1_048_576;
@@ -30,7 +30,7 @@ function decide(params: { activity: ActivityProbe; allocatedBytes?: number; kind
   });
 }
 
-describe.skipIf(AWAITS_WIN32_PLATFORM)('decideArtifactCandidate', () => {
+describeAwaitingWin32Platform('decideArtifactCandidate', () => {
   test('offers the artifact of a quiet project with the rule risk', () => {
     const decision = decide({ activity: 'quiet' });
 

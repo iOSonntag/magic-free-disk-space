@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
-import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -40,8 +40,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
-
-const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
 
 describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', () => {
   test('answers unchanged while the folder is unlisted and its reason still holds', async () => {
