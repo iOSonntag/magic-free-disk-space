@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadFullDiskAccess } from '../../src/system/loadFullDiskAccess.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 
-describe('loadFullDiskAccess', () => {
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadFullDiskAccess', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -34,15 +38,18 @@ describe('loadFullDiskAccess', () => {
     expect(await loadFullDiskAccess({ homeDir: fixtureRoot.homeDir })).toBe('granted');
   });
 
-  test('is unknown when the TCC database is missing and the Safari folder refuses the open by its permissions', async () => {
-    const safariDir = join(fixtureRoot.homeDir, 'Library/Safari');
-    await mkdir(safariDir, { recursive: true });
-    await chmod(safariDir, 0o000);
+  testOnPosix(
+    'is unknown when the TCC database is missing and the Safari folder refuses the open by its permissions',
+    async () => {
+      const safariDir = join(fixtureRoot.homeDir, 'Library/Safari');
+      await mkdir(safariDir, { recursive: true });
+      await chmod(safariDir, 0o000);
 
-    try {
-      expect(await loadFullDiskAccess({ homeDir: fixtureRoot.homeDir })).toBe('unknown');
-    } finally {
-      await chmod(safariDir, 0o755);
-    }
-  });
+      try {
+        expect(await loadFullDiskAccess({ homeDir: fixtureRoot.homeDir })).toBe('unknown');
+      } finally {
+        await chmod(safariDir, 0o755);
+      }
+    },
+  );
 });

@@ -9,6 +9,7 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -49,7 +50,10 @@ function walkTestProjects(params: {
   });
 }
 
-describe('walkProjects', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('walkProjects', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -159,7 +163,7 @@ describe('walkProjects', () => {
     ]);
   });
 
-  test('does not follow a symbolic link to a project', async () => {
+  testOnPosix('does not follow a symbolic link to a project', async () => {
     const outsideProjectPath = join(fixtureRoot.rootDir, 'outside', 'app');
     await createFixtureDirectory({ path: join(outsideProjectPath, 'node_modules') });
     await createEmptyFile({ path: join(outsideProjectPath, 'package.json') });
@@ -182,25 +186,28 @@ describe('walkProjects', () => {
     expect(result).toEqual({ artifacts: [], pinFiles: [], isComplete: true, issues: [] });
   });
 
-  test('reports a folder it cannot list, still searches its siblings, and is not complete', async () => {
-    const lockedPath = join(fixtureRoot.homeDir, 'locked');
-    await createFixtureDirectory({ path: lockedPath });
-    await chmod(lockedPath, 0o000);
+  testOnPosix(
+    'reports a folder it cannot list, still searches its siblings, and is not complete',
+    async () => {
+      const lockedPath = join(fixtureRoot.homeDir, 'locked');
+      await createFixtureDirectory({ path: lockedPath });
+      await chmod(lockedPath, 0o000);
 
-    const projectPath = join(fixtureRoot.homeDir, 'app');
-    await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
-    await createEmptyFile({ path: join(projectPath, 'package.json') });
+      const projectPath = join(fixtureRoot.homeDir, 'app');
+      await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
+      await createEmptyFile({ path: join(projectPath, 'package.json') });
 
-    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+      const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
 
-    expect(result.artifacts.map((finding) => finding.artifactPath)).toEqual([
-      join(projectPath, 'node_modules'),
-    ]);
-    expect(result.isComplete).toBe(false);
-    expect(result.issues).toEqual([
-      { path: lockedPath, reason: 'permissionDenied', detail: 'EACCES' },
-    ]);
-  });
+      expect(result.artifacts.map((finding) => finding.artifactPath)).toEqual([
+        join(projectPath, 'node_modules'),
+      ]);
+      expect(result.isComplete).toBe(false);
+      expect(result.issues).toEqual([
+        { path: lockedPath, reason: 'permissionDenied', detail: 'EACCES' },
+      ]);
+    },
+  );
 
   test('skips an evicted project folder without an issue, and is not complete', async () => {
     const evictedProjectPath = join(fixtureRoot.homeDir, 'old-app');
@@ -274,7 +281,7 @@ describe('walkProjects', () => {
     expect(result.isComplete).toBe(true);
   });
 
-  test('keeps a pin file that is a link, without following it', async () => {
+  testOnPosix('keeps a pin file that is a link, without following it', async () => {
     const projectPath = join(fixtureRoot.homeDir, 'app');
     await createFixtureDirectory({ path: projectPath });
     await symlink(

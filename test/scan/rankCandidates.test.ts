@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { rankByPlace, rankBySize } from '../../src/scan/rankCandidates.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
 
-describe('rankBySize', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('rankBySize', () => {
   test('orders items by allocated bytes, largest first', () => {
     const small = { path: '/a/small', allocatedBytes: 10 };
     const medium = { path: '/a/medium', allocatedBytes: 50 };
@@ -37,7 +38,7 @@ describe('rankBySize', () => {
   });
 });
 
-describe('rankByPlace', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('rankByPlace', () => {
   test('orders the sections Caches, Developer tools, Apps, Large files, Trash, whatever the sizes', () => {
     const trash = buildTestCandidate({
       path: '/a/trash',

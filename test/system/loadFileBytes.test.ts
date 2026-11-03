@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadFileBytes } from '../../src/system/loadFileBytes.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -9,7 +10,10 @@ import {
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
 
-describe('loadFileBytes', () => {
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadFileBytes', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -56,7 +60,7 @@ describe('loadFileBytes', () => {
     expect(bytes).toEqual({ kind: 'failed', failure: { reason: 'notFile' } });
   });
 
-  test('fails as permissionDenied when the file cannot be read', async () => {
+  testOnPosix('fails as permissionDenied when the file cannot be read', async () => {
     const filePath = join(fixtureRoot.homeDir, 'index');
     await writeFile(filePath, new Uint8Array(1));
     await chmod(filePath, 0o000);

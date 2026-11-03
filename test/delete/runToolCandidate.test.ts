@@ -23,6 +23,7 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -115,7 +116,7 @@ async function createUnitTool(params: {
         exitCode: params.probeExitCode ?? 0,
       },
     ],
-    commandBody: `touch '${markerPath}'
+    commandBody: `fs.writeFileSync(${JSON.stringify(markerPath)}, '');
 ${params.commandBody}`,
     ...(params.probePrelude === undefined ? {} : { probePrelude: params.probePrelude }),
   });
@@ -173,7 +174,11 @@ async function createDartUnit(): Promise<ExploreToolUnitDartPubCache> {
 }
 
 function buildRemoveCommands(paths: AbsolutePath[]): string {
-  return paths.map((path) => `rm -r '${path}'`).join('\n');
+  return paths.map((path) => buildRemoveCommand(path)).join('\n');
+}
+
+function buildRemoveCommand(path: string): string {
+  return `fs.rmSync(${JSON.stringify(path)}, { recursive: true });`;
 }
 
 async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
@@ -186,16 +191,19 @@ async function loadNoProcessCommands(): Promise<string[] | null> {
   return [];
 }
 
-describe('runToolCandidate', () => {
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('runToolCandidate', () => {
   test('runs the command of an unchanged unit and reports the measured drop', async () => {
     const unit = await createMiseUnit('20.1.0');
 
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.installPath}'
-echo 'uninstalled node@20.1.0' >&2
-exit 0`,
+      commandBody: `${buildRemoveCommand(unit.installPath)}
+fs.writeSync(2, 'uninstalled node@20.1.0\\n');
+process.exit(0);`,
     });
 
     const allocatedBytes = await measureAllocatedBytes(unit);
@@ -226,7 +234,7 @@ exit 0`,
         gcPaths: unit.gcPaths,
       }),
       commandBody: `${buildRemoveCommands(unit.gcPaths)}
-exit 0`,
+process.exit(0);`,
     });
 
     const allocatedBytes = await measureAllocatedBytes(unit);
@@ -260,9 +268,9 @@ exit 0`,
         homeDir: environment.homeDir,
         gcPaths: unit.gcPaths,
       }),
-      probePrelude: `/bin/dd if=/dev/zero of='${packagePath}/lib/added.bin' bs=${MEBIBYTE} count=1 2>/dev/null`,
+      probePrelude: `fs.writeFileSync(${JSON.stringify(join(packagePath, 'lib', 'added.bin'))}, Buffer.alloc(${MEBIBYTE}));`,
       commandBody: `${buildRemoveCommands(unit.gcPaths)}
-exit 0`,
+process.exit(0);`,
     });
 
     const allocatedBytesBefore = await measureAllocatedBytes(unit);
@@ -293,14 +301,14 @@ exit 0`,
     expect(await isPresent(unit.installPath)).toBe(true);
   });
 
-  test('skips the unit when its tool is no longer trusted', async () => {
+  testOnPosix('skips the unit when its tool is no longer trusted', async () => {
     const unit = await createMiseUnit('20.1.0');
 
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.installPath}'
-exit 0`,
+      commandBody: `${buildRemoveCommand(unit.installPath)}
+process.exit(0);`,
     });
     await chmod(buildToolPath('mise'), 0o777);
 
@@ -326,7 +334,7 @@ exit 0`,
         gcPaths: unit.gcPaths,
       }),
       commandBody: `${buildRemoveCommands(unit.gcPaths)}
-exit 0`,
+process.exit(0);`,
     });
     await writeDartVersionFile({ dartPath: unit.tool.path, version: '3.10.0' });
 
@@ -351,8 +359,8 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.installPath}'
-exit 0`,
+      commandBody: `${buildRemoveCommand(unit.installPath)}
+process.exit(0);`,
     });
 
     const run = await runToolCandidate({
@@ -373,8 +381,8 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildSimulatorDeviceListJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.dataPath}'
-exit 0`,
+      commandBody: `${buildRemoveCommand(unit.dataPath)}
+process.exit(0);`,
     });
 
     const whileSimulatorRuns = await runToolCandidate({
@@ -403,7 +411,7 @@ exit 0`,
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
       probeExitCode: 1,
-      commandBody: 'exit 0',
+      commandBody: 'process.exit(0);',
     });
 
     const run = await runToolCandidate({
@@ -430,7 +438,7 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: 'not json at all',
-      commandBody: 'exit 0',
+      commandBody: 'process.exit(0);',
     });
 
     const run = await runToolCandidate({
@@ -452,9 +460,9 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${removedPart}'
-echo 'cannot remove bin' >&2
-exit 3`,
+      commandBody: `${buildRemoveCommand(removedPart)}
+fs.writeSync(2, 'cannot remove bin\\n');
+process.exit(3);`,
     });
 
     const allocatedBytesBefore = await measureAllocatedBytes(unit);
@@ -480,33 +488,36 @@ exit 3`,
     expect(await isPresent(removedPart)).toBe(false);
   });
 
-  test('reports nothing freed when the measurement after the command is incomplete', async () => {
-    const unit = await createMiseUnit('20.1.0');
-    const unreadablePart = join(unit.installPath, 'lib');
+  testOnPosix(
+    'reports nothing freed when the measurement after the command is incomplete',
+    async () => {
+      const unit = await createMiseUnit('20.1.0');
+      const unreadablePart = join(unit.installPath, 'lib');
 
-    await createUnitTool({
-      unit: unit,
-      probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${join(unit.installPath, 'bin')}'
-chmod 000 '${unreadablePart}'
-exit 0`,
-    });
+      await createUnitTool({
+        unit: unit,
+        probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
+        commandBody: `${buildRemoveCommand(join(unit.installPath, 'bin'))}
+fs.chmodSync(${JSON.stringify(unreadablePart)}, 0o000);
+process.exit(0);`,
+      });
 
-    const run = await runToolCandidate({
-      unit: unit,
-      environment: environment,
-      loadProcessCommands: loadNoProcessCommands,
-      timeoutMs: TIMEOUT_MS,
-    });
-    const measurementAfter = await loadUnitMeasurement({
-      unit: unit,
-      deadlineMs: Date.now() + 60_000,
-    });
+      const run = await runToolCandidate({
+        unit: unit,
+        environment: environment,
+        loadProcessCommands: loadNoProcessCommands,
+        timeoutMs: TIMEOUT_MS,
+      });
+      const measurementAfter = await loadUnitMeasurement({
+        unit: unit,
+        deadlineMs: Date.now() + 60_000,
+      });
 
-    expect(measurementAfter.isComplete).toBe(false);
-    expect(run).toEqual({ kind: 'completed', freedBytes: 0, stderrTail: '' });
-    expect(await isPresent(unreadablePart)).toBe(true);
-  });
+      expect(measurementAfter.isComplete).toBe(false);
+      expect(run).toEqual({ kind: 'completed', freedBytes: 0, stderrTail: '' });
+      expect(await isPresent(unreadablePart)).toBe(true);
+    },
+  );
 
   test('fails with a timeout when the command passes its limit', async () => {
     const unit = await createMiseUnit('20.1.0');
@@ -514,8 +525,8 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `sleep 5
-exit 0`,
+      commandBody: `await Bun.sleep(5_000);
+process.exit(0);`,
     });
 
     const run = await runToolCandidate({

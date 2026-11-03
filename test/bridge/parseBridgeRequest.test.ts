@@ -2,8 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseBridgeRequest } from '../../src/bridge/parseBridgeRequest.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 
-describe('parseBridgeRequest', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseBridgeRequest', () => {
   // The app's test builds its requests against the same fixture.
   test('parses the six requests of the protocol fixture', async () => {
     const fixtureText = await readFile(join(import.meta.dir, 'bridgeRequests.jsonl'), 'utf8');

@@ -30,6 +30,7 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -170,7 +171,10 @@ function parseOnePin(params: { kind: ProjectPinFileKind; text: string }): PnpmPi
   });
 }
 
-describe('parsePnpmVersionMajor', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parsePnpmVersionMajor', () => {
   const majorCases: { text: string; major: number }[] = [
     { text: '10.22.0_1', major: 10 },
     { text: '11.0.0-rc.1', major: 11 },
@@ -192,7 +196,7 @@ describe('parsePnpmVersionMajor', () => {
   }
 });
 
-describe('mapPnpmMajorToStoreVersion', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('mapPnpmMajorToStoreVersion', () => {
   const storeVersionCases: { major: number; storeVersion: string }[] = [
     { major: 7, storeVersion: 'v3' },
     { major: 9, storeVersion: 'v3' },
@@ -216,7 +220,7 @@ describe('mapPnpmMajorToStoreVersion', () => {
   }
 });
 
-describe('parsePnpmPins', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parsePnpmPins', () => {
   const majorsCases: { kind: ProjectPinFileKind; text: string; majors: number[] }[] = [
     { kind: 'packageJson', text: '{"packageManager": "pnpm@10.14.0"}', majors: [10] },
     { kind: 'packageJson', text: '{"packageManager": "pnpm@11.1.2+sha512.0a1b"}', majors: [11] },
@@ -353,7 +357,7 @@ describe('parsePnpmPins', () => {
   }
 });
 
-describe('decidePnpmStoreOffers', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('decidePnpmStoreOffers', () => {
   test('offers each store version no installed or pinned pnpm uses', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({ folderNames: ['v2', 'v3'] }),
@@ -477,7 +481,7 @@ describe('decidePnpmStoreOffers', () => {
   });
 });
 
-describe('buildPnpmStoreFindings', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('buildPnpmStoreFindings', () => {
   const storeRoot = buildTestAbsolutePath({ text: '/store' });
   const folderPath = buildTestAbsolutePath({ text: '/store/v3' });
   const storeVersion = buildTestPnpmStoreVersion({ text: 'v3' });
@@ -555,7 +559,7 @@ describe('buildPnpmStoreFindings', () => {
   });
 });
 
-describe('comparePnpmStoreUnit', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('comparePnpmStoreUnit', () => {
   const unit: ExplorePathUnitPnpmStore = {
     kind: 'pnpmStore',
     storeRoot: buildTestAbsolutePath({ text: '/store' }),
@@ -601,7 +605,7 @@ describe('comparePnpmStoreUnit', () => {
   });
 });
 
-describe('loadPnpmInstallState', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPnpmInstallState', () => {
   test('reads the Cellar folders and the npm globals of each Homebrew prefix', async () => {
     const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
     const cellarPath = join(prefixPath, 'Cellar', 'pnpm', '10.14.0_1');
@@ -981,53 +985,62 @@ for (const probeCase of probeCases) {
     }
 
     for (const packageName of ['some-cli', '@scope/some-cli']) {
-      test(`keeps the store version the global package ${packageName} of pnpm 11 links into`, async () => {
-        const storeRoot = await createStore({ folderNames: ['v11'] });
-        const globalInstallsPath = join(homeDir, 'Library/pnpm/global/v11');
-        const installFolderPath = join(globalInstallsPath, PNPM_11_INSTALL_ID);
-        await linkGlobalPackageIntoStore({
-          storeRoot: storeRoot,
-          storeFolderName: 'v11',
-          packageName: packageName,
-          linkPath: join(installFolderPath, 'node_modules', packageName),
-        });
-        await symlink(installFolderPath, join(globalInstallsPath, 'sibling-install'));
-        await createFixtureDirectory({ path: join(globalInstallsPath, 'empty-install') });
+      testOnPosix(
+        `keeps the store version the global package ${packageName} of pnpm 11 links into`,
+        async () => {
+          const storeRoot = await createStore({ folderNames: ['v11'] });
+          const globalInstallsPath = join(homeDir, 'Library/pnpm/global/v11');
+          const installFolderPath = join(globalInstallsPath, PNPM_11_INSTALL_ID);
+          await linkGlobalPackageIntoStore({
+            storeRoot: storeRoot,
+            storeFolderName: 'v11',
+            packageName: packageName,
+            linkPath: join(installFolderPath, 'node_modules', packageName),
+          });
+          await symlink(installFolderPath, join(globalInstallsPath, 'sibling-install'));
+          await createFixtureDirectory({ path: join(globalInstallsPath, 'empty-install') });
 
-        expect(await loadOfferedVersions({ files: [] })).toEqual({
-          storeVersions: [],
-          isComplete: false,
-        });
-      });
+          expect(await loadOfferedVersions({ files: [] })).toEqual({
+            storeVersions: [],
+            isComplete: false,
+          });
+        },
+      );
 
-      test(`keeps the store version the global package ${packageName} of pnpm 10's global virtual store links into`, async () => {
-        const storeRoot = await createStore({ folderNames: ['v10'] });
-        await linkGlobalPackageIntoStore({
-          storeRoot: storeRoot,
-          storeFolderName: 'v10',
-          packageName: packageName,
-          linkPath: join(homeDir, 'Library/pnpm/global/5/node_modules', packageName),
-        });
+      testOnPosix(
+        `keeps the store version the global package ${packageName} of pnpm 10's global virtual store links into`,
+        async () => {
+          const storeRoot = await createStore({ folderNames: ['v10'] });
+          await linkGlobalPackageIntoStore({
+            storeRoot: storeRoot,
+            storeFolderName: 'v10',
+            packageName: packageName,
+            linkPath: join(homeDir, 'Library/pnpm/global/5/node_modules', packageName),
+          });
 
-        expect(await loadOfferedVersions({ files: [] })).toEqual({
-          storeVersions: [],
-          isComplete: false,
-        });
-      });
+          expect(await loadOfferedVersions({ files: [] })).toEqual({
+            storeVersions: [],
+            isComplete: false,
+          });
+        },
+      );
     }
 
-    test('keeps the store version a project with the global virtual store links into', async () => {
-      const storeRoot = await createStore({ folderNames: ['v10'] });
-      await createPackageLink({
-        packagePath: join(storeRoot, 'v10/links/0a1b2c/node_modules/some-lib'),
-        linkPath: join(homeDir, 'projects/app/node_modules/some-lib'),
-      });
+    testOnPosix(
+      'keeps the store version a project with the global virtual store links into',
+      async () => {
+        const storeRoot = await createStore({ folderNames: ['v10'] });
+        await createPackageLink({
+          packagePath: join(storeRoot, 'v10/links/0a1b2c/node_modules/some-lib'),
+          linkPath: join(homeDir, 'projects/app/node_modules/some-lib'),
+        });
 
-      expect(await loadOfferedVersions({ files: [] })).toEqual({
-        storeVersions: [],
-        isComplete: false,
-      });
-    });
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      },
+    );
 
     test('offers a store folder whose links folder holds only dot names', async () => {
       const storeRoot = await createStore({ folderNames: ['v10'] });
@@ -1039,22 +1052,25 @@ for (const probeCase of probeCases) {
       });
     });
 
-    test('answers unreadable at a links folder of a store folder it cannot list', async () => {
-      const storeRoot = await createStore({ folderNames: ['v10'] });
-      const linksPath = join(storeRoot, 'v10/links');
-      await createFixtureDirectory({ path: linksPath });
-      await chmod(linksPath, 0o000);
+    testOnPosix(
+      'answers unreadable at a links folder of a store folder it cannot list',
+      async () => {
+        const storeRoot = await createStore({ folderNames: ['v10'] });
+        const linksPath = join(storeRoot, 'v10/links');
+        await createFixtureDirectory({ path: linksPath });
+        await chmod(linksPath, 0o000);
 
-      try {
-        expect(await runProbe({ files: [] })).toEqual({
-          kind: 'unreadable',
-          path: linksPath,
-          failure: { reason: 'permissionDenied', code: 'EACCES' },
-        });
-      } finally {
-        await chmod(linksPath, 0o755);
-      }
-    });
+        try {
+          expect(await runProbe({ files: [] })).toEqual({
+            kind: 'unreadable',
+            path: linksPath,
+            failure: { reason: 'permissionDenied', code: 'EACCES' },
+          });
+        } finally {
+          await chmod(linksPath, 0o755);
+        }
+      },
+    );
 
     const pinCases: { kind: ProjectPinFileKind; text: string }[] = [
       { kind: 'packageJson', text: '{"packageManager": "pnpm@10.14.0+sha512.0a1b"}' },
@@ -1107,7 +1123,7 @@ for (const probeCase of probeCases) {
       });
     });
 
-    test('counts a mise link that names no version by the folder it points to', async () => {
+    testOnPosix('counts a mise link that names no version by the folder it points to', async () => {
       await createStore({ folderNames: ['v3', 'v10'] });
       const targetPath = join(homeDir, 'elsewhere', '10.1.0');
       const misePnpmPath = join(homeDir, '.local/share/mise/installs/pnpm');
@@ -1121,7 +1137,7 @@ for (const probeCase of probeCases) {
       });
     });
 
-    test('counts a dangling link for nothing', async () => {
+    testOnPosix('counts a dangling link for nothing', async () => {
       await createStore({ folderNames: ['v10'] });
       const misePnpmPath = join(homeDir, '.local/share/mise/installs/pnpm');
       await createFixtureDirectory({ path: misePnpmPath });
@@ -1177,7 +1193,7 @@ for (const probeCase of probeCases) {
       });
     });
 
-    test('answers unreadable at an install folder it cannot list', async () => {
+    testOnPosix('answers unreadable at an install folder it cannot list', async () => {
       await createStore({ folderNames: ['v3'] });
       const asdfPnpmPath = join(homeDir, '.asdf/installs/pnpm');
       await createFixtureDirectory({ path: asdfPnpmPath });
@@ -1192,7 +1208,7 @@ for (const probeCase of probeCases) {
   });
 }
 
-describe('the recheck of a pnpm store unit', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('the recheck of a pnpm store unit', () => {
   let storeRoot: AbsolutePath;
   let pinPath: AbsolutePath;
   let unit: ExplorePathUnitPnpmStore;
@@ -1253,7 +1269,7 @@ describe('the recheck of a pnpm store unit', () => {
     ).toEqual({ kind: 'busy' });
   });
 
-  test('fails at an unreadable store root', async () => {
+  testOnPosix('fails at an unreadable store root', async () => {
     await chmod(storeRoot, 0o000);
 
     expect(

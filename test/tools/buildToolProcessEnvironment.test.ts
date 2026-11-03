@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { buildToolProcessEnvironment } from '../../src/tools/buildToolProcessEnvironment.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 
-describe('buildToolProcessEnvironment', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('buildToolProcessEnvironment', () => {
   test('holds exactly the fixed entries, with the tool folder first in PATH', () => {
     const environment = buildToolProcessEnvironment({
       tool: { name: 'xcrun', path: '/usr/bin/xcrun' },

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -16,7 +17,10 @@ const SMALL_FILE_BYTES = 1024;
 const TEST_MODIFIED_MS = 1_600_000_000_000;
 const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
-describe('findLargeUserFiles', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('findLargeUserFiles', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -205,7 +209,7 @@ describe('findLargeUserFiles', () => {
     expect(result.findings.map((finding) => finding.path)).toEqual([localizedPath, versionPath]);
   });
 
-  test('a symbolic link to a large file is not followed', async () => {
+  testOnPosix('a symbolic link to a large file is not followed', async () => {
     const outsideDir = join(fixtureRoot.rootDir, 'outside');
     await createFixtureDirectory({ path: outsideDir });
     await createFixtureFile({
@@ -224,7 +228,7 @@ describe('findLargeUserFiles', () => {
     expect(result).toEqual({ findings: [], issues: [] });
   });
 
-  test('a root that is a symbolic link is not walked', async () => {
+  testOnPosix('a root that is a symbolic link is not walked', async () => {
     const outsideDir = join(fixtureRoot.rootDir, 'outside');
     await createFixtureDirectory({ path: outsideDir });
     await createFixtureFile({
@@ -262,7 +266,7 @@ describe('findLargeUserFiles', () => {
     expect(result.findings.map((finding) => finding.path)).toEqual([firstPath]);
   });
 
-  test('an unreadable folder gives an issue while its siblings are searched', async () => {
+  testOnPosix('an unreadable folder gives an issue while its siblings are searched', async () => {
     const lockedDir = join(fixtureRoot.homeDir, 'a-locked');
     await createFixtureDirectory({ path: lockedDir });
     await createFixtureFile({

@@ -246,7 +246,7 @@ async function expectRequestKept(folder: string): Promise<void> {
   expect(await isPresent(join(folder, 'developer-id.certSigningRequest'))).toBe(true);
 }
 
-describe('setupSigning.sh request', () => {
+describe.skipIf(process.platform === 'win32')('setupSigning.sh request', () => {
   test('creates a private folder with the key and a request for the email', async () => {
     const folder = join(fixtureRoot.rootDir, 'signing');
     const run = await runSetupSigning(['request', folder, 'oliver@example.com']);
@@ -311,7 +311,7 @@ describe('setupSigning.sh request', () => {
     await createFakeTool({
       folder: await createFixtureBinDir({ fixtureRoot: fixtureRoot }),
       name: 'openssl',
-      body: 'exit 1',
+      body: 'process.exit(1);',
     });
 
     const run = await runSetupSigning(['request', folder, 'oliver@example.com']);
@@ -369,7 +369,7 @@ describe('setupSigning.sh request', () => {
   });
 });
 
-describe('setupSigning.sh install', () => {
+describe.skipIf(process.platform === 'win32')('setupSigning.sh install', () => {
   async function expectFirstRunSetsUpSigning(build: OpensslBuild): Promise<void> {
     const fixture = await createSigningFixture({ subject: DEVELOPER_ID_SUBJECT });
 

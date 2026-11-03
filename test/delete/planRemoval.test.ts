@@ -3,6 +3,7 @@ import type { RemovalPlan } from '../../src/delete/planRemoval.js';
 import { planRemoval } from '../../src/delete/planRemoval.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { Candidate } from '../../src/scan/candidate.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
@@ -69,7 +70,7 @@ function planInsideRanking(params: {
   return planned.value;
 }
 
-describe('planRemoval', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('planRemoval', () => {
   test('approves exactly the selection, for every one of the 64 subsets of six items', () => {
     const selections = buildAllSelections(6);
 

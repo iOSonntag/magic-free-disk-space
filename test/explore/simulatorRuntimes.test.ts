@@ -13,6 +13,7 @@ import { parseSimulatorRuntimeList } from '../../src/explore/simulatorRuntimes/p
 import { compareSimulatorRuntime } from '../../src/explore/simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -83,7 +84,9 @@ function buildWorkingAnswers(params: { homeDir: string }): ProbeFakeAnswer[] {
   ];
 }
 
-describe('parseSimulatorRuntimeList', () => {
+const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
+
+describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
   test('reads each runtime with its id, identifier, image, and last use', () => {
     const state = parseFixtureState();
 
@@ -152,7 +155,7 @@ describe('parseSimulatorRuntimeList', () => {
   });
 });
 
-describe('buildSimulatorRuntimeFindings', () => {
+describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
   test('offers only the deletable runtime unused since the cutoff that no available device runs on', () => {
     const findings = buildSimulatorRuntimeFindings({
       tool: tool,
@@ -215,7 +218,7 @@ describe('buildSimulatorRuntimeFindings', () => {
   });
 });
 
-describe('compareSimulatorRuntime', () => {
+describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
   const unit = buildOfferedUnit({ tool: tool });
 
   test('answers unchanged, and busy while Simulator.app runs or the processes are unknown', () => {
@@ -294,7 +297,7 @@ describe('compareSimulatorRuntime', () => {
   });
 });
 
-describe('the simulator runtime probe with a fake xcrun', () => {
+describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

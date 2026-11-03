@@ -30,7 +30,7 @@ const UNEXPECTED_ARGUMENTS_EXIT_CODE = 64;
 /**
  * Writes a fake `name` into `folder` that prints the `stdoutText` of an answer and exits with its
  * `exitCode` when called with the arguments of its command, and exits 64 for any other call.
- * `prelude`, shell code, runs before each answer.
+ * `prelude`, TypeScript with `node:fs` in scope as `fs`, runs before each answer.
  */
 export async function createProbeFakeTool(params: {
   folder: string;
@@ -45,11 +45,7 @@ export async function createProbeFakeTool(params: {
     answers: params.answers,
     prelude: params.prelude ?? '',
   });
-  const body = `case "$*" in
-${answerBranches}
-esac
-echo "unexpected arguments: $*" >&2
-exit ${UNEXPECTED_ARGUMENTS_EXIT_CODE}`;
+  const body = buildArgumentsSwitchBody(answerBranches);
   const path = await createFakeTool({
     folder: params.folder,
     name: params.name,
@@ -69,8 +65,8 @@ exit ${UNEXPECTED_ARGUMENTS_EXIT_CODE}`;
 /**
  * Writes a fake of the unit's tool into `folder` that answers the commands of its probe as
  * `createProbeFakeTool` does, runs `commandBody` when called with the unit's command, and exits 64
- * for any other call. `commandBody` is shell code that ends with its own `exit`; `probePrelude`,
- * shell code too, runs before each answer.
+ * for any other call. `commandBody` is TypeScript with `node:fs` in scope as `fs` that ends with
+ * its own `process.exit`; `probePrelude`, TypeScript too, runs before each answer.
  */
 export async function createUnitRunFakeTool(params: {
   folder: string;
@@ -87,14 +83,10 @@ export async function createUnitRunFakeTool(params: {
     prelude: params.probePrelude ?? '',
   });
   const commandText = buildUnitRunArguments(params.unit).join(' ');
-  const body = `case "$*" in
-${answerBranches}
-"${commandText}")
+  const commandBranch = `  case ${JSON.stringify(commandText)}: {
 ${params.commandBody}
-;;
-esac
-echo "unexpected arguments: $*" >&2
-exit ${UNEXPECTED_ARGUMENTS_EXIT_CODE}`;
+  }`;
+  const body = buildArgumentsSwitchBody(`${answerBranches}\n${commandBranch}`);
   const path = await createFakeTool({ folder: params.folder, name: name, body: body });
 
   await writeAnswerStdoutFiles({ folder: params.folder, name: name, answers: params.answers });
@@ -125,6 +117,23 @@ function buildFixtureToolLocation(path: string | undefined): ToolLocation[] {
   return [{ kind: 'path', root: 'absolute', path: path }];
 }
 
+/**
+ * A fake's body that runs the `case` branch matching its arguments, joined by single spaces, and
+ * exits 64 when none matches; each branch ends with its own `process.exit`.
+ */
+function buildArgumentsSwitchBody(caseBranches: string): string {
+  return `import * as fs from 'node:fs';
+
+const argumentsText = process.argv.slice(2).join(' ');
+
+switch (argumentsText) {
+${caseBranches}
+}
+
+fs.writeSync(2, \`unexpected arguments: \${argumentsText}\\n\`);
+process.exit(${UNEXPECTED_ARGUMENTS_EXIT_CODE});`;
+}
+
 /** The `case` branches that print the stdout file of each answer and exit with its code. */
 function buildAnswerBranches(params: {
   folder: string;
@@ -133,14 +142,20 @@ function buildAnswerBranches(params: {
   prelude: string;
 }): string {
   return params.answers
-    .map(
-      (answer) => `"${PROBE_ARGUMENT_TEXTS[answer.command]}")
+    .map((answer) => {
+      const stdoutPath = buildAnswerStdoutPath({
+        folder: params.folder,
+        name: params.name,
+        answer: answer,
+      });
+
+      return `  case ${JSON.stringify(PROBE_ARGUMENT_TEXTS[answer.command])}: {
 ${params.prelude}
-  cat '${buildAnswerStdoutPath({ folder: params.folder, name: params.name, answer: answer })}'
-  echo 'a line on stderr' >&2
-  exit ${answer.exitCode}
-;;`,
-    )
+    fs.writeSync(1, fs.readFileSync(${JSON.stringify(stdoutPath)}));
+    fs.writeSync(2, 'a line on stderr\\n');
+    process.exit(${answer.exitCode});
+  }`;
+    })
     .join('\n');
 }
 

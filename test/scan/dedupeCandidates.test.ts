@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import { buildTestToolCandidate } from '../support/candidateFixtures.js';
 
-describe('dedupeCandidates', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('dedupeCandidates', () => {
   test('skips a tool item whose footprint lies inside an earlier offer', () => {
     const earlier = buildOfferDecision({ path: '/home/.local/share/mise', realPath: '/x' });
     const toolOffer: CandidateDecision = {

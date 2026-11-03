@@ -25,6 +25,7 @@ import {
   createVscodeInstallation,
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -157,7 +158,10 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-describe('loadExplorePhase', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadExplorePhase', () => {
   test('offers each idle device the fake simctl finds, measured, and skips the booted one', async () => {
     const unavailableDataPath = buildDeviceDataPath({
       homeDir: environment.homeDir,
@@ -385,7 +389,7 @@ describe('loadExplorePhase', () => {
     });
   });
 
-  test('skips a folder that became a symbolic link after the probe', async () => {
+  testOnPosix('skips a folder that became a symbolic link after the probe', async () => {
     const unit = buildObsoleteVscodeUnit({ homeDir: environment.homeDir });
     const outcome = await loadVscodeOutcome();
 
@@ -402,7 +406,7 @@ describe('loadExplorePhase', () => {
     expect(phase.decisions[1]).toMatchObject({ kind: 'offer' });
   });
 
-  test('adds a place issue for a folder whose identity cannot be read', async () => {
+  testOnPosix('adds a place issue for a folder whose identity cannot be read', async () => {
     const extensionsPath = buildVscodeExtensionsPath({ homeDir: environment.homeDir });
     const outcome = await loadVscodeOutcome();
 

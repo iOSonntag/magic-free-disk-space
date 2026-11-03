@@ -1,3 +1,7 @@
+// The fake bridge is a `/bin/sh` script made executable with chmod.
+@TestOn('!windows')
+library;
+
 import 'dart:async';
 import 'dart:io';
 

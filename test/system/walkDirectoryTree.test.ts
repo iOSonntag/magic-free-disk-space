@@ -62,7 +62,7 @@ async function collectEntries(params: {
   };
 }
 
-describe('walkDirectoryTree', () => {
+describe.skipIf(process.platform === 'win32')('walkDirectoryTree', () => {
   test('visits an evicted folder but never reads it, and reports it as skipped', async () => {
     const evictedPath = join(treeRoot, 'b');
 

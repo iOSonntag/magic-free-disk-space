@@ -53,7 +53,7 @@ export async function loadTestEnvironment(params: {
   const applicationRealPath = await realpath(params.fixtureRoot.applicationDir);
 
   return buildEnvironment({
-    platform: 'darwin',
+    platform: process.platform,
     nowMs: params.nowMs,
     // The fixtures belong to the user that runs the tests.
     userId: process.getuid?.() ?? 0,

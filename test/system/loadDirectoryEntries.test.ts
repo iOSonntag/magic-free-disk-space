@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadDirectoryEntries } from '../../src/system/loadDirectoryEntries.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 
@@ -15,8 +16,11 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-describe('loadDirectoryEntries', () => {
-  test('lists each entry with its own kind, sorted, never following a link', async () => {
+/** Skips on Windows a test that needs symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadDirectoryEntries', () => {
+  testOnPosix('lists each entry with its own kind, sorted, never following a link', async () => {
     const folder = join(fixtureRoot.homeDir, 'listing');
 
     await mkdir(join(folder, 'b-folder'), { recursive: true });

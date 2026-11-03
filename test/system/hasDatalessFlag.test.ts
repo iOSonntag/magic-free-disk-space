@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 // A test cannot create an iCloud placeholder; the flag offset was checked against `ls -lO` on one.
-describe('hasDatalessFlag', () => {
+describe.skipIf(process.platform === 'win32')('hasDatalessFlag', () => {
   test('is false for a folder and a file on this disk', async () => {
     const folder = join(fixtureRoot.homeDir, 'local');
     const file = join(folder, 'file.txt');

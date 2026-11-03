@@ -38,7 +38,7 @@ describe('getXcodeBundlePath', () => {
   });
 });
 
-describe('loadActiveXcodeBundlePath', () => {
+describe.skipIf(process.platform === 'win32')('loadActiveXcodeBundlePath', () => {
   test('reads the active developer directory of this Mac', async () => {
     const result = await loadActiveXcodeBundlePath({ commandTimeoutMs: 5_000 });
 

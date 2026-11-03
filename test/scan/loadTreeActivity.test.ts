@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, lutimes, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -28,7 +29,10 @@ async function updateModifiedMsInOrder(params: {
   }
 }
 
-describe('loadTreeActivity', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadTreeActivity', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -221,7 +225,7 @@ describe('loadTreeActivity', () => {
     expect(activity).toBe('unknown');
   });
 
-  test('reports unknown for an unreadable subfolder when nothing is recent', async () => {
+  testOnPosix('reports unknown for an unreadable subfolder when nothing is recent', async () => {
     const homeDir = fixtureRoot.homeDir;
     const lockedDirPath = join(homeDir, 'locked');
 
@@ -248,7 +252,7 @@ describe('loadTreeActivity', () => {
     expect(activity).toBe('unknown');
   });
 
-  test('does not follow a symbolic link to a recent folder', async () => {
+  testOnPosix('does not follow a symbolic link to a recent folder', async () => {
     const homeDir = fixtureRoot.homeDir;
     const elsewhereDirPath = join(fixtureRoot.tempDir, 'elsewhere');
     const linkPath = join(homeDir, 'link');

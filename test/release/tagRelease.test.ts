@@ -9,7 +9,7 @@ import { runFixtureCommand, runReleaseScript } from './releaseScriptFixtures.js'
 // Each test runs a dozen git commands and a Bun process on its fixture.
 setDefaultTimeout(30_000);
 
-describe('tagRelease.sh', () => {
+describe.skipIf(process.platform === 'win32')('tagRelease.sh', () => {
   let fixtureRoot: FixtureRoot;
   let originDir: string;
   let cloneDir: string;

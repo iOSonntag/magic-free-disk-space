@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoots.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 
 const USER_ID = 501;
 const HOME = '/Users/tester';
@@ -19,7 +20,7 @@ function check(params: {
   });
 }
 
-describe('checkEnvironmentRoots', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('checkEnvironmentRoots', () => {
   test('accepts an own home and the per-user temporary folder', () => {
     expect(check({})).toBeNull();
   });

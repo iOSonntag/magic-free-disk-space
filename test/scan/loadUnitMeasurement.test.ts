@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { ExploreToolUnitDartPubCache } from '../../src/explore/exploreUnit.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -47,7 +48,10 @@ async function loadAllocatedBytesOrThrow(path: string): Promise<number> {
   return measured.value.allocatedBytes;
 }
 
-describe('loadUnitMeasurement', () => {
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadUnitMeasurement', () => {
   test('sums every path of the unit and counts a missing one as 0', async () => {
     const packageFolder = join(fixtureRoot.homeDir, '.pub-cache/hosted/pub.dev/example_a-1.0.0');
     const hashFile = join(fixtureRoot.homeDir, '.pub-cache/hosted-hashes/example_a-1.0.0.sha256');
@@ -94,7 +98,7 @@ describe('loadUnitMeasurement', () => {
     expect(mounted.holdsOtherVolume).toBe(true);
   });
 
-  test('is incomplete when a path cannot be read', async () => {
+  testOnPosix('is incomplete when a path cannot be read', async () => {
     const lockedFolder = join(fixtureRoot.homeDir, 'locked');
     const hiddenFile = join(lockedFolder, 'inner');
 
@@ -115,7 +119,7 @@ describe('loadUnitMeasurement', () => {
     });
   });
 
-  test('is incomplete when a folder of a path cannot be read in part', async () => {
+  testOnPosix('is incomplete when a folder of a path cannot be read in part', async () => {
     const versionFolder = join(fixtureRoot.homeDir, 'installs/node/20.1.0');
 
     await createFixtureDirectory({ path: join(versionFolder, 'locked') });

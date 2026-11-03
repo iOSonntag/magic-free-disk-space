@@ -13,6 +13,7 @@ import {
   PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
 } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import { selectToolPins } from '../../src/explore/projectPins/selectToolPins.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -32,7 +33,10 @@ const NO_SIBLINGS: ReadonlySet<string> = new Set();
 
 const PNPM_LOCK_SIBLINGS: ReadonlySet<string> = new Set(['package.json', 'pnpm-lock.yaml']);
 
-describe('matchProjectPinFile', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('matchProjectPinFile', () => {
   const sharedNameKinds: [string, ProjectPinFileKind][] = [
     ['.tool-versions', 'toolVersions'],
     ['.nvmrc', 'nvmrc'],
@@ -93,7 +97,7 @@ describe('matchProjectPinFile', () => {
   });
 });
 
-describe('selectToolPins', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('selectToolPins', () => {
   test('keeps the texts of the files of its kinds, each with its kind', () => {
     const selected = selectToolPins({
       pins: [
@@ -194,7 +198,7 @@ describe('selectToolPins', () => {
   });
 });
 
-describe('buildProjectSearchEvidence', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('buildProjectSearchEvidence', () => {
   test('adds the incomplete-search line only when the walk was not complete', () => {
     expect(
       buildProjectSearchEvidence({
@@ -209,7 +213,7 @@ describe('buildProjectSearchEvidence', () => {
   });
 });
 
-describe('loading the pins', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loading the pins', () => {
   let fixtureRoot: FixtureRoot;
   let homeRealPath: string;
   let trackedConfigsPath: string;
@@ -419,7 +423,7 @@ describe('loading the pins', () => {
       }
     });
 
-    test('fails at a link whose target cannot be resolved', async () => {
+    testOnPosix('fails at a link whose target cannot be resolved', async () => {
       const lockedPath = join(fixtureRoot.homeDir, 'locked');
       await writeFixtureTextFile({ path: join(lockedPath, 'app', 'mise.toml'), text: '[tools]\n' });
       await createTrackedConfigLink({
@@ -448,7 +452,7 @@ describe('loading the pins', () => {
       }
     });
 
-    test('fails at the folder of a target it cannot list', async () => {
+    testOnPosix('fails at the folder of a target it cannot list', async () => {
       const projectPath = join(fixtureRoot.homeDir, 'app');
       await writeFixtureTextFile({ path: join(projectPath, 'package.json'), text: '{}' });
       await createTrackedConfigLink({ name: 'a1', targetPath: join(projectPath, 'package.json') });

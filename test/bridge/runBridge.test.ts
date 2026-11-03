@@ -12,6 +12,7 @@ import type { Result } from '../../src/result.js';
 import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
 import type { LatestReleaseFetchResult } from '../../src/update/fetchLatestReleaseVersion.js';
 import type { ReleaseVersion } from '../../src/update/releaseVersion.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -364,7 +365,10 @@ function listRecordShapeMismatches(params: {
   );
 }
 
-describe('runBridge', () => {
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('runBridge', () => {
   test('scans and answers with the view of the scan, numbered top to bottom', async () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
@@ -786,7 +790,7 @@ describe('runBridge', () => {
     expect(events[0]).toMatchObject({ effect: 'scanDropped' });
   });
 
-  test('every event matches the protocol fixture the app is tested with', async () => {
+  testOnPosix('every event matches the protocol fixture the app is tested with', async () => {
     const containersPath = join(fixtureRoot.homeDir, 'Library/Containers');
 
     // A place the scan cannot read, so the scan answers with a notice.

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { formatRemovalRun } from '../../src/report/formatRemovalRun.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 
-describe('formatRemovalRun', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
     const lines = formatRemovalRun({ run: { outcomes: [], journalFailure: null } });
 

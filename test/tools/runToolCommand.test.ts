@@ -8,6 +8,7 @@ import {
   TOOL_MAX_OUTPUT_BYTES,
 } from '../../src/tools/runToolCommand.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
@@ -70,6 +71,18 @@ async function waitUntilProcessGone(pid: number): Promise<boolean> {
   return false;
 }
 
+/**
+ * Body lines that start a grandchild in the tool's group, holding the tool's streams like a
+ * shell's `&` does, and write its pid to `pidFile`; they need `spawn` and `writeFileSync`.
+ */
+function buildStartGrandchildBody(pidFile: string): string {
+  return `const grandchild = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], {
+  stdio: 'inherit',
+});
+grandchild.unref();
+writeFileSync(${JSON.stringify(pidFile)}, String(grandchild.pid));`;
+}
+
 async function loadPid(path: string): Promise<number> {
   return Number.parseInt(await readFile(path, 'utf8'), 10);
 }
@@ -86,13 +99,17 @@ async function waitUntilPresent(path: string): Promise<void> {
   throw new Error(`${path} did not appear.`);
 }
 
-describe('runToolCommand', () => {
+/** Skips on Windows a test that needs POSIX signals. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('runToolCommand', () => {
   test('returns the output and the stderr tail of a run that exits with 0', async () => {
     const result = await runFakeTool({
       name: 'xcrun',
-      body: `echo out
-i=0
-while [ $i -lt 2000 ]; do echo "line $i" >&2; i=$((i+1)); done`,
+      body: `console.log('out');
+for (let i = 0; i < 2000; i += 1) {
+  console.error(\`line \${i}\`);
+}`,
     });
 
     expect(result.kind).toBe('succeeded');
@@ -107,7 +124,10 @@ while [ $i -lt 2000 ]; do echo "line $i" >&2; i=$((i+1)); done`,
   });
 
   test('fails with the exit code and the stderr tail of a non-zero exit', async () => {
-    const result = await runFakeTool({ name: 'xcrun', body: 'echo broken >&2\nexit 3' });
+    const result = await runFakeTool({
+      name: 'xcrun',
+      body: "console.error('broken');\nprocess.exitCode = 3;",
+    });
 
     expect(result).toEqual({
       kind: 'failed',
@@ -115,8 +135,13 @@ while [ $i -lt 2000 ]; do echo "line $i" >&2; i=$((i+1)); done`,
     });
   });
 
-  test('fails with the signal that ended the tool', async () => {
-    const result = await runFakeTool({ name: 'xcrun', body: 'echo ending >&2\nkill -TERM $$' });
+  testOnPosix('fails with the signal that ended the tool', async () => {
+    const result = await runFakeTool({
+      name: 'xcrun',
+      body: `console.error('ending');
+process.kill(process.pid, 'SIGTERM');
+await Bun.sleep(60_000);`,
+    });
 
     expect(result).toEqual({
       kind: 'failed',
@@ -130,10 +155,11 @@ while [ $i -lt 2000 ]; do echo "line $i" >&2; i=$((i+1)); done`,
 
     const result = await runFakeTool({
       name: 'xcrun',
-      body: `/bin/sleep 60 &
-echo $! > '${pidFile}'
-echo waiting >&2
-/bin/sleep 60`,
+      body: `import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+${buildStartGrandchildBody(pidFile)}
+console.error('waiting');
+await Bun.sleep(60_000);`,
       timeoutMs: 500,
     });
 
@@ -150,9 +176,10 @@ echo waiting >&2
 
     const result = await runFakeTool({
       name: 'xcrun',
-      body: `/bin/sleep 60 &
-echo $! > '${pidFile}'
-echo done`,
+      body: `import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+${buildStartGrandchildBody(pidFile)}
+console.log('done');`,
       timeoutMs: 5_000,
     });
 
@@ -163,7 +190,12 @@ echo done`,
   test('kills the tool once its output passes the cap', async () => {
     const result = await runFakeTool({
       name: 'xcrun',
-      body: 'echo flooding >&2\nexec /usr/bin/yes',
+      body: `import { writeSync } from 'node:fs';
+console.error('flooding');
+const lines = 'y\\n'.repeat(32_768);
+for (;;) {
+  writeSync(1, lines);
+}`,
     });
 
     expect(result).toEqual({
@@ -180,7 +212,12 @@ echo done`,
     process.env.MAGIC_FREE_DISK_SPACE_TEST_MARKER = 'inherited';
 
     try {
-      const result = await runFakeTool({ name: 'mise', body: '/usr/bin/env' });
+      const result = await runFakeTool({
+        name: 'mise',
+        body: `for (const [key, value] of Object.entries(process.env)) {
+  console.log(\`\${key}=\${value}\`);
+}`,
+      });
 
       expect(result.kind).toBe('succeeded');
 
@@ -204,7 +241,7 @@ echo done`,
   });
 
   test('runs the tool in the temporary folder', async () => {
-    const result = await runFakeTool({ name: 'xcrun', body: '/bin/pwd -P' });
+    const result = await runFakeTool({ name: 'xcrun', body: 'console.log(process.cwd());' });
 
     expect(result).toEqual({
       kind: 'succeeded',
@@ -212,37 +249,43 @@ echo done`,
     });
   });
 
-  test('stopRunningTools kills a running tool and what it started, and the run settles', async () => {
-    const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
-    const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
-    // The tool's pid file is written last and moved into place whole, so it marks both as ready.
-    const run = runFakeTool({
-      name: 'xcrun',
-      body: `/bin/sleep 60 &
-echo $! > '${grandchildPidFile}'
-echo $$ > '${toolPidFile}.partial'
-/bin/mv '${toolPidFile}.partial' '${toolPidFile}'
-/bin/sleep 60`,
-      timeoutMs: 60_000,
-    });
+  testOnPosix(
+    'stopRunningTools kills a running tool and what it started, and the run settles',
+    async () => {
+      const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
+      const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
+      // The tool's pid file is written last and moved into place whole, so it marks both as ready.
+      const run = runFakeTool({
+        name: 'xcrun',
+        body: `import { spawn } from 'node:child_process';
+import { renameSync, writeFileSync } from 'node:fs';
+${buildStartGrandchildBody(grandchildPidFile)}
+writeFileSync(${JSON.stringify(`${toolPidFile}.partial`)}, String(process.pid));
+renameSync(${JSON.stringify(`${toolPidFile}.partial`)}, ${JSON.stringify(toolPidFile)});
+await Bun.sleep(60_000);`,
+        timeoutMs: 60_000,
+      });
 
-    await waitUntilPresent(toolPidFile);
-    stopRunningTools();
+      await waitUntilPresent(toolPidFile);
+      stopRunningTools();
 
-    const result = await run;
+      const result = await run;
 
-    expect(result).toMatchObject({
-      kind: 'failed',
-      failure: { reason: 'endedBySignal', signal: 'SIGKILL' },
-    });
-    expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
-    expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
-  });
+      expect(result).toMatchObject({
+        kind: 'failed',
+        failure: { reason: 'endedBySignal', signal: 'SIGKILL' },
+      });
+      expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
+      expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
+    },
+  );
 
   test('puts the leading argument of dart before the arguments', async () => {
     const result = await runFakeTool({
       name: 'dart',
-      body: `printf '%s\\n' "$@"`,
+      body: `for (const argument of process.argv.slice(2)) {
+  console.log(argument);
+}`,
       args: ['pub', 'cache', 'gc', '--dry-run'],
     });
 

@@ -6,6 +6,7 @@ import {
   loadPreferences,
   saveIsUpdateCheckEnabled,
 } from '../../src/preferences/preferencesFile.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 
@@ -28,7 +29,10 @@ async function writePreferencesFile(text: string): Promise<void> {
   await writeFile(preferencesPath, text);
 }
 
-describe('loadPreferences', () => {
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPreferences', () => {
   test('lives in the support folder of the app', () => {
     expect(preferencesPath).toBe(
       join(
@@ -66,7 +70,7 @@ describe('loadPreferences', () => {
     }
   });
 
-  test('is on for a file it may not read', async () => {
+  testOnPosix('is on for a file it may not read', async () => {
     await writePreferencesFile('{"isUpdateCheckEnabled":false}');
     await chmod(preferencesPath, 0o000);
 
@@ -84,7 +88,7 @@ describe('loadPreferences', () => {
   });
 });
 
-describe('saveIsUpdateCheckEnabled', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('saveIsUpdateCheckEnabled', () => {
   test('saves the value for the next load, in a private folder and file', async () => {
     expect(
       await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false }),
@@ -125,17 +129,20 @@ describe('saveIsUpdateCheckEnabled', () => {
     });
   });
 
-  test('fails with writeFailed in a folder it may not write, and keeps the file', async () => {
-    await writePreferencesFile('{"isUpdateCheckEnabled":true}');
-    await chmod(preferencesDir, 0o500);
+  testOnPosix(
+    'fails with writeFailed in a folder it may not write, and keeps the file',
+    async () => {
+      await writePreferencesFile('{"isUpdateCheckEnabled":true}');
+      await chmod(preferencesDir, 0o500);
 
-    expect(
-      await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false }),
-    ).toEqual({ kind: 'failed', failure: { reason: 'writeFailed', code: 'EACCES' } });
-    expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
-      isUpdateCheckEnabled: true,
-    });
-  });
+      expect(
+        await saveIsUpdateCheckEnabled({ homeDir: fixtureRoot.homeDir, isEnabled: false }),
+      ).toEqual({ kind: 'failed', failure: { reason: 'writeFailed', code: 'EACCES' } });
+      expect(await loadPreferences({ homeDir: fixtureRoot.homeDir })).toEqual({
+        isUpdateCheckEnabled: true,
+      });
+    },
+  );
 
   test('fails with directoryUnavailable when a file stands where the folder belongs', async () => {
     await mkdir(join(preferencesDir, '..'), { recursive: true });

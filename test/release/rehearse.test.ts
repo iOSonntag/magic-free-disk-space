@@ -28,7 +28,7 @@ https://github.com/${REPOSITORY}/actions/runs/${NEW_RUN_ID}
 `;
 const DISPATCH_OUTPUT_WITHOUT_URL = '✓ Created workflow_dispatch event for release.yml at main\n';
 
-describe('rehearse.sh', () => {
+describe.skipIf(process.platform === 'win32')('rehearse.sh', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

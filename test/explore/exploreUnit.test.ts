@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildUnitRunArguments } from '../../src/explore/exploreUnit.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAbsolutePath,
   buildTestMiseToolName,
@@ -11,7 +12,7 @@ import {
   UNAVAILABLE_DEVICE_UDID,
 } from './probeOutputFixtures.js';
 
-describe('buildUnitRunArguments', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('buildUnitRunArguments', () => {
   test('a dart unit runs its gc with the dart leading argument first', () => {
     expect(
       buildUnitRunArguments({

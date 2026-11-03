@@ -59,7 +59,7 @@ describe('decideReleaseTag', () => {
   });
 });
 
-describe('the command decideReleaseTag.ts', () => {
+describe.skipIf(process.platform === 'win32')('the command decideReleaseTag.ts', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

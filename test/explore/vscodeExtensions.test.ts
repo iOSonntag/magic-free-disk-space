@@ -5,6 +5,7 @@ import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../../src/explore/exploreUnit.js';
 import { loadVscodeExtensionFindings } from '../../src/explore/vscodeExtensions/loadVscodeExtensionFindings.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -107,7 +108,12 @@ function listFolderPaths(findings: ExploreFinding[]): string[] {
   return findings.map((finding) => finding.displayPath);
 }
 
-describe('loadVscodeExtensionFindings', () => {
+const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
+
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
   test('offers the obsolete folder and the older version that no registry lists', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
 
@@ -216,26 +222,32 @@ describe('loadVscodeExtensionFindings', () => {
     ]);
   });
 
-  test('never offers a version a profile lists through the real path of a linked extensions folder', async () => {
-    const realExtensionsPath = join(environment.homeDir, 'real-vscode-extensions');
+  testOnPosix(
+    'never offers a version a profile lists through the real path of a linked extensions folder',
+    async () => {
+      const realExtensionsPath = join(environment.homeDir, 'real-vscode-extensions');
 
-    await createFixtureDirectory({ path: realExtensionsPath });
-    await createFixtureDirectory({ path: join(environment.homeDir, '.vscode') });
-    await symlink(realExtensionsPath, extensionsPath);
-    await createLinkedVscodeInstallation();
+      await createFixtureDirectory({ path: realExtensionsPath });
+      await createFixtureDirectory({ path: join(environment.homeDir, '.vscode') });
+      await symlink(realExtensionsPath, extensionsPath);
+      await createLinkedVscodeInstallation();
 
-    expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
-  });
+      expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
+    },
+  );
 
-  test('never offers a version a profile lists through the real path of a linked .vscode folder', async () => {
-    const realVscodePath = join(environment.homeDir, 'real-vscode');
+  testOnPosix(
+    'never offers a version a profile lists through the real path of a linked .vscode folder',
+    async () => {
+      const realVscodePath = join(environment.homeDir, 'real-vscode');
 
-    await createFixtureDirectory({ path: join(realVscodePath, 'extensions') });
-    await symlink(realVscodePath, join(environment.homeDir, '.vscode'));
-    await createLinkedVscodeInstallation();
+      await createFixtureDirectory({ path: join(realVscodePath, 'extensions') });
+      await symlink(realVscodePath, join(environment.homeDir, '.vscode'));
+      await createLinkedVscodeInstallation();
 
-    expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
-  });
+      expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
+    },
+  );
 
   test('never offers a version a profile lists through a second link to the extensions folder', async () => {
     const realExtensionsPath = join(environment.homeDir, 'real-vscode-extensions');
@@ -265,7 +277,7 @@ describe('loadVscodeExtensionFindings', () => {
   });
 });
 
-describe('loadVscodeExtensionFindings by what each read finds', () => {
+describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read finds', () => {
   test('judges no extensions folder as nothing installed', async () => {
     expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
   });
@@ -354,7 +366,7 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
     expect(listFolderPaths(probed.findings)).toEqual([join(extensionsPath, OLDER_FOLDER_NAME)]);
   });
 
-  test('fails with the path of a read that was denied', async () => {
+  testOnPosix('fails with the path of a read that was denied', async () => {
     await createVscodeInstallation({ homeDir: environment.homeDir });
     await chmod(join(extensionsPath, 'extensions.json'), 0o000);
 

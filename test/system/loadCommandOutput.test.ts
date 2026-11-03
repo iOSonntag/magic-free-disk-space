@@ -14,7 +14,7 @@ const infoPlistText = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `;
 
-describe('loadCommandOutput', () => {
+describe.skipIf(process.platform === 'win32')('loadCommandOutput', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

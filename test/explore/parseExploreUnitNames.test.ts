@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { parseAndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import { parseHomebrewFormulaName } from '../../src/explore/homebrew/parseHomebrewFormulaName.js';
 import { parseSimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeId.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAndroidAvdName,
   buildTestHomebrewFormulaName,
@@ -10,7 +11,7 @@ import {
 
 const RUNTIME_ID_TEXT = '6E8D3F4A-2B1C-4D5E-9F80-1A2B3C4D5E6F';
 
-describe('parseSimulatorRuntimeId', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseSimulatorRuntimeId', () => {
   test('passes the UUID simctl prints for a runtime', () => {
     expect(parseSimulatorRuntimeId({ text: RUNTIME_ID_TEXT })).toEqual({
       kind: 'succeeded',
@@ -25,7 +26,7 @@ describe('parseSimulatorRuntimeId', () => {
   });
 });
 
-describe('parseAndroidAvdName', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseAndroidAvdName', () => {
   test('passes the names avdmanager allows', () => {
     for (const text of ['Pixel_8_API_35', 'test.avd-2']) {
       expect(parseAndroidAvdName({ text: text })).toEqual({
@@ -42,7 +43,7 @@ describe('parseAndroidAvdName', () => {
   });
 });
 
-describe('parseHomebrewFormulaName', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseHomebrewFormulaName', () => {
   test('passes the names Homebrew prints, versioned and with a plus', () => {
     for (const text of ['wget', 'python@3.12', 'libxml++', 'node_exporter']) {
       expect(parseHomebrewFormulaName({ text: text })).toEqual({

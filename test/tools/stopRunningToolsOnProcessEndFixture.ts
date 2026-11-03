@@ -19,14 +19,15 @@ async function runFixture(params: {
 }): Promise<void> {
   stopRunningToolsOnProcessEnd({ signalExitCodes: FIXTURE_SIGNAL_EXIT_CODES });
 
-  // The pid file is moved into place whole, so the test never reads half of it; the exec keeps
-  // that pid the one process of the tool.
+  // The pid file is moved into place whole, so the test never reads half of it.
+  const partialPidFile = `${params.toolPidFile}.partial`;
   const path = await createFakeTool({
     folder: join(params.rootDir, 'bin'),
     name: 'xcrun',
-    body: `echo $$ > '${params.toolPidFile}.partial'
-/bin/mv '${params.toolPidFile}.partial' '${params.toolPidFile}'
-exec /bin/sleep 60`,
+    body: `import { renameSync, writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(partialPidFile)}, String(process.pid));
+renameSync(${JSON.stringify(partialPidFile)}, ${JSON.stringify(params.toolPidFile)});
+await Bun.sleep(60_000);`,
   });
 
   await runToolCommand({

@@ -3,6 +3,7 @@ import { chmod, realpath, symlink } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { basename, dirname, join } from 'node:path';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -19,7 +20,10 @@ async function loadExpectedRealPath(params: { path: string }): Promise<string> {
   return join(parentRealPath, basename(params.path));
 }
 
-describe('loadFileIdentity', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadFileIdentity', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -88,7 +92,7 @@ describe('loadFileIdentity', () => {
     });
   });
 
-  test('reports a symbolic link as itself, with its own name in realPath', async () => {
+  testOnPosix('reports a symbolic link as itself, with its own name in realPath', async () => {
     const targetPath = join(fixtureRoot.homeDir, 'target.txt');
     const linkPath = join(fixtureRoot.homeDir, 'link-to-target');
     await createFixtureFile({ path: targetPath, sizeBytes: 10, modifiedMs: fixtureModifiedMs });
@@ -117,18 +121,21 @@ describe('loadFileIdentity', () => {
     expect(result).toEqual({ kind: 'failed', failure: { reason: 'missing', code: 'ENOENT' } });
   });
 
-  test('fails with permissionDenied for a child of a folder that cannot be read', async () => {
-    const lockedFolderPath = join(fixtureRoot.homeDir, 'locked');
-    const childPath = join(lockedFolderPath, 'child.txt');
-    await createFixtureDirectory({ path: lockedFolderPath });
-    await createFixtureFile({ path: childPath, sizeBytes: 10, modifiedMs: fixtureModifiedMs });
-    await chmod(lockedFolderPath, 0o000);
+  testOnPosix(
+    'fails with permissionDenied for a child of a folder that cannot be read',
+    async () => {
+      const lockedFolderPath = join(fixtureRoot.homeDir, 'locked');
+      const childPath = join(lockedFolderPath, 'child.txt');
+      await createFixtureDirectory({ path: lockedFolderPath });
+      await createFixtureFile({ path: childPath, sizeBytes: 10, modifiedMs: fixtureModifiedMs });
+      await chmod(lockedFolderPath, 0o000);
 
-    const result = await loadFileIdentity({ path: childPath });
+      const result = await loadFileIdentity({ path: childPath });
 
-    expect(result).toEqual({
-      kind: 'failed',
-      failure: { reason: 'permissionDenied', code: 'EACCES' },
-    });
-  });
+      expect(result).toEqual({
+        kind: 'failed',
+        failure: { reason: 'permissionDenied', code: 'EACCES' },
+      });
+    },
+  );
 });

@@ -9,6 +9,7 @@ import type {
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -49,7 +50,9 @@ function buildSdkRoot(): AbsolutePath {
   return buildAndroidSdkRoot({ homeDir: homeDir });
 }
 
-describe('startExploreProbes with the Android probes', () => {
+const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
+
+describeAwaitingWin32Platform('startExploreProbes with the Android probes', () => {
   test('offers the unused AVD with the located avdmanager, and the image no AVD names', async () => {
     const avdmanager = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'cmdline-tools', 'bin'),
@@ -125,7 +128,7 @@ describe('startExploreProbes with the Android probes', () => {
   });
 });
 
-describe('recheckExplorePathUnit with the Android path units', () => {
+describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path units', () => {
   async function createPackageUnits(): Promise<{
     image: ExplorePathUnitAndroidSystemImage;
     emulator: ExplorePathUnitAndroidEmulator;

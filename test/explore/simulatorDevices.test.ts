@@ -6,6 +6,7 @@ import {
 } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import {
   AVAILABLE_UNDATED_DEVICE_UDID,
   BOOTED_DEVICE_UDID,
@@ -29,7 +30,7 @@ function parseFixtureDevices() {
   return parsed.value;
 }
 
-describe('parseSimulatorDeviceUdid', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseSimulatorDeviceUdid', () => {
   test('passes a UUID in either case', () => {
     expect(parseSimulatorDeviceUdid({ text: '11111111-aaaa-4aaa-8aaa-111111111111' }).kind).toBe(
       'succeeded',
@@ -46,7 +47,7 @@ describe('parseSimulatorDeviceUdid', () => {
   });
 });
 
-describe('parseAbsolutePath', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseAbsolutePath', () => {
   test('passes an absolute path and rejects a relative one', () => {
     expect(parseAbsolutePath({ text: '/Users/example/data' }).kind).toBe('succeeded');
     expect(parseAbsolutePath({ text: 'data' }).kind).toBe('failed');
@@ -54,7 +55,7 @@ describe('parseAbsolutePath', () => {
   });
 });
 
-describe('parseSimulatorDeviceList', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseSimulatorDeviceList', () => {
   test('reads each device with its runtime', () => {
     const devices = parseFixtureDevices();
 
@@ -138,7 +139,7 @@ describe('parseSimulatorDeviceList', () => {
   });
 });
 
-describe('buildSimulatorDeviceFindings', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('buildSimulatorDeviceFindings', () => {
   test('offers the unavailable and the booted unavailable device, no available one', () => {
     const findings = buildSimulatorDeviceFindings({
       tool: tool,

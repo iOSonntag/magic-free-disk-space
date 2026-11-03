@@ -72,7 +72,7 @@ async function waitUntilPresent(path: string): Promise<void> {
 
 const signals: ProcessEndSignal[] = ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGTERM'];
 
-describe('stopRunningToolsOnProcessEnd', () => {
+describe.skipIf(process.platform === 'win32')('stopRunningToolsOnProcessEnd', () => {
   test.each(signals)('on %s stops the running tool and exits with its code', async (signal) => {
     const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
     const script = Bun.spawn(

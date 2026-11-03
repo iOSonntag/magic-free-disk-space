@@ -20,7 +20,7 @@ describe('parseProcessCommandLines', () => {
   });
 });
 
-describe('loadProcessCommands', () => {
+describe.skipIf(process.platform === 'win32')('loadProcessCommands', () => {
   test('lists the running processes, one of them bun', async () => {
     const result = await loadProcessCommands({ commandTimeoutMs: 5_000 });
 

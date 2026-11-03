@@ -27,6 +27,7 @@ import type {
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -134,7 +135,12 @@ async function loadFreshState() {
   return state.value;
 }
 
-describe('parseAndroidIniText and parseAndroidPackagePath', () => {
+const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
+
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describeAwaitingWin32Platform('parseAndroidIniText and parseAndroidPackagePath', () => {
   test('reads keys with and without spaces around the equals sign', () => {
     const values = parseAndroidIniText({ text: 'path=/a/b.avd\nhw.cpu.arch = arm64\nno line\n' });
 
@@ -155,7 +161,7 @@ describe('parseAndroidIniText and parseAndroidPackagePath', () => {
   });
 });
 
-describe('the Android probes without an SDK', () => {
+describeAwaitingWin32Platform('the Android probes without an SDK', () => {
   test('judge nothing to offer without the SDK and without ~/.android/avd', async () => {
     expect(await loadAndroidProbeAnswers()).toEqual({
       avds: JUDGED_EMPTY,
@@ -180,7 +186,7 @@ describe('the Android probes without an SDK', () => {
   });
 });
 
-describe('the Android probes with an SDK', () => {
+describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   test('without ~/.android/avd judge the AVDs empty and hold back images and the emulator', async () => {
     await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
     await writeAndroidEmulator({ homeDir: homeDir });
@@ -485,7 +491,7 @@ describe('the Android probes with an SDK', () => {
     expect((await loadAndroidProbeAnswers()).avds).toEqual(NOT_JUDGED);
   });
 
-  test('fail with fileUnreadable on a denied read, naming the file', async () => {
+  testOnPosix('fail with fileUnreadable on a denied read, naming the file', async () => {
     await writeAndroidEmulator({ homeDir: homeDir });
     const avd = await writeAndroidAvd({
       homeDir: homeDir,
@@ -514,7 +520,7 @@ describe('the Android probes with an SDK', () => {
   });
 });
 
-describe('compareAndroidAvdUnit', () => {
+describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
   function buildAvdUnit(): ExploreToolUnitAndroidAvd {
     return {
       kind: 'androidAvd',
@@ -669,7 +675,7 @@ describe('compareAndroidAvdUnit', () => {
   });
 });
 
-describe('recheckAndroidAvdUnit', () => {
+describeAwaitingWin32Platform('recheckAndroidAvdUnit', () => {
   async function createOfferedAvd(): Promise<ExploreToolUnitAndroidAvd> {
     await writeAndroidEmulator({ homeDir: homeDir });
     await writeAndroidAvd({
@@ -700,7 +706,7 @@ describe('recheckAndroidAvdUnit', () => {
     }
   });
 
-  test('fails with fileUnreadable on a denied read', async () => {
+  testOnPosix('fails with fileUnreadable on a denied read', async () => {
     const unit = await createOfferedAvd();
     await chmod(unit.iniPath, 0o000);
 
@@ -711,7 +717,7 @@ describe('recheckAndroidAvdUnit', () => {
   });
 });
 
-describe('compareAndroidPathUnit', () => {
+describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
   async function createOfferedPackages(): Promise<{
     image: ExplorePathUnitAndroidSystemImage;
     emulator: ExplorePathUnitAndroidEmulator;

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { CatalogEntry, CatalogRoot } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { findCatalogTargets } from '../../src/scan/findCatalogTargets.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -15,7 +16,10 @@ import {
 
 const TEST_NOW_MS = 1_700_000_000_000;
 
-describe('findCatalogTargets', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('findCatalogTargets', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -130,7 +134,7 @@ describe('findCatalogTargets', () => {
     expect(result).toEqual({ targets: [{ entry, path: systemLogsDir }], issues: [] });
   });
 
-  test('an unreadable children folder gives a permissionDenied issue', async () => {
+  testOnPosix('an unreadable children folder gives a permissionDenied issue', async () => {
     const lockedDir = join(fixtureRoot.homeDir, 'Locked');
     await createFixtureDirectory({ path: lockedDir });
     await chmod(lockedDir, 0o000);
@@ -149,42 +153,48 @@ describe('findCatalogTargets', () => {
     });
   });
 
-  test('a self entry behind an unreadable folder gives a permissionDenied issue', async () => {
-    const lockedDir = join(fixtureRoot.homeDir, 'Locked');
-    await createFixtureDirectory({ path: lockedDir });
-    await chmod(lockedDir, 0o000);
-    const entry = buildCatalogEntry({
-      id: 'inside-locked',
-      root: 'home',
-      path: 'Locked/inside',
-      scope: 'self',
-    });
+  testOnPosix(
+    'a self entry behind an unreadable folder gives a permissionDenied issue',
+    async () => {
+      const lockedDir = join(fixtureRoot.homeDir, 'Locked');
+      await createFixtureDirectory({ path: lockedDir });
+      await chmod(lockedDir, 0o000);
+      const entry = buildCatalogEntry({
+        id: 'inside-locked',
+        root: 'home',
+        path: 'Locked/inside',
+        scope: 'self',
+      });
 
-    const result = await findCatalogTargets({ environment, entries: [entry] });
+      const result = await findCatalogTargets({ environment, entries: [entry] });
 
-    expect(result).toEqual({
-      targets: [],
-      issues: [{ path: join(lockedDir, 'inside'), reason: 'permissionDenied', detail: 'EACCES' }],
-    });
-  });
+      expect(result).toEqual({
+        targets: [],
+        issues: [{ path: join(lockedDir, 'inside'), reason: 'permissionDenied', detail: 'EACCES' }],
+      });
+    },
+  );
 
-  test('a self entry behind a symbolic link loop gives an unexpected issue with its code', async () => {
-    const loopPath = join(fixtureRoot.homeDir, 'Loop');
-    await symlink(loopPath, loopPath);
-    const entry = buildCatalogEntry({
-      id: 'inside-loop',
-      root: 'home',
-      path: 'Loop/inside',
-      scope: 'self',
-    });
+  testOnPosix(
+    'a self entry behind a symbolic link loop gives an unexpected issue with its code',
+    async () => {
+      const loopPath = join(fixtureRoot.homeDir, 'Loop');
+      await symlink(loopPath, loopPath);
+      const entry = buildCatalogEntry({
+        id: 'inside-loop',
+        root: 'home',
+        path: 'Loop/inside',
+        scope: 'self',
+      });
 
-    const result = await findCatalogTargets({ environment, entries: [entry] });
+      const result = await findCatalogTargets({ environment, entries: [entry] });
 
-    expect(result).toEqual({
-      targets: [],
-      issues: [{ path: join(loopPath, 'inside'), reason: 'unexpected', detail: 'ELOOP' }],
-    });
-  });
+      expect(result).toEqual({
+        targets: [],
+        issues: [{ path: join(loopPath, 'inside'), reason: 'unexpected', detail: 'ELOOP' }],
+      });
+    },
+  );
 });
 
 function buildCatalogEntry(params: {

@@ -10,6 +10,7 @@ import {
   loadExploreFolderNames,
   loadExploreRealPath,
 } from '../../src/explore/loadExploreRead.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -19,7 +20,10 @@ import {
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
-describe('loadExploreRead', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadExploreRead', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -65,7 +69,7 @@ describe('loadExploreRead', () => {
       expect(read).toEqual({ kind: 'succeeded', value: { kind: 'unfit' } });
     });
 
-    test('fails as fileUnreadable at its path when the file cannot be read', async () => {
+    testOnPosix('fails as fileUnreadable at its path when the file cannot be read', async () => {
       const filePath = join(fixtureRoot.homeDir, 'config.ini');
       await writeFile(filePath, 'path=/avd\n');
       await chmod(filePath, 0o000);
@@ -108,26 +112,29 @@ describe('loadExploreRead', () => {
       expect(file).toEqual({ kind: 'succeeded', value: null });
     });
 
-    test('fails as fileUnreadable at its path when the folder cannot be listed', async () => {
-      const folderPath = join(fixtureRoot.homeDir, 'locked');
-      await createFixtureDirectory({ path: folderPath });
-      await chmod(folderPath, 0o000);
+    testOnPosix(
+      'fails as fileUnreadable at its path when the folder cannot be listed',
+      async () => {
+        const folderPath = join(fixtureRoot.homeDir, 'locked');
+        await createFixtureDirectory({ path: folderPath });
+        await chmod(folderPath, 0o000);
 
-      try {
-        const names = await loadExploreDirectoryNames({ path: folderPath });
+        try {
+          const names = await loadExploreDirectoryNames({ path: folderPath });
 
-        expect(names).toEqual({
-          kind: 'failed',
-          failure: {
-            reason: 'fileUnreadable',
-            path: folderPath,
-            failure: { reason: 'permissionDenied', code: 'EACCES' },
-          },
-        });
-      } finally {
-        await chmod(folderPath, 0o700);
-      }
-    });
+          expect(names).toEqual({
+            kind: 'failed',
+            failure: {
+              reason: 'fileUnreadable',
+              path: folderPath,
+              failure: { reason: 'permissionDenied', code: 'EACCES' },
+            },
+          });
+        } finally {
+          await chmod(folderPath, 0o700);
+        }
+      },
+    );
   });
 
   describe('loadExploreDirectoryEntries', () => {
@@ -152,23 +159,26 @@ describe('loadExploreRead', () => {
   });
 
   describe('loadExploreFolderNames', () => {
-    test('keeps folders apart from links, each sorted, and leaves out dot names and files', async () => {
-      await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '22.1.0') });
-      await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '20.11.1') });
-      await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '.hidden') });
-      await writeFile(join(fixtureRoot.homeDir, '.DS_Store'), '');
-      await writeFile(join(fixtureRoot.homeDir, 'notes.txt'), '');
-      await symlink('./22.1.0', join(fixtureRoot.homeDir, 'latest'));
-      await symlink('./20.11.1', join(fixtureRoot.homeDir, '20'));
-      await symlink('./gone', join(fixtureRoot.homeDir, '.dangling'));
+    testOnPosix(
+      'keeps folders apart from links, each sorted, and leaves out dot names and files',
+      async () => {
+        await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '22.1.0') });
+        await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '20.11.1') });
+        await createFixtureDirectory({ path: join(fixtureRoot.homeDir, '.hidden') });
+        await writeFile(join(fixtureRoot.homeDir, '.DS_Store'), '');
+        await writeFile(join(fixtureRoot.homeDir, 'notes.txt'), '');
+        await symlink('./22.1.0', join(fixtureRoot.homeDir, 'latest'));
+        await symlink('./20.11.1', join(fixtureRoot.homeDir, '20'));
+        await symlink('./gone', join(fixtureRoot.homeDir, '.dangling'));
 
-      const names = await loadExploreFolderNames({ path: fixtureRoot.homeDir });
+        const names = await loadExploreFolderNames({ path: fixtureRoot.homeDir });
 
-      expect(names).toEqual({
-        kind: 'succeeded',
-        value: { folderNames: ['20.11.1', '22.1.0'], linkNames: ['20', 'latest'] },
-      });
-    });
+        expect(names).toEqual({
+          kind: 'succeeded',
+          value: { folderNames: ['20.11.1', '22.1.0'], linkNames: ['20', 'latest'] },
+        });
+      },
+    );
 
     test('returns null for a missing folder and for a file', async () => {
       const filePath = join(fixtureRoot.homeDir, 'file');
@@ -181,26 +191,29 @@ describe('loadExploreRead', () => {
       expect(file).toEqual({ kind: 'succeeded', value: null });
     });
 
-    test('fails as fileUnreadable at its path when the folder cannot be listed', async () => {
-      const folderPath = join(fixtureRoot.homeDir, 'locked');
-      await createFixtureDirectory({ path: folderPath });
-      await chmod(folderPath, 0o000);
+    testOnPosix(
+      'fails as fileUnreadable at its path when the folder cannot be listed',
+      async () => {
+        const folderPath = join(fixtureRoot.homeDir, 'locked');
+        await createFixtureDirectory({ path: folderPath });
+        await chmod(folderPath, 0o000);
 
-      try {
-        const names = await loadExploreFolderNames({ path: folderPath });
+        try {
+          const names = await loadExploreFolderNames({ path: folderPath });
 
-        expect(names).toEqual({
-          kind: 'failed',
-          failure: {
-            reason: 'fileUnreadable',
-            path: folderPath,
-            failure: { reason: 'permissionDenied', code: 'EACCES' },
-          },
-        });
-      } finally {
-        await chmod(folderPath, 0o700);
-      }
-    });
+          expect(names).toEqual({
+            kind: 'failed',
+            failure: {
+              reason: 'fileUnreadable',
+              path: folderPath,
+              failure: { reason: 'permissionDenied', code: 'EACCES' },
+            },
+          });
+        } finally {
+          await chmod(folderPath, 0o700);
+        }
+      },
+    );
   });
 
   describe('loadExploreEntryStats', () => {
@@ -217,46 +230,52 @@ describe('loadExploreRead', () => {
   });
 
   describe('loadExploreRealPath', () => {
-    test('resolves a link, and returns null for a missing path and one under a file', async () => {
-      const folderPath = join(fixtureRoot.homeDir, 'folder');
-      const linkPath = join(fixtureRoot.homeDir, 'link');
-      const filePath = join(fixtureRoot.homeDir, 'file');
-      await createFixtureDirectory({ path: folderPath });
-      await symlink(folderPath, linkPath);
-      await writeFile(filePath, '');
+    testOnPosix(
+      'resolves a link, and returns null for a missing path and one under a file',
+      async () => {
+        const folderPath = join(fixtureRoot.homeDir, 'folder');
+        const linkPath = join(fixtureRoot.homeDir, 'link');
+        const filePath = join(fixtureRoot.homeDir, 'file');
+        await createFixtureDirectory({ path: folderPath });
+        await symlink(folderPath, linkPath);
+        await writeFile(filePath, '');
 
-      const linked = await loadExploreRealPath({ path: linkPath });
-      const missing = await loadExploreRealPath({ path: join(fixtureRoot.homeDir, 'gone') });
-      const underFile = await loadExploreRealPath({ path: join(filePath, 'child') });
+        const linked = await loadExploreRealPath({ path: linkPath });
+        const missing = await loadExploreRealPath({ path: join(fixtureRoot.homeDir, 'gone') });
+        const underFile = await loadExploreRealPath({ path: join(filePath, 'child') });
 
-      expect(linked).toEqual({
-        kind: 'succeeded',
-        value: buildTestAbsolutePath({ text: await realpath(folderPath) }),
-      });
-      expect(missing).toEqual({ kind: 'succeeded', value: null });
-      expect(underFile).toEqual({ kind: 'succeeded', value: null });
-    });
-
-    test('fails as fileUnreadable at its path when a folder on it cannot be searched', async () => {
-      const folderPath = join(fixtureRoot.homeDir, 'locked');
-      const childPath = join(folderPath, 'child');
-      await createFixtureDirectory({ path: childPath });
-      await chmod(folderPath, 0o000);
-
-      try {
-        const realPath = await loadExploreRealPath({ path: childPath });
-
-        expect(realPath).toEqual({
-          kind: 'failed',
-          failure: {
-            reason: 'fileUnreadable',
-            path: childPath,
-            failure: { reason: 'permissionDenied', code: 'EACCES' },
-          },
+        expect(linked).toEqual({
+          kind: 'succeeded',
+          value: buildTestAbsolutePath({ text: await realpath(folderPath) }),
         });
-      } finally {
-        await chmod(folderPath, 0o700);
-      }
-    });
+        expect(missing).toEqual({ kind: 'succeeded', value: null });
+        expect(underFile).toEqual({ kind: 'succeeded', value: null });
+      },
+    );
+
+    testOnPosix(
+      'fails as fileUnreadable at its path when a folder on it cannot be searched',
+      async () => {
+        const folderPath = join(fixtureRoot.homeDir, 'locked');
+        const childPath = join(folderPath, 'child');
+        await createFixtureDirectory({ path: childPath });
+        await chmod(folderPath, 0o000);
+
+        try {
+          const realPath = await loadExploreRealPath({ path: childPath });
+
+          expect(realPath).toEqual({
+            kind: 'failed',
+            failure: {
+              reason: 'fileUnreadable',
+              path: childPath,
+              failure: { reason: 'permissionDenied', code: 'EACCES' },
+            },
+          });
+        } finally {
+          await chmod(folderPath, 0o700);
+        }
+      },
+    );
   });
 });

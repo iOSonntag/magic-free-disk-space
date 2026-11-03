@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { buildDartPubCacheFindings } from '../../src/explore/dartPubCache/buildDartPubCacheFindings.js';
 import { parseDartPubCacheGc } from '../../src/explore/dartPubCache/parseDartPubCacheGc.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import {
   buildDartGcDryRunText,
   buildDartGcPaths,
@@ -13,7 +14,7 @@ const tool: LocatedTool = { name: 'dart', path: '/opt/example/dart-sdk/bin/dart'
 
 const gcPaths = buildDartGcPaths({ homeDir: FIXTURE_HOME_DIR });
 
-describe('parseDartPubCacheGc', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('parseDartPubCacheGc', () => {
   test('reads the paths after "Would delete:"', () => {
     expect(
       parseDartPubCacheGc({
@@ -40,7 +41,7 @@ describe('parseDartPubCacheGc', () => {
   });
 });
 
-describe('buildDartPubCacheFindings', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('buildDartPubCacheFindings', () => {
   test('offers one unit for the whole set, with the count and three samples shown with ~', () => {
     const findings = buildDartPubCacheFindings({
       tool: tool,

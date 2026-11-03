@@ -3,6 +3,7 @@ import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -40,7 +41,9 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-describe('recheckExplorePathUnit of a VS Code extension', () => {
+const describeAwaitingWin32Platform = describe.skipIf(AWAITS_WIN32_PLATFORM);
+
+describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', () => {
   test('answers unchanged while the folder is unlisted and its reason still holds', async () => {
     for (const unit of [
       buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),

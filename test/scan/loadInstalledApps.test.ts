@@ -3,6 +3,7 @@ import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import { loadInstalledApps } from '../../src/scan/loadInstalledApps.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -34,7 +35,10 @@ async function createFixtureBundle(params: {
   );
 }
 
-describe('loadInstalledApps', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadInstalledApps', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -45,7 +49,7 @@ describe('loadInstalledApps', () => {
     await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
-  test('reads an iOS app on a Mac through its wrapped bundle', async () => {
+  testOnPosix('reads an iOS app on a Mac through its wrapped bundle', async () => {
     const wrapperPath = join(fixtureRoot.applicationDir, 'Pocket.app');
     const innerPath = join(wrapperPath, 'Wrapper', 'Pocket.app');
 
@@ -151,7 +155,7 @@ describe('loadInstalledApps', () => {
     expect(result).toEqual({ apps: [], issues: [] });
   });
 
-  test('an unreadable app folder gives an issue; other folders are still read', async () => {
+  testOnPosix('an unreadable app folder gives an issue; other folders are still read', async () => {
     const lockedDir = join(fixtureRoot.rootDir, 'Locked');
 
     await createFixtureBundle({
@@ -175,32 +179,35 @@ describe('loadInstalledApps', () => {
     expect(result.apps.map((app) => app.displayName)).toEqual(['Example']);
   });
 
-  test('an unreadable vendor folder gives an issue and its siblings are listed', async () => {
-    const applicationDir = fixtureRoot.applicationDir;
-    const vendorPath = join(applicationDir, 'Vendor');
+  testOnPosix(
+    'an unreadable vendor folder gives an issue and its siblings are listed',
+    async () => {
+      const applicationDir = fixtureRoot.applicationDir;
+      const vendorPath = join(applicationDir, 'Vendor');
 
-    await createFixtureBundle({
-      bundlePath: join(vendorPath, 'Inner.app'),
-      bundleId: 'com.example.inner',
-    });
-    await chmod(vendorPath, 0o000);
-    await createFixtureBundle({
-      bundlePath: join(applicationDir, 'Example.app'),
-      bundleId: 'com.example.app',
-    });
+      await createFixtureBundle({
+        bundlePath: join(vendorPath, 'Inner.app'),
+        bundleId: 'com.example.inner',
+      });
+      await chmod(vendorPath, 0o000);
+      await createFixtureBundle({
+        bundlePath: join(applicationDir, 'Example.app'),
+        bundleId: 'com.example.app',
+      });
 
-    const result = await loadInstalledApps({
-      appDirs: [applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
-    });
+      const result = await loadInstalledApps({
+        appDirs: [applicationDir],
+        commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      });
 
-    expect(result.issues).toEqual([
-      { path: vendorPath, reason: 'permissionDenied', detail: 'EACCES' },
-    ]);
-    expect(result.apps.map((app) => app.displayName)).toEqual(['Example']);
-  });
+      expect(result.issues).toEqual([
+        { path: vendorPath, reason: 'permissionDenied', detail: 'EACCES' },
+      ]);
+      expect(result.apps.map((app) => app.displayName)).toEqual(['Example']);
+    },
+  );
 
-  test('a symbolic link named like an app is listed and its id counts', async () => {
+  testOnPosix('a symbolic link named like an app is listed and its id counts', async () => {
     const targetPath = join(fixtureRoot.rootDir, 'Real.app');
     const linkPath = join(fixtureRoot.applicationDir, 'Linked.app');
 
@@ -225,7 +232,7 @@ describe('loadInstalledApps', () => {
     });
   });
 
-  test('a symbolic link to a folder of apps is not followed', async () => {
+  testOnPosix('a symbolic link to a folder of apps is not followed', async () => {
     const realVendorPath = join(fixtureRoot.rootDir, 'RealVendor');
 
     await createFixtureBundle({
@@ -311,7 +318,7 @@ describe('loadInstalledApps', () => {
     });
   });
 
-  test('nested bundles without an Info.plist or behind a link add nothing', async () => {
+  testOnPosix('nested bundles without an Info.plist or behind a link add nothing', async () => {
     const examplePath = join(fixtureRoot.applicationDir, 'Example.app');
     const contentsPath = join(examplePath, 'Contents');
 

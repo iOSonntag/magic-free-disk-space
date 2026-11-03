@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { PackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
 import { PACKAGE_CONFIG_CANDIDATES_MAX_COUNT } from '../../src/tools/decidePackageConfigTracking.js';
 import { loadPackageConfigTracking } from '../../src/tools/loadPackageConfigTracking.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 import {
@@ -73,7 +74,10 @@ async function createUntrackedProject(projectRoot: string): Promise<string> {
   return await createDartTool(projectRoot);
 }
 
-describe('loadPackageConfigTracking', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPackageConfigTracking', () => {
   test('returns untracked for a repository whose index does not name the package config', async () => {
     const dartToolPath = await createUntrackedProject(join(fixtureRoot.rootDir, 'app'));
 
@@ -154,7 +158,7 @@ describe('loadPackageConfigTracking', () => {
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
   });
 
-  test('returns unknown for a .git that is a link', async () => {
+  testOnPosix('returns unknown for a .git that is a link', async () => {
     const projectRoot = join(fixtureRoot.rootDir, 'app');
     const targetRoot = join(fixtureRoot.rootDir, 'target');
 
@@ -204,21 +208,24 @@ describe('loadPackageConfigTracking', () => {
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
   });
 
-  test('returns tracked for an entry through a tracked folder link to the project', async () => {
-    const repoRoot = join(fixtureRoot.rootDir, 'repo');
+  testOnPosix(
+    'returns tracked for an entry through a tracked folder link to the project',
+    async () => {
+      const repoRoot = join(fixtureRoot.rootDir, 'repo');
 
-    await createGitIndex({
-      gitDir: join(repoRoot, '.git'),
-      version: 2,
-      paths: ['app/pubspec.yaml', 'link', `link/${PACKAGE_CONFIG_PATH}`],
-    });
-    const dartToolPath = await createDartTool(join(repoRoot, 'app'));
-    await symlink('app', join(repoRoot, 'link'));
+      await createGitIndex({
+        gitDir: join(repoRoot, '.git'),
+        version: 2,
+        paths: ['app/pubspec.yaml', 'link', `link/${PACKAGE_CONFIG_PATH}`],
+      });
+      const dartToolPath = await createDartTool(join(repoRoot, 'app'));
+      await symlink('app', join(repoRoot, 'link'));
 
-    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
-  });
+      expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
+    },
+  );
 
-  test('returns unknown for a candidate entry whose stats are denied', async () => {
+  testOnPosix('returns unknown for a candidate entry whose stats are denied', async () => {
     const repoRoot = join(fixtureRoot.rootDir, 'repo');
     const lockedRoot = join(repoRoot, 'locked');
 
@@ -420,7 +427,7 @@ describe('loadPackageConfigTracking', () => {
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
   });
 
-  test('returns unknown for a marker in a folder whose listing cannot be read', async () => {
+  testOnPosix('returns unknown for a marker in a folder whose listing cannot be read', async () => {
     const lockedRoot = join(fixtureRoot.rootDir, 'locked');
 
     await mkdir(join(lockedRoot, '.hg'), { recursive: true });

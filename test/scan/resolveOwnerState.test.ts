@@ -6,10 +6,11 @@ import {
   resolveOwnerBundleId,
   resolveOwnerState,
 } from '../../src/scan/resolveOwnerState.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 
-describe('isBundleIdShape', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('isBundleIdShape', () => {
   test('accepts reverse-DNS names with three or more segments', () => {
     expect(isBundleIdShape({ name: 'com.example.app' })).toBe(true);
     expect(isBundleIdShape({ name: 'com.example.app-beta.helper' })).toBe(true);
@@ -24,14 +25,14 @@ describe('isBundleIdShape', () => {
   });
 });
 
-describe('isAppleBundleId', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('isAppleBundleId', () => {
   test('matches the com.apple. prefix only', () => {
     expect(isAppleBundleId({ bundleId: 'com.apple.Safari' })).toBe(true);
     expect(isAppleBundleId({ bundleId: 'com.applesauce.app' })).toBe(false);
   });
 });
 
-describe('resolveOwnerBundleId', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('resolveOwnerBundleId', () => {
   test('takes the owner of a self entry', () => {
     const entry = buildTestCatalogEntry({ scope: 'self', ownerBundleId: 'com.example.app' });
 
@@ -73,7 +74,7 @@ describe('resolveOwnerBundleId', () => {
   });
 });
 
-describe('findOwnerBundlePaths', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('findOwnerBundlePaths', () => {
   test('lists every installed bundle carrying the id, as app or as helper', () => {
     const apps = [
       buildTestInstalledApp({ bundlePath: '/Applications/A.app', bundleId: 'com.example.a' }),
@@ -93,7 +94,7 @@ describe('findOwnerBundlePaths', () => {
   });
 });
 
-describe('resolveOwnerState', () => {
+describe.skipIf(AWAITS_WIN32_PLATFORM)('resolveOwnerState', () => {
   const slack = buildTestInstalledApp({
     bundlePath: '/Applications/Slack.app',
     bundleId: 'com.example.slack',

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadFileText } from '../../src/system/loadFileText.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -9,7 +10,10 @@ import {
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
 
-describe('loadFileText', () => {
+/** Skips on Windows a test that needs POSIX permissions. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadFileText', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -53,20 +57,23 @@ describe('loadFileText', () => {
     expect(text).toEqual({ kind: 'failed', failure: { reason: 'notFile' } });
   });
 
-  test('fails as permissionDenied, never as missing, when the file cannot be read', async () => {
-    const filePath = join(fixtureRoot.homeDir, 'version');
-    await writeFile(filePath, '3.11.0\n');
-    await chmod(filePath, 0o000);
+  testOnPosix(
+    'fails as permissionDenied, never as missing, when the file cannot be read',
+    async () => {
+      const filePath = join(fixtureRoot.homeDir, 'version');
+      await writeFile(filePath, '3.11.0\n');
+      await chmod(filePath, 0o000);
 
-    try {
-      const text = await loadFileText({ path: filePath, maxBytes: 64 });
+      try {
+        const text = await loadFileText({ path: filePath, maxBytes: 64 });
 
-      expect(text).toEqual({
-        kind: 'failed',
-        failure: { reason: 'permissionDenied', code: 'EACCES' },
-      });
-    } finally {
-      await chmod(filePath, 0o600);
-    }
-  });
+        expect(text).toEqual({
+          kind: 'failed',
+          failure: { reason: 'permissionDenied', code: 'EACCES' },
+        });
+      } finally {
+        await chmod(filePath, 0o600);
+      }
+    },
+  );
 });

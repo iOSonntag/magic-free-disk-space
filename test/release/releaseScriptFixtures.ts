@@ -43,6 +43,7 @@ const repositoryDir = join(import.meta.dir, '../..');
 const releaseScriptsDir = join(repositoryDir, 'scripts/release');
 const releaseWorkflowPath = join(repositoryDir, '.github/workflows/release.yml');
 const systemPathDirs = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+const fakeGhModulePath = join(import.meta.dir, 'fakeGh.ts');
 
 // Without a global or system config, no signing, hook, or credential helper of the machine runs.
 const fixtureGitEnvironment = {
@@ -54,8 +55,6 @@ const fixtureGitEnvironment = {
   GIT_COMMITTER_NAME: 'Release Test',
   GIT_COMMITTER_EMAIL: 'release-test@example.com',
 };
-
-const UNEXPECTED_ARGUMENTS_EXIT_CODE = 64;
 
 /**
  * Runs `command` in `workingDir` with the fixture environment: PATH holds the fixture's bin folder,
@@ -201,30 +200,9 @@ async function writeFakeGhAnswer(params: {
 }
 
 function buildFakeGhBody(params: { logDir: string; answersDir: string }): string {
-  return `log_dir='${params.logDir}'
-answers_dir='${params.answersDir}'
-call_count=0
-if [ -f "$log_dir/count" ]; then call_count=$(cat "$log_dir/count"); fi
-call_number=$((call_count + 1))
-printf '%s' "$call_number" > "$log_dir/count"
-printf '%s' "$*" > "$log_dir/call-$call_number-arguments"
-case " $* " in
-  *" secret set "* | *" --input - "*) cat > "$log_dir/call-$call_number-stdin" ;;
-  *) : > "$log_dir/call-$call_number-stdin" ;;
-esac
-for answer_dir in "$answers_dir"/*; do
-  [ -d "$answer_dir" ] || continue
-  if [ "$*" = "$(cat "$answer_dir/arguments")" ]; then
-    answer_count=$(($(cat "$answer_dir/count") + 1))
-    printf '%s' "$answer_count" > "$answer_dir/count"
-    stdout_path="$answer_dir/stdout-$answer_count"
-    if [ ! -f "$stdout_path" ]; then stdout_path="$answer_dir/stdout-$(cat "$answer_dir/last")"; fi
-    cat "$stdout_path"
-    exit "$(cat "$answer_dir/exit-code")"
-  fi
-done
-echo "unexpected arguments: $*" >&2
-exit ${UNEXPECTED_ARGUMENTS_EXIT_CODE}`;
+  return `import { runFakeGh } from ${JSON.stringify(fakeGhModulePath)};
+
+runFakeGh({ logDir: ${JSON.stringify(params.logDir)}, answersDir: ${JSON.stringify(params.answersDir)} });`;
 }
 
 function findSecretNames(workflowText: string): string[] {

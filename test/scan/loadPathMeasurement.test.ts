@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
+import { AWAITS_WIN32_PLATFORM } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -36,7 +37,10 @@ async function loadAllocatedBytes(params: { path: string }): Promise<number> {
   return statsResult.value.allocatedBytes;
 }
 
-describe('loadPathMeasurement', () => {
+/** Skips on Windows a test that needs POSIX permissions or symbolic links. */
+const testOnPosix = test.skipIf(process.platform === 'win32');
+
+describe.skipIf(AWAITS_WIN32_PLATFORM)('loadPathMeasurement', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -142,7 +146,7 @@ describe('loadPathMeasurement', () => {
     expect(measurement.entryCount).toBe(3);
   });
 
-  test('does not add the size of a symbolic link target outside the folder', async () => {
+  testOnPosix('does not add the size of a symbolic link target outside the folder', async () => {
     const targetPath = join(fixtureRoot.tempDir, 'target.bin');
     const linkPath = join(fixtureRoot.homeDir, 'link.bin');
 
@@ -162,7 +166,7 @@ describe('loadPathMeasurement', () => {
     expect(measurement.allocatedBytes).toBeLessThan(targetBytes);
   });
 
-  test('reports an unreadable subfolder as incomplete', async () => {
+  testOnPosix('reports an unreadable subfolder as incomplete', async () => {
     const lockedDirPath = join(fixtureRoot.homeDir, 'Locked');
 
     await createFixtureDirectory({ path: lockedDirPath });
