@@ -9,6 +9,7 @@ import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
+import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
@@ -111,13 +112,13 @@ export async function runScan(params: {
   params.onProgress('Checking installed apps and running processes…');
 
   const processCommandsLoad = loadProcessCommands({
-    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+    commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
   const knownProcessCommandsLoad = processCommandsLoad.then((result) =>
     result.kind === 'succeeded' ? result.value : null,
   );
   const activeXcodeBundlePathLoad = loadActiveXcodeBundlePath({
-    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+    commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
   const unusedCutoffMs = params.environment.nowMs - params.options.unusedDays * DAY_MS;
   // One walk serves the artifact phase and the pinned probes, its deadline counted from scan start.
@@ -156,7 +157,7 @@ export async function runScan(params: {
     processCommandsLoad,
     loadInstalledApps({
       appDirs: params.environment.applicationDirs,
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     }),
     activeXcodeBundlePathLoad,
   ]);

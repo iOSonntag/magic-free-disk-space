@@ -13,7 +13,6 @@ import {
   formatDeletionLogLine,
   formatJournalUnavailableText,
 } from '../report/formatDeletionLog.js';
-import { formatArgumentFailure, formatSelectionFailure } from '../report/formatInputFailures.js';
 import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
 import { formatRemovalRun } from '../report/formatRemovalRun.js';
 import { formatScanReport } from '../report/formatScanReport.js';
@@ -22,6 +21,7 @@ import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
 import { EXIT_CODES } from './exitCodes.js';
+import { formatArgumentFailure, formatSelectionFailure } from './formatInputFailures.js';
 import type { CliArguments } from './parseArguments.js';
 import { parseArguments } from './parseArguments.js';
 import { parseSelection } from './parseSelection.js';

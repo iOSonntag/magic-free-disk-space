@@ -1,7 +1,6 @@
 export const DAY_MS = 86_400_000;
 
 export const SCAN_LIMITS = {
-  commandTimeoutMs: 10_000,
   measureTimeoutMs: 180_000,
   probeMaxEntries: 5_000,
   probeTimeoutMs: 20_000,

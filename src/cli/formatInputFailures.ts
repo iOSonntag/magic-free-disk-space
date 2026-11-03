@@ -1,5 +1,5 @@
-import type { ArgumentFailure } from '../cli/parseArguments.js';
-import type { SelectionFailure } from '../cli/parseSelection.js';
+import type { ArgumentFailure } from './parseArguments.js';
+import type { SelectionFailure } from './parseSelection.js';
 
 const ARGUMENT_FAILURE_TEXTS: Record<ArgumentFailure['reason'], string> = {
   unknownOption: 'Unknown option',

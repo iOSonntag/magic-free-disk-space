@@ -3,9 +3,8 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
-import { SCAN_LIMITS } from '../scan/limits.js';
 import { getErrorCode } from '../system/getErrorCode.js';
-import { loadCommandOutput } from '../system/loadCommandOutput.js';
+import { loadCommandOutput, SYSTEM_COMMAND_TIMEOUT_MS } from '../system/loadCommandOutput.js';
 import type { Environment } from './buildEnvironment.js';
 import { buildEnvironment } from './buildEnvironment.js';
 import { checkEnvironmentRoots } from './checkEnvironmentRoots.js';
@@ -110,7 +109,7 @@ async function loadUserTempDir(): Promise<Result<string, EnvironmentFailure>> {
   const output = await loadCommandOutput({
     command: 'getconf',
     args: [USER_TEMP_DIR_NAME],
-    timeoutMs: SCAN_LIMITS.commandTimeoutMs,
+    timeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
 
   if (output.kind === 'failed') {

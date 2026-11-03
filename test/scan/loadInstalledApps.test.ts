@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import { loadInstalledApps } from '../../src/scan/loadInstalledApps.js';
+import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../src/system/loadCommandOutput.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -64,7 +64,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result.issues).toEqual([]);
@@ -98,7 +98,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({
@@ -133,7 +133,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({
@@ -147,7 +147,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
   test('a missing app folder adds no apps and no issues', async () => {
     const result = await loadInstalledApps({
       appDirs: [join(fixtureRoot.rootDir, 'Missing')],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({ apps: [], issues: [] });
@@ -168,7 +168,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [lockedDir, fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result.issues).toEqual([
@@ -195,7 +195,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
       const result = await loadInstalledApps({
         appDirs: [applicationDir],
-        commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+        commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
       });
 
       expect(result.issues).toEqual([
@@ -214,7 +214,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({
@@ -241,7 +241,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({ apps: [], issues: [] });
@@ -255,7 +255,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({ apps: [], issues: [] });
@@ -300,7 +300,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({
@@ -335,7 +335,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     const result = await loadInstalledApps({
       appDirs: [fixtureRoot.applicationDir],
-      commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
     });
 
     expect(result).toEqual({

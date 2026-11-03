@@ -1,7 +1,7 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { Result } from '../result.js';
-import { SCAN_LIMITS } from '../scan/limits.js';
 import { loadProcessCommands } from '../scan/loadProcessCommands.js';
+import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/loadCommandOutput.js';
 import type { RemovalRun } from './deleteCandidates.js';
 import { deleteCandidates } from './deleteCandidates.js';
 import type { JournalFailure } from './deletionJournal.js';
@@ -46,7 +46,7 @@ export async function deleteApprovedCandidates(params: {
 /** `null` when `ps` failed, which withholds every item whose owner it would name. */
 async function loadCurrentProcessCommands(): Promise<string[] | null> {
   const processCommands = await loadProcessCommands({
-    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+    commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
 
   return processCommands.kind === 'succeeded' ? processCommands.value : null;
