@@ -24,12 +24,7 @@ const INFO_PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
 </dict>
 </plist>
 `;
-const BRIDGE_ENTITLEMENT_LINES = [
-  '\t<key>com.apple.security.cs.allow-jit</key>',
-  '\t<true/>',
-  '\t<key>com.apple.security.cs.allow-unsigned-executable-memory</key>',
-  '\t<true/>',
-];
+const BRIDGE_ENTITLEMENT_LINES = ['\t<key>com.apple.security.cs.allow-jit</key>', '\t<true/>'];
 const GET_TASK_ALLOW_TRUE_LINES = ['\t<key>com.apple.security.get-task-allow</key>', '\t<true/>'];
 const GET_TASK_ALLOW_FALSE_LINES = ['\t<key>com.apple.security.get-task-allow</key>', '\t<false/>'];
 /** In the order the fake `lipo` names them. */

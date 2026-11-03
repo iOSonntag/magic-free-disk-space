@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
-# Proves that the signed bridge runs under the hardened runtime on both architectures: over a
-# fixture home of some thousands of files, it must answer a status request with status and a scan
-# request with scanned, and exit 0. Then it probes whether the entitlement allow-jit alone would be
-# enough, and reports that per architecture as a GitHub notice; the probe never fails the script.
-#
-# Bun names five entitlements for a compiled executable under the hardened runtime. The bridge holds
-# only allow-jit and allow-unsigned-executable-memory, because the other three weaken a process
-# that holds Full Disk Access; the probe gives the evidence to drop one more.
+# Proves that the signed bridge, as the build signs it with Bridge.entitlements, answers a status
+# request with status and a scan request with scanned under the hardened runtime on both
+# architectures, over a fixture home of some thousands of files, and exits 0.
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 <bridge path> <signing identity>" >&2
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 <bridge path>" >&2
   exit 2
 fi
 bridge="$1"
-identity="$2"
 if [[ ! -x "$bridge" ]]; then
   echo "error: $bridge is no executable" >&2
   exit 1
@@ -55,13 +49,13 @@ build_fixture_home() {
   find "$home" -exec touch -h -t 202001010000 {} +
 }
 
-# Runs a bridge on one architecture with the fixture home and the two requests on stdin, which
+# Runs the bridge on one architecture with the fixture home and the two requests on stdin, which
 # then ends, and writes its output and error output to files. Stops it after the run limit.
 # Returns the bridge's exit code.
 run_bridge() {
-  local binary="$1" arch="$2" output="$3"
+  local arch="$1" output="$2"
   local pid deadline exit_code=0
-  HOME="$home" arch "-$arch" "$binary" <"$requests" >"$output" 2>"$output.stderr" &
+  HOME="$home" arch "-$arch" "$bridge" <"$requests" >"$output" 2>"$output.stderr" &
   pid=$!
   deadline=$((SECONDS + run_limit_seconds))
   while kill -0 "$pid" 2>/dev/null; do
@@ -105,54 +99,6 @@ print_run() {
   echo "---"
 }
 
-notice() {
-  echo "::notice title=Bridge entitlements probe::$1"
-}
-
-# Signs a copy of the bridge with allow-jit alone under the hardened runtime and runs it like the
-# bridge on each architecture. Its caller ignores its status, which turns off set -e in here, so
-# it checks each step itself.
-probe_allow_jit_alone() {
-  local probe="$work/probe" identifier sign_error arch output exit_code failure
-  identifier="$(codesign -dv "$bridge" 2>&1 | sed -n 's/^Identifier=//p')"
-  if [[ -z "$identifier" ]]; then
-    notice "The probe could not read the bridge's identifier, so it did not run."
-    return
-  fi
-  if ! mkdir -p "$probe" || ! ditto "$bridge" "$probe/magic-free-disk-space-bridge"; then
-    notice "The probe could not copy the bridge, so it did not run."
-    return
-  fi
-  printf '%s\n' \
-    '<?xml version="1.0" encoding="UTF-8"?>' \
-    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-    '<plist version="1.0">' \
-    '<dict>' \
-    '	<key>com.apple.security.cs.allow-jit</key>' \
-    '	<true/>' \
-    '</dict>' \
-    '</plist>' >"$probe/allow-jit.entitlements"
-  if ! sign_error="$(codesign --force --sign "$identity" --options runtime \
-    --identifier "$identifier" --entitlements "$probe/allow-jit.entitlements" --timestamp=none \
-    "$probe/magic-free-disk-space-bridge" 2>&1)"; then
-    notice "The probe could not sign its copy of the bridge: $(head -n 1 <<<"$sign_error")"
-    return
-  fi
-  for arch in arm64 x86_64; do
-    output="$work/probe-$arch.jsonl"
-    echo "Probing allow-jit alone on $arch"
-    exit_code=0
-    run_bridge "$probe/magic-free-disk-space-bridge" "$arch" "$output" || exit_code=$?
-    failure="$(describe_failure "$output" "$exit_code")"
-    if [[ -z "$failure" ]]; then
-      notice "On $arch allow-jit alone was enough: the bridge answered status and scanned under the hardened runtime."
-    else
-      notice "On $arch allow-jit alone was not enough: $failure."
-      print_run "$output"
-    fi
-  done
-}
-
 build_fixture_home
 echo "Built a fixture home of $(find "$home" -type f | wc -l | tr -d ' ') files at $home"
 
@@ -162,7 +108,7 @@ for arch in arm64 x86_64; do
   echo "Running the bridge on $arch: status, then a scan of the fixture home"
   started=$SECONDS
   exit_code=0
-  run_bridge "$bridge" "$arch" "$output" || exit_code=$?
+  run_bridge "$arch" "$output" || exit_code=$?
   failure="$(describe_failure "$output" "$exit_code")"
   if [[ -n "$failure" ]]; then
     echo "error: on $arch the bridge failed the smoke test: $failure" >&2
@@ -180,5 +126,3 @@ if [[ $failures -gt 0 ]]; then
   echo "error: the signed bridge failed the smoke test on $failures of 2 architectures" >&2
   exit 1
 fi
-
-probe_allow_jit_alone || true

@@ -29,8 +29,8 @@ jobs:
     # The environment holds the signing secrets and admits only main and v* tags, so no other
     # branch can sign; a check in this file could not, since a branch runs its own copy of it.
     environment: release
-    # Room for the step limits: two notarizations of up to 30 minutes each, and four bridge runs of
-    # up to 10 minutes each in the smoke test.
+    # Room for the step limits: two notarizations of up to 30 minutes each and two bridge runs of
+    # up to 10 minutes each in the smoke test, with the rest as slack for the other steps.
     timeout-minutes: 120
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -149,8 +149,7 @@ jobs:
 
       - name: Smoke-test the signed bridge on both architectures
         run: |
-          scripts/release/smokeTestBridge.sh \
-            "$APP_PATH/Contents/MacOS/magic-free-disk-space-bridge" "$SIGNING_IDENTITY"
+          scripts/release/smokeTestBridge.sh "$APP_PATH/Contents/MacOS/magic-free-disk-space-bridge"
 
       # The app is notarized on its own so that its stapled ticket travels with it out of the disk
       # image and Gatekeeper accepts it offline; the disk image gets its own ticket below.
