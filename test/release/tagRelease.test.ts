@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { FixtureCommandRun } from '../support/fixtureCommand.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { describeOnPosix } from '../support/posixOnly.js';
-import type { FixtureCommandRun } from './releaseScriptFixtures.js';
 import { runFixtureCommand, runReleaseScript } from './releaseScriptFixtures.js';
 
 // Each test runs a dozen git commands and a Bun process on its fixture.

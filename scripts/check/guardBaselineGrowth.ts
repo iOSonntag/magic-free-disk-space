@@ -152,13 +152,15 @@ function formatBaselineGrowth(growth: BaselineGrowth): string {
 }
 
 async function runGuardBaselineGrowthCommand(): Promise<number> {
-  const baselinePath = BOUNDARY_SUPPRESSIONS_PATH;
   const configuredBaseRef = process.env.BASELINE_BASE_REF;
   const baseRef =
     configuredBaseRef === undefined || configuredBaseRef === ''
       ? DEFAULT_BASE_REF
       : configuredBaseRef;
-  const base = await loadBaselineBase({ baseRef: baseRef, baselinePath: baselinePath });
+  const base = await loadBaselineBase({
+    baseRef: baseRef,
+    baselinePath: BOUNDARY_SUPPRESSIONS_PATH,
+  });
 
   if (base.kind === 'failed') {
     console.error(`error: ${base.failure}`);
@@ -176,16 +178,18 @@ async function runGuardBaselineGrowthCommand(): Promise<number> {
 
   if (baseBaseline.kind === 'failed') {
     console.error(
-      `error: ${baselinePath} in its base ${baseName} is no baseline: ${baseBaseline.failure}`,
+      `error: ${BOUNDARY_SUPPRESSIONS_PATH} in its base ${baseName} is no baseline: ${baseBaseline.failure}`,
     );
 
     return FAILURE_EXIT_CODE;
   }
 
-  const currentBaseline = await loadSuppressionBaseline(baselinePath);
+  const currentBaseline = await loadSuppressionBaseline(BOUNDARY_SUPPRESSIONS_PATH);
 
   if (currentBaseline.kind === 'failed') {
-    console.error(`error: ${baselinePath} is no baseline: ${currentBaseline.failure}`);
+    console.error(
+      `error: ${BOUNDARY_SUPPRESSIONS_PATH} is no baseline: ${currentBaseline.failure}`,
+    );
 
     return FAILURE_EXIT_CODE;
   }
@@ -193,12 +197,12 @@ async function runGuardBaselineGrowthCommand(): Promise<number> {
   const growth = findBaselineGrowth({ base: baseBaseline.value, current: currentBaseline.value });
 
   if (growth.length === 0) {
-    console.log(`${baselinePath} did not grow against its base ${baseName}`);
+    console.log(`${BOUNDARY_SUPPRESSIONS_PATH} did not grow against its base ${baseName}`);
 
     return 0;
   }
 
-  console.error(`error: ${baselinePath} grew against its base ${baseName}:
+  console.error(`error: ${BOUNDARY_SUPPRESSIONS_PATH} grew against its base ${baseName}:
 ${growth.map(formatBaselineGrowth).join('\n')}
 The baseline may only shrink: fix the new violations instead of freezing them.`);
 

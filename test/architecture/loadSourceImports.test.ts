@@ -1,19 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { rm } from 'node:fs/promises';
+import { createFixtureRepository } from './fixtureRepository.js';
 import { loadSourceImports } from './loadSourceImports.js';
-
-async function createFixtureRepository(filesByPath: Record<string, string>): Promise<string> {
-  const repositoryDir = await mkdtemp(join(tmpdir(), 'source-imports-'));
-
-  for (const [path, text] of Object.entries(filesByPath)) {
-    await mkdir(dirname(join(repositoryDir, path)), { recursive: true });
-    await writeFile(join(repositoryDir, path), text);
-  }
-
-  return repositoryDir;
-}
 
 describe('loadSourceImports', () => {
   test('reads an import type, in a type alias and behind typeof', async () => {

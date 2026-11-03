@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { decideReleaseTag } from '../../scripts/release/decideReleaseTag.js';
+import type { FixtureCommandRun } from '../support/fixtureCommand.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { describeOnPosix } from '../support/posixOnly.js';
-import type { FixtureCommandRun } from './releaseScriptFixtures.js';
 import { runFixtureCommand } from './releaseScriptFixtures.js';
 
 const decideReleaseTagPath = join(import.meta.dir, '../../scripts/release/decideReleaseTag.ts');

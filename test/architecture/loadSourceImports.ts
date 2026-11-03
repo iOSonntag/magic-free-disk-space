@@ -68,7 +68,7 @@ async function loadFileImports(params: {
   return specifiers
     .filter((specifier) => specifier.text.startsWith('./') || specifier.text.startsWith('../'))
     .map((specifier) => {
-      const line = findLineAt(sourceText, specifier.start);
+      const line = getLineNumberAt(sourceText, specifier.start);
 
       return {
         importerPath: params.sourcePath,
@@ -113,7 +113,7 @@ function findExpressionSpecifiers(params: {
     ImportExpression(node) {
       if (node.source.type !== 'Literal' || typeof node.source.value !== 'string') {
         throw new Error(
-          `${params.sourcePath}:${findLineAt(params.sourceText, node.source.start)} imports a computed path, which no boundary rule can follow: import a string literal`,
+          `${params.sourcePath}:${getLineNumberAt(params.sourceText, node.source.start)} imports a computed path, which no boundary rule can follow: import a string literal`,
         );
       }
 
@@ -129,7 +129,7 @@ function findExpressionSpecifiers(params: {
   return specifiers;
 }
 
-function findLineAt(sourceText: string, offset: number): number {
+function getLineNumberAt(sourceText: string, offset: number): number {
   return sourceText.slice(0, offset).split('\n').length;
 }
 

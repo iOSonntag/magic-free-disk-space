@@ -7,8 +7,6 @@ import { buildFixtureGitEnvironment, spawnFixtureCommand } from '../support/fixt
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { isPresent } from '../support/fixtureRoot.js';
 
-export type { FixtureCommandRun } from '../support/fixtureCommand.js';
-
 /** A release script the tests run, by its file name in `scripts/release`. */
 export type ReleaseScriptName =
   | 'setupSigning.sh'

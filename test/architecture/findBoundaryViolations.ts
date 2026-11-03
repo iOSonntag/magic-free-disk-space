@@ -51,11 +51,24 @@ export type SourceFilePlace<TModuleName extends string> =
   | SourceFilePlaceCompositionRoot
   | SourceFilePlaceSharedRoot;
 
-const SOURCE_DIR_PREFIX = 'src/';
+export const SOURCE_DIR_PREFIX = 'src/';
+
+const MANIFEST_SUFFIX = '/boundary.ts';
 
 /** The path of the manifest of the module `moduleName`, from the repository root. */
 export function formatManifestPath(moduleName: string): string {
-  return `${SOURCE_DIR_PREFIX}${moduleName}/boundary.ts`;
+  return `${SOURCE_DIR_PREFIX}${moduleName}${MANIFEST_SUFFIX}`;
+}
+
+/** The module whose manifest stands at `path`, from the repository root; `null` for any other path. */
+export function parseManifestModuleName(path: string): string | null {
+  if (!path.startsWith(SOURCE_DIR_PREFIX) || !path.endsWith(MANIFEST_SUFFIX)) {
+    return null;
+  }
+
+  const moduleName = path.slice(SOURCE_DIR_PREFIX.length, -MANIFEST_SUFFIX.length);
+
+  return moduleName === '' ? null : moduleName;
 }
 
 /**

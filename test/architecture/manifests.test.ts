@@ -1,16 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { formatManifestPath, placeSourceFile } from './findBoundaryViolations.js';
+import {
+  formatManifestPath,
+  parseManifestModuleName,
+  placeSourceFile,
+  SOURCE_DIR_PREFIX,
+} from './findBoundaryViolations.js';
+import { createFixtureRepository } from './fixtureRepository.js';
 import { loadSourcePaths } from './loadSourceImports.js';
 import { boundaryConfig, moduleRegistry } from './moduleRegistry.js';
 
 const repositoryDir = join(import.meta.dir, '../..');
-
-const SOURCE_DIR_PREFIX = 'src/';
-const MANIFEST_SUFFIX = '/boundary.ts';
 
 /** The manifest path of each folder right below `src/` that holds a TypeScript file but no manifest. */
 async function findMissingManifestPaths(params: { repositoryDir: string }): Promise<string[]> {
@@ -38,27 +40,16 @@ async function loadRootFileNames(params: { repositoryDir: string }): Promise<str
     .filter((sourceRelativePath) => !sourceRelativePath.includes('/'));
 }
 
-async function createFixtureRepository(paths: string[]): Promise<string> {
-  const fixtureDir = await mkdtemp(join(tmpdir(), 'manifests-'));
-
-  for (const path of paths) {
-    await mkdir(dirname(join(fixtureDir, path)), { recursive: true });
-    await writeFile(join(fixtureDir, path), '');
-  }
-
-  return fixtureDir;
-}
-
 describe('the checks of the manifests', () => {
-  const strayFilePaths = [
-    'src/main.ts',
-    'src/.DS_Store',
-    'src/.main.ts.swp',
-    'src/stale/.DS_Store',
-  ];
+  const strayFilesByPath = {
+    'src/main.ts': '',
+    'src/.DS_Store': '',
+    'src/.main.ts.swp': '',
+    'src/stale/.DS_Store': '',
+  };
 
   test('miss no manifest of a folder that holds no TypeScript file', async () => {
-    const fixtureDir = await createFixtureRepository(strayFilePaths);
+    const fixtureDir = await createFixtureRepository(strayFilesByPath);
 
     try {
       expect(await findMissingManifestPaths({ repositoryDir: fixtureDir })).toEqual([]);
@@ -68,7 +59,7 @@ describe('the checks of the manifests', () => {
   });
 
   test('take no file of the root that is no TypeScript file, such as a .DS_Store', async () => {
-    const fixtureDir = await createFixtureRepository(strayFilePaths);
+    const fixtureDir = await createFixtureRepository(strayFilesByPath);
 
     try {
       expect(await loadRootFileNames({ repositoryDir: fixtureDir })).toEqual(['main.ts']);
@@ -78,7 +69,10 @@ describe('the checks of the manifests', () => {
   });
 
   test('miss the manifest of a folder that holds a TypeScript file', async () => {
-    const fixtureDir = await createFixtureRepository(['src/main.ts', 'src/scan/runScan.ts']);
+    const fixtureDir = await createFixtureRepository({
+      'src/main.ts': '',
+      'src/scan/runScan.ts': '',
+    });
 
     try {
       expect(await findMissingManifestPaths({ repositoryDir: fixtureDir })).toEqual([
@@ -104,16 +98,19 @@ describe('the manifests of src/', () => {
 
   test('are each registered under the folder that holds them', async () => {
     const sourcePaths = await loadSourcePaths({ repositoryDir: repositoryDir });
-    const manifestPaths = sourcePaths.filter((sourcePath) => sourcePath.endsWith(MANIFEST_SUFFIX));
+    const manifests = sourcePaths.flatMap((sourcePath) => {
+      const moduleName = parseManifestModuleName(sourcePath);
+
+      return moduleName === null ? [] : [{ moduleName: moduleName, sourcePath: sourcePath }];
+    });
     const loadedManifests: Record<string, unknown> = {};
 
-    for (const manifestPath of manifestPaths) {
-      const moduleName = manifestPath.slice(SOURCE_DIR_PREFIX.length, -MANIFEST_SUFFIX.length);
+    for (const manifest of manifests) {
       const manifestModule: Record<string, unknown> = await import(
-        pathToFileURL(join(repositoryDir, manifestPath)).href
+        pathToFileURL(join(repositoryDir, manifest.sourcePath)).href
       );
 
-      loadedManifests[moduleName] = manifestModule.moduleBoundary;
+      loadedManifests[manifest.moduleName] = manifestModule.moduleBoundary;
     }
 
     expect(Object.keys(loadedManifests).toSorted()).toEqual(Object.keys(moduleRegistry).toSorted());
