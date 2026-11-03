@@ -1,1 +1,4 @@
+# Every text file checks out with LF, also on Windows, where Git would write CRLF; Biome and the
+# bash scripts require LF.
+* text=auto eol=lf
 bun.lock linguist-generated=true
