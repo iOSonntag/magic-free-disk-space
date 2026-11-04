@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExploreToolUnitDartPubCache } from '../../src/explore/exploreUnit.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -16,6 +18,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const MODIFIED_MS = Date.parse('2026-01-01T00:00:00Z');
 
@@ -38,7 +41,11 @@ function buildDartUnit(gcPaths: string[]): ExploreToolUnitDartPubCache {
 }
 
 async function loadAllocatedBytesOrThrow(path: string): Promise<number> {
-  const measured = await loadPathMeasurement({ path: path, deadlineMs: Date.now() + 10_000 });
+  const measured = await loadPathMeasurement({
+    path: path,
+    deadlineMs: Date.now() + 10_000,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  });
 
   if (measured.kind === 'failed') {
     throw new Error(`Measurement failed: ${measured.failure.reason}`);
@@ -47,7 +54,7 @@ async function loadAllocatedBytesOrThrow(path: string): Promise<number> {
   return measured.value.allocatedBytes;
 }
 
-describe('loadUnitMeasurement', () => {
+describeAwaitingWin32Platform('loadUnitMeasurement', () => {
   test('sums every path of the unit and counts a missing one as 0', async () => {
     const packageFolder = join(fixtureRoot.homeDir, '.pub-cache/hosted/pub.dev/example_a-1.0.0');
     const hashFile = join(fixtureRoot.homeDir, '.pub-cache/hosted-hashes/example_a-1.0.0.sha256');
@@ -64,6 +71,7 @@ describe('loadUnitMeasurement', () => {
     const measurement = await loadUnitMeasurement({
       unit: buildDartUnit([packageFolder, hashFile, join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(measurement).toEqual({
@@ -84,17 +92,19 @@ describe('loadUnitMeasurement', () => {
     const plain = await loadUnitMeasurement({
       unit: buildDartUnit([hashFile, join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
     const mounted = await loadUnitMeasurement({
       unit: buildDartUnit([hashFile, '/dev', join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(plain.holdsOtherVolume).toBe(false);
     expect(mounted.holdsOtherVolume).toBe(true);
   });
 
-  test('is incomplete when a path cannot be read', async () => {
+  testOnPosix('is incomplete when a path cannot be read', async () => {
     const lockedFolder = join(fixtureRoot.homeDir, 'locked');
     const hiddenFile = join(lockedFolder, 'inner');
 
@@ -105,6 +115,7 @@ describe('loadUnitMeasurement', () => {
     const measurement = await loadUnitMeasurement({
       unit: buildDartUnit([hiddenFile]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(measurement).toEqual({
@@ -115,7 +126,7 @@ describe('loadUnitMeasurement', () => {
     });
   });
 
-  test('is incomplete when a folder of a path cannot be read in part', async () => {
+  testOnPosix('is incomplete when a folder of a path cannot be read in part', async () => {
     const versionFolder = join(fixtureRoot.homeDir, 'installs/node/20.1.0');
 
     await createFixtureDirectory({ path: join(versionFolder, 'locked') });
@@ -130,6 +141,7 @@ describe('loadUnitMeasurement', () => {
         installPath: buildTestAbsolutePath({ text: versionFolder }),
       },
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(measurement.isComplete).toBe(false);

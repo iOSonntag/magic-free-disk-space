@@ -13,6 +13,7 @@ export function buildNvmVersionFindings(params: {
   pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
   processCommands: string[] | null;
+  projectSearchIncompleteEvidence: string;
 }): ExploreProbeFindings {
   const findings = params.offers.offers.map((offer) => {
     const finding: ExploreFinding = {
@@ -29,7 +30,10 @@ export function buildNvmVersionFindings(params: {
       evidenceLines: [
         buildNvmDefaultAliasEvidence({ defaultAlias: params.offers.defaultAlias }),
         `None of the \`.nvmrc\` found (${params.pinFiles.length}) resolves to ${offer.version}.`,
-        ...buildProjectSearchEvidence({ pins: params.projectPins }),
+        ...buildProjectSearchEvidence({
+          pins: params.projectPins,
+          incompleteEvidence: params.projectSearchIncompleteEvidence,
+        }),
       ],
       displayPath: offer.folderPath,
       activity: decideUnitActivity({

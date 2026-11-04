@@ -11,6 +11,7 @@ import type {
 } from './buildScanView.js';
 import { buildScanView } from './buildScanView.js';
 import type { NoticeView } from './noticeView.js';
+import type { ReportTexts } from './reportTexts.js';
 
 /** What leads a detail line below its item, after the indent. */
 const detailLinePrefixes: Record<ItemDetailLineKind, string> = {
@@ -26,8 +27,12 @@ const detailLinePrefixes: Record<ItemDetailLineKind, string> = {
  * The scan as the CLI prints it: the summary, the sections with their numbered items, Explore,
  * the skipped items, and the notices. The CLI has no button, so a notice shows its lines only.
  */
-export function formatScanReport(params: { report: ScanReport }): string[] {
-  const view = buildScanView({ report: params.report, fullDiskAccessHolder: 'terminal' });
+export function formatScanReport(params: { report: ScanReport; texts: ReportTexts }): string[] {
+  const view = buildScanView({
+    report: params.report,
+    fullDiskAccessHolder: 'terminal',
+    texts: params.texts,
+  });
 
   return [
     ...formatListBlockLines({ titleText: view.summary.titleText, lines: view.summary.lines }),

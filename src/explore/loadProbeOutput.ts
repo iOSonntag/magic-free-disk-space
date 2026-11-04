@@ -1,4 +1,5 @@
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
@@ -7,12 +8,13 @@ import type { ExploreToolFailure } from './exploreUnit.js';
 
 /**
  * The read-only form of a probe, which the scan and the recheck before a run both run: its tool,
- * its arguments after the tool's leading ones, and the parser of its standard output.
+ * its arguments after the tool's leading ones, and the parser of its standard output, which reads
+ * the paths in it by the path rules of the environment.
  */
 export type ExploreProbeDefinition<T> = {
   toolName: ToolName;
   args: string[];
-  parse: (params: { stdoutText: string }) => Result<T, string>;
+  parse: (params: { pathRules: PathRules; stdoutText: string }) => Result<T, string>;
 };
 
 /**
@@ -42,7 +44,10 @@ export async function loadProbeOutput<T>(params: {
     return { kind: 'failed', failure: { reason: 'commandFailed', failure: output.failure } };
   }
 
-  const parsed = params.probe.parse({ stdoutText: output.value.stdoutText });
+  const parsed = params.probe.parse({
+    pathRules: params.environment.pathRules,
+    stdoutText: output.value.stdoutText,
+  });
 
   if (parsed.kind === 'failed') {
     return { kind: 'failed', failure: { reason: 'outputUnreadable', detail: parsed.failure } };

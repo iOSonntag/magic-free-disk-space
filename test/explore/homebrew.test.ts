@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -25,8 +25,10 @@ import {
 } from '../../src/explore/homebrew/recheckHomebrewUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -37,6 +39,8 @@ import {
   buildTestAbsolutePath,
   buildTestHomebrewFormulaName,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   APPLE_SILICON_CELLAR_PATH,
   buildHomebrewCleanupDryRunText,
@@ -131,24 +135,39 @@ function buildOrphansUnit(params: { cellarPath: string }): ExploreToolUnitHomebr
   };
 }
 
-describe('parseHomebrewCellarPath', () => {
+describeAwaitingWin32Platform('parseHomebrewCellarPath', () => {
   test('reads the one path brew prints', () => {
-    expect(parseHomebrewCellarPath({ stdoutText: '/opt/homebrew/Cellar\n' })).toEqual({
+    expect(
+      parseHomebrewCellarPath({
+        pathRules: DARWIN_PATH_RULES,
+        stdoutText: '/opt/homebrew/Cellar\n',
+      }),
+    ).toEqual({
       kind: 'succeeded',
       value: APPLE_SILICON_CELLAR_PATH,
     });
   });
 
   test('rejects an empty, relative, or second path', () => {
-    expect(parseHomebrewCellarPath({ stdoutText: '' }).kind).toBe('failed');
-    expect(parseHomebrewCellarPath({ stdoutText: 'Cellar\n' }).kind).toBe('failed');
-    expect(parseHomebrewCellarPath({ stdoutText: '/a/Cellar\n/b/Cellar\n' }).kind).toBe('failed');
+    expect(parseHomebrewCellarPath({ pathRules: DARWIN_PATH_RULES, stdoutText: '' }).kind).toBe(
+      'failed',
+    );
+    expect(
+      parseHomebrewCellarPath({ pathRules: DARWIN_PATH_RULES, stdoutText: 'Cellar\n' }).kind,
+    ).toBe('failed');
+    expect(
+      parseHomebrewCellarPath({
+        pathRules: DARWIN_PATH_RULES,
+        stdoutText: '/a/Cellar\n/b/Cellar\n',
+      }).kind,
+    ).toBe('failed');
   });
 });
 
-describe('parseHomebrewCleanupDryRun', () => {
+describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
   test('reads every Would remove line with its size, and skips the closing line', () => {
     const removals = parseHomebrewCleanupDryRun({
+      pathRules: DARWIN_PATH_RULES,
       stdoutText: buildHomebrewCleanupDryRunText({
         homeDir: FIXTURE_HOME_DIR,
         cellarPaths: [APPLE_SILICON_CELLAR_PATH, INTEL_CELLAR_PATH],
@@ -170,16 +189,19 @@ describe('parseHomebrewCleanupDryRun', () => {
   });
 
   test('reads a path with spaces and parentheses', () => {
-    expect(parseHomebrewCleanupDryRun({ stdoutText: 'Would remove: /a b/c (1) (12KB)\n' })).toEqual(
-      {
-        kind: 'succeeded',
-        value: [{ path: buildTestAbsolutePath({ text: '/a b/c (1)' }), sizeText: '12KB' }],
-      },
-    );
+    expect(
+      parseHomebrewCleanupDryRun({
+        pathRules: DARWIN_PATH_RULES,
+        stdoutText: 'Would remove: /a b/c (1) (12KB)\n',
+      }),
+    ).toEqual({
+      kind: 'succeeded',
+      value: [{ path: buildTestAbsolutePath({ text: '/a b/c (1)' }), sizeText: '12KB' }],
+    });
   });
 
   test('reads nothing from an empty output', () => {
-    expect(parseHomebrewCleanupDryRun({ stdoutText: '' })).toEqual({
+    expect(parseHomebrewCleanupDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: '' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -191,14 +213,17 @@ describe('parseHomebrewCleanupDryRun', () => {
       'Would remove: /opt/homebrew/Cellar/wget/1.0',
       'Would remove: /opt/homebrew/Cellar/../wget/1.0 (1KB)',
     ]) {
-      expect(parseHomebrewCleanupDryRun({ stdoutText: line }).kind).toBe('failed');
+      expect(
+        parseHomebrewCleanupDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: line }).kind,
+      ).toBe('failed');
     }
   });
 });
 
-describe('buildHomebrewOldVersions', () => {
+describeAwaitingWin32Platform('buildHomebrewOldVersions', () => {
   test('groups the kegs of its own Cellar by formula and ignores every other line', () => {
     const removals = parseHomebrewCleanupDryRun({
+      pathRules: DARWIN_PATH_RULES,
       stdoutText: buildHomebrewCleanupDryRunText({
         homeDir: FIXTURE_HOME_DIR,
         cellarPaths: [APPLE_SILICON_CELLAR_PATH, INTEL_CELLAR_PATH],
@@ -319,7 +344,7 @@ describe('buildHomebrewOldVersions', () => {
   });
 });
 
-describe('parseHomebrewAutoremoveDryRun', () => {
+describeAwaitingWin32Platform('parseHomebrewAutoremoveDryRun', () => {
   test('reads each listed formula, a tap formula by its name', () => {
     expect(parseHomebrewAutoremoveDryRun({ stdoutText: HOMEBREW_AUTOREMOVE_DRY_RUN_TEXT })).toEqual(
       { kind: 'succeeded', value: [libyaml, libfoo] },
@@ -350,7 +375,7 @@ describe('parseHomebrewAutoremoveDryRun', () => {
   });
 });
 
-describe('decideHomebrewOrphans', () => {
+describeAwaitingWin32Platform('decideHomebrewOrphans', () => {
   test('judges no orphans when none is listed', () => {
     expect(decideHomebrewOrphans({ orphans: [] })).toEqual({ kind: 'judged', orphans: [] });
   });
@@ -379,7 +404,7 @@ describe('decideHomebrewOrphans', () => {
   });
 });
 
-describe('buildHomebrewFindings', () => {
+describeAwaitingWin32Platform('buildHomebrewFindings', () => {
   test('offers each formula with old versions and the orphans together', () => {
     const probeFindings = buildHomebrewFindings({ tool: brew, state: state, processCommands: [] });
     const findings = probeFindings.findings;
@@ -441,7 +466,7 @@ describe('buildHomebrewFindings', () => {
   });
 });
 
-describe('compareHomebrewUnit', () => {
+describeAwaitingWin32Platform('compareHomebrewUnit', () => {
   test('is unchanged while the fresh kegs are a subset of the scanned ones and brew is idle', () => {
     const oneKegLeft: HomebrewState = {
       ...state,
@@ -509,7 +534,7 @@ describe('compareHomebrewUnit', () => {
   });
 });
 
-describe('with fake brews', () => {
+describeAwaitingWin32Platform('with fake brews', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let appleSiliconCellarPath: string;
@@ -563,6 +588,7 @@ describe('with fake brews', () => {
     return loadHomebrewFindings({
       tool: params.tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       deadlineMs: Date.now() + TIMEOUT_MS,
       processCommands: [],
       unusedCutoffMs: 0,
@@ -597,6 +623,7 @@ describe('with fake brews', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({
         brewAppleSilicon: appleSilicon.path,
         brewIntel: intel.path,
@@ -643,6 +670,7 @@ describe('with fake brews', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ brewIntel: intel.path }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -669,6 +697,7 @@ describe('with fake brews', () => {
     const failed = await loadHomebrewState({
       tool: failing,
       environment: environment,
+      platform: buildTestProbePlatform(),
       deadlineMs: Date.now() + TIMEOUT_MS,
     });
 
@@ -686,6 +715,7 @@ describe('with fake brews', () => {
       run: {
         tool: garbled,
         environment: environment,
+        platform: buildTestProbePlatform(),
         deadlineMs: Date.now() + TIMEOUT_MS,
         processCommands: [],
       },
@@ -704,6 +734,7 @@ describe('with fake brews', () => {
     const recheck = {
       tool: tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     };
@@ -743,6 +774,7 @@ describe('with fake brews', () => {
     const run = {
       tool: tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       deadlineMs: Date.now() + TIMEOUT_MS,
       processCommands: [],
     };
@@ -794,7 +826,12 @@ describe('with fake brews', () => {
       name: 'brewAppleSilicon',
       answers: buildWorkingAnswers({ cellarPath: appleSiliconCellarPath }),
     });
-    const run = { tool: tool, environment: environment, deadlineMs: Date.now() + TIMEOUT_MS };
+    const run = {
+      tool: tool,
+      environment: environment,
+      platform: buildTestProbePlatform(),
+      deadlineMs: Date.now() + TIMEOUT_MS,
+    };
     const libfooPath = join(appleSiliconCellarPath, 'libfoo');
     const expectedOrphans: HomebrewOrphan[] = [
       {
@@ -854,7 +891,7 @@ describe('with fake brews', () => {
     }
   });
 
-  test('fails the probe on a rack of an orphan it cannot read', async () => {
+  testOnPosix('fails the probe on a rack of an orphan it cannot read', async () => {
     await createOrphanRacks({ cellarPath: appleSiliconCellarPath });
 
     const tool = await createBrew({

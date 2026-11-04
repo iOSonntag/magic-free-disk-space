@@ -1,7 +1,7 @@
 import type { CandidateDecision } from './candidate.js';
-import type { InstalledApp } from './loadInstalledApps.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import type { OwnerState } from './resolveOwnerState.js';
+import type { InstalledApp } from './scanPlatform.js';
 
 /**
  * Offers an app unused since `unusedCutoffMs`. An app without a bundle id is skipped, because

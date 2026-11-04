@@ -1,5 +1,6 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import type { ExploreProbeDefinition } from '../loadProbeOutput.js';
@@ -47,6 +48,7 @@ export function parseSimulatorDeviceUdid(params: {
 
 /** Parses the JSON of `simctl list devices --json`; fails with a reason on any other shape. */
 export function parseSimulatorDeviceList(params: {
+  pathRules: PathRules;
   stdoutText: string;
 }): Result<SimulatorDevice[], string> {
   const json = parseJsonValue({ text: params.stdoutText });
@@ -67,7 +69,11 @@ export function parseSimulatorDeviceList(params: {
     }
 
     for (const value of runtimeDevices) {
-      const device = parseSimulatorDevice({ value: value, runtimeIdentifier: runtimeIdentifier });
+      const device = parseSimulatorDevice({
+        pathRules: params.pathRules,
+        value: value,
+        runtimeIdentifier: runtimeIdentifier,
+      });
 
       if (device === null) {
         return { kind: 'failed', failure: 'a device lacks a field or has a malformed one' };
@@ -81,6 +87,7 @@ export function parseSimulatorDeviceList(params: {
 }
 
 function parseSimulatorDevice(params: {
+  pathRules: PathRules;
   value: unknown;
   runtimeIdentifier: string;
 }): SimulatorDevice | null {
@@ -109,7 +116,7 @@ function parseSimulatorDevice(params: {
   }
 
   const udid = parseSimulatorDeviceUdid({ text: udidText });
-  const dataPath = parseAbsolutePath({ text: dataPathText });
+  const dataPath = parseAbsolutePath({ rules: params.pathRules, text: dataPathText });
 
   if (udid.kind === 'failed' || dataPath.kind === 'failed') {
     return null;

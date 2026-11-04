@@ -1,9 +1,11 @@
 import { lstat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import { loadFileText } from '../system/loadFileText.js';
 import { loadRealPath } from '../system/loadRealPath.js';
+import type { UserIdentity } from '../system/userIdentity.js';
 import { decideDartBinaryPath, listFlutterWrapperPaths } from './decideDartBinaryPath.js';
 import type { ToolDistrustDetail, ToolFileStats } from './decideToolTrust.js';
 import { decideToolTrust } from './decideToolTrust.js';
@@ -32,19 +34,24 @@ export type ToolLookupFailure = ToolLookupFailureNotFound | ToolLookupFailureUnt
 export async function findTrustedTool(params: {
   name: ToolName;
   locations: ToolLocation[];
+  pathRules: PathRules;
   homeDir: string;
-  userId: number;
+  user: UserIdentity;
 }): Promise<Result<LocatedTool, ToolLookupFailure>> {
   let firstUntrusted: ToolLookupFailureUntrusted | null = null;
 
   for (const location of params.locations) {
-    const paths = await loadLocationPaths({ location: location, homeDir: params.homeDir });
+    const paths = await loadLocationPaths({
+      location: location,
+      pathRules: params.pathRules,
+      homeDir: params.homeDir,
+    });
 
     for (const path of paths) {
       const checked = await loadTrustedTool({
         name: params.name,
         path: path,
-        userId: params.userId,
+        user: params.user,
       });
 
       if (checked.kind === 'succeeded') {
@@ -61,7 +68,7 @@ export async function findTrustedTool(params: {
 }
 
 /**
- * Accepts the binary at `path` when it is a regular executable file owned by `userId` or root and
+ * Accepts the binary at `path` when it is a regular executable file owned by `user` or root and
  * writable by neither group nor others, and for `dart`, of an SDK of 3.11 or later; a trusted
  * binary that fails the version check fails as `notFound`. A symbolic link is followed; the real
  * path is what is checked, returned, and named in an `untrusted` failure. For `dart`, Flutter's
@@ -70,7 +77,7 @@ export async function findTrustedTool(params: {
 export async function loadTrustedTool(params: {
   name: ToolName;
   path: string;
-  userId: number;
+  user: UserIdentity;
 }): Promise<Result<LocatedTool, ToolLookupFailure>> {
   const binaryPath = await loadToolBinaryPath({ name: params.name, path: params.path });
 
@@ -84,7 +91,7 @@ export async function loadTrustedTool(params: {
     return { kind: 'failed', failure: { reason: 'notFound' } };
   }
 
-  const trust = decideToolTrust({ stats: stats, userId: params.userId });
+  const trust = decideToolTrust({ stats: stats, user: params.user });
 
   if (!trust.isTrusted) {
     return {
@@ -191,13 +198,14 @@ async function loadPresentPaths(params: { paths: string[] }): Promise<string[]> 
 
 async function loadLocationPaths(params: {
   location: ToolLocation;
+  pathRules: PathRules;
   homeDir: string;
 }): Promise<string[]> {
   switch (params.location.kind) {
     case 'path':
       return [buildFixedLocationPath({ location: params.location, homeDir: params.homeDir })];
     case 'flutterSdkFromActiveRoots':
-      return loadFlutterSdkDartPaths({ homeDir: params.homeDir });
+      return loadFlutterSdkDartPaths({ pathRules: params.pathRules, homeDir: params.homeDir });
   }
 }
 

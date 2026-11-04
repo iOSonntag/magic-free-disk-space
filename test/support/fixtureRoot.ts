@@ -12,15 +12,15 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { buildTestAbsolutePath } from './parsedValueFixtures.js';
+import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
+import { buildTestAbsolutePath, buildTestUserIdentity } from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
   rootDir: string;
   homeDir: AbsolutePath;
-  tempDir: string;
-  applicationDir: string;
+  tempDir: AbsolutePath;
+  applicationDir: AbsolutePath;
 };
 
 export async function createFixtureRoot(): Promise<FixtureRoot> {
@@ -28,8 +28,8 @@ export async function createFixtureRoot(): Promise<FixtureRoot> {
   const fixtureRoot: FixtureRoot = {
     rootDir,
     homeDir: buildTestAbsolutePath({ text: join(rootDir, 'home') }),
-    tempDir: join(rootDir, 'tmp'),
-    applicationDir: join(rootDir, 'Applications'),
+    tempDir: buildTestAbsolutePath({ text: join(rootDir, 'tmp') }),
+    applicationDir: buildTestAbsolutePath({ text: join(rootDir, 'Applications') }),
   };
 
   await mkdir(fixtureRoot.homeDir);
@@ -52,18 +52,16 @@ export async function loadTestEnvironment(params: {
   const tempRealPath = await realpath(params.fixtureRoot.tempDir);
   const applicationRealPath = await realpath(params.fixtureRoot.applicationDir);
 
-  return buildEnvironment({
-    platform: 'darwin',
+  return buildDarwinEnvironment({
     nowMs: params.nowMs,
     // The fixtures belong to the user that runs the tests.
-    userId: process.getuid?.() ?? 0,
+    user: buildTestUserIdentity({ uid: process.getuid?.() ?? 0 }),
     homeDir: params.fixtureRoot.homeDir,
-    homeRealPath,
+    homeRealPath: buildTestAbsolutePath({ text: homeRealPath }),
     tempDir: params.fixtureRoot.tempDir,
-    tempRealPath,
+    tempRealPath: buildTestAbsolutePath({ text: tempRealPath }),
     applicationDirs: [params.fixtureRoot.applicationDir],
-    applicationRealPaths: [applicationRealPath],
-    homebrewPrefixPaths: [],
+    applicationRealPaths: [buildTestAbsolutePath({ text: applicationRealPath })],
   });
 }
 

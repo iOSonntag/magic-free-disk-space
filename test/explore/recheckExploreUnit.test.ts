@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -15,6 +15,7 @@ import {
 } from '../../src/explore/recheckExploreUnit.js';
 import type { SimulatorDevice } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -26,6 +27,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { ProbeCommandName } from './probeFakeTools.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -97,7 +99,7 @@ const miseUnit: ExploreToolUnitMiseVersion = {
   installPath: nodeInstallPath,
 };
 
-describe('compareSimulatorDevice', () => {
+describeAwaitingWin32Platform('compareSimulatorDevice', () => {
   test('is unchanged while the device is still listed and offered', () => {
     expect(
       compareSimulatorDevice({
@@ -150,7 +152,7 @@ describe('compareSimulatorDevice', () => {
   });
 });
 
-describe('compareDartPubCache', () => {
+describeAwaitingWin32Platform('compareDartPubCache', () => {
   test('is unchanged for the same set or a subset, even when ps failed', () => {
     expect(
       compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths, processCommands: null }),
@@ -179,7 +181,7 @@ describe('compareDartPubCache', () => {
   });
 });
 
-describe('compareMiseVersion', () => {
+describeAwaitingWin32Platform('compareMiseVersion', () => {
   test('is unchanged while the version is still prunable at the same path, even when ps failed', () => {
     expect(
       compareMiseVersion({
@@ -217,7 +219,7 @@ describe('compareMiseVersion', () => {
   });
 });
 
-describe('recheckExploreUnit', () => {
+describeAwaitingWin32Platform('recheckExploreUnit', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -274,6 +276,7 @@ describe('recheckExploreUnit', () => {
     const recheck = {
       tool: tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     };
@@ -304,6 +307,7 @@ describe('recheckExploreUnit', () => {
         unit: { kind: 'dartPubCache', tool: dart, gcPaths: fixtureGcPaths },
         tool: dart,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: null,
         timeoutMs: TIMEOUT_MS,
       }),
@@ -323,6 +327,7 @@ describe('recheckExploreUnit', () => {
         },
         tool: mise,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: null,
         timeoutMs: TIMEOUT_MS,
       }),
@@ -338,6 +343,7 @@ describe('recheckExploreUnit', () => {
         unit: unit,
         tool: failing,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
         timeoutMs: TIMEOUT_MS,
       }),
@@ -354,6 +360,7 @@ describe('recheckExploreUnit', () => {
       unit: { ...deviceUnit, tool: garbled },
       tool: garbled,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     });

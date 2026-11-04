@@ -1,10 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import type { EntryEvictionCheck, EvictionCandidate } from '../../src/system/systemPlatform.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 let treeRoot: string;
@@ -17,7 +20,6 @@ beforeEach(async () => {
   await writeFile(join(treeRoot, 'a/deep/deeper/leaf.txt'), 'leaf');
   await writeFile(join(treeRoot, 'b/marker.json'), '{}');
   await writeFile(join(treeRoot, 'top.txt'), 'top');
-  await symlink(join(treeRoot, 'a'), join(treeRoot, 'link-to-a'));
 });
 
 afterEach(async () => {
@@ -28,17 +30,17 @@ async function collectEntries(params: {
   isStatsNeeded: boolean;
   visit?: (entry: TreeEntry) => 'descend' | 'skip' | 'stop';
   isStopped?: () => boolean;
-  isFolderEvicted?: (folder: { path: string }) => boolean;
+  isEntryEvicted?: EntryEvictionCheck;
 }) {
   const entries: TreeEntry[] = [];
   const unreadables: TreeUnreadable[] = [];
-  let evictedFolderCount = 0;
+  const evictedEntries: EvictionCandidate[] = [];
   const walkEnd = await walkDirectoryTree({
     rootPath: treeRoot,
     isStatsNeeded: params.isStatsNeeded,
     maxConcurrentDirectories: 2,
     isStopped: params.isStopped ?? (() => false),
-    isFolderEvicted: params.isFolderEvicted ?? (() => false),
+    isEntryEvicted: params.isEntryEvicted ?? (() => false),
     visitEntry: (entry) => {
       entries.push(entry);
 
@@ -47,8 +49,8 @@ async function collectEntries(params: {
     onUnreadable: (unreadable) => {
       unreadables.push(unreadable);
     },
-    onEvictedFolderSkipped: () => {
-      evictedFolderCount += 1;
+    onEvictedEntrySkipped: (entry) => {
+      evictedEntries.push(entry);
     },
   });
   const relativePaths = entries.map((entry) => relative(treeRoot, entry.path)).toSorted();
@@ -58,43 +60,63 @@ async function collectEntries(params: {
     entries: entries,
     relativePaths: relativePaths,
     unreadables: unreadables,
-    evictedFolderCount: evictedFolderCount,
+    evictedEntries: evictedEntries,
   };
 }
 
-describe('walkDirectoryTree', () => {
+describeAwaitingWin32Platform('walkDirectoryTree', () => {
   test('visits an evicted folder but never reads it, and reports it as skipped', async () => {
     const evictedPath = join(treeRoot, 'b');
 
     const walk = await collectEntries({
       isStatsNeeded: false,
-      isFolderEvicted: (folder) => folder.path === evictedPath,
+      isEntryEvicted: (entry) => entry.path === evictedPath,
     });
 
     expect(walk.walkEnd).toBe('completed');
     expect(walk.relativePaths).toContain('b');
     expect(walk.relativePaths).not.toContain('b/marker.json');
-    expect(walk.evictedFolderCount).toBe(1);
+    expect(walk.evictedEntries).toEqual([{ path: evictedPath, kind: 'directory' }]);
     expect(walk.unreadables).toEqual([]);
   });
 
-  test('visits every entry once, with its depth, never entering a symbolic link', async () => {
-    const walk = await collectEntries({ isStatsNeeded: false });
+  test('never visits an evicted file, and reports it as skipped', async () => {
+    const evictedPath = join(treeRoot, 'top.txt');
+
+    const walk = await collectEntries({
+      isStatsNeeded: true,
+      isEntryEvicted: (entry) => entry.path === evictedPath,
+    });
 
     expect(walk.walkEnd).toBe('completed');
-    expect(walk.relativePaths).toEqual([
-      'a',
-      'a/deep',
-      'a/deep/deeper',
-      'a/deep/deeper/leaf.txt',
-      'b',
-      'b/marker.json',
-      'link-to-a',
-      'top.txt',
-    ]);
-    expect(walk.entries.find((entry) => entry.name === 'link-to-a')?.kind).toBe('symbolicLink');
-    expect(walk.entries.find((entry) => entry.name === 'leaf.txt')?.depth).toBe(4);
+    expect(walk.relativePaths).not.toContain('top.txt');
+    expect(walk.relativePaths).toContain('b/marker.json');
+    expect(walk.evictedEntries).toEqual([{ path: evictedPath, kind: 'file' }]);
+    expect(walk.unreadables).toEqual([]);
   });
+
+  testOnPosix(
+    'visits every entry once, with its depth, never entering a symbolic link',
+    async () => {
+      await symlink(join(treeRoot, 'a'), join(treeRoot, 'link-to-a'));
+
+      const walk = await collectEntries({ isStatsNeeded: false });
+
+      expect(walk.walkEnd).toBe('completed');
+      expect(walk.relativePaths).toEqual([
+        'a',
+        'a/deep',
+        'a/deep/deeper',
+        'a/deep/deeper/leaf.txt',
+        'b',
+        'b/marker.json',
+        'link-to-a',
+        'top.txt',
+      ]);
+      expect(walk.entries.find((entry) => entry.name === 'link-to-a')?.kind).toBe('symbolicLink');
+      expect(walk.entries.find((entry) => entry.name === 'leaf.txt')?.depth).toBe(4);
+    },
+  );
 
   test('reads stats only when asked', async () => {
     const withoutStats = await collectEntries({ isStatsNeeded: false });
@@ -108,7 +130,7 @@ describe('walkDirectoryTree', () => {
     const walk = await collectEntries({ isStatsNeeded: false });
     const folderB = walk.entries.find((entry) => entry.name === 'b');
 
-    expect(folderB?.siblingNames).toEqual(new Set(['a', 'b', 'link-to-a', 'top.txt']));
+    expect(folderB?.siblingNames).toEqual(new Set(['a', 'b', 'top.txt']));
   });
 
   test('does not enter a folder the visitor skips', async () => {
@@ -137,7 +159,7 @@ describe('walkDirectoryTree', () => {
     expect(walk.entries).toEqual([]);
   });
 
-  test('reports an unreadable folder and goes on with the rest', async () => {
+  testOnPosix('reports an unreadable folder and goes on with the rest', async () => {
     await chmod(join(treeRoot, 'a/deep'), 0o000);
 
     const walk = await collectEntries({ isStatsNeeded: true });

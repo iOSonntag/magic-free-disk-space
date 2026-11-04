@@ -2,6 +2,8 @@ import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isJsonObject } from '../../src/system/parseJsonValue.js';
 import { createFakeTool } from '../support/fakeTool.js';
+import type { FixtureCommandRun } from '../support/fixtureCommand.js';
+import { buildFixtureGitEnvironment, spawnFixtureCommand } from '../support/fixtureCommand.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { isPresent } from '../support/fixtureRoot.js';
 
@@ -11,8 +13,6 @@ export type ReleaseScriptName =
   | 'rehearse.sh'
   | 'tagRelease.sh'
   | 'verifyAppSignature.sh';
-
-export type FixtureCommandRun = { exitCode: number; stdoutText: string; stderrText: string };
 
 /**
  * What the fake `gh` prints and how it exits for a call whose arguments, joined by single spaces,
@@ -43,19 +43,7 @@ const repositoryDir = join(import.meta.dir, '../..');
 const releaseScriptsDir = join(repositoryDir, 'scripts/release');
 const releaseWorkflowPath = join(repositoryDir, '.github/workflows/release.yml');
 const systemPathDirs = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
-
-// Without a global or system config, no signing, hook, or credential helper of the machine runs.
-const fixtureGitEnvironment = {
-  GIT_CONFIG_GLOBAL: '/dev/null',
-  GIT_CONFIG_NOSYSTEM: '1',
-  GIT_TERMINAL_PROMPT: '0',
-  GIT_AUTHOR_NAME: 'Release Test',
-  GIT_AUTHOR_EMAIL: 'release-test@example.com',
-  GIT_COMMITTER_NAME: 'Release Test',
-  GIT_COMMITTER_EMAIL: 'release-test@example.com',
-};
-
-const UNEXPECTED_ARGUMENTS_EXIT_CODE = 64;
+const fakeGhModulePath = join(import.meta.dir, 'fakeGh.ts');
 
 /**
  * Runs `command` in `workingDir` with the fixture environment: PATH holds the fixture's bin folder,
@@ -69,25 +57,21 @@ export async function runFixtureCommand(params: {
   stdinText: string | null;
 }): Promise<FixtureCommandRun> {
   const binDir = await createFixtureBinDir({ fixtureRoot: params.fixtureRoot });
-  const child = Bun.spawn(params.command, {
-    cwd: params.workingDir,
-    env: {
+  const environment = buildFixtureGitEnvironment({
+    baseEnvironment: {
       PATH: [binDir, ...systemPathDirs].join(':'),
       HOME: params.fixtureRoot.homeDir,
       TMPDIR: params.fixtureRoot.tempDir,
-      ...fixtureGitEnvironment,
     },
-    stdin: params.stdinText === null ? 'ignore' : new Blob([params.stdinText]),
-    stdout: 'pipe',
-    stderr: 'pipe',
+    globalConfigPath: '/dev/null',
   });
-  const [stdoutText, stderrText, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
 
-  return { exitCode: exitCode, stdoutText: stdoutText, stderrText: stderrText };
+  return spawnFixtureCommand({
+    command: params.command,
+    workingDir: params.workingDir,
+    environment: environment,
+    stdinText: params.stdinText,
+  });
 }
 
 /** Runs a release script of this checkout under `/bin/bash`, as `runFixtureCommand` runs a command. */
@@ -201,30 +185,9 @@ async function writeFakeGhAnswer(params: {
 }
 
 function buildFakeGhBody(params: { logDir: string; answersDir: string }): string {
-  return `log_dir='${params.logDir}'
-answers_dir='${params.answersDir}'
-call_count=0
-if [ -f "$log_dir/count" ]; then call_count=$(cat "$log_dir/count"); fi
-call_number=$((call_count + 1))
-printf '%s' "$call_number" > "$log_dir/count"
-printf '%s' "$*" > "$log_dir/call-$call_number-arguments"
-case " $* " in
-  *" secret set "* | *" --input - "*) cat > "$log_dir/call-$call_number-stdin" ;;
-  *) : > "$log_dir/call-$call_number-stdin" ;;
-esac
-for answer_dir in "$answers_dir"/*; do
-  [ -d "$answer_dir" ] || continue
-  if [ "$*" = "$(cat "$answer_dir/arguments")" ]; then
-    answer_count=$(($(cat "$answer_dir/count") + 1))
-    printf '%s' "$answer_count" > "$answer_dir/count"
-    stdout_path="$answer_dir/stdout-$answer_count"
-    if [ ! -f "$stdout_path" ]; then stdout_path="$answer_dir/stdout-$(cat "$answer_dir/last")"; fi
-    cat "$stdout_path"
-    exit "$(cat "$answer_dir/exit-code")"
-  fi
-done
-echo "unexpected arguments: $*" >&2
-exit ${UNEXPECTED_ARGUMENTS_EXIT_CODE}`;
+  return `import { runFakeGh } from ${JSON.stringify(fakeGhModulePath)};
+
+runFakeGh({ logDir: ${JSON.stringify(params.logDir)}, answersDir: ${JSON.stringify(params.answersDir)} });`;
 }
 
 function findSecretNames(workflowText: string): string[] {

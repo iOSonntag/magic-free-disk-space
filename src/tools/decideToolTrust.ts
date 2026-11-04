@@ -1,3 +1,5 @@
+import type { UserIdentity } from '../system/userIdentity.js';
+
 const ROOT_USER_ID = 0;
 
 const ANY_EXECUTE_BITS = 0o111;
@@ -13,15 +15,15 @@ export type ToolDistrustDetail = 'foreignOwner' | 'writableByOthers' | 'notExecu
 export type ToolTrust = { isTrusted: true } | { isTrusted: false; detail: ToolDistrustDetail };
 
 /**
- * Trusts a regular executable file owned by `userId` or root that neither its group nor others
+ * Trusts a regular executable file owned by `user` or root that neither its group nor others
  * can write.
  */
-export function decideToolTrust(params: { stats: ToolFileStats; userId: number }): ToolTrust {
+export function decideToolTrust(params: { stats: ToolFileStats; user: UserIdentity }): ToolTrust {
   if (!params.stats.isRegularFile || (params.stats.mode & ANY_EXECUTE_BITS) === 0) {
     return { isTrusted: false, detail: 'notExecutableFile' };
   }
 
-  if (params.stats.ownerUserId !== params.userId && params.stats.ownerUserId !== ROOT_USER_ID) {
+  if (!isOwnedByUserOrRoot({ ownerUserId: params.stats.ownerUserId, user: params.user })) {
     return { isTrusted: false, detail: 'foreignOwner' };
   }
 
@@ -30,4 +32,11 @@ export function decideToolTrust(params: { stats: ToolFileStats; userId: number }
   }
 
   return { isTrusted: true };
+}
+
+function isOwnedByUserOrRoot(params: { ownerUserId: number; user: UserIdentity }): boolean {
+  switch (params.user.kind) {
+    case 'posix':
+      return params.ownerUserId === params.user.uid || params.ownerUserId === ROOT_USER_ID;
+  }
 }

@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDeletionJournal, formatJournalLine } from '../../src/delete/deletionJournal.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -15,7 +17,7 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-describe('formatJournalLine', () => {
+describeAwaitingWin32Platform('formatJournalLine', () => {
   test('writes one JSON object per line', () => {
     expect(formatJournalLine({ entry: { kind: 'sessionStart', atMs: 5 } })).toBe(
       '{"kind":"sessionStart","atMs":5}\n',
@@ -23,7 +25,7 @@ describe('formatJournalLine', () => {
   });
 });
 
-describe('createDeletionJournal', () => {
+describeAwaitingWin32Platform('createDeletionJournal', () => {
   test('creates the log folder, records the session start, and appends entries', async () => {
     const logPath = join(fixtureRoot.homeDir, 'Library/Logs/magic-free-disk-space/deletions.jsonl');
     const journal = await createDeletionJournal({ logPath: logPath, nowMs: 100 });
@@ -66,7 +68,7 @@ describe('createDeletionJournal', () => {
     expect(journal).toMatchObject({ kind: 'failed', failure: { reason: 'directoryUnavailable' } });
   });
 
-  test('fails with cannotOpen when the log folder is not writable', async () => {
+  testOnPosix('fails with cannotOpen when the log folder is not writable', async () => {
     const logDirectory = join(fixtureRoot.homeDir, 'read-only-logs');
 
     await mkdir(logDirectory);
@@ -83,7 +85,7 @@ describe('createDeletionJournal', () => {
     });
   });
 
-  test('an append fails once the log file became read-only', async () => {
+  testOnPosix('an append fails once the log file became read-only', async () => {
     const logPath = join(fixtureRoot.homeDir, 'deletions.jsonl');
     const journal = await createDeletionJournal({ logPath: logPath, nowMs: 1 });
 

@@ -44,6 +44,23 @@ export function matchProjectPinFile(params: {
   siblingNames: ReadonlySet<string>;
   source: ProjectPinFileSource;
 }): ProjectPinFileKind | null {
+  const kind = matchProjectPinFileName({ name: params.name, source: params.source });
+
+  if (kind === 'packageJson' && !params.siblingNames.has(PNPM_LOCK_FILE_NAME)) {
+    return null;
+  }
+
+  return kind;
+}
+
+/**
+ * The kind of pin file that `name` may be, whatever lies beside it, or `null` for a name that
+ * never pins: a `package.json` here may still lack its `pnpm-lock.yaml`.
+ */
+export function matchProjectPinFileName(params: {
+  name: string;
+  source: ProjectPinFileSource;
+}): ProjectPinFileKind | null {
   if (params.name === '.tool-versions') {
     return 'toolVersions';
   }
@@ -57,7 +74,7 @@ export function matchProjectPinFile(params: {
   }
 
   if (params.name === 'package.json') {
-    return params.siblingNames.has(PNPM_LOCK_FILE_NAME) ? 'packageJson' : null;
+    return 'packageJson';
   }
 
   if (MISE_CONFIG_FILE_NAMES.includes(params.name)) {

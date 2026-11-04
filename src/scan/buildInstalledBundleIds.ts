@@ -1,7 +1,8 @@
-import type { InstalledApp } from './loadInstalledApps.js';
+import type { MacBundleId } from '../catalog/catalogOwner.js';
+import type { InstalledApp } from './scanPlatform.js';
 
-export function buildInstalledBundleIds(params: { apps: InstalledApp[] }): Set<string> {
-  const bundleIds = new Set<string>();
+export function buildInstalledBundleIds(params: { apps: InstalledApp[] }): Set<MacBundleId> {
+  const bundleIds = new Set<MacBundleId>();
 
   for (const app of params.apps) {
     if (app.bundleId !== null) {

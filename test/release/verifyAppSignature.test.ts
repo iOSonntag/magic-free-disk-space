@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { createFakeTool } from '../support/fakeTool.js';
+import type { FixtureCommandRun } from '../support/fixtureCommand.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import type { FixtureCommandRun } from './releaseScriptFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import { createFixtureBinDir, runReleaseScript } from './releaseScriptFixtures.js';
 
 const EXECUTABLE_NAME = 'Magic Free Disk Space';
@@ -41,7 +42,7 @@ type FixtureApp = {
 
 type Architecture = (typeof FIXTURE_ARCHITECTURES)[number];
 
-describe('verifyAppSignature.sh', () => {
+describeOnPosix('verifyAppSignature.sh', () => {
   let fixtureRoot: FixtureRoot;
   let fixtureApp: FixtureApp;
 
@@ -89,72 +90,116 @@ describe('verifyAppSignature.sh', () => {
     await createFakeTool({ folder: binDir, name: 'file', body: buildFakeFileBody() });
   }
 
+  /**
+   * A fake tool's body around `branches`, which read `args` and `argumentsText`, print through
+   * `printLines(fd, lines)`, and end with `process.exit`; any other call exits 64.
+   */
+  function buildFakeSigningToolBody(branches: string): string {
+    return `import * as fs from 'node:fs';
+import { basename, join } from 'node:path';
+
+const args = process.argv.slice(2);
+const argumentsText = args.join(' ');
+const printLines = (fd, lines) => fs.writeSync(fd, lines.map((line) => line + '\\n').join(''));
+
+${branches}
+
+printLines(2, ['unexpected arguments: ' + argumentsText]);
+process.exit(64);`;
+  }
+
   function buildFakeCodesignBody(): string {
-    return `app='${fixtureApp.appDir}'
-bridge='${fixtureApp.bridgePath}'
-entitlements_dir='${fixtureApp.entitlementsDir}'
-case "$*" in
-  "--verify --deep --strict --verbose=2 $app")
-    exit 0 ;;
-  "-dvv $app")
-    printf '%s\\n' 'Identifier=com.example.app' 'Authority=Developer ID Application: Test (ABCDE12345)' 'TeamIdentifier=ABCDE12345' 'Timestamp=1 Nov 2026 at 12:00:00' >&2
-    exit 0 ;;
-  "-dvv --architecture "*)
-    printf '%s\\n' 'Authority=Developer ID Application: Test (ABCDE12345)' 'Timestamp=1 Nov 2026 at 12:00:00' 'CodeDirectory v=20500 size=1 flags=0x10000(runtime) hashes=1+1 location=embedded' >&2
-    exit 0 ;;
-  "-dv $bridge")
-    echo 'Identifier=com.example.bridge' >&2
-    exit 0 ;;
-  "-d --entitlements - --xml $bridge")
-    printf '<plist version="1.0">\\n<dict>\\n</dict>\\n</plist>\\n'
-    exit 0 ;;
-  "-d --entitlements - --xml --architecture "*)
-    key="$(basename "$7")-$6"
-    if [ -f "$entitlements_dir/$key.unreadable" ]; then
-      echo "$7: invalid signature for $6" >&2
-      exit 1
-    fi
-    echo "Executable=$7" >&2
-    if [ -f "$entitlements_dir/$key.plist" ]; then cat "$entitlements_dir/$key.plist"; fi
-    exit 0 ;;
-esac
-echo "unexpected arguments: $*" >&2
-exit 64`;
+    return buildFakeSigningToolBody(`const app = ${JSON.stringify(fixtureApp.appDir)};
+const bridge = ${JSON.stringify(fixtureApp.bridgePath)};
+const entitlementsDir = ${JSON.stringify(fixtureApp.entitlementsDir)};
+
+if (argumentsText === '--verify --deep --strict --verbose=2 ' + app) {
+  process.exit(0);
+}
+
+if (argumentsText === '-dvv ' + app) {
+  printLines(2, [
+    'Identifier=com.example.app',
+    'Authority=Developer ID Application: Test (ABCDE12345)',
+    'TeamIdentifier=ABCDE12345',
+    'Timestamp=1 Nov 2026 at 12:00:00',
+  ]);
+  process.exit(0);
+}
+
+if (argumentsText.startsWith('-dvv --architecture ')) {
+  printLines(2, [
+    'Authority=Developer ID Application: Test (ABCDE12345)',
+    'Timestamp=1 Nov 2026 at 12:00:00',
+    'CodeDirectory v=20500 size=1 flags=0x10000(runtime) hashes=1+1 location=embedded',
+  ]);
+  process.exit(0);
+}
+
+if (argumentsText === '-dv ' + bridge) {
+  printLines(2, ['Identifier=com.example.bridge']);
+  process.exit(0);
+}
+
+if (argumentsText === '-d --entitlements - --xml ' + bridge) {
+  printLines(1, ['<plist version="1.0">', '<dict>', '</dict>', '</plist>']);
+  process.exit(0);
+}
+
+if (argumentsText.startsWith('-d --entitlements - --xml --architecture ')) {
+  const architecture = args[5];
+  const path = args[6];
+  const key = basename(path) + '-' + architecture;
+
+  if (fs.existsSync(join(entitlementsDir, key + '.unreadable'))) {
+    printLines(2, [path + ': invalid signature for ' + architecture]);
+    process.exit(1);
+  }
+
+  printLines(2, ['Executable=' + path]);
+
+  if (fs.existsSync(join(entitlementsDir, key + '.plist'))) {
+    fs.writeSync(1, fs.readFileSync(join(entitlementsDir, key + '.plist')));
+  }
+
+  process.exit(0);
+}`);
   }
 
   function buildFakeLipoBody(): string {
-    return `case "$*" in
-  "-archs "*)
-    echo '${FIXTURE_ARCHITECTURES.join(' ')}'
-    exit 0 ;;
-esac
-echo "unexpected arguments: $*" >&2
-exit 64`;
+    return buildFakeSigningToolBody(`if (argumentsText.startsWith('-archs ')) {
+  printLines(1, [${JSON.stringify(FIXTURE_ARCHITECTURES.join(' '))}]);
+  process.exit(0);
+}`);
   }
 
   function buildFakeFileBody(): string {
-    return `executable='${fixtureApp.executablePath}'
-bridge='${fixtureApp.bridgePath}'
-dylib='${fixtureApp.dylibPath}'
-print_universal() {
-  printf '%s\\n' "$1"
-  for arch in ${FIXTURE_ARCHITECTURES.join(' ')}; do
-    printf '%s (for architecture %s):\\t%s %s\\n' "$2" "$arch" "$3" "$arch"
-  done
+    return buildFakeSigningToolBody(`const executable = ${JSON.stringify(fixtureApp.executablePath)};
+const bridge = ${JSON.stringify(fixtureApp.bridgePath)};
+const dylib = ${JSON.stringify(fixtureApp.dylibPath)};
+const architectures = ${JSON.stringify(FIXTURE_ARCHITECTURES)};
+const printUniversal = (kind, path, type) => {
+  const architectureLines = architectures.map(
+    (architecture) => path + ' (for architecture ' + architecture + '):\\t' + type + ' ' + architecture,
+  );
+
+  printLines(1, [kind, ...architectureLines]);
+};
+
+if (argumentsText === '-b ' + executable || argumentsText === '-b ' + bridge) {
+  printUniversal(${JSON.stringify(EXECUTABLE_KIND)}, args[1], ${JSON.stringify(EXECUTABLE_TYPE)});
+  process.exit(0);
 }
-case "$*" in
-  "-b $executable" | "-b $bridge")
-    print_universal '${EXECUTABLE_KIND}' "$2" '${EXECUTABLE_TYPE}'
-    exit 0 ;;
-  "-b $dylib")
-    print_universal '${DYLIB_KIND}' "$2" '${DYLIB_TYPE}'
-    exit 0 ;;
-  "-b "*)
-    echo 'data'
-    exit 0 ;;
-esac
-echo "unexpected arguments: $*" >&2
-exit 64`;
+
+if (argumentsText === '-b ' + dylib) {
+  printUniversal(${JSON.stringify(DYLIB_KIND)}, args[1], ${JSON.stringify(DYLIB_TYPE)});
+  process.exit(0);
+}
+
+if (argumentsText.startsWith('-b ')) {
+  printLines(1, ['data']);
+  process.exit(0);
+}`);
   }
 
   function buildEntitlementsPlist(entryLines: string[]): string {

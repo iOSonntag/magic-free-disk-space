@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import { formatEnvironmentFailure } from '../../src/report/formatEnvironmentFailure.js';
+import {
+  formatEnvironmentFailure,
+  formatUnsupportedPlatform,
+} from '../../src/report/formatEnvironmentFailure.js';
+
+describe('formatUnsupportedPlatform', () => {
+  test('names the operating system the tool runs on', () => {
+    expect(formatUnsupportedPlatform()).toBe('This tool runs on macOS only.');
+  });
+});
 
 describe('formatEnvironmentFailure', () => {
   test('names each reason the tool refuses to start', () => {
-    expect(
-      formatEnvironmentFailure({ failure: { reason: 'unsupportedPlatform', platform: 'linux' } }),
-    ).toBe('This tool runs on macOS only.');
     expect(formatEnvironmentFailure({ failure: { reason: 'runAsRoot' } })).toBe(
       'Run this tool as yourself, not as root or with sudo: it deletes in the home folder of the user who runs it.',
     );

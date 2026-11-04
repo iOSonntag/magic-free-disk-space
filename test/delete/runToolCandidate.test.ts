@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { runToolCandidate } from '../../src/delete/runToolCandidate.js';
@@ -10,10 +10,11 @@ import type {
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import type { ProbeCommandName } from '../explore/probeFakeTools.js';
-import { createUnitRunFakeTool } from '../explore/probeFakeTools.js';
+import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDartGcDryRunText,
   buildDartGcPaths,
@@ -23,6 +24,7 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -33,6 +35,8 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -115,7 +119,7 @@ async function createUnitTool(params: {
         exitCode: params.probeExitCode ?? 0,
       },
     ],
-    commandBody: `touch '${markerPath}'
+    commandBody: `fs.writeFileSync(${JSON.stringify(markerPath)}, '');
 ${params.commandBody}`,
     ...(params.probePrelude === undefined ? {} : { probePrelude: params.probePrelude }),
   });
@@ -173,11 +177,15 @@ async function createDartUnit(): Promise<ExploreToolUnitDartPubCache> {
 }
 
 function buildRemoveCommands(paths: AbsolutePath[]): string {
-  return paths.map((path) => `rm -r '${path}'`).join('\n');
+  return paths.map((path) => buildRemoveFolderBody(path)).join('\n');
 }
 
 async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
-  const measurement = await loadUnitMeasurement({ unit: unit, deadlineMs: Date.now() + 60_000 });
+  const measurement = await loadUnitMeasurement({
+    unit: unit,
+    deadlineMs: Date.now() + 60_000,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  });
 
   return measurement.allocatedBytes;
 }
@@ -186,16 +194,16 @@ async function loadNoProcessCommands(): Promise<string[] | null> {
   return [];
 }
 
-describe('runToolCandidate', () => {
+describeAwaitingWin32Platform('runToolCandidate', () => {
   test('runs the command of an unchanged unit and reports the measured drop', async () => {
     const unit = await createMiseUnit('20.1.0');
 
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.installPath}'
-echo 'uninstalled node@20.1.0' >&2
-exit 0`,
+      commandBody: `${buildRemoveFolderBody(unit.installPath)}
+fs.writeSync(2, 'uninstalled node@20.1.0\\n');
+process.exit(0);`,
     });
 
     const allocatedBytes = await measureAllocatedBytes(unit);
@@ -203,6 +211,8 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -226,7 +236,7 @@ exit 0`,
         gcPaths: unit.gcPaths,
       }),
       commandBody: `${buildRemoveCommands(unit.gcPaths)}
-exit 0`,
+process.exit(0);`,
     });
 
     const allocatedBytes = await measureAllocatedBytes(unit);
@@ -234,6 +244,8 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -260,9 +272,9 @@ exit 0`,
         homeDir: environment.homeDir,
         gcPaths: unit.gcPaths,
       }),
-      probePrelude: `/bin/dd if=/dev/zero of='${packagePath}/lib/added.bin' bs=${MEBIBYTE} count=1 2>/dev/null`,
+      probePrelude: `fs.writeFileSync(${JSON.stringify(join(packagePath, 'lib', 'added.bin'))}, Buffer.alloc(${MEBIBYTE}));`,
       commandBody: `${buildRemoveCommands(unit.gcPaths)}
-exit 0`,
+process.exit(0);`,
     });
 
     const allocatedBytesBefore = await measureAllocatedBytes(unit);
@@ -270,6 +282,8 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -285,6 +299,8 @@ exit 0`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -293,20 +309,22 @@ exit 0`,
     expect(await isPresent(unit.installPath)).toBe(true);
   });
 
-  test('skips the unit when its tool is no longer trusted', async () => {
+  testOnPosix('skips the unit when its tool is no longer trusted', async () => {
     const unit = await createMiseUnit('20.1.0');
 
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.installPath}'
-exit 0`,
+      commandBody: `${buildRemoveFolderBody(unit.installPath)}
+process.exit(0);`,
     });
     await chmod(buildToolPath('mise'), 0o777);
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -326,13 +344,15 @@ exit 0`,
         gcPaths: unit.gcPaths,
       }),
       commandBody: `${buildRemoveCommands(unit.gcPaths)}
-exit 0`,
+process.exit(0);`,
     });
     await writeDartVersionFile({ dartPath: unit.tool.path, version: '3.10.0' });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -351,13 +371,15 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.installPath}'
-exit 0`,
+      commandBody: `${buildRemoveFolderBody(unit.installPath)}
+process.exit(0);`,
     });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -373,19 +395,23 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildSimulatorDeviceListJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${unit.dataPath}'
-exit 0`,
+      commandBody: `${buildRemoveFolderBody(unit.dataPath)}
+process.exit(0);`,
     });
 
     const whileSimulatorRuns = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: async () => [SIMULATOR_APP_COMMAND],
       timeoutMs: TIMEOUT_MS,
     });
     const whileProcessesUnknown = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: async () => null,
       timeoutMs: TIMEOUT_MS,
     });
@@ -403,12 +429,14 @@ exit 0`,
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
       probeExitCode: 1,
-      commandBody: 'exit 0',
+      commandBody: 'process.exit(0);',
     });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -430,12 +458,14 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: 'not json at all',
-      commandBody: 'exit 0',
+      commandBody: 'process.exit(0);',
     });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -452,9 +482,9 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${removedPart}'
-echo 'cannot remove bin' >&2
-exit 3`,
+      commandBody: `${buildRemoveFolderBody(removedPart)}
+fs.writeSync(2, 'cannot remove bin\\n');
+process.exit(3);`,
     });
 
     const allocatedBytesBefore = await measureAllocatedBytes(unit);
@@ -462,6 +492,8 @@ exit 3`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -480,33 +512,39 @@ exit 3`,
     expect(await isPresent(removedPart)).toBe(false);
   });
 
-  test('reports nothing freed when the measurement after the command is incomplete', async () => {
-    const unit = await createMiseUnit('20.1.0');
-    const unreadablePart = join(unit.installPath, 'lib');
+  testOnPosix(
+    'reports nothing freed when the measurement after the command is incomplete',
+    async () => {
+      const unit = await createMiseUnit('20.1.0');
+      const unreadablePart = join(unit.installPath, 'lib');
 
-    await createUnitTool({
-      unit: unit,
-      probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `rm -r '${join(unit.installPath, 'bin')}'
-chmod 000 '${unreadablePart}'
-exit 0`,
-    });
+      await createUnitTool({
+        unit: unit,
+        probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
+        commandBody: `${buildRemoveFolderBody(join(unit.installPath, 'bin'))}
+fs.chmodSync(${JSON.stringify(unreadablePart)}, 0o000);
+process.exit(0);`,
+      });
 
-    const run = await runToolCandidate({
-      unit: unit,
-      environment: environment,
-      loadProcessCommands: loadNoProcessCommands,
-      timeoutMs: TIMEOUT_MS,
-    });
-    const measurementAfter = await loadUnitMeasurement({
-      unit: unit,
-      deadlineMs: Date.now() + 60_000,
-    });
+      const run = await runToolCandidate({
+        unit: unit,
+        environment: environment,
+        probePlatform: buildTestProbePlatform(),
+        isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+        loadProcessCommands: loadNoProcessCommands,
+        timeoutMs: TIMEOUT_MS,
+      });
+      const measurementAfter = await loadUnitMeasurement({
+        unit: unit,
+        deadlineMs: Date.now() + 60_000,
+        isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      });
 
-    expect(measurementAfter.isComplete).toBe(false);
-    expect(run).toEqual({ kind: 'completed', freedBytes: 0, stderrTail: '' });
-    expect(await isPresent(unreadablePart)).toBe(true);
-  });
+      expect(measurementAfter.isComplete).toBe(false);
+      expect(run).toEqual({ kind: 'completed', freedBytes: 0, stderrTail: '' });
+      expect(await isPresent(unreadablePart)).toBe(true);
+    },
+  );
 
   test('fails with a timeout when the command passes its limit', async () => {
     const unit = await createMiseUnit('20.1.0');
@@ -514,13 +552,15 @@ exit 0`,
     await createUnitTool({
       unit: unit,
       probeStdoutText: buildMisePrunableJson({ homeDir: environment.homeDir }),
-      commandBody: `sleep 5
-exit 0`,
+      commandBody: `await Bun.sleep(5_000);
+process.exit(0);`,
     });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: 300,
     });

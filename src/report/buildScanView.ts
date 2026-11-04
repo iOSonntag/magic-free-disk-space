@@ -17,6 +17,7 @@ import { formatDisplayText } from './formatDisplayText.js';
 import { formatToolFailureFirstStderrLine, formatToolFailureSummary } from './formatToolFailure.js';
 import type { NoticeView } from './noticeView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from './noticeView.js';
+import type { ReportTexts } from './reportTexts.js';
 
 /** A scan as the app and the CLI show it, top to bottom; every text is formatted and safe to show. */
 export type ScanView = {
@@ -111,13 +112,15 @@ const EXPLORE_INTRO_TEXT =
 
 const ADVICE_GROUP_TITLE_TEXT = 'Handle these yourself; this tool never deletes them';
 
-const sectionTitleTexts: Record<ConsumerSection, string> = {
-  caches: 'Caches',
-  developerTools: 'Developer tools',
-  apps: 'Apps',
-  largeFiles: 'Large files',
-  trash: 'Trash',
-};
+function buildSectionTitleTexts(params: { texts: ReportTexts }): Record<ConsumerSection, string> {
+  return {
+    caches: 'Caches',
+    developerTools: 'Developer tools',
+    apps: 'Apps',
+    largeFiles: 'Large files',
+    trash: params.texts.trashName,
+  };
+}
 
 const riskTexts: Record<Risk, string> = {
   safe: 'safe',
@@ -132,32 +135,38 @@ const summaryPartTexts: Record<SummaryPart, string> = {
   explore: 'in Explore',
 };
 
-const skipReasonTexts: Record<SkipReason, string> = {
-  belowSizeThreshold: 'too small to matter',
-  symbolicLink: 'symbolic link, never followed',
-  systemOwned: 'owned by macOS',
-  ownerRunning: 'its app or tool is running',
-  runningUnknown: 'could not check whether its app or tool runs',
-  recentActivity: 'changed recently',
-  activityUnknown: 'could not tell when it last changed',
-  recentUse: 'used recently',
-  useUnknown: 'could not tell when it was last used',
-  ownerInstalled: 'its app is installed',
-  notBundleId: 'no app identifier',
-  installedAppsUnknown: 'could not read every installed app',
-  holdsOtherVolume: 'holds another mounted disk',
-  overlapsEarlierCandidate: 'already covered by another item',
-};
+function buildSkipReasonTexts(params: { texts: ReportTexts }): Record<SkipReason, string> {
+  return {
+    belowSizeThreshold: 'too small to matter',
+    symbolicLink: 'symbolic link, never followed',
+    systemOwned: `owned by ${params.texts.systemName}`,
+    ownerRunning: 'its app or tool is running',
+    runningUnknown: 'could not check whether its app or tool runs',
+    recentActivity: 'changed recently',
+    activityUnknown: 'could not tell when it last changed',
+    recentUse: 'used recently',
+    useUnknown: 'could not tell when it was last used',
+    ownerInstalled: 'its app is installed',
+    notBundleId: 'no app identifier',
+    installedAppsUnknown: 'could not read every installed app',
+    holdsOtherVolume: 'holds another mounted disk',
+    overlapsEarlierCandidate: 'already covered by another item',
+  };
+}
 
-const issueReasonTexts: Record<ScanIssue['reason'], string> = {
-  privacyDenied: 'blocked by macOS privacy protection',
-  permissionDenied: 'permission denied',
-  unexpected: 'unexpected error',
-  commandFailed: 'a system command failed',
-  walkStopped: 'search stopped at its time limit',
-  toolFailed: 'the tool failed',
-  toolUntrusted: 'the tool is not trusted, never run',
-};
+function buildIssueReasonTexts(params: {
+  texts: ReportTexts;
+}): Record<ScanIssue['reason'], string> {
+  return {
+    privacyDenied: `blocked by ${params.texts.systemName} privacy protection`,
+    permissionDenied: 'permission denied',
+    unexpected: 'unexpected error',
+    commandFailed: 'a system command failed',
+    walkStopped: 'search stopped at its time limit',
+    toolFailed: 'the tool failed',
+    toolUntrusted: 'the tool is not trusted, never run',
+  };
+}
 
 const toolDistrustDetailTexts: Record<ToolDistrustDetail, string> = {
   foreignOwner: 'owned by another user',
@@ -188,6 +197,7 @@ const fullDiskAccessHolderTexts: Record<FullDiskAccessHolder, string> = {
 export function buildScanView(params: {
   report: ScanReport;
   fullDiskAccessHolder: FullDiskAccessHolder;
+  texts: ReportTexts;
 }): ScanView {
   const placedItems = params.report.candidates.map(
     (candidate, index): PlacedItem => ({
@@ -199,13 +209,14 @@ export function buildScanView(params: {
 
   return {
     summary: buildSummaryView({ placedItems: placedItems }),
-    sections: buildSectionViews({ placedItems: placedItems }),
+    sections: buildSectionViews({ placedItems: placedItems, texts: params.texts }),
     explore: buildExploreView({ placedItems: placedItems, advice: params.report.advice }),
     safeNumbers: params.report.safeNumbers,
-    skipped: buildSkippedView({ skipped: params.report.skipped }),
+    skipped: buildSkippedView({ skipped: params.report.skipped, texts: params.texts }),
     notices: buildIssueNotices({
       issues: params.report.issues,
       fullDiskAccessHolder: params.fullDiskAccessHolder,
+      texts: params.texts,
     }),
   };
 }
@@ -266,7 +277,12 @@ function decideSummaryPart(params: { item: PlacedItem }): SummaryPart | null {
 }
 
 /** Only the sections that hold an item, in their order. */
-function buildSectionViews(params: { placedItems: PlacedItem[] }): SectionView[] {
+function buildSectionViews(params: {
+  placedItems: PlacedItem[];
+  texts: ReportTexts;
+}): SectionView[] {
+  const sectionTitleTexts = buildSectionTitleTexts({ texts: params.texts });
+
   return CONSUMER_SECTION_ORDER.flatMap((section) => {
     const sectionItems = params.placedItems.flatMap((item): SectionPlacedItem[] =>
       item.place.kind === 'section' && item.place.section === section
@@ -278,12 +294,17 @@ function buildSectionViews(params: { placedItems: PlacedItem[] }): SectionView[]
       return [];
     }
 
-    return [buildSectionView({ section: section, sectionItems: sectionItems })];
+    return [
+      buildSectionView({
+        titleText: sectionTitleTexts[section],
+        sectionItems: sectionItems,
+      }),
+    ];
   });
 }
 
 function buildSectionView(params: {
-  section: ConsumerSection;
+  titleText: string;
   sectionItems: SectionPlacedItem[];
 }): SectionView {
   const safeItems = params.sectionItems.flatMap((item) =>
@@ -294,7 +315,7 @@ function buildSectionView(params: {
   );
 
   return {
-    titleText: sectionTitleTexts[params.section],
+    titleText: params.titleText,
     sizeText: formatTotalSizeText({ items: params.sectionItems.map((item) => item.candidate) }),
     isInitiallyExpanded: safeItems.length > 0,
     items: safeItems,
@@ -382,7 +403,10 @@ function buildDetailLine(params: { kind: ItemDetailLineKind; text: string }): It
   return { kind: params.kind, text: formatDisplayText({ text: params.text }) };
 }
 
-function buildSkippedView(params: { skipped: SkippedItem[] }): SkippedView | null {
+function buildSkippedView(params: {
+  skipped: SkippedItem[];
+  texts: ReportTexts;
+}): SkippedView | null {
   if (params.skipped.length === 0) {
     return null;
   }
@@ -395,15 +419,15 @@ function buildSkippedView(params: { skipped: SkippedItem[] }): SkippedView | nul
 
   return {
     titleText: `Skipped ${itemCountText}`,
-    lines: formatSkipReasonLines({ skipped: params.skipped }),
+    lines: formatSkipReasonLines({ skipped: params.skipped, texts: params.texts }),
   };
 }
 
 /** One line per reason that occurs, in the order of the reason table. */
-function formatSkipReasonLines(params: { skipped: SkippedItem[] }): string[] {
+function formatSkipReasonLines(params: { skipped: SkippedItem[]; texts: ReportTexts }): string[] {
   const lines: string[] = [];
 
-  for (const [reason, text] of Object.entries(skipReasonTexts)) {
+  for (const [reason, text] of Object.entries(buildSkipReasonTexts({ texts: params.texts }))) {
     const count = params.skipped.filter((item) => item.reason === reason).length;
 
     if (count > 0) {
@@ -418,16 +442,19 @@ function formatSkipReasonLines(params: { skipped: SkippedItem[] }): string[] {
 function buildIssueNotices(params: {
   issues: ScanIssue[];
   fullDiskAccessHolder: FullDiskAccessHolder;
+  texts: ReportTexts;
 }): NoticeView[] {
   const placeIssues = params.issues.filter((issue) => issueNoticeKinds[issue.reason] === 'place');
   const toolIssues = params.issues.filter((issue) => issueNoticeKinds[issue.reason] === 'tool');
+  const reasonTexts = buildIssueReasonTexts({ texts: params.texts });
 
   return [
     ...buildPlaceNotices({
       issues: placeIssues,
       fullDiskAccessHolder: params.fullDiskAccessHolder,
+      reasonTexts: reasonTexts,
     }),
-    ...buildToolNotices({ issues: toolIssues }),
+    ...buildToolNotices({ issues: toolIssues, reasonTexts: reasonTexts }),
   ];
 }
 
@@ -438,13 +465,16 @@ function buildIssueNotices(params: {
 function buildPlaceNotices(params: {
   issues: ScanIssue[];
   fullDiskAccessHolder: FullDiskAccessHolder;
+  reasonTexts: Record<ScanIssue['reason'], string>;
 }): NoticeView[] {
   if (params.issues.length === 0) {
     return [];
   }
 
   const titleText = `Could not read ${formatCount({ count: params.issues.length, singular: 'place', plural: 'places' })}`;
-  const issueLines = params.issues.map((issue) => formatIssueLine({ issue: issue }));
+  const issueLines = params.issues.map((issue) =>
+    formatIssueLine({ issue: issue, reasonTexts: params.reasonTexts }),
+  );
   const hasPrivacyDenied = params.issues.some((issue) => issue.reason === 'privacyDenied');
 
   if (!hasPrivacyDenied) {
@@ -462,7 +492,10 @@ function buildPlaceNotices(params: {
   ];
 }
 
-function buildToolNotices(params: { issues: ScanIssue[] }): NoticeView[] {
+function buildToolNotices(params: {
+  issues: ScanIssue[];
+  reasonTexts: Record<ScanIssue['reason'], string>;
+}): NoticeView[] {
   if (params.issues.length === 0) {
     return [];
   }
@@ -470,14 +503,19 @@ function buildToolNotices(params: { issues: ScanIssue[] }): NoticeView[] {
   return [
     {
       titleText: `Could not ask ${formatCount({ count: params.issues.length, singular: 'tool', plural: 'tools' })}`,
-      lines: params.issues.map((issue) => formatIssueLine({ issue: issue })),
+      lines: params.issues.map((issue) =>
+        formatIssueLine({ issue: issue, reasonTexts: params.reasonTexts }),
+      ),
       settingsLink: null,
     },
   ];
 }
 
-function formatIssueLine(params: { issue: ScanIssue }): string {
-  const reasonText = issueReasonTexts[params.issue.reason];
+function formatIssueLine(params: {
+  issue: ScanIssue;
+  reasonTexts: Record<ScanIssue['reason'], string>;
+}): string {
+  const reasonText = params.reasonTexts[params.issue.reason];
   const detailText = formatIssueDetail({ issue: params.issue });
 
   return `${formatDisplayText({ text: params.issue.path })}: ${reasonText} (${detailText})`;

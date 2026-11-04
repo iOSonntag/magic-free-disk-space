@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rename, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import {
   ACTIVE_ROOT_FILES_MAX_COUNT,
   isFlutterRootApartFromProject,
@@ -8,6 +9,7 @@ import {
   parseActiveRootPackageConfigPath,
   parsePackageConfigFlutterRoot,
 } from '../../src/tools/loadFlutterSdkDartPaths.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -17,6 +19,7 @@ import {
   createGitIndex,
   writeActiveRoot,
 } from '../support/flutterSdkFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const PACKAGE_CONFIG_PATH = '.dart_tool/package_config.json';
 
@@ -34,7 +37,7 @@ function buildSdkDartPath(flutterRoot: string): string {
   return join(flutterRoot, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
 }
 
-describe('loadFlutterSdkDartPaths', () => {
+describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
   test('returns the SDK binary of each distinct Flutter root, in the sorted order of the files', async () => {
     const stableRoot = join(fixtureRoot.rootDir, 'flutter-stable');
     const betaRoot = join(fixtureRoot.rootDir, 'flutter-beta');
@@ -58,7 +61,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRoot: stableRoot,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(stableRoot), buildSdkDartPath(betaRoot)]);
   });
@@ -99,7 +105,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRoot: flutterRoot,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -121,7 +130,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -136,7 +148,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRoot: join(projectRoot, 'vendor', 'flutter'),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -149,7 +164,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRoot: dirname(buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' })),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -167,7 +185,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRootGitEntry: 'none',
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -182,7 +203,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRoot: flutterRoot,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -198,7 +222,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRootGitEntry: 'file',
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -219,12 +246,15 @@ describe('loadFlutterSdkDartPaths', () => {
       includeProjectRepository: false,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
 
-  test('skips a package config whose .dart_tool is a link', async () => {
+  testOnPosix('skips a package config whose .dart_tool is a link', async () => {
     const targetRoot = join(fixtureRoot.rootDir, 'target');
     const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
 
@@ -244,12 +274,15 @@ describe('loadFlutterSdkDartPaths', () => {
       packageConfigPath: join(projectRoot, PACKAGE_CONFIG_PATH),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
 
-  test('skips a package config that is a link', async () => {
+  testOnPosix('skips a package config that is a link', async () => {
     const projectRoot = buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' });
     const packageConfigPath = join(projectRoot, PACKAGE_CONFIG_PATH);
     const targetPath = join(fixtureRoot.rootDir, 'package_config.json');
@@ -263,7 +296,10 @@ describe('loadFlutterSdkDartPaths', () => {
     await rename(packageConfigPath, targetPath);
     await symlink(targetPath, packageConfigPath);
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -287,7 +323,10 @@ describe('loadFlutterSdkDartPaths', () => {
       includeProjectRepository: false,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -300,7 +339,10 @@ describe('loadFlutterSdkDartPaths', () => {
       flutterRoot: buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'flutter' }),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -314,40 +356,68 @@ describe('loadFlutterSdkDartPaths', () => {
       includeProjectRepository: false,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
 
   test('returns nothing without a pub cache', async () => {
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
 });
 
-describe('isFlutterRootApartFromProject', () => {
+describeAwaitingWin32Platform('isFlutterRootApartFromProject', () => {
   test('accepts disjoint paths, a shared name prefix included', () => {
     expect(
-      isFlutterRootApartFromProject({ flutterRoot: '/sdk/flutter', projectRoot: '/p/app' }),
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/sdk/flutter',
+        projectRoot: '/p/app',
+      }),
     ).toBe(true);
     expect(
-      isFlutterRootApartFromProject({ flutterRoot: '/p/app-sdk', projectRoot: '/p/app' }),
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p/app-sdk',
+        projectRoot: '/p/app',
+      }),
     ).toBe(true);
   });
 
   test('rejects equal paths and a path inside the other', () => {
-    expect(isFlutterRootApartFromProject({ flutterRoot: '/p/app', projectRoot: '/p/app' })).toBe(
-      false,
-    );
     expect(
-      isFlutterRootApartFromProject({ flutterRoot: '/p/app/flutter', projectRoot: '/p/app' }),
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p/app',
+        projectRoot: '/p/app',
+      }),
     ).toBe(false);
-    expect(isFlutterRootApartFromProject({ flutterRoot: '/p', projectRoot: '/p/app' })).toBe(false);
+    expect(
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p/app/flutter',
+        projectRoot: '/p/app',
+      }),
+    ).toBe(false);
+    expect(
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p',
+        projectRoot: '/p/app',
+      }),
+    ).toBe(false);
   });
 });
 
-describe('parseActiveRootPackageConfigPath', () => {
+describeAwaitingWin32Platform('parseActiveRootPackageConfigPath', () => {
   test('reads the path of a file URL, and nothing else', () => {
     expect(
       parseActiveRootPackageConfigPath(
@@ -361,7 +431,7 @@ describe('parseActiveRootPackageConfigPath', () => {
   });
 });
 
-describe('parsePackageConfigFlutterRoot', () => {
+describeAwaitingWin32Platform('parsePackageConfigFlutterRoot', () => {
   test('reads the path of the flutterRoot file URL', () => {
     expect(parsePackageConfigFlutterRoot('{"flutterRoot":"file:///sdk/flutter"}')).toBe(
       '/sdk/flutter',

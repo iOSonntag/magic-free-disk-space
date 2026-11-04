@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EntryStats } from '../../src/system/loadEntryStats.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -10,6 +11,7 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const diskBlockBytes = 512;
 const largeFileSizeBytes = 100_000;
@@ -26,7 +28,7 @@ async function loadEntryStatsOrThrow(params: { path: string }): Promise<EntrySta
   return result.value;
 }
 
-describe('loadEntryStats', () => {
+describeAwaitingWin32Platform('loadEntryStats', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -62,7 +64,7 @@ describe('loadEntryStats', () => {
     expect(Math.abs(stats.modifiedMs - newModifiedMs)).toBeLessThanOrEqual(1000);
   });
 
-  test('reports a symbolic link itself, not the size of its target', async () => {
+  testOnPosix('reports a symbolic link itself, not the size of its target', async () => {
     const targetPath = join(fixtureRoot.homeDir, 'large.bin');
     const linkPath = join(fixtureRoot.homeDir, 'link-to-large.bin');
     await createFixtureFile({

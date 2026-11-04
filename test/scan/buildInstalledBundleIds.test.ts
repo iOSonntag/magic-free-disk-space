@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildInstalledBundleIds } from '../../src/scan/buildInstalledBundleIds.js';
+import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 describe('buildInstalledBundleIds', () => {
   test('collects the bundle id of each app and the ids nested in it', () => {
@@ -8,22 +9,22 @@ describe('buildInstalledBundleIds', () => {
         {
           bundlePath: '/a/Example.app',
           displayName: 'Example',
-          bundleId: 'com.example.app',
-          nestedBundleIds: ['com.example.app.helper'],
+          bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
+          nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.app.helper' })],
         },
         {
           bundlePath: '/a/Other.app',
           displayName: 'Other',
-          bundleId: 'com.example.other',
+          bundleId: buildTestMacBundleId({ text: 'com.example.other' }),
           nestedBundleIds: [],
         },
       ],
     });
 
     expect([...bundleIds].toSorted()).toEqual([
-      'com.example.app',
-      'com.example.app.helper',
-      'com.example.other',
+      buildTestMacBundleId({ text: 'com.example.app' }),
+      buildTestMacBundleId({ text: 'com.example.app.helper' }),
+      buildTestMacBundleId({ text: 'com.example.other' }),
     ]);
   });
 
@@ -34,12 +35,12 @@ describe('buildInstalledBundleIds', () => {
           bundlePath: '/a/Broken.app',
           displayName: 'Broken',
           bundleId: null,
-          nestedBundleIds: ['com.example.broken.share'],
+          nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.broken.share' })],
         },
       ],
     });
 
-    expect([...bundleIds]).toEqual(['com.example.broken.share']);
+    expect([...bundleIds]).toEqual([buildTestMacBundleId({ text: 'com.example.broken.share' })]);
   });
 
   test('returns an empty set when there are no apps', () => {

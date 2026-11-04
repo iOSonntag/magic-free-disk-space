@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { buildUnitRunArguments } from '../../src/explore/exploreUnit.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAbsolutePath,
   buildTestMiseToolName,
@@ -11,7 +12,7 @@ import {
   UNAVAILABLE_DEVICE_UDID,
 } from './probeOutputFixtures.js';
 
-describe('buildUnitRunArguments', () => {
+describeAwaitingWin32Platform('buildUnitRunArguments', () => {
   test('a dart unit runs its gc with the dart leading argument first', () => {
     expect(
       buildUnitRunArguments({

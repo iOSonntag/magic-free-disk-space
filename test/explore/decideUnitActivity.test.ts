@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { UnitActivityFacts } from '../../src/explore/decideUnitActivity.js';
 import { decideUnitActivity } from '../../src/explore/decideUnitActivity.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 const SIMULATOR_APP_COMMAND =
@@ -48,7 +49,7 @@ const NVM_VERSION_FOLDER_PATH = buildTestAbsolutePath({
   text: '/Users/example/.nvm/versions/node/v20.11.1',
 });
 
-describe('decideUnitActivity', () => {
+describeAwaitingWin32Platform('decideUnitActivity', () => {
   test('a shut-down device is idle while Simulator.app does not run', () => {
     expect(
       decideUnitActivity({

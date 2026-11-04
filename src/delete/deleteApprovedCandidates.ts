@@ -1,9 +1,11 @@
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { Result } from '../result.js';
-import { SCAN_LIMITS } from '../scan/limits.js';
-import { loadProcessCommands } from '../scan/loadProcessCommands.js';
+import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
+import type { EntryEvictionCheck, RunningProcessesLoad } from '../system/systemPlatform.js';
 import type { RemovalRun } from './deleteCandidates.js';
 import { deleteCandidates } from './deleteCandidates.js';
+import type { DeletePlatform } from './deletePlatform.js';
 import type { JournalFailure } from './deletionJournal.js';
 import { createDeletionJournal } from './deletionJournal.js';
 import type { RemovalPlan } from './planRemoval.js';
@@ -21,6 +23,11 @@ type ApprovedRemoval = {
 export async function deleteApprovedCandidates(params: {
   plan: RemovalPlan;
   environment: Environment;
+  delete: DeletePlatform;
+  loadRunningProcesses: RunningProcessesLoad;
+  /** For the measurements around a tool's run. */
+  isEntryEvicted: EntryEvictionCheck;
+  probePlatform: ExploreProbePlatform;
   clock: () => number;
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
   const journal = await createDeletionJournal({
@@ -36,17 +43,23 @@ export async function deleteApprovedCandidates(params: {
     candidates: params.plan.approved,
     journal: journal.value,
     environment: params.environment,
-    loadProcessCommands: loadCurrentProcessCommands,
+    delete: params.delete,
+    probePlatform: params.probePlatform,
+    isEntryEvicted: params.isEntryEvicted,
+    loadProcessCommands: () =>
+      loadCurrentProcessCommands({ loadRunningProcesses: params.loadRunningProcesses }),
     clock: params.clock,
   });
 
   return { kind: 'succeeded', value: { run: run, logPath: journal.value.logPath } };
 }
 
-/** `null` when `ps` failed, which withholds every item whose owner it would name. */
-async function loadCurrentProcessCommands(): Promise<string[] | null> {
-  const processCommands = await loadProcessCommands({
-    commandTimeoutMs: SCAN_LIMITS.commandTimeoutMs,
+/** `null` when the process listing failed, which withholds every item whose owner it would name. */
+async function loadCurrentProcessCommands(params: {
+  loadRunningProcesses: RunningProcessesLoad;
+}): Promise<string[] | null> {
+  const processCommands = await params.loadRunningProcesses({
+    commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
 
   return processCommands.kind === 'succeeded' ? processCommands.value : null;

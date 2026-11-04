@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, realpath, rename, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, ExploreProbeId } from '../../src/catalog/catalog.js';
@@ -7,6 +7,7 @@ import type { ExploreFinding, ExploreToolFailure } from '../../src/explore/explo
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { loadVscodeExtensionFindings } from '../../src/explore/vscodeExtensions/loadVscodeExtensionFindings.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { ExplorePhase } from '../../src/scan/loadExplorePhase.js';
 import { loadExplorePhase } from '../../src/scan/loadExplorePhase.js';
 import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
@@ -25,6 +26,7 @@ import {
   createVscodeInstallation,
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -38,6 +40,8 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
 
@@ -55,7 +59,7 @@ function buildExploreEntry(params: { id: string; probe: ExploreProbeId }): Catal
     path: params.id,
     scope: 'self',
     ageRule: 'none',
-    ownerBundleId: null,
+    owner: null,
     removal: { kind: 'explore', probe: params.probe, advice: `Advice of ${params.id}.` },
   };
 }
@@ -126,6 +130,7 @@ async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
 
   const findings = await loadVscodeExtensionFindings({
     environment: environment,
+    platform: buildTestProbePlatform(),
     processCommands: [],
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: 0,
@@ -145,6 +150,8 @@ function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
     catalogEntries: [vscodeEntry],
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
     runItemMeasurement: runItemMeasurement,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }
 
@@ -157,7 +164,7 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-describe('loadExplorePhase', () => {
+describeAwaitingWin32Platform('loadExplorePhase', () => {
   test('offers each idle device the fake simctl finds, measured, and skips the booted one', async () => {
     const unavailableDataPath = buildDeviceDataPath({
       homeDir: environment.homeDir,
@@ -184,6 +191,7 @@ describe('loadExplorePhase', () => {
     });
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
@@ -198,6 +206,8 @@ describe('loadExplorePhase', () => {
       catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.issues).toEqual([]);
@@ -261,6 +271,8 @@ describe('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.decisions).toMatchObject([
@@ -296,6 +308,8 @@ describe('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.decisions).toEqual([]);
@@ -385,7 +399,7 @@ describe('loadExplorePhase', () => {
     });
   });
 
-  test('skips a folder that became a symbolic link after the probe', async () => {
+  testOnPosix('skips a folder that became a symbolic link after the probe', async () => {
     const unit = buildObsoleteVscodeUnit({ homeDir: environment.homeDir });
     const outcome = await loadVscodeOutcome();
 
@@ -402,7 +416,7 @@ describe('loadExplorePhase', () => {
     expect(phase.decisions[1]).toMatchObject({ kind: 'offer' });
   });
 
-  test('adds a place issue for a folder whose identity cannot be read', async () => {
+  testOnPosix('adds a place issue for a folder whose identity cannot be read', async () => {
     const extensionsPath = buildVscodeExtensionsPath({ homeDir: environment.homeDir });
     const outcome = await loadVscodeOutcome();
 
@@ -477,6 +491,8 @@ describe('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.issues).toEqual([

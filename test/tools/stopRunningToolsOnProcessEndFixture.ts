@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import type { ProcessEndSignal } from '../../src/tools/runToolCommand.js';
 import { runToolCommand, stopRunningToolsOnProcessEnd } from '../../src/tools/runToolCommand.js';
+import type { ProcessEndSignal } from '../../src/tools/toolsPlatform.js';
 import { createFakeTool } from '../support/fakeTool.js';
 
 /** Codes no signal's default action gives, so an exit with one proves the listener ran. */
@@ -17,16 +17,24 @@ async function runFixture(params: {
   tempDir: string;
   toolPidFile: string;
 }): Promise<void> {
-  stopRunningToolsOnProcessEnd({ signalExitCodes: FIXTURE_SIGNAL_EXIT_CODES });
+  stopRunningToolsOnProcessEnd({
+    processEndSignals: [
+      { signal: 'SIGHUP', exitCode: FIXTURE_SIGNAL_EXIT_CODES.SIGHUP },
+      { signal: 'SIGINT', exitCode: FIXTURE_SIGNAL_EXIT_CODES.SIGINT },
+      { signal: 'SIGQUIT', exitCode: FIXTURE_SIGNAL_EXIT_CODES.SIGQUIT },
+      { signal: 'SIGTERM', exitCode: FIXTURE_SIGNAL_EXIT_CODES.SIGTERM },
+    ],
+  });
 
-  // The pid file is moved into place whole, so the test never reads half of it; the exec keeps
-  // that pid the one process of the tool.
+  // The pid file is moved into place whole, so the test never reads half of it.
+  const partialPidFile = `${params.toolPidFile}.partial`;
   const path = await createFakeTool({
     folder: join(params.rootDir, 'bin'),
     name: 'xcrun',
-    body: `echo $$ > '${params.toolPidFile}.partial'
-/bin/mv '${params.toolPidFile}.partial' '${params.toolPidFile}'
-exec /bin/sleep 60`,
+    body: `import { renameSync, writeFileSync } from 'node:fs';
+writeFileSync(${JSON.stringify(partialPidFile)}, String(process.pid));
+renameSync(${JSON.stringify(partialPidFile)}, ${JSON.stringify(params.toolPidFile)});
+await Bun.sleep(60_000);`,
   });
 
   await runToolCommand({

@@ -1,5 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoots.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 
 const USER_ID = 501;
 const HOME = '/Users/tester';
@@ -12,14 +15,15 @@ function check(params: {
   tempRealPath?: string;
 }) {
   return checkEnvironmentRoots({
-    userId: params.userId ?? USER_ID,
+    pathRules: DARWIN_PATH_RULES,
+    user: buildTestUserIdentity({ uid: params.userId ?? USER_ID }),
     homeRealPath: params.homeRealPath ?? HOME,
     homeOwnerId: params.homeOwnerId ?? USER_ID,
     tempRealPath: params.tempRealPath ?? TEMP,
   });
 }
 
-describe('checkEnvironmentRoots', () => {
+describeAwaitingWin32Platform('checkEnvironmentRoots', () => {
   test('accepts an own home and the per-user temporary folder', () => {
     expect(check({})).toBeNull();
   });

@@ -1,7 +1,11 @@
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
+import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolName } from '../tools/toolInstallLocations.js';
+import type { ToolsPlatform } from '../tools/toolsPlatform.js';
+import type { ExplorePlatform } from './explorePlatform.js';
 import type {
   ExploreFileUnreadable,
   ExploreProbeFailure,
@@ -9,12 +13,35 @@ import type {
 } from './exploreUnit.js';
 import type { ProjectPins } from './projectPins/projectPins.js';
 
+/** What the probes and their rechecks take from the platform's slices. */
+export type ExploreProbePlatform = {
+  explore: ExplorePlatform;
+  /** The Homebrew prefixes of the tools slice, whose global npm packages pnpm may live in. */
+  homebrewPrefixPaths: AbsolutePath[];
+  /** The system slice's code of a privacy denial, for every read of the probes. */
+  privacyDenialCode: string | null;
+};
+
+/** What the probes and their rechecks take of the explore, tools, and system slices. */
+export function buildExploreProbePlatform(params: {
+  explore: ExplorePlatform;
+  tools: ToolsPlatform;
+  system: SystemPlatform;
+}): ExploreProbePlatform {
+  return {
+    explore: params.explore,
+    homebrewPrefixPaths: params.tools.homebrewPrefixPaths,
+    privacyDenialCode: params.system.privacyDenialCode,
+  };
+}
+
 /**
  * What every probe gets: the processes read before any tool started, the time its commands and
  * reads must end by, and the scan's cutoff of last use for the units judged by it.
  */
 export type ExploreProbeRun = {
   environment: Environment;
+  platform: ExploreProbePlatform;
   processCommands: string[] | null;
   deadlineMs: number;
   unusedCutoffMs: number;
@@ -61,4 +88,7 @@ export type ExploreToolCommandRun = {
 };
 
 /** What the recheck of a tool unit gets: the fresh tool, and the processes read right before. */
-export type ExploreUnitRecheckRun = ExploreToolCommandRun & { processCommands: string[] | null };
+export type ExploreUnitRecheckRun = ExploreToolCommandRun & {
+  platform: ExploreProbePlatform;
+  processCommands: string[] | null;
+};

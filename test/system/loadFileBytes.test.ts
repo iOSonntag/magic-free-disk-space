@@ -1,15 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadFileBytes } from '../../src/system/loadFileBytes.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
-describe('loadFileBytes', () => {
+describeAwaitingWin32Platform('loadFileBytes', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -56,7 +58,7 @@ describe('loadFileBytes', () => {
     expect(bytes).toEqual({ kind: 'failed', failure: { reason: 'notFile' } });
   });
 
-  test('fails as permissionDenied when the file cannot be read', async () => {
+  testOnPosix('fails as permissionDenied when the file cannot be read', async () => {
     const filePath = join(fixtureRoot.homeDir, 'index');
     await writeFile(filePath, new Uint8Array(1));
     await chmod(filePath, 0o000);

@@ -1,7 +1,9 @@
 import { basename } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
+import type { CatalogOwner, CatalogOwnerBundleId, MacBundleId } from '../catalog/catalogOwner.js';
+import { parseMacBundleId } from '../catalog/catalogOwner.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
-import type { InstalledApp } from './loadInstalledApps.js';
+import type { InstalledApp } from './scanPlatform.js';
 
 export type OwnerState = 'running' | 'stopped' | 'unknown';
 
@@ -14,28 +16,38 @@ export function isBundleIdShape(params: { name: string }): boolean {
   return BUNDLE_ID_PATTERN.test(params.name);
 }
 
-export function isAppleBundleId(params: { bundleId: string }): boolean {
+/** The folder name as the bundle id it is shaped like; `null` for any other name. */
+export function parseBundleIdShapedName(params: { name: string }): MacBundleId | null {
+  if (!isBundleIdShape({ name: params.name })) {
+    return null;
+  }
+
+  return parseMacBundleId({ text: params.name });
+}
+
+export function isAppleBundleId(params: { bundleId: MacBundleId }): boolean {
   return params.bundleId.startsWith(APPLE_BUNDLE_ID_PREFIX);
 }
 
 /**
- * Returns the bundle id of the app that owns the path: the entry's owner for a `self` entry;
- * for a `children` entry the child's own name when it is a bundle id, else the id of the
- * installed app named like the child. `null` when no app owns it.
+ * Returns the owner of the path: the entry's owner for a `self` entry; for a `children` entry
+ * the child's own name when it is a bundle id, else the installed app named like the child.
+ * `null` when no app owns it.
  */
-export function resolveOwnerBundleId(params: {
+export function resolveTargetOwner(params: {
   entry: CatalogEntry;
   path: string;
   installedApps: InstalledApp[];
-}): string | null {
+}): CatalogOwner | null {
   if (params.entry.scope === 'self') {
-    return params.entry.ownerBundleId;
+    return params.entry.owner;
   }
 
   const name = basename(params.path);
+  const nameBundleId = parseBundleIdShapedName({ name: name });
 
-  if (isBundleIdShape({ name: name })) {
-    return name;
+  if (nameBundleId !== null) {
+    return { kind: 'bundleId', bundleId: nameBundleId };
   }
 
   const lowerCaseName = name.toLowerCase();
@@ -43,45 +55,78 @@ export function resolveOwnerBundleId(params: {
     (app) => app.bundleId !== null && app.displayName.toLowerCase() === lowerCaseName,
   );
 
-  return namedApp?.bundleId ?? null;
+  if (namedApp === undefined) {
+    return null;
+  }
+
+  return buildAppOwner({ app: namedApp });
 }
 
-/** The bundle paths of the installed apps that carry the id, as app or as nested helper. */
+/** An app owns its own bundle; one without a bundle id has no owner whose run can be told. */
+export function buildAppOwner(params: { app: InstalledApp }): CatalogOwner | null {
+  if (params.app.bundleId === null) {
+    return null;
+  }
+
+  return { kind: 'bundleId', bundleId: params.app.bundleId };
+}
+
+/** The bundle paths of the installed apps that carry the owner's id, as app or as nested helper. */
 export function findOwnerBundlePaths(params: {
-  ownerBundleId: string | null;
+  owner: CatalogOwner | null;
   installedApps: InstalledApp[];
 }): string[] {
-  const ownerBundleId = params.ownerBundleId;
-
-  if (ownerBundleId === null) {
+  if (params.owner === null) {
     return [];
   }
 
-  return params.installedApps
-    .filter((app) => app.bundleId === ownerBundleId || app.nestedBundleIds.includes(ownerBundleId))
-    .map((app) => app.bundlePath);
+  switch (params.owner.kind) {
+    case 'bundleId': {
+      const bundleId = params.owner.bundleId;
+
+      return params.installedApps
+        .filter((app) => app.bundleId === bundleId || app.nestedBundleIds.includes(bundleId))
+        .map((app) => app.bundlePath);
+    }
+  }
 }
 
 /**
- * Returns `unknown` for any owner while the process list is missing, `stopped` for an owner
- * that no installed app carries, and `running` when a process runs from the owner's bundle.
+ * Returns `stopped` for no owner, `unknown` for any owner while the process list is missing,
+ * `stopped` for an owner that no installed app carries, and `running` when a process runs from
+ * the owner's bundle.
  */
 export function resolveOwnerState(params: {
-  ownerBundleId: string | null;
+  owner: CatalogOwner | null;
   installedApps: InstalledApp[];
   processCommands: string[] | null;
 }): OwnerState {
-  if (params.ownerBundleId === null) {
+  if (params.owner === null) {
     return 'stopped';
   }
 
+  switch (params.owner.kind) {
+    case 'bundleId':
+      return resolveBundleOwnerState({
+        owner: params.owner,
+        installedApps: params.installedApps,
+        processCommands: params.processCommands,
+      });
+  }
+}
+
+function resolveBundleOwnerState(params: {
+  owner: CatalogOwnerBundleId;
+  installedApps: InstalledApp[];
+  processCommands: string[] | null;
+}): OwnerState {
   if (params.processCommands === null) {
     return 'unknown';
   }
 
   const isRunning = isAnyBundleRunning({
     bundlePaths: findOwnerBundlePaths({
-      ownerBundleId: params.ownerBundleId,
+      owner: params.owner,
       installedApps: params.installedApps,
     }),
     processCommands: params.processCommands,

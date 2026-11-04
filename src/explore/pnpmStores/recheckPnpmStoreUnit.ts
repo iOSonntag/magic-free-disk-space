@@ -1,5 +1,6 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
+import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitPnpmStore } from '../exploreUnit.js';
 import { loadProjectPinFiles } from '../projectPins/loadProjectPins.js';
 import { selectToolPins } from '../projectPins/selectToolPins.js';
@@ -12,24 +13,35 @@ import { PNPM_PIN_FILE_KINDS, toolPinsToPnpmPins } from './parsePnpmPins.js';
 export async function recheckPnpmStoreUnit(params: {
   unit: ExplorePathUnitPnpmStore;
   environment: Environment;
+  platform: ExploreProbePlatform;
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
-  const storeState = await loadPnpmStoreState({ storeRoot: params.unit.storeRoot });
+  const storeState = await loadPnpmStoreState({
+    pathRules: params.environment.pathRules,
+    storeRoot: params.unit.storeRoot,
+    privacyDenialCode: params.platform.privacyDenialCode,
+  });
 
   if (storeState.kind === 'failed') {
     return storeState;
   }
 
   const installState = await loadPnpmInstallState({
+    pathRules: params.environment.pathRules,
     homeDir: params.environment.homeDir,
-    homebrewPrefixPaths: params.environment.homebrewPrefixPaths,
+    pnpmHomes: params.platform.explore.pnpmHomes,
+    homebrewPrefixPaths: params.platform.homebrewPrefixPaths,
+    privacyDenialCode: params.platform.privacyDenialCode,
   });
 
   if (installState.kind === 'failed') {
     return installState;
   }
 
-  const pinFiles = await loadProjectPinFiles({ files: params.unit.pinFiles });
+  const pinFiles = await loadProjectPinFiles({
+    files: params.unit.pinFiles,
+    privacyDenialCode: params.platform.privacyDenialCode,
+  });
   const toolPins = selectToolPins({ pins: pinFiles, kinds: PNPM_PIN_FILE_KINDS });
 
   if (toolPins.kind === 'failed') {

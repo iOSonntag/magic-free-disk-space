@@ -1,7 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -9,6 +11,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const MIN_ALLOCATED_BYTES = 1024 * 1024;
 const LARGE_FILE_BYTES = 2 * 1024 * 1024;
@@ -16,7 +19,7 @@ const SMALL_FILE_BYTES = 1024;
 const TEST_MODIFIED_MS = 1_600_000_000_000;
 const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
-describe('findLargeUserFiles', () => {
+describeAwaitingWin32Platform('findLargeUserFiles', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -52,6 +55,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.issues).toEqual([]);
@@ -72,6 +77,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     const [finding] = result.findings;
@@ -114,6 +121,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([loosePath]);
@@ -132,6 +141,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -150,6 +161,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -178,6 +191,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -200,12 +215,14 @@ describe('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([localizedPath, versionPath]);
   });
 
-  test('a symbolic link to a large file is not followed', async () => {
+  testOnPosix('a symbolic link to a large file is not followed', async () => {
     const outsideDir = join(fixtureRoot.rootDir, 'outside');
     await createFixtureDirectory({ path: outsideDir });
     await createFixtureFile({
@@ -219,12 +236,14 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
 
-  test('a root that is a symbolic link is not walked', async () => {
+  testOnPosix('a root that is a symbolic link is not walked', async () => {
     const outsideDir = join(fixtureRoot.rootDir, 'outside');
     await createFixtureDirectory({ path: outsideDir });
     await createFixtureFile({
@@ -239,6 +258,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [linkedRootDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -257,12 +278,14 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([firstPath]);
   });
 
-  test('an unreadable folder gives an issue while its siblings are searched', async () => {
+  testOnPosix('an unreadable folder gives an issue while its siblings are searched', async () => {
     const lockedDir = join(fixtureRoot.homeDir, 'a-locked');
     await createFixtureDirectory({ path: lockedDir });
     await createFixtureFile({
@@ -284,6 +307,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([visiblePath]);
@@ -303,6 +328,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir, fixtureRoot.tempDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: 0,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({
@@ -316,6 +343,8 @@ describe('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'absent')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });

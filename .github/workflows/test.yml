@@ -1,0 +1,100 @@
+name: Test
+
+# Every push to a pull request runs the tests on macOS and Windows; runners cost nothing for a
+# public repository. No branch filter, so the layers of a stack, whose base is another branch,
+# run them too.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request makes the older run worthless.
+concurrency:
+  group: test-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The growth guard of `bun run check` reads the baseline at the merge base with the base
+          # branch, which a shallow clone lacks.
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install the dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint and format check
+        run: bun run check
+        env:
+          BASELINE_BASE_REF: origin/${{ github.base_ref }}
+
+      - name: Test the command line tool and the bridge
+        run: bun test
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.7
+          channel: stable
+
+      - name: Test the app
+        working-directory: app
+        run: flutter test
+
+      # Consumer Windows ships with long paths off, while the runner may have them on, so the facts
+      # of a path past 260 characters are measured once more with them off. A process reads the
+      # setting when it starts, so the tests started after this step see it. It runs after a failed
+      # test step too, so a red suite never hides these facts.
+      - name: Measure the Bun Windows facts with long paths off
+        if: runner.os == 'Windows' && !cancelled()
+        shell: pwsh
+        run: |
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 0 -Type DWord
+          bun test test/windows/bunWindowsFacts.test.ts
+
+  # The release ships a native arm64 build for Windows, and every Win32 call goes through bun:ffi,
+  # so the facts are measured on arm64 too, long before a release proof would show them.
+  windows-arm64-facts:
+    name: Bun Windows facts on windows-11-arm
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install the dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Measure the Bun Windows facts
+        run: bun test test/windows

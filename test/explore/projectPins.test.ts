@@ -8,11 +8,12 @@ import {
 } from '../../src/explore/projectPins/loadProjectPins.js';
 import type { ProjectPinFileKind } from '../../src/explore/projectPins/projectPins.js';
 import { matchProjectPinFile } from '../../src/explore/projectPins/projectPins.js';
-import {
-  buildProjectSearchEvidence,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { buildProjectSearchEvidence } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import { selectToolPins } from '../../src/explore/projectPins/selectToolPins.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -21,6 +22,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import {
   buildTestPinFileText,
   buildTestPinFileUnfit,
@@ -28,11 +30,13 @@ import {
   buildTestProjectPins,
 } from './projectPinsFixtures.js';
 
+const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
+
 const NO_SIBLINGS: ReadonlySet<string> = new Set();
 
 const PNPM_LOCK_SIBLINGS: ReadonlySet<string> = new Set(['package.json', 'pnpm-lock.yaml']);
 
-describe('matchProjectPinFile', () => {
+describeAwaitingWin32Platform('matchProjectPinFile', () => {
   const sharedNameKinds: [string, ProjectPinFileKind][] = [
     ['.tool-versions', 'toolVersions'],
     ['.nvmrc', 'nvmrc'],
@@ -93,7 +97,7 @@ describe('matchProjectPinFile', () => {
   });
 });
 
-describe('selectToolPins', () => {
+describeAwaitingWin32Platform('selectToolPins', () => {
   test('keeps the texts of the files of its kinds, each with its kind', () => {
     const selected = selectToolPins({
       pins: [
@@ -194,22 +198,24 @@ describe('selectToolPins', () => {
   });
 });
 
-describe('buildProjectSearchEvidence', () => {
+describeAwaitingWin32Platform('buildProjectSearchEvidence', () => {
   test('adds the incomplete-search line only when the walk was not complete', () => {
     expect(
       buildProjectSearchEvidence({
         pins: buildTestProjectPins({ files: [], isWalkComplete: false }),
+        incompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual([PROJECT_SEARCH_INCOMPLETE_EVIDENCE]);
     expect(
       buildProjectSearchEvidence({
         pins: buildTestProjectPins({ files: [], isWalkComplete: true }),
+        incompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual([]);
   });
 });
 
-describe('loading the pins', () => {
+describeAwaitingWin32Platform('loading the pins', () => {
   let fixtureRoot: FixtureRoot;
   let homeRealPath: string;
   let trackedConfigsPath: string;
@@ -238,6 +244,7 @@ describe('loading the pins', () => {
       await writeFile(nvmrcPath, '22\n');
 
       const files = await loadProjectPinFiles({
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         files: [
           { path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' },
           { path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'toolVersions' },
@@ -261,6 +268,7 @@ describe('loading the pins', () => {
       await truncate(largePath, EXPLORE_FILE_MAX_BYTES + 1);
 
       const files = await loadProjectPinFiles({
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         files: [
           { path: buildTestAbsolutePath({ text: folderPath }), kind: 'toolVersions' },
           { path: buildTestAbsolutePath({ text: largePath }), kind: 'toolVersions' },
@@ -280,6 +288,7 @@ describe('loading the pins', () => {
 
       try {
         const files = await loadProjectPinFiles({
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           files: [{ path: buildTestAbsolutePath({ text: gradlePath }), kind: 'gradle' }],
         });
 
@@ -296,6 +305,8 @@ describe('loading the pins', () => {
       await writeFile(nvmrcPath, '22\n');
 
       const pins = await loadProjectPins({
+        pathRules: DARWIN_PATH_RULES,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [{ path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' }],
         isWalkComplete: false,
@@ -342,6 +353,8 @@ describe('loading the pins', () => {
       await writeFile(join(trackedConfigsPath, 'not-a-link.toml'), '[tools]\n');
 
       const pins = await loadProjectPins({
+        pathRules: DARWIN_PATH_RULES,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [],
         isWalkComplete: true,
@@ -378,6 +391,8 @@ describe('loading the pins', () => {
       await createTrackedConfigLink({ name: 'a1', targetPath: miseConfigPath });
 
       const pins = await loadProjectPins({
+        pathRules: DARWIN_PATH_RULES,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [
           { path: buildTestAbsolutePath({ text: miseConfigPath }), kind: 'miseConfig' },
@@ -401,6 +416,8 @@ describe('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
+          pathRules: DARWIN_PATH_RULES,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,
@@ -419,7 +436,7 @@ describe('loading the pins', () => {
       }
     });
 
-    test('fails at a link whose target cannot be resolved', async () => {
+    testOnPosix('fails at a link whose target cannot be resolved', async () => {
       const lockedPath = join(fixtureRoot.homeDir, 'locked');
       await writeFixtureTextFile({ path: join(lockedPath, 'app', 'mise.toml'), text: '[tools]\n' });
       await createTrackedConfigLink({
@@ -430,6 +447,8 @@ describe('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
+          pathRules: DARWIN_PATH_RULES,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,
@@ -448,7 +467,7 @@ describe('loading the pins', () => {
       }
     });
 
-    test('fails at the folder of a target it cannot list', async () => {
+    testOnPosix('fails at the folder of a target it cannot list', async () => {
       const projectPath = join(fixtureRoot.homeDir, 'app');
       await writeFixtureTextFile({ path: join(projectPath, 'package.json'), text: '{}' });
       await createTrackedConfigLink({ name: 'a1', targetPath: join(projectPath, 'package.json') });
@@ -457,6 +476,8 @@ describe('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
+          pathRules: DARWIN_PATH_RULES,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,

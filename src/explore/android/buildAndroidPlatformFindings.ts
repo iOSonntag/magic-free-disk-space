@@ -16,12 +16,16 @@ export function buildAndroidPlatformFindings(params: {
   pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
   processCommands: string[] | null;
+  projectSearchIncompleteEvidence: string;
 }): ExploreProbeFindings {
   const activity = decideUnitActivity({
     facts: { kind: 'android' },
     processCommands: params.processCommands,
   });
-  const searchEvidenceLines = buildProjectSearchEvidence({ pins: params.projectPins });
+  const searchEvidenceLines = buildProjectSearchEvidence({
+    pins: params.projectPins,
+    incompleteEvidence: params.projectSearchIncompleteEvidence,
+  });
   const findings = params.offers.offers.map((offer) => {
     const finding: ExploreFinding = {
       unit: {

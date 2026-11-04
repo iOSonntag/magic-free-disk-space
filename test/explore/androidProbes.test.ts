@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -9,6 +9,7 @@ import type {
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -16,6 +17,7 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -49,7 +51,7 @@ function buildSdkRoot(): AbsolutePath {
   return buildAndroidSdkRoot({ homeDir: homeDir });
 }
 
-describe('startExploreProbes with the Android probes', () => {
+describeAwaitingWin32Platform('startExploreProbes with the Android probes', () => {
   test('offers the unused AVD with the located avdmanager, and the image no AVD names', async () => {
     const avdmanager = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'cmdline-tools', 'bin'),
@@ -78,6 +80,7 @@ describe('startExploreProbes with the Android probes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ avdmanager: avdmanager }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -125,7 +128,7 @@ describe('startExploreProbes with the Android probes', () => {
   });
 });
 
-describe('recheckExplorePathUnit with the Android path units', () => {
+describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path units', () => {
   async function createPackageUnits(): Promise<{
     image: ExplorePathUnitAndroidSystemImage;
     emulator: ExplorePathUnitAndroidEmulator;
@@ -149,7 +152,12 @@ describe('recheckExplorePathUnit with the Android path units', () => {
 
     for (const unit of [units.image, units.emulator]) {
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'unchanged' });
     }
   });
@@ -162,6 +170,7 @@ describe('recheckExplorePathUnit with the Android path units', () => {
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
         }),
       ).toEqual({ kind: 'busy' });
@@ -179,7 +188,12 @@ describe('recheckExplorePathUnit with the Android path units', () => {
 
     for (const unit of [units.image, units.emulator]) {
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });

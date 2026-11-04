@@ -21,14 +21,13 @@ import { parseNvmrcPin } from '../../src/explore/nvmVersions/parseNvmrcPin.js';
 import { resolveNvmVersionPin } from '../../src/explore/nvmVersions/resolveNvmVersionPin.js';
 import type { ProjectPinsLoad } from '../../src/explore/projectPins/loadProjectPins.js';
 import type { ProjectPinFileRef } from '../../src/explore/projectPins/projectPins.js';
-import {
-  PINNED_VERSION_REINSTALL_EXPLANATION,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { PINNED_VERSION_REINSTALL_EXPLANATION } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -37,6 +36,8 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath, buildTestNvmNodeVersion } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
   buildEmptyProjectPinsLoad,
@@ -95,7 +96,7 @@ function listOfferedVersions(offers: NvmVersionOffers): string[] {
   return offers.offers.map((offer) => offer.version);
 }
 
-describe('parseNvmNodeVersion', () => {
+describeAwaitingWin32Platform('parseNvmNodeVersion', () => {
   test('passes a v<x.y.z> folder name and refuses any other', () => {
     expect(parseNvmNodeVersion({ folderName: 'v22.11.0' })).toEqual({
       kind: 'succeeded',
@@ -107,7 +108,7 @@ describe('parseNvmNodeVersion', () => {
   });
 });
 
-describe('parseNvmrcPin', () => {
+describeAwaitingWin32Platform('parseNvmrcPin', () => {
   test('takes the one version line, without comments and edge spaces', () => {
     expect(parseNvmrcPin({ text: '22\n' })).toBe('22');
     expect(parseNvmrcPin({ text: '# the node of this project\n  v24.19 # newest\r\n\n' })).toBe(
@@ -143,7 +144,7 @@ describe('parseNvmrcPin', () => {
   });
 });
 
-describe('parseNvmAliasText', () => {
+describeAwaitingWin32Platform('parseNvmAliasText', () => {
   test('takes the first line left after comments and blank lines, without trailing spaces', () => {
     expect(parseNvmAliasText({ text: 'v22.11.0\n' })).toBe('v22.11.0');
     expect(parseNvmAliasText({ text: '# set by hand\n\n   \nlts/iron  # the LTS\t\n' })).toBe(
@@ -159,7 +160,7 @@ describe('parseNvmAliasText', () => {
   });
 });
 
-describe('resolveNvmVersionPin', () => {
+describeAwaitingWin32Platform('resolveNvmVersionPin', () => {
   const versions = [
     'v18.20.0',
     'v20.11.1',
@@ -288,7 +289,7 @@ describe('resolveNvmVersionPin', () => {
   });
 });
 
-describe('decideNvmVersionOffers', () => {
+describeAwaitingWin32Platform('decideNvmVersionOffers', () => {
   const folderNames = ['v20.11.1', 'v22.3.0', 'v22.11.0', 'v24.19.1'];
 
   test('offers each version neither the default nor any .nvmrc resolves to', () => {
@@ -389,7 +390,7 @@ describe('decideNvmVersionOffers', () => {
   });
 });
 
-describe('buildNvmVersionFindings', () => {
+describeAwaitingWin32Platform('buildNvmVersionFindings', () => {
   const folderPath = buildTestAbsolutePath({ text: `${FIXTURE_VERSIONS_PATH}/v20.11.1` });
   const version = buildTestNvmNodeVersion({ text: 'v20.11.1' });
   const pinFiles: ProjectPinFileRef[] = [
@@ -406,6 +407,7 @@ describe('buildNvmVersionFindings', () => {
       pinFiles: pinFiles,
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: params.isWalkComplete }),
       processCommands: params.processCommands,
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
   }
 
@@ -495,7 +497,7 @@ describe('buildNvmVersionFindings', () => {
   });
 });
 
-describe('compareNvmVersionUnit', () => {
+describeAwaitingWin32Platform('compareNvmVersionUnit', () => {
   const state = buildFixtureState({ folderNames: ['v20.11.1', 'v22.11.0'] });
   const unit: ExplorePathUnitNvmVersion = {
     kind: 'nvmVersion',
@@ -546,7 +548,7 @@ describe('compareNvmVersionUnit', () => {
   });
 });
 
-describe('the nvm probe and recheck against a fixture home', () => {
+describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let versionsPath: string;
@@ -588,6 +590,7 @@ describe('the nvm probe and recheck against a fixture home', () => {
   async function probeNvmVersions(projectPins: ProjectPinsLoad): Promise<unknown> {
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({}),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -637,7 +640,7 @@ describe('the nvm probe and recheck against a fixture home', () => {
     });
   });
 
-  test('answers unreadable at an alias file it cannot read', async () => {
+  testOnPosix('answers unreadable at an alias file it cannot read', async () => {
     await createVersionFolders(['v20.11.1']);
     const path = await writeAlias({ name: 'lts/iron', text: 'v20.11.1\n' });
     await chmod(path, 0o000);
@@ -649,7 +652,7 @@ describe('the nvm probe and recheck against a fixture home', () => {
     });
   });
 
-  test('judges nothing while the default alias file is unfit', async () => {
+  testOnPosix('judges nothing while the default alias file is unfit', async () => {
     await createVersionFolders(['v20.11.1']);
     await mkdir(join(fixtureRoot.rootDir, 'elsewhere'));
     await mkdir(aliasPath, { recursive: true });
@@ -715,7 +718,12 @@ describe('the nvm probe and recheck against a fixture home', () => {
       const unit = await createUnit({ nvmrcText: '22\n' });
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'unchanged' });
     });
 
@@ -724,7 +732,12 @@ describe('the nvm probe and recheck against a fixture home', () => {
       await writeAlias({ name: 'default', text: '20\n' });
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'changed' });
     });
 
@@ -733,7 +746,12 @@ describe('the nvm probe and recheck against a fixture home', () => {
       await writeNvmrc({ projectName: 'app', text: 'v20.11\n' });
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'changed' });
     });
 
@@ -744,18 +762,24 @@ describe('the nvm probe and recheck against a fixture home', () => {
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [`${unit.folderPath}/bin/node server.js`],
         }),
       ).toEqual({ kind: 'busy' });
     });
 
-    test('fails at an alias file it cannot read', async () => {
+    testOnPosix('fails at an alias file it cannot read', async () => {
       const unit = await createUnit({ nvmrcText: '22\n' });
       const path = await writeAlias({ name: 'default', text: '22\n' });
       await chmod(path, 0o000);
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({
         kind: 'failed',
         failure: {

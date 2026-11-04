@@ -14,8 +14,12 @@ export function buildAsdfVersionFindings(params: {
   pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
   processCommands: string[] | null;
+  projectSearchIncompleteEvidence: string;
 }): ExploreFinding[] {
-  const searchEvidenceLines = buildProjectSearchEvidence({ pins: params.projectPins });
+  const searchEvidenceLines = buildProjectSearchEvidence({
+    pins: params.projectPins,
+    incompleteEvidence: params.projectSearchIncompleteEvidence,
+  });
 
   return params.offers.map((offer) => {
     const finding: ExploreFinding = {

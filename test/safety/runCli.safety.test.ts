@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { runCli } from '../../src/cli/runCli.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -16,6 +17,7 @@ import {
   loadTestEnvironment,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { buildTestPlatform } from '../support/platformFixtures.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 
 const MIB = 1_048_576;
@@ -115,18 +117,27 @@ async function runWithInput(params: {
     isTerminal: params.isTerminal ?? true,
     inputLines: params.inputLines,
   });
+  const platform = buildTestPlatform({
+    catalogEntries: TEST_CATALOG,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+  });
   const exitCode = await runCli({
     argv: params.argv,
     environment: environment,
-    catalogEntries: TEST_CATALOG,
-    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+    catalog: platform.catalog,
+    tools: platform.tools,
+    scan: platform.scan,
+    system: platform.system,
+    delete: platform.delete,
+    explore: platform.explore,
+    texts: platform.report,
     io: io,
   });
 
   return { exitCode: exitCode, io: io };
 }
 
-describe('runCli safety', () => {
+describeAwaitingWin32Platform('runCli safety', () => {
   test('the ranking of the fixture home is the one these tests rely on', async () => {
     const { exitCode, io } = await runWithInput({ argv: ['--list'], inputLines: [] });
     const out = io.outText();
@@ -278,11 +289,20 @@ describe('runCli safety', () => {
       return 'DELETE';
     };
 
+    const platform = buildTestPlatform({
+      catalogEntries: TEST_CATALOG,
+      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+    });
     const exitCode = await runCli({
       argv: [],
       environment: environment,
-      catalogEntries: TEST_CATALOG,
-      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+      catalog: platform.catalog,
+      tools: platform.tools,
+      scan: platform.scan,
+      system: platform.system,
+      delete: platform.delete,
+      explore: platform.explore,
+      texts: platform.report,
       io: io,
     });
 
@@ -333,20 +353,6 @@ describe('runCli safety', () => {
 
     expect(io.outText()).not.toContain('com.example.gone');
     expect(io.outText()).toContain('- could not read every installed app: 1');
-  });
-
-  test('refuses to run anywhere but macOS', async () => {
-    const io = createScriptedTerminalIo({ isTerminal: true, inputLines: ['1', 'DELETE'] });
-    const exitCode = await runCli({
-      argv: [],
-      environment: { ...environment, platform: 'linux' },
-      catalogEntries: TEST_CATALOG,
-      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
-      io: io,
-    });
-
-    expect(exitCode).toBe(2);
-    expect(io.prompts).toEqual([]);
   });
 
   test('bad usage exits 2 without scanning', async () => {

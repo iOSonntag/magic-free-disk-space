@@ -19,7 +19,12 @@ import { loadAndroidSdkState } from './loadAndroidSdkState.js';
 export async function loadAndroidAvdFindings(
   run: ExploreProbeToolRun,
 ): Promise<ExploreProbeToolResult> {
-  const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
+  const state = await loadAndroidSdkState({
+    pathRules: run.environment.pathRules,
+    homeDir: run.environment.homeDir,
+    androidSdkRoot: run.platform.explore.androidSdkRoot,
+    privacyDenialCode: run.platform.privacyDenialCode,
+  });
 
   if (state.kind === 'failed') {
     return state;
@@ -40,7 +45,12 @@ export async function loadAndroidAvdFindings(
 export async function loadAndroidSystemImageFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {
-  const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
+  const state = await loadAndroidSdkState({
+    pathRules: run.environment.pathRules,
+    homeDir: run.environment.homeDir,
+    androidSdkRoot: run.platform.explore.androidSdkRoot,
+    privacyDenialCode: run.platform.privacyDenialCode,
+  });
 
   if (state.kind === 'failed') {
     return state;
@@ -59,7 +69,12 @@ export async function loadAndroidSystemImageFindings(
 export async function loadAndroidEmulatorFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {
-  const state = await loadAndroidSdkState({ homeDir: run.environment.homeDir });
+  const state = await loadAndroidSdkState({
+    pathRules: run.environment.pathRules,
+    homeDir: run.environment.homeDir,
+    androidSdkRoot: run.platform.explore.androidSdkRoot,
+    privacyDenialCode: run.platform.privacyDenialCode,
+  });
 
   if (state.kind === 'failed') {
     return state;

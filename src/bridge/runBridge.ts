@@ -1,10 +1,13 @@
-import type { CatalogEntry } from '../catalog/catalog.js';
+import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import { isDeleteConfirmation } from '../delete/confirmation.js';
 import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js';
+import type { DeletePlatform } from '../delete/deletePlatform.js';
 import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { EnvironmentFailure } from '../environment/loadEnvironment.js';
+import type { EnvironmentPlatform } from '../environment/environmentPlatform.js';
+import type { ExplorePlatform } from '../explore/explorePlatform.js';
+import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { Preferences, PreferencesSaveFailure } from '../preferences/preferencesFile.js';
 import { buildFullDiskAccessNotices } from '../report/buildFullDiskAccessNotices.js';
 import type { ScanView } from '../report/buildScanView.js';
@@ -24,12 +27,15 @@ import { formatPreferencesSaveFailure } from '../report/formatPreferencesSaveFai
 import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
 import { formatRemovalRun } from '../report/formatRemovalRun.js';
 import type { NoticeView } from '../report/noticeView.js';
+import type { ReportTexts } from '../report/reportTexts.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
+import type { ScanPlatform } from '../scan/scanPlatform.js';
 import type { FullDiskAccess } from '../system/fullDiskAccess.js';
-import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
+import type { SystemPlatform } from '../system/systemPlatform.js';
+import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import type { LatestReleaseFetchResult } from '../update/fetchLatestReleaseVersion.js';
 import type { ReleaseVersion } from '../update/releaseVersion.js';
 import { runUpdateCheck } from '../update/runUpdateCheck.js';
@@ -120,21 +126,25 @@ type BridgeStep = { answer: BridgeAnswer; nextState: BridgeState };
 
 type BridgeContext = {
   io: BridgeIo;
-  catalogEntries: CatalogEntry[];
-  toolInstallLocations: ToolInstallLocations;
-  loadEnvironment: () => Promise<Result<Environment, EnvironmentFailure>>;
-  /** Never throws. */
-  loadFullDiskAccess: (params: { homeDir: string }) => Promise<FullDiskAccess>;
+  /** The slices of the platform the bridge runs on. */
+  environment: EnvironmentPlatform;
+  catalog: CatalogPlatform;
+  tools: ToolsPlatform;
+  scan: ScanPlatform;
+  system: SystemPlatform;
+  delete: DeletePlatform;
+  explore: ExplorePlatform;
+  texts: ReportTexts;
   clock: () => number;
   /** `null` for a development build, which never looks for an update. */
   releaseVersion: ReleaseVersion | null;
   /** Never throws. */
   fetchLatestReleaseVersion: () => Promise<LatestReleaseFetchResult>;
   /** Never throws. */
-  loadPreferences: (params: { homeDir: string }) => Promise<Preferences>;
+  loadPreferences: (params: { preferencesDir: string }) => Promise<Preferences>;
   /** Never throws. */
   saveIsUpdateCheckEnabled: (params: {
-    homeDir: string;
+    preferencesDir: string;
     isEnabled: boolean;
   }) => Promise<Result<null, PreferencesSaveFailure>>;
 };
@@ -153,7 +163,7 @@ const AWAITING_SCAN: BridgeStateAwaitingScan = { kind: 'awaitingScan' };
  * confirmation word, and only within an hour of its scan.
  */
 export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
-  const startEnvironment = await params.loadEnvironment();
+  const startEnvironment = await params.environment.loadEnvironment();
 
   if (startEnvironment.kind === 'failed') {
     params.io.writeEvent({
@@ -177,6 +187,7 @@ export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
     const step = await answerRequestLine({
       context: params,
       homeDir: startEnvironment.value.homeDir,
+      preferencesDir: startEnvironment.value.preferencesDir,
       line: line,
       state: state,
       nextPlanId: lastPlanId + 1,
@@ -197,6 +208,8 @@ async function answerRequestLine(params: {
   context: BridgeContext;
   /** The home of the environment the bridge started in. */
   homeDir: string;
+  /** The preferences folder of the environment the bridge started in. */
+  preferencesDir: string;
   line: string;
   state: BridgeState;
   nextPlanId: number;
@@ -236,13 +249,13 @@ async function answerRequestLine(params: {
     case 'checkUpdate':
       return answerCheckUpdate({
         context: params.context,
-        homeDir: params.homeDir,
+        preferencesDir: params.preferencesDir,
         state: params.state,
       });
     case 'setUpdateCheck':
       return answerSetUpdateCheck({
         context: params.context,
-        homeDir: params.homeDir,
+        preferencesDir: params.preferencesDir,
         state: params.state,
         isEnabled: parsed.value.isEnabled,
       });
@@ -252,10 +265,12 @@ async function answerRequestLine(params: {
 /** Keeps the held scan and plan; any failure of the check answers without a notice. */
 async function answerCheckUpdate(params: {
   context: BridgeContext;
-  homeDir: string;
+  preferencesDir: string;
   state: BridgeState;
 }): Promise<BridgeStep> {
-  const preferences = await params.context.loadPreferences({ homeDir: params.homeDir });
+  const preferences = await params.context.loadPreferences({
+    preferencesDir: params.preferencesDir,
+  });
   const outcome = await runUpdateCheck({
     isUpdateCheckEnabled: preferences.isUpdateCheckEnabled,
     releaseVersion: params.context.releaseVersion,
@@ -266,7 +281,7 @@ async function answerCheckUpdate(params: {
     answer: {
       kind: 'updateChecked',
       isUpdateCheckEnabled: preferences.isUpdateCheckEnabled,
-      notice: buildUpdateNotice(outcome),
+      notice: buildUpdateNotice({ outcome: outcome, texts: params.context.texts }),
     },
     nextState: params.state,
   };
@@ -275,12 +290,12 @@ async function answerCheckUpdate(params: {
 /** Keeps the held scan and plan; saves the switch and never fetches. */
 async function answerSetUpdateCheck(params: {
   context: BridgeContext;
-  homeDir: string;
+  preferencesDir: string;
   state: BridgeState;
   isEnabled: boolean;
 }): Promise<BridgeStep> {
   const saved = await params.context.saveIsUpdateCheckEnabled({
-    homeDir: params.homeDir,
+    preferencesDir: params.preferencesDir,
     isEnabled: params.isEnabled,
   });
 
@@ -299,7 +314,7 @@ async function answerSetUpdateCheck(params: {
 
 /** Loads the environment afresh, so the age cutoffs count from this scan. */
 async function answerScan(params: { context: BridgeContext }): Promise<BridgeStep> {
-  const environment = await params.context.loadEnvironment();
+  const environment = await params.context.environment.loadEnvironment();
 
   if (environment.kind === 'failed') {
     return buildFailedStep({
@@ -310,8 +325,11 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
 
   const report = await runScan({
     environment: environment.value,
-    catalogEntries: params.context.catalogEntries,
-    toolInstallLocations: params.context.toolInstallLocations,
+    catalog: params.context.catalog,
+    tools: params.context.tools,
+    scan: params.context.scan,
+    system: params.context.system,
+    explore: params.context.explore,
     options: {
       staleDays: SCAN_LIMITS.defaultStaleDays,
       unusedDays: SCAN_LIMITS.defaultUnusedDays,
@@ -322,7 +340,14 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
   });
 
   return {
-    answer: { kind: 'scanned', ...buildScanView({ report: report, fullDiskAccessHolder: 'app' }) },
+    answer: {
+      kind: 'scanned',
+      ...buildScanView({
+        report: report,
+        fullDiskAccessHolder: 'app',
+        texts: params.context.texts,
+      }),
+    },
     nextState: { kind: 'scanned', report: report, environment: environment.value },
   };
 }
@@ -333,7 +358,9 @@ async function answerStatus(params: {
   homeDir: string;
   state: BridgeState;
 }): Promise<BridgeStep> {
-  const fullDiskAccess = await params.context.loadFullDiskAccess({ homeDir: params.homeDir });
+  const fullDiskAccess = await params.context.system.loadFullDiskAccess({
+    homeDir: params.homeDir,
+  });
 
   return {
     answer: {
@@ -386,7 +413,7 @@ function answerPlan(params: {
       kind: 'planned',
       planId: params.planId,
       lines: lines,
-      warningLines: formatDeletionWarningLines(),
+      warningLines: formatDeletionWarningLines({ texts: params.context.texts }),
     },
     nextState: {
       kind: 'planned',
@@ -431,6 +458,14 @@ async function answerDelete(params: {
   const removal = await deleteApprovedCandidates({
     plan: params.state.plan,
     environment: params.state.environment,
+    delete: params.context.delete,
+    loadRunningProcesses: params.context.system.loadRunningProcesses,
+    isEntryEvicted: params.context.system.isEntryEvicted,
+    probePlatform: buildExploreProbePlatform({
+      explore: params.context.explore,
+      tools: params.context.tools,
+      system: params.context.system,
+    }),
     clock: params.context.clock,
   });
 

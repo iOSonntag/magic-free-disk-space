@@ -24,10 +24,15 @@ export async function loadPnpmStoreFindings(params: {
   }
 
   const storeRoot = joinAbsolutePath({
+    rules: params.run.environment.pathRules,
     parentPath: params.run.environment.homeDir,
     names: params.storeRootPathNames,
   });
-  const storeState = await loadPnpmStoreState({ storeRoot: storeRoot });
+  const storeState = await loadPnpmStoreState({
+    pathRules: params.run.environment.pathRules,
+    storeRoot: storeRoot,
+    privacyDenialCode: params.run.platform.privacyDenialCode,
+  });
 
   if (storeState.kind === 'failed') {
     return storeState;
@@ -38,8 +43,11 @@ export async function loadPnpmStoreFindings(params: {
   }
 
   const installState = await loadPnpmInstallState({
+    pathRules: params.run.environment.pathRules,
     homeDir: params.run.environment.homeDir,
-    homebrewPrefixPaths: params.run.environment.homebrewPrefixPaths,
+    pnpmHomes: params.run.platform.explore.pnpmHomes,
+    homebrewPrefixPaths: params.run.platform.homebrewPrefixPaths,
+    privacyDenialCode: params.run.platform.privacyDenialCode,
   });
 
   if (installState.kind === 'failed') {
@@ -60,6 +68,7 @@ export async function loadPnpmStoreFindings(params: {
       pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
       projectPins: params.projectPins,
       processCommands: params.run.processCommands,
+      projectSearchIncompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
     }),
   };
 }

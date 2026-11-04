@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from '../../src/explore/limits.js';
 import type { ProjectPins } from '../../src/explore/projectPins/projectPins.js';
 import { runExploreProbe, startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -13,6 +14,8 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -70,7 +73,7 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
         exitCode: 0,
       },
     ],
-    prelude: `touch '${buildMarkerPath({ name: 'dart' })}'`,
+    prelude: buildMarkerPrelude({ name: 'dart' }),
   });
 
   await writeDartVersionFile({ dartPath: dart, version: '3.11.0' });
@@ -86,7 +89,7 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
           exitCode: 0,
         },
       ],
-      prelude: `touch '${buildMarkerPath({ name: 'xcrun' })}'`,
+      prelude: buildMarkerPrelude({ name: 'xcrun' }),
     }),
     dart: dart,
     mise: await createProbeFakeTool({
@@ -99,7 +102,7 @@ async function createWorkingTools(): Promise<{ xcrun: string; dart: string; mise
           exitCode: 0,
         },
       ],
-      prelude: `touch '${buildMarkerPath({ name: 'mise' })}'`,
+      prelude: buildMarkerPrelude({ name: 'mise' }),
     }),
   };
 }
@@ -108,12 +111,18 @@ function buildMarkerPath(params: { name: string }): string {
   return join(fixtureRoot.rootDir, `${params.name}.ran`);
 }
 
-describe('startExploreProbes', () => {
+/** A probe prelude that leaves the marker file of the tool `name`. */
+function buildMarkerPrelude(params: { name: string }): string {
+  return `fs.writeFileSync(${JSON.stringify(buildMarkerPath({ name: params.name }))}, '');`;
+}
+
+describeAwaitingWin32Platform('startExploreProbes', () => {
   test('finds the units of every tool with the activity of each, all judged', async () => {
     const tools = await createWorkingTools();
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -153,6 +162,7 @@ describe('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve(null),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -179,6 +189,7 @@ describe('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: processCommands.promise,
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -206,6 +217,7 @@ describe('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -236,6 +248,7 @@ describe('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -263,6 +276,7 @@ describe('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -276,7 +290,7 @@ describe('startExploreProbes', () => {
     expect(outcome.kind === 'failed' && outcome.failure.reason).toBe('outputUnreadable');
   });
 
-  test('names an untrusted tool and runs no probe with it', async () => {
+  testOnPosix('names an untrusted tool and runs no probe with it', async () => {
     const dart = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: 'dart',
@@ -286,6 +300,7 @@ describe('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ dart: dart }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -303,6 +318,7 @@ describe('startExploreProbes', () => {
   test('answers toolMissing for a tool at none of its locations', async () => {
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({
         xcrun: join(fixtureRoot.rootDir, 'absent', 'xcrun'),
       }),
@@ -326,6 +342,7 @@ describe('startExploreProbes', () => {
       probe: { kind: 'files', loadFindings: () => new Promise(() => {}) },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -363,6 +380,7 @@ describe('startExploreProbes', () => {
       },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -393,6 +411,7 @@ describe('startExploreProbes', () => {
       },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -431,6 +450,7 @@ describe('startExploreProbes', () => {
       },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -448,11 +468,12 @@ describe('startExploreProbes', () => {
       folder: join(fixtureRoot.rootDir, 'tools'),
       name: 'mise',
       answers: [{ command: 'miseVersions', stdoutText: '', exitCode: 0 }],
-      prelude: 'sleep 5',
+      prelude: 'await Bun.sleep(5_000);',
     });
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),

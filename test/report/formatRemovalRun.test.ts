@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { formatRemovalRun } from '../../src/report/formatRemovalRun.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 
-describe('formatRemovalRun', () => {
+describeAwaitingWin32Platform('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
     const lines = formatRemovalRun({ run: { outcomes: [], journalFailure: null } });
 

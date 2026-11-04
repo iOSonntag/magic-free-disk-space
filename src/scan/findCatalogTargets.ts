@@ -24,16 +24,18 @@ type CatalogEntryTargets = {
 export async function findCatalogTargets(params: {
   environment: Environment;
   entries: CatalogEntry[];
+  privacyDenialCode: string | null;
 }): Promise<{ targets: CatalogTarget[]; issues: ScanIssue[] }> {
   const targetsPerEntry: CatalogEntryTargets[] = [];
 
   for (const entry of params.entries) {
     const path = getCatalogEntryPath({ environment: params.environment, entry: entry });
+    const entryPath = { entry: entry, path: path, privacyDenialCode: params.privacyDenialCode };
 
     if (entry.scope === 'self') {
-      targetsPerEntry.push(await findSelfTargets({ entry: entry, path: path }));
+      targetsPerEntry.push(await findSelfTargets(entryPath));
     } else {
-      targetsPerEntry.push(await findChildTargets({ entry: entry, path: path }));
+      targetsPerEntry.push(await findChildTargets(entryPath));
     }
   }
 
@@ -46,13 +48,18 @@ export async function findCatalogTargets(params: {
 async function findSelfTargets(params: {
   entry: CatalogEntry;
   path: string;
+  privacyDenialCode: string | null;
 }): Promise<CatalogEntryTargets> {
   const identityResult = await loadFileIdentity({ path: params.path });
 
   if (identityResult.kind === 'failed') {
     return {
       targets: [],
-      issues: buildFailureIssues({ path: params.path, failure: identityResult.failure }),
+      issues: buildFailureIssues({
+        path: params.path,
+        failure: identityResult.failure,
+        privacyDenialCode: params.privacyDenialCode,
+      }),
     };
   }
 
@@ -65,13 +72,18 @@ async function findSelfTargets(params: {
 async function findChildTargets(params: {
   entry: CatalogEntry;
   path: string;
+  privacyDenialCode: string | null;
 }): Promise<CatalogEntryTargets> {
   const namesResult = await loadDirectoryNames({ path: params.path });
 
   if (namesResult.kind === 'failed') {
     return {
       targets: [],
-      issues: buildFailureIssues({ path: params.path, failure: namesResult.failure }),
+      issues: buildFailureIssues({
+        path: params.path,
+        failure: namesResult.failure,
+        privacyDenialCode: params.privacyDenialCode,
+      }),
     };
   }
 

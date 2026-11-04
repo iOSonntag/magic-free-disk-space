@@ -1,17 +1,18 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import type { BridgeEnd, BridgeEvent } from '../../src/bridge/runBridge.js';
 import { runBridge } from '../../src/bridge/runBridge.js';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { EnvironmentFailure } from '../../src/environment/loadEnvironment.js';
+import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
 import type { PreferencesSaveFailure } from '../../src/preferences/preferencesFile.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
 import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
 import type { LatestReleaseFetchResult } from '../../src/update/fetchLatestReleaseVersion.js';
 import type { ReleaseVersion } from '../../src/update/releaseVersion.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -24,6 +25,8 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { buildTestPlatform } from '../support/platformFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import { loadProtocolFixtureEvents } from '../support/protocolFixture.js';
 
 const MIB = 1_048_576;
@@ -149,18 +152,22 @@ async function runBridgeWithLines(params: {
   events: BridgeEvent[];
   probedHomeDirs: string[];
   fetchCount: number;
-  preferenceHomeDirs: string[];
+  preferencesDirs: string[];
   savedValues: boolean[];
 }> {
   const events: BridgeEvent[] = [];
   const probedHomeDirs: string[] = [];
-  const preferenceHomeDirs: string[] = [];
+  const preferencesDirs: string[] = [];
   const savedValues: boolean[] = [];
   let fetchCount = 0;
   const environmentResult: Result<Environment, EnvironmentFailure> = params.environmentResult ?? {
     kind: 'succeeded',
     value: environment,
   };
+  const platform = buildTestPlatform({
+    catalogEntries: BRIDGE_CATALOG,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+  });
   const end = await runBridge({
     io: {
       readLines: () => yieldLines(params.lines),
@@ -168,14 +175,21 @@ async function runBridgeWithLines(params: {
         events.push(event);
       },
     },
-    catalogEntries: BRIDGE_CATALOG,
-    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
-    loadEnvironment: async () => environmentResult,
-    loadFullDiskAccess: async (probe) => {
-      probedHomeDirs.push(probe.homeDir);
+    environment: { loadEnvironment: async () => environmentResult },
+    catalog: platform.catalog,
+    tools: platform.tools,
+    scan: platform.scan,
+    system: {
+      ...platform.system,
+      loadFullDiskAccess: async (probe) => {
+        probedHomeDirs.push(probe.homeDir);
 
-      return params.fullDiskAccess ?? 'unknown';
+        return params.fullDiskAccess ?? 'unknown';
+      },
     },
+    delete: platform.delete,
+    explore: platform.explore,
+    texts: platform.report,
     clock: () => params.nowMs ?? NOW_MS,
     releaseVersion: params.releaseVersion === undefined ? RELEASE_1_2_0 : params.releaseVersion,
     fetchLatestReleaseVersion: async () => {
@@ -184,12 +198,12 @@ async function runBridgeWithLines(params: {
       return params.latestRelease ?? { kind: 'succeeded', value: RELEASE_1_3_0 };
     },
     loadPreferences: async (load) => {
-      preferenceHomeDirs.push(load.homeDir);
+      preferencesDirs.push(load.preferencesDir);
 
       return { isUpdateCheckEnabled: params.isUpdateCheckEnabled ?? true };
     },
     saveIsUpdateCheckEnabled: async (save) => {
-      preferenceHomeDirs.push(save.homeDir);
+      preferencesDirs.push(save.preferencesDir);
       savedValues.push(save.isEnabled);
 
       return params.saveResult ?? { kind: 'succeeded', value: null };
@@ -201,7 +215,7 @@ async function runBridgeWithLines(params: {
     events: events,
     probedHomeDirs: probedHomeDirs,
     fetchCount: fetchCount,
-    preferenceHomeDirs: preferenceHomeDirs,
+    preferencesDirs: preferencesDirs,
     savedValues: savedValues,
   };
 }
@@ -364,7 +378,7 @@ function listRecordShapeMismatches(params: {
   );
 }
 
-describe('runBridge', () => {
+describeAwaitingWin32Platform('runBridge', () => {
   test('scans and answers with the view of the scan, numbered top to bottom', async () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
@@ -673,12 +687,12 @@ describe('runBridge', () => {
   });
 
   test('answers checkUpdate with the notice of a newer release, from the home it started in', async () => {
-    const { events, fetchCount, preferenceHomeDirs } = await runBridgeWithLines({
+    const { events, fetchCount, preferencesDirs } = await runBridgeWithLines({
       lines: [CHECK_UPDATE_LINE],
     });
 
     expect(fetchCount).toBe(1);
-    expect(preferenceHomeDirs).toEqual([environment.homeDir]);
+    expect(preferencesDirs).toEqual([environment.preferencesDir]);
     expect(events).toEqual([
       {
         kind: 'updateChecked',
@@ -729,7 +743,7 @@ describe('runBridge', () => {
   });
 
   test('saves the switch without fetching and answers with the saved value', async () => {
-    const { events, fetchCount, preferenceHomeDirs, savedValues } = await runBridgeWithLines({
+    const { events, fetchCount, preferencesDirs, savedValues } = await runBridgeWithLines({
       lines: [
         buildSetUpdateCheckLine({ isEnabled: false }),
         buildSetUpdateCheckLine({ isEnabled: true }),
@@ -741,7 +755,7 @@ describe('runBridge', () => {
       { kind: 'updateCheckSet', isUpdateCheckEnabled: true },
     ]);
     expect(savedValues).toEqual([false, true]);
-    expect(preferenceHomeDirs).toEqual([environment.homeDir, environment.homeDir]);
+    expect(preferencesDirs).toEqual([environment.preferencesDir, environment.preferencesDir]);
     expect(fetchCount).toBe(0);
   });
 
@@ -786,7 +800,7 @@ describe('runBridge', () => {
     expect(events[0]).toMatchObject({ effect: 'scanDropped' });
   });
 
-  test('every event matches the protocol fixture the app is tested with', async () => {
+  testOnPosix('every event matches the protocol fixture the app is tested with', async () => {
     const containersPath = join(fixtureRoot.homeDir, 'Library/Containers');
 
     // A place the scan cannot read, so the scan answers with a notice.

@@ -1,8 +1,9 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { DirectoryEntry } from '../../system/loadDirectoryEntries.js';
-import type { ExploreToolCommandRun } from '../exploreProbe.js';
+import type { ExploreProbePlatform, ExploreToolCommandRun } from '../exploreProbe.js';
 import type { ExploreFileUnreadable, ExploreProbeFailure } from '../exploreUnit.js';
 import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import { loadProbeOutput } from '../loadProbeOutput.js';
@@ -37,7 +38,7 @@ export type HomebrewOrphan = {
  * The first failed command or failed rack read ends it.
  */
 export async function loadHomebrewState(
-  run: ExploreToolCommandRun,
+  run: ExploreToolCommandRun & { platform: ExploreProbePlatform },
 ): Promise<Result<HomebrewState, ExploreProbeFailure>> {
   const cellarPath = await loadProbeOutput({
     ...run,
@@ -80,8 +81,10 @@ export async function loadHomebrewState(
   }
 
   const orphans = await loadHomebrewOrphans({
+    pathRules: run.environment.pathRules,
     cellarPath: cellarPath.value,
     formulae: orphanFormulae.value,
+    privacyDenialCode: run.platform.privacyDenialCode,
   });
 
   if (orphans.kind === 'failed') {
@@ -96,12 +99,19 @@ export async function loadHomebrewState(
 
 /** The rack of each formula as an orphan, in the order of `params.formulae`; a failed read fails. */
 async function loadHomebrewOrphans(params: {
+  pathRules: PathRules;
   cellarPath: AbsolutePath;
   formulae: HomebrewFormulaName[];
+  privacyDenialCode: string | null;
 }): Promise<Result<HomebrewOrphan[], ExploreFileUnreadable>> {
   const orphanReads = await Promise.all(
     params.formulae.map((formula) =>
-      loadHomebrewOrphan({ cellarPath: params.cellarPath, formula: formula }),
+      loadHomebrewOrphan({
+        pathRules: params.pathRules,
+        cellarPath: params.cellarPath,
+        formula: formula,
+        privacyDenialCode: params.privacyDenialCode,
+      }),
     ),
   );
 
@@ -109,11 +119,20 @@ async function loadHomebrewOrphans(params: {
 }
 
 async function loadHomebrewOrphan(params: {
+  pathRules: PathRules;
   cellarPath: AbsolutePath;
   formula: HomebrewFormulaName;
+  privacyDenialCode: string | null;
 }): Promise<Result<HomebrewOrphan, ExploreFileUnreadable>> {
-  const rackPath = joinAbsolutePath({ parentPath: params.cellarPath, names: [params.formula] });
-  const rack = await loadExploreDirectoryEntries({ path: rackPath });
+  const rackPath = joinAbsolutePath({
+    rules: params.pathRules,
+    parentPath: params.cellarPath,
+    names: [params.formula],
+  });
+  const rack = await loadExploreDirectoryEntries({
+    path: rackPath,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (rack.kind === 'failed') {
     return rack;

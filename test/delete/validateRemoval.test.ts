@@ -1,22 +1,21 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
-import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
+import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 
-const ENVIRONMENT = buildEnvironment({
-  platform: 'darwin',
+const ENVIRONMENT = buildDarwinEnvironment({
   nowMs: 0,
-  userId: 501,
+  user: buildTestUserIdentity({ uid: 501 }),
   homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
-  homeRealPath: '/Users/tester',
-  tempDir: '/var/folders/xy/abc/T',
-  tempRealPath: '/private/var/folders/xy/abc/T',
-  applicationDirs: ['/Applications'],
-  applicationRealPaths: ['/Applications'],
-  homebrewPrefixPaths: [],
+  homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
+  tempDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/T' }),
+  tempRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/T' }),
+  applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
+  applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
 });
 
 function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
@@ -30,7 +29,7 @@ function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
   });
 }
 
-describe('validateRemoval', () => {
+describeAwaitingWin32Platform('validateRemoval', () => {
   test('approves files and folders strictly inside an allowed root', () => {
     expect(validate({ path: '/Users/tester/Library/Caches/com.example.app' }).kind).toBe(
       'approved',

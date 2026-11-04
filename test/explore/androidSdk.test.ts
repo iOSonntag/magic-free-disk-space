@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -26,7 +26,9 @@ import type {
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -35,6 +37,8 @@ import {
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -70,6 +74,18 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
+/** The load of the Android state below the fixture home, at the SDK root of macOS. */
+function buildStateLoad(): Parameters<typeof loadAndroidSdkState>[0] {
+  const platform = buildTestProbePlatform();
+
+  return {
+    pathRules: DARWIN_PATH_RULES,
+    homeDir: homeDir,
+    androidSdkRoot: platform.explore.androidSdkRoot,
+    privacyDenialCode: platform.privacyDenialCode,
+  };
+}
+
 type AndroidProbeAnswers = {
   avds: ExploreProbeFindings;
   systemImages: ExploreProbeFindings;
@@ -81,6 +97,7 @@ async function loadAndroidProbeAnswers(
 ): Promise<AndroidProbeAnswers> {
   const run = {
     environment: environment,
+    platform: buildTestProbePlatform(),
     processCommands: processCommands,
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
@@ -104,6 +121,7 @@ function buildRecheckRun(processCommands: string[] | null) {
   return {
     tool: tool,
     environment: environment,
+    platform: buildTestProbePlatform(),
     deadlineMs: Date.now() + 10_000,
     processCommands: processCommands,
   };
@@ -125,7 +143,7 @@ function takeFirstUnit<TUnit extends ExploreFinding['unit']>(
 }
 
 async function loadFreshState() {
-  const state = await loadAndroidSdkState({ homeDir: homeDir });
+  const state = await loadAndroidSdkState(buildStateLoad());
 
   if (state.kind === 'failed') {
     throw new Error('The Android state should load.');
@@ -134,7 +152,7 @@ async function loadFreshState() {
   return state.value;
 }
 
-describe('parseAndroidIniText and parseAndroidPackagePath', () => {
+describeAwaitingWin32Platform('parseAndroidIniText and parseAndroidPackagePath', () => {
   test('reads keys with and without spaces around the equals sign', () => {
     const values = parseAndroidIniText({ text: 'path=/a/b.avd\nhw.cpu.arch = arm64\nno line\n' });
 
@@ -155,7 +173,7 @@ describe('parseAndroidIniText and parseAndroidPackagePath', () => {
   });
 });
 
-describe('the Android probes without an SDK', () => {
+describeAwaitingWin32Platform('the Android probes without an SDK', () => {
   test('judge nothing to offer without the SDK and without ~/.android/avd', async () => {
     expect(await loadAndroidProbeAnswers()).toEqual({
       avds: JUDGED_EMPTY,
@@ -180,7 +198,7 @@ describe('the Android probes without an SDK', () => {
   });
 });
 
-describe('the Android probes with an SDK', () => {
+describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   test('without ~/.android/avd judge the AVDs empty and hold back images and the emulator', async () => {
     await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
     await writeAndroidEmulator({ homeDir: homeDir });
@@ -485,7 +503,7 @@ describe('the Android probes with an SDK', () => {
     expect((await loadAndroidProbeAnswers()).avds).toEqual(NOT_JUDGED);
   });
 
-  test('fail with fileUnreadable on a denied read, naming the file', async () => {
+  testOnPosix('fail with fileUnreadable on a denied read, naming the file', async () => {
     await writeAndroidEmulator({ homeDir: homeDir });
     const avd = await writeAndroidAvd({
       homeDir: homeDir,
@@ -495,7 +513,7 @@ describe('the Android probes with an SDK', () => {
     });
     await chmod(avd.iniPath, 0o000);
 
-    expect(await loadAndroidSdkState({ homeDir: homeDir })).toEqual({
+    expect(await loadAndroidSdkState(buildStateLoad())).toEqual({
       kind: 'failed',
       failure: {
         reason: 'fileUnreadable',
@@ -506,6 +524,7 @@ describe('the Android probes with an SDK', () => {
     expect(
       await loadAndroidSystemImageFindings({
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
         deadlineMs: Date.now() + 10_000,
         unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
@@ -514,7 +533,7 @@ describe('the Android probes with an SDK', () => {
   });
 });
 
-describe('compareAndroidAvdUnit', () => {
+describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
   function buildAvdUnit(): ExploreToolUnitAndroidAvd {
     return {
       kind: 'androidAvd',
@@ -669,7 +688,7 @@ describe('compareAndroidAvdUnit', () => {
   });
 });
 
-describe('recheckAndroidAvdUnit', () => {
+describeAwaitingWin32Platform('recheckAndroidAvdUnit', () => {
   async function createOfferedAvd(): Promise<ExploreToolUnitAndroidAvd> {
     await writeAndroidEmulator({ homeDir: homeDir });
     await writeAndroidAvd({
@@ -700,7 +719,7 @@ describe('recheckAndroidAvdUnit', () => {
     }
   });
 
-  test('fails with fileUnreadable on a denied read', async () => {
+  testOnPosix('fails with fileUnreadable on a denied read', async () => {
     const unit = await createOfferedAvd();
     await chmod(unit.iniPath, 0o000);
 
@@ -711,7 +730,7 @@ describe('recheckAndroidAvdUnit', () => {
   });
 });
 
-describe('compareAndroidPathUnit', () => {
+describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
   async function createOfferedPackages(): Promise<{
     image: ExplorePathUnitAndroidSystemImage;
     emulator: ExplorePathUnitAndroidEmulator;

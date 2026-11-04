@@ -1,15 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadRealPath } from '../../src/system/loadRealPath.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
-describe('loadRealPath', () => {
+describeAwaitingWin32Platform('loadRealPath', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -20,7 +22,7 @@ describe('loadRealPath', () => {
     await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
-  test('resolves a link to the folder it points to', async () => {
+  testOnPosix('resolves a link to the folder it points to', async () => {
     const folderPath = join(fixtureRoot.homeDir, 'folder');
     const linkPath = join(fixtureRoot.homeDir, 'link');
     await createFixtureDirectory({ path: folderPath });
@@ -37,7 +39,7 @@ describe('loadRealPath', () => {
     expect(resolved).toBeNull();
   });
 
-  test('returns null for a dangling link', async () => {
+  testOnPosix('returns null for a dangling link', async () => {
     const linkPath = join(fixtureRoot.homeDir, 'dangling');
     await symlink(join(fixtureRoot.homeDir, 'missing'), linkPath);
 

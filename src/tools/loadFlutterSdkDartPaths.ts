@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import { loadFileText } from '../system/loadFileText.js';
@@ -23,14 +24,20 @@ const ACTIVE_ROOTS_PATH = '.pub-cache/active_roots';
  * `<project>/.dart_tool/package_config.json` that `loadPackageConfigTracking` finds untracked.
  * Anything unreadable or malformed is skipped.
  */
-export async function loadFlutterSdkDartPaths(params: { homeDir: string }): Promise<string[]> {
+export async function loadFlutterSdkDartPaths(params: {
+  pathRules: PathRules;
+  homeDir: string;
+}): Promise<string[]> {
   const activeRootFiles = await loadActiveRootFiles({
     activeRootsDir: join(params.homeDir, ACTIVE_ROOTS_PATH),
   });
   const flutterRoots: string[] = [];
 
   for (const activeRootFile of activeRootFiles) {
-    const flutterRoot = await loadFlutterRoot({ activeRootFile: activeRootFile });
+    const flutterRoot = await loadFlutterRoot({
+      pathRules: params.pathRules,
+      activeRootFile: activeRootFile,
+    });
 
     if (flutterRoot !== null && !flutterRoots.includes(flutterRoot)) {
       flutterRoots.push(flutterRoot);
@@ -45,14 +52,17 @@ export async function loadFlutterSdkDartPaths(params: { homeDir: string }): Prom
  * equal to nor inside the other.
  */
 export function isFlutterRootApartFromProject(params: {
+  pathRules: PathRules;
   flutterRoot: string;
   projectRoot: string;
 }): boolean {
   const flutterRootInProject = isSameOrInsidePath({
+    rules: params.pathRules,
     path: params.flutterRoot,
     parentPath: params.projectRoot,
   });
   const projectInFlutterRoot = isSameOrInsidePath({
+    rules: params.pathRules,
     path: params.projectRoot,
     parentPath: params.flutterRoot,
   });
@@ -99,7 +109,10 @@ async function loadActiveRootFiles(params: { activeRootsDir: string }): Promise<
   return files;
 }
 
-async function loadFlutterRoot(params: { activeRootFile: string }): Promise<string | null> {
+async function loadFlutterRoot(params: {
+  pathRules: PathRules;
+  activeRootFile: string;
+}): Promise<string | null> {
   const activeRootText = await loadFileText({
     path: params.activeRootFile,
     maxBytes: TOOL_FILE_MAX_BYTES,
@@ -131,6 +144,7 @@ async function loadFlutterRoot(params: { activeRootFile: string }): Promise<stri
   }
 
   const accepted = await isFlutterRootAccepted({
+    pathRules: params.pathRules,
     flutterRoot: flutterRoot,
     projectRoot: dirname(dirname(packageConfigPath)),
     packageConfigPath: packageConfigPath,
@@ -149,6 +163,7 @@ async function loadFlutterRoot(params: { activeRootFile: string }): Promise<stri
  * that `loadPackageConfigTracking` finds untracked.
  */
 async function isFlutterRootAccepted(params: {
+  pathRules: PathRules;
   flutterRoot: string;
   projectRoot: string;
   packageConfigPath: string;
@@ -162,6 +177,7 @@ async function isFlutterRootAccepted(params: {
   }
 
   const apart = isFlutterRootApartFromProject({
+    pathRules: params.pathRules,
     flutterRoot: flutterRealPath,
     projectRoot: projectRealPath,
   });

@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { formatUsage } from '../../src/report/formatUsage.js';
 
 describe('formatUsage', () => {
   test('lists the usage, the options with their defaults, and the exit codes', () => {
-    expect(formatUsage().join('\n')).toBe(`Usage: bun start [options]
+    expect(
+      formatUsage({
+        texts: darwinPlatform.report,
+        processEndSignals: darwinPlatform.tools.processEndSignals,
+      }).join('\n'),
+    ).toBe(`Usage: bun start [options]
 Finds storage leftovers on this Mac and permanently deletes the ones you select.
 
 Options:

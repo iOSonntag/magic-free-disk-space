@@ -1,7 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, lutimes, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -10,6 +12,7 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -28,7 +31,7 @@ async function updateModifiedMsInOrder(params: {
   }
 }
 
-describe('loadTreeActivity', () => {
+describeAwaitingWin32Platform('loadTreeActivity', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -60,6 +63,7 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('quiet');
@@ -86,6 +90,7 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('recent');
@@ -112,6 +117,7 @@ describe('loadTreeActivity', () => {
       excludedNames: ['node_modules'],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
     const includedActivity = await loadTreeActivity({
       path: homeDir,
@@ -119,10 +125,38 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(excludedActivity).toBe('quiet');
     expect(includedActivity).toBe('recent');
+  });
+
+  test('skips a folder the eviction predicate marks as evicted', async () => {
+    const homeDir = fixtureRoot.homeDir;
+    const evictedDirPath = join(homeDir, 'a', 'b', 'c');
+
+    await createFixtureDirectory({ path: evictedDirPath });
+    await createFixtureFile({
+      path: join(evictedDirPath, 'new.txt'),
+      sizeBytes: 10,
+      modifiedMs: probeTimes.recentModifiedMs,
+    });
+    await updateModifiedMsInOrder({
+      paths: [evictedDirPath, join(homeDir, 'a', 'b'), join(homeDir, 'a'), homeDir],
+      modifiedMs: probeTimes.oldModifiedMs,
+    });
+
+    const activity = await loadTreeActivity({
+      path: homeDir,
+      cutoffMs: probeTimes.cutoffMs,
+      excludedNames: [],
+      maxEntries: 10_000,
+      deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: (entry) => entry.path === evictedDirPath,
+    });
+
+    expect(activity).toBe('quiet');
   });
 
   test('reports recent for a new file in the root folder', async () => {
@@ -146,6 +180,7 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('recent');
@@ -167,6 +202,7 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('recent');
@@ -190,6 +226,7 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 2,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');
@@ -216,12 +253,13 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: 0,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');
   });
 
-  test('reports unknown for an unreadable subfolder when nothing is recent', async () => {
+  testOnPosix('reports unknown for an unreadable subfolder when nothing is recent', async () => {
     const homeDir = fixtureRoot.homeDir;
     const lockedDirPath = join(homeDir, 'locked');
 
@@ -243,12 +281,13 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');
   });
 
-  test('does not follow a symbolic link to a recent folder', async () => {
+  testOnPosix('does not follow a symbolic link to a recent folder', async () => {
     const homeDir = fixtureRoot.homeDir;
     const elsewhereDirPath = join(fixtureRoot.tempDir, 'elsewhere');
     const linkPath = join(homeDir, 'link');
@@ -269,6 +308,7 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('quiet');
@@ -281,6 +321,7 @@ describe('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');

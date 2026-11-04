@@ -1,9 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, link, mkdir, realpath, symlink, truncate, unlink } from 'node:fs/promises';
+import {
+  chmod,
+  link,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  truncate,
+  unlink,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
 import { PACKAGE_CONFIG_CANDIDATES_MAX_COUNT } from '../../src/tools/decidePackageConfigTracking.js';
 import { loadPackageConfigTracking } from '../../src/tools/loadPackageConfigTracking.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 import {
@@ -13,6 +25,7 @@ import {
   createGitIndex,
   createUntrackedProjectRepository,
 } from '../support/flutterSdkFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const PACKAGE_CONFIG_PATH = '.dart_tool/package_config.json';
 
@@ -37,14 +50,14 @@ async function createDartTool(projectRoot: string): Promise<string> {
 
 /** Whether the volume of the fixtures answers a folder for a case variant of its name. */
 async function probeVolumeFoldsCase(): Promise<boolean> {
-  const probeRoot = await createFixtureRoot();
+  const probeDir = await mkdtemp(join(tmpdir(), 'magic-free-disk-space-case-probe-'));
 
   try {
-    await mkdir(join(probeRoot.rootDir, 'Probe'));
+    await mkdir(join(probeDir, 'Probe'));
 
-    return await isPresent(join(probeRoot.rootDir, 'probe'));
+    return await isPresent(join(probeDir, 'probe'));
   } finally {
-    await deleteFixtureRoot({ fixtureRoot: probeRoot });
+    await rm(probeDir, { recursive: true, force: true });
   }
 }
 
@@ -73,7 +86,7 @@ async function createUntrackedProject(projectRoot: string): Promise<string> {
   return await createDartTool(projectRoot);
 }
 
-describe('loadPackageConfigTracking', () => {
+describeAwaitingWin32Platform('loadPackageConfigTracking', () => {
   test('returns untracked for a repository whose index does not name the package config', async () => {
     const dartToolPath = await createUntrackedProject(join(fixtureRoot.rootDir, 'app'));
 
@@ -154,7 +167,7 @@ describe('loadPackageConfigTracking', () => {
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
   });
 
-  test('returns unknown for a .git that is a link', async () => {
+  testOnPosix('returns unknown for a .git that is a link', async () => {
     const projectRoot = join(fixtureRoot.rootDir, 'app');
     const targetRoot = join(fixtureRoot.rootDir, 'target');
 
@@ -204,21 +217,24 @@ describe('loadPackageConfigTracking', () => {
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
   });
 
-  test('returns tracked for an entry through a tracked folder link to the project', async () => {
-    const repoRoot = join(fixtureRoot.rootDir, 'repo');
+  testOnPosix(
+    'returns tracked for an entry through a tracked folder link to the project',
+    async () => {
+      const repoRoot = join(fixtureRoot.rootDir, 'repo');
 
-    await createGitIndex({
-      gitDir: join(repoRoot, '.git'),
-      version: 2,
-      paths: ['app/pubspec.yaml', 'link', `link/${PACKAGE_CONFIG_PATH}`],
-    });
-    const dartToolPath = await createDartTool(join(repoRoot, 'app'));
-    await symlink('app', join(repoRoot, 'link'));
+      await createGitIndex({
+        gitDir: join(repoRoot, '.git'),
+        version: 2,
+        paths: ['app/pubspec.yaml', 'link', `link/${PACKAGE_CONFIG_PATH}`],
+      });
+      const dartToolPath = await createDartTool(join(repoRoot, 'app'));
+      await symlink('app', join(repoRoot, 'link'));
 
-    expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
-  });
+      expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('tracked');
+    },
+  );
 
-  test('returns unknown for a candidate entry whose stats are denied', async () => {
+  testOnPosix('returns unknown for a candidate entry whose stats are denied', async () => {
     const repoRoot = join(fixtureRoot.rootDir, 'repo');
     const lockedRoot = join(repoRoot, 'locked');
 
@@ -420,7 +436,7 @@ describe('loadPackageConfigTracking', () => {
     expect(await loadPackageConfigTracking({ dartToolRealPath: dartToolPath })).toBe('unknown');
   });
 
-  test('returns unknown for a marker in a folder whose listing cannot be read', async () => {
+  testOnPosix('returns unknown for a marker in a folder whose listing cannot be read', async () => {
     const lockedRoot = join(fixtureRoot.rootDir, 'locked');
 
     await mkdir(join(lockedRoot, '.hg'), { recursive: true });

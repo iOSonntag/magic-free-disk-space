@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadDirectoryNames } from '../../src/system/loadDirectoryNames.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -9,10 +10,11 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const fixtureModifiedMs = Date.UTC(2024, 0, 15, 12, 0, 0);
 
-describe('loadDirectoryNames', () => {
+describeAwaitingWin32Platform('loadDirectoryNames', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -62,7 +64,7 @@ describe('loadDirectoryNames', () => {
     });
   });
 
-  test('fails with permissionDenied when the folder cannot be read', async () => {
+  testOnPosix('fails with permissionDenied when the folder cannot be read', async () => {
     const lockedFolderPath = join(fixtureRoot.homeDir, 'locked');
     await createFixtureDirectory({ path: lockedFolderPath });
     await chmod(lockedFolderPath, 0o000);

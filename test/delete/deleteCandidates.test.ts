@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { RemovalOutcomeKind, RemovalRun } from '../../src/delete/deleteCandidates.js';
@@ -14,10 +14,11 @@ import type {
   ExploreToolUnit,
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
-import { createUnitRunFakeTool } from '../explore/probeFakeTools.js';
+import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDeviceDataPath,
   buildMisePrunableJson,
@@ -37,6 +38,7 @@ import {
   VSCODE_APP_COMMAND,
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
@@ -50,11 +52,20 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
 
 const SIMULATOR_APP_COMMAND =
   '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator';
+
+/** The macOS slices a deletion reads, with the probe facts of the tests. */
+const DELETION_PLATFORM = {
+  delete: darwinPlatform.delete,
+  probePlatform: buildTestProbePlatform(),
+  isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+};
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -240,9 +251,9 @@ async function createSimulatorCandidate(): Promise<Candidate> {
         exitCode: 0,
       },
     ],
-    commandBody: `touch '${markerPath}'
-rm -r '${dataPath}'
-exit 0`,
+    commandBody: `fs.writeFileSync(${JSON.stringify(markerPath)}, '');
+${buildRemoveFolderBody(dataPath)}
+process.exit(0);`,
   });
 
   return {
@@ -265,6 +276,7 @@ async function measureAllocatedBytes(candidate: Candidate): Promise<number> {
   const measurement = await loadUnitMeasurement({
     unit: readToolUnit(candidate),
     deadlineMs: Date.now() + 60_000,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
   });
 
   return measurement.allocatedBytes;
@@ -281,7 +293,7 @@ function buildExpectedToolIntent(params: { candidate: Candidate; version: string
   };
 }
 
-describe('deleteCandidates', () => {
+describeAwaitingWin32Platform('deleteCandidates', () => {
   test('deletes exactly the given items and records intent before outcome', async () => {
     const selected = await createCacheFolder('selected');
     const sibling = await createCacheFolder('sibling');
@@ -292,6 +304,7 @@ describe('deleteCandidates', () => {
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
     const journalLines = await loadJournalLines(journal);
@@ -311,28 +324,32 @@ describe('deleteCandidates', () => {
     ]);
   });
 
-  test('removes a symbolic link inside a deleted folder without touching its target', async () => {
-    const selected = await createCacheFolder('with-link');
-    const keptFolder = join(fixtureRoot.homeDir, 'Documents/important');
-    const keptFile = join(keptFolder, 'thesis.txt');
+  testOnPosix(
+    'removes a symbolic link inside a deleted folder without touching its target',
+    async () => {
+      const selected = await createCacheFolder('with-link');
+      const keptFolder = join(fixtureRoot.homeDir, 'Documents/important');
+      const keptFile = join(keptFolder, 'thesis.txt');
 
-    await mkdir(keptFolder, { recursive: true });
-    await createFixtureFile({ path: keptFile, sizeBytes: 100, modifiedMs: NOW_MS });
-    await symlink(keptFolder, join(selected, 'link-to-folder'));
-    await symlink(keptFile, join(selected, 'link-to-file'));
+      await mkdir(keptFolder, { recursive: true });
+      await createFixtureFile({ path: keptFile, sizeBytes: 100, modifiedMs: NOW_MS });
+      await symlink(keptFolder, join(selected, 'link-to-folder'));
+      await symlink(keptFile, join(selected, 'link-to-file'));
 
-    const run = await deleteCandidates({
-      candidates: [await scanCandidate(selected)],
-      journal: await createTestJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
-      environment: environment,
-      clock: () => NOW_MS,
-    });
+      const run = await deleteCandidates({
+        candidates: [await scanCandidate(selected)],
+        journal: await createTestJournal(),
+        loadProcessCommands: buildProcessCommandsLoader([]),
+        environment: environment,
+        ...DELETION_PLATFORM,
+        clock: () => NOW_MS,
+      });
 
-    expect(run.outcomes[0]?.outcome).toBe('removed');
-    expect(await isPresent(selected)).toBe(false);
-    expect(await readFile(keptFile, 'utf8')).toHaveLength(100);
-  });
+      expect(run.outcomes[0]?.outcome).toBe('removed');
+      expect(await isPresent(selected)).toBe(false);
+      expect(await readFile(keptFile, 'utf8')).toHaveLength(100);
+    },
+  );
 
   test('leaves a folder alone that was replaced after the scan', async () => {
     const selected = await createCacheFolder('replaced');
@@ -346,6 +363,7 @@ describe('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -353,26 +371,30 @@ describe('deleteCandidates', () => {
     expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
   });
 
-  test('leaves a symbolic link alone that took the place of the scanned folder', async () => {
-    const selected = await createCacheFolder('swapped');
-    const target = await createCacheFolder('target');
-    const scanned = await scanCandidate(selected);
+  testOnPosix(
+    'leaves a symbolic link alone that took the place of the scanned folder',
+    async () => {
+      const selected = await createCacheFolder('swapped');
+      const target = await createCacheFolder('target');
+      const scanned = await scanCandidate(selected);
 
-    await rm(selected, { recursive: true });
-    await symlink(target, selected);
+      await rm(selected, { recursive: true });
+      await symlink(target, selected);
 
-    const run = await deleteCandidates({
-      candidates: [scanned],
-      journal: await createTestJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
-      environment: environment,
-      clock: () => NOW_MS,
-    });
+      const run = await deleteCandidates({
+        candidates: [scanned],
+        journal: await createTestJournal(),
+        loadProcessCommands: buildProcessCommandsLoader([]),
+        environment: environment,
+        ...DELETION_PLATFORM,
+        clock: () => NOW_MS,
+      });
 
-    expect(run.outcomes[0]?.outcome).toBe('changedSinceScan');
-    expect(await isPresent(selected)).toBe(true);
-    expect(await isPresent(join(target, 'nested/blob.bin'))).toBe(true);
-  });
+      expect(run.outcomes[0]?.outcome).toBe('changedSinceScan');
+      expect(await isPresent(selected)).toBe(true);
+      expect(await isPresent(join(target, 'nested/blob.bin'))).toBe(true);
+    },
+  );
 
   test('reports an item that vanished as already gone and goes on', async () => {
     const vanished = await createCacheFolder('vanished');
@@ -386,13 +408,14 @@ describe('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
     expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual(['alreadyGone', 'removed']);
   });
 
-  test('reports a permission denial, keeps the file, and goes on', async () => {
+  testOnPosix('reports a permission denial, keeps the file, and goes on', async () => {
     const lockedFolder = join(fixtureRoot.homeDir, 'Downloads');
     const lockedFile = join(lockedFolder, 'locked.bin');
     const next = await createCacheFolder('after-locked');
@@ -409,6 +432,7 @@ describe('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -417,7 +441,7 @@ describe('deleteCandidates', () => {
     expect(await isPresent(lockedFile)).toBe(true);
   });
 
-  test('deletes nothing when the intent cannot be recorded', async () => {
+  testOnPosix('deletes nothing when the intent cannot be recorded', async () => {
     const first = await createCacheFolder('first');
     const second = await createCacheFolder('second');
     const journal = await createTestJournal();
@@ -430,6 +454,7 @@ describe('deleteCandidates', () => {
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -453,6 +478,7 @@ describe('deleteCandidates', () => {
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -477,6 +503,7 @@ describe('deleteCandidates', () => {
         '/Applications/Example.app/Contents/MacOS/Example',
       ]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -497,6 +524,7 @@ describe('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader(null),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -516,6 +544,7 @@ describe('deleteCandidates', () => {
       candidates: [toolCandidate, await scanCandidate(pathItem)],
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -550,6 +579,7 @@ describe('deleteCandidates', () => {
       candidates: [buildTestDartToolCandidate({ homeDir: fixtureRoot.homeDir })],
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -565,6 +595,7 @@ describe('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -572,13 +603,13 @@ describe('deleteCandidates', () => {
   });
 });
 
-describe('deleteCandidates with a tool item', () => {
+describeAwaitingWin32Platform('deleteCandidates with a tool item', () => {
   test('records the intent and then the outcome of a completed run', async () => {
     const candidate = await createToolCandidate({
       version: '20.1.0',
-      buildCommandBody: (installPath) => `rm -r '${installPath}'
-echo 'uninstalled node@20.1.0' >&2
-exit 0`,
+      buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
+fs.writeSync(2, 'uninstalled node@20.1.0\\n');
+process.exit(0);`,
     });
     const allocatedBytes = await measureAllocatedBytes(candidate);
     const journal = await createTestJournal();
@@ -587,6 +618,7 @@ exit 0`,
       candidates: [candidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -622,8 +654,8 @@ exit 0`,
   test('records the intent and then the skip of a unit that changed since the scan', async () => {
     const candidate = await createToolCandidate({
       version: '18.0.0',
-      buildCommandBody: (installPath) => `rm -r '${installPath}'
-exit 0`,
+      buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
+process.exit(0);`,
     });
     const journal = await createTestJournal();
 
@@ -631,6 +663,7 @@ exit 0`,
       candidates: [candidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -657,8 +690,8 @@ exit 0`,
   test('records the intent and then the failure of a command that exited non-zero', async () => {
     const candidate = await createToolCandidate({
       version: '20.1.0',
-      buildCommandBody: () => `echo 'node@20.1.0 is in use' >&2
-exit 1`,
+      buildCommandBody: () => `fs.writeSync(2, 'node@20.1.0 is in use\\n');
+process.exit(1);`,
     });
     const journal = await createTestJournal();
     const failure = {
@@ -670,6 +703,7 @@ exit 1`,
       candidates: [candidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -707,8 +741,8 @@ exit 1`,
 
     const toolCandidate = await createToolCandidate({
       version: '20.1.0',
-      buildCommandBody: (installPath) => `rm -r '${installPath}'
-exit 0`,
+      buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
+process.exit(0);`,
     });
     const toolAllocatedBytes = await measureAllocatedBytes(toolCandidate);
     const journal = await createTestJournal();
@@ -717,6 +751,7 @@ exit 0`,
       candidates: [await scanCandidate(pathItem), toolCandidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -756,6 +791,7 @@ exit 0`,
       candidates: [await scanCandidate(pathItem), simulatorCandidate],
       journal: await createTestJournal(),
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: async () => {
         readCount += 1;
 
@@ -772,7 +808,7 @@ exit 0`,
   });
 });
 
-describe('deleteCandidates with a VS Code extension folder', () => {
+describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder', () => {
   /** The obsolete folder of the fixture installation, scanned with the identity it has. */
   async function scanVscodeCandidate(): Promise<Candidate> {
     await createVscodeInstallation({ homeDir: environment.homeDir });
@@ -797,6 +833,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
       journal: await createTestJournal(),
       loadProcessCommands: params.loadProcessCommands,
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
   }
@@ -809,6 +846,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -886,28 +924,31 @@ describe('deleteCandidates with a VS Code extension folder', () => {
     expect(await isPresent(candidate.path)).toBe(true);
   });
 
-  test('reports a denied read of a registry as a permission denial and keeps the folder', async () => {
-    const candidate = await scanVscodeCandidate();
+  testOnPosix(
+    'reports a denied read of a registry as a permission denial and keeps the folder',
+    async () => {
+      const candidate = await scanVscodeCandidate();
 
-    await chmod(
-      join(buildVscodeExtensionsPath({ homeDir: environment.homeDir }), 'extensions.json'),
-      0o000,
-    );
+      await chmod(
+        join(buildVscodeExtensionsPath({ homeDir: environment.homeDir }), 'extensions.json'),
+        0o000,
+      );
 
-    const run = await deleteVscodeCandidate({
-      candidate: candidate,
-      loadProcessCommands: buildProcessCommandsLoader([]),
-    });
+      const run = await deleteVscodeCandidate({
+        candidate: candidate,
+        loadProcessCommands: buildProcessCommandsLoader([]),
+      });
 
-    expect(run.outcomes[0]).toMatchObject({
-      outcome: 'permissionDenied',
-      code: 'EACCES',
-      freedBytes: 0,
-    });
-    expect(await isPresent(candidate.path)).toBe(true);
-  });
+      expect(run.outcomes[0]).toMatchObject({
+        outcome: 'permissionDenied',
+        code: 'EACCES',
+        freedBytes: 0,
+      });
+      expect(await isPresent(candidate.path)).toBe(true);
+    },
+  );
 
-  test('reports any other failed read of a registry as failed with its code', async () => {
+  testOnPosix('reports any other failed read of a registry as failed with its code', async () => {
     const candidate = await scanVscodeCandidate();
     const registryPath = join(
       buildVscodeExtensionsPath({ homeDir: environment.homeDir }),
@@ -945,7 +986,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
   });
 });
 
-describe('isUnremovedOutcome', () => {
+describeAwaitingWin32Platform('isUnremovedOutcome', () => {
   test('is true only for the outcomes that left their item through a failure', () => {
     const kinds: RemovalOutcomeKind[] = [
       'removed',
@@ -962,7 +1003,7 @@ describe('isUnremovedOutcome', () => {
   });
 });
 
-describe('toolCandidateRunToRemoval', () => {
+describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
   const TOOL_PATH = '/Users/tester/.local/share/mise/installs/node/20.1.0';
 
   test('a completed run is removed with its measured drop and the stderr tail', () => {

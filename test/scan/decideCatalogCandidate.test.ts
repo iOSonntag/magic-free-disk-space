@@ -1,10 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry, buildTestMeasurement } from '../support/candidateFixtures.js';
+import { buildTestCatalogOwner } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 const PATH = '/home/Library/Caches/com.example.app';
@@ -21,7 +23,7 @@ function decide(params: {
     path: PATH,
     measurement:
       params.measurement ?? buildTestMeasurement({ realPath: PATH, allocatedBytes: 5 * MIB }),
-    ownerBundleId: params.ownerBundleId ?? null,
+    owner: buildTestCatalogOwner({ bundleId: params.ownerBundleId ?? null }),
     ownerBundlePaths: ['/Applications/Example.app'],
     ownerState: params.ownerState ?? 'stopped',
     activity: params.activity === undefined ? null : params.activity,
@@ -29,7 +31,7 @@ function decide(params: {
   });
 }
 
-describe('decideCatalogCandidate', () => {
+describeAwaitingWin32Platform('decideCatalogCandidate', () => {
   test('offers a large entry with its catalog texts', () => {
     const decision = decide({});
 

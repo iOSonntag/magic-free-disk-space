@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadCommandOutput } from '../../src/system/loadCommandOutput.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 const infoPlistText = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
@@ -14,7 +15,7 @@ const infoPlistText = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `;
 
-describe('loadCommandOutput', () => {
+describeOnPosix('loadCommandOutput', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

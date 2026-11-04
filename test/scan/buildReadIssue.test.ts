@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildFailureIssues, buildReadIssue } from '../../src/scan/buildReadIssue.js';
 import { loadDirectoryNames } from '../../src/system/loadDirectoryNames.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
-describe('buildReadIssue', () => {
+describeAwaitingWin32Platform('buildReadIssue', () => {
   test('reports the path with the reason of the failure and its code as the detail', () => {
     expect(
       buildReadIssue({
@@ -27,12 +30,13 @@ describe('buildReadIssue', () => {
   });
 });
 
-describe('buildFailureIssues', () => {
+describeAwaitingWin32Platform('buildFailureIssues', () => {
   test('reports a denial by macOS privacy protection as privacyDenied', () => {
     expect(
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'permissionDenied', code: 'EPERM' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([
       { path: '/Users/example/Library/Containers', reason: 'privacyDenied', detail: 'EPERM' },
@@ -44,6 +48,7 @@ describe('buildFailureIssues', () => {
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'permissionDenied', code: 'EACCES' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([
       { path: '/Users/example/Library/Containers', reason: 'permissionDenied', detail: 'EACCES' },
@@ -55,12 +60,14 @@ describe('buildFailureIssues', () => {
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'missing', code: 'ENOENT' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([]);
     expect(
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'notDirectory', code: 'ENOTDIR' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([]);
   });
@@ -76,24 +83,31 @@ describe('buildFailureIssues', () => {
       await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
     });
 
-    test('keeps a folder without read permission as permissionDenied with its code', async () => {
-      const containersPath = join(fixtureRoot.homeDir, 'Library/Containers');
-      await mkdir(containersPath, { recursive: true });
-      await chmod(containersPath, 0o000);
+    testOnPosix(
+      'keeps a folder without read permission as permissionDenied with its code',
+      async () => {
+        const containersPath = join(fixtureRoot.homeDir, 'Library/Containers');
+        await mkdir(containersPath, { recursive: true });
+        await chmod(containersPath, 0o000);
 
-      try {
-        const names = await loadDirectoryNames({ path: containersPath });
+        try {
+          const names = await loadDirectoryNames({ path: containersPath });
 
-        if (names.kind !== 'failed') {
-          throw new Error('expected the listing of a folder with mode 000 to fail');
+          if (names.kind !== 'failed') {
+            throw new Error('expected the listing of a folder with mode 000 to fail');
+          }
+
+          expect(
+            buildFailureIssues({
+              path: containersPath,
+              failure: names.failure,
+              privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+            }),
+          ).toEqual([{ path: containersPath, reason: 'permissionDenied', detail: 'EACCES' }]);
+        } finally {
+          await chmod(containersPath, 0o755);
         }
-
-        expect(buildFailureIssues({ path: containersPath, failure: names.failure })).toEqual([
-          { path: containersPath, reason: 'permissionDenied', detail: 'EACCES' },
-        ]);
-      } finally {
-        await chmod(containersPath, 0o755);
-      }
-    });
+      },
+    );
   });
 });

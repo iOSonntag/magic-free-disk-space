@@ -1,6 +1,7 @@
 import { normalize } from 'node:path';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 
 /** A path `brew cleanup -n` would remove, with the size Homebrew gave it, such as `3 files, 1.2MB`. */
@@ -17,6 +18,7 @@ const REMOVAL_LINE_PATTERN = /^Would remove: (.+) \(([^()]+)\)$/;
  * lines, such as the closing `==> This operation would free…`, carry no path and are skipped.
  */
 export function parseHomebrewCleanupDryRun(params: {
+  pathRules: PathRules;
   stdoutText: string;
 }): Result<HomebrewCleanupRemoval[], string> {
   const removals: HomebrewCleanupRemoval[] = [];
@@ -26,7 +28,7 @@ export function parseHomebrewCleanupDryRun(params: {
       continue;
     }
 
-    const removal = parseHomebrewCleanupRemoval({ line: line });
+    const removal = parseHomebrewCleanupRemoval({ pathRules: params.pathRules, line: line });
 
     if (removal === null) {
       return { kind: 'failed', failure: 'a Would remove line has no absolute path or no size' };
@@ -38,7 +40,10 @@ export function parseHomebrewCleanupDryRun(params: {
   return { kind: 'succeeded', value: removals };
 }
 
-function parseHomebrewCleanupRemoval(params: { line: string }): HomebrewCleanupRemoval | null {
+function parseHomebrewCleanupRemoval(params: {
+  pathRules: PathRules;
+  line: string;
+}): HomebrewCleanupRemoval | null {
   const match = REMOVAL_LINE_PATTERN.exec(params.line);
   const pathText = match?.[1];
   const sizeText = match?.[2];
@@ -47,7 +52,7 @@ function parseHomebrewCleanupRemoval(params: { line: string }): HomebrewCleanupR
     return null;
   }
 
-  const path = parseAbsolutePath({ text: pathText });
+  const path = parseAbsolutePath({ rules: params.pathRules, text: pathText });
 
   if (path.kind === 'failed') {
     return null;

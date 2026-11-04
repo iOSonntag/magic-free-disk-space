@@ -1,19 +1,19 @@
-import { rm } from 'node:fs/promises';
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ExploreProbeFailure } from '../explore/exploreUnit.js';
 import { buildUnitRunArguments } from '../explore/exploreUnit.js';
 import { recheckExplorePathUnit } from '../explore/recheckExploreUnit.js';
-import type { Result } from '../result.js';
 import type {
   Candidate,
   CandidateRemovalDeletePath,
   CandidateRemovalDeleteUnitFolder,
 } from '../scan/candidate.js';
-import { getErrorCode } from '../system/getErrorCode.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import type { ReadFailure } from '../system/readFailure.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
+import type { DeletePlatform } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
 import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
@@ -86,6 +86,12 @@ export async function deleteCandidates(params: {
   candidates: Candidate[];
   journal: DeletionJournal;
   environment: Environment;
+  /** The delete slice, whose `removeTree` removes each path. */
+  delete: DeletePlatform;
+  /** What the rechecks of the units read by. */
+  probePlatform: ExploreProbePlatform;
+  /** The system slice's eviction check, for the measurements around a tool's run. */
+  isEntryEvicted: EntryEvictionCheck;
   loadProcessCommands: () => Promise<string[] | null>;
   clock: () => number;
 }): Promise<RemovalRun> {
@@ -110,6 +116,9 @@ export async function deleteCandidates(params: {
     const removal = await removeCandidate({
       candidate: candidate,
       environment: params.environment,
+      delete: params.delete,
+      probePlatform: params.probePlatform,
+      isEntryEvicted: params.isEntryEvicted,
       processCommands: processCommands,
       loadProcessCommands: params.loadProcessCommands,
       clock: params.clock,
@@ -158,6 +167,9 @@ function buildIntentEntry(params: { candidate: Candidate; atMs: number }): Journ
 async function removeCandidate(params: {
   candidate: Candidate;
   environment: Environment;
+  delete: DeletePlatform;
+  probePlatform: ExploreProbePlatform;
+  isEntryEvicted: EntryEvictionCheck;
   /** The processes read once before the run, for path items. */
   processCommands: string[] | null;
   loadProcessCommands: () => Promise<string[] | null>;
@@ -169,6 +181,7 @@ async function removeCandidate(params: {
         path: params.candidate.path,
         allocatedBytes: params.candidate.allocatedBytes,
         removal: params.candidate.removal,
+        delete: params.delete,
         processCommands: params.processCommands,
       });
 
@@ -179,6 +192,8 @@ async function removeCandidate(params: {
         allocatedBytes: params.candidate.allocatedBytes,
         removal: params.candidate.removal,
         environment: params.environment,
+        delete: params.delete,
+        probePlatform: params.probePlatform,
         loadProcessCommands: params.loadProcessCommands,
       });
 
@@ -188,6 +203,8 @@ async function removeCandidate(params: {
       const run = await runToolCandidate({
         unit: params.candidate.removal.unit,
         environment: params.environment,
+        probePlatform: params.probePlatform,
+        isEntryEvicted: params.isEntryEvicted,
         loadProcessCommands: params.loadProcessCommands,
         timeoutMs: TOOL_RUN_TIMEOUT_MS,
       });
@@ -289,6 +306,7 @@ async function deletePathCandidate(params: {
   path: string;
   allocatedBytes: number;
   removal: CandidateRemovalDeletePath;
+  delete: DeletePlatform;
   processCommands: string[] | null;
 }): Promise<RemovalOutcomeCoded> {
   if (
@@ -309,6 +327,7 @@ async function deletePathCandidate(params: {
     path: params.path,
     allocatedBytes: params.allocatedBytes,
     identity: params.removal.identity,
+    delete: params.delete,
   });
 }
 
@@ -320,12 +339,15 @@ async function deleteUnitFolderCandidate(params: {
   allocatedBytes: number;
   removal: CandidateRemovalDeleteUnitFolder;
   environment: Environment;
+  delete: DeletePlatform;
+  probePlatform: ExploreProbePlatform;
   loadProcessCommands: () => Promise<string[] | null>;
 }): Promise<RemovalOutcomeCoded> {
   const folderPath = params.removal.unit.folderPath;
   const recheck = await recheckExplorePathUnit({
     unit: params.removal.unit,
     environment: params.environment,
+    platform: params.probePlatform,
     processCommands: await params.loadProcessCommands(),
   });
 
@@ -356,6 +378,7 @@ async function deleteUnitFolderCandidate(params: {
         path: folderPath,
         allocatedBytes: params.allocatedBytes,
         identity: params.removal.identity,
+        delete: params.delete,
       });
   }
 }
@@ -376,6 +399,7 @@ async function deleteScannedPath(params: {
   path: string;
   allocatedBytes: number;
   identity: FileIdentity;
+  delete: DeletePlatform;
 }): Promise<RemovalOutcomeCoded> {
   const currentIdentity = await loadFileIdentity({ path: params.path });
 
@@ -415,7 +439,7 @@ async function deleteScannedPath(params: {
     });
   }
 
-  const removed = await removePath({ path: params.path });
+  const removed = await params.delete.removeTree({ path: params.path });
 
   if (removed.kind === 'succeeded') {
     return buildPathOutcome({
@@ -486,17 +510,6 @@ function isSameIdentity(params: { current: FileIdentity; scanned: FileIdentity }
     params.current.kind === params.scanned.kind &&
     params.current.realPath === params.scanned.realPath
   );
-}
-
-/** Removes the path recursively; a symbolic link inside is removed itself, never its target. */
-async function removePath(params: { path: string }): Promise<Result<null, string>> {
-  try {
-    await rm(params.path, { recursive: true });
-
-    return { kind: 'succeeded', value: null };
-  } catch (error) {
-    return { kind: 'failed', failure: getErrorCode(error) };
-  }
 }
 
 function buildNotAttemptedOutcomes(params: { candidates: Candidate[] }): RemovalOutcome[] {

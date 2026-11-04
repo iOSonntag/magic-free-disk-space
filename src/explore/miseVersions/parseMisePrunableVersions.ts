@@ -1,5 +1,6 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import type { ExploreProbeDefinition } from '../loadProbeOutput.js';
@@ -58,6 +59,7 @@ export function parseMiseToolVersion(params: { text: string }): Result<MiseToolV
 
 /** Parses the JSON of `mise ls --prunable --json`; fails with a reason on any other shape. */
 export function parseMisePrunableVersions(params: {
+  pathRules: PathRules;
   stdoutText: string;
 }): Result<MisePrunableVersion[], string> {
   const json = parseJsonValue({ text: params.stdoutText });
@@ -80,7 +82,11 @@ export function parseMisePrunableVersions(params: {
     }
 
     for (const value of toolVersions) {
-      const version = parseMisePrunableVersion({ value: value, miseToolName: miseToolName.value });
+      const version = parseMisePrunableVersion({
+        pathRules: params.pathRules,
+        value: value,
+        miseToolName: miseToolName.value,
+      });
 
       if (version === null) {
         return { kind: 'failed', failure: 'a version lacks a field or has a malformed one' };
@@ -94,6 +100,7 @@ export function parseMisePrunableVersions(params: {
 }
 
 function parseMisePrunableVersion(params: {
+  pathRules: PathRules;
   value: unknown;
   miseToolName: MiseToolName;
 }): MisePrunableVersion | null {
@@ -109,7 +116,7 @@ function parseMisePrunableVersion(params: {
   }
 
   const version = parseMiseToolVersion({ text: versionText });
-  const installPath = parseAbsolutePath({ text: installPathText });
+  const installPath = parseAbsolutePath({ rules: params.pathRules, text: installPathText });
 
   if (version.kind === 'failed' || installPath.kind === 'failed') {
     return null;

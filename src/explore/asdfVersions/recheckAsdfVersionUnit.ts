@@ -12,13 +12,20 @@ export async function recheckAsdfVersionUnit(params: {
   unit: ExploreToolUnitAsdfVersion;
   run: ExploreUnitRecheckRun;
 }): Promise<UnitRecheck> {
-  const state = await loadAsdfState({ homeDir: params.run.environment.homeDir });
+  const state = await loadAsdfState({
+    pathRules: params.run.environment.pathRules,
+    homeDir: params.run.environment.homeDir,
+    privacyDenialCode: params.run.platform.privacyDenialCode,
+  });
 
   if (state.kind === 'failed') {
     return state;
   }
 
-  const pinFiles = await loadProjectPinFiles({ files: params.unit.pinFiles });
+  const pinFiles = await loadProjectPinFiles({
+    files: params.unit.pinFiles,
+    privacyDenialCode: params.run.platform.privacyDenialCode,
+  });
   const toolPins = selectToolPins({ pins: pinFiles, kinds: ASDF_PIN_FILE_KINDS });
 
   if (toolPins.kind === 'failed') {

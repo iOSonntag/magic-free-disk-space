@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -12,12 +14,17 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 async function loadMeasurementOrThrow(params: {
   path: string;
   deadlineMs: number;
 }): Promise<Measurement> {
-  const result = await loadPathMeasurement(params);
+  const result = await loadPathMeasurement({
+    path: params.path,
+    deadlineMs: params.deadlineMs,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  });
 
   if (result.kind === 'failed') {
     throw new Error(`Measurement failed: ${result.failure.reason}`);
@@ -36,7 +43,7 @@ async function loadAllocatedBytes(params: { path: string }): Promise<number> {
   return statsResult.value.allocatedBytes;
 }
 
-describe('loadPathMeasurement', () => {
+describeAwaitingWin32Platform('loadPathMeasurement', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -142,7 +149,7 @@ describe('loadPathMeasurement', () => {
     expect(measurement.entryCount).toBe(3);
   });
 
-  test('does not add the size of a symbolic link target outside the folder', async () => {
+  testOnPosix('does not add the size of a symbolic link target outside the folder', async () => {
     const targetPath = join(fixtureRoot.tempDir, 'target.bin');
     const linkPath = join(fixtureRoot.homeDir, 'link.bin');
 
@@ -162,7 +169,7 @@ describe('loadPathMeasurement', () => {
     expect(measurement.allocatedBytes).toBeLessThan(targetBytes);
   });
 
-  test('reports an unreadable subfolder as incomplete', async () => {
+  testOnPosix('reports an unreadable subfolder as incomplete', async () => {
     const lockedDirPath = join(fixtureRoot.homeDir, 'Locked');
 
     await createFixtureDirectory({ path: lockedDirPath });
@@ -205,6 +212,7 @@ describe('loadPathMeasurement', () => {
     const result = await loadPathMeasurement({
       path: join(fixtureRoot.homeDir, 'missing'),
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(result).toEqual({ kind: 'failed', failure: { reason: 'missing', code: 'ENOENT' } });

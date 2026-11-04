@@ -1,22 +1,21 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import type { RemovalPlan } from '../../src/delete/planRemoval.js';
 import { planRemoval } from '../../src/delete/planRemoval.js';
-import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
+import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
 import type { Candidate } from '../../src/scan/candidate.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 
-const ENVIRONMENT = buildEnvironment({
-  platform: 'darwin',
+const ENVIRONMENT = buildDarwinEnvironment({
   nowMs: 0,
-  userId: 501,
+  user: buildTestUserIdentity({ uid: 501 }),
   homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
-  homeRealPath: '/Users/tester',
-  tempDir: '/private/tmp/tester',
-  tempRealPath: '/private/tmp/tester',
-  applicationDirs: ['/Applications'],
-  applicationRealPaths: ['/Applications'],
-  homebrewPrefixPaths: [],
+  homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
+  tempDir: buildTestAbsolutePath({ text: '/private/tmp/tester' }),
+  tempRealPath: buildTestAbsolutePath({ text: '/private/tmp/tester' }),
+  applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
+  applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
 });
 
 const VALID_CANDIDATES: Candidate[] = [1, 2, 3, 4, 5, 6].map((index) =>
@@ -69,7 +68,7 @@ function planInsideRanking(params: {
   return planned.value;
 }
 
-describe('planRemoval', () => {
+describeAwaitingWin32Platform('planRemoval', () => {
   test('approves exactly the selection, for every one of the 64 subsets of six items', () => {
     const selections = buildAllSelections(6);
 

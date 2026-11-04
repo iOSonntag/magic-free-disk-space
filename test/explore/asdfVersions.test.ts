@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -24,13 +24,12 @@ import type {
   ProjectPinFileRef,
   ProjectPinFileText,
 } from '../../src/explore/projectPins/projectPins.js';
-import {
-  PINNED_VERSION_REINSTALL_EXPLANATION,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { PINNED_VERSION_REINSTALL_EXPLANATION } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -43,6 +42,8 @@ import {
   buildTestAsdfToolName,
   buildTestAsdfToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildFoundProjectPinsLoad,
@@ -106,7 +107,7 @@ function buildOldVersionUnit(): ExploreToolUnitAsdfVersion {
   };
 }
 
-describe('parseAsdfToolName and parseAsdfToolVersion', () => {
+describeAwaitingWin32Platform('parseAsdfToolName and parseAsdfToolVersion', () => {
   test('accept the names asdf installs', () => {
     expect(parseAsdfToolName({ folderName: 'java' }).kind).toBe('succeeded');
     expect(parseAsdfToolVersion({ folderName: 'adoptopenjdk-17.0.1+12' })).toEqual({
@@ -123,7 +124,7 @@ describe('parseAsdfToolName and parseAsdfToolVersion', () => {
   });
 });
 
-describe('parseToolVersionsText', () => {
+describeAwaitingWin32Platform('parseToolVersionsText', () => {
   test('reads tool lines and skips comments, blank lines, and lines without a version', () => {
     const text = [
       '# the tools of this project',
@@ -141,7 +142,7 @@ describe('parseToolVersionsText', () => {
   });
 });
 
-describe('parseAsdfToolVersionsPins', () => {
+describeAwaitingWin32Platform('parseAsdfToolVersionsPins', () => {
   test('maps ref: to its folder and drops system and path:', () => {
     const file: ProjectPinFileText = {
       ...pinFileText,
@@ -156,7 +157,7 @@ describe('parseAsdfToolVersionsPins', () => {
   });
 });
 
-describe('isAsdfLegacyVersionFileOn', () => {
+describeAwaitingWin32Platform('isAsdfLegacyVersionFileOn', () => {
   test('reads the key with spaces and a comment', () => {
     expect(isAsdfLegacyVersionFileOn({ text: '  legacy_version_file =  yes  # on\n' })).toBe(true);
   });
@@ -219,7 +220,7 @@ describe('isAsdfLegacyVersionFileOn', () => {
   });
 });
 
-describe('decideAsdfVersionOffers', () => {
+describeAwaitingWin32Platform('decideAsdfVersionOffers', () => {
   test('offers each version no .tool-versions names', () => {
     const offers = decideAsdfVersionOffers({ state: buildInstalledState({}), toolPins: textPins });
 
@@ -299,7 +300,7 @@ describe('decideAsdfVersionOffers', () => {
   });
 });
 
-describe('buildAsdfVersionFindings', () => {
+describeAwaitingWin32Platform('buildAsdfVersionFindings', () => {
   test('builds a careful finding with its pin files and evidence', () => {
     const findings = buildAsdfVersionFindings({
       tool: tool,
@@ -307,6 +308,7 @@ describe('buildAsdfVersionFindings', () => {
       pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
       processCommands: [],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings).toEqual([
@@ -333,6 +335,7 @@ describe('buildAsdfVersionFindings', () => {
       pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [] }),
       processCommands: [`${oldFolder.folderPath}/bin/node server.js`],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings[0]?.activity).toBe('busy');
@@ -340,7 +343,7 @@ describe('buildAsdfVersionFindings', () => {
   });
 });
 
-describe('compareAsdfVersionUnit', () => {
+describeAwaitingWin32Platform('compareAsdfVersionUnit', () => {
   test('is unchanged while the version is still offered and idle', () => {
     expect(
       compareAsdfVersionUnit({
@@ -400,7 +403,7 @@ describe('compareAsdfVersionUnit', () => {
   });
 });
 
-describe('the asdf probe and recheck against a fixture home', () => {
+describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -449,6 +452,7 @@ describe('the asdf probe and recheck against a fixture home', () => {
   async function runAsdfProbe(params: { files: ProjectPinFile[]; asdfPath: string | null }) {
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(
         params.asdfPath === null ? {} : { asdf: params.asdfPath },
       ),
@@ -488,6 +492,7 @@ describe('the asdf probe and recheck against a fixture home', () => {
       run: {
         tool: params.unit.tool,
         environment: environment,
+        platform: buildTestProbePlatform(),
         deadlineMs: Date.now() + TIMEOUT_MS,
         processCommands: params.processCommands,
       },
@@ -527,7 +532,7 @@ describe('the asdf probe and recheck against a fixture home', () => {
     });
   });
 
-  test('a pin of a link in the tool folder pins the folder it points to', async () => {
+  testOnPosix('a pin of a link in the tool folder pins the folder it points to', async () => {
     await writeInstalls();
     await symlink('./18.0.0', buildInstallPath({ toolName: 'nodejs', version: 'lts' }));
     await symlink('/nowhere', buildInstallPath({ toolName: 'nodejs', version: 'gone' }));
@@ -664,7 +669,7 @@ describe('the asdf probe and recheck against a fixture home', () => {
     ).toEqual({ kind: 'busy' });
   });
 
-  test('the recheck fails when a pin file is unreadable', async () => {
+  testOnPosix('the recheck fails when a pin file is unreadable', async () => {
     const unit = await probeOfferedUnit();
     const pinPath = join(environment.homeDir, 'project', '.tool-versions');
 

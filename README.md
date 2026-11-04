@@ -253,12 +253,18 @@ Access pane, and the update banner's download link runs it with the release's pa
 ```sh
 bun test           # unit, filesystem, and end-to-end safety tests on temporary fixtures
 bun run typecheck
-bun run check      # Biome lint and format check
+bun run check      # Biome lint and format check, the module boundaries, and their baseline
 cd app && flutter analyze && flutter test   # the app
 ```
 
 Tests never touch your real home folder: each one builds its own folders in a temporary
 directory and removes them afterwards.
+
+Each folder of `src/` is a module whose `boundary.ts` declares the modules it imports and the files
+other modules may import. The specs in `test/architecture` fail an import the manifests do not
+allow, and a cycle between the manifests. `boundary-suppressions.json` freezes the violations kept
+for now; it may only shrink against the base of a change, `origin/main` unless
+`BASELINE_BASE_REF` names another.
 
 ### Releasing
 

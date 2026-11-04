@@ -1,5 +1,7 @@
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
-import type { EnvironmentFailure } from './loadEnvironment.js';
+import type { PathRules } from '../path/pathRules.js';
+import type { UserIdentity } from '../system/userIdentity.js';
+import type { EnvironmentFailure } from './environmentPlatform.js';
 
 /**
  * Returns why the resolved folders are unsafe to delete in, or `null`. The tool deletes as the
@@ -8,17 +10,20 @@ import type { EnvironmentFailure } from './loadEnvironment.js';
  * home or lies in it.
  */
 export function checkEnvironmentRoots(params: {
-  userId: number;
+  pathRules: PathRules;
+  user: UserIdentity;
   homeRealPath: string;
   homeOwnerId: number;
   tempRealPath: string;
 }): EnvironmentFailure | null {
-  if (params.userId === 0) {
-    return { reason: 'runAsRoot' };
-  }
+  const userFailure = checkDeletingUser({
+    user: params.user,
+    homeRealPath: params.homeRealPath,
+    homeOwnerId: params.homeOwnerId,
+  });
 
-  if (params.homeOwnerId !== params.userId) {
-    return { reason: 'homeNotOwned', path: params.homeRealPath };
+  if (userFailure !== null) {
+    return userFailure;
   }
 
   // Compared without case: macOS disks usually ignore it, and the looser match only refuses more.
@@ -26,11 +31,39 @@ export function checkEnvironmentRoots(params: {
   const lowerCaseTempPath = params.tempRealPath.toLowerCase();
 
   if (
-    isSameOrInsidePath({ path: lowerCaseHomePath, parentPath: lowerCaseTempPath }) ||
-    isSameOrInsidePath({ path: lowerCaseTempPath, parentPath: lowerCaseHomePath })
+    isSameOrInsidePath({
+      rules: params.pathRules,
+      path: lowerCaseHomePath,
+      parentPath: lowerCaseTempPath,
+    }) ||
+    isSameOrInsidePath({
+      rules: params.pathRules,
+      path: lowerCaseTempPath,
+      parentPath: lowerCaseHomePath,
+    })
   ) {
     return { reason: 'tempOverlapsHome', path: params.tempRealPath };
   }
 
   return null;
+}
+
+/** Refuses root, and a user who does not own the home. */
+function checkDeletingUser(params: {
+  user: UserIdentity;
+  homeRealPath: string;
+  homeOwnerId: number;
+}): EnvironmentFailure | null {
+  switch (params.user.kind) {
+    case 'posix':
+      if (params.user.uid === 0) {
+        return { reason: 'runAsRoot' };
+      }
+
+      if (params.homeOwnerId !== params.user.uid) {
+        return { reason: 'homeNotOwned', path: params.homeRealPath };
+      }
+
+      return null;
+  }
 }

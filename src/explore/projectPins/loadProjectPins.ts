@@ -1,6 +1,7 @@
 import { basename, dirname } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
@@ -29,11 +30,17 @@ export type ProjectPinsLoad = {
  * tracked configs cannot be read, since the tool of such a link is unknown.
  */
 export async function loadProjectPins(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
   walkedPinFiles: ProjectPinFileRef[];
   isWalkComplete: boolean;
+  privacyDenialCode: string | null;
 }): Promise<Result<ProjectPins, ExploreFileUnreadable>> {
-  const trackedPinFiles = await loadMiseTrackedConfigPinFiles({ homeDir: params.homeDir });
+  const trackedPinFiles = await loadMiseTrackedConfigPinFiles({
+    pathRules: params.pathRules,
+    homeDir: params.homeDir,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (trackedPinFiles.kind === 'failed') {
     return trackedPinFiles;
@@ -41,6 +48,7 @@ export async function loadProjectPins(params: {
 
   const files = await loadProjectPinFiles({
     files: [...params.walkedPinFiles, ...trackedPinFiles.value],
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   return { kind: 'succeeded', value: { files: files, isWalkComplete: params.isWalkComplete } };
@@ -51,13 +59,19 @@ export async function loadProjectPins(params: {
  * tracks none; a dangling link or an entry that is no link is skipped.
  */
 async function loadMiseTrackedConfigPinFiles(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<ProjectPinFileRef[], ExploreFileUnreadable>> {
   const folderPath = joinAbsolutePath({
+    rules: params.pathRules,
     parentPath: params.homeDir,
     names: MISE_TRACKED_CONFIGS_PATH_NAMES,
   });
-  const entries = await loadExploreDirectoryEntries({ path: folderPath });
+  const entries = await loadExploreDirectoryEntries({
+    path: folderPath,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (entries.kind === 'failed') {
     return entries;
@@ -72,7 +86,13 @@ async function loadMiseTrackedConfigPinFiles(params: {
       .filter((entry) => entry.kind === 'symbolicLink')
       .map((entry) =>
         loadMiseTrackedConfigPinFile({
-          linkPath: joinAbsolutePath({ parentPath: folderPath, names: [entry.name] }),
+          pathRules: params.pathRules,
+          linkPath: joinAbsolutePath({
+            rules: params.pathRules,
+            parentPath: folderPath,
+            names: [entry.name],
+          }),
+          privacyDenialCode: params.privacyDenialCode,
         }),
       ),
   );
@@ -93,9 +113,15 @@ async function loadMiseTrackedConfigPinFiles(params: {
 
 /** The ref of the link's target, or `null` when the target is gone or has no pin file name. */
 async function loadMiseTrackedConfigPinFile(params: {
+  pathRules: PathRules;
   linkPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<ProjectPinFileRef | null, ExploreFileUnreadable>> {
-  const realPath = await loadExploreRealPath({ path: params.linkPath });
+  const realPath = await loadExploreRealPath({
+    pathRules: params.pathRules,
+    path: params.linkPath,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (realPath.kind === 'failed') {
     return realPath;
@@ -105,7 +131,10 @@ async function loadMiseTrackedConfigPinFile(params: {
     return { kind: 'succeeded', value: null };
   }
 
-  const siblingNames = await loadExploreDirectoryNames({ path: dirname(realPath.value) });
+  const siblingNames = await loadExploreDirectoryNames({
+    path: dirname(realPath.value),
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (siblingNames.kind === 'failed') {
     return siblingNames;
@@ -134,10 +163,11 @@ async function loadMiseTrackedConfigPinFile(params: {
  */
 export async function loadProjectPinFiles(params: {
   files: ProjectPinFileRef[];
+  privacyDenialCode: string | null;
 }): Promise<ProjectPinFile[]> {
   const loaded = await Promise.all(
     dedupeProjectPinFileRefs({ files: params.files }).map((file) =>
-      loadProjectPinFile({ file: file }),
+      loadProjectPinFile({ file: file, privacyDenialCode: params.privacyDenialCode }),
     ),
   );
 
@@ -147,8 +177,12 @@ export async function loadProjectPinFiles(params: {
 /** `null` when nothing is at the path any more. */
 async function loadProjectPinFile(params: {
   file: ProjectPinFileRef;
+  privacyDenialCode: string | null;
 }): Promise<ProjectPinFile | null> {
-  const read = await loadExploreFileText({ path: params.file.path });
+  const read = await loadExploreFileText({
+    path: params.file.path,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (read.kind === 'failed') {
     return { ...params.file, content: { kind: 'unreadable', failure: read.failure.failure } };

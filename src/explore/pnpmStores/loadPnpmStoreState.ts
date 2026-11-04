@@ -1,5 +1,6 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreDirectoryNames, loadExploreFolderNames } from '../loadExploreRead.js';
@@ -30,9 +31,14 @@ const GLOBAL_VIRTUAL_STORE_FOLDER_NAME = 'links';
 const HIDDEN_NAME_PREFIX = '.';
 
 export async function loadPnpmStoreState(params: {
+  pathRules: PathRules;
   storeRoot: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmStoreState, ExploreFileUnreadable>> {
-  const names = await loadExploreFolderNames({ path: params.storeRoot });
+  const names = await loadExploreFolderNames({
+    path: params.storeRoot,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (names.kind === 'failed') {
     return names;
@@ -43,8 +49,10 @@ export async function loadPnpmStoreState(params: {
   }
 
   const folders = await loadPnpmStoreFolders({
+    pathRules: params.pathRules,
     storeRoot: params.storeRoot,
     folderNames: names.value.folderNames,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (folders.kind === 'failed') {
@@ -55,15 +63,19 @@ export async function loadPnpmStoreState(params: {
 }
 
 async function loadPnpmStoreFolders(params: {
+  pathRules: PathRules;
   storeRoot: AbsolutePath;
   folderNames: string[];
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmStoreFolder[], ExploreFileUnreadable>> {
   const folders: PnpmStoreFolder[] = [];
 
   for (const folderName of params.folderNames) {
     const folder = await loadPnpmStoreFolder({
+      pathRules: params.pathRules,
       storeRoot: params.storeRoot,
       folderName: folderName,
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (folder.kind === 'failed') {
@@ -81,10 +93,16 @@ async function loadPnpmStoreFolders(params: {
  * entry of any type whose name does not start with `.`, and a missing `links` holds none.
  */
 async function loadPnpmStoreFolder(params: {
+  pathRules: PathRules;
   storeRoot: AbsolutePath;
   folderName: string;
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmStoreFolder, ExploreFileUnreadable>> {
-  const folderPath = joinAbsolutePath({ parentPath: params.storeRoot, names: [params.folderName] });
+  const folderPath = joinAbsolutePath({
+    rules: params.pathRules,
+    parentPath: params.storeRoot,
+    names: [params.folderName],
+  });
   const storeVersion = parsePnpmStoreVersion({ folderName: params.folderName });
 
   switch (storeVersion.kind) {
@@ -93,9 +111,11 @@ async function loadPnpmStoreFolder(params: {
     case 'succeeded': {
       const linksNames = await loadExploreDirectoryNames({
         path: joinAbsolutePath({
+          rules: params.pathRules,
           parentPath: folderPath,
           names: [GLOBAL_VIRTUAL_STORE_FOLDER_NAME],
         }),
+        privacyDenialCode: params.privacyDenialCode,
       });
 
       if (linksNames.kind === 'failed') {

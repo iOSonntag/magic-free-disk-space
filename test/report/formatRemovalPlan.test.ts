@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { formatRemovalPlan } from '../../src/report/formatRemovalPlan.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
@@ -31,7 +32,7 @@ function buildCandidate(params: {
   };
 }
 
-describe('formatRemovalPlan', () => {
+describeAwaitingWin32Platform('formatRemovalPlan', () => {
   test('writes out control characters in a path, so the plan cannot be rewritten', () => {
     const lines = formatRemovalPlan({
       plan: {

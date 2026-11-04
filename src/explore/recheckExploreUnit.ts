@@ -10,7 +10,7 @@ import { isDartGcSetOffered } from './dartPubCache/buildDartPubCacheFindings.js'
 import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
 import type { PathUnitRecheck, UnitComparison, UnitRecheck } from './decideComparisonActivity.js';
 import { decideComparisonActivity } from './decideComparisonActivity.js';
-import type { ExploreUnitRecheckRun } from './exploreProbe.js';
+import type { ExploreProbePlatform, ExploreUnitRecheckRun } from './exploreProbe.js';
 import type {
   ExplorePathUnit,
   ExploreToolUnit,
@@ -40,12 +40,14 @@ export async function recheckExploreUnit(params: {
   unit: ExploreToolUnit;
   tool: LocatedTool;
   environment: Environment;
+  platform: ExploreProbePlatform;
   processCommands: string[] | null;
   timeoutMs: number;
 }): Promise<UnitRecheck> {
   const run: ExploreUnitRecheckRun = {
     tool: params.tool,
     environment: params.environment,
+    platform: params.platform,
     deadlineMs: Date.now() + params.timeoutMs,
     processCommands: params.processCommands,
   };
@@ -109,12 +111,18 @@ export async function recheckExploreUnit(params: {
 export async function recheckExplorePathUnit(params: {
   unit: ExplorePathUnit;
   environment: Environment;
+  platform: ExploreProbePlatform;
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
   switch (params.unit.kind) {
     case 'androidSystemImage':
     case 'androidEmulator': {
-      const state = await loadAndroidSdkState({ homeDir: params.environment.homeDir });
+      const state = await loadAndroidSdkState({
+        pathRules: params.environment.pathRules,
+        homeDir: params.environment.homeDir,
+        androidSdkRoot: params.platform.explore.androidSdkRoot,
+        privacyDenialCode: params.platform.privacyDenialCode,
+      });
 
       if (state.kind === 'failed') {
         return state;
@@ -127,7 +135,11 @@ export async function recheckExplorePathUnit(params: {
       });
     }
     case 'vscodeExtension': {
-      const state = await loadVscodeExtensionState({ homeDir: params.environment.homeDir });
+      const state = await loadVscodeExtensionState({
+        pathRules: params.environment.pathRules,
+        homeDir: params.environment.homeDir,
+        privacyDenialCode: params.platform.privacyDenialCode,
+      });
 
       if (state.kind === 'failed') {
         return state;

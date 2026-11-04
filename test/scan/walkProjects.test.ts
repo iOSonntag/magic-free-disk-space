@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
@@ -7,8 +7,12 @@ import type {
   ProjectPinFileRef,
 } from '../../src/explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
+import type { EntryEvictionCheck } from '../../src/system/systemPlatform.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -17,6 +21,7 @@ import {
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
 
 const NO_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
@@ -37,19 +42,21 @@ function walkTestProjects(params: {
   excludedTopNames?: string[];
   maxDepth?: number;
   deadlineMs?: number;
-  isFolderEvicted?: (folder: { path: string }) => boolean;
+  isEntryEvicted?: EntryEvictionCheck;
 }): Promise<ProjectWalk> {
   return walkProjects({
+    pathRules: DARWIN_PATH_RULES,
     homeDir: params.homeDir,
     excludedTopNames: params.excludedTopNames ?? [],
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: params.maxDepth ?? 4,
     deadlineMs: params.deadlineMs ?? NO_DEADLINE_MS,
-    isFolderEvicted: params.isFolderEvicted ?? (() => false),
+    isEntryEvicted: params.isEntryEvicted ?? (() => false),
+    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }
 
-describe('walkProjects', () => {
+describeAwaitingWin32Platform('walkProjects', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -159,7 +166,7 @@ describe('walkProjects', () => {
     ]);
   });
 
-  test('does not follow a symbolic link to a project', async () => {
+  testOnPosix('does not follow a symbolic link to a project', async () => {
     const outsideProjectPath = join(fixtureRoot.rootDir, 'outside', 'app');
     await createFixtureDirectory({ path: join(outsideProjectPath, 'node_modules') });
     await createEmptyFile({ path: join(outsideProjectPath, 'package.json') });
@@ -182,25 +189,28 @@ describe('walkProjects', () => {
     expect(result).toEqual({ artifacts: [], pinFiles: [], isComplete: true, issues: [] });
   });
 
-  test('reports a folder it cannot list, still searches its siblings, and is not complete', async () => {
-    const lockedPath = join(fixtureRoot.homeDir, 'locked');
-    await createFixtureDirectory({ path: lockedPath });
-    await chmod(lockedPath, 0o000);
+  testOnPosix(
+    'reports a folder it cannot list, still searches its siblings, and is not complete',
+    async () => {
+      const lockedPath = join(fixtureRoot.homeDir, 'locked');
+      await createFixtureDirectory({ path: lockedPath });
+      await chmod(lockedPath, 0o000);
 
-    const projectPath = join(fixtureRoot.homeDir, 'app');
-    await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
-    await createEmptyFile({ path: join(projectPath, 'package.json') });
+      const projectPath = join(fixtureRoot.homeDir, 'app');
+      await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
+      await createEmptyFile({ path: join(projectPath, 'package.json') });
 
-    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+      const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
 
-    expect(result.artifacts.map((finding) => finding.artifactPath)).toEqual([
-      join(projectPath, 'node_modules'),
-    ]);
-    expect(result.isComplete).toBe(false);
-    expect(result.issues).toEqual([
-      { path: lockedPath, reason: 'permissionDenied', detail: 'EACCES' },
-    ]);
-  });
+      expect(result.artifacts.map((finding) => finding.artifactPath)).toEqual([
+        join(projectPath, 'node_modules'),
+      ]);
+      expect(result.isComplete).toBe(false);
+      expect(result.issues).toEqual([
+        { path: lockedPath, reason: 'permissionDenied', detail: 'EACCES' },
+      ]);
+    },
+  );
 
   test('skips an evicted project folder without an issue, and is not complete', async () => {
     const evictedProjectPath = join(fixtureRoot.homeDir, 'old-app');
@@ -209,12 +219,38 @@ describe('walkProjects', () => {
 
     const evictedWalk = await walkTestProjects({
       homeDir: fixtureRoot.homeDir,
-      isFolderEvicted: (folder) => folder.path === evictedProjectPath,
+      isEntryEvicted: (entry) => entry.path === evictedProjectPath,
     });
     const residentWalk = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
 
     expect(evictedWalk).toEqual({ artifacts: [], pinFiles: [], isComplete: false, issues: [] });
     expect(residentWalk.isComplete).toBe(true);
+  });
+
+  test('is not complete for an evicted pin file, and complete for an evicted file of another name', async () => {
+    const projectPath = join(fixtureRoot.homeDir, 'app');
+    const pinFilePath = join(projectPath, '.nvmrc');
+    const notesPath = join(projectPath, 'notes.txt');
+    await createFixtureDirectory({ path: projectPath });
+    await createEmptyFile({ path: pinFilePath });
+    await createEmptyFile({ path: notesPath });
+
+    const pinFileWalk = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      isEntryEvicted: (entry) => entry.path === pinFilePath,
+    });
+    const notesWalk = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      isEntryEvicted: (entry) => entry.path === notesPath,
+    });
+
+    expect(pinFileWalk).toEqual({ artifacts: [], pinFiles: [], isComplete: false, issues: [] });
+    expect(notesWalk).toEqual({
+      artifacts: [],
+      pinFiles: [buildPinFileRef({ path: pinFilePath, kind: 'nvmrc' })],
+      isComplete: true,
+      issues: [],
+    });
   });
 
   test('returns nothing, and is complete, when the home folder is missing', async () => {
@@ -274,7 +310,7 @@ describe('walkProjects', () => {
     expect(result.isComplete).toBe(true);
   });
 
-  test('keeps a pin file that is a link, without following it', async () => {
+  testOnPosix('keeps a pin file that is a link, without following it', async () => {
     const projectPath = join(fixtureRoot.homeDir, 'app');
     await createFixtureDirectory({ path: projectPath });
     await symlink(

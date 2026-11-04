@@ -6,7 +6,11 @@ import { loadVscodeExtensionState } from './loadVscodeExtensionState.js';
 export async function loadVscodeExtensionFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {
-  const state = await loadVscodeExtensionState({ homeDir: run.environment.homeDir });
+  const state = await loadVscodeExtensionState({
+    pathRules: run.environment.pathRules,
+    homeDir: run.environment.homeDir,
+    privacyDenialCode: run.platform.privacyDenialCode,
+  });
 
   if (state.kind === 'failed') {
     return state;

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -12,13 +12,16 @@ import type { SimulatorRuntimeState } from '../../src/explore/simulatorRuntimes/
 import { parseSimulatorRuntimeList } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeList.js';
 import { compareSimulatorRuntime } from '../../src/explore/simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -49,8 +52,12 @@ const SIMULATOR_APP_COMMAND =
 const tool: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 
 function parseFixtureState(): SimulatorRuntimeState {
-  const runtimes = parseSimulatorRuntimeList({ stdoutText: buildSimulatorRuntimeListJson() });
+  const runtimes = parseSimulatorRuntimeList({
+    pathRules: DARWIN_PATH_RULES,
+    stdoutText: buildSimulatorRuntimeListJson(),
+  });
   const devices = parseSimulatorDeviceList({
+    pathRules: DARWIN_PATH_RULES,
     stdoutText: buildSimulatorDeviceListJson({ homeDir: FIXTURE_HOME_DIR }),
   });
 
@@ -83,7 +90,7 @@ function buildWorkingAnswers(params: { homeDir: string }): ProbeFakeAnswer[] {
   ];
 }
 
-describe('parseSimulatorRuntimeList', () => {
+describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
   test('reads each runtime with its id, identifier, image, and last use', () => {
     const state = parseFixtureState();
 
@@ -106,15 +113,19 @@ describe('parseSimulatorRuntimeList', () => {
   });
 
   test('reads an empty list', () => {
-    expect(parseSimulatorRuntimeList({ stdoutText: '{}' })).toEqual({
+    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '{}' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
   });
 
   test('rejects text that is no JSON object', () => {
-    expect(parseSimulatorRuntimeList({ stdoutText: 'garbage' }).kind).toBe('failed');
-    expect(parseSimulatorRuntimeList({ stdoutText: '[]' }).kind).toBe('failed');
+    expect(
+      parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+    ).toBe('failed');
+    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '[]' }).kind).toBe(
+      'failed',
+    );
   });
 
   test('rejects a runtime whose id is no UUID', () => {
@@ -128,7 +139,10 @@ describe('parseSimulatorRuntimeList', () => {
       });
 
       expect(
-        parseSimulatorRuntimeList({ stdoutText: JSON.stringify({ [runtimeId]: entry }) }).kind,
+        parseSimulatorRuntimeList({
+          pathRules: DARWIN_PATH_RULES,
+          stdoutText: JSON.stringify({ [runtimeId]: entry }),
+        }).kind,
       ).toBe('failed');
     }
   });
@@ -145,14 +159,16 @@ describe('parseSimulatorRuntimeList', () => {
 
     for (const value of [entry, relativeEntry]) {
       expect(
-        parseSimulatorRuntimeList({ stdoutText: JSON.stringify({ [OFFERED_RUNTIME_ID]: value }) })
-          .kind,
+        parseSimulatorRuntimeList({
+          pathRules: DARWIN_PATH_RULES,
+          stdoutText: JSON.stringify({ [OFFERED_RUNTIME_ID]: value }),
+        }).kind,
       ).toBe('failed');
     }
   });
 });
 
-describe('buildSimulatorRuntimeFindings', () => {
+describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
   test('offers only the deletable runtime unused since the cutoff that no available device runs on', () => {
     const findings = buildSimulatorRuntimeFindings({
       tool: tool,
@@ -215,7 +231,7 @@ describe('buildSimulatorRuntimeFindings', () => {
   });
 });
 
-describe('compareSimulatorRuntime', () => {
+describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
   const unit = buildOfferedUnit({ tool: tool });
 
   test('answers unchanged, and busy while Simulator.app runs or the processes are unknown', () => {
@@ -294,7 +310,7 @@ describe('compareSimulatorRuntime', () => {
   });
 });
 
-describe('the simulator runtime probe with a fake xcrun', () => {
+describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -324,6 +340,7 @@ describe('the simulator runtime probe with a fake xcrun', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun.path }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
@@ -354,6 +371,7 @@ describe('the simulator runtime probe with a fake xcrun', () => {
     });
     const run = {
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       deadlineMs: Date.now() + TIMEOUT_MS,
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
@@ -385,6 +403,7 @@ describe('the simulator runtime probe with a fake xcrun', () => {
     const recheck = {
       tool: xcrun,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     };
@@ -417,6 +436,7 @@ describe('the simulator runtime probe with a fake xcrun', () => {
       unit: buildOfferedUnit({ tool: failing }),
       tool: failing,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     });

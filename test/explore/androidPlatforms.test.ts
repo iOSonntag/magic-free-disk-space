@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -14,15 +14,16 @@ import type {
   ProjectPinFile,
   ProjectPinFileText,
 } from '../../src/explore/projectPins/projectPins.js';
-import {
-  PINNED_VERSION_REINSTALL_EXPLANATION,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { PINNED_VERSION_REINSTALL_EXPLANATION } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
+import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -31,6 +32,8 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_UNUSED_CUTOFF_MS,
@@ -70,7 +73,11 @@ function buildApiLevelPins(...apiLevels: number[]): AndroidCompileSdkPins {
 }
 
 function buildExamplePlatformPath(folderName: string): AbsolutePath {
-  return buildTestAbsolutePath({ text: join(EXAMPLE_SDK_ROOT, 'platforms', folderName) });
+  return joinAbsolutePath({
+    rules: DARWIN_PATH_RULES,
+    parentPath: EXAMPLE_SDK_ROOT,
+    names: ['platforms', folderName],
+  });
 }
 
 function buildExampleState(): AndroidPlatformState {
@@ -95,7 +102,7 @@ function buildTextPins(...texts: string[]): ToolPins {
   return { kind: 'texts', files: texts.map((text) => buildGradleText(text)) };
 }
 
-describe('parseAndroidCompileSdkPins', () => {
+describeAwaitingWin32Platform('parseAndroidCompileSdkPins', () => {
   test('reads a compileSdk indented in an android block', () => {
     expect(
       parseGradleTexts('android {\n    namespace "com.example"\n    compileSdk 34\n}\n'),
@@ -179,7 +186,7 @@ describe('parseAndroidCompileSdkPins', () => {
   });
 });
 
-describe('decideAndroidPlatformOffers', () => {
+describeAwaitingWin32Platform('decideAndroidPlatformOffers', () => {
   test('offers each platform no Gradle file pins', () => {
     expect(
       decideAndroidPlatformOffers({
@@ -257,7 +264,7 @@ describe('decideAndroidPlatformOffers', () => {
   });
 });
 
-describe('buildAndroidPlatformFindings', () => {
+describeAwaitingWin32Platform('buildAndroidPlatformFindings', () => {
   const offers: AndroidPlatformOffers = {
     offers: [
       {
@@ -276,6 +283,7 @@ describe('buildAndroidPlatformFindings', () => {
         pinFiles: [{ path: buildTestAbsolutePath({ text: EXAMPLE_GRADLE_PATH }), kind: 'gradle' }],
         projectPins: buildTestProjectPins({ files: [] }),
         processCommands: [],
+        projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual({
       findings: [
@@ -310,6 +318,7 @@ describe('buildAndroidPlatformFindings', () => {
       pinFiles: [],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
       processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings.findings[0]).toMatchObject({
@@ -322,7 +331,7 @@ describe('buildAndroidPlatformFindings', () => {
   });
 });
 
-describe('compareAndroidPlatformUnit', () => {
+describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
   const unit: ExplorePathUnitAndroidPlatform = {
     kind: 'androidPlatform',
     sdkRoot: EXAMPLE_SDK_ROOT,
@@ -407,6 +416,7 @@ async function loadAndroidProbeOutcomes(params: {
 }): Promise<AndroidProbeOutcomes> {
   const probes = startExploreProbes({
     environment: environment,
+    platform: buildTestProbePlatform(),
     toolInstallLocations: buildFixtureToolLocations({}),
     processCommands: Promise.resolve([]),
     activeXcodeBundlePath: Promise.resolve(null),
@@ -430,7 +440,7 @@ function buildHomeGradlePin(text: string): ProjectPinFile {
   });
 }
 
-describe('startExploreProbes with the Android platform probe', () => {
+describeAwaitingWin32Platform('startExploreProbes with the Android platform probe', () => {
   test('offers the platform no Gradle file pins', async () => {
     const unpinnedPath = await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
     await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-35' });
@@ -514,27 +524,30 @@ describe('startExploreProbes with the Android platform probe', () => {
     });
   });
 
-  test('answers unreadable on the platforms folder and leaves the other Android probes judged', async () => {
-    await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
-    await writeAndroidEmulator({ homeDir: homeDir });
-    await createAndroidAvdHome({ homeDir: homeDir });
-    await chmod(buildPlatformsPath(), 0o000);
+  testOnPosix(
+    'answers unreadable on the platforms folder and leaves the other Android probes judged',
+    async () => {
+      await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
+      await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+      await writeAndroidEmulator({ homeDir: homeDir });
+      await createAndroidAvdHome({ homeDir: homeDir });
+      await chmod(buildPlatformsPath(), 0o000);
 
-    try {
-      const outcomes = await loadAndroidProbeOutcomes({ pinFiles: [] });
+      try {
+        const outcomes = await loadAndroidProbeOutcomes({ pinFiles: [] });
 
-      expect(outcomes.platforms).toEqual({
-        kind: 'unreadable',
-        path: buildPlatformsPath(),
-        failure: { reason: 'permissionDenied', code: 'EACCES' },
-      });
-      expect(outcomes.systemImages).toMatchObject({ kind: 'probed', isComplete: true });
-      expect(outcomes.emulator).toMatchObject({ kind: 'probed', isComplete: true });
-    } finally {
-      await chmod(buildPlatformsPath(), 0o755);
-    }
-  });
+        expect(outcomes.platforms).toEqual({
+          kind: 'unreadable',
+          path: buildPlatformsPath(),
+          failure: { reason: 'permissionDenied', code: 'EACCES' },
+        });
+        expect(outcomes.systemImages).toMatchObject({ kind: 'probed', isComplete: true });
+        expect(outcomes.emulator).toMatchObject({ kind: 'probed', isComplete: true });
+      } finally {
+        await chmod(buildPlatformsPath(), 0o755);
+      }
+    },
+  );
 
   test('answers unreadable on an unreadable Gradle file', async () => {
     await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
@@ -552,7 +565,7 @@ describe('startExploreProbes with the Android platform probe', () => {
   });
 });
 
-describe('recheckExplorePathUnit with an Android platform unit', () => {
+describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform unit', () => {
   async function createPlatformUnit(): Promise<{
     unit: ExplorePathUnitAndroidPlatform;
     gradlePath: string;
@@ -580,6 +593,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
       await recheckExplorePathUnit({
         unit: platform.unit,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -593,6 +607,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
       await recheckExplorePathUnit({
         unit: platform.unit,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -605,12 +620,13 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
       await recheckExplorePathUnit({
         unit: platform.unit,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
       }),
     ).toEqual({ kind: 'busy' });
   });
 
-  test('fails on an unreadable platforms folder', async () => {
+  testOnPosix('fails on an unreadable platforms folder', async () => {
     const platform = await createPlatformUnit();
     await chmod(buildPlatformsPath(), 0o000);
 
@@ -619,6 +635,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
         await recheckExplorePathUnit({
           unit: platform.unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [],
         }),
       ).toEqual({

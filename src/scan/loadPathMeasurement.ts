@@ -1,9 +1,9 @@
 import { dirname } from 'node:path';
 import type { Result } from '../result.js';
-import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type Measurement = {
@@ -30,6 +30,7 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 export async function loadPathMeasurement(params: {
   path: string;
   deadlineMs: number;
+  isEntryEvicted: EntryEvictionCheck;
 }): Promise<Result<Measurement, FileFailure>> {
   const identityResult = await loadFileIdentity({ path: params.path });
 
@@ -73,7 +74,7 @@ export async function loadPathMeasurement(params: {
     isStatsNeeded: true,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
-    isFolderEvicted: hasDatalessFlag,
+    isEntryEvicted: params.isEntryEvicted,
     visitEntry: (entry) => {
       if (entry.stats === null) {
         return 'skip';
@@ -101,7 +102,7 @@ export async function loadPathMeasurement(params: {
     onUnreadable: () => {
       unreadableCount += 1;
     },
-    onEvictedFolderSkipped: () => undefined,
+    onEvictedEntrySkipped: () => undefined,
   });
 
   return {
