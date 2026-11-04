@@ -9,15 +9,11 @@ import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 export function buildTestProbePlatform(
   overrides: Partial<ExploreProbePlatform> = {},
 ): ExploreProbePlatform {
-  return buildExploreProbePlatform({
-    explore: overrides.explore ?? darwinPlatform.explore,
-    tools: { ...darwinPlatform.tools, homebrewPrefixPaths: overrides.homebrewPrefixPaths ?? [] },
-    system: {
-      ...darwinPlatform.system,
-      privacyDenialCode:
-        overrides.privacyDenialCode === undefined
-          ? darwinPlatform.system.privacyDenialCode
-          : overrides.privacyDenialCode,
-    },
+  const probePlatform = buildExploreProbePlatform({
+    explore: darwinPlatform.explore,
+    tools: { ...darwinPlatform.tools, homebrewPrefixPaths: [] },
+    system: darwinPlatform.system,
   });
+
+  return { ...probePlatform, ...overrides };
 }

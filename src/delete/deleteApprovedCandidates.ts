@@ -23,13 +23,10 @@ type ApprovedRemoval = {
 export async function deleteApprovedCandidates(params: {
   plan: RemovalPlan;
   environment: Environment;
-  /** The delete slice, whose `removeTree` removes each path. */
   delete: DeletePlatform;
-  /** The system slice's process listing. */
   loadRunningProcesses: SystemPlatform['loadRunningProcesses'];
-  /** The system slice's eviction check, for the measurements around a tool's run. */
+  /** For the measurements around a tool's run. */
   isEntryEvicted: SystemPlatform['isEntryEvicted'];
-  /** What the rechecks of the units read by. */
   probePlatform: ExploreProbePlatform;
   clock: () => number;
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
