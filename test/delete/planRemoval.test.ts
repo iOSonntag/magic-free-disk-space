@@ -2,15 +2,21 @@ import { expect, test } from 'bun:test';
 import type { RemovalPlan } from '../../src/delete/planRemoval.js';
 import { planRemoval } from '../../src/delete/planRemoval.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
+import {
+  DARWIN_DELETION_LOG_HOME_DIR_NAMES,
+  DARWIN_PATH_RULES,
+  DARWIN_PREFERENCES_HOME_DIR_NAMES,
+  DARWIN_PROTECTED_ROOT_PATHS,
+} from '../../src/environment/loadEnvironment.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 
 const ENVIRONMENT = buildEnvironment({
-  platform: 'darwin',
   nowMs: 0,
-  userId: 501,
+  user: buildTestUserIdentity({ uid: 501 }),
+  pathRules: DARWIN_PATH_RULES,
   homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
   homeRealPath: '/Users/tester',
   tempDir: '/private/tmp/tester',
@@ -18,6 +24,9 @@ const ENVIRONMENT = buildEnvironment({
   applicationDirs: ['/Applications'],
   applicationRealPaths: ['/Applications'],
   homebrewPrefixPaths: [],
+  protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
+  deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
+  preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
 });
 
 const VALID_CANDIDATES: Candidate[] = [1, 2, 3, 4, 5, 6].map((index) =>

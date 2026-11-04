@@ -1,3 +1,6 @@
+import type { CatalogOwner, MacBundleId } from '../../src/catalog/catalogOwner.js';
+import { parseMacBundleId } from '../../src/catalog/catalogOwner.js';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { AndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import { parseAndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import type {
@@ -29,11 +32,39 @@ import { parseSimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/par
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { Result } from '../../src/result.js';
+import type { UserIdentity } from '../../src/system/userIdentity.js';
+import { parsePosixUid } from '../../src/system/userIdentity.js';
 
 /** Branded values for fixtures, each made by its one maker; a value that fails it throws. */
 
 export function buildTestAbsolutePath(params: { text: string }): AbsolutePath {
-  return unwrapFixtureValue({ parsed: parseAbsolutePath(params), text: params.text });
+  return unwrapFixtureValue({
+    parsed: parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text }),
+    text: params.text,
+  });
+}
+
+export function buildTestUserIdentity(params: { uid: number }): UserIdentity {
+  return {
+    kind: 'posix',
+    uid: unwrapFixtureValue({
+      parsed: parsePosixUid({ value: params.uid }),
+      text: String(params.uid),
+    }),
+  };
+}
+
+export function buildTestMacBundleId(params: { text: string }): MacBundleId {
+  return unwrapFixtureValue({ parsed: parseMacBundleId(params), text: params.text });
+}
+
+/** The owner of a catalog entry: none for `null`, else the app of that bundle id. */
+export function buildTestCatalogOwner(params: { bundleId: string | null }): CatalogOwner {
+  if (params.bundleId === null) {
+    return { kind: 'none' };
+  }
+
+  return { kind: 'bundleId', bundleId: buildTestMacBundleId({ text: params.bundleId }) };
 }
 
 export function buildTestUdid(params: { text: string }): SimulatorDeviceUdid {

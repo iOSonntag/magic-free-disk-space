@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { ExploreToolUnitSimulatorRuntime } from '../../src/explore/exploreUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { SimulatorDevice } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
@@ -50,8 +51,12 @@ const SIMULATOR_APP_COMMAND =
 const tool: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 
 function parseFixtureState(): SimulatorRuntimeState {
-  const runtimes = parseSimulatorRuntimeList({ stdoutText: buildSimulatorRuntimeListJson() });
+  const runtimes = parseSimulatorRuntimeList({
+    pathRules: DARWIN_PATH_RULES,
+    stdoutText: buildSimulatorRuntimeListJson(),
+  });
   const devices = parseSimulatorDeviceList({
+    pathRules: DARWIN_PATH_RULES,
     stdoutText: buildSimulatorDeviceListJson({ homeDir: FIXTURE_HOME_DIR }),
   });
 
@@ -107,15 +112,19 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
   });
 
   test('reads an empty list', () => {
-    expect(parseSimulatorRuntimeList({ stdoutText: '{}' })).toEqual({
+    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '{}' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
   });
 
   test('rejects text that is no JSON object', () => {
-    expect(parseSimulatorRuntimeList({ stdoutText: 'garbage' }).kind).toBe('failed');
-    expect(parseSimulatorRuntimeList({ stdoutText: '[]' }).kind).toBe('failed');
+    expect(
+      parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+    ).toBe('failed');
+    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '[]' }).kind).toBe(
+      'failed',
+    );
   });
 
   test('rejects a runtime whose id is no UUID', () => {
@@ -129,7 +138,10 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
       });
 
       expect(
-        parseSimulatorRuntimeList({ stdoutText: JSON.stringify({ [runtimeId]: entry }) }).kind,
+        parseSimulatorRuntimeList({
+          pathRules: DARWIN_PATH_RULES,
+          stdoutText: JSON.stringify({ [runtimeId]: entry }),
+        }).kind,
       ).toBe('failed');
     }
   });
@@ -146,8 +158,10 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
 
     for (const value of [entry, relativeEntry]) {
       expect(
-        parseSimulatorRuntimeList({ stdoutText: JSON.stringify({ [OFFERED_RUNTIME_ID]: value }) })
-          .kind,
+        parseSimulatorRuntimeList({
+          pathRules: DARWIN_PATH_RULES,
+          stdoutText: JSON.stringify({ [OFFERED_RUNTIME_ID]: value }),
+        }).kind,
       ).toBe('failed');
     }
   });

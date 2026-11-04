@@ -7,6 +7,7 @@ export type ModuleName =
   | 'environment'
   | 'explore'
   | 'path'
+  | 'platform'
   | 'preferences'
   | 'report'
   | 'scan'

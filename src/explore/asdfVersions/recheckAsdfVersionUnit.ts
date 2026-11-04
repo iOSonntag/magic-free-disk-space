@@ -12,7 +12,10 @@ export async function recheckAsdfVersionUnit(params: {
   unit: ExploreToolUnitAsdfVersion;
   run: ExploreUnitRecheckRun;
 }): Promise<UnitRecheck> {
-  const state = await loadAsdfState({ homeDir: params.run.environment.homeDir });
+  const state = await loadAsdfState({
+    pathRules: params.run.environment.pathRules,
+    homeDir: params.run.environment.homeDir,
+  });
 
   if (state.kind === 'failed') {
     return state;

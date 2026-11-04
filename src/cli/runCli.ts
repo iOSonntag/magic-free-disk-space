@@ -41,12 +41,6 @@ export async function runCli(params: {
   toolInstallLocations: ToolInstallLocations;
   io: TerminalIo;
 }): Promise<number> {
-  if (params.environment.platform !== 'darwin') {
-    params.io.writeError('This tool runs on macOS only.\n');
-
-    return EXIT_CODES.cannotStart;
-  }
-
   const parsed = parseArguments({ argv: params.argv });
 
   if (parsed.kind === 'failed') {

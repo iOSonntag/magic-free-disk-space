@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -12,7 +13,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
     };
 
-    expect(dedupeCandidates({ decisions: [earlier, toolOffer] })).toEqual([
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [earlier, toolOffer] }),
+    ).toEqual([
       earlier,
       {
         kind: 'skip',
@@ -32,7 +35,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       realPath: '/y',
     });
 
-    expect(dedupeCandidates({ decisions: [toolOffer, inside] })).toEqual([
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [toolOffer, inside] }),
+    ).toEqual([
       toolOffer,
       {
         kind: 'skip',
@@ -53,7 +58,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
     };
 
-    expect(dedupeCandidates({ decisions: [skip, toolOffer] })[1]).toEqual({
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [skip, toolOffer] })[1],
+    ).toEqual({
       kind: 'skip',
       path: '/home/.local/share/mise/installs/node/20.1.0',
       reason: 'overlapsEarlierCandidate',
@@ -64,44 +71,43 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     const earlier = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
     const later = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
 
-    expect(dedupeCandidates({ decisions: [earlier, later] })).toEqual([
-      earlier,
-      { kind: 'skip', path: '/a/b', reason: 'overlapsEarlierCandidate' },
-    ]);
+    expect(dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [earlier, later] })).toEqual(
+      [earlier, { kind: 'skip', path: '/a/b', reason: 'overlapsEarlierCandidate' }],
+    );
   });
 
   test('skips a later offer inside an earlier offer', () => {
     const earlier = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
     const later = buildOfferDecision({ path: '/a/b/c', realPath: '/a/b/c' });
 
-    expect(dedupeCandidates({ decisions: [earlier, later] })).toEqual([
-      earlier,
-      { kind: 'skip', path: '/a/b/c', reason: 'overlapsEarlierCandidate' },
-    ]);
+    expect(dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [earlier, later] })).toEqual(
+      [earlier, { kind: 'skip', path: '/a/b/c', reason: 'overlapsEarlierCandidate' }],
+    );
   });
 
   test('skips a later offer that contains an earlier offer', () => {
     const earlier = buildOfferDecision({ path: '/a/b/c', realPath: '/a/b/c' });
     const later = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
 
-    expect(dedupeCandidates({ decisions: [earlier, later] })).toEqual([
-      earlier,
-      { kind: 'skip', path: '/a/b', reason: 'overlapsEarlierCandidate' },
-    ]);
+    expect(dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [earlier, later] })).toEqual(
+      [earlier, { kind: 'skip', path: '/a/b', reason: 'overlapsEarlierCandidate' }],
+    );
   });
 
   test('keeps a sibling whose name shares a prefix with an earlier offer', () => {
     const earlier = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
     const sibling = buildOfferDecision({ path: '/a/bc', realPath: '/a/bc' });
 
-    expect(dedupeCandidates({ decisions: [earlier, sibling] })).toEqual([earlier, sibling]);
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [earlier, sibling] }),
+    ).toEqual([earlier, sibling]);
   });
 
   test('skips an offer inside an earlier advice path', () => {
     const advice = buildAdviceDecision({ path: '/a/b' });
     const later = buildOfferDecision({ path: '/a/b/c', realPath: '/a/b/c' });
 
-    expect(dedupeCandidates({ decisions: [advice, later] })).toEqual([
+    expect(dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [advice, later] })).toEqual([
       advice,
       { kind: 'skip', path: '/a/b/c', reason: 'overlapsEarlierCandidate' },
     ]);
@@ -111,7 +117,7 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     const advice = buildAdviceDecision({ path: '/a/b/' });
     const later = buildOfferDecision({ path: '/a/b/c', realPath: '/a/b/c' });
 
-    expect(dedupeCandidates({ decisions: [advice, later] })).toEqual([
+    expect(dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [advice, later] })).toEqual([
       advice,
       { kind: 'skip', path: '/a/b/c', reason: 'overlapsEarlierCandidate' },
     ]);
@@ -121,7 +127,7 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     const advice = buildAdviceDecision({ path: '/a/b/c' });
     const later = buildOfferDecision({ path: '/a/b', realPath: '/a/b' });
 
-    expect(dedupeCandidates({ decisions: [advice, later] })).toEqual([
+    expect(dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [advice, later] })).toEqual([
       advice,
       { kind: 'skip', path: '/a/b', reason: 'overlapsEarlierCandidate' },
     ]);
@@ -138,7 +144,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       realPath: '/home/Library/Caches/Browser',
     });
 
-    expect(dedupeCandidates({ decisions: [withheld, catchAll] })).toEqual([
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [withheld, catchAll] }),
+    ).toEqual([
       withheld,
       { kind: 'skip', path: '/home/Library/Caches/Browser', reason: 'overlapsEarlierCandidate' },
     ]);
@@ -149,11 +157,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     const inside = buildOfferDecision({ path: '/a/b/c', realPath: '/a/b/c' });
     const sibling = buildOfferDecision({ path: '/a/bc', realPath: '/a/bc' });
 
-    expect(dedupeCandidates({ decisions: [skip, inside, sibling] })).toEqual([
-      skip,
-      inside,
-      sibling,
-    ]);
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [skip, inside, sibling] }),
+    ).toEqual([skip, inside, sibling]);
   });
 
   test('a later skip inside an earlier offer still withholds that offer', () => {
@@ -167,7 +173,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       reason: 'recentActivity',
     };
 
-    expect(dedupeCandidates({ decisions: [earlier, laterSkip] })).toEqual([
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [earlier, laterSkip] }),
+    ).toEqual([
       { kind: 'skip', path: '/home/Documents/app', reason: 'overlapsEarlierCandidate' },
       laterSkip,
     ]);
@@ -184,10 +192,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       reason: 'systemOwned',
     };
 
-    expect(dedupeCandidates({ decisions: [specific, catchAllSkip] })).toEqual([
-      specific,
-      catchAllSkip,
-    ]);
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [specific, catchAllSkip] }),
+    ).toEqual([specific, catchAllSkip]);
   });
 
   test('compares the paths the scan produced, not where they resolve', () => {
@@ -201,7 +208,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       realPath: '/private/var/folders/x/T/build',
     });
 
-    expect(dedupeCandidates({ decisions: [tempSkip, tempOffer] })).toEqual([
+    expect(
+      dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions: [tempSkip, tempOffer] }),
+    ).toEqual([
       tempSkip,
       { kind: 'skip', path: '/var/folders/x/T/build', reason: 'overlapsEarlierCandidate' },
     ]);
@@ -214,7 +223,7 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     const decisions: CandidateDecision[] = [advice, sibling, inside];
     const decisionsBefore = [...decisions];
 
-    const result = dedupeCandidates({ decisions });
+    const result = dedupeCandidates({ pathRules: DARWIN_PATH_RULES, decisions });
 
     expect(result).toEqual([
       advice,

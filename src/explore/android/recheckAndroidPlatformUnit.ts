@@ -13,7 +13,10 @@ export async function recheckAndroidPlatformUnit(params: {
   environment: Environment;
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
-  const state = await loadAndroidPlatformState({ homeDir: params.environment.homeDir });
+  const state = await loadAndroidPlatformState({
+    pathRules: params.environment.pathRules,
+    homeDir: params.environment.homeDir,
+  });
 
   if (state.kind === 'failed') {
     return state;

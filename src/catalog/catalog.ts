@@ -1,3 +1,5 @@
+import type { CatalogOwner } from './catalogOwner.js';
+
 export type Risk = 'safe' | 'review' | 'careful' | 'never';
 
 export type CandidateCategory =
@@ -55,7 +57,7 @@ export type CatalogEntry = {
   /** self: the path itself; children: each entry directly inside it. */
   scope: 'self' | 'children';
   ageRule: 'none' | 'staleDays';
-  /** Bundle id of the app that owns the data; a running app withholds it. */
-  ownerBundleId: string | null;
+  /** The app that owns the data; while it runs, the entry is withheld. */
+  owner: CatalogOwner;
   removal: CatalogRemoval;
 };

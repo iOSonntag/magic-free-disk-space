@@ -1,4 +1,5 @@
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { CandidateDecision } from './candidate.js';
 import { listCandidateFootprint } from './listCandidateFootprint.js';
 
@@ -9,7 +10,10 @@ import { listCandidateFootprint } from './listCandidateFootprint.js';
  * compared as the scan produced them, never followed through links. The result keeps length and
  * order.
  */
-export function dedupeCandidates(params: { decisions: CandidateDecision[] }): CandidateDecision[] {
+export function dedupeCandidates(params: {
+  pathRules: PathRules;
+  decisions: CandidateDecision[];
+}): CandidateDecision[] {
   const skippedPaths = params.decisions.flatMap((decision) =>
     decision.kind === 'skip' ? [decision.path] : [],
   );
@@ -33,6 +37,7 @@ export function dedupeCandidates(params: { decisions: CandidateDecision[] }): Ca
     const footprint = listCandidateFootprint(decision.candidate);
     const isOverlapping = footprint.some((path) =>
       isOverlappingHeldPath({
+        pathRules: params.pathRules,
         path: path,
         skippedPaths: skippedPaths,
         advisedPaths: advisedPaths,
@@ -52,6 +57,7 @@ export function dedupeCandidates(params: { decisions: CandidateDecision[] }): Ca
 }
 
 function isOverlappingHeldPath(params: {
+  pathRules: PathRules;
   path: string;
   skippedPaths: string[];
   advisedPaths: string[];
@@ -60,20 +66,35 @@ function isOverlappingHeldPath(params: {
 }): boolean {
   return (
     [...params.skippedPaths, ...params.advisedPaths].some((heldPath) =>
-      isStrictlyInsidePath({ path: heldPath, parentPath: params.path }),
+      isStrictlyInsidePath({
+        pathRules: params.pathRules,
+        path: heldPath,
+        parentPath: params.path,
+      }),
     ) ||
     params.advisedPaths.some((advisedPath) =>
-      isSameOrInsidePath({ path: params.path, parentPath: advisedPath }),
+      isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: advisedPath }),
     ) ||
     params.earlierSkippedPaths.includes(params.path) ||
     params.keptOfferPaths.some(
       (keptPath) =>
-        isSameOrInsidePath({ path: params.path, parentPath: keptPath }) ||
-        isSameOrInsidePath({ path: keptPath, parentPath: params.path }),
+        isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: keptPath }) ||
+        isSameOrInsidePath({ rules: params.pathRules, path: keptPath, parentPath: params.path }),
     )
   );
 }
 
-function isStrictlyInsidePath(params: { path: string; parentPath: string }): boolean {
-  return params.path !== params.parentPath && isSameOrInsidePath(params);
+function isStrictlyInsidePath(params: {
+  pathRules: PathRules;
+  path: string;
+  parentPath: string;
+}): boolean {
+  return (
+    params.path !== params.parentPath &&
+    isSameOrInsidePath({
+      rules: params.pathRules,
+      path: params.path,
+      parentPath: params.parentPath,
+    })
+  );
 }

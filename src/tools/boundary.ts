@@ -9,5 +9,6 @@ export const moduleBoundary = {
     'findTrustedTool.ts',
     'runToolCommand.ts',
     'toolInstallLocations.ts',
+    'toolsPlatform.ts',
   ],
 } satisfies ModuleBoundary;

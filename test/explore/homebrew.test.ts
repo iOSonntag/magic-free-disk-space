@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { ExploreProbeToolResult } from '../../src/explore/exploreProbe.js';
 import type {
   ExploreToolUnitHomebrewOldVersions,
@@ -135,22 +136,37 @@ function buildOrphansUnit(params: { cellarPath: string }): ExploreToolUnitHomebr
 
 describeAwaitingWin32Platform('parseHomebrewCellarPath', () => {
   test('reads the one path brew prints', () => {
-    expect(parseHomebrewCellarPath({ stdoutText: '/opt/homebrew/Cellar\n' })).toEqual({
+    expect(
+      parseHomebrewCellarPath({
+        pathRules: DARWIN_PATH_RULES,
+        stdoutText: '/opt/homebrew/Cellar\n',
+      }),
+    ).toEqual({
       kind: 'succeeded',
       value: APPLE_SILICON_CELLAR_PATH,
     });
   });
 
   test('rejects an empty, relative, or second path', () => {
-    expect(parseHomebrewCellarPath({ stdoutText: '' }).kind).toBe('failed');
-    expect(parseHomebrewCellarPath({ stdoutText: 'Cellar\n' }).kind).toBe('failed');
-    expect(parseHomebrewCellarPath({ stdoutText: '/a/Cellar\n/b/Cellar\n' }).kind).toBe('failed');
+    expect(parseHomebrewCellarPath({ pathRules: DARWIN_PATH_RULES, stdoutText: '' }).kind).toBe(
+      'failed',
+    );
+    expect(
+      parseHomebrewCellarPath({ pathRules: DARWIN_PATH_RULES, stdoutText: 'Cellar\n' }).kind,
+    ).toBe('failed');
+    expect(
+      parseHomebrewCellarPath({
+        pathRules: DARWIN_PATH_RULES,
+        stdoutText: '/a/Cellar\n/b/Cellar\n',
+      }).kind,
+    ).toBe('failed');
   });
 });
 
 describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
   test('reads every Would remove line with its size, and skips the closing line', () => {
     const removals = parseHomebrewCleanupDryRun({
+      pathRules: DARWIN_PATH_RULES,
       stdoutText: buildHomebrewCleanupDryRunText({
         homeDir: FIXTURE_HOME_DIR,
         cellarPaths: [APPLE_SILICON_CELLAR_PATH, INTEL_CELLAR_PATH],
@@ -172,16 +188,19 @@ describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
   });
 
   test('reads a path with spaces and parentheses', () => {
-    expect(parseHomebrewCleanupDryRun({ stdoutText: 'Would remove: /a b/c (1) (12KB)\n' })).toEqual(
-      {
-        kind: 'succeeded',
-        value: [{ path: buildTestAbsolutePath({ text: '/a b/c (1)' }), sizeText: '12KB' }],
-      },
-    );
+    expect(
+      parseHomebrewCleanupDryRun({
+        pathRules: DARWIN_PATH_RULES,
+        stdoutText: 'Would remove: /a b/c (1) (12KB)\n',
+      }),
+    ).toEqual({
+      kind: 'succeeded',
+      value: [{ path: buildTestAbsolutePath({ text: '/a b/c (1)' }), sizeText: '12KB' }],
+    });
   });
 
   test('reads nothing from an empty output', () => {
-    expect(parseHomebrewCleanupDryRun({ stdoutText: '' })).toEqual({
+    expect(parseHomebrewCleanupDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: '' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -193,7 +212,9 @@ describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
       'Would remove: /opt/homebrew/Cellar/wget/1.0',
       'Would remove: /opt/homebrew/Cellar/../wget/1.0 (1KB)',
     ]) {
-      expect(parseHomebrewCleanupDryRun({ stdoutText: line }).kind).toBe('failed');
+      expect(
+        parseHomebrewCleanupDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: line }).kind,
+      ).toBe('failed');
     }
   });
 });
@@ -201,6 +222,7 @@ describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
 describeAwaitingWin32Platform('buildHomebrewOldVersions', () => {
   test('groups the kegs of its own Cellar by formula and ignores every other line', () => {
     const removals = parseHomebrewCleanupDryRun({
+      pathRules: DARWIN_PATH_RULES,
       stdoutText: buildHomebrewCleanupDryRunText({
         homeDir: FIXTURE_HOME_DIR,
         cellarPaths: [APPLE_SILICON_CELLAR_PATH, INTEL_CELLAR_PATH],

@@ -1,6 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import type { DirectoryEntry } from '../system/loadDirectoryEntries.js';
@@ -122,6 +123,7 @@ export async function loadExploreEntryStats(params: {
  * Throws when `realpath` answers with a path that is not absolute.
  */
 export async function loadExploreRealPath(params: {
+  pathRules: PathRules;
   path: string;
 }): Promise<Result<AbsolutePath | null, ExploreFileUnreadable>> {
   const text = await loadRealPathText({ path: params.path });
@@ -130,7 +132,7 @@ export async function loadExploreRealPath(params: {
     return toNullWhenNotFound({ path: params.path, failure: text.failure });
   }
 
-  const realPath = parseAbsolutePath({ text: text.value });
+  const realPath = parseAbsolutePath({ rules: params.pathRules, text: text.value });
 
   if (realPath.kind === 'failed') {
     throw new Error('realpath returned a path that is not absolute.');

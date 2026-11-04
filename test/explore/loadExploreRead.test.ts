@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, realpath, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { EXPLORE_FILE_MAX_BYTES } from '../../src/explore/limits.js';
 import {
   loadExploreDirectoryEntries,
@@ -238,9 +239,15 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         await symlink(folderPath, linkPath);
         await writeFile(filePath, '');
 
-        const linked = await loadExploreRealPath({ path: linkPath });
-        const missing = await loadExploreRealPath({ path: join(fixtureRoot.homeDir, 'gone') });
-        const underFile = await loadExploreRealPath({ path: join(filePath, 'child') });
+        const linked = await loadExploreRealPath({ pathRules: DARWIN_PATH_RULES, path: linkPath });
+        const missing = await loadExploreRealPath({
+          pathRules: DARWIN_PATH_RULES,
+          path: join(fixtureRoot.homeDir, 'gone'),
+        });
+        const underFile = await loadExploreRealPath({
+          pathRules: DARWIN_PATH_RULES,
+          path: join(filePath, 'child'),
+        });
 
         expect(linked).toEqual({
           kind: 'succeeded',
@@ -260,7 +267,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         await chmod(folderPath, 0o000);
 
         try {
-          const realPath = await loadExploreRealPath({ path: childPath });
+          const realPath = await loadExploreRealPath({
+            pathRules: DARWIN_PATH_RULES,
+            path: childPath,
+          });
 
           expect(realPath).toEqual({
             kind: 'failed',

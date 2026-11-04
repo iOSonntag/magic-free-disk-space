@@ -12,5 +12,6 @@ export const moduleBoundary = {
     'loadUnitMeasurement.ts',
     'placeCandidate.ts',
     'runScan.ts',
+    'scanPlatform.ts',
   ],
 } satisfies ModuleBoundary;

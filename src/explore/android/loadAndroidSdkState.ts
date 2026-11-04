@@ -2,6 +2,7 @@ import { basename, join } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
@@ -87,10 +88,16 @@ const SYSTEM_IMAGE_FOLDER_DEPTH = 3;
  * A read that is absent or unfit is a fact of the state; only a failed read fails.
  */
 export async function loadAndroidSdkState(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
 }): Promise<Result<AndroidSdkState, ExploreFileUnreadable>> {
   const sdk = await loadAndroidSdk({
-    sdkRoot: joinAbsolutePath({ parentPath: params.homeDir, names: ANDROID_SDK_PATH_NAMES }),
+    pathRules: params.pathRules,
+    sdkRoot: joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.homeDir,
+      names: ANDROID_SDK_PATH_NAMES,
+    }),
   });
 
   if (sdk.kind === 'failed') {
@@ -98,7 +105,12 @@ export async function loadAndroidSdkState(params: {
   }
 
   const avds = await loadAndroidAvds({
-    avdHomePath: joinAbsolutePath({ parentPath: params.homeDir, names: AVD_HOME_FOLDER_NAMES }),
+    pathRules: params.pathRules,
+    avdHomePath: joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.homeDir,
+      names: AVD_HOME_FOLDER_NAMES,
+    }),
   });
 
   if (avds.kind === 'failed') {
@@ -109,6 +121,7 @@ export async function loadAndroidSdkState(params: {
 }
 
 async function loadAndroidSdk(params: {
+  pathRules: PathRules;
   sdkRoot: AbsolutePath;
 }): Promise<Result<AndroidSdk | null, ExploreFileUnreadable>> {
   const names = await loadExploreDirectoryNames({ path: params.sdkRoot });
@@ -121,14 +134,21 @@ async function loadAndroidSdk(params: {
     return { kind: 'succeeded', value: null };
   }
 
-  const systemImages = await loadAndroidSystemImageFolders({ sdkRoot: params.sdkRoot });
+  const systemImages = await loadAndroidSystemImageFolders({
+    pathRules: params.pathRules,
+    sdkRoot: params.sdkRoot,
+  });
 
   if (systemImages.kind === 'failed') {
     return systemImages;
   }
 
   const emulator = await loadAndroidPackageFolder({
-    folderPath: joinAbsolutePath({ parentPath: params.sdkRoot, names: ['emulator'] }),
+    folderPath: joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.sdkRoot,
+      names: ['emulator'],
+    }),
   });
 
   if (emulator.kind === 'failed') {
@@ -142,12 +162,22 @@ async function loadAndroidSdk(params: {
 }
 
 async function loadAndroidSystemImageFolders(params: {
+  pathRules: PathRules;
   sdkRoot: AbsolutePath;
 }): Promise<Result<AndroidPackageFolder[], ExploreFileUnreadable>> {
-  let folderPaths = [joinAbsolutePath({ parentPath: params.sdkRoot, names: ['system-images'] })];
+  let folderPaths = [
+    joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.sdkRoot,
+      names: ['system-images'],
+    }),
+  ];
 
   for (let depth = 0; depth < SYSTEM_IMAGE_FOLDER_DEPTH; depth++) {
-    const childPaths = await loadAndroidChildPaths({ parentPaths: folderPaths });
+    const childPaths = await loadAndroidChildPaths({
+      pathRules: params.pathRules,
+      parentPaths: folderPaths,
+    });
 
     if (childPaths.kind === 'failed') {
       return childPaths;
@@ -160,6 +190,7 @@ async function loadAndroidSystemImageFolders(params: {
 }
 
 async function loadAndroidAvds(params: {
+  pathRules: PathRules;
   avdHomePath: AbsolutePath;
 }): Promise<Result<AndroidAvd[] | null, ExploreFileUnreadable>> {
   const names = await loadExploreDirectoryNames({ path: params.avdHomePath });
@@ -176,7 +207,12 @@ async function loadAndroidAvds(params: {
 
   for (const name of names.value.filter((entryName) => entryName.endsWith(AVD_INI_SUFFIX))) {
     const avd = await loadAndroidAvd({
-      iniPath: joinAbsolutePath({ parentPath: params.avdHomePath, names: [name] }),
+      pathRules: params.pathRules,
+      iniPath: joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: params.avdHomePath,
+        names: [name],
+      }),
     });
 
     if (avd.kind === 'failed') {
@@ -190,6 +226,7 @@ async function loadAndroidAvds(params: {
 }
 
 async function loadAndroidAvd(params: {
+  pathRules: PathRules;
   iniPath: AbsolutePath;
 }): Promise<Result<AndroidAvd, ExploreFileUnreadable>> {
   const parsedName = parseAndroidAvdName({ text: basename(params.iniPath, AVD_INI_SUFFIX) });
@@ -207,6 +244,7 @@ async function loadAndroidAvd(params: {
   }
 
   const avdPath = parseAbsolutePath({
+    rules: params.pathRules,
     text: parseAndroidIniText({ text: ini.value.text }).get('path') ?? '',
   });
 

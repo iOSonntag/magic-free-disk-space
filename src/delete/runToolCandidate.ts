@@ -56,7 +56,7 @@ export async function runToolCandidate(params: {
   const trustedTool = await loadTrustedTool({
     name: params.unit.tool.name,
     path: params.unit.tool.path,
-    userId: params.environment.userId,
+    user: params.environment.user,
   });
 
   if (trustedTool.kind === 'failed') {

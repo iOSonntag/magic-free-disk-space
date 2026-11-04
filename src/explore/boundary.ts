@@ -5,6 +5,7 @@ export const moduleBoundary = {
   imports: ['catalog', 'environment', 'path', 'system', 'tools'],
   readsTablesOf: [],
   exposes: [
+    'explorePlatform.ts',
     'exploreUnit.ts',
     'projectPins/loadProjectPins.ts',
     'projectPins/projectPins.ts',

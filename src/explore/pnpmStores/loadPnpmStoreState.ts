@@ -1,5 +1,6 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreDirectoryNames, loadExploreFolderNames } from '../loadExploreRead.js';
@@ -30,6 +31,7 @@ const GLOBAL_VIRTUAL_STORE_FOLDER_NAME = 'links';
 const HIDDEN_NAME_PREFIX = '.';
 
 export async function loadPnpmStoreState(params: {
+  pathRules: PathRules;
   storeRoot: AbsolutePath;
 }): Promise<Result<PnpmStoreState, ExploreFileUnreadable>> {
   const names = await loadExploreFolderNames({ path: params.storeRoot });
@@ -43,6 +45,7 @@ export async function loadPnpmStoreState(params: {
   }
 
   const folders = await loadPnpmStoreFolders({
+    pathRules: params.pathRules,
     storeRoot: params.storeRoot,
     folderNames: names.value.folderNames,
   });
@@ -55,6 +58,7 @@ export async function loadPnpmStoreState(params: {
 }
 
 async function loadPnpmStoreFolders(params: {
+  pathRules: PathRules;
   storeRoot: AbsolutePath;
   folderNames: string[];
 }): Promise<Result<PnpmStoreFolder[], ExploreFileUnreadable>> {
@@ -62,6 +66,7 @@ async function loadPnpmStoreFolders(params: {
 
   for (const folderName of params.folderNames) {
     const folder = await loadPnpmStoreFolder({
+      pathRules: params.pathRules,
       storeRoot: params.storeRoot,
       folderName: folderName,
     });
@@ -81,10 +86,15 @@ async function loadPnpmStoreFolders(params: {
  * entry of any type whose name does not start with `.`, and a missing `links` holds none.
  */
 async function loadPnpmStoreFolder(params: {
+  pathRules: PathRules;
   storeRoot: AbsolutePath;
   folderName: string;
 }): Promise<Result<PnpmStoreFolder, ExploreFileUnreadable>> {
-  const folderPath = joinAbsolutePath({ parentPath: params.storeRoot, names: [params.folderName] });
+  const folderPath = joinAbsolutePath({
+    rules: params.pathRules,
+    parentPath: params.storeRoot,
+    names: [params.folderName],
+  });
   const storeVersion = parsePnpmStoreVersion({ folderName: params.folderName });
 
   switch (storeVersion.kind) {
@@ -93,6 +103,7 @@ async function loadPnpmStoreFolder(params: {
     case 'succeeded': {
       const linksNames = await loadExploreDirectoryNames({
         path: joinAbsolutePath({
+          rules: params.pathRules,
           parentPath: folderPath,
           names: [GLOBAL_VIRTUAL_STORE_FOLDER_NAME],
         }),

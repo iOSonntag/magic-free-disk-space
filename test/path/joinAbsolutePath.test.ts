@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
@@ -7,12 +8,14 @@ describeAwaitingWin32Platform('joinAbsolutePath', () => {
   test('joins each name as one folder level below the parent', () => {
     expect(
       joinAbsolutePath({
+        rules: DARWIN_PATH_RULES,
         parentPath: buildTestAbsolutePath({ text: '/Users/example' }),
         names: ['Library', 'Android', 'sdk'],
       }),
     ).toBe(buildTestAbsolutePath({ text: '/Users/example/Library/Android/sdk' }));
     expect(
       joinAbsolutePath({
+        rules: DARWIN_PATH_RULES,
         parentPath: buildTestAbsolutePath({ text: '/opt/homebrew/Cellar/' }),
         names: ['python@3.12'],
       }),
@@ -23,7 +26,9 @@ describeAwaitingWin32Platform('joinAbsolutePath', () => {
     const parentPath = buildTestAbsolutePath({ text: '/opt/homebrew/Cellar' });
 
     for (const name of ['', '.', '..', 'wget/1.21.4', '../wget']) {
-      expect(() => joinAbsolutePath({ parentPath: parentPath, names: [name] })).toThrow();
+      expect(() =>
+        joinAbsolutePath({ rules: DARWIN_PATH_RULES, parentPath: parentPath, names: [name] }),
+      ).toThrow();
     }
   });
 });

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import type { MacBundleId } from '../catalog/catalogOwner.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 
@@ -10,7 +11,7 @@ const MAX_CHILDREN_PER_DIRECTORY = 200;
  */
 export async function findLastSignOfUse(params: {
   homeDir: string;
-  bundleId: string | null;
+  bundleId: MacBundleId | null;
   displayName: string;
 }): Promise<number | null> {
   const signPaths = buildSignOfUsePaths({
@@ -36,7 +37,7 @@ export async function findLastSignOfUse(params: {
  */
 export function buildSignOfUsePaths(params: {
   homeDir: string;
-  bundleId: string | null;
+  bundleId: MacBundleId | null;
   displayName: string;
 }): string[] {
   const libraryDir = join(params.homeDir, 'Library');
@@ -65,7 +66,7 @@ export function buildSignOfUsePaths(params: {
 
 function buildLibrarySignOfUsePaths(params: {
   libraryDir: string;
-  bundleId: string;
+  bundleId: MacBundleId;
   displayName: string;
 }): string[] {
   return [

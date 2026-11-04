@@ -13,7 +13,10 @@ export async function recheckNvmVersionUnit(params: {
   environment: Environment;
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
-  const state = await loadNvmState({ homeDir: params.environment.homeDir });
+  const state = await loadNvmState({
+    pathRules: params.environment.pathRules,
+    homeDir: params.environment.homeDir,
+  });
 
   if (state.kind === 'failed') {
     return state;

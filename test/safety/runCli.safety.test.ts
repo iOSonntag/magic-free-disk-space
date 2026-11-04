@@ -336,20 +336,6 @@ describeAwaitingWin32Platform('runCli safety', () => {
     expect(io.outText()).toContain('- could not read every installed app: 1');
   });
 
-  test('refuses to run anywhere but macOS', async () => {
-    const io = createScriptedTerminalIo({ isTerminal: true, inputLines: ['1', 'DELETE'] });
-    const exitCode = await runCli({
-      argv: [],
-      environment: { ...environment, platform: 'linux' },
-      catalogEntries: TEST_CATALOG,
-      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
-      io: io,
-    });
-
-    expect(exitCode).toBe(2);
-    expect(io.prompts).toEqual([]);
-  });
-
   test('bad usage exits 2 without scanning', async () => {
     const { exitCode, io } = await runWithInput({ argv: ['--frobnicate'], inputLines: [] });
 

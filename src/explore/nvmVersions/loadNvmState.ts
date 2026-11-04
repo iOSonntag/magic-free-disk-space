@@ -1,5 +1,6 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import type { ExploreFileReadText, ExploreFileReadUnfit } from '../loadExploreRead.js';
@@ -44,9 +45,11 @@ export type NvmState = NvmStateNoVersions | NvmStateInstalled;
  * units. A missing alias folder or file is no alias; only a failed read fails.
  */
 export async function loadNvmState(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
 }): Promise<Result<NvmState, ExploreFileUnreadable>> {
   const versionsPath = joinAbsolutePath({
+    rules: params.pathRules,
     parentPath: params.homeDir,
     names: NVM_NODE_VERSIONS_PATH_NAMES,
   });
@@ -61,7 +64,12 @@ export async function loadNvmState(params: {
   }
 
   const aliases = await loadNvmAliasFolder({
-    folderPath: joinAbsolutePath({ parentPath: params.homeDir, names: NVM_ALIAS_PATH_NAMES }),
+    pathRules: params.pathRules,
+    folderPath: joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.homeDir,
+      names: NVM_ALIAS_PATH_NAMES,
+    }),
     namePrefix: '',
   });
 
@@ -70,7 +78,11 @@ export async function loadNvmState(params: {
   }
 
   const versionFolders = names.value.folderNames.map((folderName) =>
-    buildNvmVersionFolder({ versionsPath: versionsPath, folderName: folderName }),
+    buildNvmVersionFolder({
+      pathRules: params.pathRules,
+      versionsPath: versionsPath,
+      folderName: folderName,
+    }),
   );
 
   return {
@@ -80,10 +92,12 @@ export async function loadNvmState(params: {
 }
 
 function buildNvmVersionFolder(params: {
+  pathRules: PathRules;
   versionsPath: AbsolutePath;
   folderName: string;
 }): NvmVersionFolder {
   const folderPath = joinAbsolutePath({
+    rules: params.pathRules,
     parentPath: params.versionsPath,
     names: [params.folderName],
   });
@@ -100,6 +114,7 @@ type NvmAliasEntry = [aliasName: string, file: NvmAliasFile];
 
 /** Every alias file below `folderPath`, its subfolders such as `lts/` included; none when it is missing. */
 async function loadNvmAliasFolder(params: {
+  pathRules: PathRules;
   folderPath: AbsolutePath;
   namePrefix: string;
 }): Promise<Result<NvmAliasEntry[], ExploreFileUnreadable>> {
@@ -112,11 +127,19 @@ async function loadNvmAliasFolder(params: {
   const aliases: NvmAliasEntry[] = [];
 
   for (const entry of entries.value ?? []) {
-    const entryPath = joinAbsolutePath({ parentPath: params.folderPath, names: [entry.name] });
+    const entryPath = joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.folderPath,
+      names: [entry.name],
+    });
     const aliasName = `${params.namePrefix}${entry.name}`;
     const loaded =
       entry.kind === 'directory'
-        ? await loadNvmAliasFolder({ folderPath: entryPath, namePrefix: `${aliasName}/` })
+        ? await loadNvmAliasFolder({
+            pathRules: params.pathRules,
+            folderPath: entryPath,
+            namePrefix: `${aliasName}/`,
+          })
         : await loadNvmAliasFile({ path: entryPath, aliasName: aliasName });
 
     if (loaded.kind === 'failed') {

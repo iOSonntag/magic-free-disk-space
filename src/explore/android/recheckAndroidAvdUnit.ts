@@ -8,7 +8,10 @@ export async function recheckAndroidAvdUnit(params: {
   unit: ExploreToolUnitAndroidAvd;
   run: ExploreUnitRecheckRun;
 }): Promise<UnitRecheck> {
-  const state = await loadAndroidSdkState({ homeDir: params.run.environment.homeDir });
+  const state = await loadAndroidSdkState({
+    pathRules: params.run.environment.pathRules,
+    homeDir: params.run.environment.homeDir,
+  });
 
   if (state.kind === 'failed') {
     return state;

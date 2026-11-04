@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreDirectoryNames, loadExploreFileText } from '../loadExploreRead.js';
@@ -41,6 +42,7 @@ export async function loadAndroidPackageFolders(params: {
 
 /** The entries of each parent folder; a parent that is absent or no folder has none. */
 export async function loadAndroidChildPaths(params: {
+  pathRules: PathRules;
   parentPaths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const childPaths: AbsolutePath[] = [];
@@ -53,7 +55,9 @@ export async function loadAndroidChildPaths(params: {
     }
 
     for (const name of names.value ?? []) {
-      childPaths.push(joinAbsolutePath({ parentPath: parentPath, names: [name] }));
+      childPaths.push(
+        joinAbsolutePath({ rules: params.pathRules, parentPath: parentPath, names: [name] }),
+      );
     }
   }
 

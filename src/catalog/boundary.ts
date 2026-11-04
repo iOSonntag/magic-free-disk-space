@@ -4,5 +4,12 @@ import type { ModuleBoundary } from '../moduleBoundary.js';
 export const moduleBoundary = {
   imports: [],
   readsTablesOf: [],
-  exposes: ['catalog.ts', 'catalogEntries.ts', 'projectArtifactRules.ts', 'protectedPaths.ts'],
+  exposes: [
+    'catalog.ts',
+    'catalogEntries.ts',
+    'catalogOwner.ts',
+    'catalogPlatform.ts',
+    'projectArtifactRules.ts',
+    'protectedPaths.ts',
+  ],
 } satisfies ModuleBoundary;

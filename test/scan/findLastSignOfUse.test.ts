@@ -10,8 +10,9 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
-const BUNDLE_ID = 'com.example.fixture';
+const BUNDLE_ID = buildTestMacBundleId({ text: 'com.example.fixture' });
 const DISPLAY_NAME = 'Fixture App';
 const OLDEST_MS = 1_600_000_000_000;
 const MIDDLE_MS = 1_650_000_000_000;

@@ -161,7 +161,7 @@ export function buildTestCatalogEntry(overrides: Partial<CatalogEntry>): Catalog
     path: 'Library/Caches/Test',
     scope: 'self',
     ageRule: 'none',
-    ownerBundleId: null,
+    owner: { kind: 'none' },
     removal: { kind: 'delete' },
     ...overrides,
   };

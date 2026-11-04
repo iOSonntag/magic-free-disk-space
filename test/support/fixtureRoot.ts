@@ -13,8 +13,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
+import {
+  DARWIN_DELETION_LOG_HOME_DIR_NAMES,
+  DARWIN_PATH_RULES,
+  DARWIN_PREFERENCES_HOME_DIR_NAMES,
+  DARWIN_PROTECTED_ROOT_PATHS,
+} from '../../src/environment/loadEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { buildTestAbsolutePath } from './parsedValueFixtures.js';
+import { buildTestAbsolutePath, buildTestUserIdentity } from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
   rootDir: string;
@@ -53,10 +59,10 @@ export async function loadTestEnvironment(params: {
   const applicationRealPath = await realpath(params.fixtureRoot.applicationDir);
 
   return buildEnvironment({
-    platform: process.platform,
     nowMs: params.nowMs,
     // The fixtures belong to the user that runs the tests.
-    userId: process.getuid?.() ?? 0,
+    user: buildTestUserIdentity({ uid: process.getuid?.() ?? 0 }),
+    pathRules: DARWIN_PATH_RULES,
     homeDir: params.fixtureRoot.homeDir,
     homeRealPath,
     tempDir: params.fixtureRoot.tempDir,
@@ -64,6 +70,9 @@ export async function loadTestEnvironment(params: {
     applicationDirs: [params.fixtureRoot.applicationDir],
     applicationRealPaths: [applicationRealPath],
     homebrewPrefixPaths: [],
+    protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
+    deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
+    preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
   });
 }
 

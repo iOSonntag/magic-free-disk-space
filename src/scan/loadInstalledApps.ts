@@ -1,4 +1,6 @@
 import { basename, join } from 'node:path';
+import type { MacBundleId } from '../catalog/catalogOwner.js';
+import { parseMacBundleId } from '../catalog/catalogOwner.js';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadCommandOutput } from '../system/loadCommandOutput.js';
@@ -10,9 +12,10 @@ import type { ScanIssue } from './issue.js';
 export type InstalledApp = {
   bundlePath: string;
   displayName: string;
-  bundleId: string | null;
+  /** `null` when its Info.plist could not be read or names an empty id. */
+  bundleId: MacBundleId | null;
   /** Bundle ids of helpers and extensions inside the app; they belong to the app. */
-  nestedBundleIds: string[];
+  nestedBundleIds: MacBundleId[];
 };
 
 type AppBundleSearch = {
@@ -143,11 +146,14 @@ function isAppBundleName(params: { name: string }): boolean {
   return params.name.toLowerCase().endsWith(APP_BUNDLE_SUFFIX);
 }
 
-/** Reads the id from the first Info.plist that holds one; the failure is the macOS layout's. */
+/**
+ * Reads the id from the first Info.plist that holds one; the failure is the macOS layout's.
+ * `null` when that Info.plist names an empty id.
+ */
 async function loadBundleId(params: {
   bundlePath: string;
   commandTimeoutMs: number;
-}): Promise<Result<string, CommandFailure>> {
+}): Promise<Result<MacBundleId | null, CommandFailure>> {
   const macBundleId = await loadInfoPlistBundleId({
     infoPlistPath: join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
     commandTimeoutMs: params.commandTimeoutMs,
@@ -174,7 +180,7 @@ async function loadBundleId(params: {
 async function loadInfoPlistBundleId(params: {
   infoPlistPath: string;
   commandTimeoutMs: number;
-}): Promise<Result<string, CommandFailure>> {
+}): Promise<Result<MacBundleId | null, CommandFailure>> {
   const plutilResult = await loadCommandOutput({
     command: 'plutil',
     args: ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', params.infoPlistPath],
@@ -185,7 +191,15 @@ async function loadInfoPlistBundleId(params: {
     return plutilResult;
   }
 
-  return { kind: 'succeeded', value: plutilResult.value.trim() };
+  const bundleId = parseMacBundleId({ text: plutilResult.value.trim() });
+
+  switch (bundleId.kind) {
+    case 'succeeded':
+      return bundleId;
+    // An empty id names no app, as no id does.
+    case 'failed':
+      return { kind: 'succeeded', value: null };
+  }
 }
 
 /**
@@ -195,7 +209,7 @@ async function loadInfoPlistBundleId(params: {
 async function loadNestedBundleIds(params: {
   bundlePath: string;
   commandTimeoutMs: number;
-}): Promise<{ bundleIds: string[]; issues: ScanIssue[] }> {
+}): Promise<{ bundleIds: MacBundleId[]; issues: ScanIssue[] }> {
   const nestedBundlePathLists = await Promise.all(
     [join(params.bundlePath, 'Contents'), join(params.bundlePath, WRAPPED_BUNDLE_NAME)].map(
       (searchRootPath) =>
@@ -203,7 +217,7 @@ async function loadNestedBundleIds(params: {
     ),
   );
   const nestedBundlePaths = nestedBundlePathLists.flat();
-  const bundleIds: string[] = [];
+  const bundleIds: MacBundleId[] = [];
   const issues: ScanIssue[] = [];
 
   for (const nestedBundlePath of nestedBundlePaths) {
@@ -213,7 +227,9 @@ async function loadNestedBundleIds(params: {
     });
 
     if (bundleIdResult.kind === 'succeeded') {
-      bundleIds.push(bundleIdResult.value);
+      if (bundleIdResult.value !== null) {
+        bundleIds.push(bundleIdResult.value);
+      }
     } else if (bundleIdResult.failure.reason !== 'exitedWithError') {
       issues.push({
         path: nestedBundlePath,

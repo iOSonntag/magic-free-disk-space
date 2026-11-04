@@ -10,6 +10,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 function buildInfoPlistText(params: { bundleId: string }): string {
@@ -72,8 +73,8 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
       {
         bundlePath: wrapperPath,
         displayName: 'Pocket',
-        bundleId: 'com.example.pocket',
-        nestedBundleIds: ['com.example.pocket.widget'],
+        bundleId: buildTestMacBundleId({ text: 'com.example.pocket' }),
+        nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.pocket.widget' })],
       },
     ]);
   });
@@ -106,19 +107,19 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
         {
           bundlePath: examplePath,
           displayName: 'Example',
-          bundleId: 'com.example.app',
-          nestedBundleIds: ['com.example.share'],
+          bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
+          nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.share' })],
         },
         {
           bundlePath: join(applicationDir, 'Loud.APP'),
           displayName: 'Loud',
-          bundleId: 'com.example.loud',
+          bundleId: buildTestMacBundleId({ text: 'com.example.loud' }),
           nestedBundleIds: [],
         },
         {
           bundlePath: join(applicationDir, 'Utilities', 'Helper.app'),
           displayName: 'Helper',
-          bundleId: 'com.example.helper',
+          bundleId: buildTestMacBundleId({ text: 'com.example.helper' }),
           nestedBundleIds: [],
         },
       ],
@@ -222,7 +223,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
         {
           bundlePath: linkPath,
           displayName: 'Linked',
-          bundleId: 'com.example.real',
+          bundleId: buildTestMacBundleId({ text: 'com.example.real' }),
           nestedBundleIds: [],
         },
       ],
@@ -308,8 +309,11 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
         {
           bundlePath: examplePath,
           displayName: 'Example',
-          bundleId: 'com.example.app',
-          nestedBundleIds: ['com.example.near', 'com.example.share'],
+          bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
+          nestedBundleIds: [
+            buildTestMacBundleId({ text: 'com.example.near' }),
+            buildTestMacBundleId({ text: 'com.example.share' }),
+          ],
         },
       ],
       issues: [],
@@ -343,8 +347,8 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
         {
           bundlePath: examplePath,
           displayName: 'Example',
-          bundleId: 'com.example.app',
-          nestedBundleIds: ['com.example.share'],
+          bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
+          nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.share' })],
         },
       ],
       issues: [],

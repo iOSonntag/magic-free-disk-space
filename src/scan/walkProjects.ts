@@ -4,6 +4,7 @@ import type { ProjectPinFileRef } from '../explore/projectPins/projectPins.js';
 import { matchProjectPinFile } from '../explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { TreeEntry, TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -32,6 +33,7 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
  * `deadlineMs` stops the walk with one `walkStopped` issue. Never rejects.
  */
 export async function walkProjects(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
   excludedTopNames: string[];
   rules: ProjectArtifactRule[];
@@ -48,7 +50,7 @@ export async function walkProjects(params: {
 
   function visitProjectEntry(entry: TreeEntry): TreeEntryVisit {
     if (entry.kind === 'file' || entry.kind === 'symbolicLink') {
-      const pinFile = findWalkedPinFile({ entry: entry });
+      const pinFile = findWalkedPinFile({ pathRules: params.pathRules, entry: entry });
 
       if (pinFile !== null) {
         pinFiles.push(pinFile);
@@ -128,7 +130,10 @@ export async function walkProjects(params: {
 }
 
 /** The ref of a file or link the walk passed, or `null` when its name is no pin file's. */
-function findWalkedPinFile(params: { entry: TreeEntry }): ProjectPinFileRef | null {
+function findWalkedPinFile(params: {
+  pathRules: PathRules;
+  entry: TreeEntry;
+}): ProjectPinFileRef | null {
   const kind = matchProjectPinFile({
     name: params.entry.name,
     siblingNames: params.entry.siblingNames,
@@ -139,7 +144,7 @@ function findWalkedPinFile(params: { entry: TreeEntry }): ProjectPinFileRef | nu
     return null;
   }
 
-  const path = parseAbsolutePath({ text: params.entry.path });
+  const path = parseAbsolutePath({ rules: params.pathRules, text: params.entry.path });
 
   // Every entry lies below the absolute home folder the walk started at.
   if (path.kind === 'failed') {

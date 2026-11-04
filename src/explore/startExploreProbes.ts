@@ -357,8 +357,9 @@ async function runExploreToolProbe(params: {
   const found = await findTrustedTool({
     name: params.probe.toolName,
     locations: params.start.toolInstallLocations[params.probe.toolName],
+    pathRules: params.start.environment.pathRules,
     homeDir: params.start.environment.homeDir,
-    userId: params.start.environment.userId,
+    user: params.start.environment.user,
   });
 
   if (found.kind === 'failed') {

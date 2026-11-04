@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type {
   ProjectPinFileKind,
   ProjectPinFileRef,
@@ -42,6 +43,7 @@ function walkTestProjects(params: {
   isFolderEvicted?: (folder: { path: string }) => boolean;
 }): Promise<ProjectWalk> {
   return walkProjects({
+    pathRules: DARWIN_PATH_RULES,
     homeDir: params.homeDir,
     excludedTopNames: params.excludedTopNames ?? [],
     rules: PROJECT_ARTIFACT_RULES,

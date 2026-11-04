@@ -1,4 +1,5 @@
 import type { CatalogEntry } from '../catalog/catalog.js';
+import type { CatalogOwner } from '../catalog/catalogOwner.js';
 import type { CandidateDecision, SkipReason } from './candidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import type { ActivityProbe } from './loadTreeActivity.js';
@@ -13,7 +14,7 @@ export function decideCatalogCandidate(params: {
   entry: CatalogEntry;
   path: string;
   measurement: Measurement;
-  ownerBundleId: string | null;
+  owner: CatalogOwner;
   ownerBundlePaths: string[];
   ownerState: OwnerState;
   activity: ActivityProbe | null;
@@ -23,7 +24,7 @@ export function decideCatalogCandidate(params: {
     return { kind: 'skip', path: params.path, reason: 'symbolicLink' };
   }
 
-  if (isSystemOwnedTarget({ entry: params.entry, ownerBundleId: params.ownerBundleId })) {
+  if (isSystemOwnedTarget({ entry: params.entry, owner: params.owner })) {
     return { kind: 'skip', path: params.path, reason: 'systemOwned' };
   }
 
@@ -90,15 +91,17 @@ export function decideCatalogCandidate(params: {
 }
 
 /** An Apple-named child of a `children` entry belongs to macOS; the scanner skips it unmeasured. */
-export function isSystemOwnedTarget(params: {
-  entry: CatalogEntry;
-  ownerBundleId: string | null;
-}): boolean {
-  return (
-    params.entry.scope === 'children' &&
-    params.ownerBundleId !== null &&
-    isAppleBundleId({ bundleId: params.ownerBundleId })
-  );
+export function isSystemOwnedTarget(params: { entry: CatalogEntry; owner: CatalogOwner }): boolean {
+  if (params.entry.scope === 'self') {
+    return false;
+  }
+
+  switch (params.owner.kind) {
+    case 'none':
+      return false;
+    case 'bundleId':
+      return isAppleBundleId({ bundleId: params.owner.bundleId });
+  }
 }
 
 function getActivitySkipReason(params: {

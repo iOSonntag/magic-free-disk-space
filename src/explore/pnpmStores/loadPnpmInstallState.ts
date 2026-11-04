@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import { ASDF_INSTALLS_PATH_NAMES } from '../asdfVersions/asdfInstallsRoot.js';
@@ -74,19 +75,24 @@ const PACKAGE_JSON_FILE_NAME = 'package.json';
  * folders, the launcher `pnpm`); a missing place holds none.
  */
 export async function loadPnpmInstallState(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
   homebrewPrefixPaths: AbsolutePath[];
 }): Promise<Result<PnpmInstallState, ExploreFileUnreadable>> {
   const pnpmHomePaths = PNPM_HOMES_PATH_NAMES.map((names) =>
-    joinAbsolutePath({ parentPath: params.homeDir, names: names }),
+    joinAbsolutePath({ rules: params.pathRules, parentPath: params.homeDir, names: names }),
   );
-  const misePnpmRoots = await loadMisePnpmVersionsRoots({ homeDir: params.homeDir });
+  const misePnpmRoots = await loadMisePnpmVersionsRoots({
+    pathRules: params.pathRules,
+    homeDir: params.homeDir,
+  });
 
   if (misePnpmRoots.kind === 'failed') {
     return misePnpmRoots;
   }
 
   const cellarRoots = await loadHomebrewCellarPnpmRoots({
+    pathRules: params.pathRules,
     homebrewPrefixPaths: params.homebrewPrefixPaths,
   });
 
@@ -95,11 +101,13 @@ export async function loadPnpmInstallState(params: {
   }
 
   const homeRoots = listHomePnpmVersionsRoots({
+    pathRules: params.pathRules,
     homeDir: params.homeDir,
     pnpmHomePaths: pnpmHomePaths,
     misePnpmRoots: misePnpmRoots.value,
   });
   const folderInstalls = await loadVersionFolderInstalls({
+    pathRules: params.pathRules,
     versionsRoots: [...homeRoots, ...cellarRoots.value],
   });
 
@@ -107,13 +115,17 @@ export async function loadPnpmInstallState(params: {
     return folderInstalls;
   }
 
-  const globalFolders = await loadPnpmGlobalFolders({ pnpmHomePaths: pnpmHomePaths });
+  const globalFolders = await loadPnpmGlobalFolders({
+    pathRules: params.pathRules,
+    pnpmHomePaths: pnpmHomePaths,
+  });
 
   if (globalFolders.kind === 'failed') {
     return globalFolders;
   }
 
   const packageFolders = await loadPnpmPackageFolders({
+    pathRules: params.pathRules,
     homeDir: params.homeDir,
     homebrewPrefixPaths: params.homebrewPrefixPaths,
     globalFolderPaths: globalFolders.value,
@@ -123,13 +135,19 @@ export async function loadPnpmInstallState(params: {
     return packageFolders;
   }
 
-  const packageInstalls = await loadPackageJsonInstalls({ packageFolders: packageFolders.value });
+  const packageInstalls = await loadPackageJsonInstalls({
+    pathRules: params.pathRules,
+    packageFolders: packageFolders.value,
+  });
 
   if (packageInstalls.kind === 'failed') {
     return packageInstalls;
   }
 
-  const standaloneInstalls = await loadStandaloneInstalls({ pnpmHomePaths: pnpmHomePaths });
+  const standaloneInstalls = await loadStandaloneInstalls({
+    pathRules: params.pathRules,
+    pnpmHomePaths: pnpmHomePaths,
+  });
 
   if (standaloneInstalls.kind === 'failed') {
     return standaloneInstalls;
@@ -144,20 +162,22 @@ export async function loadPnpmInstallState(params: {
 }
 
 function listHomePnpmVersionsRoots(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
   pnpmHomePaths: AbsolutePath[];
   misePnpmRoots: AbsolutePath[];
 }): AbsolutePath[] {
   const asdfRoot = joinAbsolutePath({
+    rules: params.pathRules,
     parentPath: params.homeDir,
     names: [...ASDF_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME],
   });
   const corepackRoots = COREPACK_PNPM_PATH_NAMES.map((names) =>
-    joinAbsolutePath({ parentPath: params.homeDir, names: names }),
+    joinAbsolutePath({ rules: params.pathRules, parentPath: params.homeDir, names: names }),
   );
   const pnpmToolsRoots = params.pnpmHomePaths.flatMap((pnpmHomePath) =>
     PNPM_TOOLS_PATH_NAMES.map((names) =>
-      joinAbsolutePath({ parentPath: pnpmHomePath, names: names }),
+      joinAbsolutePath({ rules: params.pathRules, parentPath: pnpmHomePath, names: names }),
     ),
   );
 
@@ -169,13 +189,18 @@ function listHomePnpmVersionsRoots(params: {
  * `npm-pnpm` of the backend key `npm:pnpm`; a missing installs folder holds none.
  */
 async function loadMisePnpmVersionsRoots(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const miseInstallsPath = joinAbsolutePath({
+    rules: params.pathRules,
     parentPath: params.homeDir,
     names: MISE_INSTALLS_PATH_NAMES,
   });
-  const entryPaths = await loadEntryPaths({ folderPaths: [miseInstallsPath] });
+  const entryPaths = await loadEntryPaths({
+    pathRules: params.pathRules,
+    folderPaths: [miseInstallsPath],
+  });
 
   if (entryPaths.kind === 'failed') {
     return entryPaths;
@@ -190,12 +215,14 @@ async function loadMisePnpmVersionsRoots(params: {
 
 /** The Cellar folders of the formula `pnpm` and of each versioned formula `pnpm@<major>`. */
 async function loadHomebrewCellarPnpmRoots(params: {
+  pathRules: PathRules;
   homebrewPrefixPaths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const roots: AbsolutePath[] = [];
 
   for (const prefixPath of params.homebrewPrefixPaths) {
     const cellarPath = joinAbsolutePath({
+      rules: params.pathRules,
       parentPath: prefixPath,
       names: [HOMEBREW_CELLAR_FOLDER_NAME],
     });
@@ -213,7 +240,7 @@ async function loadHomebrewCellarPnpmRoots(params: {
     );
     roots.push(
       ...pnpmFormulaNames.map((formulaName) =>
-        joinAbsolutePath({ parentPath: cellarPath, names: [formulaName] }),
+        joinAbsolutePath({ rules: params.pathRules, parentPath: cellarPath, names: [formulaName] }),
       ),
     );
   }
@@ -222,12 +249,16 @@ async function loadHomebrewCellarPnpmRoots(params: {
 }
 
 async function loadVersionFolderInstalls(params: {
+  pathRules: PathRules;
   versionsRoots: AbsolutePath[];
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const installs: PnpmInstall[] = [];
 
   for (const versionsRoot of params.versionsRoots) {
-    const rootInstalls = await loadVersionsRootInstalls({ versionsRoot: versionsRoot });
+    const rootInstalls = await loadVersionsRootInstalls({
+      pathRules: params.pathRules,
+      versionsRoot: versionsRoot,
+    });
 
     if (rootInstalls.kind === 'failed') {
       return rootInstalls;
@@ -244,6 +275,7 @@ async function loadVersionFolderInstalls(params: {
  * version, else by the name of the folder its real path ends in.
  */
 async function loadVersionsRootInstalls(params: {
+  pathRules: PathRules;
   versionsRoot: AbsolutePath;
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const names = await loadExploreFolderNames({ path: params.versionsRoot });
@@ -258,14 +290,22 @@ async function loadVersionsRootInstalls(params: {
 
   const installs = names.value.folderNames.map((folderName) =>
     buildPnpmInstall({
-      path: joinAbsolutePath({ parentPath: params.versionsRoot, names: [folderName] }),
+      path: joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: params.versionsRoot,
+        names: [folderName],
+      }),
       versionText: folderName,
     }),
   );
 
   for (const linkName of names.value.linkNames) {
-    const linkPath = joinAbsolutePath({ parentPath: params.versionsRoot, names: [linkName] });
-    const realPath = await loadExploreRealPath({ path: linkPath });
+    const linkPath = joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.versionsRoot,
+      names: [linkName],
+    });
+    const realPath = await loadExploreRealPath({ pathRules: params.pathRules, path: linkPath });
 
     if (realPath.kind === 'failed') {
       return realPath;
@@ -288,6 +328,7 @@ async function loadVersionsRootInstalls(params: {
  * each node's npm globals.
  */
 async function loadPnpmPackageFolders(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
   homebrewPrefixPaths: AbsolutePath[];
   globalFolderPaths: AbsolutePath[];
@@ -296,8 +337,13 @@ async function loadPnpmPackageFolders(params: {
     [...ASDF_INSTALLS_PATH_NAMES, ASDF_NODE_TOOL_NAME],
     [...MISE_INSTALLS_PATH_NAMES, MISE_NODE_TOOL_NAME],
     NVM_NODE_VERSIONS_PATH_NAMES,
-  ].map((names) => joinAbsolutePath({ parentPath: params.homeDir, names: names }));
-  const nodeFolders = await loadEntryRealPaths({ folderPaths: nodeInstallsRoots });
+  ].map((names) =>
+    joinAbsolutePath({ rules: params.pathRules, parentPath: params.homeDir, names: names }),
+  );
+  const nodeFolders = await loadEntryRealPaths({
+    pathRules: params.pathRules,
+    folderPaths: nodeInstallsRoots,
+  });
 
   if (nodeFolders.kind === 'failed') {
     return nodeFolders;
@@ -305,13 +351,17 @@ async function loadPnpmPackageFolders(params: {
 
   const globalPackageFolders = params.globalFolderPaths.flatMap((globalFolder) =>
     PNPM_PACKAGE_PATH_NAMES.map((names) =>
-      joinAbsolutePath({ parentPath: globalFolder, names: names }),
+      joinAbsolutePath({ rules: params.pathRules, parentPath: globalFolder, names: names }),
     ),
   );
   const npmGlobalPackageFolders = [...params.homebrewPrefixPaths, ...nodeFolders.value].flatMap(
     (nodeFolder) =>
       PNPM_PACKAGE_PATH_NAMES.map((names) =>
-        joinAbsolutePath({ parentPath: nodeFolder, names: [NPM_GLOBAL_FOLDER_NAME, ...names] }),
+        joinAbsolutePath({
+          rules: params.pathRules,
+          parentPath: nodeFolder,
+          names: [NPM_GLOBAL_FOLDER_NAME, ...names],
+        }),
       ),
   );
 
@@ -323,11 +373,17 @@ async function loadPnpmPackageFolders(params: {
  * the entries of an entry named `v<digits>` are the global folders in its place.
  */
 async function loadPnpmGlobalFolders(params: {
+  pathRules: PathRules;
   pnpmHomePaths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const entryPaths = await loadEntryPaths({
+    pathRules: params.pathRules,
     folderPaths: params.pnpmHomePaths.map((pnpmHomePath) =>
-      joinAbsolutePath({ parentPath: pnpmHomePath, names: [PNPM_GLOBAL_FOLDER_NAME] }),
+      joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: pnpmHomePath,
+        names: [PNPM_GLOBAL_FOLDER_NAME],
+      }),
     ),
   });
 
@@ -342,13 +398,16 @@ async function loadPnpmGlobalFolders(params: {
   const flatFolderPaths = globalEntryPaths.filter(
     (entryPath) => !isGlobalInstallsFolder({ entryPath: entryPath }),
   );
-  const flatFolders = await loadRealPaths({ paths: flatFolderPaths });
+  const flatFolders = await loadRealPaths({ pathRules: params.pathRules, paths: flatFolderPaths });
 
   if (flatFolders.kind === 'failed') {
     return flatFolders;
   }
 
-  const installFolders = await loadEntryRealPaths({ folderPaths: installsFolderPaths });
+  const installFolders = await loadEntryRealPaths({
+    pathRules: params.pathRules,
+    folderPaths: installsFolderPaths,
+  });
 
   if (installFolders.kind === 'failed') {
     return installFolders;
@@ -364,12 +423,16 @@ function isGlobalInstallsFolder(params: { entryPath: AbsolutePath }): boolean {
 }
 
 async function loadStandaloneInstalls(params: {
+  pathRules: PathRules;
   pnpmHomePaths: AbsolutePath[];
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const installs: PnpmInstall[] = [];
 
   for (const pnpmHomePath of params.pnpmHomePaths) {
-    const install = await loadStandaloneInstall({ pnpmHomePath: pnpmHomePath });
+    const install = await loadStandaloneInstall({
+      pathRules: params.pathRules,
+      pnpmHomePath: pnpmHomePath,
+    });
 
     if (install.kind === 'failed') {
       return install;
@@ -389,9 +452,14 @@ async function loadStandaloneInstalls(params: {
  * read on its own.
  */
 async function loadStandaloneInstall(params: {
+  pathRules: PathRules;
   pnpmHomePath: AbsolutePath;
 }): Promise<Result<PnpmInstall | null, ExploreFileUnreadable>> {
-  const path = joinAbsolutePath({ parentPath: params.pnpmHomePath, names: [PNPM_TOOL_NAME] });
+  const path = joinAbsolutePath({
+    rules: params.pathRules,
+    parentPath: params.pnpmHomePath,
+    names: [PNPM_TOOL_NAME],
+  });
   const file = await loadExploreFileText({ path: path });
 
   if (file.kind === 'failed') {
@@ -415,15 +483,20 @@ async function loadStandaloneInstall(params: {
 
 /** The real paths of the folders and the live links in each of `folderPaths`, each path once. */
 async function loadEntryRealPaths(params: {
+  pathRules: PathRules;
   folderPaths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
-  const entryPaths = await loadEntryPaths({ folderPaths: params.folderPaths });
+  const entryPaths = await loadEntryPaths({
+    pathRules: params.pathRules,
+    folderPaths: params.folderPaths,
+  });
 
   if (entryPaths.kind === 'failed') {
     return entryPaths;
   }
 
   return loadRealPaths({
+    pathRules: params.pathRules,
     paths: [...entryPaths.value.folderPaths, ...entryPaths.value.linkPaths],
   });
 }
@@ -432,6 +505,7 @@ type EntryPaths = { folderPaths: AbsolutePath[]; linkPaths: AbsolutePath[] };
 
 /** The folders and the links in each of `folderPaths`; a missing folder holds none. */
 async function loadEntryPaths(params: {
+  pathRules: PathRules;
   folderPaths: AbsolutePath[];
 }): Promise<Result<EntryPaths, ExploreFileUnreadable>> {
   const folderPaths: AbsolutePath[] = [];
@@ -450,12 +524,12 @@ async function loadEntryPaths(params: {
 
     folderPaths.push(
       ...names.value.folderNames.map((folderName) =>
-        joinAbsolutePath({ parentPath: folderPath, names: [folderName] }),
+        joinAbsolutePath({ rules: params.pathRules, parentPath: folderPath, names: [folderName] }),
       ),
     );
     linkPaths.push(
       ...names.value.linkNames.map((linkName) =>
-        joinAbsolutePath({ parentPath: folderPath, names: [linkName] }),
+        joinAbsolutePath({ rules: params.pathRules, parentPath: folderPath, names: [linkName] }),
       ),
     );
   }
@@ -465,12 +539,13 @@ async function loadEntryPaths(params: {
 
 /** The real path of each of `paths`, each real path once; a dangling link adds nothing. */
 async function loadRealPaths(params: {
+  pathRules: PathRules;
   paths: AbsolutePath[];
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const realPaths = new Set<AbsolutePath>();
 
   for (const path of params.paths) {
-    const realPath = await loadExploreRealPath({ path: path });
+    const realPath = await loadExploreRealPath({ pathRules: params.pathRules, path: path });
 
     if (realPath.kind === 'failed') {
       return realPath;
@@ -485,12 +560,16 @@ async function loadRealPaths(params: {
 }
 
 async function loadPackageJsonInstalls(params: {
+  pathRules: PathRules;
   packageFolders: AbsolutePath[];
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const installs: PnpmInstall[] = [];
 
   for (const packageFolder of params.packageFolders) {
-    const install = await loadPackageJsonInstall({ packageFolder: packageFolder });
+    const install = await loadPackageJsonInstall({
+      pathRules: params.pathRules,
+      packageFolder: packageFolder,
+    });
 
     if (install.kind === 'failed') {
       return install;
@@ -506,10 +585,15 @@ async function loadPackageJsonInstalls(params: {
 
 /** The pnpm of a package folder by the `version` of its `package.json`; `null` when it has none. */
 async function loadPackageJsonInstall(params: {
+  pathRules: PathRules;
   packageFolder: AbsolutePath;
 }): Promise<Result<PnpmInstall | null, ExploreFileUnreadable>> {
   const packageJson = await loadExploreFileText({
-    path: joinAbsolutePath({ parentPath: params.packageFolder, names: [PACKAGE_JSON_FILE_NAME] }),
+    path: joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.packageFolder,
+      names: [PACKAGE_JSON_FILE_NAME],
+    }),
   });
 
   if (packageJson.kind === 'failed') {

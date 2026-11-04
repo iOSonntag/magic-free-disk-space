@@ -151,12 +151,12 @@ async function runBridgeWithLines(params: {
   events: BridgeEvent[];
   probedHomeDirs: string[];
   fetchCount: number;
-  preferenceHomeDirs: string[];
+  preferencesDirs: string[];
   savedValues: boolean[];
 }> {
   const events: BridgeEvent[] = [];
   const probedHomeDirs: string[] = [];
-  const preferenceHomeDirs: string[] = [];
+  const preferencesDirs: string[] = [];
   const savedValues: boolean[] = [];
   let fetchCount = 0;
   const environmentResult: Result<Environment, EnvironmentFailure> = params.environmentResult ?? {
@@ -186,12 +186,12 @@ async function runBridgeWithLines(params: {
       return params.latestRelease ?? { kind: 'succeeded', value: RELEASE_1_3_0 };
     },
     loadPreferences: async (load) => {
-      preferenceHomeDirs.push(load.homeDir);
+      preferencesDirs.push(load.preferencesDir);
 
       return { isUpdateCheckEnabled: params.isUpdateCheckEnabled ?? true };
     },
     saveIsUpdateCheckEnabled: async (save) => {
-      preferenceHomeDirs.push(save.homeDir);
+      preferencesDirs.push(save.preferencesDir);
       savedValues.push(save.isEnabled);
 
       return params.saveResult ?? { kind: 'succeeded', value: null };
@@ -203,7 +203,7 @@ async function runBridgeWithLines(params: {
     events: events,
     probedHomeDirs: probedHomeDirs,
     fetchCount: fetchCount,
-    preferenceHomeDirs: preferenceHomeDirs,
+    preferencesDirs: preferencesDirs,
     savedValues: savedValues,
   };
 }
@@ -675,12 +675,12 @@ describeAwaitingWin32Platform('runBridge', () => {
   });
 
   test('answers checkUpdate with the notice of a newer release, from the home it started in', async () => {
-    const { events, fetchCount, preferenceHomeDirs } = await runBridgeWithLines({
+    const { events, fetchCount, preferencesDirs } = await runBridgeWithLines({
       lines: [CHECK_UPDATE_LINE],
     });
 
     expect(fetchCount).toBe(1);
-    expect(preferenceHomeDirs).toEqual([environment.homeDir]);
+    expect(preferencesDirs).toEqual([environment.preferencesDir]);
     expect(events).toEqual([
       {
         kind: 'updateChecked',
@@ -731,7 +731,7 @@ describeAwaitingWin32Platform('runBridge', () => {
   });
 
   test('saves the switch without fetching and answers with the saved value', async () => {
-    const { events, fetchCount, preferenceHomeDirs, savedValues } = await runBridgeWithLines({
+    const { events, fetchCount, preferencesDirs, savedValues } = await runBridgeWithLines({
       lines: [
         buildSetUpdateCheckLine({ isEnabled: false }),
         buildSetUpdateCheckLine({ isEnabled: true }),
@@ -743,7 +743,7 @@ describeAwaitingWin32Platform('runBridge', () => {
       { kind: 'updateCheckSet', isUpdateCheckEnabled: true },
     ]);
     expect(savedValues).toEqual([false, true]);
-    expect(preferenceHomeDirs).toEqual([environment.homeDir, environment.homeDir]);
+    expect(preferencesDirs).toEqual([environment.preferencesDir, environment.preferencesDir]);
     expect(fetchCount).toBe(0);
   });
 

@@ -131,10 +131,10 @@ type BridgeContext = {
   /** Never throws. */
   fetchLatestReleaseVersion: () => Promise<LatestReleaseFetchResult>;
   /** Never throws. */
-  loadPreferences: (params: { homeDir: string }) => Promise<Preferences>;
+  loadPreferences: (params: { preferencesDir: string }) => Promise<Preferences>;
   /** Never throws. */
   saveIsUpdateCheckEnabled: (params: {
-    homeDir: string;
+    preferencesDir: string;
     isEnabled: boolean;
   }) => Promise<Result<null, PreferencesSaveFailure>>;
 };
@@ -177,6 +177,7 @@ export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
     const step = await answerRequestLine({
       context: params,
       homeDir: startEnvironment.value.homeDir,
+      preferencesDir: startEnvironment.value.preferencesDir,
       line: line,
       state: state,
       nextPlanId: lastPlanId + 1,
@@ -197,6 +198,8 @@ async function answerRequestLine(params: {
   context: BridgeContext;
   /** The home of the environment the bridge started in. */
   homeDir: string;
+  /** The preferences folder of the environment the bridge started in. */
+  preferencesDir: string;
   line: string;
   state: BridgeState;
   nextPlanId: number;
@@ -236,13 +239,13 @@ async function answerRequestLine(params: {
     case 'checkUpdate':
       return answerCheckUpdate({
         context: params.context,
-        homeDir: params.homeDir,
+        preferencesDir: params.preferencesDir,
         state: params.state,
       });
     case 'setUpdateCheck':
       return answerSetUpdateCheck({
         context: params.context,
-        homeDir: params.homeDir,
+        preferencesDir: params.preferencesDir,
         state: params.state,
         isEnabled: parsed.value.isEnabled,
       });
@@ -252,10 +255,12 @@ async function answerRequestLine(params: {
 /** Keeps the held scan and plan; any failure of the check answers without a notice. */
 async function answerCheckUpdate(params: {
   context: BridgeContext;
-  homeDir: string;
+  preferencesDir: string;
   state: BridgeState;
 }): Promise<BridgeStep> {
-  const preferences = await params.context.loadPreferences({ homeDir: params.homeDir });
+  const preferences = await params.context.loadPreferences({
+    preferencesDir: params.preferencesDir,
+  });
   const outcome = await runUpdateCheck({
     isUpdateCheckEnabled: preferences.isUpdateCheckEnabled,
     releaseVersion: params.context.releaseVersion,
@@ -275,12 +280,12 @@ async function answerCheckUpdate(params: {
 /** Keeps the held scan and plan; saves the switch and never fetches. */
 async function answerSetUpdateCheck(params: {
   context: BridgeContext;
-  homeDir: string;
+  preferencesDir: string;
   state: BridgeState;
   isEnabled: boolean;
 }): Promise<BridgeStep> {
   const saved = await params.context.saveIsUpdateCheckEnabled({
-    homeDir: params.homeDir,
+    preferencesDir: params.preferencesDir,
     isEnabled: params.isEnabled,
   });
 

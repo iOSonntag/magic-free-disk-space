@@ -1,5 +1,6 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { DirectoryEntry } from '../../system/loadDirectoryEntries.js';
 import type { ExploreToolCommandRun } from '../exploreProbe.js';
@@ -80,6 +81,7 @@ export async function loadHomebrewState(
   }
 
   const orphans = await loadHomebrewOrphans({
+    pathRules: run.environment.pathRules,
     cellarPath: cellarPath.value,
     formulae: orphanFormulae.value,
   });
@@ -96,12 +98,17 @@ export async function loadHomebrewState(
 
 /** The rack of each formula as an orphan, in the order of `params.formulae`; a failed read fails. */
 async function loadHomebrewOrphans(params: {
+  pathRules: PathRules;
   cellarPath: AbsolutePath;
   formulae: HomebrewFormulaName[];
 }): Promise<Result<HomebrewOrphan[], ExploreFileUnreadable>> {
   const orphanReads = await Promise.all(
     params.formulae.map((formula) =>
-      loadHomebrewOrphan({ cellarPath: params.cellarPath, formula: formula }),
+      loadHomebrewOrphan({
+        pathRules: params.pathRules,
+        cellarPath: params.cellarPath,
+        formula: formula,
+      }),
     ),
   );
 
@@ -109,10 +116,15 @@ async function loadHomebrewOrphans(params: {
 }
 
 async function loadHomebrewOrphan(params: {
+  pathRules: PathRules;
   cellarPath: AbsolutePath;
   formula: HomebrewFormulaName;
 }): Promise<Result<HomebrewOrphan, ExploreFileUnreadable>> {
-  const rackPath = joinAbsolutePath({ parentPath: params.cellarPath, names: [params.formula] });
+  const rackPath = joinAbsolutePath({
+    rules: params.pathRules,
+    parentPath: params.cellarPath,
+    names: [params.formula],
+  });
   const rack = await loadExploreDirectoryEntries({ path: rackPath });
 
   if (rack.kind === 'failed') {

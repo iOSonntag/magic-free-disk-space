@@ -24,10 +24,14 @@ export async function loadPnpmStoreFindings(params: {
   }
 
   const storeRoot = joinAbsolutePath({
+    rules: params.run.environment.pathRules,
     parentPath: params.run.environment.homeDir,
     names: params.storeRootPathNames,
   });
-  const storeState = await loadPnpmStoreState({ storeRoot: storeRoot });
+  const storeState = await loadPnpmStoreState({
+    pathRules: params.run.environment.pathRules,
+    storeRoot: storeRoot,
+  });
 
   if (storeState.kind === 'failed') {
     return storeState;
@@ -38,6 +42,7 @@ export async function loadPnpmStoreFindings(params: {
   }
 
   const installState = await loadPnpmInstallState({
+    pathRules: params.run.environment.pathRules,
     homeDir: params.run.environment.homeDir,
     homebrewPrefixPaths: params.run.environment.homebrewPrefixPaths,
   });

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { compareAndroidAvdUnit } from '../../src/explore/android/compareAndroidAvdUnit.js';
 import { compareAndroidPathUnit } from '../../src/explore/android/compareAndroidPathUnit.js';
 import {
@@ -127,7 +128,7 @@ function takeFirstUnit<TUnit extends ExploreFinding['unit']>(
 }
 
 async function loadFreshState() {
-  const state = await loadAndroidSdkState({ homeDir: homeDir });
+  const state = await loadAndroidSdkState({ pathRules: DARWIN_PATH_RULES, homeDir: homeDir });
 
   if (state.kind === 'failed') {
     throw new Error('The Android state should load.');
@@ -497,7 +498,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     });
     await chmod(avd.iniPath, 0o000);
 
-    expect(await loadAndroidSdkState({ homeDir: homeDir })).toEqual({
+    expect(await loadAndroidSdkState({ pathRules: DARWIN_PATH_RULES, homeDir: homeDir })).toEqual({
       kind: 'failed',
       failure: {
         reason: 'fileUnreadable',

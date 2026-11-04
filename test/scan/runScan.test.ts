@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
 import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
@@ -24,6 +25,7 @@ const vscodeOffer: CandidateDecision = { kind: 'offer', candidate: vscodeCandida
 describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
   test('keeps the offers of an incomplete probe and shows the advice of its entry', () => {
     const report = buildScanReportOfPhases({
+      pathRules: DARWIN_PATH_RULES,
       phases: [{ decisions: [vscodeOffer], issues: [] }],
       incompleteExploreAdvice: {
         decisions: [{ kind: 'advice', advice: vscodeAdvice }],
@@ -41,6 +43,7 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
 
   test('would hold back those offers if the advice took part in the dedupe', () => {
     const report = buildScanReportOfPhases({
+      pathRules: DARWIN_PATH_RULES,
       phases: [{ decisions: [vscodeOffer, { kind: 'advice', advice: vscodeAdvice }], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
     });

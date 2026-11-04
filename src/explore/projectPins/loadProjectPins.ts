@@ -1,6 +1,7 @@
 import { basename, dirname } from 'node:path';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
@@ -29,11 +30,15 @@ export type ProjectPinsLoad = {
  * tracked configs cannot be read, since the tool of such a link is unknown.
  */
 export async function loadProjectPins(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
   walkedPinFiles: ProjectPinFileRef[];
   isWalkComplete: boolean;
 }): Promise<Result<ProjectPins, ExploreFileUnreadable>> {
-  const trackedPinFiles = await loadMiseTrackedConfigPinFiles({ homeDir: params.homeDir });
+  const trackedPinFiles = await loadMiseTrackedConfigPinFiles({
+    pathRules: params.pathRules,
+    homeDir: params.homeDir,
+  });
 
   if (trackedPinFiles.kind === 'failed') {
     return trackedPinFiles;
@@ -51,9 +56,11 @@ export async function loadProjectPins(params: {
  * tracks none; a dangling link or an entry that is no link is skipped.
  */
 async function loadMiseTrackedConfigPinFiles(params: {
+  pathRules: PathRules;
   homeDir: AbsolutePath;
 }): Promise<Result<ProjectPinFileRef[], ExploreFileUnreadable>> {
   const folderPath = joinAbsolutePath({
+    rules: params.pathRules,
     parentPath: params.homeDir,
     names: MISE_TRACKED_CONFIGS_PATH_NAMES,
   });
@@ -72,7 +79,12 @@ async function loadMiseTrackedConfigPinFiles(params: {
       .filter((entry) => entry.kind === 'symbolicLink')
       .map((entry) =>
         loadMiseTrackedConfigPinFile({
-          linkPath: joinAbsolutePath({ parentPath: folderPath, names: [entry.name] }),
+          pathRules: params.pathRules,
+          linkPath: joinAbsolutePath({
+            rules: params.pathRules,
+            parentPath: folderPath,
+            names: [entry.name],
+          }),
         }),
       ),
   );
@@ -93,9 +105,13 @@ async function loadMiseTrackedConfigPinFiles(params: {
 
 /** The ref of the link's target, or `null` when the target is gone or has no pin file name. */
 async function loadMiseTrackedConfigPinFile(params: {
+  pathRules: PathRules;
   linkPath: AbsolutePath;
 }): Promise<Result<ProjectPinFileRef | null, ExploreFileUnreadable>> {
-  const realPath = await loadExploreRealPath({ path: params.linkPath });
+  const realPath = await loadExploreRealPath({
+    pathRules: params.pathRules,
+    path: params.linkPath,
+  });
 
   if (realPath.kind === 'failed') {
     return realPath;

@@ -14,13 +14,17 @@ export async function recheckPnpmStoreUnit(params: {
   environment: Environment;
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
-  const storeState = await loadPnpmStoreState({ storeRoot: params.unit.storeRoot });
+  const storeState = await loadPnpmStoreState({
+    pathRules: params.environment.pathRules,
+    storeRoot: params.unit.storeRoot,
+  });
 
   if (storeState.kind === 'failed') {
     return storeState;
   }
 
   const installState = await loadPnpmInstallState({
+    pathRules: params.environment.pathRules,
     homeDir: params.environment.homeDir,
     homebrewPrefixPaths: params.environment.homebrewPrefixPaths,
   });

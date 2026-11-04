@@ -2,7 +2,9 @@ import { createBridgeIo } from './bridge/bridgeIo.js';
 import { runBridge } from './bridge/runBridge.js';
 import { CATALOG_ENTRIES } from './catalog/catalogEntries.js';
 import { loadEnvironment } from './environment/loadEnvironment.js';
+import { parsePlatformId } from './platform/platform.js';
 import { loadPreferences, saveIsUpdateCheckEnabled } from './preferences/preferencesFile.js';
+import { formatUnsupportedPlatform } from './report/formatEnvironmentFailure.js';
 import { loadFullDiskAccess } from './system/loadFullDiskAccess.js';
 import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
 import { TOOL_INSTALL_LOCATIONS } from './tools/toolInstallLocations.js';
@@ -48,6 +50,21 @@ function getReleaseVersion(): ReleaseVersion | null {
 }
 
 async function main(): Promise<number> {
+  const platformId = parsePlatformId({ text: process.platform });
+
+  if (platformId.kind === 'failed') {
+    return refuseUnsupportedPlatform();
+  }
+
+  switch (platformId.value) {
+    case 'darwin':
+      return runBridgeOnDarwin();
+    case 'win32':
+      return refuseUnsupportedPlatform();
+  }
+}
+
+async function runBridgeOnDarwin(): Promise<number> {
   const releaseVersion = getReleaseVersion();
   const end = await runBridge({
     io: createBridgeIo(),
@@ -72,6 +89,17 @@ async function main(): Promise<number> {
     case 'cannotStart':
       return CANNOT_START_EXIT_CODE;
   }
+}
+
+/** Tells the app, as `runBridge` tells it of an unsafe environment, that the bridge cannot start. */
+function refuseUnsupportedPlatform(): number {
+  createBridgeIo().writeEvent({
+    kind: 'failed',
+    message: formatUnsupportedPlatform(),
+    effect: 'bridgeStopping',
+  });
+
+  return CANNOT_START_EXIT_CODE;
 }
 
 stopRunningToolsOnProcessEnd({

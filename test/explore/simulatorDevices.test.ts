@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { buildSimulatorDeviceFindings } from '../../src/explore/simulatorDevices/buildSimulatorDeviceFindings.js';
 import {
   parseSimulatorDeviceList,
@@ -20,6 +21,7 @@ const tool: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 
 function parseFixtureDevices() {
   const parsed = parseSimulatorDeviceList({
+    pathRules: DARWIN_PATH_RULES,
     stdoutText: buildSimulatorDeviceListJson({ homeDir: FIXTURE_HOME_DIR }),
   });
 
@@ -49,9 +51,11 @@ describeAwaitingWin32Platform('parseSimulatorDeviceUdid', () => {
 
 describeAwaitingWin32Platform('parseAbsolutePath', () => {
   test('passes an absolute path and rejects a relative one', () => {
-    expect(parseAbsolutePath({ text: '/Users/example/data' }).kind).toBe('succeeded');
-    expect(parseAbsolutePath({ text: 'data' }).kind).toBe('failed');
-    expect(parseAbsolutePath({ text: '-rf' }).kind).toBe('failed');
+    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: '/Users/example/data' }).kind).toBe(
+      'succeeded',
+    );
+    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: 'data' }).kind).toBe('failed');
+    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: '-rf' }).kind).toBe('failed');
   });
 });
 
@@ -90,16 +94,23 @@ describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
         },
       });
 
-      expect(parseSimulatorDeviceList({ stdoutText: text }).kind).toBe('succeeded');
+      expect(
+        parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind,
+      ).toBe('succeeded');
     }
   });
 
   test('rejects text that is no JSON', () => {
-    expect(parseSimulatorDeviceList({ stdoutText: 'garbage' }).kind).toBe('failed');
+    expect(
+      parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+    ).toBe('failed');
   });
 
   test('rejects JSON without a devices object', () => {
-    expect(parseSimulatorDeviceList({ stdoutText: '{"runtimes":[]}' }).kind).toBe('failed');
+    expect(
+      parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: '{"runtimes":[]}' })
+        .kind,
+    ).toBe('failed');
   });
 
   test('rejects a device whose UDID could start an option', () => {
@@ -117,7 +128,9 @@ describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
       },
     });
 
-    expect(parseSimulatorDeviceList({ stdoutText: text }).kind).toBe('failed');
+    expect(parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+      'failed',
+    );
   });
 
   test('rejects a relative data path', () => {
@@ -135,7 +148,9 @@ describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
       },
     });
 
-    expect(parseSimulatorDeviceList({ stdoutText: text }).kind).toBe('failed');
+    expect(parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+      'failed',
+    );
   });
 });
 

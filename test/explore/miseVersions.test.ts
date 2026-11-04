@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { buildMiseVersionFindings } from '../../src/explore/miseVersions/buildMiseVersionFindings.js';
 import {
   parseMisePrunableVersions,
@@ -47,6 +48,7 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
   test('reads each prunable version with its install path', () => {
     expect(
       parseMisePrunableVersions({
+        pathRules: DARWIN_PATH_RULES,
         stdoutText: buildMisePrunableJson({ homeDir: FIXTURE_HOME_DIR }),
       }),
     ).toEqual({
@@ -67,14 +69,16 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
   });
 
   test('reads no versions from an empty object', () => {
-    expect(parseMisePrunableVersions({ stdoutText: '{}' })).toEqual({
+    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: '{}' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
   });
 
   test('rejects text that is no JSON', () => {
-    expect(parseMisePrunableVersions({ stdoutText: 'garbage' }).kind).toBe('failed');
+    expect(
+      parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+    ).toBe('failed');
   });
 
   test('rejects a version that could start an option', () => {
@@ -82,13 +86,17 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
       node: [{ version: '--all', install_path: nodeInstallPath }],
     });
 
-    expect(parseMisePrunableVersions({ stdoutText: text }).kind).toBe('failed');
+    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+      'failed',
+    );
   });
 
   test('rejects a version without an absolute install path', () => {
     const text = JSON.stringify({ node: [{ version: '20.1.0', install_path: 'node/20.1.0' }] });
 
-    expect(parseMisePrunableVersions({ stdoutText: text }).kind).toBe('failed');
+    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+      'failed',
+    );
   });
 });
 

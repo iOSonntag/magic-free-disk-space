@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PREFERENCES_HOME_RELATIVE_DIR } from '../catalog/protectedPaths.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import { loadFileText } from '../system/loadFileText.js';
@@ -23,8 +22,8 @@ const PREFERENCES_FILE_NAME = 'preferences.json';
 const PREFERENCES_FILE_MAX_BYTES = 65_536;
 
 /** Never throws: a missing, unreadable, or malformed file, or a missing or mistyped key, is the default. */
-export async function loadPreferences(params: { homeDir: string }): Promise<Preferences> {
-  const fileJson = await loadPreferencesJson({ homeDir: params.homeDir });
+export async function loadPreferences(params: { preferencesDir: string }): Promise<Preferences> {
+  const fileJson = await loadPreferencesJson({ preferencesDir: params.preferencesDir });
 
   return parsePreferences(fileJson);
 }
@@ -43,13 +42,11 @@ function parsePreferences(fileJson: Record<string, unknown>): Preferences {
  * survives. Replaces the file by a rename, so a reader never sees half of it. Never throws.
  */
 export async function saveIsUpdateCheckEnabled(params: {
-  homeDir: string;
+  preferencesDir: string;
   isEnabled: boolean;
 }): Promise<Result<null, PreferencesSaveFailure>> {
-  const directoryPath = join(params.homeDir, PREFERENCES_HOME_RELATIVE_DIR);
-
   try {
-    await mkdir(directoryPath, { recursive: true, mode: 0o700 });
+    await mkdir(params.preferencesDir, { recursive: true, mode: 0o700 });
   } catch (error) {
     return {
       kind: 'failed',
@@ -57,16 +54,16 @@ export async function saveIsUpdateCheckEnabled(params: {
     };
   }
 
-  const fileJson = await loadPreferencesJson({ homeDir: params.homeDir });
+  const fileJson = await loadPreferencesJson({ preferencesDir: params.preferencesDir });
   const savedJson = { ...fileJson, isUpdateCheckEnabled: params.isEnabled };
-  const temporaryPath = join(directoryPath, `${PREFERENCES_FILE_NAME}.${randomUUID()}.tmp`);
+  const temporaryPath = join(params.preferencesDir, `${PREFERENCES_FILE_NAME}.${randomUUID()}.tmp`);
 
   try {
     await writeFile(temporaryPath, `${JSON.stringify(savedJson, null, 2)}\n`, {
       flag: 'wx',
       mode: 0o600,
     });
-    await rename(temporaryPath, join(directoryPath, PREFERENCES_FILE_NAME));
+    await rename(temporaryPath, buildPreferencesPath({ preferencesDir: params.preferencesDir }));
   } catch (error) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
 
@@ -76,14 +73,16 @@ export async function saveIsUpdateCheckEnabled(params: {
   return { kind: 'succeeded', value: null };
 }
 
-export function buildPreferencesPath(params: { homeDir: string }): string {
-  return join(params.homeDir, PREFERENCES_HOME_RELATIVE_DIR, PREFERENCES_FILE_NAME);
+export function buildPreferencesPath(params: { preferencesDir: string }): string {
+  return join(params.preferencesDir, PREFERENCES_FILE_NAME);
 }
 
 /** The file's JSON object, or `{}` when there is no readable file or it holds no object. */
-async function loadPreferencesJson(params: { homeDir: string }): Promise<Record<string, unknown>> {
+async function loadPreferencesJson(params: {
+  preferencesDir: string;
+}): Promise<Record<string, unknown>> {
   const fileText = await loadFileText({
-    path: buildPreferencesPath({ homeDir: params.homeDir }),
+    path: buildPreferencesPath({ preferencesDir: params.preferencesDir }),
     maxBytes: PREFERENCES_FILE_MAX_BYTES,
   });
 

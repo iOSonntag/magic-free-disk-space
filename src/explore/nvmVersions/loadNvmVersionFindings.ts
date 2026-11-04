@@ -17,7 +17,10 @@ export async function loadNvmVersionFindings(params: {
     return toolPins;
   }
 
-  const state = await loadNvmState({ homeDir: params.run.environment.homeDir });
+  const state = await loadNvmState({
+    pathRules: params.run.environment.pathRules,
+    homeDir: params.run.environment.homeDir,
+  });
 
   if (state.kind === 'failed') {
     return state;

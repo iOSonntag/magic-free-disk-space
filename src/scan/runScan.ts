@@ -1,10 +1,12 @@
 import { join, sep } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
+import type { CatalogOwner } from '../catalog/catalogOwner.js';
 import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js';
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
@@ -42,8 +44,8 @@ import { loadProcessCommands } from './loadProcessCommands.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
   findOwnerBundlePaths,
-  resolveOwnerBundleId,
   resolveOwnerState,
+  resolveTargetOwner,
 } from './resolveOwnerState.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
@@ -123,6 +125,7 @@ export async function runScan(params: {
   const unusedCutoffMs = params.environment.nowMs - params.options.unusedDays * DAY_MS;
   // One walk serves the artifact phase and the pinned probes, its deadline counted from scan start.
   const projectWalk = walkProjects({
+    pathRules: params.environment.pathRules,
     homeDir: params.environment.homeDir,
     excludedTopNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     rules: PROJECT_ARTIFACT_RULES,
@@ -134,6 +137,7 @@ export async function runScan(params: {
     walkEnded: projectWalk.then(() => undefined),
     pins: projectWalk.then((walk) =>
       loadProjectPins({
+        pathRules: params.environment.pathRules,
         homeDir: params.environment.homeDir,
         walkedPinFiles: walk.pinFiles,
         isWalkComplete: walk.isComplete,
@@ -214,6 +218,7 @@ export async function runScan(params: {
   });
 
   return buildScanReportOfPhases({
+    pathRules: params.environment.pathRules,
     // Explore comes last, so an item an earlier source found wins the overlap.
     phases: [
       setup,
@@ -234,6 +239,7 @@ export async function runScan(params: {
  * whose probe judged only part of their units, and builds the report.
  */
 export function buildScanReportOfPhases(params: {
+  pathRules: PathRules;
   phases: ScanPhase[];
   incompleteExploreAdvice: ScanPhase;
 }): ScanReport {
@@ -241,7 +247,7 @@ export function buildScanReportOfPhases(params: {
 
   return buildScanReport({
     decisions: [
-      ...dedupeCandidates({ decisions: scan.decisions }),
+      ...dedupeCandidates({ pathRules: params.pathRules, decisions: scan.decisions }),
       // Added after the dedupe, so this advice holds back no offer of its own entry, whose units
       // lie inside its path. Moved before it, the advice would skip every finding of its probe.
       ...params.incompleteExploreAdvice.decisions,
@@ -273,14 +279,14 @@ async function loadCatalogTargetPhase(params: {
 }): Promise<ScanPhase> {
   const entry = params.target.entry;
   const path = params.target.path;
-  const ownerBundleId = resolveOwnerBundleId({
+  const owner = resolveTargetOwner({
     entry: entry,
     path: path,
     installedApps: params.context.installedApps,
   });
 
   // Decided before measuring, because macOS denies reading most of its own folders.
-  if (isSystemOwnedTarget({ entry: entry, ownerBundleId: ownerBundleId })) {
+  if (isSystemOwnedTarget({ entry: entry, owner: owner })) {
     return { decisions: [{ kind: 'skip', path: path, reason: 'systemOwned' }], issues: [] };
   }
 
@@ -304,13 +310,13 @@ async function loadCatalogTargetPhase(params: {
         entry: entry,
         path: path,
         measurement: measurement,
-        ownerBundleId: ownerBundleId,
+        owner: owner,
         ownerBundlePaths: findOwnerBundlePaths({
-          ownerBundleId: ownerBundleId,
+          owner: owner,
           installedApps: params.context.installedApps,
         }),
         ownerState: resolveOwnerState({
-          ownerBundleId: ownerBundleId,
+          owner: owner,
           installedApps: params.context.installedApps,
           processCommands: params.context.processCommands,
         }),
@@ -395,7 +401,7 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
         lastSignOfUseMs: lastSignOfUseMs,
         unusedCutoffMs: params.context.unusedCutoffMs,
         ownerState: resolveOwnerState({
-          ownerBundleId: app.bundleId,
+          owner: buildAppOwner({ app: app }),
           installedApps: params.context.installedApps,
           processCommands: params.context.processCommands,
         }),
@@ -481,6 +487,15 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
   );
 
   return mergeScanPhases({ phases: namePhases });
+}
+
+/** An app owns its own bundle; one without a bundle id has no owner whose run can be told. */
+function buildAppOwner(params: { app: InstalledApp }): CatalogOwner {
+  if (params.app.bundleId === null) {
+    return { kind: 'none' };
+  }
+
+  return { kind: 'bundleId', bundleId: params.app.bundleId };
 }
 
 /**

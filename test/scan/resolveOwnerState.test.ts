@@ -3,12 +3,13 @@ import {
   findOwnerBundlePaths,
   isAppleBundleId,
   isBundleIdShape,
-  resolveOwnerBundleId,
   resolveOwnerState,
+  resolveTargetOwner,
 } from '../../src/scan/resolveOwnerState.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
+import { buildTestCatalogOwner, buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 describeAwaitingWin32Platform('isBundleIdShape', () => {
   test('accepts reverse-DNS names with three or more segments', () => {
@@ -27,50 +28,63 @@ describeAwaitingWin32Platform('isBundleIdShape', () => {
 
 describeAwaitingWin32Platform('isAppleBundleId', () => {
   test('matches the com.apple. prefix only', () => {
-    expect(isAppleBundleId({ bundleId: 'com.apple.Safari' })).toBe(true);
-    expect(isAppleBundleId({ bundleId: 'com.applesauce.app' })).toBe(false);
+    expect(isAppleBundleId({ bundleId: buildTestMacBundleId({ text: 'com.apple.Safari' }) })).toBe(
+      true,
+    );
+    expect(
+      isAppleBundleId({ bundleId: buildTestMacBundleId({ text: 'com.applesauce.app' }) }),
+    ).toBe(false);
   });
 });
 
-describeAwaitingWin32Platform('resolveOwnerBundleId', () => {
+describeAwaitingWin32Platform('resolveTargetOwner', () => {
   test('takes the owner of a self entry', () => {
-    const entry = buildTestCatalogEntry({ scope: 'self', ownerBundleId: 'com.example.app' });
+    const entry = buildTestCatalogEntry({
+      scope: 'self',
+      owner: buildTestCatalogOwner({ bundleId: 'com.example.app' }),
+    });
 
     expect(
-      resolveOwnerBundleId({ entry: entry, path: '/home/Library/Caches/Test', installedApps: [] }),
-    ).toBe('com.example.app');
+      resolveTargetOwner({ entry: entry, path: '/home/Library/Caches/Test', installedApps: [] }),
+    ).toEqual(buildTestCatalogOwner({ bundleId: 'com.example.app' }));
   });
 
   test('takes the child name of a children entry when it is a bundle id', () => {
-    const entry = buildTestCatalogEntry({ scope: 'children', ownerBundleId: null });
+    const entry = buildTestCatalogEntry({
+      scope: 'children',
+      owner: buildTestCatalogOwner({ bundleId: null }),
+    });
 
     expect(
-      resolveOwnerBundleId({
+      resolveTargetOwner({
         entry: entry,
         path: '/home/Library/Caches/com.example.app',
         installedApps: [],
       }),
-    ).toBe('com.example.app');
+    ).toEqual(buildTestCatalogOwner({ bundleId: 'com.example.app' }));
     expect(
-      resolveOwnerBundleId({
+      resolveTargetOwner({
         entry: entry,
         path: '/home/Library/Caches/Homebrew',
         installedApps: [],
       }),
-    ).toBe(null);
+    ).toEqual(buildTestCatalogOwner({ bundleId: null }));
   });
 
   test('takes the installed app named like a child, ignoring case', () => {
-    const entry = buildTestCatalogEntry({ scope: 'children', ownerBundleId: null });
+    const entry = buildTestCatalogEntry({
+      scope: 'children',
+      owner: buildTestCatalogOwner({ bundleId: null }),
+    });
     const slack = buildTestInstalledApp({ displayName: 'Slack', bundleId: 'com.example.slack' });
 
     expect(
-      resolveOwnerBundleId({
+      resolveTargetOwner({
         entry: entry,
         path: '/home/Library/Caches/slack',
         installedApps: [slack],
       }),
-    ).toBe('com.example.slack');
+    ).toEqual(buildTestCatalogOwner({ bundleId: 'com.example.slack' }));
   });
 });
 
@@ -86,11 +100,18 @@ describeAwaitingWin32Platform('findOwnerBundlePaths', () => {
       buildTestInstalledApp({ bundlePath: '/Applications/C.app', bundleId: 'com.example.c' }),
     ];
 
-    expect(findOwnerBundlePaths({ ownerBundleId: 'com.example.a', installedApps: apps })).toEqual([
-      '/Applications/A.app',
-      '/Applications/B.app',
-    ]);
-    expect(findOwnerBundlePaths({ ownerBundleId: null, installedApps: apps })).toEqual([]);
+    expect(
+      findOwnerBundlePaths({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.a' }),
+        installedApps: apps,
+      }),
+    ).toEqual(['/Applications/A.app', '/Applications/B.app']);
+    expect(
+      findOwnerBundlePaths({
+        owner: buildTestCatalogOwner({ bundleId: null }),
+        installedApps: apps,
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -103,21 +124,25 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
 
   test('an entry without owner counts as stopped', () => {
     expect(
-      resolveOwnerState({ ownerBundleId: null, installedApps: [slack], processCommands: null }),
+      resolveOwnerState({
+        owner: buildTestCatalogOwner({ bundleId: null }),
+        installedApps: [slack],
+        processCommands: null,
+      }),
     ).toBe('stopped');
   });
 
   test('any owner is unknown while the process list is missing, installed or not', () => {
     expect(
       resolveOwnerState({
-        ownerBundleId: 'com.example.slack',
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
         installedApps: [slack],
         processCommands: null,
       }),
     ).toBe('unknown');
     expect(
       resolveOwnerState({
-        ownerBundleId: 'com.example.gone',
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
         installedApps: [slack],
         processCommands: null,
       }),
@@ -127,7 +152,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
   test('an owner no installed app carries counts as stopped', () => {
     expect(
       resolveOwnerState({
-        ownerBundleId: 'com.example.gone',
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
         installedApps: [slack],
         processCommands: ['/Applications/Slack.app/Contents/MacOS/Slack'],
       }),
@@ -137,7 +162,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
   test('a process inside the bundle marks the owner running', () => {
     expect(
       resolveOwnerState({
-        ownerBundleId: 'com.example.slack',
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
         installedApps: [slack],
         processCommands: ['/sbin/launchd', '/Applications/Slack.app/Contents/MacOS/Slack --flag'],
       }),
@@ -147,7 +172,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
   test('a nested bundle id maps to its app', () => {
     expect(
       resolveOwnerState({
-        ownerBundleId: 'com.example.slack.helper',
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.slack.helper' }),
         installedApps: [slack],
         processCommands: [
           '/Applications/Slack.app/Contents/Frameworks/Helper.app/Contents/MacOS/H',
@@ -159,7 +184,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
   test('a bundle whose path only shares a prefix does not count', () => {
     expect(
       resolveOwnerState({
-        ownerBundleId: 'com.example.slack',
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
         installedApps: [slack],
         processCommands: ['/Applications/Slack.app.old/Contents/MacOS/Slack'],
       }),
@@ -174,7 +199,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
 
     expect(
       resolveOwnerState({
-        ownerBundleId: 'com.example.slack',
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
         installedApps: [slack, copy],
         processCommands: ['/Users/tester/Applications/Slack.app/Contents/MacOS/Slack'],
       }),

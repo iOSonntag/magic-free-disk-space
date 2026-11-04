@@ -83,10 +83,18 @@ function validatePathRemoval(params: {
     ...params.environment.protectedRealPaths,
     ...params.environment.sensitiveRealPaths,
   ].some((protectedPath) =>
-    isSameOrInsidePath({ path: protectedPath.toLowerCase(), parentPath: lowerCaseRealPath }),
+    isSameOrInsidePath({
+      rules: params.environment.pathRules,
+      path: protectedPath.toLowerCase(),
+      parentPath: lowerCaseRealPath,
+    }),
   );
   const isInsideSensitivePath = params.environment.sensitiveRealPaths.some((sensitivePath) =>
-    isSameOrInsidePath({ path: lowerCaseRealPath, parentPath: sensitivePath.toLowerCase() }),
+    isSameOrInsidePath({
+      rules: params.environment.pathRules,
+      path: lowerCaseRealPath,
+      parentPath: sensitivePath.toLowerCase(),
+    }),
   );
 
   if (holdsProtectedPath || isInsideSensitivePath) {
@@ -95,7 +103,12 @@ function validatePathRemoval(params: {
 
   const isInsideAllowedRoot = params.environment.allowedRealRoots.some(
     (allowedRoot) =>
-      realPath !== allowedRoot && isSameOrInsidePath({ path: realPath, parentPath: allowedRoot }),
+      realPath !== allowedRoot &&
+      isSameOrInsidePath({
+        rules: params.environment.pathRules,
+        path: realPath,
+        parentPath: allowedRoot,
+      }),
   );
 
   if (!isInsideAllowedRoot) {

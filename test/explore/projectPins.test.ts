@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, realpath, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { EXPLORE_FILE_MAX_BYTES } from '../../src/explore/limits.js';
 import {
   loadProjectPinFiles,
@@ -298,6 +299,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       await writeFile(nvmrcPath, '22\n');
 
       const pins = await loadProjectPins({
+        pathRules: DARWIN_PATH_RULES,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [{ path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' }],
         isWalkComplete: false,
@@ -344,6 +346,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       await writeFile(join(trackedConfigsPath, 'not-a-link.toml'), '[tools]\n');
 
       const pins = await loadProjectPins({
+        pathRules: DARWIN_PATH_RULES,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [],
         isWalkComplete: true,
@@ -380,6 +383,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       await createTrackedConfigLink({ name: 'a1', targetPath: miseConfigPath });
 
       const pins = await loadProjectPins({
+        pathRules: DARWIN_PATH_RULES,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [
           { path: buildTestAbsolutePath({ text: miseConfigPath }), kind: 'miseConfig' },
@@ -403,6 +407,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
+          pathRules: DARWIN_PATH_RULES,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,
@@ -432,6 +437,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
+          pathRules: DARWIN_PATH_RULES,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,
@@ -459,6 +465,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
+          pathRules: DARWIN_PATH_RULES,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,

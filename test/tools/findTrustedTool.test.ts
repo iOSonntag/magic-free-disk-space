@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { findTrustedTool, loadTrustedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../src/tools/toolInstallLocations.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -8,11 +9,14 @@ import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { createActiveProject, writeDartVersionFile } from '../support/flutterSdkFixtures.js';
+import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
 const userId = process.getuid?.() ?? 0;
+
+const user = buildTestUserIdentity({ uid: userId });
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
@@ -42,8 +46,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(path)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -63,8 +68,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(link)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -79,8 +85,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(path)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -95,8 +102,8 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
 
     await mkdir(folder, { recursive: true });
 
-    const plain = await loadTrustedTool({ name: 'mise', path: path, userId: userId });
-    const directory = await loadTrustedTool({ name: 'mise', path: folder, userId: userId });
+    const plain = await loadTrustedTool({ name: 'mise', path: path, user: user });
+    const directory = await loadTrustedTool({ name: 'mise', path: folder, user: user });
 
     expect(plain).toEqual({
       kind: 'failed',
@@ -111,7 +118,11 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
   testOnPosix('distrusts a binary of another user', async () => {
     const path = await createMise({ folder: 'mine' });
 
-    const loaded = await loadTrustedTool({ name: 'mise', path: path, userId: userId + 1 });
+    const loaded = await loadTrustedTool({
+      name: 'mise',
+      path: path,
+      user: buildTestUserIdentity({ uid: userId + 1 }),
+    });
 
     expect(loaded).toEqual({
       kind: 'failed',
@@ -130,8 +141,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
         buildAbsoluteLocation(join(fixtureRoot.rootDir, 'missing', 'mise')),
         buildAbsoluteLocation(link),
       ],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
@@ -150,8 +162,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
         buildAbsoluteLocation(trusted),
         buildAbsoluteLocation(later),
       ],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -171,8 +184,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
         buildAbsoluteLocation(notExecutable),
         buildAbsoluteLocation(writable),
       ],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -195,8 +209,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [{ kind: 'path', root: 'home', path: '.local/bin/mise' }],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -215,8 +230,9 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -273,8 +289,9 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -293,8 +310,9 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
@@ -321,8 +339,9 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }, buildAbsoluteLocation(link)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -379,8 +398,9 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -399,8 +419,9 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -415,8 +436,9 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
@@ -428,8 +450,9 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -454,8 +477,9 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(dart)],
+      pathRules: DARWIN_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      userId: userId,
+      user: user,
     });
 
     expect(found).toEqual({
@@ -467,7 +491,7 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
   testOnPosix('loadTrustedTool reads the wrapper the same way', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
 
-    expect(await loadTrustedTool({ name: 'dart', path: layout.linkPath, userId: userId })).toEqual({
+    expect(await loadTrustedTool({ name: 'dart', path: layout.linkPath, user: user })).toEqual({
       kind: 'succeeded',
       value: { name: 'dart', path: await realpath(layout.sdkDartPath) },
     });

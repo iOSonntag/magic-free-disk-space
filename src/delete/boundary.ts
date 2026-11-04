@@ -8,6 +8,7 @@ export const moduleBoundary = {
     'confirmation.ts',
     'deleteApprovedCandidates.ts',
     'deleteCandidates.ts',
+    'deletePlatform.ts',
     'deletionJournal.ts',
     'planRemoval.ts',
     'validateRemoval.ts',

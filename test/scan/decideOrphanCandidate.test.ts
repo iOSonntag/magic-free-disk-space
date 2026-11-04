@@ -3,6 +3,7 @@ import { decideOrphanCandidate } from '../../src/scan/decideOrphanCandidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
+import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 const UNUSED_CUTOFF_MS = 1_650_000_000_000;
@@ -27,7 +28,7 @@ function decide(params: {
       isComplete: params.isComplete ?? true,
       latestModifiedMs: params.latestModifiedMs ?? UNUSED_CUTOFF_MS - 1,
     }),
-    installedBundleIds: new Set(['com.example.installed']),
+    installedBundleIds: new Set([buildTestMacBundleId({ text: 'com.example.installed' })]),
     isInstalledAppListComplete: params.isInstalledAppListComplete ?? true,
     unusedCutoffMs: UNUSED_CUTOFF_MS,
     minOfferedBytes: MIB,

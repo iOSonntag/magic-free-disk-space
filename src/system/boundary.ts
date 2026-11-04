@@ -23,6 +23,8 @@ export const moduleBoundary = {
     'parseJsonValue.ts',
     'readFailure.ts',
     'runFilesystemCall.ts',
+    'systemPlatform.ts',
+    'userIdentity.ts',
     'walkDirectoryTree.ts',
   ],
 } satisfies ModuleBoundary;

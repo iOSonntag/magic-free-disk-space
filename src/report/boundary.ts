@@ -27,5 +27,6 @@ export const moduleBoundary = {
     'formatScanReport.ts',
     'formatUsage.ts',
     'noticeView.ts',
+    'reportTexts.ts',
   ],
 } satisfies ModuleBoundary;

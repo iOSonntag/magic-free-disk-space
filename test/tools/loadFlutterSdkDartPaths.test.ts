@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rename, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import {
   ACTIVE_ROOT_FILES_MAX_COUNT,
   isFlutterRootApartFromProject,
@@ -60,7 +61,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRoot: stableRoot,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(stableRoot), buildSdkDartPath(betaRoot)]);
   });
@@ -101,7 +105,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRoot: flutterRoot,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -123,7 +130,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRoot: join(fixtureRoot.rootDir, 'flutter'),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -138,7 +148,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRoot: join(projectRoot, 'vendor', 'flutter'),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -151,7 +164,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRoot: dirname(buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'a0aaaa' })),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -169,7 +185,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRootGitEntry: 'none',
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -184,7 +203,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRoot: flutterRoot,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -200,7 +222,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRootGitEntry: 'file',
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -221,7 +246,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       includeProjectRepository: false,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -246,7 +274,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       packageConfigPath: join(projectRoot, PACKAGE_CONFIG_PATH),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -265,7 +296,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
     await rename(packageConfigPath, targetPath);
     await symlink(targetPath, packageConfigPath);
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -289,7 +323,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       includeProjectRepository: false,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([buildSdkDartPath(flutterRoot)]);
   });
@@ -302,7 +339,10 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       flutterRoot: buildProjectRoot({ homeDir: fixtureRoot.homeDir, name: 'flutter' }),
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -316,13 +356,19 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
       includeProjectRepository: false,
     });
 
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
 
   test('returns nothing without a pub cache', async () => {
-    const paths = await loadFlutterSdkDartPaths({ homeDir: fixtureRoot.homeDir });
+    const paths = await loadFlutterSdkDartPaths({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+    });
 
     expect(paths).toEqual([]);
   });
@@ -331,21 +377,43 @@ describeAwaitingWin32Platform('loadFlutterSdkDartPaths', () => {
 describeAwaitingWin32Platform('isFlutterRootApartFromProject', () => {
   test('accepts disjoint paths, a shared name prefix included', () => {
     expect(
-      isFlutterRootApartFromProject({ flutterRoot: '/sdk/flutter', projectRoot: '/p/app' }),
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/sdk/flutter',
+        projectRoot: '/p/app',
+      }),
     ).toBe(true);
     expect(
-      isFlutterRootApartFromProject({ flutterRoot: '/p/app-sdk', projectRoot: '/p/app' }),
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p/app-sdk',
+        projectRoot: '/p/app',
+      }),
     ).toBe(true);
   });
 
   test('rejects equal paths and a path inside the other', () => {
-    expect(isFlutterRootApartFromProject({ flutterRoot: '/p/app', projectRoot: '/p/app' })).toBe(
-      false,
-    );
     expect(
-      isFlutterRootApartFromProject({ flutterRoot: '/p/app/flutter', projectRoot: '/p/app' }),
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p/app',
+        projectRoot: '/p/app',
+      }),
     ).toBe(false);
-    expect(isFlutterRootApartFromProject({ flutterRoot: '/p', projectRoot: '/p/app' })).toBe(false);
+    expect(
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p/app/flutter',
+        projectRoot: '/p/app',
+      }),
+    ).toBe(false);
+    expect(
+      isFlutterRootApartFromProject({
+        pathRules: DARWIN_PATH_RULES,
+        flutterRoot: '/p',
+        projectRoot: '/p/app',
+      }),
+    ).toBe(false);
   });
 });
 

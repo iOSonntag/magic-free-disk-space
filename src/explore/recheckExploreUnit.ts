@@ -114,7 +114,10 @@ export async function recheckExplorePathUnit(params: {
   switch (params.unit.kind) {
     case 'androidSystemImage':
     case 'androidEmulator': {
-      const state = await loadAndroidSdkState({ homeDir: params.environment.homeDir });
+      const state = await loadAndroidSdkState({
+        pathRules: params.environment.pathRules,
+        homeDir: params.environment.homeDir,
+      });
 
       if (state.kind === 'failed') {
         return state;
@@ -127,7 +130,10 @@ export async function recheckExplorePathUnit(params: {
       });
     }
     case 'vscodeExtension': {
-      const state = await loadVscodeExtensionState({ homeDir: params.environment.homeDir });
+      const state = await loadVscodeExtensionState({
+        pathRules: params.environment.pathRules,
+        homeDir: params.environment.homeDir,
+      });
 
       if (state.kind === 'failed') {
         return state;

@@ -1,5 +1,6 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import type { ExploreProbeDefinition } from '../loadProbeOutput.js';
@@ -29,6 +30,7 @@ const LAST_USED_AT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 
 /** Parses the JSON of `simctl runtime list -j`; fails with a reason on any other shape. */
 export function parseSimulatorRuntimeList(params: {
+  pathRules: PathRules;
   stdoutText: string;
 }): Result<SimulatorRuntime[], string> {
   const json = parseJsonValue({ text: params.stdoutText });
@@ -44,7 +46,7 @@ export function parseSimulatorRuntimeList(params: {
   const runtimes: SimulatorRuntime[] = [];
 
   for (const value of Object.values(json.value)) {
-    const runtime = parseSimulatorRuntime({ value: value });
+    const runtime = parseSimulatorRuntime({ pathRules: params.pathRules, value: value });
 
     if (runtime === null) {
       return { kind: 'failed', failure: 'a runtime lacks a field or has a malformed one' };
@@ -56,7 +58,10 @@ export function parseSimulatorRuntimeList(params: {
   return { kind: 'succeeded', value: runtimes };
 }
 
-function parseSimulatorRuntime(params: { value: unknown }): SimulatorRuntime | null {
+function parseSimulatorRuntime(params: {
+  pathRules: PathRules;
+  value: unknown;
+}): SimulatorRuntime | null {
   const value = params.value;
 
   if (!isJsonObject(value)) {
@@ -80,7 +85,7 @@ function parseSimulatorRuntime(params: { value: unknown }): SimulatorRuntime | n
   }
 
   const runtimeId = parseSimulatorRuntimeId({ text: identifierText });
-  const imagePath = parseAbsolutePath({ text: pathText });
+  const imagePath = parseAbsolutePath({ rules: params.pathRules, text: pathText });
   const lastUsedAtMs = parseLastUsedAtMs({ text: lastUsedAtText });
 
   if (

@@ -1,6 +1,7 @@
+import type { MacBundleId } from '../catalog/catalogOwner.js';
 import type { CandidateDecision, SkipReason } from './candidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
-import { isAppleBundleId, isBundleIdShape } from './resolveOwnerState.js';
+import { isAppleBundleId, parseBundleIdShapedName } from './resolveOwnerState.js';
 
 /**
  * Returns why a container name is no orphan, or `null` when it may be one. It needs no
@@ -9,18 +10,20 @@ import { isAppleBundleId, isBundleIdShape } from './resolveOwnerState.js';
  */
 export function getOrphanNameSkipReason(params: {
   name: string;
-  installedBundleIds: Set<string>;
+  installedBundleIds: Set<MacBundleId>;
   isInstalledAppListComplete: boolean;
 }): SkipReason | null {
-  if (!isBundleIdShape({ name: params.name })) {
+  const bundleId = parseBundleIdShapedName({ name: params.name });
+
+  if (bundleId === null) {
     return 'notBundleId';
   }
 
-  if (isAppleBundleId({ bundleId: params.name })) {
+  if (isAppleBundleId({ bundleId: bundleId })) {
     return 'systemOwned';
   }
 
-  if (params.installedBundleIds.has(params.name)) {
+  if (params.installedBundleIds.has(bundleId)) {
     return 'ownerInstalled';
   }
 
@@ -40,7 +43,7 @@ export function decideOrphanCandidate(params: {
   path: string;
   name: string;
   measurement: Measurement;
-  installedBundleIds: Set<string>;
+  installedBundleIds: Set<MacBundleId>;
   isInstalledAppListComplete: boolean;
   unusedCutoffMs: number;
   minOfferedBytes: number;

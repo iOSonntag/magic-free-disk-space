@@ -4,5 +4,5 @@ import type { ModuleBoundary } from '../moduleBoundary.js';
 export const moduleBoundary = {
   imports: ['catalog', 'path', 'system'],
   readsTablesOf: [],
-  exposes: ['buildEnvironment.ts', 'loadEnvironment.ts'],
+  exposes: ['buildEnvironment.ts', 'environmentPlatform.ts', 'loadEnvironment.ts'],
 } satisfies ModuleBoundary;

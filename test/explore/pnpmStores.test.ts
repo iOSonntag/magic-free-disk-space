@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { ExplorePathUnitPnpmStore } from '../../src/explore/exploreUnit.js';
 import { buildPnpmStoreFindings } from '../../src/explore/pnpmStores/buildPnpmStoreFindings.js';
 import { comparePnpmStoreUnit } from '../../src/explore/pnpmStores/comparePnpmStoreUnit.js';
@@ -612,7 +613,11 @@ describeAwaitingWin32Platform('loadPnpmInstallState', () => {
     await writePnpmPackage({ packageFolder: npmGlobalPath, version: '9.15.4' });
 
     expect(
-      await loadPnpmInstallState({ homeDir: homeDir, homebrewPrefixPaths: [prefixPath] }),
+      await loadPnpmInstallState({
+        pathRules: DARWIN_PATH_RULES,
+        homeDir: homeDir,
+        homebrewPrefixPaths: [prefixPath],
+      }),
     ).toEqual({
       kind: 'succeeded',
       value: {
@@ -640,7 +645,13 @@ describeAwaitingWin32Platform('loadPnpmInstallState', () => {
       text: '{"name": "pnpm"}',
     });
 
-    expect(await loadPnpmInstallState({ homeDir: homeDir, homebrewPrefixPaths: [] })).toEqual({
+    expect(
+      await loadPnpmInstallState({
+        pathRules: DARWIN_PATH_RULES,
+        homeDir: homeDir,
+        homebrewPrefixPaths: [],
+      }),
+    ).toEqual({
       kind: 'succeeded',
       value: {
         installs: [
