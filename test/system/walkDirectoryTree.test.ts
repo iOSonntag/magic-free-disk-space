@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import type { EvictionCandidate } from '../../src/system/systemPlatform.js';
+import type { EntryEvictionCheck, EvictionCandidate } from '../../src/system/systemPlatform.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -30,7 +30,7 @@ async function collectEntries(params: {
   isStatsNeeded: boolean;
   visit?: (entry: TreeEntry) => 'descend' | 'skip' | 'stop';
   isStopped?: () => boolean;
-  isEntryEvicted?: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted?: EntryEvictionCheck;
 }) {
   const entries: TreeEntry[] = [];
   const unreadables: TreeUnreadable[] = [];

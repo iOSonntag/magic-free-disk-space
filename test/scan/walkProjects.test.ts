@@ -11,7 +11,7 @@ import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
-import type { EvictionCandidate } from '../../src/system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../../src/system/systemPlatform.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -42,7 +42,7 @@ function walkTestProjects(params: {
   excludedTopNames?: string[];
   maxDepth?: number;
   deadlineMs?: number;
-  isEntryEvicted?: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted?: EntryEvictionCheck;
 }): Promise<ProjectWalk> {
   return walkProjects({
     pathRules: DARWIN_PATH_RULES,

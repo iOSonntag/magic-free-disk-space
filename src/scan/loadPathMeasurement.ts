@@ -3,7 +3,7 @@ import type { Result } from '../result.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import type { EvictionCandidate } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type Measurement = {
@@ -30,7 +30,7 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 export async function loadPathMeasurement(params: {
   path: string;
   deadlineMs: number;
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
 }): Promise<Result<Measurement, FileFailure>> {
   const identityResult = await loadFileIdentity({ path: params.path });
 

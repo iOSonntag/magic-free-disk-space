@@ -5,7 +5,7 @@ import type { DirectoryFailure } from './loadDirectoryNames.js';
 import type { EntryStats } from './loadEntryStats.js';
 import { loadEntryStats } from './loadEntryStats.js';
 import type { FileFailure, FileKind } from './loadFileIdentity.js';
-import type { EvictionCandidate } from './systemPlatform.js';
+import type { EntryEvictionCheck, EvictionCandidate } from './systemPlatform.js';
 
 export type TreeEntry = {
   path: string;
@@ -43,7 +43,7 @@ export function walkDirectoryTree(params: {
   isStatsNeeded: boolean;
   maxConcurrentDirectories: number;
   isStopped: () => boolean;
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   visitEntry: (entry: TreeEntry) => TreeEntryVisit;
   onUnreadable: (unreadable: TreeUnreadable) => void;
   onEvictedEntrySkipped: (entry: EvictionCandidate) => void;

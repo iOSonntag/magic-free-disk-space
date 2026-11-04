@@ -6,7 +6,7 @@ import { recheckExploreUnit } from '../explore/recheckExploreUnit.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { UnitMeasurement } from '../scan/loadUnitMeasurement.js';
 import { loadUnitMeasurement } from '../scan/loadUnitMeasurement.js';
-import type { EvictionCandidate } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
@@ -51,7 +51,7 @@ export async function runToolCandidate(params: {
   /** What the recheck of the unit reads by. */
   probePlatform: ExploreProbePlatform;
   /** The system slice's eviction check, for the measurements before and after the command. */
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   loadProcessCommands: () => Promise<string[] | null>;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
@@ -103,7 +103,7 @@ async function runCheckedUnitCommand(params: {
   unit: ExploreToolUnit;
   tool: LocatedTool;
   environment: Environment;
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   before: UnitMeasurement;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {

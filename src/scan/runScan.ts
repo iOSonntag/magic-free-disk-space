@@ -15,7 +15,7 @@ import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { EvictionCandidate, SystemPlatform } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck, SystemPlatform } from '../system/systemPlatform.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -82,7 +82,7 @@ type ScanContext = {
   processCommands: string[] | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
   /** The system slice's eviction check, asked by every walk and measurement of the scan. */
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   /** The system slice's code of a privacy denial, for every issue of a failed read. */
   privacyDenialCode: string | null;
   /** Home folders searched for large files, from the scan slice. */

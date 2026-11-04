@@ -3,7 +3,7 @@ import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import type { EvictionCandidate } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import type { TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -42,7 +42,7 @@ export async function findLargeUserFiles(params: {
   rootDirs: string[];
   minAllocatedBytes: number;
   deadlineMs: number;
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   const largeFiles: LargeFile[] = [];

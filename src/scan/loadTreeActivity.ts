@@ -1,5 +1,5 @@
 import { loadEntryStats } from '../system/loadEntryStats.js';
-import type { EvictionCandidate } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type ActivityProbe = 'recent' | 'quiet' | 'unknown';
@@ -17,7 +17,7 @@ export async function loadTreeActivity(params: {
   excludedNames: string[];
   maxEntries: number;
   deadlineMs: number;
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
 }): Promise<ActivityProbe> {
   const rootStats = await loadEntryStats({ path: params.path });
 

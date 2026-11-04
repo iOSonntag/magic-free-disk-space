@@ -2,7 +2,7 @@ import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { Result } from '../result.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
-import type { SystemPlatform } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck, RunningProcessesLoad } from '../system/systemPlatform.js';
 import type { RemovalRun } from './deleteCandidates.js';
 import { deleteCandidates } from './deleteCandidates.js';
 import type { DeletePlatform } from './deletePlatform.js';
@@ -24,9 +24,9 @@ export async function deleteApprovedCandidates(params: {
   plan: RemovalPlan;
   environment: Environment;
   delete: DeletePlatform;
-  loadRunningProcesses: SystemPlatform['loadRunningProcesses'];
+  loadRunningProcesses: RunningProcessesLoad;
   /** For the measurements around a tool's run. */
-  isEntryEvicted: SystemPlatform['isEntryEvicted'];
+  isEntryEvicted: EntryEvictionCheck;
   probePlatform: ExploreProbePlatform;
   clock: () => number;
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
@@ -56,7 +56,7 @@ export async function deleteApprovedCandidates(params: {
 
 /** `null` when the process listing failed, which withholds every item whose owner it would name. */
 async function loadCurrentProcessCommands(params: {
-  loadRunningProcesses: SystemPlatform['loadRunningProcesses'];
+  loadRunningProcesses: RunningProcessesLoad;
 }): Promise<string[] | null> {
   const processCommands = await params.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,

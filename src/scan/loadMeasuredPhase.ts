@@ -1,7 +1,7 @@
 import type { Result } from '../result.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
-import type { EvictionCandidate } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { CandidateDecision } from './candidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
@@ -18,7 +18,7 @@ export function loadMeasuredPhase(params: {
   path: string;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   privacyDenialCode: string | null;
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {

@@ -12,7 +12,7 @@ import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import type { ReadFailure } from '../system/readFailure.js';
-import type { EvictionCandidate } from '../system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import type { DeletePlatform } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
@@ -91,7 +91,7 @@ export async function deleteCandidates(params: {
   /** What the rechecks of the units read by. */
   probePlatform: ExploreProbePlatform;
   /** The system slice's eviction check, for the measurements around a tool's run. */
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   loadProcessCommands: () => Promise<string[] | null>;
   clock: () => number;
 }): Promise<RemovalRun> {
@@ -169,7 +169,7 @@ async function removeCandidate(params: {
   environment: Environment;
   delete: DeletePlatform;
   probePlatform: ExploreProbePlatform;
-  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  isEntryEvicted: EntryEvictionCheck;
   /** The processes read once before the run, for path items. */
   processCommands: string[] | null;
   loadProcessCommands: () => Promise<string[] | null>;
