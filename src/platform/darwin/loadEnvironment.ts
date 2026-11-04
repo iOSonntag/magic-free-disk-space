@@ -50,13 +50,10 @@ const USER_TEMP_DIR_NAME = 'DARWIN_USER_TEMP_DIR';
 
 export async function loadEnvironment(): Promise<Result<Environment, EnvironmentFailure>> {
   const homeText = homedir();
-  const homeDir = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: homeText });
+  const homeDir = parseEnvironmentPath({ text: homeText, failurePath: homeText });
 
   if (homeDir.kind === 'failed') {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: homeText, code: 'notAbsolute' },
-    };
+    return homeDir;
   }
 
   const applicationDirs = [
@@ -163,6 +160,23 @@ function parseDarwinAbsolutePath(params: { text: string }): AbsolutePath {
   return path.value;
 }
 
+/** Parses `text` as a macOS absolute path; unresolvable at `failurePath` when it is not one. */
+function parseEnvironmentPath(params: {
+  text: string;
+  failurePath: string;
+}): Result<AbsolutePath, EnvironmentFailure> {
+  const path = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text });
+
+  if (path.kind === 'failed') {
+    return {
+      kind: 'failed',
+      failure: { reason: 'unresolvable', path: params.failurePath, code: 'notAbsolute' },
+    };
+  }
+
+  return { kind: 'succeeded', value: path.value };
+}
+
 /** The effective user of the process; throws for an id that is no non-negative integer. */
 function getEffectiveUser(): UserIdentity {
   // Without an id, as on no Mac, the check refuses as for root.
@@ -191,16 +205,8 @@ async function loadUserTempDir(): Promise<Result<AbsolutePath, EnvironmentFailur
 
   // Printed with a trailing slash, which would end up in every temporary path shown.
   const tempDirText = output.value.trim().replace(/\/+$/, '');
-  const tempDir = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: tempDirText });
 
-  if (tempDir.kind === 'failed') {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: USER_TEMP_DIR_NAME, code: 'notAbsolute' },
-    };
-  }
-
-  return { kind: 'succeeded', value: tempDir.value };
+  return parseEnvironmentPath({ text: tempDirText, failurePath: USER_TEMP_DIR_NAME });
 }
 
 /** The real path of `path`; unresolvable when it cannot be read or is not absolute. */
@@ -213,16 +219,7 @@ async function loadRealPath(params: {
     return realPathText;
   }
 
-  const realPath = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: realPathText.value });
-
-  if (realPath.kind === 'failed') {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: params.path, code: 'notAbsolute' },
-    };
-  }
-
-  return { kind: 'succeeded', value: realPath.value };
+  return parseEnvironmentPath({ text: realPathText.value, failurePath: params.path });
 }
 
 async function loadRealPathText(params: {
