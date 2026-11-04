@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -54,6 +55,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.issues).toEqual([]);
@@ -74,6 +77,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     const [finding] = result.findings;
@@ -116,6 +121,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([loosePath]);
@@ -134,6 +141,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -152,6 +161,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -180,6 +191,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -202,6 +215,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([localizedPath, versionPath]);
@@ -221,6 +236,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -241,6 +258,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [linkedRootDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -259,6 +278,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([firstPath]);
@@ -286,6 +307,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([visiblePath]);
@@ -305,6 +328,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir, fixtureRoot.tempDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: 0,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({
@@ -318,6 +343,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'absent')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });

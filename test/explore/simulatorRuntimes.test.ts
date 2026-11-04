@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { ExploreToolUnitSimulatorRuntime } from '../../src/explore/exploreUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { SimulatorDevice } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
@@ -13,6 +12,7 @@ import type { SimulatorRuntimeState } from '../../src/explore/simulatorRuntimes/
 import { parseSimulatorRuntimeList } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeList.js';
 import { compareSimulatorRuntime } from '../../src/explore/simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -21,6 +21,7 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -339,6 +340,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun.path }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
@@ -369,6 +371,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
     });
     const run = {
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       deadlineMs: Date.now() + TIMEOUT_MS,
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
@@ -400,6 +403,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
     const recheck = {
       tool: xcrun,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     };
@@ -432,6 +436,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       unit: buildOfferedUnit({ tool: failing }),
       tool: failing,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getErrorCode } from '../../src/system/getErrorCode.js';
-import type { ProcessEndSignal } from '../../src/tools/runToolCommand.js';
+import type { ProcessEndSignal } from '../../src/tools/toolsPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 import { describeOnPosix } from '../support/posixOnly.js';

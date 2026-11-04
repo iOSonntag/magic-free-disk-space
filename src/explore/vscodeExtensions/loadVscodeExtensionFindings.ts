@@ -9,6 +9,7 @@ export async function loadVscodeExtensionFindings(
   const state = await loadVscodeExtensionState({
     pathRules: run.environment.pathRules,
     homeDir: run.environment.homeDir,
+    privacyDenialCode: run.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {

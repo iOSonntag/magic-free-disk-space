@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
@@ -13,6 +14,8 @@ import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const MIB = 1_048_576;
+
+const TEXTS = darwinPlatform.report;
 
 const SIMULATOR_UDID = '0A1B2C3D-0000-4000-8000-000000000001';
 
@@ -85,7 +88,9 @@ function listNumbersTopToBottom(params: { view: ScanView }): number[] {
 
 describeAwaitingWin32Platform('buildScanView', () => {
   test('shows an empty scan as its summary alone', () => {
-    expect(buildScanView({ report: EMPTY_REPORT, fullDiskAccessHolder: 'app' })).toEqual({
+    expect(
+      buildScanView({ report: EMPTY_REPORT, fullDiskAccessHolder: 'app', texts: TEXTS }),
+    ).toEqual({
       summary: { titleText: 'Nothing to delete was found.', lines: [] },
       sections: [],
       explore: null,
@@ -170,6 +175,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
     const fixtureEvent = await loadProtocolFixtureEventOfKind('scanned');
 
     const view = buildScanView({
+      texts: TEXTS,
       report: { ...report, skipped: skipped },
       fullDiskAccessHolder: 'app',
     });
@@ -179,6 +185,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('puts a section of check items only into its closed check group', () => {
     const view = buildScanView({
+      texts: TEXTS,
       report: buildRankedReport({
         candidates: [
           buildTestCandidate({
@@ -210,6 +217,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('shows a never item in its check group and counts it in no space the summary names', () => {
     const view = buildScanView({
+      texts: TEXTS,
       report: buildRankedReport({
         candidates: [
           buildTestCandidate({
@@ -244,6 +252,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('shows Explore with advice only when the scan offered no Explore item', () => {
     const view = buildScanView({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         advice: [buildAdvice({ path: '/fixture/store', title: 'Tool store', allocatedBytes: MIB })],
@@ -279,6 +288,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('reads an incomplete size as at least in its item, its section, and the summary', () => {
     const view = buildScanView({
+      texts: TEXTS,
       report: buildRankedReport({
         candidates: [
           buildTestCandidate({
@@ -354,7 +364,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
       ],
     });
 
-    const view = buildScanView({ report: report, fullDiskAccessHolder: 'app' });
+    const view = buildScanView({ report: report, fullDiskAccessHolder: 'app', texts: TEXTS });
 
     expect(listNumbersTopToBottom({ view: view })).toEqual([1, 2, 3, 4, 5, 6]);
     expect(view.sections.map((section) => section.titleText)).toEqual([
@@ -373,6 +383,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('names no Full Disk Access and links no Settings pane for a denial by permissions', () => {
     const view = buildScanView({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         issues: [{ path: '/fixture/locked', reason: 'permissionDenied', detail: 'EACCES' }],
@@ -395,8 +406,12 @@ describeAwaitingWin32Platform('buildScanView', () => {
       issues: [{ path: '/fixture/Mail', reason: 'privacyDenied', detail: 'EPERM' }],
     };
 
-    const appView = buildScanView({ report: report, fullDiskAccessHolder: 'app' });
-    const terminalView = buildScanView({ report: report, fullDiskAccessHolder: 'terminal' });
+    const appView = buildScanView({ report: report, fullDiskAccessHolder: 'app', texts: TEXTS });
+    const terminalView = buildScanView({
+      report: report,
+      fullDiskAccessHolder: 'terminal',
+      texts: TEXTS,
+    });
 
     expect(appView.notices).toEqual([
       {
@@ -415,6 +430,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('writes out control characters in every text that comes from outside', () => {
     const view = buildScanView({
+      texts: TEXTS,
       report: buildRankedReport({
         candidates: [
           buildTestCandidate({

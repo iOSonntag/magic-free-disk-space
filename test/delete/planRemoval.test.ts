@@ -7,7 +7,11 @@ import {
   DARWIN_PATH_RULES,
   DARWIN_PREFERENCES_HOME_DIR_NAMES,
   DARWIN_PROTECTED_ROOT_PATHS,
-} from '../../src/environment/loadEnvironment.js';
+} from '../../src/platform/darwin/loadEnvironment.js';
+import {
+  PROTECTED_HOME_RELATIVE_PATHS,
+  SENSITIVE_HOME_RELATIVE_PATHS,
+} from '../../src/platform/darwin/protectedPaths.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
@@ -21,10 +25,10 @@ const ENVIRONMENT = buildEnvironment({
   homeRealPath: '/Users/tester',
   tempDir: '/private/tmp/tester',
   tempRealPath: '/private/tmp/tester',
-  applicationDirs: ['/Applications'],
   applicationRealPaths: ['/Applications'],
-  homebrewPrefixPaths: [],
   protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
+  protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
+  sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
   deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
   preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
 });

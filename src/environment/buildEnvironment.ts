@@ -1,8 +1,4 @@
 import { join } from 'node:path';
-import {
-  PROTECTED_HOME_RELATIVE_PATHS,
-  SENSITIVE_HOME_RELATIVE_PATHS,
-} from '../catalog/protectedPaths.js';
 import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -15,9 +11,6 @@ export type Environment = {
   pathRules: PathRules;
   homeDir: AbsolutePath;
   tempDir: string;
-  applicationDirs: string[];
-  /** Homebrew's prefixes, Apple silicon's first, read as files by a probe that runs no `brew`. */
-  homebrewPrefixPaths: AbsolutePath[];
   /** The roots of the file system, which are refused as a whole. */
   protectedRootPaths: AbsolutePath[];
   /** Real paths under which a removal is allowed. */
@@ -39,10 +32,13 @@ export function buildEnvironment(params: {
   homeRealPath: string;
   tempDir: string;
   tempRealPath: string;
-  applicationDirs: string[];
+  /** The real paths of the platform's app folders that exist. */
   applicationRealPaths: string[];
-  homebrewPrefixPaths: AbsolutePath[];
   protectedRootPaths: AbsolutePath[];
+  /** Root-like folders below the home folder, which are never removed as a whole. */
+  protectedHomeRelativePaths: string[];
+  /** Folders below the home folder that are never removed, neither whole nor in part. */
+  sensitiveHomeRelativePaths: string[];
   /** The folder of the deletion log below the home folder, one name per level. */
   deletionLogHomeDirNames: string[];
   /** The folder of the bridge's preference file below the home folder, one name per level. */
@@ -54,19 +50,17 @@ export function buildEnvironment(params: {
     pathRules: params.pathRules,
     homeDir: params.homeDir,
     tempDir: params.tempDir,
-    applicationDirs: params.applicationDirs,
-    homebrewPrefixPaths: params.homebrewPrefixPaths,
     protectedRootPaths: params.protectedRootPaths,
     allowedRealRoots: [params.homeRealPath, params.tempRealPath, ...params.applicationRealPaths],
     protectedRealPaths: [
-      ...PROTECTED_HOME_RELATIVE_PATHS.map((relativePath) =>
+      ...params.protectedHomeRelativePaths.map((relativePath) =>
         join(params.homeRealPath, relativePath),
       ),
       params.tempRealPath,
       ...params.protectedRootPaths,
     ],
     sensitiveRealPaths: [
-      ...SENSITIVE_HOME_RELATIVE_PATHS.map((relativePath) =>
+      ...params.sensitiveHomeRelativePaths.map((relativePath) =>
         join(params.homeRealPath, relativePath),
       ),
       join(params.homeRealPath, ...params.deletionLogHomeDirNames),

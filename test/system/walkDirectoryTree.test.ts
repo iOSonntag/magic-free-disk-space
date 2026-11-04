@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import type { EvictionCandidate } from '../../src/system/systemPlatform.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -29,7 +30,7 @@ async function collectEntries(params: {
   isStatsNeeded: boolean;
   visit?: (entry: TreeEntry) => 'descend' | 'skip' | 'stop';
   isStopped?: () => boolean;
-  isFolderEvicted?: (folder: { path: string }) => boolean;
+  isEntryEvicted?: (entry: EvictionCandidate) => boolean;
 }) {
   const entries: TreeEntry[] = [];
   const unreadables: TreeUnreadable[] = [];
@@ -39,7 +40,7 @@ async function collectEntries(params: {
     isStatsNeeded: params.isStatsNeeded,
     maxConcurrentDirectories: 2,
     isStopped: params.isStopped ?? (() => false),
-    isFolderEvicted: params.isFolderEvicted ?? (() => false),
+    isEntryEvicted: params.isEntryEvicted ?? (() => false),
     visitEntry: (entry) => {
       entries.push(entry);
 
@@ -48,7 +49,7 @@ async function collectEntries(params: {
     onUnreadable: (unreadable) => {
       unreadables.push(unreadable);
     },
-    onEvictedFolderSkipped: () => {
+    onEvictedEntrySkipped: () => {
       evictedFolderCount += 1;
     },
   });
@@ -69,7 +70,7 @@ describeAwaitingWin32Platform('walkDirectoryTree', () => {
 
     const walk = await collectEntries({
       isStatsNeeded: false,
-      isFolderEvicted: (folder) => folder.path === evictedPath,
+      isEntryEvicted: (entry) => entry.path === evictedPath,
     });
 
     expect(walk.walkEnd).toBe('completed');

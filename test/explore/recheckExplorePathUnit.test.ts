@@ -11,6 +11,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   BETA_CURRENT_FOLDER_NAME,
   buildObsoleteVscodeUnit,
@@ -51,6 +52,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [],
         }),
       ).toEqual({ kind: 'unchanged' });
@@ -75,6 +77,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
       await recheckExplorePathUnit({
         unit: buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -95,6 +98,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [],
         }),
       ).toEqual({ kind: 'changed' });
@@ -108,6 +112,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
       await recheckExplorePathUnit({
         unit: buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -119,13 +124,23 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
     await rm(unit.folderPath, { recursive: true });
 
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: buildTestProbePlatform(),
+        processCommands: [],
+      }),
     ).toEqual({ kind: 'changed' });
 
     await rm(extensionsPath, { recursive: true });
 
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: buildTestProbePlatform(),
+        processCommands: [],
+      }),
     ).toEqual({ kind: 'changed' });
   });
 
@@ -136,11 +151,17 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
       await recheckExplorePathUnit({
         unit: unit,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [VSCODE_APP_COMMAND],
       }),
     ).toEqual({ kind: 'busy' });
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: null }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: buildTestProbePlatform(),
+        processCommands: null,
+      }),
     ).toEqual({ kind: 'busy' });
   });
 
@@ -153,6 +174,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
       await recheckExplorePathUnit({
         unit: buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
       }),
     ).toEqual({

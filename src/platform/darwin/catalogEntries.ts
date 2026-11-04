@@ -1,6 +1,6 @@
-import type { CatalogEntry } from './catalog.js';
-import type { CatalogOwner } from './catalogOwner.js';
-import { parseMacBundleId } from './catalogOwner.js';
+import type { CatalogEntry } from '../../catalog/catalog.js';
+import type { CatalogOwner } from '../../catalog/catalogOwner.js';
+import { parseMacBundleId } from '../../catalog/catalogOwner.js';
 
 /**
  * In order of precedence: where two entries overlap, the earlier one wins.

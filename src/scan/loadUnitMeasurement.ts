@@ -1,6 +1,7 @@
 import type { ExploreUnit } from '../explore/exploreUnit.js';
 import { listUnitPaths } from '../explore/exploreUnit.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import type { EvictionCandidate } from '../system/systemPlatform.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
 
 /** The sum over a unit's paths; a path that is gone counts 0. */
@@ -39,12 +40,17 @@ const MAX_CONCURRENT_PATHS = 8;
 export async function loadUnitMeasurement(params: {
   unit: ExploreUnit;
   deadlineMs: number;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
 }): Promise<UnitMeasurement> {
   const runPathMeasurement = createConcurrencyLimit({ maxConcurrent: MAX_CONCURRENT_PATHS });
   const parts = await Promise.all(
     listUnitPaths(params.unit).map((path) =>
       runPathMeasurement(() =>
-        loadPathMeasurementPart({ path: path, deadlineMs: params.deadlineMs }),
+        loadPathMeasurementPart({
+          path: path,
+          deadlineMs: params.deadlineMs,
+          isEntryEvicted: params.isEntryEvicted,
+        }),
       ),
     ),
   );
@@ -60,8 +66,13 @@ export async function loadUnitMeasurement(params: {
 async function loadPathMeasurementPart(params: {
   path: string;
   deadlineMs: number;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
 }): Promise<PathMeasurementPart> {
-  const measured = await loadPathMeasurement({ path: params.path, deadlineMs: params.deadlineMs });
+  const measured = await loadPathMeasurement({
+    path: params.path,
+    deadlineMs: params.deadlineMs,
+    isEntryEvicted: params.isEntryEvicted,
+  });
 
   if (measured.kind === 'succeeded') {
     return {

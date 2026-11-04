@@ -3,6 +3,7 @@ import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExploreFinding, ExplorePathUnit, ExploreToolUnit } from '../explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import type { EvictionCandidate } from '../system/systemPlatform.js';
 import { buildReadIssue } from './buildReadIssue.js';
 import type {
   CandidateDecision,
@@ -41,6 +42,8 @@ export async function loadExplorePhase(params: {
   catalogEntries: CatalogEntry[];
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const entryPhases = await Promise.all(
     params.catalogEntries.flatMap((entry) => {
@@ -55,6 +58,8 @@ export async function loadExplorePhase(params: {
           outcome: params.probes[entry.removal.probe],
           measureTimeoutMs: params.measureTimeoutMs,
           runItemMeasurement: params.runItemMeasurement,
+          isEntryEvicted: params.isEntryEvicted,
+          privacyDenialCode: params.privacyDenialCode,
         }),
       ];
     }),
@@ -74,6 +79,8 @@ async function loadExploreEntryPhase(params: {
   outcome: Promise<ExploreProbeOutcome>;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const outcome = await params.outcome;
 
@@ -86,6 +93,8 @@ async function loadExploreEntryPhase(params: {
             category: params.entry.category,
             measureTimeoutMs: params.measureTimeoutMs,
             runItemMeasurement: params.runItemMeasurement,
+            isEntryEvicted: params.isEntryEvicted,
+            privacyDenialCode: params.privacyDenialCode,
           }),
         ),
       );
@@ -154,6 +163,8 @@ async function loadExploreFindingPhase(params: {
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   switch (params.finding.activity) {
     case 'busy':
@@ -176,6 +187,8 @@ async function loadIdleFindingPhase(params: {
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   const unit = params.finding.unit;
 
@@ -209,11 +222,13 @@ async function loadToolFindingPhase(params: {
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
 }): Promise<ScanPhase> {
   const measurement = await params.runItemMeasurement(() =>
     loadUnitMeasurement({
       unit: params.unit,
       deadlineMs: Date.now() + params.measureTimeoutMs,
+      isEntryEvicted: params.isEntryEvicted,
     }),
   );
   const removal: CandidateRemovalRunTool = { kind: 'runTool', unit: params.unit };
@@ -239,11 +254,15 @@ function loadPathFindingPhase(params: {
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   return loadMeasuredPhase({
     path: params.unit.folderPath,
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
+    isEntryEvicted: params.isEntryEvicted,
+    privacyDenialCode: params.privacyDenialCode,
     decide: async (measurement) => {
       if (measurement.identity.kind === 'symbolicLink') {
         return { kind: 'skip', path: params.unit.folderPath, reason: 'symbolicLink' };

@@ -1,22 +1,15 @@
 import { basename, join } from 'node:path';
-import type { MacBundleId } from '../catalog/catalogOwner.js';
-import { parseMacBundleId } from '../catalog/catalogOwner.js';
-import type { Result } from '../result.js';
-import type { CommandFailure } from '../system/loadCommandOutput.js';
-import { loadCommandOutput } from '../system/loadCommandOutput.js';
-import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import { loadEntryStats } from '../system/loadEntryStats.js';
-import { buildFailureIssues } from './buildReadIssue.js';
-import type { ScanIssue } from './issue.js';
-
-export type InstalledApp = {
-  bundlePath: string;
-  displayName: string;
-  /** `null` when its Info.plist could not be read or names an empty id. */
-  bundleId: MacBundleId | null;
-  /** Bundle ids of helpers and extensions inside the app; they belong to the app. */
-  nestedBundleIds: MacBundleId[];
-};
+import type { MacBundleId } from '../../catalog/catalogOwner.js';
+import { parseMacBundleId } from '../../catalog/catalogOwner.js';
+import type { Result } from '../../result.js';
+import { buildFailureIssues } from '../../scan/buildReadIssue.js';
+import type { ScanIssue } from '../../scan/issue.js';
+import type { InstalledApp } from '../../scan/scanPlatform.js';
+import type { CommandFailure } from '../../system/loadCommandOutput.js';
+import { loadCommandOutput } from '../../system/loadCommandOutput.js';
+import { loadDirectoryNames } from '../../system/loadDirectoryNames.js';
+import { loadEntryStats } from '../../system/loadEntryStats.js';
+import { DARWIN_PRIVACY_DENIAL_CODE } from './loadFullDiskAccess.js';
 
 type AppBundleSearch = {
   bundlePaths: string[];
@@ -92,7 +85,13 @@ async function findAppBundlePaths(params: { appDirs: string[] }): Promise<AppBun
     const listing = await loadDirectoryNames({ path: appDir });
 
     if (listing.kind === 'failed') {
-      issues.push(...buildFailureIssues({ path: appDir, failure: listing.failure }));
+      issues.push(
+        ...buildFailureIssues({
+          path: appDir,
+          failure: listing.failure,
+          privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE,
+        }),
+      );
 
       continue;
     }
@@ -108,7 +107,13 @@ async function findAppBundlePaths(params: { appDirs: string[] }): Promise<AppBun
       const stats = await loadEntryStats({ path: entryPath });
 
       if (stats.kind === 'failed') {
-        issues.push(...buildFailureIssues({ path: entryPath, failure: stats.failure }));
+        issues.push(
+          ...buildFailureIssues({
+            path: entryPath,
+            failure: stats.failure,
+            privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE,
+          }),
+        );
 
         continue;
       }
@@ -131,7 +136,11 @@ async function findVendorBundlePaths(params: { vendorPath: string }): Promise<Ap
   if (listing.kind === 'failed') {
     return {
       bundlePaths: [],
-      issues: buildFailureIssues({ path: params.vendorPath, failure: listing.failure }),
+      issues: buildFailureIssues({
+        path: params.vendorPath,
+        failure: listing.failure,
+        privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE,
+      }),
     };
   }
 

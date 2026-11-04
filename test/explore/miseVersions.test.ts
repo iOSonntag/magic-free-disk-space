@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { buildMiseVersionFindings } from '../../src/explore/miseVersions/buildMiseVersionFindings.js';
 import {
   parseMisePrunableVersions,
   parseMiseToolName,
   parseMiseToolVersion,
 } from '../../src/explore/miseVersions/parseMisePrunableVersions.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';

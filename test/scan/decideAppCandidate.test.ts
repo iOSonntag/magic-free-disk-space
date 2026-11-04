@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { decideAppCandidate } from '../../src/scan/decideAppCandidate.js';
-import type { InstalledApp } from '../../src/scan/loadInstalledApps.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
+import type { InstalledApp } from '../../src/scan/scanPlatform.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';

@@ -6,6 +6,7 @@ export const moduleBoundary = {
   readsTablesOf: [],
   exposes: [
     'explorePlatform.ts',
+    'exploreProbe.ts',
     'exploreUnit.ts',
     'projectPins/loadProjectPins.ts',
     'projectPins/projectPins.ts',

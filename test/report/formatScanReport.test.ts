@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
@@ -9,6 +10,8 @@ import {
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
 import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
+
+const TEXTS = darwinPlatform.report;
 
 const fullDiskAccessLine =
   '- Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
@@ -36,11 +39,14 @@ function buildAdvice(params: {
 
 describeAwaitingWin32Platform('formatScanReport', () => {
   test('says that nothing was found for an empty report', () => {
-    expect(formatScanReport({ report: EMPTY_REPORT })).toEqual(['Nothing to delete was found.']);
+    expect(formatScanReport({ report: EMPTY_REPORT, texts: TEXTS })).toEqual([
+      'Nothing to delete was found.',
+    ]);
   });
 
   test('prints the summary, then each section with its numbered items and its check group', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         candidates: [
@@ -104,6 +110,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('marks an incomplete size as at least, in the item, its section, and the summary', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         candidates: [
@@ -132,6 +139,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('shows advice unnumbered under Explore, after its intro', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         advice: [
@@ -160,6 +168,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('counts skipped items and names each reason that occurs', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         skipped: [
@@ -181,6 +190,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('names every skip reason in table order, one line each', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         skipped: [
@@ -225,6 +235,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('writes out control characters in a title and a path, so no line can be forged', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         candidates: [
@@ -250,6 +261,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('lists every issue with its reason and detail, and names Full Disk Access for no denial by permissions', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -274,6 +286,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('names Full Disk Access for the terminal after a place macOS privacy protection blocked', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -295,6 +308,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('lists the tools it could not ask apart from the places it could not read', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -339,6 +353,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('writes out control characters in the detail of an issue and in the stderr of a tool', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -368,6 +383,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
       allocatedBytes: 2048,
     });
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         candidates: [
@@ -410,6 +426,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('shows the command of a tool item with the leading arguments of its tool', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         candidates: [buildTestDartToolCandidate({ homeDir: '/fixture/home' })],
@@ -421,6 +438,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('lists a unit folder as an Explore item with its evidence and no command', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         ...EMPTY_REPORT,
         candidates: [buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' })],
@@ -444,6 +462,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('shows the summary, the sections, Explore, the skipped items, and the notices in that order', () => {
     const lines = formatScanReport({
+      texts: TEXTS,
       report: {
         candidates: [
           buildTestCandidate({

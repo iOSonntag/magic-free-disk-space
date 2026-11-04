@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExploreToolUnitDartPubCache } from '../../src/explore/exploreUnit.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -40,7 +41,11 @@ function buildDartUnit(gcPaths: string[]): ExploreToolUnitDartPubCache {
 }
 
 async function loadAllocatedBytesOrThrow(path: string): Promise<number> {
-  const measured = await loadPathMeasurement({ path: path, deadlineMs: Date.now() + 10_000 });
+  const measured = await loadPathMeasurement({
+    path: path,
+    deadlineMs: Date.now() + 10_000,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  });
 
   if (measured.kind === 'failed') {
     throw new Error(`Measurement failed: ${measured.failure.reason}`);
@@ -66,6 +71,7 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
     const measurement = await loadUnitMeasurement({
       unit: buildDartUnit([packageFolder, hashFile, join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(measurement).toEqual({
@@ -86,10 +92,12 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
     const plain = await loadUnitMeasurement({
       unit: buildDartUnit([hashFile, join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
     const mounted = await loadUnitMeasurement({
       unit: buildDartUnit([hashFile, '/dev', join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(plain.holdsOtherVolume).toBe(false);
@@ -107,6 +115,7 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
     const measurement = await loadUnitMeasurement({
       unit: buildDartUnit([hiddenFile]),
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(measurement).toEqual({
@@ -132,6 +141,7 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
         installPath: buildTestAbsolutePath({ text: versionFolder }),
       },
       deadlineMs: Date.now() + 10_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(measurement.isComplete).toBe(false);

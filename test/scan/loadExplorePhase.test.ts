@@ -7,6 +7,7 @@ import type { ExploreFinding, ExploreToolFailure } from '../../src/explore/explo
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { loadVscodeExtensionFindings } from '../../src/explore/vscodeExtensions/loadVscodeExtensionFindings.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { ExplorePhase } from '../../src/scan/loadExplorePhase.js';
 import { loadExplorePhase } from '../../src/scan/loadExplorePhase.js';
 import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
@@ -40,6 +41,7 @@ import {
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
 
@@ -128,6 +130,7 @@ async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
 
   const findings = await loadVscodeExtensionFindings({
     environment: environment,
+    platform: buildTestProbePlatform(),
     processCommands: [],
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: 0,
@@ -147,6 +150,8 @@ function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
     catalogEntries: [vscodeEntry],
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
     runItemMeasurement: runItemMeasurement,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }
 
@@ -186,6 +191,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
     });
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
@@ -200,6 +206,8 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.issues).toEqual([]);
@@ -263,6 +271,8 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.decisions).toMatchObject([
@@ -298,6 +308,8 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.decisions).toEqual([]);
@@ -479,6 +491,8 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(phase.issues).toEqual([

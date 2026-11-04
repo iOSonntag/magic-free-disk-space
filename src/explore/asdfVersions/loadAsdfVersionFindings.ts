@@ -20,6 +20,7 @@ export async function loadAsdfVersionFindings(params: {
   const state = await loadAsdfState({
     pathRules: params.run.environment.pathRules,
     homeDir: params.run.environment.homeDir,
+    privacyDenialCode: params.run.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {
@@ -33,6 +34,7 @@ export async function loadAsdfVersionFindings(params: {
     pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
     projectPins: params.projectPins,
     processCommands: params.run.processCommands,
+    projectSearchIncompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
   });
 
   return { kind: 'succeeded', value: { findings: findings, isComplete: offers.isComplete } };

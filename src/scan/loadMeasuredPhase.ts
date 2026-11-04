@@ -1,6 +1,7 @@
 import type { Result } from '../result.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
+import type { EvictionCandidate } from '../system/systemPlatform.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { CandidateDecision } from './candidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
@@ -17,21 +18,30 @@ export function loadMeasuredPhase(params: {
   path: string;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  privacyDenialCode: string | null;
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {
   return params.runItemMeasurement(async () => {
     const measured = await loadPathMeasurement({
       path: params.path,
       deadlineMs: Date.now() + params.measureTimeoutMs,
+      isEntryEvicted: params.isEntryEvicted,
     });
 
-    return buildMeasuredPhase({ path: params.path, measured: measured, decide: params.decide });
+    return buildMeasuredPhase({
+      path: params.path,
+      measured: measured,
+      privacyDenialCode: params.privacyDenialCode,
+      decide: params.decide,
+    });
   });
 }
 
 async function buildMeasuredPhase(params: {
   path: string;
   measured: Result<Measurement, FileFailure>;
+  privacyDenialCode: string | null;
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {
   const measured = params.measured;
@@ -47,6 +57,10 @@ async function buildMeasuredPhase(params: {
 
   return {
     decisions: [],
-    issues: buildFailureIssues({ path: params.path, failure: measured.failure }),
+    issues: buildFailureIssues({
+      path: params.path,
+      failure: measured.failure,
+      privacyDenialCode: params.privacyDenialCode,
+    }),
   };
 }

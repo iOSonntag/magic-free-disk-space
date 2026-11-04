@@ -17,6 +17,7 @@ import type {
   ExploreProbe,
   ExploreProbeFiles,
   ExploreProbePinned,
+  ExploreProbePlatform,
   ExploreProbeRun,
   ExploreProbeTool,
   ExploreProbeToolRun,
@@ -30,10 +31,6 @@ import { buildMiseVersionFindings } from './miseVersions/buildMiseVersionFinding
 import { MISE_PRUNABLE_LIST_PROBE } from './miseVersions/parseMisePrunableVersions.js';
 import { loadNvmVersionFindings } from './nvmVersions/loadNvmVersionFindings.js';
 import { loadPnpmStoreFindings } from './pnpmStores/loadPnpmStoreFindings.js';
-import {
-  PNPM_STORE_ROOT_PATH_NAMES,
-  PNPM_XDG_STORE_ROOT_PATH_NAMES,
-} from './pnpmStores/pnpmHomes.js';
 import type { ProjectPinsLoad } from './projectPins/loadProjectPins.js';
 import { buildSimulatorDeviceFindings } from './simulatorDevices/buildSimulatorDeviceFindings.js';
 import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
@@ -80,6 +77,7 @@ export type ExploreProbeOutcome =
 
 type ExploreProbeStart = {
   environment: Environment;
+  platform: ExploreProbePlatform;
   toolInstallLocations: ToolInstallLocations;
   processCommands: Promise<string[] | null>;
   activeXcodeBundlePath: Promise<string | null>;
@@ -175,7 +173,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
         loadPnpmStoreFindings({
           run: run,
           projectPins: params.projectPins,
-          storeRootPathNames: PNPM_STORE_ROOT_PATH_NAMES,
+          storeRootPathNames: run.platform.explore.pnpmStoreRoot,
         }),
     }),
   },
@@ -187,7 +185,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
         loadPnpmStoreFindings({
           run: run,
           projectPins: params.projectPins,
-          storeRootPathNames: PNPM_XDG_STORE_ROOT_PATH_NAMES,
+          storeRootPathNames: run.platform.explore.pnpmXdgStoreRoot,
         }),
     }),
   },
@@ -275,6 +273,7 @@ export async function runExploreProbe(params: {
 
   const run: ExploreProbeRun = {
     environment: params.start.environment,
+    platform: params.start.platform,
     processCommands: processCommands,
     deadlineMs: Date.now() + params.start.timeoutMs,
     unusedCutoffMs: params.start.unusedCutoffMs,

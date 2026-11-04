@@ -20,6 +20,7 @@ export function buildPnpmStoreFindings(params: {
   pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
   processCommands: string[] | null;
+  projectSearchIncompleteEvidence: string;
 }): ExploreProbeFindings {
   const activity = decideUnitActivity({
     facts: { kind: 'pnpmStore' },
@@ -28,7 +29,10 @@ export function buildPnpmStoreFindings(params: {
   const installedEvidence = formatInstalledEvidence({
     installedVersions: params.offers.installedVersions,
   });
-  const searchEvidence = buildProjectSearchEvidence({ pins: params.projectPins });
+  const searchEvidence = buildProjectSearchEvidence({
+    pins: params.projectPins,
+    incompleteEvidence: params.projectSearchIncompleteEvidence,
+  });
 
   const findings = params.offers.offers.map((offer) => {
     const finding: ExploreFinding = {

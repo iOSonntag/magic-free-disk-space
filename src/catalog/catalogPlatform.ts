@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import type { CatalogEntry } from './catalog.js';
 
 /** A folder of the platform, below the home folder or at a fixed place. */
@@ -13,3 +14,16 @@ export type CatalogPlatform = {
   /** Folders below the home folder that are never removed, neither whole nor in part. */
   sensitiveHomeRelativePaths: string[];
 };
+
+/** The absolute path of the folder: its path as is, or joined below `homeDir`. */
+export function resolveCatalogFolderPath(params: {
+  folder: CatalogFolder;
+  homeDir: string;
+}): string {
+  switch (params.folder.root) {
+    case 'absolute':
+      return params.folder.path;
+    case 'home':
+      return join(params.homeDir, params.folder.path);
+  }
+}

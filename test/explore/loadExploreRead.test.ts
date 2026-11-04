@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, realpath, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { EXPLORE_FILE_MAX_BYTES } from '../../src/explore/limits.js';
 import {
   loadExploreDirectoryEntries,
@@ -11,6 +10,8 @@ import {
   loadExploreFolderNames,
   loadExploreRealPath,
 } from '../../src/explore/loadExploreRead.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -21,6 +22,8 @@ import {
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+
+const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
 
 describeAwaitingWin32Platform('loadExploreRead', () => {
   let fixtureRoot: FixtureRoot;
@@ -38,13 +41,19 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       const filePath = join(fixtureRoot.homeDir, 'config.ini');
       await writeFile(filePath, 'path=/avd\n');
 
-      const read = await loadExploreFileText({ path: filePath });
+      const read = await loadExploreFileText({
+        path: filePath,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(read).toEqual({ kind: 'succeeded', value: { kind: 'text', text: 'path=/avd\n' } });
     });
 
     test('reads a missing file as absent', async () => {
-      const read = await loadExploreFileText({ path: join(fixtureRoot.homeDir, 'missing') });
+      const read = await loadExploreFileText({
+        path: join(fixtureRoot.homeDir, 'missing'),
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(read).toEqual({ kind: 'succeeded', value: { kind: 'absent' } });
     });
@@ -53,7 +62,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       const folderPath = join(fixtureRoot.homeDir, 'folder');
       await createFixtureDirectory({ path: folderPath });
 
-      const read = await loadExploreFileText({ path: folderPath });
+      const read = await loadExploreFileText({
+        path: folderPath,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(read).toEqual({ kind: 'succeeded', value: { kind: 'unfit' } });
     });
@@ -63,7 +75,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       await writeFile(filePath, '');
       await truncate(filePath, EXPLORE_FILE_MAX_BYTES + 1);
 
-      const read = await loadExploreFileText({ path: filePath });
+      const read = await loadExploreFileText({
+        path: filePath,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(read).toEqual({ kind: 'succeeded', value: { kind: 'unfit' } });
     });
@@ -74,7 +89,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       await chmod(filePath, 0o000);
 
       try {
-        const read = await loadExploreFileText({ path: filePath });
+        const read = await loadExploreFileText({
+          path: filePath,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
+        });
 
         expect(read).toEqual({
           kind: 'failed',
@@ -95,7 +113,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       await createFixtureDirectory({ path: join(fixtureRoot.homeDir, 'b') });
       await createFixtureDirectory({ path: join(fixtureRoot.homeDir, 'a') });
 
-      const names = await loadExploreDirectoryNames({ path: fixtureRoot.homeDir });
+      const names = await loadExploreDirectoryNames({
+        path: fixtureRoot.homeDir,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(names).toEqual({ kind: 'succeeded', value: ['a', 'b'] });
     });
@@ -104,8 +125,14 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       const filePath = join(fixtureRoot.homeDir, 'file');
       await writeFile(filePath, '');
 
-      const missing = await loadExploreDirectoryNames({ path: join(fixtureRoot.homeDir, 'gone') });
-      const file = await loadExploreDirectoryNames({ path: filePath });
+      const missing = await loadExploreDirectoryNames({
+        path: join(fixtureRoot.homeDir, 'gone'),
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
+      const file = await loadExploreDirectoryNames({
+        path: filePath,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(missing).toEqual({ kind: 'succeeded', value: null });
       expect(file).toEqual({ kind: 'succeeded', value: null });
@@ -119,7 +146,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         await chmod(folderPath, 0o000);
 
         try {
-          const names = await loadExploreDirectoryNames({ path: folderPath });
+          const names = await loadExploreDirectoryNames({
+            path: folderPath,
+            privacyDenialCode: PRIVACY_DENIAL_CODE,
+          });
 
           expect(names).toEqual({
             kind: 'failed',
@@ -141,9 +171,13 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       await createFixtureDirectory({ path: join(fixtureRoot.homeDir, 'folder') });
       await writeFile(join(fixtureRoot.homeDir, 'file'), '');
 
-      const entries = await loadExploreDirectoryEntries({ path: fixtureRoot.homeDir });
+      const entries = await loadExploreDirectoryEntries({
+        path: fixtureRoot.homeDir,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
       const missing = await loadExploreDirectoryEntries({
         path: join(fixtureRoot.homeDir, 'gone'),
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
       });
 
       expect(entries).toEqual({
@@ -170,7 +204,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         await symlink('./20.11.1', join(fixtureRoot.homeDir, '20'));
         await symlink('./gone', join(fixtureRoot.homeDir, '.dangling'));
 
-        const names = await loadExploreFolderNames({ path: fixtureRoot.homeDir });
+        const names = await loadExploreFolderNames({
+          path: fixtureRoot.homeDir,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
+        });
 
         expect(names).toEqual({
           kind: 'succeeded',
@@ -183,8 +220,14 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       const filePath = join(fixtureRoot.homeDir, 'file');
       await writeFile(filePath, '');
 
-      const missing = await loadExploreFolderNames({ path: join(fixtureRoot.homeDir, 'gone') });
-      const file = await loadExploreFolderNames({ path: filePath });
+      const missing = await loadExploreFolderNames({
+        path: join(fixtureRoot.homeDir, 'gone'),
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
+      const file = await loadExploreFolderNames({
+        path: filePath,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(missing).toEqual({ kind: 'succeeded', value: null });
       expect(file).toEqual({ kind: 'succeeded', value: null });
@@ -198,7 +241,10 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         await chmod(folderPath, 0o000);
 
         try {
-          const names = await loadExploreFolderNames({ path: folderPath });
+          const names = await loadExploreFolderNames({
+            path: folderPath,
+            privacyDenialCode: PRIVACY_DENIAL_CODE,
+          });
 
           expect(names).toEqual({
             kind: 'failed',
@@ -220,8 +266,14 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
       const filePath = join(fixtureRoot.homeDir, 'config.ini');
       await createFixtureFile({ path: filePath, sizeBytes: 1, modifiedMs: 1_000_000 });
 
-      const stats = await loadExploreEntryStats({ path: filePath });
-      const missing = await loadExploreEntryStats({ path: join(fixtureRoot.homeDir, 'gone') });
+      const stats = await loadExploreEntryStats({
+        path: filePath,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
+      const missing = await loadExploreEntryStats({
+        path: join(fixtureRoot.homeDir, 'gone'),
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(stats.kind === 'succeeded' ? stats.value?.modifiedMs : undefined).toBe(1_000_000);
       expect(missing).toEqual({ kind: 'succeeded', value: null });
@@ -239,14 +291,20 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         await symlink(folderPath, linkPath);
         await writeFile(filePath, '');
 
-        const linked = await loadExploreRealPath({ pathRules: DARWIN_PATH_RULES, path: linkPath });
+        const linked = await loadExploreRealPath({
+          pathRules: DARWIN_PATH_RULES,
+          path: linkPath,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
+        });
         const missing = await loadExploreRealPath({
           pathRules: DARWIN_PATH_RULES,
           path: join(fixtureRoot.homeDir, 'gone'),
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
         const underFile = await loadExploreRealPath({
           pathRules: DARWIN_PATH_RULES,
           path: join(filePath, 'child'),
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
 
         expect(linked).toEqual({
@@ -270,6 +328,7 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
           const realPath = await loadExploreRealPath({
             pathRules: DARWIN_PATH_RULES,
             path: childPath,
+            privacyDenialCode: PRIVACY_DENIAL_CODE,
           });
 
           expect(realPath).toEqual({

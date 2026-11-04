@@ -13,13 +13,17 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import {
   DARWIN_DELETION_LOG_HOME_DIR_NAMES,
   DARWIN_PATH_RULES,
   DARWIN_PREFERENCES_HOME_DIR_NAMES,
   DARWIN_PROTECTED_ROOT_PATHS,
-} from '../../src/environment/loadEnvironment.js';
-import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+} from '../../src/platform/darwin/loadEnvironment.js';
+import {
+  PROTECTED_HOME_RELATIVE_PATHS,
+  SENSITIVE_HOME_RELATIVE_PATHS,
+} from '../../src/platform/darwin/protectedPaths.js';
 import { buildTestAbsolutePath, buildTestUserIdentity } from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
@@ -67,10 +71,10 @@ export async function loadTestEnvironment(params: {
     homeRealPath,
     tempDir: params.fixtureRoot.tempDir,
     tempRealPath,
-    applicationDirs: [params.fixtureRoot.applicationDir],
     applicationRealPaths: [applicationRealPath],
-    homebrewPrefixPaths: [],
     protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
+    protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
+    sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
     deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
     preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
   });

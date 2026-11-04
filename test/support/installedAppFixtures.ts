@@ -1,4 +1,4 @@
-import type { InstalledApp } from '../../src/scan/loadInstalledApps.js';
+import type { InstalledApp } from '../../src/scan/scanPlatform.js';
 import { buildTestMacBundleId } from './parsedValueFixtures.js';
 
 /** The fields of an installed app, its bundle ids as text for `buildTestMacBundleId`. */

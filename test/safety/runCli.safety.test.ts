@@ -17,6 +17,7 @@ import {
   loadTestEnvironment,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { buildTestPlatform } from '../support/platformFixtures.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 
 const MIB = 1_048_576;
@@ -116,11 +117,21 @@ async function runWithInput(params: {
     isTerminal: params.isTerminal ?? true,
     inputLines: params.inputLines,
   });
+  const platform = buildTestPlatform({
+    fixtureRoot: fixtureRoot,
+    catalogEntries: TEST_CATALOG,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+  });
   const exitCode = await runCli({
     argv: params.argv,
     environment: environment,
-    catalogEntries: TEST_CATALOG,
-    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+    catalog: platform.catalog,
+    tools: platform.tools,
+    scan: platform.scan,
+    system: platform.system,
+    delete: platform.delete,
+    explore: platform.explore,
+    texts: platform.report,
     io: io,
   });
 
@@ -279,11 +290,21 @@ describeAwaitingWin32Platform('runCli safety', () => {
       return 'DELETE';
     };
 
+    const platform = buildTestPlatform({
+      fixtureRoot: fixtureRoot,
+      catalogEntries: TEST_CATALOG,
+      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+    });
     const exitCode = await runCli({
       argv: [],
       environment: environment,
-      catalogEntries: TEST_CATALOG,
-      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+      catalog: platform.catalog,
+      tools: platform.tools,
+      scan: platform.scan,
+      system: platform.system,
+      delete: platform.delete,
+      explore: platform.explore,
+      texts: platform.report,
       io: io,
     });
 

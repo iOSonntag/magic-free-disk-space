@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildFailureIssues, buildReadIssue } from '../../src/scan/buildReadIssue.js';
 import { loadDirectoryNames } from '../../src/system/loadDirectoryNames.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -35,6 +36,7 @@ describeAwaitingWin32Platform('buildFailureIssues', () => {
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'permissionDenied', code: 'EPERM' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([
       { path: '/Users/example/Library/Containers', reason: 'privacyDenied', detail: 'EPERM' },
@@ -46,6 +48,7 @@ describeAwaitingWin32Platform('buildFailureIssues', () => {
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'permissionDenied', code: 'EACCES' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([
       { path: '/Users/example/Library/Containers', reason: 'permissionDenied', detail: 'EACCES' },
@@ -57,12 +60,14 @@ describeAwaitingWin32Platform('buildFailureIssues', () => {
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'missing', code: 'ENOENT' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([]);
     expect(
       buildFailureIssues({
         path: '/Users/example/Library/Containers',
         failure: { reason: 'notDirectory', code: 'ENOTDIR' },
+        privacyDenialCode: darwinPlatform.system.privacyDenialCode,
       }),
     ).toEqual([]);
   });
@@ -92,9 +97,13 @@ describeAwaitingWin32Platform('buildFailureIssues', () => {
             throw new Error('expected the listing of a folder with mode 000 to fail');
           }
 
-          expect(buildFailureIssues({ path: containersPath, failure: names.failure })).toEqual([
-            { path: containersPath, reason: 'permissionDenied', detail: 'EACCES' },
-          ]);
+          expect(
+            buildFailureIssues({
+              path: containersPath,
+              failure: names.failure,
+              privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+            }),
+          ).toEqual([{ path: containersPath, reason: 'permissionDenied', detail: 'EACCES' }]);
         } finally {
           await chmod(containersPath, 0o755);
         }

@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   getXcodeBundlePath,
   loadActiveXcodeBundlePath,
-} from '../../src/scan/loadActiveXcodeBundlePath.js';
-import { describeOnPosix } from '../support/posixOnly.js';
+} from '../../../src/platform/darwin/loadActiveXcodeBundlePath.js';
+import { describeOnPosix } from '../../support/posixOnly.js';
 
 describe('getXcodeBundlePath', () => {
   test('returns the app bundle above the developer directory', () => {

@@ -1,7 +1,7 @@
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
-import type { EnvironmentFailure } from './loadEnvironment.js';
+import type { EnvironmentFailure } from './environmentPlatform.js';
 
 /**
  * Returns why the resolved folders are unsafe to delete in, or `null`. The tool deletes as the

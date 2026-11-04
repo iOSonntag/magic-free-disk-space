@@ -8,6 +8,7 @@ export type ModuleName =
   | 'explore'
   | 'path'
   | 'platform'
+  | 'platform/darwin'
   | 'preferences'
   | 'report'
   | 'scan'

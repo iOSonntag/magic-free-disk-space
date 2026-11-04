@@ -15,6 +15,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -53,6 +54,7 @@ afterEach(async () => {
 function buildRun(processCommands: string[] | null): ExploreProbeRun {
   return {
     environment: environment,
+    platform: buildTestProbePlatform(),
     processCommands: processCommands,
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: 0,

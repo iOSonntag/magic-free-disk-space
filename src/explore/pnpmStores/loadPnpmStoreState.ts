@@ -33,8 +33,12 @@ const HIDDEN_NAME_PREFIX = '.';
 export async function loadPnpmStoreState(params: {
   pathRules: PathRules;
   storeRoot: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmStoreState, ExploreFileUnreadable>> {
-  const names = await loadExploreFolderNames({ path: params.storeRoot });
+  const names = await loadExploreFolderNames({
+    path: params.storeRoot,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (names.kind === 'failed') {
     return names;
@@ -48,6 +52,7 @@ export async function loadPnpmStoreState(params: {
     pathRules: params.pathRules,
     storeRoot: params.storeRoot,
     folderNames: names.value.folderNames,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (folders.kind === 'failed') {
@@ -61,6 +66,7 @@ async function loadPnpmStoreFolders(params: {
   pathRules: PathRules;
   storeRoot: AbsolutePath;
   folderNames: string[];
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmStoreFolder[], ExploreFileUnreadable>> {
   const folders: PnpmStoreFolder[] = [];
 
@@ -69,6 +75,7 @@ async function loadPnpmStoreFolders(params: {
       pathRules: params.pathRules,
       storeRoot: params.storeRoot,
       folderName: folderName,
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (folder.kind === 'failed') {
@@ -89,6 +96,7 @@ async function loadPnpmStoreFolder(params: {
   pathRules: PathRules;
   storeRoot: AbsolutePath;
   folderName: string;
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmStoreFolder, ExploreFileUnreadable>> {
   const folderPath = joinAbsolutePath({
     rules: params.pathRules,
@@ -107,6 +115,7 @@ async function loadPnpmStoreFolder(params: {
           parentPath: folderPath,
           names: [GLOBAL_VIRTUAL_STORE_FOLDER_NAME],
         }),
+        privacyDenialCode: params.privacyDenialCode,
       });
 
       if (linksNames.kind === 'failed') {

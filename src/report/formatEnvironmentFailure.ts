@@ -1,4 +1,4 @@
-import type { EnvironmentFailure } from '../environment/loadEnvironment.js';
+import type { EnvironmentFailure } from '../environment/environmentPlatform.js';
 import { formatDisplayText } from './formatDisplayText.js';
 
 /** The text with which the tool refuses to start on an operating system it does not run on. */

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
@@ -19,7 +20,11 @@ async function loadMeasurementOrThrow(params: {
   path: string;
   deadlineMs: number;
 }): Promise<Measurement> {
-  const result = await loadPathMeasurement(params);
+  const result = await loadPathMeasurement({
+    path: params.path,
+    deadlineMs: params.deadlineMs,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  });
 
   if (result.kind === 'failed') {
     throw new Error(`Measurement failed: ${result.failure.reason}`);
@@ -207,6 +212,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
     const result = await loadPathMeasurement({
       path: join(fixtureRoot.homeDir, 'missing'),
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(result).toEqual({ kind: 'failed', failure: { reason: 'missing', code: 'ENOENT' } });

@@ -1,15 +1,18 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { FullDiskAccess } from './fullDiskAccess.js';
-import { readFailureVerdictToFullDiskAccess } from './fullDiskAccess.js';
-import { getErrorCode } from './getErrorCode.js';
-import type { DirectoryFailure } from './loadDirectoryNames.js';
-import { getDirectoryFailure } from './loadDirectoryNames.js';
-import type { FileFailure } from './loadFileIdentity.js';
-import { getFileFailure } from './loadFileIdentity.js';
-import { decideReadFailure } from './readFailure.js';
-import { runFilesystemCall } from './runFilesystemCall.js';
+import type { FullDiskAccess } from '../../system/fullDiskAccess.js';
+import { readFailureVerdictToFullDiskAccess } from '../../system/fullDiskAccess.js';
+import { getErrorCode } from '../../system/getErrorCode.js';
+import type { DirectoryFailure } from '../../system/loadDirectoryNames.js';
+import { getDirectoryFailure } from '../../system/loadDirectoryNames.js';
+import type { FileFailure } from '../../system/loadFileIdentity.js';
+import { getFileFailure } from '../../system/loadFileIdentity.js';
+import { decideReadFailure } from '../../system/readFailure.js';
+import { runFilesystemCall } from '../../system/runFilesystemCall.js';
+
+/** macOS privacy protection (TCC) refuses with EPERM; a denial by the file's own mode is EACCES. */
+export const DARWIN_PRIVACY_DENIAL_CODE = 'EPERM';
 
 const TCC_DATABASE_RELATIVE_PATH = 'Library/Application Support/com.apple.TCC/TCC.db';
 const SAFARI_FOLDER_RELATIVE_PATH = 'Library/Safari';
@@ -49,7 +52,9 @@ async function probeFullDiskAccessPath(params: {
   } catch (error) {
     const failure = params.getFailure({ code: getErrorCode(error) });
 
-    return readFailureVerdictToFullDiskAccess(decideReadFailure(failure));
+    return readFailureVerdictToFullDiskAccess(
+      decideReadFailure({ failure, privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE }),
+    );
   }
 }
 

@@ -5,6 +5,7 @@ import type { DirectoryFailure } from './loadDirectoryNames.js';
 import type { EntryStats } from './loadEntryStats.js';
 import { loadEntryStats } from './loadEntryStats.js';
 import type { FileFailure, FileKind } from './loadFileIdentity.js';
+import type { EvictionCandidate } from './systemPlatform.js';
 
 export type TreeEntry = {
   path: string;
@@ -32,18 +33,20 @@ type PendingDirectory = { path: string; depth: number };
  * once, and asks `visitEntry` about every entry. Waiting folders are kept as paths, so a wide
  * tree costs memory for its paths only. Returns `stopped` once `visitEntry` returned `stop` or
  * `isStopped` turned true. A vanished entry is left out; an unreadable one goes to `onUnreadable`.
- * A folder `isFolderEvicted` marks, such as an evicted iCloud folder, is visited but never read,
- * so the walk downloads nothing, and goes to `onEvictedFolderSkipped`.
+ * `isEntryEvicted` is asked about each folder before it is read, the root included, and about
+ * each other entry before it is visited. An evicted entry, such as an iCloud placeholder, goes to
+ * `onEvictedEntrySkipped`: a folder is visited but never read, any other entry is never visited,
+ * so the walk downloads nothing.
  */
 export function walkDirectoryTree(params: {
   rootPath: string;
   isStatsNeeded: boolean;
   maxConcurrentDirectories: number;
   isStopped: () => boolean;
-  isFolderEvicted: (folder: { path: string }) => boolean;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
   visitEntry: (entry: TreeEntry) => TreeEntryVisit;
   onUnreadable: (unreadable: TreeUnreadable) => void;
-  onEvictedFolderSkipped: () => void;
+  onEvictedEntrySkipped: (entry: EvictionCandidate) => void;
 }): Promise<TreeWalkEnd> {
   const pendingDirectories: PendingDirectory[] = [{ path: params.rootPath, depth: 0 }];
   let activeCount = 0;
@@ -56,9 +59,11 @@ export function walkDirectoryTree(params: {
       return;
     }
 
-    // An evicted iCloud folder holds nothing on this disk, and reading it would download it.
-    if (params.isFolderEvicted({ path: directory.path })) {
-      params.onEvictedFolderSkipped();
+    const directoryCandidate: EvictionCandidate = { path: directory.path, kind: 'directory' };
+
+    // An evicted folder holds nothing on this disk, and reading it would download it.
+    if (params.isEntryEvicted(directoryCandidate)) {
+      params.onEvictedEntrySkipped(directoryCandidate);
 
       return;
     }
@@ -88,6 +93,15 @@ export function walkDirectoryTree(params: {
     for (const treeEntry of treeEntries) {
       if (isStoppedByVisit) {
         return;
+      }
+
+      const entryCandidate: EvictionCandidate = { path: treeEntry.path, kind: treeEntry.kind };
+
+      // A folder is asked once it is read; any other entry before its visit, which may read it.
+      if (treeEntry.kind !== 'directory' && params.isEntryEvicted(entryCandidate)) {
+        params.onEvictedEntrySkipped(entryCandidate);
+
+        continue;
       }
 
       const visit = params.visitEntry(treeEntry);

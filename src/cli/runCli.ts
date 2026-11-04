@@ -1,10 +1,12 @@
-import type { CatalogEntry } from '../catalog/catalog.js';
+import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import { isDeleteConfirmation } from '../delete/confirmation.js';
 import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js';
 import { isUnremovedOutcome } from '../delete/deleteCandidates.js';
+import type { DeletePlatform } from '../delete/deletePlatform.js';
 import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { ExplorePlatform } from '../explore/explorePlatform.js';
 import {
   CANCELLED_TEXT,
   formatDeletionWarningLines,
@@ -17,9 +19,12 @@ import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
 import { formatRemovalRun } from '../report/formatRemovalRun.js';
 import { formatScanReport } from '../report/formatScanReport.js';
 import { formatUsage } from '../report/formatUsage.js';
+import type { ReportTexts } from '../report/reportTexts.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
-import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
+import type { ScanPlatform } from '../scan/scanPlatform.js';
+import type { SystemPlatform } from '../system/systemPlatform.js';
+import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import { EXIT_CODES } from './exitCodes.js';
 import { formatArgumentFailure, formatSelectionFailure } from './formatInputFailures.js';
 import type { CliArguments } from './parseArguments.js';
@@ -37,8 +42,13 @@ const SELECTION_PROMPT =
 export async function runCli(params: {
   argv: string[];
   environment: Environment;
-  catalogEntries: CatalogEntry[];
-  toolInstallLocations: ToolInstallLocations;
+  catalog: CatalogPlatform;
+  tools: ToolsPlatform;
+  scan: ScanPlatform;
+  system: SystemPlatform;
+  delete: DeletePlatform;
+  explore: ExplorePlatform;
+  texts: ReportTexts;
   io: TerminalIo;
 }): Promise<number> {
   const parsed = parseArguments({ argv: params.argv });
@@ -54,7 +64,13 @@ export async function runCli(params: {
   const mode = parsed.value.mode;
 
   if (mode.kind === 'help') {
-    writeLines({ io: params.io, lines: formatUsage() });
+    writeLines({
+      io: params.io,
+      lines: formatUsage({
+        texts: params.texts,
+        processEndSignals: params.tools.processEndSignals,
+      }),
+    });
 
     return EXIT_CODES.done;
   }
@@ -70,15 +86,18 @@ export async function runCli(params: {
 
   const report = await runScan({
     environment: params.environment,
-    catalogEntries: params.catalogEntries,
-    toolInstallLocations: params.toolInstallLocations,
+    catalog: params.catalog,
+    tools: params.tools,
+    scan: params.scan,
+    system: params.system,
+    explore: params.explore,
     options: { staleDays: parsed.value.staleDays, unusedDays: parsed.value.unusedDays },
     onProgress: (message) => {
       params.io.writeError(`${message}\n`);
     },
   });
 
-  writeLines({ io: params.io, lines: formatScanReport({ report: report }) });
+  writeLines({ io: params.io, lines: formatScanReport({ report: report, texts: params.texts }) });
 
   if (mode.kind === 'list') {
     return EXIT_CODES.done;
@@ -96,6 +115,12 @@ export async function runCli(params: {
   return runInteractiveDeletion({
     arguments: parsed.value,
     environment: params.environment,
+    tools: params.tools,
+    scan: params.scan,
+    system: params.system,
+    delete: params.delete,
+    explore: params.explore,
+    texts: params.texts,
     io: params.io,
     report: report,
   });
@@ -140,6 +165,12 @@ function runDryRun(params: {
 async function runInteractiveDeletion(params: {
   arguments: CliArguments;
   environment: Environment;
+  tools: ToolsPlatform;
+  scan: ScanPlatform;
+  system: SystemPlatform;
+  delete: DeletePlatform;
+  explore: ExplorePlatform;
+  texts: ReportTexts;
   io: TerminalIo;
   report: ScanReport;
 }): Promise<number> {
@@ -169,7 +200,7 @@ async function runInteractiveDeletion(params: {
     return EXIT_CODES.done;
   }
 
-  const warningText = formatDeletionWarningLines().join('\n');
+  const warningText = formatDeletionWarningLines({ texts: params.texts }).join('\n');
   const confirmation = await params.io.readLine(`\n${warningText}\n> `);
 
   if (confirmation === null || !isDeleteConfirmation({ confirmation: confirmation })) {
@@ -181,6 +212,11 @@ async function runInteractiveDeletion(params: {
   const removal = await deleteApprovedCandidates({
     plan: plan,
     environment: params.environment,
+    delete: params.delete,
+    scan: params.scan,
+    system: params.system,
+    explore: params.explore,
+    tools: params.tools,
     clock: () => Date.now(),
   });
 

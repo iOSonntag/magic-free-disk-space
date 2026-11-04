@@ -20,6 +20,7 @@ export async function loadNvmVersionFindings(params: {
   const state = await loadNvmState({
     pathRules: params.run.environment.pathRules,
     homeDir: params.run.environment.homeDir,
+    privacyDenialCode: params.run.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {
@@ -35,6 +36,7 @@ export async function loadNvmVersionFindings(params: {
       pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
       projectPins: params.projectPins,
       processCommands: params.run.processCommands,
+      projectSearchIncompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
     }),
   };
 }

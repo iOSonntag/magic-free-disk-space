@@ -2,14 +2,16 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type {
   ProjectPinFileKind,
   ProjectPinFileRef,
 } from '../../src/explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
+import type { EvictionCandidate } from '../../src/system/systemPlatform.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -40,7 +42,7 @@ function walkTestProjects(params: {
   excludedTopNames?: string[];
   maxDepth?: number;
   deadlineMs?: number;
-  isFolderEvicted?: (folder: { path: string }) => boolean;
+  isEntryEvicted?: (entry: EvictionCandidate) => boolean;
 }): Promise<ProjectWalk> {
   return walkProjects({
     pathRules: DARWIN_PATH_RULES,
@@ -49,7 +51,8 @@ function walkTestProjects(params: {
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: params.maxDepth ?? 4,
     deadlineMs: params.deadlineMs ?? NO_DEADLINE_MS,
-    isFolderEvicted: params.isFolderEvicted ?? (() => false),
+    isEntryEvicted: params.isEntryEvicted ?? (() => false),
+    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }
 
@@ -216,7 +219,7 @@ describeAwaitingWin32Platform('walkProjects', () => {
 
     const evictedWalk = await walkTestProjects({
       homeDir: fixtureRoot.homeDir,
-      isFolderEvicted: (folder) => folder.path === evictedProjectPath,
+      isEntryEvicted: (entry) => entry.path === evictedProjectPath,
     });
     const residentWalk = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
 

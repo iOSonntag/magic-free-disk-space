@@ -6,6 +6,7 @@ export const moduleBoundary = {
     'catalog',
     'delete',
     'environment',
+    'explore',
     'preferences',
     'report',
     'scan',

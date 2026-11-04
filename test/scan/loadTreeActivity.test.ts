@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, lutimes, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -62,6 +63,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('quiet');
@@ -88,6 +90,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('recent');
@@ -114,6 +117,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: ['node_modules'],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
     const includedActivity = await loadTreeActivity({
       path: homeDir,
@@ -121,6 +125,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(excludedActivity).toBe('quiet');
@@ -148,6 +153,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('recent');
@@ -169,6 +175,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('recent');
@@ -192,6 +199,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 2,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');
@@ -218,6 +226,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: 0,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');
@@ -245,6 +254,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');
@@ -271,6 +281,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('quiet');
@@ -283,6 +294,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
     });
 
     expect(activity).toBe('unknown');

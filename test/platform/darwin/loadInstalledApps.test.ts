@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadInstalledApps } from '../../src/scan/loadInstalledApps.js';
-import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../src/system/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import type { FixtureRoot } from '../support/fixtureRoot.js';
+import { loadInstalledApps } from '../../../src/platform/darwin/loadInstalledApps.js';
+import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../../src/system/limits.js';
+import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
+import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
-} from '../support/fixtureRoot.js';
-import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+} from '../../support/fixtureRoot.js';
+import { buildTestMacBundleId } from '../../support/parsedValueFixtures.js';
+import { testOnPosix } from '../../support/posixOnly.js';
 
 function buildInfoPlistText(params: { bundleId: string }): string {
   return `<?xml version="1.0" encoding="UTF-8"?>

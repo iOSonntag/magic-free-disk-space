@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
+import type { ExploreProbePlatform } from '../../src/explore/exploreProbe.js';
 import type { ExplorePathUnitPnpmStore } from '../../src/explore/exploreUnit.js';
 import { buildPnpmStoreFindings } from '../../src/explore/pnpmStores/buildPnpmStoreFindings.js';
 import { comparePnpmStoreUnit } from '../../src/explore/pnpmStores/comparePnpmStoreUnit.js';
@@ -18,19 +18,20 @@ import { mapPnpmMajorToStoreVersion } from '../../src/explore/pnpmStores/mapPnpm
 import type { PnpmPins } from '../../src/explore/pnpmStores/parsePnpmPins.js';
 import { parsePnpmPins } from '../../src/explore/pnpmStores/parsePnpmPins.js';
 import { parsePnpmVersionMajor } from '../../src/explore/pnpmStores/parsePnpmVersionMajor.js';
-import {
-  PNPM_STORE_ROOT_PATH_NAMES,
-  PNPM_XDG_STORE_ROOT_PATH_NAMES,
-} from '../../src/explore/pnpmStores/pnpmHomes.js';
 import type {
   ProjectPinFile,
   ProjectPinFileKind,
 } from '../../src/explore/projectPins/projectPins.js';
-import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import {
+  PNPM_STORE_ROOT_PATH_NAMES,
+  PNPM_XDG_STORE_ROOT_PATH_NAMES,
+} from '../../src/platform/darwin/pnpmHomes.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -45,6 +46,7 @@ import {
   buildTestPnpmStoreVersion,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
   buildFoundProjectPinsLoad,
@@ -66,11 +68,13 @@ const PNPM_11_INSTALL_ID = '1375b-1a0a4cad7f8';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
+let probePlatform: ExploreProbePlatform;
 let homeDir: AbsolutePath;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
+  probePlatform = buildTestProbePlatform();
   homeDir = environment.homeDir;
 });
 
@@ -504,6 +508,7 @@ describeAwaitingWin32Platform('buildPnpmStoreFindings', () => {
       pinFiles: [{ path: pinFile.path, kind: pinFile.kind }],
       projectPins: buildTestProjectPins({ files: [pinFile], isWalkComplete: false }),
       processCommands: [],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings).toEqual({
@@ -544,6 +549,7 @@ describeAwaitingWin32Platform('buildPnpmStoreFindings', () => {
       pinFiles: [],
       projectPins: buildTestProjectPins({ files: [] }),
       processCommands: [PNPM_PROCESS_COMMAND],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings.findings).toEqual([
@@ -616,7 +622,9 @@ describeAwaitingWin32Platform('loadPnpmInstallState', () => {
       await loadPnpmInstallState({
         pathRules: DARWIN_PATH_RULES,
         homeDir: homeDir,
+        pnpmHomes: probePlatform.explore.pnpmHomes,
         homebrewPrefixPaths: [prefixPath],
+        privacyDenialCode: probePlatform.privacyDenialCode,
       }),
     ).toEqual({
       kind: 'succeeded',
@@ -649,7 +657,9 @@ describeAwaitingWin32Platform('loadPnpmInstallState', () => {
       await loadPnpmInstallState({
         pathRules: DARWIN_PATH_RULES,
         homeDir: homeDir,
+        pnpmHomes: probePlatform.explore.pnpmHomes,
         homebrewPrefixPaths: [],
+        privacyDenialCode: probePlatform.privacyDenialCode,
       }),
     ).toEqual({
       kind: 'succeeded',
@@ -677,6 +687,7 @@ for (const probeCase of probeCases) {
     async function runProbe(params: { files: ProjectPinFile[] }): Promise<ExploreProbeOutcome> {
       const probes = startExploreProbes({
         environment: environment,
+        platform: probePlatform,
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(null),
@@ -840,7 +851,7 @@ for (const probeCase of probeCases) {
       await createStore({ folderNames: ['v3', 'v10'] });
       const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
       await createFixtureDirectory({ path: join(prefixPath, 'Cellar', 'pnpm', '10.14.0_1') });
-      environment = { ...environment, homebrewPrefixPaths: [prefixPath] };
+      probePlatform = buildTestProbePlatform({ homebrewPrefixPaths: [prefixPath] });
 
       expect(await loadOfferedVersions({ files: [] })).toEqual({
         storeVersions: ['v3'],
@@ -862,7 +873,7 @@ for (const probeCase of probeCases) {
         const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
         const installPath = join(prefixPath, ...prefixPlace.installPathNames);
         await writePnpmPackage({ packageFolder: installPath, version: '10.14.0' });
-        environment = { ...environment, homebrewPrefixPaths: [prefixPath] };
+        probePlatform = buildTestProbePlatform({ homebrewPrefixPaths: [prefixPath] });
 
         expect(await loadOfferedVersions({ files: [] })).toEqual({
           storeVersions: [],
@@ -1240,7 +1251,12 @@ describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
 
   test('is unchanged while nothing uses the store version', async () => {
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: probePlatform,
+        processCommands: [],
+      }),
     ).toEqual({ kind: 'unchanged' });
   });
 
@@ -1248,7 +1264,12 @@ describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
     await writeFile(pinPath, '{"packageManager": "pnpm@10.14.0"}');
 
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: probePlatform,
+        processCommands: [],
+      }),
     ).toEqual({ kind: 'changed' });
   });
 
@@ -1256,7 +1277,12 @@ describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
     await createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/v1/pnpm/10.14.0') });
 
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: probePlatform,
+        processCommands: [],
+      }),
     ).toEqual({ kind: 'changed' });
   });
 
@@ -1264,7 +1290,12 @@ describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
     await createFixtureDirectory({ path: join(storeRoot, 'v10/links/0a1b2c') });
 
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: probePlatform,
+        processCommands: [],
+      }),
     ).toEqual({ kind: 'changed' });
   });
 
@@ -1273,6 +1304,7 @@ describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
       await recheckExplorePathUnit({
         unit: unit,
         environment: environment,
+        platform: probePlatform,
         processCommands: [PNPM_PROCESS_COMMAND],
       }),
     ).toEqual({ kind: 'busy' });
@@ -1282,7 +1314,12 @@ describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
     await chmod(storeRoot, 0o000);
 
     expect(
-      await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: probePlatform,
+        processCommands: [],
+      }),
     ).toEqual({
       kind: 'failed',
       failure: {

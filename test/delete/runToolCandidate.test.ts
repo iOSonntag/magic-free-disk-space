@@ -10,6 +10,7 @@ import type {
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import type { ProbeCommandName } from '../explore/probeFakeTools.js';
@@ -35,6 +36,7 @@ import {
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -179,7 +181,11 @@ function buildRemoveCommands(paths: AbsolutePath[]): string {
 }
 
 async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
-  const measurement = await loadUnitMeasurement({ unit: unit, deadlineMs: Date.now() + 60_000 });
+  const measurement = await loadUnitMeasurement({
+    unit: unit,
+    deadlineMs: Date.now() + 60_000,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  });
 
   return measurement.allocatedBytes;
 }
@@ -205,6 +211,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -236,6 +244,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -272,6 +282,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -287,6 +299,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -309,6 +323,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -335,6 +351,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -360,6 +378,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -382,12 +402,16 @@ process.exit(0);`,
     const whileSimulatorRuns = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: async () => [SIMULATOR_APP_COMMAND],
       timeoutMs: TIMEOUT_MS,
     });
     const whileProcessesUnknown = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: async () => null,
       timeoutMs: TIMEOUT_MS,
     });
@@ -411,6 +435,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -438,6 +464,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -464,6 +492,8 @@ process.exit(3);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -499,12 +529,15 @@ process.exit(0);`,
       const run = await runToolCandidate({
         unit: unit,
         environment: environment,
+        probePlatform: buildTestProbePlatform(),
+        isEntryEvicted: darwinPlatform.system.isEntryEvicted,
         loadProcessCommands: loadNoProcessCommands,
         timeoutMs: TIMEOUT_MS,
       });
       const measurementAfter = await loadUnitMeasurement({
         unit: unit,
         deadlineMs: Date.now() + 60_000,
+        isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       });
 
       expect(measurementAfter.isComplete).toBe(false);
@@ -526,6 +559,8 @@ process.exit(0);`,
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
+      probePlatform: buildTestProbePlatform(),
+      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: 300,
     });

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, realpath, symlink, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { EXPLORE_FILE_MAX_BYTES } from '../../src/explore/limits.js';
 import {
   loadProjectPinFiles,
@@ -9,11 +8,11 @@ import {
 } from '../../src/explore/projectPins/loadProjectPins.js';
 import type { ProjectPinFileKind } from '../../src/explore/projectPins/projectPins.js';
 import { matchProjectPinFile } from '../../src/explore/projectPins/projectPins.js';
-import {
-  buildProjectSearchEvidence,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { buildProjectSearchEvidence } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import { selectToolPins } from '../../src/explore/projectPins/selectToolPins.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -30,6 +29,8 @@ import {
   buildTestPinFileUnreadable,
   buildTestProjectPins,
 } from './projectPinsFixtures.js';
+
+const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
 
 const NO_SIBLINGS: ReadonlySet<string> = new Set();
 
@@ -202,11 +203,13 @@ describeAwaitingWin32Platform('buildProjectSearchEvidence', () => {
     expect(
       buildProjectSearchEvidence({
         pins: buildTestProjectPins({ files: [], isWalkComplete: false }),
+        incompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual([PROJECT_SEARCH_INCOMPLETE_EVIDENCE]);
     expect(
       buildProjectSearchEvidence({
         pins: buildTestProjectPins({ files: [], isWalkComplete: true }),
+        incompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual([]);
   });
@@ -241,6 +244,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       await writeFile(nvmrcPath, '22\n');
 
       const files = await loadProjectPinFiles({
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         files: [
           { path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' },
           { path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'toolVersions' },
@@ -264,6 +268,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       await truncate(largePath, EXPLORE_FILE_MAX_BYTES + 1);
 
       const files = await loadProjectPinFiles({
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         files: [
           { path: buildTestAbsolutePath({ text: folderPath }), kind: 'toolVersions' },
           { path: buildTestAbsolutePath({ text: largePath }), kind: 'toolVersions' },
@@ -283,6 +288,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       try {
         const files = await loadProjectPinFiles({
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           files: [{ path: buildTestAbsolutePath({ text: gradlePath }), kind: 'gradle' }],
         });
 
@@ -300,6 +306,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       const pins = await loadProjectPins({
         pathRules: DARWIN_PATH_RULES,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [{ path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' }],
         isWalkComplete: false,
@@ -347,6 +354,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       const pins = await loadProjectPins({
         pathRules: DARWIN_PATH_RULES,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [],
         isWalkComplete: true,
@@ -384,6 +392,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       const pins = await loadProjectPins({
         pathRules: DARWIN_PATH_RULES,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [
           { path: buildTestAbsolutePath({ text: miseConfigPath }), kind: 'miseConfig' },
@@ -408,6 +417,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       try {
         const pins = await loadProjectPins({
           pathRules: DARWIN_PATH_RULES,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,
@@ -438,6 +448,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       try {
         const pins = await loadProjectPins({
           pathRules: DARWIN_PATH_RULES,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,
@@ -466,6 +477,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       try {
         const pins = await loadProjectPins({
           pathRules: DARWIN_PATH_RULES,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
           isWalkComplete: true,

@@ -5,11 +5,12 @@ export const moduleBoundary = {
   imports: ['catalog', 'environment', 'explore', 'path', 'system', 'tools'],
   readsTablesOf: [],
   exposes: [
+    'buildReadIssue.ts',
     'candidate.ts',
     'issue.ts',
     'limits.ts',
-    'loadProcessCommands.ts',
     'loadUnitMeasurement.ts',
+    'parseProcessCommandLines.ts',
     'placeCandidate.ts',
     'runScan.ts',
     'scanPlatform.ts',

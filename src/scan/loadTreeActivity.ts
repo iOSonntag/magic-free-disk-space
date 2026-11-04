@@ -1,5 +1,5 @@
-import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
+import type { EvictionCandidate } from '../system/systemPlatform.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type ActivityProbe = 'recent' | 'quiet' | 'unknown';
@@ -17,6 +17,7 @@ export async function loadTreeActivity(params: {
   excludedNames: string[];
   maxEntries: number;
   deadlineMs: number;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
 }): Promise<ActivityProbe> {
   const rootStats = await loadEntryStats({ path: params.path });
 
@@ -41,7 +42,7 @@ export async function loadTreeActivity(params: {
     isStatsNeeded: true,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
-    isFolderEvicted: hasDatalessFlag,
+    isEntryEvicted: params.isEntryEvicted,
     visitEntry: (entry) => {
       if (entry.stats === null || params.excludedNames.includes(entry.name)) {
         return 'skip';
@@ -64,7 +65,7 @@ export async function loadTreeActivity(params: {
     onUnreadable: () => {
       hasUnreadableEntry = true;
     },
-    onEvictedFolderSkipped: () => undefined,
+    onEvictedEntrySkipped: () => undefined,
   });
 
   if (hasRecentEntry) {

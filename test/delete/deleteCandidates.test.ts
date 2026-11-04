@@ -14,6 +14,7 @@ import type {
   ExploreToolUnit,
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
@@ -52,11 +53,19 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
 
 const SIMULATOR_APP_COMMAND =
   '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator';
+
+/** The macOS slices a deletion reads, with the probe facts of the tests. */
+const DELETION_PLATFORM = {
+  delete: darwinPlatform.delete,
+  probePlatform: buildTestProbePlatform(),
+  isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+};
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -267,6 +276,7 @@ async function measureAllocatedBytes(candidate: Candidate): Promise<number> {
   const measurement = await loadUnitMeasurement({
     unit: readToolUnit(candidate),
     deadlineMs: Date.now() + 60_000,
+    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
   });
 
   return measurement.allocatedBytes;
@@ -294,6 +304,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
     const journalLines = await loadJournalLines(journal);
@@ -330,6 +341,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
         journal: await createTestJournal(),
         loadProcessCommands: buildProcessCommandsLoader([]),
         environment: environment,
+        ...DELETION_PLATFORM,
         clock: () => NOW_MS,
       });
 
@@ -351,6 +363,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -373,6 +386,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
         journal: await createTestJournal(),
         loadProcessCommands: buildProcessCommandsLoader([]),
         environment: environment,
+        ...DELETION_PLATFORM,
         clock: () => NOW_MS,
       });
 
@@ -394,6 +408,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -417,6 +432,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -438,6 +454,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -461,6 +478,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -485,6 +503,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
         '/Applications/Example.app/Contents/MacOS/Example',
       ]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -505,6 +524,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader(null),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -524,6 +544,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       candidates: [toolCandidate, await scanCandidate(pathItem)],
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -558,6 +579,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       candidates: [buildTestDartToolCandidate({ homeDir: fixtureRoot.homeDir })],
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -573,6 +595,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: await createTestJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
@@ -595,6 +618,7 @@ process.exit(0);`,
       candidates: [candidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -639,6 +663,7 @@ process.exit(0);`,
       candidates: [candidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -678,6 +703,7 @@ process.exit(1);`,
       candidates: [candidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -725,6 +751,7 @@ process.exit(0);`,
       candidates: [await scanCandidate(pathItem), toolCandidate],
       journal: journal,
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: buildProcessCommandsLoader([]),
       clock: () => NOW_MS,
     });
@@ -764,6 +791,7 @@ process.exit(0);`,
       candidates: [await scanCandidate(pathItem), simulatorCandidate],
       journal: await createTestJournal(),
       environment: environment,
+      ...DELETION_PLATFORM,
       loadProcessCommands: async () => {
         readCount += 1;
 
@@ -805,6 +833,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
       journal: await createTestJournal(),
       loadProcessCommands: params.loadProcessCommands,
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
   }
@@ -817,6 +846,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
+      ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 

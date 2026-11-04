@@ -31,43 +31,49 @@ export type ExploreFileReadUnfit = { kind: 'unfit' };
 /** The text of a file a tool keeps, or the verdict of a read that found none to read. */
 export type ExploreFileRead = ExploreFileReadText | ExploreFileReadAbsent | ExploreFileReadUnfit;
 
+/**
+ * The read of a path a tool keeps. `privacyDenialCode` is the system slice's code of a privacy
+ * denial, which every read below passes to `decideReadFailure`.
+ */
+export type ExploreRead = { path: string; privacyDenialCode: string | null };
+
 /** Reads a file a tool keeps, up to `EXPLORE_FILE_MAX_BYTES`; only a failed read fails, at its path. */
-export async function loadExploreFileText(params: {
-  path: string;
-}): Promise<Result<ExploreFileRead, ExploreFileUnreadable>> {
+export async function loadExploreFileText(
+  params: ExploreRead,
+): Promise<Result<ExploreFileRead, ExploreFileUnreadable>> {
   const text = await loadFileText({ path: params.path, maxBytes: EXPLORE_FILE_MAX_BYTES });
 
   if (text.kind === 'succeeded') {
     return { kind: 'succeeded', value: { kind: 'text', text: text.value } };
   }
 
-  return decideExploreReadFailure({ path: params.path, failure: text.failure });
+  return decideExploreReadFailure({ read: params, failure: text.failure });
 }
 
 /** The sorted names in the folder; `null` when nothing is there or it is no folder. */
-export async function loadExploreDirectoryNames(params: {
-  path: string;
-}): Promise<Result<string[] | null, ExploreFileUnreadable>> {
+export async function loadExploreDirectoryNames(
+  params: ExploreRead,
+): Promise<Result<string[] | null, ExploreFileUnreadable>> {
   const names = await loadDirectoryNames({ path: params.path });
 
   if (names.kind === 'succeeded') {
     return names;
   }
 
-  return toNullWhenNotFound({ path: params.path, failure: names.failure });
+  return toNullWhenNotFound({ read: params, failure: names.failure });
 }
 
 /** The entries of the folder with their kinds; `null` when nothing is there or it is no folder. */
-export async function loadExploreDirectoryEntries(params: {
-  path: string;
-}): Promise<Result<DirectoryEntry[] | null, ExploreFileUnreadable>> {
+export async function loadExploreDirectoryEntries(
+  params: ExploreRead,
+): Promise<Result<DirectoryEntry[] | null, ExploreFileUnreadable>> {
   const entries = await loadDirectoryEntries({ path: params.path });
 
   if (entries.kind === 'succeeded') {
     return entries;
   }
 
-  return toNullWhenNotFound({ path: params.path, failure: entries.failure });
+  return toNullWhenNotFound({ read: params, failure: entries.failure });
 }
 
 /** The real folders and the symbolic links of a folder, each sorted, without dot names. */
@@ -77,10 +83,10 @@ export type ExploreFolderNames = { folderNames: string[]; linkNames: string[] };
  * The install folders a tool keeps in a folder, the one rule of a tool's version list; `null`
  * when nothing is there or it is no folder.
  */
-export async function loadExploreFolderNames(params: {
-  path: string;
-}): Promise<Result<ExploreFolderNames | null, ExploreFileUnreadable>> {
-  const entries = await loadExploreDirectoryEntries({ path: params.path });
+export async function loadExploreFolderNames(
+  params: ExploreRead,
+): Promise<Result<ExploreFolderNames | null, ExploreFileUnreadable>> {
+  const entries = await loadExploreDirectoryEntries(params);
 
   if (entries.kind === 'failed') {
     return entries;
@@ -106,30 +112,29 @@ export async function loadExploreFolderNames(params: {
 }
 
 /** The stats of the entry itself; `null` when nothing is there. */
-export async function loadExploreEntryStats(params: {
-  path: string;
-}): Promise<Result<EntryStats | null, ExploreFileUnreadable>> {
+export async function loadExploreEntryStats(
+  params: ExploreRead,
+): Promise<Result<EntryStats | null, ExploreFileUnreadable>> {
   const stats = await loadEntryStats({ path: params.path });
 
   if (stats.kind === 'succeeded') {
     return stats;
   }
 
-  return toNullWhenNotFound({ path: params.path, failure: stats.failure });
+  return toNullWhenNotFound({ read: params, failure: stats.failure });
 }
 
 /**
  * The path with every link resolved; `null` when nothing is there or a part of it is no folder.
  * Throws when `realpath` answers with a path that is not absolute.
  */
-export async function loadExploreRealPath(params: {
-  pathRules: PathRules;
-  path: string;
-}): Promise<Result<AbsolutePath | null, ExploreFileUnreadable>> {
+export async function loadExploreRealPath(
+  params: ExploreRead & { pathRules: PathRules },
+): Promise<Result<AbsolutePath | null, ExploreFileUnreadable>> {
   const text = await loadRealPathText({ path: params.path });
 
   if (text.kind === 'failed') {
-    return toNullWhenNotFound({ path: params.path, failure: text.failure });
+    return toNullWhenNotFound({ read: params, failure: text.failure });
   }
 
   const realPath = parseAbsolutePath({ rules: params.pathRules, text: text.value });
@@ -152,7 +157,7 @@ async function loadRealPathText(params: { path: string }): Promise<Result<string
 }
 
 function toNullWhenNotFound(params: {
-  path: string;
+  read: ExploreRead;
   failure: FileFailure | DirectoryFailure;
 }): Result<null, ExploreFileUnreadable> {
   const verdict = decideExploreReadFailure(params);
@@ -166,15 +171,18 @@ function toNullWhenNotFound(params: {
 
 /** Absent and unfit are verdicts of the state; any other failure leaves as `fileUnreadable`. */
 function decideExploreReadFailure(params: {
-  path: string;
+  read: ExploreRead;
   failure: FileFailure | DirectoryFailure | FileContentFailure;
 }): Result<ReadFailureVerdictAbsent | ReadFailureVerdictUnfit, ExploreFileUnreadable> {
-  const verdict = decideReadFailure(params.failure);
+  const verdict = decideReadFailure({
+    failure: params.failure,
+    privacyDenialCode: params.read.privacyDenialCode,
+  });
 
   if (verdict.kind === 'failed') {
     return {
       kind: 'failed',
-      failure: { reason: 'fileUnreadable', path: params.path, failure: verdict.failure },
+      failure: { reason: 'fileUnreadable', path: params.read.path, failure: verdict.failure },
     };
   }
 

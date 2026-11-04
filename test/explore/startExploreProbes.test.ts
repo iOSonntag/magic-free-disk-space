@@ -15,6 +15,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -121,6 +122,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -160,6 +162,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve(null),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -186,6 +189,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: processCommands.promise,
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -213,6 +217,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(tools),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -243,6 +248,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -270,6 +276,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -293,6 +300,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ dart: dart }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -310,6 +318,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
   test('answers toolMissing for a tool at none of its locations', async () => {
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({
         xcrun: join(fixtureRoot.rootDir, 'absent', 'xcrun'),
       }),
@@ -333,6 +342,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       probe: { kind: 'files', loadFindings: () => new Promise(() => {}) },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -370,6 +380,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -400,6 +411,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -438,6 +450,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       },
       start: {
         environment: environment,
+        platform: buildTestProbePlatform(),
         toolInstallLocations: buildFixtureToolLocations({}),
         processCommands: Promise.resolve([]),
         activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
@@ -460,6 +473,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),

@@ -3,7 +3,7 @@ import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogOwner, CatalogOwnerBundleId, MacBundleId } from '../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
-import type { InstalledApp } from './loadInstalledApps.js';
+import type { InstalledApp } from './scanPlatform.js';
 
 export type OwnerState = 'running' | 'stopped' | 'unknown';
 

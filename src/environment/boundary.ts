@@ -2,7 +2,7 @@ import type { ModuleBoundary } from '../moduleBoundary.js';
 
 /** The edges and the surface of the module environment. */
 export const moduleBoundary = {
-  imports: ['catalog', 'path', 'system'],
+  imports: ['path', 'system'],
   readsTablesOf: [],
-  exposes: ['buildEnvironment.ts', 'environmentPlatform.ts', 'loadEnvironment.ts'],
+  exposes: ['buildEnvironment.ts', 'checkEnvironmentRoots.ts', 'environmentPlatform.ts'],
 } satisfies ModuleBoundary;

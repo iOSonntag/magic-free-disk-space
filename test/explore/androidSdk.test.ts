@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { compareAndroidAvdUnit } from '../../src/explore/android/compareAndroidAvdUnit.js';
 import { compareAndroidPathUnit } from '../../src/explore/android/compareAndroidPathUnit.js';
 import {
@@ -27,6 +26,7 @@ import type {
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -38,6 +38,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -73,6 +74,18 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
+/** The load of the Android state below the fixture home, at the SDK root of macOS. */
+function buildStateLoad(): Parameters<typeof loadAndroidSdkState>[0] {
+  const platform = buildTestProbePlatform();
+
+  return {
+    pathRules: DARWIN_PATH_RULES,
+    homeDir: homeDir,
+    androidSdkRoot: platform.explore.androidSdkRoot,
+    privacyDenialCode: platform.privacyDenialCode,
+  };
+}
+
 type AndroidProbeAnswers = {
   avds: ExploreProbeFindings;
   systemImages: ExploreProbeFindings;
@@ -84,6 +97,7 @@ async function loadAndroidProbeAnswers(
 ): Promise<AndroidProbeAnswers> {
   const run = {
     environment: environment,
+    platform: buildTestProbePlatform(),
     processCommands: processCommands,
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
@@ -107,6 +121,7 @@ function buildRecheckRun(processCommands: string[] | null) {
   return {
     tool: tool,
     environment: environment,
+    platform: buildTestProbePlatform(),
     deadlineMs: Date.now() + 10_000,
     processCommands: processCommands,
   };
@@ -128,7 +143,7 @@ function takeFirstUnit<TUnit extends ExploreFinding['unit']>(
 }
 
 async function loadFreshState() {
-  const state = await loadAndroidSdkState({ pathRules: DARWIN_PATH_RULES, homeDir: homeDir });
+  const state = await loadAndroidSdkState(buildStateLoad());
 
   if (state.kind === 'failed') {
     throw new Error('The Android state should load.');
@@ -498,7 +513,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     });
     await chmod(avd.iniPath, 0o000);
 
-    expect(await loadAndroidSdkState({ pathRules: DARWIN_PATH_RULES, homeDir: homeDir })).toEqual({
+    expect(await loadAndroidSdkState(buildStateLoad())).toEqual({
       kind: 'failed',
       failure: {
         reason: 'fileUnreadable',
@@ -509,6 +524,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     expect(
       await loadAndroidSystemImageFindings({
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
         deadlineMs: Date.now() + 10_000,
         unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,

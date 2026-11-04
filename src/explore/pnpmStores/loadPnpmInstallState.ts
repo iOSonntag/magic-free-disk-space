@@ -5,6 +5,7 @@ import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import { ASDF_INSTALLS_PATH_NAMES } from '../asdfVersions/asdfInstallsRoot.js';
+import type { HomeRelativePathNames } from '../explorePlatform.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
   loadExploreFileText,
@@ -14,7 +15,6 @@ import {
 import { MISE_INSTALLS_PATH_NAMES } from '../miseVersions/miseInstallsRoot.js';
 import { NVM_NODE_VERSIONS_PATH_NAMES } from '../nvmVersions/nvmVersionsRoot.js';
 import { parsePnpmVersionMajor } from './parsePnpmVersionMajor.js';
-import { PNPM_HOMES_PATH_NAMES } from './pnpmHomes.js';
 import { hasPnpmToolName, PNPM_TOOL_NAME } from './pnpmToolName.js';
 
 /** An installed pnpm whose version names its major. */
@@ -77,14 +77,18 @@ const PACKAGE_JSON_FILE_NAME = 'package.json';
 export async function loadPnpmInstallState(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
+  /** pnpm's homes of the explore slice. */
+  pnpmHomes: HomeRelativePathNames[];
   homebrewPrefixPaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstallState, ExploreFileUnreadable>> {
-  const pnpmHomePaths = PNPM_HOMES_PATH_NAMES.map((names) =>
+  const pnpmHomePaths = params.pnpmHomes.map((names) =>
     joinAbsolutePath({ rules: params.pathRules, parentPath: params.homeDir, names: names }),
   );
   const misePnpmRoots = await loadMisePnpmVersionsRoots({
     pathRules: params.pathRules,
     homeDir: params.homeDir,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (misePnpmRoots.kind === 'failed') {
@@ -94,6 +98,7 @@ export async function loadPnpmInstallState(params: {
   const cellarRoots = await loadHomebrewCellarPnpmRoots({
     pathRules: params.pathRules,
     homebrewPrefixPaths: params.homebrewPrefixPaths,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (cellarRoots.kind === 'failed') {
@@ -109,6 +114,7 @@ export async function loadPnpmInstallState(params: {
   const folderInstalls = await loadVersionFolderInstalls({
     pathRules: params.pathRules,
     versionsRoots: [...homeRoots, ...cellarRoots.value],
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (folderInstalls.kind === 'failed') {
@@ -118,6 +124,7 @@ export async function loadPnpmInstallState(params: {
   const globalFolders = await loadPnpmGlobalFolders({
     pathRules: params.pathRules,
     pnpmHomePaths: pnpmHomePaths,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (globalFolders.kind === 'failed') {
@@ -129,6 +136,7 @@ export async function loadPnpmInstallState(params: {
     homeDir: params.homeDir,
     homebrewPrefixPaths: params.homebrewPrefixPaths,
     globalFolderPaths: globalFolders.value,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (packageFolders.kind === 'failed') {
@@ -138,6 +146,7 @@ export async function loadPnpmInstallState(params: {
   const packageInstalls = await loadPackageJsonInstalls({
     pathRules: params.pathRules,
     packageFolders: packageFolders.value,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (packageInstalls.kind === 'failed') {
@@ -147,6 +156,7 @@ export async function loadPnpmInstallState(params: {
   const standaloneInstalls = await loadStandaloneInstalls({
     pathRules: params.pathRules,
     pnpmHomePaths: pnpmHomePaths,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (standaloneInstalls.kind === 'failed') {
@@ -191,6 +201,7 @@ function listHomePnpmVersionsRoots(params: {
 async function loadMisePnpmVersionsRoots(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const miseInstallsPath = joinAbsolutePath({
     rules: params.pathRules,
@@ -200,6 +211,7 @@ async function loadMisePnpmVersionsRoots(params: {
   const entryPaths = await loadEntryPaths({
     pathRules: params.pathRules,
     folderPaths: [miseInstallsPath],
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (entryPaths.kind === 'failed') {
@@ -217,6 +229,7 @@ async function loadMisePnpmVersionsRoots(params: {
 async function loadHomebrewCellarPnpmRoots(params: {
   pathRules: PathRules;
   homebrewPrefixPaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const roots: AbsolutePath[] = [];
 
@@ -226,7 +239,10 @@ async function loadHomebrewCellarPnpmRoots(params: {
       parentPath: prefixPath,
       names: [HOMEBREW_CELLAR_FOLDER_NAME],
     });
-    const names = await loadExploreFolderNames({ path: cellarPath });
+    const names = await loadExploreFolderNames({
+      path: cellarPath,
+      privacyDenialCode: params.privacyDenialCode,
+    });
 
     if (names.kind === 'failed') {
       return names;
@@ -251,6 +267,7 @@ async function loadHomebrewCellarPnpmRoots(params: {
 async function loadVersionFolderInstalls(params: {
   pathRules: PathRules;
   versionsRoots: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const installs: PnpmInstall[] = [];
 
@@ -258,6 +275,7 @@ async function loadVersionFolderInstalls(params: {
     const rootInstalls = await loadVersionsRootInstalls({
       pathRules: params.pathRules,
       versionsRoot: versionsRoot,
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (rootInstalls.kind === 'failed') {
@@ -277,8 +295,12 @@ async function loadVersionFolderInstalls(params: {
 async function loadVersionsRootInstalls(params: {
   pathRules: PathRules;
   versionsRoot: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
-  const names = await loadExploreFolderNames({ path: params.versionsRoot });
+  const names = await loadExploreFolderNames({
+    path: params.versionsRoot,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (names.kind === 'failed') {
     return names;
@@ -305,7 +327,11 @@ async function loadVersionsRootInstalls(params: {
       parentPath: params.versionsRoot,
       names: [linkName],
     });
-    const realPath = await loadExploreRealPath({ pathRules: params.pathRules, path: linkPath });
+    const realPath = await loadExploreRealPath({
+      pathRules: params.pathRules,
+      path: linkPath,
+      privacyDenialCode: params.privacyDenialCode,
+    });
 
     if (realPath.kind === 'failed') {
       return realPath;
@@ -332,6 +358,7 @@ async function loadPnpmPackageFolders(params: {
   homeDir: AbsolutePath;
   homebrewPrefixPaths: AbsolutePath[];
   globalFolderPaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const nodeInstallsRoots = [
     [...ASDF_INSTALLS_PATH_NAMES, ASDF_NODE_TOOL_NAME],
@@ -343,6 +370,7 @@ async function loadPnpmPackageFolders(params: {
   const nodeFolders = await loadEntryRealPaths({
     pathRules: params.pathRules,
     folderPaths: nodeInstallsRoots,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (nodeFolders.kind === 'failed') {
@@ -375,6 +403,7 @@ async function loadPnpmPackageFolders(params: {
 async function loadPnpmGlobalFolders(params: {
   pathRules: PathRules;
   pnpmHomePaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const entryPaths = await loadEntryPaths({
     pathRules: params.pathRules,
@@ -385,6 +414,7 @@ async function loadPnpmGlobalFolders(params: {
         names: [PNPM_GLOBAL_FOLDER_NAME],
       }),
     ),
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (entryPaths.kind === 'failed') {
@@ -398,7 +428,11 @@ async function loadPnpmGlobalFolders(params: {
   const flatFolderPaths = globalEntryPaths.filter(
     (entryPath) => !isGlobalInstallsFolder({ entryPath: entryPath }),
   );
-  const flatFolders = await loadRealPaths({ pathRules: params.pathRules, paths: flatFolderPaths });
+  const flatFolders = await loadRealPaths({
+    pathRules: params.pathRules,
+    paths: flatFolderPaths,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (flatFolders.kind === 'failed') {
     return flatFolders;
@@ -407,6 +441,7 @@ async function loadPnpmGlobalFolders(params: {
   const installFolders = await loadEntryRealPaths({
     pathRules: params.pathRules,
     folderPaths: installsFolderPaths,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (installFolders.kind === 'failed') {
@@ -425,6 +460,7 @@ function isGlobalInstallsFolder(params: { entryPath: AbsolutePath }): boolean {
 async function loadStandaloneInstalls(params: {
   pathRules: PathRules;
   pnpmHomePaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const installs: PnpmInstall[] = [];
 
@@ -432,6 +468,7 @@ async function loadStandaloneInstalls(params: {
     const install = await loadStandaloneInstall({
       pathRules: params.pathRules,
       pnpmHomePath: pnpmHomePath,
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (install.kind === 'failed') {
@@ -454,13 +491,17 @@ async function loadStandaloneInstalls(params: {
 async function loadStandaloneInstall(params: {
   pathRules: PathRules;
   pnpmHomePath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall | null, ExploreFileUnreadable>> {
   const path = joinAbsolutePath({
     rules: params.pathRules,
     parentPath: params.pnpmHomePath,
     names: [PNPM_TOOL_NAME],
   });
-  const file = await loadExploreFileText({ path: path });
+  const file = await loadExploreFileText({
+    path: path,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (file.kind === 'failed') {
     return file;
@@ -485,10 +526,12 @@ async function loadStandaloneInstall(params: {
 async function loadEntryRealPaths(params: {
   pathRules: PathRules;
   folderPaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const entryPaths = await loadEntryPaths({
     pathRules: params.pathRules,
     folderPaths: params.folderPaths,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (entryPaths.kind === 'failed') {
@@ -498,6 +541,7 @@ async function loadEntryRealPaths(params: {
   return loadRealPaths({
     pathRules: params.pathRules,
     paths: [...entryPaths.value.folderPaths, ...entryPaths.value.linkPaths],
+    privacyDenialCode: params.privacyDenialCode,
   });
 }
 
@@ -507,12 +551,16 @@ type EntryPaths = { folderPaths: AbsolutePath[]; linkPaths: AbsolutePath[] };
 async function loadEntryPaths(params: {
   pathRules: PathRules;
   folderPaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<EntryPaths, ExploreFileUnreadable>> {
   const folderPaths: AbsolutePath[] = [];
   const linkPaths: AbsolutePath[] = [];
 
   for (const folderPath of params.folderPaths) {
-    const names = await loadExploreFolderNames({ path: folderPath });
+    const names = await loadExploreFolderNames({
+      path: folderPath,
+      privacyDenialCode: params.privacyDenialCode,
+    });
 
     if (names.kind === 'failed') {
       return names;
@@ -541,11 +589,16 @@ async function loadEntryPaths(params: {
 async function loadRealPaths(params: {
   pathRules: PathRules;
   paths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const realPaths = new Set<AbsolutePath>();
 
   for (const path of params.paths) {
-    const realPath = await loadExploreRealPath({ pathRules: params.pathRules, path: path });
+    const realPath = await loadExploreRealPath({
+      pathRules: params.pathRules,
+      path: path,
+      privacyDenialCode: params.privacyDenialCode,
+    });
 
     if (realPath.kind === 'failed') {
       return realPath;
@@ -562,6 +615,7 @@ async function loadRealPaths(params: {
 async function loadPackageJsonInstalls(params: {
   pathRules: PathRules;
   packageFolders: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const installs: PnpmInstall[] = [];
 
@@ -569,6 +623,7 @@ async function loadPackageJsonInstalls(params: {
     const install = await loadPackageJsonInstall({
       pathRules: params.pathRules,
       packageFolder: packageFolder,
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (install.kind === 'failed') {
@@ -587,6 +642,7 @@ async function loadPackageJsonInstalls(params: {
 async function loadPackageJsonInstall(params: {
   pathRules: PathRules;
   packageFolder: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall | null, ExploreFileUnreadable>> {
   const packageJson = await loadExploreFileText({
     path: joinAbsolutePath({
@@ -594,6 +650,7 @@ async function loadPackageJsonInstall(params: {
       parentPath: params.packageFolder,
       names: [PACKAGE_JSON_FILE_NAME],
     }),
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (packageJson.kind === 'failed') {

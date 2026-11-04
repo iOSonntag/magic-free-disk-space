@@ -3,6 +3,7 @@ import { chmod, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, CatalogRoot } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { findCatalogTargets } from '../../src/scan/findCatalogTargets.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -16,6 +17,8 @@ import {
 import { testOnPosix } from '../support/posixOnly.js';
 
 const TEST_NOW_MS = 1_700_000_000_000;
+
+const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
 
 describeAwaitingWin32Platform('findCatalogTargets', () => {
   let fixtureRoot: FixtureRoot;
@@ -49,6 +52,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     const result = await findCatalogTargets({
       environment,
       entries: [presentEntry, missingEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
     expect(result).toEqual({ targets: [{ entry: presentEntry, path: cacheDir }], issues: [] });
@@ -70,7 +74,11 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       scope: 'children',
     });
 
-    const result = await findCatalogTargets({ environment, entries: [entry] });
+    const result = await findCatalogTargets({
+      environment,
+      entries: [entry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
 
     expect(result).toEqual({
       targets: [
@@ -104,6 +112,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     const result = await findCatalogTargets({
       environment,
       entries: [missingEntry, fileEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
     expect(result).toEqual({ targets: [], issues: [] });
@@ -112,7 +121,11 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
   test('a temp entry with an empty path is the temp folder itself', async () => {
     const entry = buildCatalogEntry({ id: 'temp-root', root: 'temp', path: '', scope: 'self' });
 
-    const result = await findCatalogTargets({ environment, entries: [entry] });
+    const result = await findCatalogTargets({
+      environment,
+      entries: [entry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
 
     expect(result).toEqual({ targets: [{ entry, path: fixtureRoot.tempDir }], issues: [] });
   });
@@ -127,7 +140,11 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       scope: 'self',
     });
 
-    const result = await findCatalogTargets({ environment, entries: [entry] });
+    const result = await findCatalogTargets({
+      environment,
+      entries: [entry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
 
     expect(result).toEqual({ targets: [{ entry, path: systemLogsDir }], issues: [] });
   });
@@ -143,7 +160,11 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       scope: 'children',
     });
 
-    const result = await findCatalogTargets({ environment, entries: [entry] });
+    const result = await findCatalogTargets({
+      environment,
+      entries: [entry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
 
     expect(result).toEqual({
       targets: [],
@@ -164,7 +185,11 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
         scope: 'self',
       });
 
-      const result = await findCatalogTargets({ environment, entries: [entry] });
+      const result = await findCatalogTargets({
+        environment,
+        entries: [entry],
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(result).toEqual({
         targets: [],
@@ -185,7 +210,11 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
         scope: 'self',
       });
 
-      const result = await findCatalogTargets({ environment, entries: [entry] });
+      const result = await findCatalogTargets({
+        environment,
+        entries: [entry],
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
 
       expect(result).toEqual({
         targets: [],

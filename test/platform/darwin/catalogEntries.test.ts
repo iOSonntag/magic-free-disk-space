@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { ExploreProbeId } from '../../src/catalog/catalog.js';
-import { CATALOG_ENTRIES } from '../../src/catalog/catalogEntries.js';
+import type { ExploreProbeId } from '../../../src/catalog/catalog.js';
+import { CATALOG_ENTRIES } from '../../../src/platform/darwin/catalogEntries.js';
 
 const KEBAB_CASE_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 

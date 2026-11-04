@@ -1,4 +1,5 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
+import type { EvictionCandidate } from '../../system/systemPlatform.js';
 
 // macOS `struct stat` with 64-bit inodes: 144 bytes, `st_flags` at byte 116. Checked against
 // `ls -lO` on Apple silicon. Intel Macs name this variant `lstat$INODE64`.
@@ -21,16 +22,26 @@ function openLibSystem() {
 }
 
 /**
+ * True for a folder whose content iCloud evicted from this Mac, by its dataless flag. Any other
+ * entry is `false`, so a walk visits every file, link, and other entry it meets.
+ */
+export function isEntryEvicted(params: EvictionCandidate): boolean {
+  switch (params.kind) {
+    case 'directory':
+      return hasDatalessFlag({ path: params.path });
+    case 'file':
+    case 'symbolicLink':
+    case 'other':
+      return false;
+  }
+}
+
+/**
  * True when the entry is an iCloud placeholder whose content was evicted from this Mac.
  * Reads the entry itself without following a link and without downloading; `false` when it
- * cannot be read, and on any system but macOS, which has no such placeholders. `node:fs` hides
- * `st_flags`, hence the direct call.
+ * cannot be read. `node:fs` hides `st_flags`, hence the direct call.
  */
 export function hasDatalessFlag(params: { path: string }): boolean {
-  if (process.platform !== 'darwin') {
-    return false;
-  }
-
   libSystem ??= openLibSystem();
 
   const statBuffer = new Uint8Array(STAT_BUFFER_BYTES);

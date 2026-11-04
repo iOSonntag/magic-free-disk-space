@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';

@@ -24,12 +24,10 @@ import type {
   ProjectPinFileRef,
   ProjectPinFileText,
 } from '../../src/explore/projectPins/projectPins.js';
-import {
-  PINNED_VERSION_REINSTALL_EXPLANATION,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { PINNED_VERSION_REINSTALL_EXPLANATION } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -45,6 +43,7 @@ import {
   buildTestAsdfToolVersion,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildFoundProjectPinsLoad,
@@ -309,6 +308,7 @@ describeAwaitingWin32Platform('buildAsdfVersionFindings', () => {
       pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
       processCommands: [],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings).toEqual([
@@ -335,6 +335,7 @@ describeAwaitingWin32Platform('buildAsdfVersionFindings', () => {
       pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [] }),
       processCommands: [`${oldFolder.folderPath}/bin/node server.js`],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings[0]?.activity).toBe('busy');
@@ -451,6 +452,7 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
   async function runAsdfProbe(params: { files: ProjectPinFile[]; asdfPath: string | null }) {
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations(
         params.asdfPath === null ? {} : { asdf: params.asdfPath },
       ),
@@ -490,6 +492,7 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
       run: {
         tool: params.unit.tool,
         environment: environment,
+        platform: buildTestProbePlatform(),
         deadlineMs: Date.now() + TIMEOUT_MS,
         processCommands: params.processCommands,
       },

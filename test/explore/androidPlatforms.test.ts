@@ -14,15 +14,13 @@ import type {
   ProjectPinFile,
   ProjectPinFileText,
 } from '../../src/explore/projectPins/projectPins.js';
-import {
-  PINNED_VERSION_REINSTALL_EXPLANATION,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { PINNED_VERSION_REINSTALL_EXPLANATION } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -33,6 +31,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_UNUSED_CUTOFF_MS,
@@ -278,6 +277,7 @@ describeAwaitingWin32Platform('buildAndroidPlatformFindings', () => {
         pinFiles: [{ path: buildTestAbsolutePath({ text: EXAMPLE_GRADLE_PATH }), kind: 'gradle' }],
         projectPins: buildTestProjectPins({ files: [] }),
         processCommands: [],
+        projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual({
       findings: [
@@ -312,6 +312,7 @@ describeAwaitingWin32Platform('buildAndroidPlatformFindings', () => {
       pinFiles: [],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
       processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
     expect(findings.findings[0]).toMatchObject({
@@ -409,6 +410,7 @@ async function loadAndroidProbeOutcomes(params: {
 }): Promise<AndroidProbeOutcomes> {
   const probes = startExploreProbes({
     environment: environment,
+    platform: buildTestProbePlatform(),
     toolInstallLocations: buildFixtureToolLocations({}),
     processCommands: Promise.resolve([]),
     activeXcodeBundlePath: Promise.resolve(null),
@@ -585,6 +587,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
       await recheckExplorePathUnit({
         unit: platform.unit,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -598,6 +601,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
       await recheckExplorePathUnit({
         unit: platform.unit,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
       }),
     ).toEqual({ kind: 'changed' });
@@ -610,6 +614,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
       await recheckExplorePathUnit({
         unit: platform.unit,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
       }),
     ).toEqual({ kind: 'busy' });
@@ -624,6 +629,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
         await recheckExplorePathUnit({
           unit: platform.unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [],
         }),
       ).toEqual({

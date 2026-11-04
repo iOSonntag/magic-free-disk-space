@@ -1,6 +1,5 @@
 import type { CatalogOwner, MacBundleId } from '../../src/catalog/catalogOwner.js';
 import { parseMacBundleId } from '../../src/catalog/catalogOwner.js';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { AndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import { parseAndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import type {
@@ -31,6 +30,7 @@ import type { SimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/par
 import { parseSimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeId.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { Result } from '../../src/result.js';
 import type { UserIdentity } from '../../src/system/userIdentity.js';
 import { parsePosixUid } from '../../src/system/userIdentity.js';

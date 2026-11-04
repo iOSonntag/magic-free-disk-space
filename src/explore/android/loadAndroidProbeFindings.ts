@@ -22,6 +22,8 @@ export async function loadAndroidAvdFindings(
   const state = await loadAndroidSdkState({
     pathRules: run.environment.pathRules,
     homeDir: run.environment.homeDir,
+    androidSdkRoot: run.platform.explore.androidSdkRoot,
+    privacyDenialCode: run.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {
@@ -46,6 +48,8 @@ export async function loadAndroidSystemImageFindings(
   const state = await loadAndroidSdkState({
     pathRules: run.environment.pathRules,
     homeDir: run.environment.homeDir,
+    androidSdkRoot: run.platform.explore.androidSdkRoot,
+    privacyDenialCode: run.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {
@@ -68,6 +72,8 @@ export async function loadAndroidEmulatorFindings(
   const state = await loadAndroidSdkState({
     pathRules: run.environment.pathRules,
     homeDir: run.environment.homeDir,
+    androidSdkRoot: run.platform.explore.androidSdkRoot,
+    privacyDenialCode: run.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {

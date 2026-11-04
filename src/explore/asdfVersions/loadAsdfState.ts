@@ -57,13 +57,17 @@ const ASDFRC_FILE_NAME = '.asdfrc';
 export async function loadAsdfState(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<AsdfState, ExploreFileUnreadable>> {
   const installsPath = joinAbsolutePath({
     rules: params.pathRules,
     parentPath: params.homeDir,
     names: ASDF_INSTALLS_PATH_NAMES,
   });
-  const toolNames = await loadExploreFolderNames({ path: installsPath });
+  const toolNames = await loadExploreFolderNames({
+    path: installsPath,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (toolNames.kind === 'failed') {
     return toolNames;
@@ -85,6 +89,7 @@ export async function loadAsdfState(params: {
         names: [toolFolderName],
       }),
       toolFolderName: toolFolderName,
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (toolFolder.kind === 'failed') {
@@ -98,6 +103,7 @@ export async function loadAsdfState(params: {
   const legacyVersionFile = await loadAsdfLegacyVersionFile({
     pathRules: params.pathRules,
     homeDir: params.homeDir,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (legacyVersionFile.kind === 'failed') {
@@ -119,6 +125,7 @@ async function loadAsdfToolFolder(params: {
   pathRules: PathRules;
   toolPath: AbsolutePath;
   toolFolderName: string;
+  privacyDenialCode: string | null;
 }): Promise<Result<AsdfToolFolderState, ExploreFileUnreadable>> {
   const asdfToolName = parseAsdfToolName({ folderName: params.toolFolderName });
 
@@ -129,7 +136,10 @@ async function loadAsdfToolFolder(params: {
     };
   }
 
-  const versionNames = await loadExploreFolderNames({ path: params.toolPath });
+  const versionNames = await loadExploreFolderNames({
+    path: params.toolPath,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (versionNames.kind === 'failed') {
     return versionNames;
@@ -156,6 +166,7 @@ async function loadAsdfToolFolder(params: {
     asdfToolName: asdfToolName.value,
     folderNames: versionNames.value.folderNames,
     linkNames: versionNames.value.linkNames,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (links.kind === 'failed') {
@@ -191,6 +202,7 @@ async function loadAsdfVersionLinks(params: {
   asdfToolName: AsdfToolName;
   folderNames: string[];
   linkNames: string[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AsdfVersionLink[], ExploreFileUnreadable>> {
   if (params.linkNames.length === 0) {
     return { kind: 'succeeded', value: [] };
@@ -199,6 +211,7 @@ async function loadAsdfVersionLinks(params: {
   const toolRealPath = await loadExploreRealPath({
     pathRules: params.pathRules,
     path: params.toolPath,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (toolRealPath.kind === 'failed') {
@@ -219,6 +232,7 @@ async function loadAsdfVersionLinks(params: {
         parentPath: params.toolPath,
         names: [linkName],
       }),
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (linkRealPath.kind === 'failed') {
@@ -242,6 +256,7 @@ async function loadAsdfVersionLinks(params: {
 async function loadAsdfLegacyVersionFile(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<AsdfLegacyVersionFile, ExploreFileUnreadable>> {
   const asdfrc = await loadExploreFileText({
     path: joinAbsolutePath({
@@ -249,6 +264,7 @@ async function loadAsdfLegacyVersionFile(params: {
       parentPath: params.homeDir,
       names: [ASDFRC_FILE_NAME],
     }),
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (asdfrc.kind === 'failed') {

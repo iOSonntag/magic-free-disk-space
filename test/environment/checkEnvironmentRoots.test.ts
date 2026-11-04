@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoots.js';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 

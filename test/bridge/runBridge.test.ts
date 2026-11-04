@@ -5,7 +5,7 @@ import type { BridgeEnd, BridgeEvent } from '../../src/bridge/runBridge.js';
 import { runBridge } from '../../src/bridge/runBridge.js';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { EnvironmentFailure } from '../../src/environment/loadEnvironment.js';
+import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
 import type { PreferencesSaveFailure } from '../../src/preferences/preferencesFile.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
@@ -25,6 +25,7 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { buildTestPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { loadProtocolFixtureEvents } from '../support/protocolFixture.js';
 
@@ -163,6 +164,11 @@ async function runBridgeWithLines(params: {
     kind: 'succeeded',
     value: environment,
   };
+  const platform = buildTestPlatform({
+    fixtureRoot: fixtureRoot,
+    catalogEntries: BRIDGE_CATALOG,
+    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+  });
   const end = await runBridge({
     io: {
       readLines: () => yieldLines(params.lines),
@@ -170,14 +176,21 @@ async function runBridgeWithLines(params: {
         events.push(event);
       },
     },
-    catalogEntries: BRIDGE_CATALOG,
-    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
-    loadEnvironment: async () => environmentResult,
-    loadFullDiskAccess: async (probe) => {
-      probedHomeDirs.push(probe.homeDir);
+    environment: { loadEnvironment: async () => environmentResult },
+    catalog: platform.catalog,
+    tools: platform.tools,
+    scan: platform.scan,
+    system: {
+      ...platform.system,
+      loadFullDiskAccess: async (probe) => {
+        probedHomeDirs.push(probe.homeDir);
 
-      return params.fullDiskAccess ?? 'unknown';
+        return params.fullDiskAccess ?? 'unknown';
+      },
     },
+    delete: platform.delete,
+    explore: platform.explore,
+    texts: platform.report,
     clock: () => params.nowMs ?? NOW_MS,
     releaseVersion: params.releaseVersion === undefined ? RELEASE_1_2_0 : params.releaseVersion,
     fetchLatestReleaseVersion: async () => {

@@ -22,11 +22,15 @@ export type AndroidPackageFolder = AndroidPackageFolderParsed | AndroidPackageFo
 /** The folders of `folderPaths` that hold a `package.xml`; the first unreadable one fails. */
 export async function loadAndroidPackageFolders(params: {
   folderPaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AndroidPackageFolder[], ExploreFileUnreadable>> {
   const packageFolders: AndroidPackageFolder[] = [];
 
   for (const folderPath of params.folderPaths) {
-    const packageFolder = await loadAndroidPackageFolder({ folderPath: folderPath });
+    const packageFolder = await loadAndroidPackageFolder({
+      folderPath: folderPath,
+      privacyDenialCode: params.privacyDenialCode,
+    });
 
     if (packageFolder.kind === 'failed') {
       return packageFolder;
@@ -44,11 +48,15 @@ export async function loadAndroidPackageFolders(params: {
 export async function loadAndroidChildPaths(params: {
   pathRules: PathRules;
   parentPaths: AbsolutePath[];
+  privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
   const childPaths: AbsolutePath[] = [];
 
   for (const parentPath of params.parentPaths) {
-    const names = await loadExploreDirectoryNames({ path: parentPath });
+    const names = await loadExploreDirectoryNames({
+      path: parentPath,
+      privacyDenialCode: params.privacyDenialCode,
+    });
 
     if (names.kind === 'failed') {
       return names;
@@ -67,8 +75,12 @@ export async function loadAndroidChildPaths(params: {
 /** `null` when the folder holds no `package.xml`, so it is no package. */
 export async function loadAndroidPackageFolder(params: {
   folderPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<AndroidPackageFolder | null, ExploreFileUnreadable>> {
-  const packageXml = await loadExploreFileText({ path: join(params.folderPath, 'package.xml') });
+  const packageXml = await loadExploreFileText({
+    path: join(params.folderPath, 'package.xml'),
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (packageXml.kind === 'failed') {
     return packageXml;

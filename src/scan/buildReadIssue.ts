@@ -13,8 +13,13 @@ export function buildReadIssue(params: { path: string; failure: ReadFailure }): 
 export function buildFailureIssues(params: {
   path: string;
   failure: FileFailure | DirectoryFailure;
+  /** The system slice's code of a privacy denial; `null` takes none for one. */
+  privacyDenialCode: string | null;
 }): ScanIssue[] {
-  const verdict = decideReadFailure(params.failure);
+  const verdict = decideReadFailure({
+    failure: params.failure,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   switch (verdict.kind) {
     case 'absent':

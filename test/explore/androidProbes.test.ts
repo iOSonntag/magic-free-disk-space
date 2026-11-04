@@ -17,6 +17,7 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -79,6 +80,7 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ avdmanager: avdmanager }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -150,7 +152,12 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
 
     for (const unit of [units.image, units.emulator]) {
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'unchanged' });
     }
   });
@@ -163,6 +170,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
         }),
       ).toEqual({ kind: 'busy' });
@@ -180,7 +188,12 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
 
     for (const unit of [units.image, units.emulator]) {
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });

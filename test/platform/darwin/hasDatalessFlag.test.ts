@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { hasDatalessFlag } from '../../src/system/hasDatalessFlag.js';
-import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import { describeOnPosix } from '../support/posixOnly.js';
+import { hasDatalessFlag } from '../../../src/platform/darwin/hasDatalessFlag.js';
+import type { FixtureRoot } from '../../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot } from '../../support/fixtureRoot.js';
+import { describeOnPosix } from '../../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 

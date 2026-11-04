@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 

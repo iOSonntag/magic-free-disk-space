@@ -11,6 +11,8 @@ export async function recheckAndroidAvdUnit(params: {
   const state = await loadAndroidSdkState({
     pathRules: params.run.environment.pathRules,
     homeDir: params.run.environment.homeDir,
+    androidSdkRoot: params.run.platform.explore.androidSdkRoot,
+    privacyDenialCode: params.run.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {

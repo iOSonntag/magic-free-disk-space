@@ -1,7 +1,16 @@
+import type { MacBundleId } from '../catalog/catalogOwner.js';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import type { ScanIssue } from './issue.js';
-import type { InstalledApp } from './loadInstalledApps.js';
+
+export type InstalledApp = {
+  bundlePath: string;
+  displayName: string;
+  /** `null` when its Info.plist could not be read or names an empty id. */
+  bundleId: MacBundleId | null;
+  /** Bundle ids of helpers and extensions inside the app; they belong to the app. */
+  nestedBundleIds: MacBundleId[];
+};
 
 /** The platform's apps are listed, and an app unused for long is offered with its leftovers. */
 export type ScanPlatformAppsOffered = {

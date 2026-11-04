@@ -68,6 +68,7 @@ type VscodeRegistry = {
 export async function loadVscodeExtensionState(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<VscodeExtensionState, ExploreFileUnreadable>> {
   const extensionsPath = joinAbsolutePath({
     rules: params.pathRules,
@@ -77,6 +78,7 @@ export async function loadVscodeExtensionState(params: {
   const folders = await loadExtensionFolders({
     pathRules: params.pathRules,
     extensionsPath: extensionsPath,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (folders.kind === 'failed') {
@@ -90,6 +92,7 @@ export async function loadVscodeExtensionState(params: {
   const extensionsRealPath = await loadExploreRealPath({
     pathRules: params.pathRules,
     path: extensionsPath,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (extensionsRealPath.kind === 'failed') {
@@ -105,6 +108,7 @@ export async function loadVscodeExtensionState(params: {
     homePath: params.homeDir,
     extensionsPath: extensionsPath,
     extensionsRealPath: extensionsRealPath.value,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (listedFolderNames.kind === 'failed') {
@@ -114,6 +118,7 @@ export async function loadVscodeExtensionState(params: {
   const obsoleteFolderNames = await loadObsoleteFolderNames({
     pathRules: params.pathRules,
     extensionsPath: extensionsPath,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (obsoleteFolderNames.kind === 'failed') {
@@ -143,8 +148,12 @@ export function hasVscodeExtensionFolder(params: {
 async function loadExtensionFolders(params: {
   pathRules: PathRules;
   extensionsPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<VscodeExtensionFolder[] | null, ExploreFileUnreadable>> {
-  const entries = await loadExploreDirectoryEntries({ path: params.extensionsPath });
+  const entries = await loadExploreDirectoryEntries({
+    path: params.extensionsPath,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (entries.kind === 'failed') {
     return entries;
@@ -205,11 +214,13 @@ async function loadListedFolderNames(params: {
   homePath: AbsolutePath;
   extensionsPath: AbsolutePath;
   extensionsRealPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<ReadonlySet<string> | null, ExploreFileUnreadable>> {
   const registries = await listRegistries({
     pathRules: params.pathRules,
     homePath: params.homePath,
     extensionsPath: params.extensionsPath,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (registries.kind === 'failed') {
@@ -219,6 +230,7 @@ async function loadListedFolderNames(params: {
   const folderPaths = await loadRegistriesFolderPaths({
     registries: registries.value,
     extensionsPath: params.extensionsPath,
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (folderPaths.kind === 'failed') {
@@ -232,6 +244,7 @@ async function loadListedFolderNames(params: {
   const parentRealPaths = await loadParentRealPaths({
     pathRules: params.pathRules,
     parentPaths: new Set(folderPaths.value.map((folderPath) => dirname(folderPath))),
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (parentRealPaths.kind === 'failed') {
@@ -255,6 +268,7 @@ async function loadListedFolderNames(params: {
 async function loadRegistriesFolderPaths(params: {
   registries: VscodeRegistry[];
   extensionsPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<string[] | null, ExploreFileUnreadable>> {
   const folderPaths: string[] = [];
   let isEveryRegistryJudged = true;
@@ -263,6 +277,7 @@ async function loadRegistriesFolderPaths(params: {
     const registryFolderPaths = await loadRegistryFolderPaths({
       registry: registry,
       extensionsPath: params.extensionsPath,
+      privacyDenialCode: params.privacyDenialCode,
     });
 
     if (registryFolderPaths.kind === 'failed') {
@@ -286,11 +301,16 @@ async function loadRegistriesFolderPaths(params: {
 async function loadParentRealPaths(params: {
   pathRules: PathRules;
   parentPaths: ReadonlySet<string>;
+  privacyDenialCode: string | null;
 }): Promise<Result<ReadonlyMap<string, AbsolutePath | null>, ExploreFileUnreadable>> {
   const parentRealPaths = new Map<string, AbsolutePath | null>();
 
   for (const parentPath of params.parentPaths) {
-    const realPath = await loadExploreRealPath({ pathRules: params.pathRules, path: parentPath });
+    const realPath = await loadExploreRealPath({
+      pathRules: params.pathRules,
+      path: parentPath,
+      privacyDenialCode: params.privacyDenialCode,
+    });
 
     if (realPath.kind === 'failed') {
       return realPath;
@@ -307,6 +327,7 @@ async function listRegistries(params: {
   pathRules: PathRules;
   homePath: AbsolutePath;
   extensionsPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<VscodeRegistry[], ExploreFileUnreadable>> {
   const defaultRegistry: VscodeRegistry = {
     path: joinAbsolutePath({
@@ -321,7 +342,10 @@ async function listRegistries(params: {
     parentPath: params.homePath,
     names: PROFILES_FOLDER_NAMES,
   });
-  const profileNames = await loadExploreDirectoryNames({ path: profilesPath });
+  const profileNames = await loadExploreDirectoryNames({
+    path: profilesPath,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (profileNames.kind === 'failed') {
     return profileNames;
@@ -343,8 +367,12 @@ async function listRegistries(params: {
 async function loadRegistryFolderPaths(params: {
   registry: VscodeRegistry;
   extensionsPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<string[] | null, ExploreFileUnreadable>> {
-  const read = await loadExploreFileText({ path: params.registry.path });
+  const read = await loadExploreFileText({
+    path: params.registry.path,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   if (read.kind === 'failed') {
     return read;
@@ -452,6 +480,7 @@ function findExtensionsFolderName(params: {
 async function loadObsoleteFolderNames(params: {
   pathRules: PathRules;
   extensionsPath: AbsolutePath;
+  privacyDenialCode: string | null;
 }): Promise<Result<ReadonlySet<string> | null, ExploreFileUnreadable>> {
   const read = await loadExploreFileText({
     path: joinAbsolutePath({
@@ -459,6 +488,7 @@ async function loadObsoleteFolderNames(params: {
       parentPath: params.extensionsPath,
       names: [OBSOLETE_FILE_NAME],
     }),
+    privacyDenialCode: params.privacyDenialCode,
   });
 
   if (read.kind === 'failed') {

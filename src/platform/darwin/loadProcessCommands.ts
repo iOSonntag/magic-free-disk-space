@@ -1,6 +1,7 @@
-import type { Result } from '../result.js';
-import type { CommandFailure } from '../system/loadCommandOutput.js';
-import { loadCommandOutput } from '../system/loadCommandOutput.js';
+import type { Result } from '../../result.js';
+import { parseProcessCommandLines } from '../../scan/parseProcessCommandLines.js';
+import type { CommandFailure } from '../../system/loadCommandOutput.js';
+import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 
 export async function loadProcessCommands(params: {
   commandTimeoutMs: number;
@@ -18,11 +19,4 @@ export async function loadProcessCommands(params: {
   const commandLines = parseProcessCommandLines({ stdoutText: outputResult.value });
 
   return { kind: 'succeeded', value: commandLines };
-}
-
-export function parseProcessCommandLines(params: { stdoutText: string }): string[] {
-  const lines = params.stdoutText.split('\n');
-  const trimmedLines = lines.map((line) => line.trim());
-
-  return trimmedLines.filter((line) => line !== '');
 }

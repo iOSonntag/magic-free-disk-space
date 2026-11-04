@@ -1,24 +1,22 @@
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
-import type { AbsolutePath } from '../path/parseAbsolutePath.js';
-import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
-import type { PathRules } from '../path/pathRules.js';
-import type { Result } from '../result.js';
-import { getErrorCode } from '../system/getErrorCode.js';
-import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
-import { loadCommandOutput } from '../system/loadCommandOutput.js';
-import type { UserIdentity } from '../system/userIdentity.js';
-import { parsePosixUid } from '../system/userIdentity.js';
-import type { Environment } from './buildEnvironment.js';
-import { buildEnvironment } from './buildEnvironment.js';
-import { checkEnvironmentRoots } from './checkEnvironmentRoots.js';
-
-export type EnvironmentFailure =
-  | { reason: 'runAsRoot' }
-  | { reason: 'unresolvable'; path: string; code: string }
-  | { reason: 'homeNotOwned'; path: string }
-  | { reason: 'tempOverlapsHome'; path: string };
+import { isAbsolute } from 'node:path';
+import type { CatalogFolder } from '../../catalog/catalogPlatform.js';
+import { resolveCatalogFolderPath } from '../../catalog/catalogPlatform.js';
+import type { Environment } from '../../environment/buildEnvironment.js';
+import { buildEnvironment } from '../../environment/buildEnvironment.js';
+import { checkEnvironmentRoots } from '../../environment/checkEnvironmentRoots.js';
+import type { EnvironmentFailure } from '../../environment/environmentPlatform.js';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
+import type { Result } from '../../result.js';
+import { getErrorCode } from '../../system/getErrorCode.js';
+import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
+import { loadCommandOutput } from '../../system/loadCommandOutput.js';
+import type { UserIdentity } from '../../system/userIdentity.js';
+import { parsePosixUid } from '../../system/userIdentity.js';
+import { PROTECTED_HOME_RELATIVE_PATHS, SENSITIVE_HOME_RELATIVE_PATHS } from './protectedPaths.js';
 
 /** How macOS spells and compares an absolute path. */
 export const DARWIN_PATH_RULES: PathRules = {
@@ -44,6 +42,17 @@ export const DARWIN_PREFERENCES_HOME_DIR_NAMES: string[] = [
   'magic-free-disk-space',
 ];
 
+/** Where macOS apps are installed: for every user, and for the user alone. */
+export const DARWIN_APPLICATION_DIRS: CatalogFolder[] = [
+  { root: 'absolute', path: '/Applications' },
+  { root: 'home', path: 'Applications' },
+];
+
+/** Homebrew's prefixes, Apple silicon's first, then Intel's. */
+export const DARWIN_HOMEBREW_PREFIX_PATHS: AbsolutePath[] = ['/opt/homebrew', '/usr/local'].map(
+  (prefixText) => parseDarwinAbsolutePath({ text: prefixText }),
+);
+
 /** The name under which macOS keeps the per-user temporary folder, whatever `TMPDIR` says. */
 const USER_TEMP_DIR_NAME = 'DARWIN_USER_TEMP_DIR';
 
@@ -58,9 +67,8 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     };
   }
 
-  const applicationDirs = ['/Applications', join(homeDir.value, 'Applications')];
-  const homebrewPrefixPaths = ['/opt/homebrew', '/usr/local'].map((prefixText) =>
-    parseDarwinAbsolutePath({ text: prefixText }),
+  const applicationDirs = DARWIN_APPLICATION_DIRS.map((folder) =>
+    resolveCatalogFolderPath({ folder: folder, homeDir: homeDir.value }),
   );
 
   const homeRealPath = await loadRealPath({ path: homeDir.value });
@@ -113,10 +121,10 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
       homeRealPath: homeRealPath.value,
       tempDir: tempDir.value,
       tempRealPath: tempRealPath.value,
-      applicationDirs: applicationDirs,
       applicationRealPaths: applicationRealPaths,
-      homebrewPrefixPaths: homebrewPrefixPaths,
       protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
+      protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
+      sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
       deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
       preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
     }),

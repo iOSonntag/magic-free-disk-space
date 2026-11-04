@@ -1,7 +1,7 @@
-import type { Result } from '../result.js';
-import type { CommandFailure } from '../system/loadCommandOutput.js';
-import { loadCommandOutput } from '../system/loadCommandOutput.js';
-import { loadRealPath } from '../system/loadRealPath.js';
+import type { Result } from '../../result.js';
+import type { CommandFailure } from '../../system/loadCommandOutput.js';
+import { loadCommandOutput } from '../../system/loadCommandOutput.js';
+import { loadRealPath } from '../../system/loadRealPath.js';
 
 const APP_BUNDLE_EXTENSION = '.app';
 

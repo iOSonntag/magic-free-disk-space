@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import { isSameOrInsidePath } from '../../src/path/isSameOrInsidePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 
 const RULES = DARWIN_PATH_RULES;
 

@@ -1,10 +1,12 @@
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ExploreProbeFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
 import { buildUnitCommand } from '../explore/exploreUnit.js';
 import { recheckExploreUnit } from '../explore/recheckExploreUnit.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { UnitMeasurement } from '../scan/loadUnitMeasurement.js';
 import { loadUnitMeasurement } from '../scan/loadUnitMeasurement.js';
+import type { EvictionCandidate } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
@@ -46,12 +48,17 @@ export type ToolCandidateRun =
 export async function runToolCandidate(params: {
   unit: ExploreToolUnit;
   environment: Environment;
+  /** What the recheck of the unit reads by. */
+  probePlatform: ExploreProbePlatform;
+  /** The system slice's eviction check, for the measurements before and after the command. */
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
   loadProcessCommands: () => Promise<string[] | null>;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
   const before = await loadUnitMeasurement({
     unit: params.unit,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
+    isEntryEvicted: params.isEntryEvicted,
   });
   const trustedTool = await loadTrustedTool({
     name: params.unit.tool.name,
@@ -67,6 +74,7 @@ export async function runToolCandidate(params: {
     unit: params.unit,
     tool: trustedTool.value,
     environment: params.environment,
+    platform: params.probePlatform,
     processCommands: await params.loadProcessCommands(),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
   });
@@ -83,6 +91,7 @@ export async function runToolCandidate(params: {
         unit: params.unit,
         tool: trustedTool.value,
         environment: params.environment,
+        isEntryEvicted: params.isEntryEvicted,
         before: before,
         timeoutMs: params.timeoutMs,
       });
@@ -94,6 +103,7 @@ async function runCheckedUnitCommand(params: {
   unit: ExploreToolUnit;
   tool: LocatedTool;
   environment: Environment;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
   before: UnitMeasurement;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
@@ -107,6 +117,7 @@ async function runCheckedUnitCommand(params: {
   const after = await loadUnitMeasurement({
     unit: params.unit,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
+    isEntryEvicted: params.isEntryEvicted,
   });
   // An incomplete measurement after the run misses part of what is left, so its drop could
   // count bytes that were never freed.

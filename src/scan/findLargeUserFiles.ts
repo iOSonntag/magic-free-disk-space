@@ -1,9 +1,9 @@
 import { basename } from 'node:path';
-import { hasDatalessFlag } from '../system/hasDatalessFlag.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import type { EvictionCandidate } from '../system/systemPlatform.js';
 import type { TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -42,6 +42,8 @@ export async function findLargeUserFiles(params: {
   rootDirs: string[];
   minAllocatedBytes: number;
   deadlineMs: number;
+  isEntryEvicted: (entry: EvictionCandidate) => boolean;
+  privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   const largeFiles: LargeFile[] = [];
   const issues: ScanIssue[] = [];
@@ -63,7 +65,13 @@ export async function findLargeUserFiles(params: {
     const rootStats = await loadEntryStats({ path: rootDir });
 
     if (rootStats.kind === 'failed') {
-      issues.push(...buildFailureIssues({ path: rootDir, failure: rootStats.failure }));
+      issues.push(
+        ...buildFailureIssues({
+          path: rootDir,
+          failure: rootStats.failure,
+          privacyDenialCode: params.privacyDenialCode,
+        }),
+      );
 
       continue;
     }
@@ -84,7 +92,7 @@ export async function findLargeUserFiles(params: {
       isStatsNeeded: true,
       maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
       isStopped: () => Date.now() >= params.deadlineMs,
-      isFolderEvicted: hasDatalessFlag,
+      isEntryEvicted: params.isEntryEvicted,
       visitEntry: (entry): TreeEntryVisit => {
         if (
           entry.stats === null ||
@@ -107,9 +115,15 @@ export async function findLargeUserFiles(params: {
         return 'skip';
       },
       onUnreadable: (unreadable) => {
-        issues.push(...buildFailureIssues({ path: unreadable.path, failure: unreadable.failure }));
+        issues.push(
+          ...buildFailureIssues({
+            path: unreadable.path,
+            failure: unreadable.failure,
+            privacyDenialCode: params.privacyDenialCode,
+          }),
+        );
       },
-      onEvictedFolderSkipped: () => undefined,
+      onEvictedEntrySkipped: () => undefined,
     });
 
     if (walkEnd === 'stopped') {
@@ -119,7 +133,11 @@ export async function findLargeUserFiles(params: {
     }
   }
 
-  const findings = await loadUserFileFindings({ largeFiles: largeFiles, issues: issues });
+  const findings = await loadUserFileFindings({
+    largeFiles: largeFiles,
+    issues: issues,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 
   return {
     findings: findings.toSorted((left, right) => (left.path < right.path ? -1 : 1)),
@@ -130,6 +148,7 @@ export async function findLargeUserFiles(params: {
 async function loadUserFileFindings(params: {
   largeFiles: LargeFile[];
   issues: ScanIssue[];
+  privacyDenialCode: string | null;
 }): Promise<UserFileFinding[]> {
   const findings = await Promise.all(
     params.largeFiles.map(async (largeFile): Promise<UserFileFinding | null> => {
@@ -137,7 +156,11 @@ async function loadUserFileFindings(params: {
 
       if (identityResult.kind === 'failed') {
         params.issues.push(
-          ...buildFailureIssues({ path: largeFile.path, failure: identityResult.failure }),
+          ...buildFailureIssues({
+            path: largeFile.path,
+            failure: identityResult.failure,
+            privacyDenialCode: params.privacyDenialCode,
+          }),
         );
 
         return null;

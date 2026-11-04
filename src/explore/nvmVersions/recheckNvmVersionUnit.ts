@@ -1,5 +1,6 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
+import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitNvmVersion } from '../exploreUnit.js';
 import { loadProjectPinFiles } from '../projectPins/loadProjectPins.js';
 import { selectToolPins } from '../projectPins/selectToolPins.js';
@@ -11,18 +12,23 @@ import { NVM_PIN_FILE_KINDS } from './parseNvmrcPin.js';
 export async function recheckNvmVersionUnit(params: {
   unit: ExplorePathUnitNvmVersion;
   environment: Environment;
+  platform: ExploreProbePlatform;
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
   const state = await loadNvmState({
     pathRules: params.environment.pathRules,
     homeDir: params.environment.homeDir,
+    privacyDenialCode: params.platform.privacyDenialCode,
   });
 
   if (state.kind === 'failed') {
     return state;
   }
 
-  const pinFiles = await loadProjectPinFiles({ files: params.unit.pinFiles });
+  const pinFiles = await loadProjectPinFiles({
+    files: params.unit.pinFiles,
+    privacyDenialCode: params.platform.privacyDenialCode,
+  });
   const toolPins = selectToolPins({ pins: pinFiles, kinds: NVM_PIN_FILE_KINDS });
 
   if (toolPins.kind === 'failed') {

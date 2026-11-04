@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, rename, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import {
   ACTIVE_ROOT_FILES_MAX_COUNT,
   isFlutterRootApartFromProject,

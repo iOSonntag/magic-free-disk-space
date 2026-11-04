@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
 import type { ExploreProbeToolResult } from '../../src/explore/exploreProbe.js';
 import type {
   ExploreToolUnitHomebrewOldVersions,
@@ -26,6 +25,7 @@ import {
 } from '../../src/explore/homebrew/recheckHomebrewUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -40,6 +40,7 @@ import {
   buildTestHomebrewFormulaName,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   APPLE_SILICON_CELLAR_PATH,
   buildHomebrewCleanupDryRunText,
@@ -587,6 +588,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
     return loadHomebrewFindings({
       tool: params.tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       deadlineMs: Date.now() + TIMEOUT_MS,
       processCommands: [],
       unusedCutoffMs: 0,
@@ -621,6 +623,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({
         brewAppleSilicon: appleSilicon.path,
         brewIntel: intel.path,
@@ -667,6 +670,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
 
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({ brewIntel: intel.path }),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -693,6 +697,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
     const failed = await loadHomebrewState({
       tool: failing,
       environment: environment,
+      platform: buildTestProbePlatform(),
       deadlineMs: Date.now() + TIMEOUT_MS,
     });
 
@@ -710,6 +715,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
       run: {
         tool: garbled,
         environment: environment,
+        platform: buildTestProbePlatform(),
         deadlineMs: Date.now() + TIMEOUT_MS,
         processCommands: [],
       },
@@ -728,6 +734,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
     const recheck = {
       tool: tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     };
@@ -767,6 +774,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
     const run = {
       tool: tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       deadlineMs: Date.now() + TIMEOUT_MS,
       processCommands: [],
     };
@@ -818,7 +826,12 @@ describeAwaitingWin32Platform('with fake brews', () => {
       name: 'brewAppleSilicon',
       answers: buildWorkingAnswers({ cellarPath: appleSiliconCellarPath }),
     });
-    const run = { tool: tool, environment: environment, deadlineMs: Date.now() + TIMEOUT_MS };
+    const run = {
+      tool: tool,
+      environment: environment,
+      platform: buildTestProbePlatform(),
+      deadlineMs: Date.now() + TIMEOUT_MS,
+    };
     const libfooPath = join(appleSiliconCellarPath, 'libfoo');
     const expectedOrphans: HomebrewOrphan[] = [
       {

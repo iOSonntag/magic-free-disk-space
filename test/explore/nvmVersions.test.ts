@@ -21,14 +21,12 @@ import { parseNvmrcPin } from '../../src/explore/nvmVersions/parseNvmrcPin.js';
 import { resolveNvmVersionPin } from '../../src/explore/nvmVersions/resolveNvmVersionPin.js';
 import type { ProjectPinsLoad } from '../../src/explore/projectPins/loadProjectPins.js';
 import type { ProjectPinFileRef } from '../../src/explore/projectPins/projectPins.js';
-import {
-  PINNED_VERSION_REINSTALL_EXPLANATION,
-  PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
-} from '../../src/explore/projectPins/projectSearchEvidence.js';
+import { PINNED_VERSION_REINSTALL_EXPLANATION } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -39,6 +37,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath, buildTestNvmNodeVersion } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import {
   buildEmptyProjectPinsLoad,
@@ -408,6 +407,7 @@ describeAwaitingWin32Platform('buildNvmVersionFindings', () => {
       pinFiles: pinFiles,
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: params.isWalkComplete }),
       processCommands: params.processCommands,
+      projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
   }
 
@@ -590,6 +590,7 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
   async function probeNvmVersions(projectPins: ProjectPinsLoad): Promise<unknown> {
     const probes = startExploreProbes({
       environment: environment,
+      platform: buildTestProbePlatform(),
       toolInstallLocations: buildFixtureToolLocations({}),
       processCommands: Promise.resolve([]),
       activeXcodeBundlePath: Promise.resolve(null),
@@ -717,7 +718,12 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
       const unit = await createUnit({ nvmrcText: '22\n' });
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'unchanged' });
     });
 
@@ -726,7 +732,12 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
       await writeAlias({ name: 'default', text: '20\n' });
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'changed' });
     });
 
@@ -735,7 +746,12 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
       await writeNvmrc({ projectName: 'app', text: 'v20.11\n' });
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({ kind: 'changed' });
     });
 
@@ -746,6 +762,7 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
+          platform: buildTestProbePlatform(),
           processCommands: [`${unit.folderPath}/bin/node server.js`],
         }),
       ).toEqual({ kind: 'busy' });
@@ -757,7 +774,12 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
       await chmod(path, 0o000);
 
       expect(
-        await recheckExplorePathUnit({ unit: unit, environment: environment, processCommands: [] }),
+        await recheckExplorePathUnit({
+          unit: unit,
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        }),
       ).toEqual({
         kind: 'failed',
         failure: {

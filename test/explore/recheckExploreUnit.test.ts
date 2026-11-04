@@ -27,6 +27,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { ProbeCommandName } from './probeFakeTools.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -275,6 +276,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
     const recheck = {
       tool: tool,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     };
@@ -305,6 +307,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
         unit: { kind: 'dartPubCache', tool: dart, gcPaths: fixtureGcPaths },
         tool: dart,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: null,
         timeoutMs: TIMEOUT_MS,
       }),
@@ -324,6 +327,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
         },
         tool: mise,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: null,
         timeoutMs: TIMEOUT_MS,
       }),
@@ -339,6 +343,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
         unit: unit,
         tool: failing,
         environment: environment,
+        platform: buildTestProbePlatform(),
         processCommands: [],
         timeoutMs: TIMEOUT_MS,
       }),
@@ -355,6 +360,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
       unit: { ...deviceUnit, tool: garbled },
       tool: garbled,
       environment: environment,
+      platform: buildTestProbePlatform(),
       processCommands: [],
       timeoutMs: TIMEOUT_MS,
     });

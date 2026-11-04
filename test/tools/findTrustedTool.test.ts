@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DARWIN_PATH_RULES } from '../../src/environment/loadEnvironment.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { findTrustedTool, loadTrustedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../src/tools/toolInstallLocations.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
