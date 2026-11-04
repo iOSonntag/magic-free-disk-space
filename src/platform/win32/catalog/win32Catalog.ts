@@ -7,6 +7,8 @@ import type {
 } from '../../../environment/buildEnvironment.js';
 import type { ExplorePlatform } from '../../../explore/explorePlatform.js';
 import type { UserFileRoot } from '../../../scan/scanPlatform.js';
+import { WIN32_CATALOG_ENTRIES } from './catalogEntries.js';
+import { WIN32_PROTECTED_DIR_NAMES, WIN32_SENSITIVE_DIR_NAMES } from './protectedPaths.js';
 
 /** The data of Windows the run takes beside what it reads from the system. */
 export type Win32Catalog = {
@@ -41,9 +43,9 @@ const DOTNET_PROJECT_MARKERS: ProjectMarker[] = [
   { kind: 'fileSuffix', suffix: '.vbproj' },
 ];
 
-/** The data of Windows, as small as the run needs it until its catalog is filled. */
+/** The data of Windows, each location as the tool that keeps it or Microsoft documents it. */
 export const WIN32_CATALOG: Win32Catalog = {
-  entries: [],
+  entries: WIN32_CATALOG_ENTRIES,
   protectedKnownFolders: [
     'desktop',
     'documents',
@@ -54,9 +56,20 @@ export const WIN32_CATALOG: Win32Catalog = {
     'localAppDataLow',
     'skyDrive',
   ],
-  protectedDirNames: [{ base: 'home', names: ['AppData'] }],
-  sensitiveDirNames: [],
-  projectSearchExcludedNames: ['AppData'],
+  protectedDirNames: WIN32_PROTECTED_DIR_NAMES,
+  sensitiveDirNames: WIN32_SENSITIVE_DIR_NAMES,
+  projectSearchExcludedNames: [
+    '3D Objects',
+    'AppData',
+    'Contacts',
+    'Favorites',
+    'Links',
+    'Music',
+    'Pictures',
+    'Saved Games',
+    'Searches',
+    'Videos',
+  ],
   projectArtifactRules: [
     ...PROJECT_ARTIFACT_RULES,
     {
@@ -65,7 +78,7 @@ export const WIN32_CATALOG: Win32Catalog = {
       unmarkedFolder: 'walked',
       title: '.NET build output',
       explanation: 'Compiled output of a .NET project.',
-      regeneration: 'Rebuilt by the next dotnet build.',
+      regeneration: 'Rebuilt by the next build.',
       risk: 'safe',
     },
     {
@@ -74,7 +87,7 @@ export const WIN32_CATALOG: Win32Catalog = {
       unmarkedFolder: 'walked',
       title: '.NET intermediate output',
       explanation: 'Intermediate build files and the package restore of a .NET project.',
-      regeneration: 'Rebuilt by the next dotnet build, which restores packages (needs network).',
+      regeneration: 'Rebuilt by the next restore or build.',
       risk: 'safe',
     },
   ],

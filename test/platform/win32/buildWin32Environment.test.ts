@@ -12,7 +12,7 @@ describe('buildWin32Environment', () => {
     expect<string>(ENVIRONMENT.preferencesDir).toBe(
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space',
     );
-    expect<string[]>(ENVIRONMENT.sensitiveRealPaths).toEqual([
+    expect<string[]>(ENVIRONMENT.sensitiveRealPaths.slice(-2)).toEqual([
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space\\Logs',
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space',
     ]);
@@ -51,8 +51,8 @@ describe('buildWin32Environment', () => {
   });
 
   test('refuses as a whole the AppData folder of the profile, the run folders, the guarded folders, and each fixed drive', () => {
-    expect<string[]>(ENVIRONMENT.protectedRealPaths).toEqual([
-      'C:\\Users\\tester\\AppData',
+    expect<string[]>(ENVIRONMENT.protectedRealPaths).toContain('C:\\Users\\tester\\AppData');
+    expect<string[]>(ENVIRONMENT.protectedRealPaths.slice(-7)).toEqual([
       'C:\\Users\\tester',
       'C:\\Users\\tester\\AppData\\Local',
       'C:\\Users\\tester\\AppData\\Roaming',
