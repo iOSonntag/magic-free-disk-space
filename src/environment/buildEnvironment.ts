@@ -9,7 +9,7 @@ export type Environment = {
   user: UserIdentity;
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  tempDir: string;
+  tempDir: AbsolutePath;
   /** The folders the platform's apps are installed in, whether they exist or not. */
   applicationDirs: AbsolutePath[];
   /** The roots of the file system, which are refused as a whole. */
@@ -31,7 +31,7 @@ export function buildEnvironment(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
   homeRealPath: AbsolutePath;
-  tempDir: string;
+  tempDir: AbsolutePath;
   tempRealPath: AbsolutePath;
   /** The folders the platform's apps are installed in, whether they exist or not. */
   applicationDirs: AbsolutePath[];
@@ -39,15 +39,15 @@ export function buildEnvironment(params: {
   applicationRealPaths: AbsolutePath[];
   protectedRootPaths: AbsolutePath[];
   /**
-   * Root-like folders below the home folder, which are never removed as a whole, spelled with the
-   * separator of `pathRules`; the empty path is the home folder itself.
+   * Root-like folders below the home folder, which are never removed as a whole, one name per
+   * level; the empty list is the home folder itself.
    */
-  protectedHomeRelativePaths: string[];
+  protectedHomeDirNames: string[][];
   /**
-   * Folders below the home folder that are never removed, neither whole nor in part, spelled with
-   * the separator of `pathRules`.
+   * Folders below the home folder that are never removed, neither whole nor in part, one name per
+   * level.
    */
-  sensitiveHomeRelativePaths: string[];
+  sensitiveHomeDirNames: string[][];
   /** The folder of the deletion log below the home folder, one name per level. */
   deletionLogHomeDirNames: string[];
   /** The folder of the bridge's preference file below the home folder, one name per level. */
@@ -63,22 +63,22 @@ export function buildEnvironment(params: {
     protectedRootPaths: params.protectedRootPaths,
     allowedRealRoots: [params.homeRealPath, params.tempRealPath, ...params.applicationRealPaths],
     protectedRealPaths: [
-      ...params.protectedHomeRelativePaths.map((relativePath) =>
-        joinHomeRelativePath({
+      ...params.protectedHomeDirNames.map((names) =>
+        joinAbsolutePath({
           rules: params.pathRules,
-          homeRealPath: params.homeRealPath,
-          relativePath: relativePath,
+          parentPath: params.homeRealPath,
+          names: names,
         }),
       ),
       params.tempRealPath,
       ...params.protectedRootPaths,
     ],
     sensitiveRealPaths: [
-      ...params.sensitiveHomeRelativePaths.map((relativePath) =>
-        joinHomeRelativePath({
+      ...params.sensitiveHomeDirNames.map((names) =>
+        joinAbsolutePath({
           rules: params.pathRules,
-          homeRealPath: params.homeRealPath,
-          relativePath: relativePath,
+          parentPath: params.homeRealPath,
+          names: names,
         }),
       ),
       joinAbsolutePath({
@@ -103,15 +103,4 @@ export function buildEnvironment(params: {
       names: params.preferencesHomeDirNames,
     }),
   };
-}
-
-/** The real path of a folder below the home folder, its relative path spelled under `rules`. */
-function joinHomeRelativePath(params: {
-  rules: PathRules;
-  homeRealPath: AbsolutePath;
-  relativePath: string;
-}): AbsolutePath {
-  const names = params.relativePath.split(params.rules.separator).filter((name) => name !== '');
-
-  return joinAbsolutePath({ rules: params.rules, parentPath: params.homeRealPath, names: names });
 }

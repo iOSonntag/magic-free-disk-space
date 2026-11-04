@@ -19,7 +19,7 @@ import { buildTestAbsolutePath, buildTestUserIdentity } from './parsedValueFixtu
 export type FixtureRoot = {
   rootDir: string;
   homeDir: AbsolutePath;
-  tempDir: string;
+  tempDir: AbsolutePath;
   applicationDir: AbsolutePath;
 };
 
@@ -28,7 +28,7 @@ export async function createFixtureRoot(): Promise<FixtureRoot> {
   const fixtureRoot: FixtureRoot = {
     rootDir,
     homeDir: buildTestAbsolutePath({ text: join(rootDir, 'home') }),
-    tempDir: join(rootDir, 'tmp'),
+    tempDir: buildTestAbsolutePath({ text: join(rootDir, 'tmp') }),
     applicationDir: buildTestAbsolutePath({ text: join(rootDir, 'Applications') }),
   };
 

@@ -12,7 +12,7 @@ const ENVIRONMENT = buildDarwinEnvironment({
   user: buildTestUserIdentity({ uid: 501 }),
   homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
   homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
-  tempDir: '/var/folders/xy/abc/T',
+  tempDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/T' }),
   tempRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/T' }),
   applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
   applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],

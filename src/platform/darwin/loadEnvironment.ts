@@ -1,6 +1,5 @@
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute } from 'node:path';
 import type { Environment } from '../../environment/buildEnvironment.js';
 import { buildEnvironment } from '../../environment/buildEnvironment.js';
 import { checkEnvironmentRoots } from '../../environment/checkEnvironmentRoots.js';
@@ -15,7 +14,7 @@ import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
 import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parsePosixUid } from '../../system/userIdentity.js';
-import { PROTECTED_HOME_RELATIVE_PATHS, SENSITIVE_HOME_RELATIVE_PATHS } from './protectedPaths.js';
+import { PROTECTED_HOME_DIR_NAMES, SENSITIVE_HOME_DIR_NAMES } from './protectedPaths.js';
 
 /** How macOS spells and compares an absolute path. */
 export const DARWIN_PATH_RULES: PathRules = { rootForm: 'posix', separator: '/' };
@@ -130,7 +129,7 @@ export function buildDarwinEnvironment(params: {
   user: UserIdentity;
   homeDir: AbsolutePath;
   homeRealPath: AbsolutePath;
-  tempDir: string;
+  tempDir: AbsolutePath;
   tempRealPath: AbsolutePath;
   applicationDirs: AbsolutePath[];
   applicationRealPaths: AbsolutePath[];
@@ -146,8 +145,8 @@ export function buildDarwinEnvironment(params: {
     applicationDirs: params.applicationDirs,
     applicationRealPaths: params.applicationRealPaths,
     protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
-    protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
-    sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
+    protectedHomeDirNames: PROTECTED_HOME_DIR_NAMES,
+    sensitiveHomeDirNames: SENSITIVE_HOME_DIR_NAMES,
     deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
     preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
   });
@@ -176,7 +175,7 @@ function getEffectiveUser(): UserIdentity {
   return { kind: 'posix', uid: uid.value };
 }
 
-async function loadUserTempDir(): Promise<Result<string, EnvironmentFailure>> {
+async function loadUserTempDir(): Promise<Result<AbsolutePath, EnvironmentFailure>> {
   const output = await loadCommandOutput({
     command: 'getconf',
     args: [USER_TEMP_DIR_NAME],
@@ -191,16 +190,17 @@ async function loadUserTempDir(): Promise<Result<string, EnvironmentFailure>> {
   }
 
   // Printed with a trailing slash, which would end up in every temporary path shown.
-  const tempDir = output.value.trim().replace(/\/+$/, '');
+  const tempDirText = output.value.trim().replace(/\/+$/, '');
+  const tempDir = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: tempDirText });
 
-  if (!isAbsolute(tempDir)) {
+  if (tempDir.kind === 'failed') {
     return {
       kind: 'failed',
       failure: { reason: 'unresolvable', path: USER_TEMP_DIR_NAME, code: 'notAbsolute' },
     };
   }
 
-  return { kind: 'succeeded', value: tempDir };
+  return { kind: 'succeeded', value: tempDir.value };
 }
 
 /** The real path of `path`; unresolvable when it cannot be read or is not absolute. */
