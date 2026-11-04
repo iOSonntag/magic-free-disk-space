@@ -7,10 +7,10 @@ describe('parsePlatformId', () => {
     expect(parsePlatformId({ text: 'win32' })).toEqual({ kind: 'succeeded', value: 'win32' });
   });
 
-  test('refuses any other operating system and names it', () => {
+  test('refuses any other operating system', () => {
     expect(parsePlatformId({ text: 'linux' })).toEqual({
       kind: 'failed',
-      failure: { reason: 'unsupportedPlatform', platform: 'linux' },
+      failure: { reason: 'unsupportedPlatform' },
     });
   });
 });

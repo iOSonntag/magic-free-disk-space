@@ -12,7 +12,7 @@ import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 export type PlatformId = 'darwin' | 'win32';
 
 /** The run is on an operating system the app does not run on. */
-export type UnsupportedPlatform = { reason: 'unsupportedPlatform'; platform: string };
+export type UnsupportedPlatform = { reason: 'unsupportedPlatform' };
 
 /**
  * Everything the app takes from one operating system: one slice per module that holds a fact of
@@ -37,7 +37,7 @@ export function parsePlatformId(params: { text: string }): Result<PlatformId, Un
   const platformId = PLATFORM_IDS.find((candidate) => candidate === params.text);
 
   if (platformId === undefined) {
-    return { kind: 'failed', failure: { reason: 'unsupportedPlatform', platform: params.text } };
+    return { kind: 'failed', failure: { reason: 'unsupportedPlatform' } };
   }
 
   return { kind: 'succeeded', value: platformId };
