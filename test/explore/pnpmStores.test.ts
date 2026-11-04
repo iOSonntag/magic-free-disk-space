@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
+import type { CatalogLocation } from '../../src/catalog/catalog.js';
+import { resolveCatalogLocation } from '../../src/catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbePlatform } from '../../src/explore/exploreProbe.js';
 import type { ExplorePathUnitPnpmStore } from '../../src/explore/exploreUnit.js';
@@ -26,11 +28,7 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import {
-  PNPM_STORE_ROOT_PATH_NAMES,
-  PNPM_XDG_STORE_ROOT_PATH_NAMES,
-} from '../../src/platform/darwin/pnpmHomes.js';
+import { PNPM_STORE_ROOT, PNPM_XDG_STORE_ROOT } from '../../src/platform/darwin/pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -43,6 +41,7 @@ import {
 } from '../support/fixtureRoot.js';
 import {
   buildTestAbsolutePath,
+  buildTestHostPath,
   buildTestPnpmStoreVersion,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -82,11 +81,15 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
+/** Creates the folders `folderNames` in the store at `storeRoot` of the fixture environment. */
 async function createStoreFolders(params: {
-  rootNames: string[];
+  storeRoot: CatalogLocation;
   folderNames: string[];
 }): Promise<AbsolutePath> {
-  const storeRoot = buildTestAbsolutePath({ text: join(homeDir, ...params.rootNames) });
+  const storeRoot = resolveCatalogLocation({
+    environment: environment,
+    location: params.storeRoot,
+  });
 
   for (const folderName of params.folderNames) {
     await createFixtureDirectory({ path: join(storeRoot, folderName) });
@@ -610,9 +613,16 @@ describeAwaitingWin32Platform('comparePnpmStoreUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadPnpmInstallState', () => {
+describe('loadPnpmInstallState', () => {
+  /** pnpm's homes of the probe platform, in the fixture environment. */
+  function resolvePnpmHomePaths(): AbsolutePath[] {
+    return probePlatform.explore.pnpmHomes.map((location) =>
+      resolveCatalogLocation({ environment: environment, location: location }),
+    );
+  }
+
   test('reads the Cellar folders and the npm globals of each Homebrew prefix', async () => {
-    const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
+    const prefixPath = buildTestHostPath({ text: join(fixtureRoot.rootDir, 'homebrew') });
     const cellarPath = join(prefixPath, 'Cellar', 'pnpm', '10.14.0_1');
     const npmGlobalPath = join(prefixPath, 'lib', 'node_modules', 'pnpm');
     await createFixtureDirectory({ path: cellarPath });
@@ -620,9 +630,9 @@ describeAwaitingWin32Platform('loadPnpmInstallState', () => {
 
     expect(
       await loadPnpmInstallState({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: environment.pathRules,
         homeDir: homeDir,
-        pnpmHomes: probePlatform.explore.pnpmHomes,
+        pnpmHomePaths: resolvePnpmHomePaths(),
         homebrewPrefixPaths: [prefixPath],
         privacyDenialCode: probePlatform.privacyDenialCode,
       }),
@@ -632,13 +642,13 @@ describeAwaitingWin32Platform('loadPnpmInstallState', () => {
         installs: [
           {
             kind: 'parsed',
-            path: buildTestAbsolutePath({ text: cellarPath }),
+            path: buildTestHostPath({ text: cellarPath }),
             versionText: '10.14.0_1',
             major: 10,
           },
           {
             kind: 'parsed',
-            path: buildTestAbsolutePath({ text: npmGlobalPath }),
+            path: buildTestHostPath({ text: npmGlobalPath }),
             versionText: '9.15.4',
             major: 9,
           },
@@ -648,42 +658,36 @@ describeAwaitingWin32Platform('loadPnpmInstallState', () => {
   });
 
   test('keeps a global package.json with no version as an install without a version', async () => {
+    const packageFolder = join(homeDir, 'Library/pnpm/global/5/node_modules/pnpm');
     await writeFixtureTextFile({
-      path: join(homeDir, 'Library/pnpm/global/5/node_modules/pnpm/package.json'),
+      path: join(packageFolder, 'package.json'),
       text: '{"name": "pnpm"}',
     });
 
     expect(
       await loadPnpmInstallState({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: environment.pathRules,
         homeDir: homeDir,
-        pnpmHomes: probePlatform.explore.pnpmHomes,
+        pnpmHomePaths: resolvePnpmHomePaths(),
         homebrewPrefixPaths: [],
         privacyDenialCode: probePlatform.privacyDenialCode,
       }),
     ).toEqual({
       kind: 'succeeded',
-      value: {
-        installs: [
-          {
-            kind: 'unparsed',
-            path: expect.stringContaining('/Library/pnpm/global/5/node_modules/pnpm'),
-          },
-        ],
-      },
+      value: { installs: [{ kind: 'unparsed', path: buildTestHostPath({ text: packageFolder }) }] },
     });
   });
 });
 
 type StoreVersionsOffered = { storeVersions: string[]; isComplete: boolean };
 
-const probeCases: { probeId: 'pnpmStores' | 'pnpmStoresXdg'; rootNames: string[] }[] = [
-  { probeId: 'pnpmStores', rootNames: PNPM_STORE_ROOT_PATH_NAMES },
-  { probeId: 'pnpmStoresXdg', rootNames: PNPM_XDG_STORE_ROOT_PATH_NAMES },
+const probeCases: { probeId: 'pnpmStores' | 'pnpmStoresXdg'; storeRoot: CatalogLocation }[] = [
+  { probeId: 'pnpmStores', storeRoot: PNPM_STORE_ROOT },
+  { probeId: 'pnpmStoresXdg', storeRoot: PNPM_XDG_STORE_ROOT },
 ];
 
 for (const probeCase of probeCases) {
-  describeAwaitingWin32Platform(`the probe ${probeCase.probeId}`, () => {
+  describe(`the probe ${probeCase.probeId}`, () => {
     async function runProbe(params: { files: ProjectPinFile[] }): Promise<ExploreProbeOutcome> {
       const probes = startExploreProbes(
         buildTestProbeStart({
@@ -714,7 +718,7 @@ for (const probeCase of probeCases) {
 
     async function createStore(params: { folderNames: string[] }): Promise<AbsolutePath> {
       return createStoreFolders({
-        rootNames: probeCase.rootNames,
+        storeRoot: probeCase.storeRoot,
         folderNames: params.folderNames,
       });
     }
@@ -729,7 +733,7 @@ for (const probeCase of probeCases) {
             unit: {
               kind: 'pnpmStore',
               storeRoot: storeRoot,
-              folderPath: buildTestAbsolutePath({ text: join(storeRoot, 'v3') }),
+              folderPath: buildTestHostPath({ text: join(storeRoot, 'v3') }),
               storeVersion: buildTestPnpmStoreVersion({ text: 'v3' }),
               pinFiles: [],
             },
@@ -846,7 +850,7 @@ for (const probeCase of probeCases) {
 
     test("keeps a store version a pnpm in Homebrew's Cellar uses", async () => {
       await createStore({ folderNames: ['v3', 'v10'] });
-      const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
+      const prefixPath = buildTestHostPath({ text: join(fixtureRoot.rootDir, 'homebrew') });
       await createFixtureDirectory({ path: join(prefixPath, 'Cellar', 'pnpm', '10.14.0_1') });
       probePlatform = buildTestProbePlatform({ homebrewPrefixPaths: [prefixPath] });
 
@@ -867,7 +871,7 @@ for (const probeCase of probeCases) {
     for (const prefixPlace of homebrewPrefixPlaces) {
       test(`offers nothing beside a pnpm in ${prefixPlace.place}`, async () => {
         await createStore({ folderNames: ['v10'] });
-        const prefixPath = buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'homebrew') });
+        const prefixPath = buildTestHostPath({ text: join(fixtureRoot.rootDir, 'homebrew') });
         const installPath = join(prefixPath, ...prefixPlace.installPathNames);
         await writePnpmPackage({ packageFolder: installPath, version: '10.14.0' });
         probePlatform = buildTestProbePlatform({ homebrewPrefixPaths: [prefixPath] });
@@ -1225,22 +1229,22 @@ for (const probeCase of probeCases) {
   });
 }
 
-describeAwaitingWin32Platform('the recheck of a pnpm store unit', () => {
+describe('the recheck of a pnpm store unit', () => {
   let storeRoot: AbsolutePath;
   let pinPath: AbsolutePath;
   let unit: ExplorePathUnitPnpmStore;
 
   beforeEach(async () => {
     storeRoot = await createStoreFolders({
-      rootNames: PNPM_STORE_ROOT_PATH_NAMES,
+      storeRoot: PNPM_STORE_ROOT,
       folderNames: ['v10'],
     });
-    pinPath = buildTestAbsolutePath({ text: join(homeDir, 'projects/app/package.json') });
+    pinPath = buildTestHostPath({ text: join(homeDir, 'projects/app/package.json') });
     await writeFixtureTextFile({ path: pinPath, text: '{"packageManager": "yarn@4.1.0"}' });
     unit = {
       kind: 'pnpmStore',
       storeRoot: storeRoot,
-      folderPath: buildTestAbsolutePath({ text: join(storeRoot, 'v10') }),
+      folderPath: buildTestHostPath({ text: join(storeRoot, 'v10') }),
       storeVersion: buildTestPnpmStoreVersion({ text: 'v10' }),
       pinFiles: [{ path: pinPath, kind: 'packageJson' }],
     };

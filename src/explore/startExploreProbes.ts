@@ -250,7 +250,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
         loadPnpmStoreFindings({
           run: run,
           projectPins: params.projectPins,
-          storeRootPathNames: run.platform.explore.pnpmStoreRoot,
+          storeLocation: run.platform.explore.pnpmStoreRoot,
         }),
     }),
   },
@@ -262,7 +262,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
         loadPnpmStoreFindings({
           run: run,
           projectPins: params.projectPins,
-          storeRootPathNames: run.platform.explore.pnpmXdgStoreRoot,
+          storeLocation: run.platform.explore.pnpmXdgStoreRoot,
         }),
     }),
   },

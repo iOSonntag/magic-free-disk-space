@@ -9,6 +9,7 @@ export type ModuleName =
   | 'path'
   | 'platform'
   | 'platform/darwin'
+  | 'platform/win32'
   | 'preferences'
   | 'report'
   | 'scan'

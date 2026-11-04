@@ -3,12 +3,15 @@ import type { Result } from '../result.js';
 import { getErrorCode } from './getErrorCode.js';
 import { runFilesystemCall } from './runFilesystemCall.js';
 
+/** `inUse`: another program holds the folder open, which only Windows refuses a read for. */
 export type DirectoryFailure = {
-  reason: 'missing' | 'permissionDenied' | 'notDirectory' | 'unexpected';
+  reason: 'missing' | 'permissionDenied' | 'inUse' | 'notDirectory' | 'unexpected';
   code: string;
 };
 
 const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
+
+const IN_USE_CODE = 'EBUSY';
 
 export async function loadDirectoryNames(params: {
   path: string;
@@ -33,6 +36,10 @@ export function getDirectoryFailure(params: { code: string }): DirectoryFailure 
 
   if (PERMISSION_DENIED_CODES.includes(params.code)) {
     return { reason: 'permissionDenied', code: params.code };
+  }
+
+  if (params.code === IN_USE_CODE) {
+    return { reason: 'inUse', code: params.code };
   }
 
   return { reason: 'unexpected', code: params.code };

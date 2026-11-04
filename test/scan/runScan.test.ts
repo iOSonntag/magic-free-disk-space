@@ -71,11 +71,13 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
         decisions: [{ kind: 'advice', advice: vscodeAdvice }],
         issues: [{ path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' }],
       },
+      evictedEntryCount: 2,
     });
 
     expect(report.candidates).toEqual([vscodeCandidate]);
     expect(report.advice).toEqual([vscodeAdvice]);
     expect(report.skipped).toEqual([]);
+    expect(report.evictedEntryCount).toBe(2);
     expect(report.issues).toEqual([
       { path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' },
     ]);
@@ -87,6 +89,7 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
       reservedEntryPaths: [vscodeAdvice.path],
       phases: [{ decisions: [vscodeOffer, { kind: 'advice', advice: vscodeAdvice }], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
+      evictedEntryCount: 0,
     });
 
     expect(report.candidates).toEqual([]);
@@ -453,6 +456,7 @@ function buildReportOfPhases(params: {
     reservedEntryPaths: params.reservedEntryPaths,
     phases: params.phases.map((decisions) => ({ decisions: decisions, issues: [] })),
     incompleteExploreAdvice: { decisions: [], issues: [] },
+    evictedEntryCount: 0,
   });
 }
 

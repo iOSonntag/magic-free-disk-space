@@ -37,8 +37,9 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
  * Walks the projects under `homeDir` once: the artifact folders whose project folder holds a
- * marker file, and the pin files it passes. Symbolic links are never followed; a passed
- * `deadlineMs` stops the walk with one `walkStopped` issue. Never rejects.
+ * marker file, and the pin files it passes. An artifact folder beside no marker is skipped or
+ * walked as its rule says. Symbolic links are never followed; a passed `deadlineMs` stops the walk
+ * with one `walkStopped` issue. Never rejects.
  */
 export async function walkProjects(params: {
   pathRules: PathRules;
@@ -77,7 +78,6 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
-    // An unmarked folder of an artifact's name is no project to search either, such as `vendor`.
     if (artifactNames.has(entry.name)) {
       const markedRule = findMarkedArtifactRule({
         rules: params.rules,
@@ -91,9 +91,19 @@ export async function walkProjects(params: {
           projectRoot: dirname(entry.path),
           rule: markedRule,
         });
+
+        return 'skip';
       }
 
-      return 'skip';
+      // An unmarked folder one rule skips is no project to search either, such as `vendor`; any
+      // other is an ordinary folder, such as a `bin` beside no project file of .NET.
+      const skippedUnmarked = params.rules.some(
+        (rule) => rule.artifactName === entry.name && rule.unmarkedFolder === 'skipped',
+      );
+
+      if (skippedUnmarked) {
+        return 'skip';
+      }
     }
 
     if (entry.name.startsWith('.') || entry.depth >= params.maxDepth) {

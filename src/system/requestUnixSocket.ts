@@ -81,7 +81,7 @@ async function findTrustedSocketPath(params: {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notSocket' } };
   }
 
-  if (entry.value.uid !== params.user.uid) {
+  if (!isOwnedByUser({ stats: entry.value, user: params.user })) {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notOwnedByUser' } };
   }
 
@@ -105,11 +105,21 @@ async function findTrustedSocketPath(params: {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notSocket' } };
   }
 
-  if (targetEntry.value.uid !== params.user.uid) {
+  if (!isOwnedByUser({ stats: targetEntry.value, user: params.user })) {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notOwnedByUser' } };
   }
 
   return { kind: 'succeeded', value: target.value };
+}
+
+/** Never for a user of Windows, whose owner an `lstat` does not report, so no socket is trusted. */
+function isOwnedByUser(params: { stats: Stats; user: UserIdentity }): boolean {
+  switch (params.user.kind) {
+    case 'posix':
+      return params.stats.uid === params.user.uid;
+    case 'windows':
+      return false;
+  }
 }
 
 async function loadSocketEntryStats(params: {

@@ -140,7 +140,10 @@ export function buildCarvedPaths(params: {
   );
 }
 
-/** An Apple-named child of a `children` entry belongs to macOS; the scanner skips it unmeasured. */
+/**
+ * An Apple-named child of a `children` entry belongs to macOS; the scanner skips it unmeasured. No
+ * Windows program is told apart as the system's.
+ */
 export function isSystemOwnedTarget(params: {
   entry: CatalogEntry;
   owner: CatalogOwner | null;
@@ -153,6 +156,7 @@ export function isSystemOwnedTarget(params: {
     case 'bundleId':
       return isAppleBundleId({ bundleId: params.owner.bundleId });
     case 'bundleIdFamily':
+    case 'executable':
       return false;
   }
 }

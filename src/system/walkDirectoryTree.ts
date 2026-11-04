@@ -73,6 +73,7 @@ export function walkDirectoryTree(params: {
     if (listing.kind === 'failed') {
       if (
         listing.failure.reason === 'permissionDenied' ||
+        listing.failure.reason === 'inUse' ||
         listing.failure.reason === 'unexpected'
       ) {
         params.onUnreadable({ path: directory.path, failure: listing.failure });

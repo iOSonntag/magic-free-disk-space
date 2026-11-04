@@ -17,14 +17,20 @@ export type FileIdentity = {
   realPath: string;
 };
 
+/**
+ * `inUse`: another program holds the file open without sharing it, such as Windows' page file,
+ * which only Windows refuses a read for.
+ */
 export type FileFailure = {
-  reason: 'missing' | 'permissionDenied' | 'unexpected';
+  reason: 'missing' | 'permissionDenied' | 'inUse' | 'unexpected';
   code: string;
 };
 
 const MISSING_CODES = ['ENOENT', 'ENOTDIR'];
 
 const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
+
+const IN_USE_CODE = 'EBUSY';
 
 export async function loadFileIdentity(params: {
   path: string;
@@ -80,6 +86,10 @@ export function getFileFailure(params: { code: string }): FileFailure {
 
   if (PERMISSION_DENIED_CODES.includes(params.code)) {
     return { reason: 'permissionDenied', code: params.code };
+  }
+
+  if (params.code === IN_USE_CODE) {
+    return { reason: 'inUse', code: params.code };
   }
 
   return { reason: 'unexpected', code: params.code };

@@ -1,6 +1,10 @@
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import type { Environment } from '../../environment/buildEnvironment.js';
+import type {
+  Environment,
+  EnvironmentDirNames,
+  OwnerOnlyModes,
+} from '../../environment/buildEnvironment.js';
 import { buildEnvironment } from '../../environment/buildEnvironment.js';
 import { checkEnvironmentRoots } from '../../environment/checkEnvironmentRoots.js';
 import type { EnvironmentFailure } from '../../environment/environmentPlatform.js';
@@ -36,6 +40,9 @@ const DARWIN_PREFERENCES_HOME_DIR_NAMES: string[] = [
   'Application Support',
   'magic-free-disk-space',
 ];
+
+/** Folders the tool writes are the user's alone: `rwx------`, and `rw-------` for files. */
+const DARWIN_OWNER_ONLY_MODES: OwnerOnlyModes = { directoryMode: 0o700, fileMode: 0o600 };
 
 /** Where macOS apps are installed for every user. */
 const DARWIN_SHARED_APPLICATION_DIR: AbsolutePath = parseDarwinAbsolutePath({
@@ -115,8 +122,9 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     pathRules: DARWIN_PATH_RULES,
     user: user,
     homeRealPath: homeRealPath.value,
-    homeOwnerId: homeOwnerId.value,
+    homeOwner: buildPosixUser({ uid: homeOwnerId.value }),
     tempRealPath: tempRealPath.value,
+    tempPlacement: 'apartFromHome',
   });
 
   if (rootsFailure !== null) {
@@ -163,18 +171,25 @@ export function buildDarwinEnvironment(params: {
     homeRealPath: params.homeRealPath,
     tempDir: params.tempDir,
     tempRealPath: params.tempRealPath,
-    userCacheDir: params.userCacheDir,
-    userCacheRealPath: params.userCacheRealPath,
+    userCache: { dir: params.userCacheDir, realPath: params.userCacheRealPath },
+    appData: null,
+    knownFolderPaths: null,
     applicationDirs: params.applicationDirs,
     applicationRealPaths: params.applicationRealPaths,
     protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
-    protectedHomeDirNames: PROTECTED_HOME_DIR_NAMES,
-    sensitiveHomeDirNames: SENSITIVE_HOME_DIR_NAMES,
-    sensitiveExceptionHomeDirNames: SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
-    evictHomeDirNames: [ICLOUD_DRIVE_ROOT_PATH_NAMES],
-    deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
-    preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
+    protectedDirNames: PROTECTED_HOME_DIR_NAMES.map(toHomeDirNames),
+    protectedFolderRealPaths: [],
+    sensitiveDirNames: SENSITIVE_HOME_DIR_NAMES.map(toHomeDirNames),
+    sensitiveExceptionDirNames: SENSITIVE_EXCEPTION_HOME_DIR_NAMES.map(toHomeDirNames),
+    evictDirNames: [toHomeDirNames(ICLOUD_DRIVE_ROOT_PATH_NAMES)],
+    deletionLogDirNames: toHomeDirNames(DARWIN_DELETION_LOG_HOME_DIR_NAMES),
+    preferencesDirNames: toHomeDirNames(DARWIN_PREFERENCES_HOME_DIR_NAMES),
+    ownerOnlyModes: DARWIN_OWNER_ONLY_MODES,
   });
+}
+
+function toHomeDirNames(names: string[]): EnvironmentDirNames {
+  return { base: 'home', names: names };
 }
 
 /** A path of macOS this file spells out; throws for one that is not absolute, which is a bug. */
@@ -208,10 +223,15 @@ function parseEnvironmentPath(params: {
 /** The effective user of the process; throws for an id that is no non-negative integer. */
 function getEffectiveUser(): UserIdentity {
   // Without an id, as on no Mac, the check refuses as for root.
-  const uid = parsePosixUid({ value: process.geteuid?.() ?? 0 });
+  return buildPosixUser({ uid: process.geteuid?.() ?? 0 });
+}
+
+/** Throws for an id that is no non-negative integer, which no Mac reports. */
+function buildPosixUser(params: { uid: number }): UserIdentity {
+  const uid = parsePosixUid({ value: params.uid });
 
   if (uid.kind === 'failed') {
-    throw new Error(`The effective user id is ${uid.failure}.`);
+    throw new Error(`The user id is ${uid.failure}.`);
   }
 
   return { kind: 'posix', uid: uid.value };

@@ -1,3 +1,4 @@
+import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
@@ -29,7 +30,9 @@ export async function recheckPnpmStoreUnit(params: {
   const installState = await loadPnpmInstallState({
     pathRules: params.environment.pathRules,
     homeDir: params.environment.homeDir,
-    pnpmHomes: params.platform.explore.pnpmHomes,
+    pnpmHomePaths: params.platform.explore.pnpmHomes.map((location) =>
+      resolveCatalogLocation({ environment: params.environment, location: location }),
+    ),
     homebrewPrefixPaths: params.platform.homebrewPrefixPaths,
     privacyDenialCode: params.platform.privacyDenialCode,
   });

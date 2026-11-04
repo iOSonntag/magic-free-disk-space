@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildEngineFindings } from '../../src/explore/engines/buildEngineFindings.js';
+import { buildEngineProbe } from '../../src/explore/engines/buildEngineProbe.js';
 import { callEngineUnit } from '../../src/explore/engines/callEngineUnit.js';
 import { isEngineUnitUnchanged } from '../../src/explore/engines/isEngineUnitUnchanged.js';
 import { loadEngineFindings } from '../../src/explore/engines/loadEngineFindings.js';
@@ -19,6 +20,7 @@ import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
 import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -28,6 +30,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 import type { FakeEngine } from './engineFixtures.js';
 import {
@@ -500,6 +503,31 @@ describe('isEngineUnitUnchanged', () => {
         nowMs: NOW_MS,
       }),
     ).toBe(false);
+  });
+});
+
+describe('the engine probe on a platform without the engine', () => {
+  test('answers socketMissing, as for an engine whose socket is missing', async () => {
+    const probePlatform = buildTestProbePlatform();
+    const probe = buildEngineProbe('dockerDesktopEngine');
+
+    expect(
+      await probe.loadFindings(
+        buildTestProbeRun({
+          environment: EXAMPLE_WIN32_ENVIRONMENT,
+          platform: {
+            ...probePlatform,
+            explore: {
+              ...probePlatform.explore,
+              containerEngines: {
+                ...probePlatform.explore.containerEngines,
+                dockerDesktopEngine: null,
+              },
+            },
+          },
+        }),
+      ),
+    ).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
   });
 });
 

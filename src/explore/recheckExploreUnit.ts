@@ -138,8 +138,8 @@ export async function recheckExplorePathUnit(params: {
       return recheckAndroidPackageUnit({ ...params, unit: params.unit });
     case 'vscodeExtension': {
       const state = await loadVscodeExtensionState({
-        pathRules: params.environment.pathRules,
-        homeDir: params.environment.homeDir,
+        environment: params.environment,
+        profilesRoot: params.platform.explore.vscodeProfilesRoot,
         privacyDenialCode: params.platform.privacyDenialCode,
       });
 

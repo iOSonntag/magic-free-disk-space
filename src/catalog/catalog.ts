@@ -37,8 +37,24 @@ export type CandidateCategory =
   | 'leftovers'
   | 'userFiles';
 
-/** The folder an entry's path lies below; `userCache` is the per-user folder of the system's caches. */
-export type CatalogRoot = 'home' | 'temp' | 'userCache' | 'absolute';
+/**
+ * The folder a catalog path is named below: the home folder, the temporary folder, macOS' per-user
+ * folder of the system's caches for `userCache`, Windows' two AppData folders, or none for
+ * `absolute`, whose path is whole.
+ */
+export type CatalogRoot =
+  | 'home'
+  | 'temp'
+  | 'userCache'
+  | 'absolute'
+  | 'localAppData'
+  | 'roamingAppData';
+
+/**
+ * A folder or file the platform names: relative to its root, with `/` between its names on every
+ * platform and `''` for the root itself, or the whole path for `absolute`.
+ */
+export type CatalogLocation = { root: CatalogRoot; path: string };
 
 /** The apps an advice may open, by a key only the app maps to the app itself. */
 export type OpenableApp =
@@ -209,7 +225,7 @@ export type CatalogEntry = {
   regeneration: string;
   risk: Risk;
   root: CatalogRoot;
-  /** Relative to the root for home, temp, and user cache; the full path for absolute. */
+  /** As a `CatalogLocation` names it: relative to the root, or whole for `absolute`. */
   path: string;
   selection: CatalogSelection;
   ageRule: CatalogAgeRule;

@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { chmod, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
@@ -7,9 +7,11 @@ import { recheckDownloadsUnit } from '../../src/explore/downloadsInstallers/rech
 import type { ExploreFinding, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
@@ -304,6 +306,24 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
         ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
       },
     });
+  });
+});
+
+describe('the Downloads probe on a platform without a fixed Downloads place', () => {
+  test('says the place is missing', async () => {
+    const probePlatform = buildTestProbePlatform();
+
+    expect(
+      await loadDownloadsInstallerFindings(
+        buildTestProbeRun({
+          environment: EXAMPLE_WIN32_ENVIRONMENT,
+          platform: {
+            ...probePlatform,
+            explore: { ...probePlatform.explore, downloadsRoot: null },
+          },
+        }),
+      ),
+    ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
   });
 });
 

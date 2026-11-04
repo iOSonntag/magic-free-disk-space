@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { OwnerOnlyModes } from '../../src/environment/buildEnvironment.js';
 import {
   buildPreferencesPath,
   loadPreferences,
@@ -18,11 +19,13 @@ import { testOnPosix } from '../support/posixOnly.js';
 let fixtureRoot: FixtureRoot;
 let preferencesPath: string;
 let preferencesDir: string;
+let ownerOnlyModes: OwnerOnlyModes | null;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
-  preferencesDir = (await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: 0 }))
-    .preferencesDir;
+  const environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: 0 });
+  preferencesDir = environment.preferencesDir;
+  ownerOnlyModes = environment.ownerOnlyModes;
   preferencesPath = buildPreferencesPath({ preferencesDir: preferencesDir });
 });
 
@@ -35,7 +38,7 @@ async function writePreferencesFile(text: string): Promise<void> {
   await writeFile(preferencesPath, text);
 }
 
-describeAwaitingWin32Platform('loadPreferences', () => {
+describeAwaitingWin32Platform('the place of the preferences', () => {
   test('lives in the support folder of the app', () => {
     expect(preferencesPath).toBe(
       join(
@@ -44,7 +47,9 @@ describeAwaitingWin32Platform('loadPreferences', () => {
       ),
     );
   });
+});
 
+describe('loadPreferences', () => {
   test('is on without a file', async () => {
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: true,
@@ -91,29 +96,63 @@ describeAwaitingWin32Platform('loadPreferences', () => {
   });
 });
 
-describeAwaitingWin32Platform('saveIsUpdateCheckEnabled', () => {
-  test('saves the value for the next load, in a private folder and file', async () => {
+describe('saveIsUpdateCheckEnabled', () => {
+  test('saves the value for the next load', async () => {
     expect(
-      await saveIsUpdateCheckEnabled({ preferencesDir: preferencesDir, isEnabled: false }),
+      await saveIsUpdateCheckEnabled({
+        preferencesDir: preferencesDir,
+        ownerOnlyModes: ownerOnlyModes,
+        isEnabled: false,
+      }),
     ).toEqual({ kind: 'succeeded', value: null });
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: false,
     });
-    expect((await stat(preferencesDir)).mode & 0o777).toBe(0o700);
-    expect((await stat(preferencesPath)).mode & 0o777).toBe(0o600);
     expect(await readdir(preferencesDir)).toEqual(['preferences.json']);
 
-    await saveIsUpdateCheckEnabled({ preferencesDir: preferencesDir, isEnabled: true });
+    await saveIsUpdateCheckEnabled({
+      preferencesDir: preferencesDir,
+      ownerOnlyModes: ownerOnlyModes,
+      isEnabled: true,
+    });
 
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: true,
     });
   });
 
+  testOnPosix('saves in a folder and a file of the owner-only modes', async () => {
+    await saveIsUpdateCheckEnabled({
+      preferencesDir: preferencesDir,
+      ownerOnlyModes: { directoryMode: 0o700, fileMode: 0o600 },
+      isEnabled: false,
+    });
+
+    expect((await stat(preferencesDir)).mode & 0o777).toBe(0o700);
+    expect((await stat(preferencesPath)).mode & 0o777).toBe(0o600);
+  });
+
+  testOnPosix('saves in a folder and a file of the defaults for no modes', async () => {
+    const umask = process.umask();
+
+    await saveIsUpdateCheckEnabled({
+      preferencesDir: preferencesDir,
+      ownerOnlyModes: null,
+      isEnabled: false,
+    });
+
+    expect((await stat(preferencesDir)).mode & 0o777).toBe(0o777 & ~umask);
+    expect((await stat(preferencesPath)).mode & 0o777).toBe(0o666 & ~umask);
+  });
+
   test('keeps every key it does not know', async () => {
     await writePreferencesFile('{"isUpdateCheckEnabled":true,"theme":"dark","limits":{"days":30}}');
 
-    await saveIsUpdateCheckEnabled({ preferencesDir: preferencesDir, isEnabled: false });
+    await saveIsUpdateCheckEnabled({
+      preferencesDir: preferencesDir,
+      ownerOnlyModes: ownerOnlyModes,
+      isEnabled: false,
+    });
 
     expect(JSON.parse(await readFile(preferencesPath, 'utf8'))).toEqual({
       isUpdateCheckEnabled: false,
@@ -125,7 +164,11 @@ describeAwaitingWin32Platform('saveIsUpdateCheckEnabled', () => {
   test('replaces a file that holds no object', async () => {
     await writePreferencesFile('[1, 2]');
 
-    await saveIsUpdateCheckEnabled({ preferencesDir: preferencesDir, isEnabled: false });
+    await saveIsUpdateCheckEnabled({
+      preferencesDir: preferencesDir,
+      ownerOnlyModes: ownerOnlyModes,
+      isEnabled: false,
+    });
 
     expect(JSON.parse(await readFile(preferencesPath, 'utf8'))).toEqual({
       isUpdateCheckEnabled: false,
@@ -139,7 +182,11 @@ describeAwaitingWin32Platform('saveIsUpdateCheckEnabled', () => {
       await chmod(preferencesDir, 0o500);
 
       expect(
-        await saveIsUpdateCheckEnabled({ preferencesDir: preferencesDir, isEnabled: false }),
+        await saveIsUpdateCheckEnabled({
+          preferencesDir: preferencesDir,
+          ownerOnlyModes: ownerOnlyModes,
+          isEnabled: false,
+        }),
       ).toEqual({ kind: 'failed', failure: { reason: 'writeFailed', code: 'EACCES' } });
       expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
         isUpdateCheckEnabled: true,
@@ -152,7 +199,11 @@ describeAwaitingWin32Platform('saveIsUpdateCheckEnabled', () => {
     await writeFile(preferencesDir, 'a file where the folder belongs');
 
     expect(
-      await saveIsUpdateCheckEnabled({ preferencesDir: preferencesDir, isEnabled: false }),
+      await saveIsUpdateCheckEnabled({
+        preferencesDir: preferencesDir,
+        ownerOnlyModes: ownerOnlyModes,
+        isEnabled: false,
+      }),
     ).toMatchObject({ kind: 'failed', failure: { reason: 'directoryUnavailable' } });
   });
 });

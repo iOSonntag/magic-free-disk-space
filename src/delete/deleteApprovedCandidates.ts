@@ -33,6 +33,7 @@ export async function deleteApprovedCandidates(params: {
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
   const journal = await createDeletionJournal({
     logPath: params.environment.deletionLogPath,
+    ownerOnlyModes: params.environment.ownerOnlyModes,
     nowMs: params.clock(),
   });
 

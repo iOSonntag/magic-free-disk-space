@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { OwnerOnlyModes } from '../environment/buildEnvironment.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import { loadFileText } from '../system/loadFileText.js';
@@ -39,14 +40,19 @@ function parsePreferences(fileJson: Record<string, unknown>): Preferences {
 
 /**
  * Sets `isUpdateCheckEnabled` and keeps every other key of the file, so a key of another release
- * survives. Replaces the file by a rename, so a reader never sees half of it. Never throws.
+ * survives. Replaces the file by a rename, so a reader never sees half of it. Creates the folder
+ * and the file with `ownerOnlyModes`, or with the system's defaults for `null`. Never throws.
  */
 export async function saveIsUpdateCheckEnabled(params: {
   preferencesDir: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
   isEnabled: boolean;
 }): Promise<Result<null, PreferencesSaveFailure>> {
   try {
-    await mkdir(params.preferencesDir, { recursive: true, mode: 0o700 });
+    await mkdir(params.preferencesDir, {
+      recursive: true,
+      ...(params.ownerOnlyModes === null ? {} : { mode: params.ownerOnlyModes.directoryMode }),
+    });
   } catch (error) {
     return {
       kind: 'failed',
@@ -61,7 +67,7 @@ export async function saveIsUpdateCheckEnabled(params: {
   try {
     await writeFile(temporaryPath, `${JSON.stringify(savedJson, null, 2)}\n`, {
       flag: 'wx',
-      mode: 0o600,
+      ...(params.ownerOnlyModes === null ? {} : { mode: params.ownerOnlyModes.fileMode }),
     });
     await rename(temporaryPath, buildPreferencesPath({ preferencesDir: params.preferencesDir }));
   } catch (error) {

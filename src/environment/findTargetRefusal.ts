@@ -1,6 +1,6 @@
-import { isAbsolute } from 'node:path';
-import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { mayBeSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import { isStrictlyInsidePath } from '../path/isStrictlyInsidePath.js';
+import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import type { Environment } from './buildEnvironment.js';
 import { isTouchingProtectedPath } from './isTouchingProtectedPath.js';
@@ -51,7 +51,9 @@ function findDeleteRefusal(params: {
       break;
   }
 
-  if (!isAbsolute(params.identity.realPath)) {
+  if (
+    !isAbsoluteRealPath({ environment: params.environment, realPath: params.identity.realPath })
+  ) {
     return 'outsideAllowedRoot';
   }
 
@@ -104,7 +106,7 @@ function findEvictRefusal(params: {
   }
 
   if (
-    !isAbsolute(params.identity.realPath) ||
+    !isAbsoluteRealPath({ environment: params.environment, realPath: params.identity.realPath }) ||
     getEvictRootPlacement({
       environment: params.environment,
       realPath: params.identity.realPath,
@@ -125,6 +127,14 @@ function findEvictRefusal(params: {
   return null;
 }
 
+/** Whether `realPath` is absolute as the platform of the environment spells a path. */
+function isAbsoluteRealPath(params: { environment: Environment; realPath: string }): boolean {
+  return (
+    parseAbsolutePath({ rules: params.environment.pathRules, text: params.realPath }).kind ===
+    'succeeded'
+  );
+}
+
 /**
  * `rootOrHolder` when the path is or holds a cloud folder, before `strictlyInside` one, so a path
  * that is one cloud folder and lies in another counts as the folder. Compared without case: macOS
@@ -134,15 +144,11 @@ function getEvictRootPlacement(params: {
   environment: Environment;
   realPath: string;
 }): EvictRootPlacement {
-  const lowerCaseRealPath = params.realPath.toLowerCase();
-  const lowerCaseEvictRoots = params.environment.evictRealRoots.map((evictRoot) =>
-    evictRoot.toLowerCase(),
-  );
-  const isRootOrHolder = lowerCaseEvictRoots.some((evictRoot) =>
-    isSameOrInsidePath({
+  const isRootOrHolder = params.environment.evictRealRoots.some((evictRoot) =>
+    mayBeSameOrInsidePath({
       rules: params.environment.pathRules,
       path: evictRoot,
-      parentPath: lowerCaseRealPath,
+      parentPath: params.realPath,
     }),
   );
 
@@ -150,10 +156,10 @@ function getEvictRootPlacement(params: {
     return 'rootOrHolder';
   }
 
-  const isStrictlyInside = lowerCaseEvictRoots.some((evictRoot) =>
-    isSameOrInsidePath({
+  const isStrictlyInside = params.environment.evictRealRoots.some((evictRoot) =>
+    mayBeSameOrInsidePath({
       rules: params.environment.pathRules,
-      path: lowerCaseRealPath,
+      path: params.realPath,
       parentPath: evictRoot,
     }),
   );

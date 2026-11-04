@@ -10,11 +10,20 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { dirname, join, parse } from 'node:path';
+import type {
+  Environment,
+  WindowsKnownFolderPaths,
+} from '../../src/environment/buildEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
-import { buildTestAbsolutePath, buildTestUserIdentity } from './parsedValueFixtures.js';
+import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
+import {
+  buildTestAbsolutePath,
+  buildTestHostPath,
+  buildTestUserIdentity,
+  buildTestWindowsUser,
+} from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
   rootDir: string;
@@ -24,14 +33,34 @@ export type FixtureRoot = {
   applicationDir: AbsolutePath;
 };
 
+/** A folder of a fixture environment by its path and its real path. */
+type TestFolder = { path: AbsolutePath; realPath: AbsolutePath };
+
+/** A made-up user of Windows: the owner of a fixture is never read there, where no tool is trusted. */
+const TEST_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
+
+/** The fixture environment of Windows names no known folder; each stays where none was created. */
+const NO_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
+  desktop: null,
+  documents: null,
+  downloads: null,
+  videos: null,
+  music: null,
+  pictures: null,
+  localAppDataLow: null,
+  skyDrive: null,
+};
+
 export async function createFixtureRoot(): Promise<FixtureRoot> {
-  const rootDir = await mkdtemp(join(tmpdir(), 'magic-free-disk-space-test-'));
+  // Below the real path of the temp folder, so each fixture path reads as its own real path, which
+  // a short name of Windows such as `RUNNER~1` in the variable TEMP would not.
+  const rootDir = await mkdtemp(join(await realpath(tmpdir()), 'magic-free-disk-space-test-'));
   const fixtureRoot: FixtureRoot = {
     rootDir: rootDir,
-    homeDir: buildTestAbsolutePath({ text: join(rootDir, 'home') }),
-    tempDir: buildTestAbsolutePath({ text: join(rootDir, 'tmp') }),
-    userCacheDir: buildTestAbsolutePath({ text: join(rootDir, 'cache') }),
-    applicationDir: buildTestAbsolutePath({ text: join(rootDir, 'Applications') }),
+    homeDir: buildTestHostPath({ text: join(rootDir, 'home') }),
+    tempDir: buildTestHostPath({ text: join(rootDir, 'tmp') }),
+    userCacheDir: buildTestHostPath({ text: join(rootDir, 'cache') }),
+    applicationDir: buildTestHostPath({ text: join(rootDir, 'Applications') }),
   };
 
   await mkdir(fixtureRoot.homeDir);
@@ -60,27 +89,46 @@ export async function withFixtureRoot(params: {
   }
 }
 
+/**
+ * The environment of a run on the host's platform, with its folders in the fixture root. Windows
+ * has no folder of the system's caches, so the fixture's cache folder is unused there.
+ */
 export async function loadTestEnvironment(params: {
   fixtureRoot: FixtureRoot;
   nowMs: number;
 }): Promise<Environment> {
-  const homeRealPath = await realpath(params.fixtureRoot.homeDir);
-  const tempRealPath = await realpath(params.fixtureRoot.tempDir);
-  const userCacheRealPath = await realpath(params.fixtureRoot.userCacheDir);
-  const applicationRealPath = await realpath(params.fixtureRoot.applicationDir);
+  const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
+  const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
+
+  if (process.platform === 'win32') {
+    return buildWin32Environment({
+      nowMs: params.nowMs,
+      user: buildTestWindowsUser({ sidText: TEST_WINDOWS_SID_TEXT }),
+      home: home,
+      temp: temp,
+      localAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Local') }),
+      roamingAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Roaming') }),
+      knownFolderPaths: NO_KNOWN_FOLDER_PATHS,
+      fixedDriveRoots: [buildTestHostPath({ text: parse(params.fixtureRoot.rootDir).root })],
+      protectedFolderRealPaths: [],
+    });
+  }
+
+  const userCache = await loadTestFolder({ path: params.fixtureRoot.userCacheDir });
+  const application = await loadTestFolder({ path: params.fixtureRoot.applicationDir });
 
   return buildDarwinEnvironment({
     nowMs: params.nowMs,
     // The fixtures belong to the user that runs the tests.
     user: buildTestUserIdentity({ uid: process.getuid?.() ?? 0 }),
-    homeDir: params.fixtureRoot.homeDir,
-    homeRealPath: buildTestAbsolutePath({ text: homeRealPath }),
-    tempDir: params.fixtureRoot.tempDir,
-    tempRealPath: buildTestAbsolutePath({ text: tempRealPath }),
-    userCacheDir: params.fixtureRoot.userCacheDir,
-    userCacheRealPath: buildTestAbsolutePath({ text: userCacheRealPath }),
-    applicationDirs: [params.fixtureRoot.applicationDir],
-    applicationRealPaths: [buildTestAbsolutePath({ text: applicationRealPath })],
+    homeDir: home.path,
+    homeRealPath: home.realPath,
+    tempDir: temp.path,
+    tempRealPath: temp.realPath,
+    userCacheDir: userCache.path,
+    userCacheRealPath: userCache.realPath,
+    applicationDirs: [application.path],
+    applicationRealPaths: [application.realPath],
   });
 }
 
@@ -174,6 +222,19 @@ export async function updateModifiedMs(params: {
   const modifiedSeconds = params.modifiedMs / 1000;
 
   await utimes(params.path, modifiedSeconds, modifiedSeconds);
+}
+
+async function loadTestFolder(params: { path: AbsolutePath }): Promise<TestFolder> {
+  return {
+    path: params.path,
+    realPath: buildTestHostPath({ text: await realpath(params.path) }),
+  };
+}
+
+async function createTestFolder(params: { path: string }): Promise<TestFolder> {
+  await mkdir(params.path, { recursive: true });
+
+  return loadTestFolder({ path: buildTestHostPath({ text: params.path }) });
 }
 
 async function restoreWritableDirectories(params: { path: string }): Promise<void> {

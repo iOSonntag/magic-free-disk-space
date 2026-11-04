@@ -482,6 +482,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
           }),
         ],
         skipped: [{ path: '/fixture/b', reason: 'ownerRunning' }],
+        evictedEntryCount: 2,
         issues: [
           { path: '/fixture/c', reason: 'unexpected', detail: 'EIO' },
           { path: '/fixture/bin/mise', reason: 'toolUntrusted', detail: 'foreignOwner' },
@@ -507,8 +508,9 @@ describeAwaitingWin32Platform('formatScanReport', () => {
       '   Installed simulator runtimes.',
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
       '',
-      'Skipped 1 item:',
+      'Skipped 3 items:',
       '- its app or tool is running: 1',
+      '- in iCloud, not on this Mac: 2',
       '',
       'Could not read 1 place:',
       '- /fixture/c: unexpected error (EIO)',

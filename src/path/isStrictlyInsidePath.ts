@@ -2,8 +2,9 @@ import { isSameOrInsidePath } from './isSameOrInsidePath.js';
 import type { PathRules } from './pathRules.js';
 
 /**
- * True when `path` lies below `parentPath` and is not the same text, by whole segments as
- * `isSameOrInsidePath` compares them. Both paths must be absolute and normalized.
+ * True when `path` lies below `parentPath` and is not the same path, by whole segments as
+ * `isSameOrInsidePath` compares them, so on Windows a path differing only by case is the same.
+ * Both paths must be absolute and normalized.
  */
 export function isStrictlyInsidePath(params: {
   rules: PathRules;
@@ -11,7 +12,7 @@ export function isStrictlyInsidePath(params: {
   parentPath: string;
 }): boolean {
   return (
-    params.path !== params.parentPath &&
-    isSameOrInsidePath({ rules: params.rules, path: params.path, parentPath: params.parentPath })
+    isSameOrInsidePath({ rules: params.rules, path: params.path, parentPath: params.parentPath }) &&
+    !isSameOrInsidePath({ rules: params.rules, path: params.parentPath, parentPath: params.path })
   );
 }

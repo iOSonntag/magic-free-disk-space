@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { WIN32_REPORT_TEXTS } from '../../src/platform/win32/reportTexts.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanProgressView, buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
@@ -62,7 +63,11 @@ function buildRankedReport(params: {
     (item): CandidateDecision => ({ kind: 'advice', advice: item }),
   );
 
-  return buildScanReport({ decisions: [...offers, ...advice], issues: params.issues ?? [] });
+  return buildScanReport({
+    decisions: [...offers, ...advice],
+    evictedEntryCount: 0,
+    issues: params.issues ?? [],
+  });
 }
 
 function buildView(params: { report: ScanReport; disk?: VolumeSpace }): ScanView {
@@ -113,6 +118,36 @@ describeAwaitingWin32Platform('buildScanView', () => {
     const view = buildView({ report: buildProtocolFixtureReport(), disk: PROTOCOL_FIXTURE_DISK });
 
     expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
+  });
+
+  test('counts the entries left in iCloud into the skipped items, on a line of their own', () => {
+    const view = buildView({
+      report: {
+        ...EMPTY_REPORT,
+        skipped: [{ path: '/Users/me/busy', reason: 'ownerRunning' }],
+        evictedEntryCount: 4,
+      },
+    });
+
+    expect(view.skipped).toEqual({
+      titleText: 'Skipped 5 items',
+      lines: ['its app or tool is running: 1', 'in iCloud, not on this Mac: 4'],
+    });
+  });
+
+  test('names OneDrive and this PC for the entries left in the cloud store on Windows', () => {
+    const view = buildScanView({
+      texts: WIN32_REPORT_TEXTS,
+      report: { ...EMPTY_REPORT, evictedEntryCount: 1 },
+      fullDiskAccessHolder: 'app',
+      homeDir: HOME_DIR,
+      disk: null,
+    });
+
+    expect(view.skipped).toEqual({
+      titleText: 'Skipped 1 item',
+      lines: ['in OneDrive, not on this PC: 1'],
+    });
   });
 
   test('puts a section of check items only into its closed check group', () => {

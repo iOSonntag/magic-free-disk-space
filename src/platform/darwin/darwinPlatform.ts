@@ -1,5 +1,6 @@
+import { PROJECT_ARTIFACT_RULES } from '../../catalog/projectArtifactRules.js';
 import type { Platform } from '../platform.js';
-import { ANDROID_SDK_PATH_NAMES, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
+import { ANDROID_SDK_ROOT, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
 import {
   DOWNLOADS_ROOT_PATH_NAMES,
   ICLOUD_DRIVE_ROOT_PATH_NAMES,
@@ -19,16 +20,13 @@ import { loadProcessCommands } from './loadProcessCommands.js';
 import { loadSystemVersion } from './loadSystemVersion.js';
 import { loadVolumeSpace } from './loadVolumeSpace.js';
 import { ORPHAN_LOCATIONS } from './orphanLocations.js';
-import {
-  PNPM_HOMES_PATH_NAMES,
-  PNPM_STORE_ROOT_PATH_NAMES,
-  PNPM_XDG_STORE_ROOT_PATH_NAMES,
-} from './pnpmHomes.js';
+import { PNPM_HOMES, PNPM_STORE_ROOT, PNPM_XDG_STORE_ROOT } from './pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from './projectSearchEvidence.js';
 import { removeTree } from './removeTree.js';
-import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOT_RELATIVE_PATHS } from './scanHomeFolders.js';
+import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOTS } from './scanHomeFolders.js';
 import { DARWIN_SYSTEM_APPS, MAIL_BUNDLE_PATHS } from './systemApps.js';
 import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
+import { VSCODE_PROFILES_ROOT } from './vscodeProfilesRoot.js';
 
 /** Everything the app takes from macOS; the entry points hand each module its slice. */
 export const darwinPlatform: Platform = {
@@ -57,15 +55,17 @@ export const darwinPlatform: Platform = {
     systemApps: DARWIN_SYSTEM_APPS,
     loadActiveXcodeBundlePath: loadActiveXcodeBundlePath,
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
-    userFileRootRelativePaths: USER_FILE_ROOT_RELATIVE_PATHS,
+    projectArtifactRules: PROJECT_ARTIFACT_RULES,
+    userFileRoots: USER_FILE_ROOTS,
   },
   delete: { removeTree: removeTree },
   explore: {
-    pnpmHomes: PNPM_HOMES_PATH_NAMES,
-    pnpmStoreRoot: PNPM_STORE_ROOT_PATH_NAMES,
-    pnpmXdgStoreRoot: PNPM_XDG_STORE_ROOT_PATH_NAMES,
-    androidSdkRoot: ANDROID_SDK_PATH_NAMES,
+    pnpmHomes: PNPM_HOMES,
+    pnpmStoreRoot: PNPM_STORE_ROOT,
+    pnpmXdgStoreRoot: PNPM_XDG_STORE_ROOT,
+    androidSdkRoot: ANDROID_SDK_ROOT,
     flutterSettingsPaths: FLUTTER_SETTINGS_PATHS,
+    vscodeProfilesRoot: VSCODE_PROFILES_ROOT,
     projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     containerEngines: CONTAINER_ENGINES,
     ideVersionRoots: IDE_VERSION_ROOTS,
@@ -79,6 +79,7 @@ export const darwinPlatform: Platform = {
     computerPhrase: 'this Mac',
     systemName: 'macOS',
     trashName: 'Trash',
+    cloudStoreName: 'iCloud',
     updateInstallText:
       'Download the new version, quit this app, and move the new one into Applications in its place.',
   },

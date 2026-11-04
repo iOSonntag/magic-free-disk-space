@@ -35,11 +35,12 @@ describeAwaitingWin32Platform('buildScanReport', () => {
     ];
     const issue = { path: '/home/locked', reason: 'permissionDenied' as const, detail: 'EACCES' };
 
-    const report = buildScanReport({ decisions: decisions, issues: [issue] });
+    const report = buildScanReport({ decisions: decisions, evictedEntryCount: 3, issues: [issue] });
 
     expect(report.candidates).toEqual([large, small]);
     expect(report.advice.map((item) => item.path)).toEqual(['/opt/tool']);
     expect(report.skipped).toEqual([{ path: '/home/held', reason: 'ownerRunning' }]);
+    expect(report.evictedEntryCount).toBe(3);
     expect(report.issues).toEqual([issue]);
   });
 
@@ -64,6 +65,7 @@ describeAwaitingWin32Platform('buildScanReport', () => {
 
     const report = buildScanReport({
       decisions: buildOffers([toolSmall, safeSmall, toolLarge, careful, safeLarge]),
+      evictedEntryCount: 0,
       issues: [],
     });
 
@@ -110,6 +112,7 @@ describeAwaitingWin32Platform('buildScanReport', () => {
 
     const report = buildScanReport({
       decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, projectReview, cacheSafe]),
+      evictedEntryCount: 0,
       issues: [],
     });
 

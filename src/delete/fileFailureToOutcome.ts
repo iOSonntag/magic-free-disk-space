@@ -14,6 +14,7 @@ export function fileFailureToOutcome(failure: FileFailure): {
       return { outcome: 'alreadyGone', code: null };
     case 'permissionDenied':
       return { outcome: 'permissionDenied', code: failure.code };
+    case 'inUse':
     case 'unexpected':
       return { outcome: 'failed', code: failure.code };
   }

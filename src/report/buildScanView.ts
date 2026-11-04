@@ -267,6 +267,7 @@ function buildIssueReasonTexts(params: {
   return {
     privacyDenied: `blocked by ${params.texts.systemName} privacy protection`,
     permissionDenied: 'permission denied',
+    inUse: 'in use by another program',
     unexpected: 'unexpected error',
     commandFailed: 'a system command failed',
     walkStopped: 'search stopped at its time limit',
@@ -280,12 +281,14 @@ const toolDistrustDetailTexts: Record<ToolDistrustDetail, string> = {
   foreignOwner: 'owned by another user',
   writableByOthers: 'others can change it',
   notExecutableFile: 'not an executable file',
+  ownerUnchecked: 'its owner is not checked on this system',
 };
 
 /** Issues of a tool that could not be asked are listed apart from the places that could not be read. */
 const issueNoticeKinds: Record<ScanIssue['reason'], 'place' | 'tool'> = {
   privacyDenied: 'place',
   permissionDenied: 'place',
+  inUse: 'place',
   unexpected: 'place',
   commandFailed: 'place',
   walkStopped: 'place',
@@ -348,7 +351,11 @@ export function buildScanView(params: {
       homeDir: params.homeDir,
     }),
     safeNumbers: params.report.safeNumbers,
-    skipped: buildSkippedView({ skipped: params.report.skipped, texts: params.texts }),
+    skipped: buildSkippedView({
+      skipped: params.report.skipped,
+      evictedEntryCount: params.report.evictedEntryCount,
+      texts: params.texts,
+    }),
     notices: [
       ...buildIssueNotices({
         issues: params.report.issues,
@@ -659,23 +666,32 @@ function buildDetailLine(params: { kind: ItemDetailLineKind; text: string }): It
   return { kind: params.kind, text: formatDisplayText({ text: params.text }) };
 }
 
+/** The skipped items by reason, then the entries left unread in the cloud store, as one count. */
 function buildSkippedView(params: {
   skipped: SkippedItem[];
+  evictedEntryCount: number;
   texts: ReportTexts;
 }): SkippedView | null {
-  if (params.skipped.length === 0) {
+  const skippedCount = params.skipped.length + params.evictedEntryCount;
+
+  if (skippedCount === 0) {
     return null;
   }
 
-  const itemCountText = formatCount({
-    count: params.skipped.length,
-    singular: 'item',
-    plural: 'items',
-  });
+  const itemCountText = formatCount({ count: skippedCount, singular: 'item', plural: 'items' });
+  const evictedLines =
+    params.evictedEntryCount === 0
+      ? []
+      : [
+          `in ${params.texts.cloudStoreName}, not on ${params.texts.computerPhrase}: ${params.evictedEntryCount}`,
+        ];
 
   return {
     titleText: `Skipped ${itemCountText}`,
-    lines: formatSkipReasonLines({ skipped: params.skipped, texts: params.texts }),
+    lines: [
+      ...formatSkipReasonLines({ skipped: params.skipped, texts: params.texts }),
+      ...evictedLines,
+    ],
   };
 }
 
@@ -821,6 +837,7 @@ function formatIssueDetail(params: { issue: ScanIssue }): string {
   switch (params.issue.reason) {
     case 'privacyDenied':
     case 'permissionDenied':
+    case 'inUse':
     case 'unexpected':
     case 'commandFailed':
     case 'walkStopped':

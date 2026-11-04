@@ -2,21 +2,59 @@ import type { PathRules } from './pathRules.js';
 
 /**
  * True when `path` equals `parentPath` or lies below it, comparing whole path segments split by
- * the separator of `rules`, so `/a/bc` is not inside `/a/b`. Both paths must be absolute and
- * normalized.
+ * the separator of `rules`, so `/a/bc` is not inside `/a/b`. Names compare as the platform compares
+ * them: exactly on POSIX, without case on Windows. Both paths must be absolute and normalized.
  */
 export function isSameOrInsidePath(params: {
   rules: PathRules;
   path: string;
   parentPath: string;
 }): boolean {
+  return isPrefixPath({
+    separator: params.rules.separator,
+    path: foldUnderRules({ rules: params.rules, text: params.path }),
+    parentPath: foldUnderRules({ rules: params.rules, text: params.parentPath }),
+  });
+}
+
+/**
+ * Like `isSameOrInsidePath`, but true as well when the two paths differ only by case, on every
+ * platform: a macOS volume usually ignores case too. A refusal takes this looser match, which only
+ * refuses more.
+ */
+export function mayBeSameOrInsidePath(params: {
+  rules: PathRules;
+  path: string;
+  parentPath: string;
+}): boolean {
+  return isPrefixPath({
+    separator: params.rules.separator,
+    path: foldCase(params.path),
+    parentPath: foldCase(params.parentPath),
+  });
+}
+
+function foldUnderRules(params: { rules: PathRules; text: string }): string {
+  switch (params.rules.rootForm) {
+    case 'posix':
+      return params.text;
+    case 'win32':
+      return foldCase(params.text);
+  }
+}
+
+function foldCase(text: string): string {
+  return text.toLowerCase();
+}
+
+function isPrefixPath(params: { separator: string; path: string; parentPath: string }): boolean {
   if (params.path === params.parentPath) {
     return true;
   }
 
-  const parentPrefix = params.parentPath.endsWith(params.rules.separator)
+  const parentPrefix = params.parentPath.endsWith(params.separator)
     ? params.parentPath
-    : `${params.parentPath}${params.rules.separator}`;
+    : `${params.parentPath}${params.separator}`;
 
   return params.path.startsWith(parentPrefix);
 }

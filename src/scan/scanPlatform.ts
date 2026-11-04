@@ -1,4 +1,7 @@
+import type { CatalogLocation } from '../catalog/catalog.js';
 import type { MacBundleId } from '../catalog/catalogOwner.js';
+import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
+import type { WindowsKnownFolder } from '../environment/buildEnvironment.js';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import type { ScanIssue } from './issue.js';
@@ -90,6 +93,14 @@ export type ScanPlatformAppsOffered = {
 /** How the scan treats the platform's apps. */
 export type ScanPlatformApps = ScanPlatformAppsOffered;
 
+/**
+ * A folder searched for large files the user may no longer need: one at a fixed place, or a known
+ * folder of Windows wherever the user moved it, which the environment resolved.
+ */
+export type UserFileRoot =
+  | { kind: 'location'; location: CatalogLocation }
+  | { kind: 'knownFolder'; folder: WindowsKnownFolder };
+
 /** What the scan takes from the operating system. */
 export type ScanPlatform = {
   apps: ScanPlatformApps;
@@ -101,6 +112,8 @@ export type ScanPlatform = {
   }) => Promise<Result<string | null, CommandFailure>>;
   /** Top-level home folders that the project search never enters. */
   projectSearchExcludedNames: string[];
-  /** Home folders searched for large files that the user may no longer need. */
-  userFileRootRelativePaths: string[];
+  /** The build and dependency folders the project search offers. */
+  projectArtifactRules: ProjectArtifactRule[];
+  /** Folders searched for large files that the user may no longer need. */
+  userFileRoots: UserFileRoot[];
 };

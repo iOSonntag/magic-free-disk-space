@@ -477,6 +477,7 @@ function readFailureToOutcomeKind(failure: ReadFailure): RemovalOutcomeCodedKind
     case 'privacyDenied':
     case 'permissionDenied':
       return 'permissionDenied';
+    case 'inUse':
     case 'unexpected':
       return 'failed';
   }

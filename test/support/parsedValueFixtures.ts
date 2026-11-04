@@ -1,5 +1,9 @@
-import type { CatalogOwner, MacBundleId } from '../../src/catalog/catalogOwner.js';
-import { parseMacBundleId } from '../../src/catalog/catalogOwner.js';
+import type {
+  CatalogOwner,
+  MacBundleId,
+  WindowsImageName,
+} from '../../src/catalog/catalogOwner.js';
+import { parseMacBundleId, parseWindowsImageName } from '../../src/catalog/catalogOwner.js';
 import type { AndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import { parseAndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import type {
@@ -42,16 +46,39 @@ import type {
 } from '../../src/explore/vagrantBoxes/vagrantBoxNames.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import type { PathRules } from '../../src/path/pathRules.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 import type { Result } from '../../src/result.js';
-import type { UserIdentity } from '../../src/system/userIdentity.js';
-import { parsePosixUid } from '../../src/system/userIdentity.js';
+import type { UserIdentity, WindowsSid } from '../../src/system/userIdentity.js';
+import { parsePosixUid, parseWindowsSid } from '../../src/system/userIdentity.js';
 
 /** Branded values for fixtures, each made by its one maker; a value that fails it throws. */
 
+/** The rules of the operating system that runs the tests, for the paths it names itself. */
+export const HOST_PATH_RULES: PathRules =
+  process.platform === 'win32' ? WIN32_PATH_RULES : DARWIN_PATH_RULES;
+
+/** An example macOS path, such as `/Users/test/Library`, the same on every host. */
 export function buildTestAbsolutePath(params: { text: string }): AbsolutePath {
   return unwrapFixtureValue({
     parsed: parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text }),
+    text: params.text,
+  });
+}
+
+/** A path the host names, such as one below its temporary folder, under the rules of the host. */
+export function buildTestHostPath(params: { text: string }): AbsolutePath {
+  return unwrapFixtureValue({
+    parsed: parseAbsolutePath({ rules: HOST_PATH_RULES, text: params.text }),
+    text: params.text,
+  });
+}
+
+/** An example Windows path, such as `C:\Users\test`, the same on every host. */
+export function buildTestWindowsPath(params: { text: string }): AbsolutePath {
+  return unwrapFixtureValue({
+    parsed: parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.text }),
     text: params.text,
   });
 }
@@ -64,6 +91,19 @@ export function buildTestUserIdentity(params: { uid: number }): UserIdentity {
       text: String(params.uid),
     }),
   };
+}
+
+export function buildTestWindowsSid(params: { text: string }): WindowsSid {
+  return unwrapFixtureValue({ parsed: parseWindowsSid(params), text: params.text });
+}
+
+/** A Windows user by its SID, such as `S-1-5-21-1-2-3-1001`. */
+export function buildTestWindowsUser(params: { sidText: string }): UserIdentity {
+  return { kind: 'windows', sid: buildTestWindowsSid({ text: params.sidText }) };
+}
+
+export function buildTestWindowsImageName(params: { text: string }): WindowsImageName {
+  return unwrapFixtureValue({ parsed: parseWindowsImageName(params), text: params.text });
 }
 
 export function buildTestMacBundleId(params: { text: string }): MacBundleId {

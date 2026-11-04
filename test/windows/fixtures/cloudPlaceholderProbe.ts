@@ -1,12 +1,13 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
-import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadLstatText, observeSafely } from '../observations.js';
-import { formatHex, loadFileAttributes, loadFindData, toWideString } from '../win32Bindings.js';
+import { isEntryEvicted } from '../../../src/platform/win32/isEntryEvicted.js';
+import type { EvictionCandidate } from '../../../src/system/entryReads.js';
+import { formatHex, loadAttributesText, loadLstatText, observeSafely } from '../observations.js';
 
-// Registers a sync root in the given empty folder, creates cloud placeholders in it and converts
-// an ordinary file into a full, in-sync one through cldapi, and writes one JSON line per stage,
-// so a crash from a wrong struct layout still leaves the stages before it on stdout.
+// Registers a sync root in the given empty folder, creates cloud placeholders in it through
+// cldapi, and writes one JSON line per stage, so a crash from a wrong struct layout still leaves
+// the stages before it on stdout. Each placeholder is read as the walk reads it, through
+// win32Api.ts and isEntryEvicted.
 //   cloudPlaceholderProbe.ts <sync root folder>
 
 // The layouts follow learn.microsoft.com/windows/win32/api/cfapi for LLP64, shared by x64 and
@@ -28,20 +29,15 @@ const CF_POPULATION_POLICY_ALWAYS_FULL = 3;
 const PLACEHOLDER_CREATE_INFO_BYTES = 88;
 const CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION = 0x1;
 const CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC = 0x2;
-const CF_CONVERT_FLAG_MARK_IN_SYNC = 0x1;
 
 const FILE_ATTRIBUTE_DIRECTORY = 0x10;
 const FILE_ATTRIBUTE_NORMAL = 0x80;
-const GENERIC_READ_WRITE = 0xc0000000;
-const FILE_SHARE_READ_WRITE_DELETE = 0x7;
-const OPEN_EXISTING = 3;
 const PLACEHOLDER_FILE_SIZE_BYTES = 1048576n;
 // The seconds from 1601-01-01, the FILETIME epoch, to the Unix epoch.
 const FILETIME_UNIX_EPOCH_SECONDS = 11644473600n;
 
 const CLOUD_ONLY_FILE_NAME = 'cloudOnlyFile.txt';
 const CLOUD_ONLY_FOLDER_NAME = 'cloudOnlyFolder';
-const HYDRATED_FILE_NAME = 'hydratedFile.txt';
 
 const openCloudFilterApi = () => {
   return dlopen('cldapi.dll', {
@@ -54,33 +50,15 @@ const openCloudFilterApi = () => {
       args: [FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr],
       returns: FFIType.i32,
     },
-    CfConvertToPlaceholder: {
-      args: [FFIType.i64, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.ptr],
-      returns: FFIType.i32,
-    },
-  });
-};
-
-const openKernel32Handles = () => {
-  return dlopen('kernel32.dll', {
-    CreateFileW: {
-      args: [
-        FFIType.ptr,
-        FFIType.u32,
-        FFIType.u32,
-        FFIType.ptr,
-        FFIType.u32,
-        FFIType.u32,
-        FFIType.ptr,
-      ],
-      returns: FFIType.i64,
-    },
-    CloseHandle: { args: [FFIType.i64], returns: FFIType.i32 },
-    GetLastError: { args: [], returns: FFIType.u32 },
   });
 };
 
 type CloudFilterApi = ReturnType<typeof openCloudFilterApi>;
+
+/** The text as a NUL-terminated UTF-16LE buffer, the form of an `LPCWSTR`. */
+function toWideString(text: string): Buffer {
+  return Buffer.from(`${text}\0`, 'utf16le');
+}
 
 const writeStage = (stage: string, observations: Record<string, unknown>): void => {
   process.stdout.write(`${JSON.stringify({ stage: stage, ...observations })}\n`);
@@ -187,59 +165,13 @@ const createCloudOnlyPlaceholders = (cloudFilterApi: CloudFilterApi, syncRoot: s
   return hresult >= 0;
 };
 
-const convertToHydratedPlaceholder = async (
-  cloudFilterApi: CloudFilterApi,
-  path: string,
-): Promise<boolean> => {
-  await writeFile(path, 'A fully local file in a sync root.\n');
-
-  const kernel32 = openKernel32Handles();
-  const handle = kernel32.symbols.CreateFileW(
-    toWideString(path),
-    GENERIC_READ_WRITE,
-    FILE_SHARE_READ_WRITE_DELETE,
-    null,
-    OPEN_EXISTING,
-    FILE_ATTRIBUTE_NORMAL,
-    null,
-  );
-
-  if (handle === -1n) {
-    writeStage('CreateFileW', { lastError: kernel32.symbols.GetLastError() });
-
-    return false;
-  }
-
-  try {
-    const identity = new TextEncoder().encode('hydrated-file');
-    const hresult = cloudFilterApi.symbols.CfConvertToPlaceholder(
-      handle,
-      identity,
-      identity.byteLength,
-      CF_CONVERT_FLAG_MARK_IN_SYNC,
-      null,
-      null,
-    );
-
-    writeStage('CfConvertToPlaceholder', { hresult: formatHex(hresult) });
-
-    return hresult >= 0;
-  } finally {
-    kernel32.symbols.CloseHandle(handle);
-  }
-};
-
-const observeEntry = async (label: string, path: string): Promise<void> => {
-  const lstatText = await observeSafely(() => loadLstatText(path));
-  const attributes = loadFileAttributes(path);
-  const findData = loadFindData(path);
+const observeEntry = async (label: string, entry: EvictionCandidate): Promise<void> => {
+  const lstatText = await observeSafely(() => loadLstatText(entry.path));
 
   writeStage(label, {
     lstat: lstatText,
-    attributes: `${attributes.attributesHex} ${attributes.attributeNames}`,
-    findFirstFile: findData.isFound
-      ? `attributes=${findData.attributesHex} dwReserved0=${findData.reparseTagHex}`
-      : `failed lastError=${findData.lastError}`,
+    attributes: loadAttributesText(entry.path),
+    isEntryEvicted: isEntryEvicted(entry),
   });
 };
 
@@ -271,14 +203,14 @@ const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
 
   try {
     if (createCloudOnlyPlaceholders(cloudFilterApi, syncRoot)) {
-      await observeEntry('cloud-only file', join(syncRoot, CLOUD_ONLY_FILE_NAME));
-      await observeEntry('cloud-only folder', join(syncRoot, CLOUD_ONLY_FOLDER_NAME));
-    }
-
-    const hydratedPath = join(syncRoot, HYDRATED_FILE_NAME);
-
-    if (await convertToHydratedPlaceholder(cloudFilterApi, hydratedPath)) {
-      await observeEntry('hydrated file', hydratedPath);
+      await observeEntry('cloud-only file', {
+        path: join(syncRoot, CLOUD_ONLY_FILE_NAME),
+        kind: 'file',
+      });
+      await observeEntry('cloud-only folder', {
+        path: join(syncRoot, CLOUD_ONLY_FOLDER_NAME),
+        kind: 'directory',
+      });
     }
   } finally {
     const unregisterHresult = cloudFilterApi.symbols.CfUnregisterSyncRoot(toWideString(syncRoot));

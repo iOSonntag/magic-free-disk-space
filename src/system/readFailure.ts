@@ -5,10 +5,11 @@ import type { FileFailure } from './loadFileIdentity.js';
 /**
  * A read that failed for a reason a place issue reports, with the code the system gave.
  * `privacyDenied` is the platform's privacy protection, which Full Disk Access lifts on macOS;
- * `permissionDenied` is a denial by the file's own permissions.
+ * `permissionDenied` is a denial by the file's own permissions; `inUse` is another program holding
+ * the entry open.
  */
 export type ReadFailure = {
-  reason: 'privacyDenied' | 'permissionDenied' | 'unexpected';
+  reason: 'privacyDenied' | 'permissionDenied' | 'inUse' | 'unexpected';
   code: string;
 };
 
@@ -52,6 +53,8 @@ export function decideReadFailure(params: {
           code: params.failure.code,
         },
       };
+    case 'inUse':
+      return { kind: 'failed', failure: { reason: 'inUse', code: params.failure.code } };
     case 'unexpected':
       return { kind: 'failed', failure: { reason: 'unexpected', code: params.failure.code } };
   }

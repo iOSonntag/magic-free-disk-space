@@ -5,5 +5,6 @@ export const EMPTY_REPORT: ScanReport = {
   safeNumbers: [],
   advice: [],
   skipped: [],
+  evictedEntryCount: 0,
   issues: [],
 };

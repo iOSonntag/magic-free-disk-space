@@ -108,9 +108,12 @@ function parseSystemRelease(params: { version: string | null }): string | null {
   return release === null ? null : (release[1] ?? null);
 }
 
+/** Whether the user owns the bundle by its POSIX owner; a Windows user owns no app bundle so. */
 function isOwnedByUser(params: { app: InstalledApp; user: UserIdentity }): boolean {
   switch (params.user.kind) {
     case 'posix':
       return params.app.ownerUid === params.user.uid;
+    case 'windows':
+      return false;
   }
 }

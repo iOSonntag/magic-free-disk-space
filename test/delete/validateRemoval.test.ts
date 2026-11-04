@@ -1,6 +1,7 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
+import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { CandidateProbed } from '../../src/scan/candidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -10,6 +11,7 @@ import {
   buildTestToolCandidate,
   buildTestUnitPathsCandidate,
 } from '../support/candidateFixtures.js';
+import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
@@ -20,16 +22,65 @@ function buildHomePath(relativePath: string): string {
   return `${TEST_MAC_HOME_DIR}/${relativePath}`;
 }
 
-function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
+function validate(params: {
+  path: string;
+  risk?: Risk;
+  kind?: FileKind;
+  environment?: Environment;
+}) {
   return validateRemoval({
     candidate: buildTestCandidate({
       path: params.path,
       risk: params.risk ?? 'safe',
       kind: params.kind ?? 'directory',
     }),
-    environment: ENVIRONMENT,
+    environment: params.environment ?? ENVIRONMENT,
   });
 }
+
+/** The decision on `path` in the example environment of Windows. */
+function validateOnWindows(params: { path: string; kind?: FileKind }) {
+  return validate({ ...params, environment: EXAMPLE_WIN32_ENVIRONMENT });
+}
+
+describe('validateRemoval on Windows', () => {
+  test('approves an entry below the profile or an AppData folder, in any case', () => {
+    for (const path of [
+      'c:\\users\\TESTER\\appdata\\local\\Example\\Cache',
+      'C:\\Users\\tester\\AppData\\Roaming\\Example\\logs',
+      'C:\\Users\\tester\\Downloads\\old.zip',
+      'C:\\Users\\tester\\AppData\\Local\\Temp\\build-123',
+    ]) {
+      expect(validateOnWindows({ path: path }).kind).toBe('approved');
+    }
+  });
+
+  test('refuses every protected folder itself, each fixed drive root among them', () => {
+    for (const protectedPath of EXAMPLE_WIN32_ENVIRONMENT.protectedRealPaths) {
+      expect(validateOnWindows({ path: protectedPath })).toMatchObject({ reason: 'protectedRoot' });
+    }
+  });
+
+  test('refuses the deletion log and the preferences in any case, whole and in every part', () => {
+    for (const path of [
+      'C:\\USERS\\tester\\AppData\\Local\\magic-free-disk-space\\Logs\\deletions.jsonl',
+      'c:\\users\\tester\\appdata\\local\\MAGIC-FREE-DISK-SPACE',
+      'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space\\preferences.json',
+    ]) {
+      expect(validateOnWindows({ path: path, kind: 'file' })).toMatchObject({
+        reason: 'protectedRoot',
+      });
+    }
+  });
+
+  test('refuses a path on another drive and one that names no drive', () => {
+    for (const path of ['D:\\Data\\old.zip', '\\\\server\\share\\x', 'C:Users\\tester\\x']) {
+      expect(validateOnWindows({ path: path, kind: 'file' })).toMatchObject({
+        reason: 'outsideAllowedRoot',
+      });
+    }
+  });
+});
 
 describeAwaitingWin32Platform('validateRemoval', () => {
   test('approves files and folders strictly inside an allowed root', () => {
@@ -102,6 +153,12 @@ describeAwaitingWin32Platform('validateRemoval', () => {
     expect(validate({ path: '/Users' })).toMatchObject({ reason: 'protectedRoot' });
     expect(validate({ path: '/private/var/folders/xy' })).toMatchObject({
       reason: 'protectedRoot',
+    });
+  });
+
+  test('approves no path whose case differs from its allowed root, which macOS compares exactly', () => {
+    expect(validate({ path: '/users/tester/Downloads/old.dmg', kind: 'file' })).toMatchObject({
+      reason: 'outsideAllowedRoot',
     });
   });
 

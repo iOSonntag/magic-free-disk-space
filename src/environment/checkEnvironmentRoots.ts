@@ -1,37 +1,49 @@
-import { isOverlappingPath } from '../path/isOverlappingPath.js';
+import { mayBeSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
 import type { EnvironmentFailure } from './environmentPlatform.js';
 
 /**
+ * Where the platform keeps the temporary folder: apart from the home on macOS, below it on Windows
+ * (`AppData\Local\Temp`).
+ */
+export type TempPlacement = 'apartFromHome' | 'belowHome';
+
+/**
  * Returns why the resolved folders are unsafe to delete in, or `null`. The tool deletes as the
  * user who runs it, inside that user's own home, and treats the whole temporary folder as
- * expendable, so it refuses root, a home of another user, and a temporary folder that holds the
- * home or lies in it.
+ * expendable, so it refuses root, a home of another user, and a temporary folder that is the home
+ * or holds it, or lies in it where the platform keeps it apart from the home.
  */
 export function checkEnvironmentRoots(params: {
   pathRules: PathRules;
   user: UserIdentity;
   homeRealPath: string;
-  homeOwnerId: number;
+  homeOwner: UserIdentity;
   tempRealPath: string;
+  tempPlacement: TempPlacement;
 }): EnvironmentFailure | null {
   const userFailure = checkDeletingUser({
     user: params.user,
     homeRealPath: params.homeRealPath,
-    homeOwnerId: params.homeOwnerId,
+    homeOwner: params.homeOwner,
   });
 
   if (userFailure !== null) {
     return userFailure;
   }
 
-  // Compared without case: macOS disks usually ignore it, and the looser match only refuses more.
   if (
-    isOverlappingPath({
+    mayBeSameOrInsidePath({
       rules: params.pathRules,
-      path: params.homeRealPath.toLowerCase(),
-      otherPath: params.tempRealPath.toLowerCase(),
+      path: params.homeRealPath,
+      parentPath: params.tempRealPath,
+    }) ||
+    isTempRefusedInHome({
+      pathRules: params.pathRules,
+      homeRealPath: params.homeRealPath,
+      tempRealPath: params.tempRealPath,
+      tempPlacement: params.tempPlacement,
     })
   ) {
     return { reason: 'tempOverlapsHome', path: params.tempRealPath };
@@ -44,7 +56,7 @@ export function checkEnvironmentRoots(params: {
 function checkDeletingUser(params: {
   user: UserIdentity;
   homeRealPath: string;
-  homeOwnerId: number;
+  homeOwner: UserIdentity;
 }): EnvironmentFailure | null {
   switch (params.user.kind) {
     case 'posix':
@@ -52,10 +64,34 @@ function checkDeletingUser(params: {
         return { reason: 'runAsRoot' };
       }
 
-      if (params.homeOwnerId !== params.user.uid) {
+      if (params.homeOwner.kind !== 'posix' || params.homeOwner.uid !== params.user.uid) {
         return { reason: 'homeNotOwned', path: params.homeRealPath };
       }
 
       return null;
+    case 'windows':
+      if (params.homeOwner.kind !== 'windows' || params.homeOwner.sid !== params.user.sid) {
+        return { reason: 'profileNotOwned', path: params.homeRealPath };
+      }
+
+      return null;
+  }
+}
+
+function isTempRefusedInHome(params: {
+  pathRules: PathRules;
+  homeRealPath: string;
+  tempRealPath: string;
+  tempPlacement: TempPlacement;
+}): boolean {
+  switch (params.tempPlacement) {
+    case 'apartFromHome':
+      return mayBeSameOrInsidePath({
+        rules: params.pathRules,
+        path: params.tempRealPath,
+        parentPath: params.homeRealPath,
+      });
+    case 'belowHome':
+      return false;
   }
 }

@@ -1,4 +1,5 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
+import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type {
   ExploreEngineUnit,
@@ -26,7 +27,6 @@ import type {
   RemovalTargets,
 } from './candidate.js';
 import { hasSymbolicLinkTarget } from './candidate.js';
-import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 import type { FoundTarget } from './loadMeasuredTargetsPhase.js';
 import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
@@ -158,7 +158,7 @@ async function loadExploreEntryPhase(params: {
       };
     case 'timedOut': {
       const deadlineIssue: ScanIssue = {
-        path: getCatalogEntryPath({ environment: params.environment, entry: params.entry }),
+        path: resolveCatalogLocation({ environment: params.environment, location: params.entry }),
         reason: 'walkStopped',
         detail: 'deadline',
       };

@@ -32,13 +32,18 @@ const ENGINE_FOLDER_PREFIX = '_';
  * Asks each instance of the engine over its socket, trusted by `requestUnixSocket`, and judges its
  * images, containers, volumes and build cache. An instance whose socket is missing or untrusted is
  * skipped quietly; one that answers not as asked leaves the findings incomplete, and fails the
- * probe when no instance answered. Never rejects.
+ * probe when no instance answered. `socketMissing` where the platform has no such engine, a `null`
+ * engine. Never rejects.
  */
 export async function loadEngineFindings(params: {
   run: ExploreProbeRun;
   engineProbeId: EngineProbeId;
-  engine: ContainerEngine;
+  engine: ContainerEngine | null;
 }): Promise<ExploreProbeEngineResult> {
+  if (params.engine === null) {
+    return { kind: 'failed', failure: { kind: 'socketMissing' } };
+  }
+
   const sockets = await loadEngineSockets({
     environment: params.run.environment,
     engine: params.engine,

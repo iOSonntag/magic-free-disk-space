@@ -2,11 +2,16 @@ import { basename } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type {
   CatalogOwner,
+  CatalogOwnerBundleId,
   CatalogOwnerBundleIdFamily,
+  CatalogOwnerExecutable,
   MacBundleId,
 } from '../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
+import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
+import type { Environment } from '../environment/buildEnvironment.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
+import { isExecutableOwnerRunning } from './isExecutableOwnerRunning.js';
 import type { InstalledApp, SystemApp } from './scanPlatform.js';
 
 export type OwnerState = 'running' | 'stopped' | 'unknown';
@@ -109,7 +114,8 @@ export function buildAppOwner(params: { app: InstalledApp }): CatalogOwner | nul
 /**
  * Whether the installed app is the owner: for a bundle id, the app of that id or one nesting it as
  * a helper; for a family, an app whose own id belongs to it. A family takes no nested helper, so an
- * app that bundles one of its helpers, such as Creative Cloud, never counts as one of its apps.
+ * app that bundles one of its helpers, such as Creative Cloud, never counts as one of its apps. No
+ * app bundle is a Windows program.
  */
 function isOwnerApp(params: { owner: CatalogOwner; app: InstalledApp }): boolean {
   switch (params.owner.kind) {
@@ -127,6 +133,8 @@ function isOwnerApp(params: { owner: CatalogOwner; app: InstalledApp }): boolean
 
       return isFamilyBundleId({ family: params.owner, bundleId: appBundleId });
     }
+    case 'executable':
+      return false;
   }
 }
 
@@ -137,6 +145,8 @@ function isOwnerSystemApp(params: { owner: CatalogOwner; app: SystemApp }): bool
       return params.app.bundleId === params.owner.bundleId;
     case 'bundleIdFamily':
       return isFamilyBundleId({ family: params.owner, bundleId: params.app.bundleId });
+    case 'executable':
+      return false;
   }
 }
 
@@ -172,7 +182,8 @@ export function findOwnerBundlePaths(params: {
 
 /**
  * True when an owner is set and neither a system app nor an app of the complete list of installed
- * apps is it; false for no owner, and while the list is incomplete, since it may miss the owner.
+ * apps is it; false for no owner, for a Windows program, which no app bundle is, and while the
+ * list is incomplete, since it may miss the owner.
  */
 export function isOwnerUninstalled(params: {
   owner: CatalogOwner | null;
@@ -182,7 +193,7 @@ export function isOwnerUninstalled(params: {
 }): boolean {
   const owner = params.owner;
 
-  if (owner === null || !params.isInstalledAppListComplete) {
+  if (owner === null || owner.kind === 'executable' || !params.isInstalledAppListComplete) {
     return false;
   }
 
@@ -248,16 +259,19 @@ function findOwnerInstalledAppName(params: {
 
       return app?.displayName ?? null;
     }
+    case 'executable':
+      return null;
   }
 }
 
 /**
  * Returns `stopped` for no owner, `unknown` for any owner while the process list is missing,
- * `stopped` for an owner that no installed or system app is, and `running` when a process runs
- * from the bundle of any app that is the owner.
+ * `stopped` for a bundle owner that no installed or system app is, and `running` when a process
+ * runs from the bundle of any app that is the owner, or runs the owner's program.
  */
 export function resolveOwnerState(params: {
   owner: CatalogOwner | null;
+  environment: Environment;
   installedApps: InstalledApp[];
   systemApps: SystemApp[];
   processCommands: string[] | null;
@@ -266,6 +280,59 @@ export function resolveOwnerState(params: {
     return 'stopped';
   }
 
+  switch (params.owner.kind) {
+    case 'bundleId':
+    case 'bundleIdFamily':
+      return resolveBundleOwnerState({
+        owner: params.owner,
+        installedApps: params.installedApps,
+        systemApps: params.systemApps,
+        processCommands: params.processCommands,
+      });
+    case 'executable':
+      return resolveExecutableOwnerState({
+        owner: params.owner,
+        environment: params.environment,
+        processCommands: params.processCommands,
+      });
+  }
+}
+
+function resolveExecutableOwnerState(params: {
+  owner: CatalogOwnerExecutable;
+  environment: Environment;
+  processCommands: string[] | null;
+}): OwnerState {
+  if (params.processCommands === null) {
+    return 'unknown';
+  }
+
+  const isRunning = isExecutableOwnerRunning({
+    pathRules: params.environment.pathRules,
+    imageNames: params.owner.imageNames,
+    installFolderPath:
+      params.owner.installFolder === null
+        ? null
+        : resolveCatalogLocation({
+            environment: params.environment,
+            location: params.owner.installFolder,
+          }),
+    processImagePaths: params.processCommands,
+  });
+
+  if (isRunning) {
+    return 'running';
+  }
+
+  return 'stopped';
+}
+
+function resolveBundleOwnerState(params: {
+  owner: CatalogOwnerBundleId | CatalogOwnerBundleIdFamily;
+  installedApps: InstalledApp[];
+  systemApps: SystemApp[];
+  processCommands: string[] | null;
+}): OwnerState {
   if (params.processCommands === null) {
     return 'unknown';
   }

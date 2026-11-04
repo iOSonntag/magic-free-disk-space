@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { CatalogOwner } from '../../src/catalog/catalogOwner.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
@@ -15,9 +15,24 @@ import {
 import type { SystemApp } from '../../src/scan/scanPlatform.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
+import {
+  EXAMPLE_DARWIN_ENVIRONMENT,
+  EXAMPLE_WIN32_ENVIRONMENT,
+} from '../support/environmentFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
-import { buildTestCatalogOwner, buildTestMacBundleId } from '../support/parsedValueFixtures.js';
+import {
+  buildTestCatalogOwner,
+  buildTestMacBundleId,
+  buildTestWindowsImageName,
+} from '../support/parsedValueFixtures.js';
 import { getCatalogEntry } from '../support/scanRunFixtures.js';
+
+/** VS Code as a Windows program: its image name, and its install folder below LocalAppData. */
+const CODE_OWNER: CatalogOwner = {
+  kind: 'executable',
+  imageNames: [buildTestWindowsImageName({ text: 'Code.exe' })],
+  installFolder: { root: 'localAppData', path: 'Programs/Microsoft VS Code' },
+};
 
 /**
  * The state of the owner of `Library/Caches/foo`, a child of a `children` entry, while `Foo.app`,
@@ -37,6 +52,7 @@ function resolveFooCacheOwnerState(params: { processCommands: string[] | null })
 
   return resolveOwnerState({
     owner: owner,
+    environment: EXAMPLE_DARWIN_ENVIRONMENT,
     installedApps: [foo],
     systemApps: [],
     processCommands: params.processCommands,
@@ -49,6 +65,17 @@ function resolveCatalogEntryOwner(params: { id: string }): CatalogOwner | null {
     entry: getCatalogEntry(params.id),
     path: '/home/Library',
     installedApps: [],
+  });
+}
+
+/** The state of `CODE_OWNER` while the processes of `processImagePaths` run on Windows. */
+function resolveCodeOwnerState(params: { processImagePaths: string[] | null }): OwnerState {
+  return resolveOwnerState({
+    owner: CODE_OWNER,
+    environment: EXAMPLE_WIN32_ENVIRONMENT,
+    installedApps: [],
+    systemApps: [],
+    processCommands: params.processImagePaths,
   });
 }
 
@@ -308,6 +335,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: null }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack],
         systemApps: [],
         processCommands: null,
@@ -319,6 +347,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack],
         systemApps: [],
         processCommands: null,
@@ -327,6 +356,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack],
         systemApps: [],
         processCommands: null,
@@ -338,6 +368,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack],
         systemApps: [],
         processCommands: ['/Applications/Slack.app/Contents/MacOS/Slack'],
@@ -349,6 +380,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack],
         systemApps: [],
         processCommands: ['/sbin/launchd', '/Applications/Slack.app/Contents/MacOS/Slack --flag'],
@@ -360,6 +392,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack.helper' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack],
         systemApps: [],
         processCommands: [
@@ -373,6 +406,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack],
         systemApps: [],
         processCommands: ['/Applications/Slack.app.old/Contents/MacOS/Slack'],
@@ -399,6 +433,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
     expect(
       resolveOwnerState({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [slack, copy],
         systemApps: [],
         processCommands: ['/Users/tester/Applications/Slack.app/Contents/MacOS/Slack'],
@@ -420,6 +455,7 @@ describeAwaitingWin32Platform('a system app owner', () => {
     expect(
       resolveOwnerState({
         owner: notesOwner,
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [],
         systemApps: [notes],
         processCommands: [notesCommand],
@@ -428,6 +464,7 @@ describeAwaitingWin32Platform('a system app owner', () => {
     expect(
       resolveOwnerState({
         owner: notesOwner,
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: [],
         systemApps: [notes],
         processCommands: ['/sbin/launchd'],
@@ -481,6 +518,7 @@ describeAwaitingWin32Platform('a system app owner', () => {
       ownerRuns.map(([id, command]) =>
         resolveOwnerState({
           owner: resolveCatalogEntryOwner({ id: id }),
+          environment: EXAMPLE_DARWIN_ENVIRONMENT,
           installedApps: [],
           systemApps: darwinPlatform.scan.systemApps,
           processCommands: [command],
@@ -517,6 +555,7 @@ describeAwaitingWin32Platform('a bundle id family owner', () => {
     expect(
       resolveOwnerState({
         owner: owner,
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: installedApps,
         systemApps: [],
         processCommands: [
@@ -530,6 +569,7 @@ describeAwaitingWin32Platform('a bundle id family owner', () => {
     expect(
       resolveOwnerState({
         owner: owner,
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
         installedApps: installedApps,
         systemApps: [],
         processCommands: [
@@ -547,5 +587,63 @@ describeAwaitingWin32Platform('a bundle id family owner', () => {
     expect(findOwnerAppName({ owner: owner, installedApps: installedApps, systemApps: [] })).toBe(
       'Adobe Premiere Pro 2025',
     );
+  });
+});
+
+describe('resolveOwnerState of a Windows program', () => {
+  test('is unknown while the process list is missing', () => {
+    expect(resolveCodeOwnerState({ processImagePaths: null })).toBe('unknown');
+  });
+
+  test('runs while a process runs from the install folder below LocalAppData', () => {
+    expect(
+      resolveCodeOwnerState({
+        processImagePaths: [
+          'C:\\Users\\tester\\AppData\\Local\\Programs\\Microsoft VS Code\\resources\\helper.exe',
+        ],
+      }),
+    ).toBe('running');
+  });
+
+  test('runs while a process carries its image name, wherever it runs from', () => {
+    expect(resolveCodeOwnerState({ processImagePaths: ['D:\\Portable\\VSCode\\code.exe'] })).toBe(
+      'running',
+    );
+  });
+
+  test('is stopped while no process carries its image name or runs from its folder', () => {
+    expect(
+      resolveCodeOwnerState({
+        processImagePaths: [
+          'C:\\Windows\\explorer.exe',
+          'C:\\Users\\tester\\AppData\\Local\\Programs\\Microsoft VS Code Insiders\\helper.exe',
+        ],
+      }),
+    ).toBe('stopped');
+  });
+});
+
+describe('a Windows program owner beside the app bundles', () => {
+  const codeBundle = buildTestInstalledApp({
+    bundlePath: '/Applications/Code.app',
+    displayName: 'Code',
+    bundleId: 'com.example.code',
+  });
+
+  test('owns no bundle, names no app, and is never told uninstalled by the complete app list', () => {
+    expect(
+      findOwnerBundlePaths({ owner: CODE_OWNER, installedApps: [codeBundle], systemApps: [] }),
+    ).toEqual([]);
+    expect(
+      findOwnerAppName({ owner: CODE_OWNER, installedApps: [codeBundle], systemApps: [] }),
+    ).toBeNull();
+    expect(
+      isOwnerUninstalled({
+        owner: CODE_OWNER,
+        installedApps: [],
+        systemApps: [],
+        isInstalledAppListComplete: true,
+      }),
+    ).toBe(false);
   });
 });

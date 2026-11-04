@@ -66,10 +66,10 @@ jobs:
         run: flutter test
 
       # Consumer Windows ships with long paths off, while the runner may have them on, so the facts
-      # of a path past 260 characters are measured once more with them off. A process reads the
+      # of a path past 260 characters are checked once more with them off. A process reads the
       # setting when it starts, so the tests started after this step see it. It runs after a failed
       # test step too, so a red suite never hides these facts.
-      - name: Measure the Bun Windows facts with long paths off
+      - name: Check the Bun Windows facts with long paths off
         if: runner.os == 'Windows' && !cancelled()
         shell: pwsh
         run: |
@@ -77,7 +77,7 @@ jobs:
           bun test test/windows/bunWindowsFacts.test.ts
 
   # The release ships a native arm64 build for Windows, and every Win32 call goes through bun:ffi,
-  # so the facts are measured on arm64 too, long before a release proof would show them.
+  # so the facts are checked on arm64 too, long before a release proof would show them.
   windows-arm64-facts:
     name: Bun Windows facts on windows-11-arm
     runs-on: windows-11-arm
@@ -96,5 +96,5 @@ jobs:
       - name: Install the dependencies
         run: bun install --frozen-lockfile
 
-      - name: Measure the Bun Windows facts
+      - name: Check the Bun Windows facts
         run: bun test test/windows

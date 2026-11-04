@@ -5,7 +5,7 @@ import { requestUnixSocket } from '../../src/system/requestUnixSocket.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
+import { buildTestUserIdentity, buildTestWindowsUser } from '../support/parsedValueFixtures.js';
 
 const USER = buildTestUserIdentity({ uid: process.getuid?.() ?? 0 });
 
@@ -132,6 +132,32 @@ describeAwaitingWin32Platform('requestUnixSocket', () => {
         user: OTHER_USER,
         method: 'DELETE',
         requestPath: '/v1.47/volumes/data',
+        timeoutMs: TIMEOUT_MS,
+      });
+
+      expect(result).toEqual({
+        kind: 'failed',
+        failure: { kind: 'socketUntrusted', detail: 'notOwnedByUser' },
+      });
+      expect(served.requestPaths).toEqual([]);
+    } finally {
+      served.server.stop(true);
+    }
+  });
+
+  test('refuses every socket for a user of Windows as notOwnedByUser, sending nothing', async () => {
+    const socketPath = join(fixtureRoot.rootDir, 'engine.sock');
+    const served = startCountingServer({
+      socketPath: socketPath,
+      answer: () => new Response('OK'),
+    });
+
+    try {
+      const result = await requestUnixSocket({
+        socketPath: socketPath,
+        user: buildTestWindowsUser({ sidText: 'S-1-5-21-1000-2000-3000-1001' }),
+        method: 'GET',
+        requestPath: '/_ping',
         timeoutMs: TIMEOUT_MS,
       });
 

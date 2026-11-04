@@ -15,10 +15,9 @@ import type { ExploreProbesStarted } from '../../src/explore/startExploreProbes.
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import {
-  ANDROID_SDK_PATH_NAMES,
+  ANDROID_SDK_ROOT,
   FLUTTER_SETTINGS_PATHS,
 } from '../../src/platform/darwin/androidSdkRoot.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { Result } from '../../src/result.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -134,9 +133,8 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
     files: ProjectPinFile[],
   ): Promise<Result<AndroidSdkRoot[], ExploreFileUnreadable>> {
     return loadAndroidSdkRoots({
-      pathRules: DARWIN_PATH_RULES,
-      homeDir: environment.homeDir,
-      androidSdkRoot: ANDROID_SDK_PATH_NAMES,
+      environment: environment,
+      androidSdkRoot: ANDROID_SDK_ROOT,
       flutterSettingsPaths: FLUTTER_SETTINGS_PATHS,
       pinFiles: files,
       privacyDenialCode: null,

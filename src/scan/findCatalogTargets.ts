@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
+import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -7,7 +8,6 @@ import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import { findProfileFolderTargets } from './findProfileFolderTargets.js';
-import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 
 /** One item of an entry: its place, shown and judged, and the paths that go with it. */
@@ -47,7 +47,7 @@ export async function findCatalogTargets(params: {
   const earlierEntryPaths: string[] = [];
 
   for (const entry of params.entries) {
-    const path = getCatalogEntryPath({ environment: params.environment, entry: entry });
+    const path = resolveCatalogLocation({ environment: params.environment, location: entry });
     const entryTargets = await findEntryTargets({
       entry: entry,
       path: path,

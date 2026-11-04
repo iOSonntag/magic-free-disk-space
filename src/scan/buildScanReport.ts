@@ -17,6 +17,7 @@ type DecisionPartition = {
  */
 export function buildScanReport(params: {
   decisions: CandidateDecision[];
+  evictedEntryCount: number;
   issues: ScanIssue[];
 }): ScanReport {
   const partitions = params.decisions.map(partitionDecision);
@@ -29,6 +30,7 @@ export function buildScanReport(params: {
     safeNumbers: listSafeNumbers({ candidates: candidates }),
     advice: rankBySize({ items: partitions.flatMap((partition) => partition.advice) }),
     skipped: partitions.flatMap((partition) => partition.skipped),
+    evictedEntryCount: params.evictedEntryCount,
     issues: params.issues,
   };
 }

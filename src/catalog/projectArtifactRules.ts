@@ -12,6 +12,12 @@ export type ProjectArtifactRule = {
   artifactName: string;
   /** The artifact counts only when its project folder holds a file one of these matches. */
   markers: ProjectMarker[];
+  /**
+   * What the project search does with a folder of this name beside no marker: `skipped` for a name
+   * only build tools use, `walked` for a common name such as `bin`, which is then an ordinary
+   * folder.
+   */
+  unmarkedFolder: 'skipped' | 'walked';
   title: string;
   explanation: string;
   regeneration: string;
@@ -35,6 +41,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: 'node_modules',
     markers: NODE_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'Node.js dependencies',
     explanation: 'Installed packages of a Node.js project.',
     regeneration: 'Reinstall with the project package manager (needs network).',
@@ -43,6 +50,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.next',
     markers: NODE_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'Next.js build output',
     explanation: 'Build output and cache of a Next.js project.',
     regeneration: 'Rebuilt by the next build.',
@@ -51,6 +59,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.turbo',
     markers: NODE_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'Turborepo cache',
     explanation: 'Task cache of a Turborepo workspace.',
     regeneration: 'Rebuilt by the next turbo run.',
@@ -59,6 +68,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.parcel-cache',
     markers: NODE_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'Parcel cache',
     explanation: 'Build cache of a Parcel project.',
     regeneration: 'Rebuilt by the next Parcel build.',
@@ -67,6 +77,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.svelte-kit',
     markers: NODE_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'SvelteKit build output',
     explanation: 'Generated files and build output of a SvelteKit project.',
     regeneration: 'Rebuilt by the next dev run or build.',
@@ -75,6 +86,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.nuxt',
     markers: NODE_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'Nuxt build output',
     explanation: 'Generated files and build output of a Nuxt project.',
     regeneration: 'Rebuilt by the next dev run or build.',
@@ -83,6 +95,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.angular',
     markers: NODE_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'Angular build cache',
     explanation: 'Build cache of an Angular project.',
     regeneration: 'Rebuilt by the next build.',
@@ -91,6 +104,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.sst',
     markers: buildFileNameMarkers(['sst.config.ts']),
+    unmarkedFolder: 'skipped',
     title: 'SST build output',
     explanation: 'Build output and local state that SST keeps in a project.',
     regeneration: 'Rebuilt by the next sst dev or deploy.',
@@ -99,6 +113,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: 'target',
     markers: buildFileNameMarkers(['Cargo.toml']),
+    unmarkedFolder: 'skipped',
     title: 'Rust build output',
     explanation: 'Compiled output of a Rust project.',
     regeneration: 'Rebuilt by the next cargo build.',
@@ -107,6 +122,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: 'build',
     markers: buildFileNameMarkers(['build.gradle', 'build.gradle.kts', 'pubspec.yaml']),
+    unmarkedFolder: 'skipped',
     title: 'Gradle or Flutter build output',
     explanation: 'Compiled output of a Gradle, Android, or Flutter project.',
     regeneration: 'Rebuilt by the next build.',
@@ -115,6 +131,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.build',
     markers: buildFileNameMarkers(['Package.swift']),
+    unmarkedFolder: 'skipped',
     title: 'Swift package build output',
     explanation: 'Compiled output and checked-out packages of a Swift package.',
     regeneration: 'Rebuilt by the next swift build.',
@@ -123,6 +140,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.gradle',
     markers: buildFileNameMarkers(['settings.gradle', 'settings.gradle.kts']),
+    unmarkedFolder: 'skipped',
     title: 'Gradle project cache',
     explanation: 'Task and build caches that Gradle keeps in a project.',
     regeneration: 'Rebuilt by the next Gradle build.',
@@ -131,6 +149,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: 'Pods',
     markers: buildFileNameMarkers(['Podfile']),
+    unmarkedFolder: 'skipped',
     title: 'CocoaPods dependencies',
     explanation: 'Installed libraries of an Xcode project that uses CocoaPods.',
     regeneration: 'Reinstall with pod install (may need network).',
@@ -139,6 +158,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: 'vendor',
     markers: buildFileNameMarkers(['composer.json']),
+    unmarkedFolder: 'skipped',
     title: 'PHP dependencies',
     explanation: 'Installed packages of a PHP project that uses Composer.',
     regeneration: 'Reinstall with composer install (may need network).',
@@ -147,6 +167,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.terraform',
     markers: [{ kind: 'fileSuffix', suffix: '.tf' }],
+    unmarkedFolder: 'skipped',
     title: 'Terraform providers and modules',
     explanation: 'Providers and modules that Terraform downloaded for a project.',
     regeneration: 'Downloaded again by terraform init (needs network).',
@@ -155,6 +176,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '_build',
     markers: buildFileNameMarkers(['mix.exs']),
+    unmarkedFolder: 'skipped',
     title: 'Elixir build output',
     explanation: 'Compiled output of an Elixir project.',
     regeneration: 'Rebuilt by mix compile.',
@@ -163,6 +185,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.dart_tool',
     markers: buildFileNameMarkers(['pubspec.yaml']),
+    unmarkedFolder: 'skipped',
     title: 'Dart tool cache',
     explanation: 'Tool state and build cache of a Dart or Flutter project.',
     regeneration: 'Rebuilt by dart pub get or flutter run.',
@@ -171,6 +194,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.stack-work',
     markers: buildFileNameMarkers(['stack.yaml']),
+    unmarkedFolder: 'skipped',
     title: 'Haskell build output',
     explanation: 'Build output of a Haskell Stack project.',
     regeneration: 'Rebuilt by stack build.',
@@ -179,6 +203,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.venv',
     markers: buildFileNameMarkers(['pyproject.toml', 'requirements.txt', 'setup.py']),
+    unmarkedFolder: 'skipped',
     title: 'Python virtual environment',
     explanation: 'Installed packages of a Python project.',
     regeneration: 'Recreate with python -m venv and reinstall (needs network).',
@@ -187,6 +212,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.pytest_cache',
     markers: PYTHON_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'pytest cache',
     explanation: 'Test cache of a Python project.',
     regeneration: 'Rebuilt by the next test run.',
@@ -195,6 +221,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.mypy_cache',
     markers: PYTHON_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'mypy cache',
     explanation: 'Type-check cache of a Python project.',
     regeneration: 'Rebuilt by the next mypy run.',
@@ -203,6 +230,7 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   {
     artifactName: '.ruff_cache',
     markers: PYTHON_PROJECT_MARKERS,
+    unmarkedFolder: 'skipped',
     title: 'Ruff cache',
     explanation: 'Lint cache of a Python project.',
     regeneration: 'Rebuilt by the next ruff run.',

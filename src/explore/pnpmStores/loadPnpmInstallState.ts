@@ -5,7 +5,6 @@ import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import { ASDF_INSTALLS_PATH_NAMES } from '../asdfVersions/asdfInstallsRoot.js';
-import type { HomeRelativePathNames } from '../explorePlatform.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
   loadExploreFileText,
@@ -77,14 +76,11 @@ const PACKAGE_JSON_FILE_NAME = 'package.json';
 export async function loadPnpmInstallState(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  /** pnpm's homes of the explore slice. */
-  pnpmHomes: HomeRelativePathNames[];
+  /** pnpm's homes of the explore slice, resolved. */
+  pnpmHomePaths: AbsolutePath[];
   homebrewPrefixPaths: AbsolutePath[];
   privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstallState, ExploreFileUnreadable>> {
-  const pnpmHomePaths = params.pnpmHomes.map((names) =>
-    joinAbsolutePath({ rules: params.pathRules, parentPath: params.homeDir, names: names }),
-  );
   const misePnpmRoots = await loadMisePnpmVersionsRoots({
     pathRules: params.pathRules,
     homeDir: params.homeDir,
@@ -108,7 +104,7 @@ export async function loadPnpmInstallState(params: {
   const homeRoots = listHomePnpmVersionsRoots({
     pathRules: params.pathRules,
     homeDir: params.homeDir,
-    pnpmHomePaths: pnpmHomePaths,
+    pnpmHomePaths: params.pnpmHomePaths,
     misePnpmRoots: misePnpmRoots.value,
   });
   const folderInstalls = await loadVersionFolderInstalls({
@@ -123,7 +119,7 @@ export async function loadPnpmInstallState(params: {
 
   const globalFolders = await loadPnpmGlobalFolders({
     pathRules: params.pathRules,
-    pnpmHomePaths: pnpmHomePaths,
+    pnpmHomePaths: params.pnpmHomePaths,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -155,7 +151,7 @@ export async function loadPnpmInstallState(params: {
 
   const standaloneInstalls = await loadStandaloneInstalls({
     pathRules: params.pathRules,
-    pnpmHomePaths: pnpmHomePaths,
+    pnpmHomePaths: params.pnpmHomePaths,
     privacyDenialCode: params.privacyDenialCode,
   });
 

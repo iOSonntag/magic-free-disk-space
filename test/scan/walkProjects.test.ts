@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Risk } from '../../src/catalog/catalog.js';
+import type { ProjectArtifactRule } from '../../src/catalog/projectArtifactRules.js';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
 import type {
   ProjectPinFileKind,
@@ -10,6 +11,7 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
@@ -76,6 +78,7 @@ function comparePinFilePaths(left: ProjectPinFileRef, right: ProjectPinFileRef):
 function walkTestProjects(params: {
   homeDir: AbsolutePath;
   excludedTopNames?: string[];
+  rules?: ProjectArtifactRule[];
   maxDepth?: number;
   deadlineMs?: number;
   isEntryEvicted?: EntryEvictionCheck;
@@ -84,7 +87,7 @@ function walkTestProjects(params: {
     pathRules: DARWIN_PATH_RULES,
     homeDir: params.homeDir,
     excludedTopNames: params.excludedTopNames ?? [],
-    rules: PROJECT_ARTIFACT_RULES,
+    rules: params.rules ?? PROJECT_ARTIFACT_RULES,
     maxDepth: params.maxDepth ?? 4,
     deadlineMs: params.deadlineMs ?? NO_DEADLINE_MS,
     entryReads: buildTestEntryReads({
@@ -134,6 +137,45 @@ describeAwaitingWin32Platform('walkProjects', () => {
     const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
 
     expect(result).toEqual({ artifacts: [], pinFiles: [], isComplete: true, issues: [] });
+  });
+
+  test('finds bin and obj beside a file whose name ends in a project ending of .NET', async () => {
+    const projectPath = join(fixtureRoot.homeDir, 'Service');
+    await createFixtureDirectory({ path: join(projectPath, 'bin', 'Debug') });
+    await createFixtureDirectory({ path: join(projectPath, 'obj') });
+    await createEmptyFile({ path: join(projectPath, 'Service.Api.csproj') });
+
+    const result = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      rules: WIN32_CATALOG.projectArtifactRules,
+    });
+
+    expect(
+      result.artifacts.map((finding) => ({
+        artifactPath: finding.artifactPath,
+        artifactName: finding.rule.artifactName,
+      })),
+    ).toEqual([
+      { artifactPath: join(projectPath, 'bin'), artifactName: 'bin' },
+      { artifactPath: join(projectPath, 'obj'), artifactName: 'obj' },
+    ]);
+  });
+
+  test('walks into a bin folder without a project file beside it, as any other folder', async () => {
+    const toolsPath = join(fixtureRoot.homeDir, 'tools');
+    const projectPath = join(toolsPath, 'bin', 'app');
+    await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
+    await createEmptyFile({ path: join(projectPath, 'package.json') });
+    await createEmptyFile({ path: join(toolsPath, 'bin.csproj.bak') });
+
+    const result = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      rules: WIN32_CATALOG.projectArtifactRules,
+    });
+
+    expect(result.artifacts.map((finding) => finding.artifactPath)).toEqual([
+      join(projectPath, 'node_modules'),
+    ]);
   });
 
   test('does not report an artifact nested inside a found artifact', async () => {

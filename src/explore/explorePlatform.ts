@@ -1,4 +1,4 @@
-import type { EngineProbeId } from '../catalog/catalog.js';
+import type { CatalogLocation, EngineProbeId } from '../catalog/catalog.js';
 
 /** The folder names of a place below the home folder, joined by the platform's separator. */
 export type HomeRelativePathNames = string[];
@@ -40,22 +40,28 @@ export type IdeVersionRoots = Record<'caches' | 'logs' | 'settings', HomeRelativ
 
 /** What the explore probes take from the operating system: where the tools keep their data. */
 export type ExplorePlatform = {
-  /** pnpm's homes below the home folder, the platform's own first, then the XDG data place. */
-  pnpmHomes: HomeRelativePathNames[];
-  /** pnpm's store below the home folder at the platform's own place. */
-  pnpmStoreRoot: HomeRelativePathNames;
-  /** pnpm's store below the home folder at the XDG data place. */
-  pnpmXdgStoreRoot: HomeRelativePathNames;
-  /** The Android SDK below the home folder. */
-  androidSdkRoot: HomeRelativePathNames;
+  /** pnpm's homes, the platform's own first, then the XDG data place where it has a default. */
+  pnpmHomes: CatalogLocation[];
+  /** pnpm's store at the platform's own place. */
+  pnpmStoreRoot: CatalogLocation;
+  /** pnpm's store at the XDG data place; `null` where pnpm has no default for it, as on Windows. */
+  pnpmXdgStoreRoot: CatalogLocation | null;
+  /** The Android SDK at the place Android Studio installs it. */
+  androidSdkRoot: CatalogLocation;
   /**
-   * Flutter's settings files below the home folder, in order; the first that exists is Flutter's,
-   * whose `android-sdk` may name a second SDK.
+   * Flutter's settings files, in order; the first that exists is Flutter's, whose `android-sdk`
+   * may name a second SDK.
    */
-  flutterSettingsPaths: HomeRelativePathNames[];
+  flutterSettingsPaths: CatalogLocation[];
+  /** VS Code's folder of profiles, each with its own list of extensions. */
+  vscodeProfilesRoot: CatalogLocation;
   /** The evidence line of a project search that did not search everything, such as cloud-only folders. */
   projectSearchIncompleteEvidence: string;
-  containerEngines: Record<EngineProbeId, ContainerEngine>;
+  /**
+   * The container engines by their probes; `null` where the platform has no such engine the probe
+   * can reach, so its probe cannot run.
+   */
+  containerEngines: Record<EngineProbeId, ContainerEngine | null>;
   /** The folders of the JetBrains IDEs and Android Studio that hold one folder per version. */
   ideVersionRoots: IdeVersionRoots;
   /** iCloud Drive's local folder; `null` where the platform has none, so its probe cannot run. */
@@ -64,8 +70,11 @@ export type ExplorePlatform = {
   mailDownloadsRoot: HomeRelativePathNames | null;
   /** The bundles of Mail, whose running process may still open the attachments it saved. */
   mailBundlePaths: string[];
-  /** The person's folder of downloads, the browsers' default target. */
-  downloadsRoot: HomeRelativePathNames;
+  /**
+   * The person's folder of downloads, the browsers' default target; `null` where it is no fixed
+   * place below the home folder, so its probe cannot run.
+   */
+  downloadsRoot: HomeRelativePathNames | null;
   /** The browsers that write a partial download, which must not run while one of theirs goes. */
   browserBundles: BrowserBundles;
 };

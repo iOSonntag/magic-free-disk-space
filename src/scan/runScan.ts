@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
-import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
+import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
+import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExplorePlatform, IdeVersionRoots } from '../explore/explorePlatform.js';
 import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
@@ -14,7 +15,7 @@ import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
-import type { EntryReads } from '../system/entryReads.js';
+import type { EntryReads, EvictionCandidate } from '../system/entryReads.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
@@ -47,7 +48,6 @@ import type { CatalogTarget } from './findCatalogTargets.js';
 import { findCatalogTargets } from './findCatalogTargets.js';
 import { findLargeUserFiles } from './findLargeUserFiles.js';
 import { findLastSignOfUse } from './findLastSignOfUse.js';
-import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 import { DAY_MS, SCAN_LIMITS } from './limits.js';
 import { listCandidateFootprint } from './listCandidateFootprint.js';
@@ -63,6 +63,7 @@ import {
   resolveOwnerState,
   resolveTargetOwner,
 } from './resolveOwnerState.js';
+import { resolveUserFileRootPaths } from './resolveUserFileRootPaths.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
 import type {
@@ -110,6 +111,11 @@ export type ScanReport = {
   safeNumbers: number[];
   advice: Advice[];
   skipped: SkippedItem[];
+  /**
+   * The entries the scan's walks left unread because their content lives only in the cloud store,
+   * each path counted once.
+   */
+  evictedEntryCount: number;
   issues: ScanIssue[];
 };
 
@@ -129,12 +135,15 @@ type ScanContext = {
   /** `null` when `ps` failed: every item with an owner app is then withheld. */
   processCommands: string[] | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
-  /** The system slice's entry reads, asked by every walk and measurement of the scan. */
+  /**
+   * The system slice's entry reads, asked by every walk and measurement of the scan, whose
+   * eviction check records each entry it answers true for.
+   */
   entryReads: EntryReads;
   /** The system slice's code of a privacy denial, for every issue of a failed read. */
   privacyDenialCode: string | null;
-  /** Home folders searched for large files, from the scan slice. */
-  userFileRootRelativePaths: string[];
+  /** The folders searched for large files, from the scan slice. */
+  userFileRootPaths: AbsolutePath[];
 };
 
 const XCODE_BUNDLE_ID_PREFIX = 'com.apple.dt.Xcode';
@@ -168,7 +177,7 @@ export async function runScan(params: {
   // Known from the start, so the first `found` already leaves out what a probe reserves.
   const reservedEntryPaths = params.catalog.entries.flatMap((entry) =>
     entry.removal.kind === 'explore'
-      ? [getCatalogEntryPath({ environment: params.environment, entry: entry })]
+      ? [resolveCatalogLocation({ environment: params.environment, location: entry })]
       : [],
   );
   // The probe of the IDE versions takes folders outside its entry, in the roots of every version.
@@ -202,6 +211,11 @@ export async function runScan(params: {
     probeClaimPaths: knownClaimPaths,
   });
 
+  const evictedEntryPaths = new Set<string>();
+  const entryReads = recordEvictedEntries({
+    entryReads: params.system.entryReads,
+    evictedPaths: evictedEntryPaths,
+  });
   const processCommandsLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
@@ -218,10 +232,10 @@ export async function runScan(params: {
     pathRules: params.environment.pathRules,
     homeDir: params.environment.homeDir,
     excludedTopNames: params.scan.projectSearchExcludedNames,
-    rules: PROJECT_ARTIFACT_RULES,
+    rules: params.scan.projectArtifactRules,
     maxDepth: SCAN_LIMITS.projectMaxDepth,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
-    entryReads: params.system.entryReads,
+    entryReads: entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const projectPins: ProjectPinsLoad = {
@@ -272,9 +286,12 @@ export async function runScan(params: {
     systemApps: params.scan.systemApps,
     processCommands: await knownProcessCommandsLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
-    entryReads: params.system.entryReads,
+    entryReads: entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
-    userFileRootRelativePaths: params.scan.userFileRootRelativePaths,
+    userFileRootPaths: resolveUserFileRootPaths({
+      environment: params.environment,
+      roots: params.scan.userFileRoots,
+    }),
   };
   const setup: ScanPhase = {
     decisions: [],
@@ -323,7 +340,10 @@ export async function runScan(params: {
     finishedPhases: [setup, catalog, artifacts, apps],
     probeClaimPaths: probeClaimPaths,
   });
-  const userFiles = await loadUserFilePhase({ context: context });
+  const userFiles = await loadUserFilePhase({
+    context: context,
+    artifactRules: params.scan.projectArtifactRules,
+  });
 
   const orphans = await loadOrphanPhaseOfAppSection({
     apps: params.scan.apps,
@@ -347,7 +367,7 @@ export async function runScan(params: {
     catalogEntries: params.catalog.entries,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    entryReads: params.system.entryReads,
+    entryReads: entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const exploreAdvice = await loadCatalogPhase({
@@ -374,6 +394,7 @@ export async function runScan(params: {
       exploreAdvice,
     ],
     incompleteExploreAdvice: incompleteExploreAdvice,
+    evictedEntryCount: evictedEntryPaths.size,
   });
 }
 
@@ -468,6 +489,7 @@ export function buildScanReportOfPhases(params: {
   reservedEntryPaths: string[];
   phases: ScanPhase[];
   incompleteExploreAdvice: ScanPhase;
+  evictedEntryCount: number;
 }): ScanReport {
   const scan = mergeScanPhases({ phases: params.phases });
 
@@ -482,6 +504,7 @@ export function buildScanReportOfPhases(params: {
       // lie inside its path. Moved before it, the advice would skip every finding of its probe.
       ...params.incompleteExploreAdvice.decisions,
     ],
+    evictedEntryCount: params.evictedEntryCount,
     issues: [...scan.issues, ...params.incompleteExploreAdvice.issues],
   });
 }
@@ -535,6 +558,29 @@ function isInProbeClaim(params: {
       isOverlappingPath({ rules: params.pathRules, path: path, otherPath: claimPath }),
     ),
   );
+}
+
+/**
+ * The entry reads `entryReads` whose eviction check also adds the path of each entry it answers
+ * true for to `evictedPaths`. A walk skips every such entry, so the set holds each entry a walk
+ * left unread.
+ */
+function recordEvictedEntries(params: {
+  entryReads: EntryReads;
+  evictedPaths: Set<string>;
+}): EntryReads {
+  return {
+    isEntryEvicted: (entry: EvictionCandidate): boolean => {
+      const isEvicted = params.entryReads.isEntryEvicted(entry);
+
+      if (isEvicted) {
+        params.evictedPaths.add(entry.path);
+      }
+
+      return isEvicted;
+    },
+    loadPrivateBytes: params.entryReads.loadPrivateBytes,
+  };
 }
 
 async function loadCatalogPhase(params: {
@@ -628,6 +674,7 @@ async function loadCatalogTargetPhase(params: {
           systemApps: params.context.systemApps,
         }),
         ownerState: resolveOwnerState({
+          environment: params.context.environment,
           owner: owner,
           installedApps: params.context.installedApps,
           systemApps: params.context.systemApps,
@@ -747,6 +794,7 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
         lastSignOfUseMs: lastSignOfUseMs,
         unusedCutoffMs: params.context.unusedCutoffMs,
         ownerState: resolveOwnerState({
+          environment: params.context.environment,
           owner: buildAppOwner({ app: app }),
           installedApps: params.context.installedApps,
           systemApps: params.context.systemApps,
@@ -766,12 +814,13 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
   });
 }
 
-async function loadUserFilePhase(params: { context: ScanContext }): Promise<ScanPhase> {
+async function loadUserFilePhase(params: {
+  context: ScanContext;
+  artifactRules: ProjectArtifactRule[];
+}): Promise<ScanPhase> {
   const found = await findLargeUserFiles({
-    rootDirs: params.context.userFileRootRelativePaths.map((relativePath) =>
-      join(params.context.environment.homeDir, relativePath),
-    ),
-    artifactRules: PROJECT_ARTIFACT_RULES,
+    rootDirs: params.context.userFileRootPaths,
+    artifactRules: params.artifactRules,
     minAllocatedBytes: SCAN_LIMITS.minUserFileBytes,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
     entryReads: params.context.entryReads,

@@ -1,4 +1,7 @@
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import type { CatalogLocation } from '../../catalog/catalog.js';
+import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
+import type { Environment } from '../../environment/buildEnvironment.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -13,8 +16,6 @@ import {
 } from '../loadExploreRead.js';
 
 const EXTENSIONS_FOLDER_NAMES = ['.vscode', 'extensions'];
-
-const PROFILES_FOLDER_NAMES = ['Library', 'Application Support', 'Code', 'User', 'profiles'];
 
 const REGISTRY_FILE_NAME = 'extensions.json';
 
@@ -66,17 +67,19 @@ type VscodeRegistry = {
  * A read that is absent or unfit is a fact of the state; only a failed read fails.
  */
 export async function loadVscodeExtensionState(params: {
-  pathRules: PathRules;
-  homeDir: AbsolutePath;
+  environment: Environment;
+  /** VS Code's folder of profiles, from the explore slice. */
+  profilesRoot: CatalogLocation;
   privacyDenialCode: string | null;
 }): Promise<Result<VscodeExtensionState, ExploreFileUnreadable>> {
+  const pathRules = params.environment.pathRules;
   const extensionsPath = joinAbsolutePath({
-    rules: params.pathRules,
-    parentPath: params.homeDir,
+    rules: pathRules,
+    parentPath: params.environment.homeDir,
     names: EXTENSIONS_FOLDER_NAMES,
   });
   const folders = await loadExtensionFolders({
-    pathRules: params.pathRules,
+    pathRules: pathRules,
     extensionsPath: extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -90,7 +93,7 @@ export async function loadVscodeExtensionState(params: {
   }
 
   const extensionsRealPath = await loadExploreRealPath({
-    pathRules: params.pathRules,
+    pathRules: pathRules,
     path: extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -104,8 +107,11 @@ export async function loadVscodeExtensionState(params: {
   }
 
   const listedFolderNames = await loadListedFolderNames({
-    pathRules: params.pathRules,
-    homePath: params.homeDir,
+    pathRules: pathRules,
+    profilesPath: resolveCatalogLocation({
+      environment: params.environment,
+      location: params.profilesRoot,
+    }),
     extensionsPath: extensionsPath,
     extensionsRealPath: extensionsRealPath.value,
     privacyDenialCode: params.privacyDenialCode,
@@ -116,7 +122,7 @@ export async function loadVscodeExtensionState(params: {
   }
 
   const obsoleteFolderNames = await loadObsoleteFolderNames({
-    pathRules: params.pathRules,
+    pathRules: pathRules,
     extensionsPath: extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -211,14 +217,14 @@ function parseExtensionFolder(params: {
  */
 async function loadListedFolderNames(params: {
   pathRules: PathRules;
-  homePath: AbsolutePath;
+  profilesPath: AbsolutePath;
   extensionsPath: AbsolutePath;
   extensionsRealPath: AbsolutePath;
   privacyDenialCode: string | null;
 }): Promise<Result<ReadonlySet<string> | null, ExploreFileUnreadable>> {
   const registries = await listRegistries({
     pathRules: params.pathRules,
-    homePath: params.homePath,
+    profilesPath: params.profilesPath,
     extensionsPath: params.extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -325,7 +331,7 @@ async function loadParentRealPaths(params: {
 /** The default registry, then one per profile folder; no profiles folder adds none. */
 async function listRegistries(params: {
   pathRules: PathRules;
-  homePath: AbsolutePath;
+  profilesPath: AbsolutePath;
   extensionsPath: AbsolutePath;
   privacyDenialCode: string | null;
 }): Promise<Result<VscodeRegistry[], ExploreFileUnreadable>> {
@@ -337,13 +343,8 @@ async function listRegistries(params: {
     }),
     isRequired: true,
   };
-  const profilesPath = joinAbsolutePath({
-    rules: params.pathRules,
-    parentPath: params.homePath,
-    names: PROFILES_FOLDER_NAMES,
-  });
   const profileNames = await loadExploreDirectoryNames({
-    path: profilesPath,
+    path: params.profilesPath,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -354,7 +355,7 @@ async function listRegistries(params: {
   const profileRegistries = (profileNames.value ?? []).map((profileName) => ({
     path: joinAbsolutePath({
       rules: params.pathRules,
-      parentPath: profilesPath,
+      parentPath: params.profilesPath,
       names: [profileName, REGISTRY_FILE_NAME],
     }),
     isRequired: false,

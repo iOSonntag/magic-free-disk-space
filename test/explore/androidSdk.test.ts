@@ -27,7 +27,6 @@ import type {
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -83,7 +82,7 @@ function buildStateLoad(): Parameters<typeof loadAndroidSdkState>[0] {
   const platform = buildTestProbePlatform();
 
   return {
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: environment.pathRules,
     homeDir: homeDir,
     sdkRoots: buildSdkRoots(),
     privacyDenialCode: platform.privacyDenialCode,

@@ -1,34 +1,71 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { chmod, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { buildLongPathSegments } from './longPath.js';
 import {
-  describeThrownError,
-  formatNoticeCommand,
-  formatProbeOutputLines,
-  loadLstatText,
-  observeSafely,
-  parseJsonObject,
-} from './observations.js';
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, parse } from 'node:path';
+import { buildGuidBytes, KNOWN_FOLDER_IDS } from '../../src/platform/win32/knownFolderIds.js';
+import { listDriveRootTexts } from '../../src/platform/win32/listDriveRoots.js';
+import type { Win32CallFailure } from '../../src/platform/win32/win32Api.js';
+import {
+  closeHandle,
+  loadDriveType,
+  loadFileAttributes,
+  loadFileOwnerSid,
+  loadKnownFolderPath,
+  loadLogicalDrives,
+  loadTokenElevation,
+  loadTokenUserSid,
+  openProcessToken,
+} from '../../src/platform/win32/win32Api.js';
+import type { Result } from '../../src/result.js';
+import { parseWindowsSid } from '../../src/system/userIdentity.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { buildLongPathSegments } from './longPath.js';
+import { parseProbeLines } from './observations.js';
 
-// Measures how Bun behaves on Windows and reports each observation as a GitHub notice, because
-// the check-run annotations are what a session can read of a run. Only invariants are asserted:
-// a failed observation is a fact to report, not a failed test.
+// Asserts what the code relies on of Bun and of the calls of win32Api.ts on Windows. The workflow
+// runs it on x64 and arm64, and once more with long paths off.
 
-const NOTICE_TITLE = 'Bun Windows fact';
 const FIXTURES_FOLDER = join(import.meta.dir, 'fixtures');
-const KERNEL_PROBE_PATH = join(FIXTURES_FOLDER, 'kernelProbe.ts');
 const CLOUD_PLACEHOLDER_PROBE_PATH = join(FIXTURES_FOLDER, 'cloudPlaceholderProbe.ts');
 const COMPILED_PROBE_ENTRY_PATH = join(FIXTURES_FOLDER, 'compiledProbe.ts');
+const FILE_SYSTEM_TEST_TIMEOUT_MS = 60_000;
 const CHILD_TIMEOUT_MS = 60_000;
 const COMPILED_PROBE_TIMEOUT_MS = 120_000;
-const FACT_GROUP_TIMEOUT_MS = 150_000;
-const COMPILED_PROBE_GROUP_TIMEOUT_MS = 300_000;
-const STDERR_EXCERPT_MAX_LENGTH = 400;
-const UNEXPECTED_STDOUT_EXCERPT_BYTES = 64;
+const COMPILED_PROBE_TEST_TIMEOUT_MS = 300_000;
 const ECHO_LINE = 'Größe – 🧹';
+
+/**
+ * Set to `1` to run the cloud placeholder probe, which registers a sync root of the Cloud Files
+ * API on this machine for the time of the probe.
+ */
+const IS_CLOUD_PROBE_OPTED_IN = process.env.MAGIC_FREE_DISK_SPACE_CLOUD_PROBE === '1';
+
+/** The longest path a W function takes without its `\\?\` form while long paths are off. */
+const MAX_PATH = 260;
+
+const FILE_ATTRIBUTE_READONLY = 0x1;
+const FILE_ATTRIBUTE_DIRECTORY = 0x10;
+const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
+const ERROR_FILE_NOT_FOUND = 2;
+const DRIVE_FIXED = 3;
+
+/** `GUID_NULL`, the id of no known folder. */
+const NO_KNOWN_FOLDER_ID = '00000000-0000-0000-0000-000000000000';
+
+/** An attribute text of loadAttributesText: the call succeeded. */
+const ATTRIBUTES_HEX_PATTERN = /^0x[0-9a-f]{8}$/;
 
 // The flags the release compiles the bridge with, so the probe runs as the bridge does.
 const COMPILED_PROBE_BUILD_FLAGS = [
@@ -46,13 +83,12 @@ const COMPILED_PROBE_BUILD_FLAGS = [
   'Copyright © 2026 iOSonntag. MIT License.',
 ] as const;
 
-type FactGroup =
-  | 'links'
-  | 'cloud placeholders'
-  | 'rm of a tree'
-  | 'long paths in Bun fs'
-  | 'process ids and bun:ffi'
-  | 'compiled probe';
+/** The known folders the environment takes from Windows, by the variable that names each. */
+const KNOWN_FOLDER_VARIABLES = [
+  { folder: 'profile', variableName: 'USERPROFILE' },
+  { folder: 'localAppData', variableName: 'LOCALAPPDATA' },
+  { folder: 'roamingAppData', variableName: 'APPDATA' },
+] as const;
 
 type ChildRun = {
   exitCode: number | null;
@@ -61,19 +97,25 @@ type ChildRun = {
   stderr: string;
 };
 
-let runContextLine = 'context: not read';
+/** The value of a call that succeeded; throws with the call and its code for one that failed. */
+function unwrapCall<TValue>(result: Result<TValue, Win32CallFailure>): TValue {
+  if (result.kind === 'failed') {
+    throw new Error(`${result.failure.call} failed with ${result.failure.code}.`);
+  }
 
-const emitFactNotice = (group: FactGroup, lines: string[]): void => {
-  const message = [runContextLine, `group: ${group}`, ...lines].join('\n');
+  return result.value;
+}
 
-  process.stdout.write(`${formatNoticeCommand({ title: NOTICE_TITLE, message: message })}\n`);
-};
+/** The attributes win32Api.ts reads for the host path. */
+function loadAttributes(path: string): number {
+  return unwrapCall(loadFileAttributes({ path: buildTestHostPath({ text: path }) }));
+}
 
-const runChildProcess = async (params: {
+async function runChildProcess(params: {
   command: string[];
   stdin: Uint8Array | null;
   timeoutMs: number;
-}): Promise<ChildRun> => {
+}): Promise<ChildRun> {
   const child = Bun.spawn(params.command, {
     stdin: params.stdin === null ? 'ignore' : 'pipe',
     stdout: 'pipe',
@@ -104,383 +146,234 @@ const runChildProcess = async (params: {
     stdout: await stdoutPromise,
     stderr: await stderrPromise,
   };
-};
+}
 
-const runBunScript = (scriptPath: string, args: string[]): Promise<ChildRun> => {
-  return runChildProcess({
-    command: [process.execPath, scriptPath, ...args],
-    stdin: null,
-    timeoutMs: CHILD_TIMEOUT_MS,
+describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', () => {
+  let folder: string;
+
+  beforeEach(async () => {
+    // Below the real temp folder, so no path holds a short name such as RUNNER~1.
+    folder = await mkdtemp(join(await realpath(tmpdir()), 'mfds-windows-facts-'));
   });
-};
 
-const formatChildEnd = (run: ChildRun): string[] => {
-  const end = run.timedOut ? 'timed out and was killed' : `exitCode=${run.exitCode}`;
-  const stderr = run.stderr.trim();
+  afterEach(async () => {
+    await rm(folder, { recursive: true, force: true });
+  });
 
-  if (stderr === '') {
-    return [`child: ${end}`];
-  }
+  test(
+    'lstat reads a junction and a directory symlink as links, GetFileAttributesW as reparse points',
+    async () => {
+      const target = join(folder, 'target');
+      const junction = join(folder, 'junction');
+      const directorySymlink = join(folder, 'directorySymlink');
 
-  return [`child: ${end}`, `stderr: ${stderr.slice(0, STDERR_EXCERPT_MAX_LENGTH)}`];
-};
+      await mkdir(target);
+      await symlink(target, junction, 'junction');
+      await symlink(target, directorySymlink, 'dir');
 
-const formatChildRun = (run: ChildRun): string[] => {
-  return [...formatProbeOutputLines(new TextDecoder().decode(run.stdout)), ...formatChildEnd(run)];
-};
+      for (const link of [junction, directorySymlink]) {
+        expect((await lstat(link)).isSymbolicLink()).toBe(true);
+        expect(loadAttributes(link) & FILE_ATTRIBUTE_REPARSE_POINT).toBe(
+          FILE_ATTRIBUTE_REPARSE_POINT,
+        );
+      }
 
-/** The kernelProbe readings of `GetFileAttributesW` for the paths, as one line; never throws. */
-const observeFileAttributesInChild = async (paths: string[]): Promise<string> => {
-  const run = await runBunScript(KERNEL_PROBE_PATH, ['file-attributes', ...paths]);
-
-  return formatChildRun(run).join(' | ');
-};
-
-const loadLongPathsEnabledContext = async (): Promise<string> => {
-  const run = await runBunScript(KERNEL_PROBE_PATH, ['long-paths-setting']);
-  const reading = parseJsonObject(new TextDecoder().decode(run.stdout).trim());
-
-  if (reading !== null && reading.isRead === true) {
-    return `${String(reading.value)} (RegGetValueW)`;
-  }
-
-  const registryQuery = Bun.spawnSync([
-    'reg',
-    'query',
-    'HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem',
-    '/v',
-    'LongPathsEnabled',
-  ]);
-  const registryValueMatch = /LongPathsEnabled\s+REG_DWORD\s+(0x[0-9a-f]+)/i.exec(
-    registryQuery.stdout.toString(),
+      expect((await lstat(target)).isDirectory()).toBe(true);
+      expect(loadAttributes(target) & FILE_ATTRIBUTE_REPARSE_POINT).toBe(0);
+    },
+    FILE_SYSTEM_TEST_TIMEOUT_MS,
   );
-  const registryFailure = `RegGetValueW gave ${JSON.stringify(reading)}, ${formatChildEnd(run).join(' ')}`;
 
-  if (registryValueMatch?.[1] === undefined) {
-    return `unknown (${registryFailure}; reg query exitCode=${registryQuery.exitCode})`;
-  }
-
-  return `${Number.parseInt(registryValueMatch[1], 16)} (reg query; ${registryFailure})`;
-};
-
-/** What `RtlAreLongPathsEnabled` answers for a child Bun, the long paths a process really gets. */
-const loadRtlAreLongPathsEnabledContext = async (): Promise<string> => {
-  const run = await runBunScript(KERNEL_PROBE_PATH, ['long-paths-of-process']);
-  const reading = parseJsonObject(new TextDecoder().decode(run.stdout).trim());
-
-  if (reading !== null && typeof reading.rtlAreLongPathsEnabled === 'number') {
-    return String(reading.rtlAreLongPathsEnabled);
-  }
-
-  return `unknown (${formatChildEnd(run).join(' ')})`;
-};
-
-/** Removes the folder, through `rd /s /q` on the `\\?\` path when Bun's fs leaves it behind. */
-const removeFolderBestEffort = async (path: string): Promise<boolean> => {
-  try {
-    await rm(path, { recursive: true, force: true });
-  } catch {
-    // The fallback below removes what Bun's rm could not.
-  }
-
-  if (existsSync(path)) {
-    Bun.spawnSync(['cmd', '/c', 'rd', '/s', '/q', `\\\\?\\${path}`]);
-  }
-
-  return !existsSync(path);
-};
-
-const createTempFolder = (): Promise<string> => {
-  return mkdtemp(join(tmpdir(), 'mfds-windows-facts-'));
-};
-
-/** Creates a junction, by `fs.symlink` and else by `mklink /J`, and returns how it was made. */
-const createJunction = async (target: string, path: string): Promise<string> => {
-  try {
-    await symlink(target, path, 'junction');
-
-    return 'fs.symlink junction';
-  } catch (error) {
-    const symlinkFailure = describeThrownError(error);
-    const mklink = Bun.spawnSync(['cmd', '/c', 'mklink', '/J', path, target]);
-
-    if (mklink.exitCode !== 0) {
-      throw new Error(
-        `fs.symlink junction ${symlinkFailure}; mklink /J exitCode=${mklink.exitCode}`,
-      );
-    }
-
-    return `mklink /J (fs.symlink junction ${symlinkFailure})`;
-  }
-};
-
-const isMissing = async (path: string): Promise<boolean> => {
-  try {
-    await lstat(path);
-
-    return false;
-  } catch {
-    return true;
-  }
-};
-
-const observeLinks = async (folder: string): Promise<string[]> => {
-  const target = join(folder, 'target');
-  const junction = join(folder, 'junction');
-  const directorySymlink = join(folder, 'directorySymlink');
-
-  await mkdir(target);
-
-  const junctionCreation = await observeSafely(() => createJunction(target, junction));
-  const symlinkCreation = await observeSafely(async () => {
-    await symlink(target, directorySymlink, 'dir');
-
-    return 'ok';
+  test('GetFileAttributesW fails for a missing path with the GetLastError of the call', () => {
+    expect(
+      loadFileAttributes({ path: buildTestHostPath({ text: join(folder, 'missing') }) }),
+    ).toEqual({
+      kind: 'failed',
+      failure: { call: 'GetFileAttributesW', code: ERROR_FILE_NOT_FOUND },
+    });
+    expect(loadAttributes(folder) & FILE_ATTRIBUTE_DIRECTORY).toBe(FILE_ATTRIBUTE_DIRECTORY);
   });
 
-  return [
-    `junction made by: ${junctionCreation}`,
-    `junction lstat: ${await observeSafely(() => loadLstatText(junction))}`,
-    `dir symlink fs.symlink: ${symlinkCreation}`,
-    `dir symlink lstat: ${await observeSafely(() => loadLstatText(directorySymlink))}`,
-    `plain dir lstat: ${await observeSafely(() => loadLstatText(target))}`,
-  ];
-};
+  test(
+    'Bun fs and win32Api.ts reach a path past 260 characters, with long paths on or off',
+    async () => {
+      const longFolder = join(folder, ...buildLongPathSegments());
+      const longFile = join(longFolder, 'file.txt');
 
-const observeTreeRemoval = async (params: { folder: string; force: boolean }): Promise<string> => {
-  const tree = join(params.folder, 'tree');
-  const outside = join(params.folder, 'outside');
-  const sentinel = join(outside, 'sentinel.txt');
-  const readOnlyFile = join(tree, 'readOnly.txt');
+      expect(longFile.length).toBeGreaterThan(MAX_PATH);
 
-  await mkdir(outside, { recursive: true });
-  await writeFile(sentinel, 'sentinel');
-  await mkdir(tree, { recursive: true });
-  await writeFile(readOnlyFile, 'read only');
-
-  const chmodResult = await observeSafely(async () => {
-    await chmod(readOnlyFile, 0o444);
-
-    return 'ok';
-  });
-  const readOnlyAttributes = await observeFileAttributesInChild([readOnlyFile]);
-  const junctionCreation = await observeSafely(() => {
-    return createJunction(outside, join(tree, 'junctionOutside'));
-  });
-  const rmResult = await observeSafely(async () => {
-    await rm(tree, { recursive: true, force: params.force });
-
-    return 'ok';
-  });
-
-  return [
-    `rm recursive force=${params.force}: ${rmResult}`,
-    `  chmod 0o444: ${chmodResult}; attributes after: ${readOnlyAttributes}`,
-    `  junction made by: ${junctionCreation}`,
-    `  readOnlyFileGone=${await isMissing(readOnlyFile)} treeGone=${await isMissing(tree)} sentinelSurvived=${existsSync(sentinel)}`,
-  ].join('\n');
-};
-
-const observeLongPaths = async (folder: string): Promise<string[]> => {
-  const longFolder = join(folder, ...buildLongPathSegments());
-  const longFile = join(longFolder, 'file.txt');
-
-  return [
-    `path length: ${longFile.length}, unprefixed`,
-    `mkdir recursive: ${await observeSafely(async () => {
       await mkdir(longFolder, { recursive: true });
-
-      return 'ok';
-    })}`,
-    `writeFile: ${await observeSafely(async () => {
       await writeFile(longFile, 'long path');
 
-      return 'ok';
-    })}`,
-    `lstat: ${await observeSafely(() => loadLstatText(longFile))}`,
-    `readdir: ${await observeSafely(async () => {
-      const entries = await readdir(longFolder);
+      expect((await lstat(longFile)).isFile()).toBe(true);
+      expect(await readdir(longFolder)).toEqual(['file.txt']);
+      expect(loadAttributes(longFolder) & FILE_ATTRIBUTE_DIRECTORY).toBe(FILE_ATTRIBUTE_DIRECTORY);
+      expect(loadAttributes(longFile) & FILE_ATTRIBUTE_DIRECTORY).toBe(0);
 
-      return `ok ${JSON.stringify(entries)}`;
-    })}`,
-    `GetFileAttributesW unprefixed, then \\\\?\\: ${await observeFileAttributesInChild([
-      longFile,
-      `\\\\?\\${longFile}`,
-    ])}`,
-    `rm recursive: ${await observeSafely(async () => {
-      await rm(longFolder, { recursive: true });
-
-      return 'ok';
-    })}`,
-  ];
-};
-
-const describeProcessIdFunction = (name: 'geteuid' | 'getuid'): string => {
-  const candidate: unknown = Reflect.get(process, name);
-
-  if (typeof candidate !== 'function') {
-    return `typeof process.${name}=${typeof candidate}`;
-  }
-
-  return `typeof process.${name}=function value=${String(Reflect.apply(candidate, process, []))}`;
-};
-
-const observeCompiledProbe = async (folder: string): Promise<string[]> => {
-  const executablePath = join(folder, 'compiledProbe.exe');
-  const build = await runChildProcess({
-    command: [
-      process.execPath,
-      'build',
-      ...COMPILED_PROBE_BUILD_FLAGS,
-      COMPILED_PROBE_ENTRY_PATH,
-      '--outfile',
-      executablePath,
-    ],
-    stdin: null,
-    timeoutMs: COMPILED_PROBE_TIMEOUT_MS,
-  });
-  const buildLines = formatChildEnd(build).map((line) => `build ${line}`);
-
-  if (build.exitCode !== 0) {
-    return buildLines;
-  }
-
-  const input = new TextEncoder().encode(`1 ${ECHO_LINE}\n2 ${ECHO_LINE}\n`);
-  const probeRun = await runChildProcess({
-    command: [executablePath, folder],
-    stdin: input,
-    timeoutMs: COMPILED_PROBE_TIMEOUT_MS,
-  });
-  const echoed = probeRun.stdout.subarray(0, input.byteLength);
-  const echoByteExact = Buffer.from(echoed).equals(Buffer.from(input));
-  const echoLines = echoByteExact
-    ? ['stdin echo byte-exact: true']
-    : [
-        'stdin echo byte-exact: false',
-        `stdout first bytes: ${Buffer.from(probeRun.stdout.subarray(0, UNEXPECTED_STDOUT_EXCERPT_BYTES)).toString('hex')}`,
-      ];
-  const findings = echoByteExact ? probeRun.stdout.subarray(input.byteLength) : probeRun.stdout;
-
-  return [
-    ...buildLines,
-    ...echoLines,
-    `ended after stdin closed: ${!probeRun.timedOut}`,
-    ...formatProbeOutputLines(new TextDecoder().decode(findings)),
-    ...formatChildEnd(probeRun).map((line) => `probe ${line}`),
-  ];
-};
-
-/**
- * Runs the observation in a fresh temp folder, emits its lines as the group's notice, and
- * returns whether the folder is gone afterwards. A thrown error becomes a line of the notice.
- */
-const observeFactGroupInTempFolder = async (
-  group: FactGroup,
-  observe: (folder: string) => Promise<string[]>,
-): Promise<boolean> => {
-  const folder = await createTempFolder();
-  const lines = await gatherObservationLines(() => observe(folder));
-  const removed = await removeFolderBestEffort(folder);
-
-  emitFactNotice(group, [...lines, `temp folder removed: ${removed}`]);
-
-  return removed;
-};
-
-const gatherObservationLines = async (observe: () => Promise<string[]>): Promise<string[]> => {
-  try {
-    return await observe();
-  } catch (error) {
-    return [`observation ${describeThrownError(error)}`];
-  }
-};
-
-describe.skipIf(process.platform !== 'win32')('Bun on Windows', () => {
-  beforeAll(async () => {
-    const longPathsEnabled = await observeSafely(() => loadLongPathsEnabledContext());
-    const rtlAreLongPathsEnabled = await observeSafely(() => loadRtlAreLongPathsEnabledContext());
-
-    runContextLine = `context: arch=${process.arch} LongPathsEnabled=${longPathsEnabled} RtlAreLongPathsEnabled=${rtlAreLongPathsEnabled} bun=${Bun.version}`;
-  }, CHILD_TIMEOUT_MS * 3);
-
-  test(
-    'lstat of a junction, a directory symlink and a plain folder',
-    async () => {
-      const removed = await observeFactGroupInTempFolder('links', observeLinks);
-
-      expect(removed).toBe(true);
-    },
-    FACT_GROUP_TIMEOUT_MS,
-  );
-
-  test(
-    'cloud placeholders through cldapi',
-    async () => {
-      await observeFactGroupInTempFolder('cloud placeholders', async (folder) => {
-        const syncRoot = join(folder, 'syncRoot');
-
-        await mkdir(syncRoot);
-
-        return formatChildRun(await runBunScript(CLOUD_PLACEHOLDER_PROBE_PATH, [syncRoot]));
-      });
-
-      // The placeholder root is removed best effort: a sync root may keep its folder.
-    },
-    FACT_GROUP_TIMEOUT_MS,
-  );
-
-  test(
-    'rm of a tree with a read-only file and a junction to the outside',
-    async () => {
-      const removed = await observeFactGroupInTempFolder('rm of a tree', async (folder) => {
-        return [
-          await observeTreeRemoval({ folder: join(folder, 'withoutForce'), force: false }),
-          await observeTreeRemoval({ folder: join(folder, 'withForce'), force: true }),
-        ];
-      });
-
-      expect(removed).toBe(true);
-    },
-    FACT_GROUP_TIMEOUT_MS,
-  );
-
-  test(
-    'Bun fs on a path past 260 characters without \\\\?\\',
-    async () => {
-      const removed = await observeFactGroupInTempFolder('long paths in Bun fs', observeLongPaths);
-
-      expect(removed).toBe(true);
-    },
-    FACT_GROUP_TIMEOUT_MS,
-  );
-
-  test(
-    'process ids and bun:ffi',
-    async () => {
-      const removed = await observeFactGroupInTempFolder(
-        'process ids and bun:ffi',
-        async (folder) => {
-          const ffiReadings = await observeFileAttributesInChild([join(folder, 'missing'), folder]);
-
-          return [
-            `process ids: ${describeProcessIdFunction('geteuid')}; ${describeProcessIdFunction('getuid')}`,
-            `bun:ffi GetFileAttributesW of a missing path, then a folder: ${ffiReadings}`,
-          ];
-        },
+      const ownerSid = unwrapCall(
+        loadFileOwnerSid({ path: buildTestHostPath({ text: longFile }) }),
       );
 
-      expect(removed).toBe(true);
+      expect(parseWindowsSid({ text: ownerSid }).kind).toBe('succeeded');
+
+      await rm(longFolder, { recursive: true });
+
+      expect(existsSync(longFolder)).toBe(false);
     },
-    FACT_GROUP_TIMEOUT_MS,
+    FILE_SYSTEM_TEST_TIMEOUT_MS,
   );
 
   test(
-    'a probe compiled with the flags of the bridge',
+    'rm of a tree removes its read-only file and leaves the target of a junction in it',
     async () => {
-      const removed = await observeFactGroupInTempFolder('compiled probe', observeCompiledProbe);
+      for (const force of [false, true]) {
+        const tree = join(folder, `force-${force}`, 'tree');
+        const outside = join(folder, `force-${force}`, 'outside');
+        const sentinel = join(outside, 'sentinel.txt');
+        const readOnlyFile = join(tree, 'readOnly.txt');
 
-      expect(removed).toBe(true);
+        await mkdir(outside, { recursive: true });
+        await writeFile(sentinel, 'sentinel');
+        await mkdir(tree, { recursive: true });
+        await writeFile(readOnlyFile, 'read only');
+        await chmod(readOnlyFile, 0o444);
+        await symlink(outside, join(tree, 'junctionOutside'), 'junction');
+
+        expect(loadAttributes(readOnlyFile) & FILE_ATTRIBUTE_READONLY).toBe(
+          FILE_ATTRIBUTE_READONLY,
+        );
+
+        await rm(tree, { recursive: true, force: force });
+
+        expect(existsSync(tree)).toBe(false);
+        expect(await readFile(sentinel, 'utf8')).toBe('sentinel');
+      }
     },
-    COMPILED_PROBE_GROUP_TIMEOUT_MS,
+    FILE_SYSTEM_TEST_TIMEOUT_MS,
+  );
+
+  test('Bun has no POSIX user ids on Windows', () => {
+    expect(process.geteuid).toBeUndefined();
+    expect(process.getuid).toBeUndefined();
+  });
+
+  test('the token of the process names its user by a SID and reads its elevation', () => {
+    const token = unwrapCall(openProcessToken());
+
+    try {
+      const sidText = unwrapCall(loadTokenUserSid({ token: token }));
+
+      expect(parseWindowsSid({ text: sidText }).kind).toBe('succeeded');
+      expect(typeof unwrapCall(loadTokenElevation({ token: token }))).toBe('boolean');
+    } finally {
+      closeHandle({ handle: token });
+    }
+  });
+
+  test('the profile and the AppData folders are the folders their variables name', () => {
+    for (const knownFolder of KNOWN_FOLDER_VARIABLES) {
+      const pathText = unwrapCall(
+        loadKnownFolderPath({
+          folderId: buildGuidBytes({ text: KNOWN_FOLDER_IDS[knownFolder.folder] }),
+        }),
+      );
+
+      expect(buildTestHostPath({ text: pathText })).toBe(
+        buildTestHostPath({ text: process.env[knownFolder.variableName] ?? '' }),
+      );
+    }
+  });
+
+  test('SHGetKnownFolderPath fails for an id that names no known folder', () => {
+    expect(
+      loadKnownFolderPath({ folderId: buildGuidBytes({ text: NO_KNOWN_FOLDER_ID }) }),
+    ).toMatchObject({ kind: 'failed', failure: { call: 'SHGetKnownFolderPath' } });
+  });
+
+  test('the drives in use hold the drive of the profile, a fixed one', () => {
+    const profile = unwrapCall(
+      loadKnownFolderPath({ folderId: buildGuidBytes({ text: KNOWN_FOLDER_IDS.profile }) }),
+    );
+    const profileRootText = parse(buildTestHostPath({ text: profile })).root;
+    const driveRootTexts = listDriveRootTexts({ logicalDrives: unwrapCall(loadLogicalDrives()) });
+
+    expect(driveRootTexts).toContain(profileRootText);
+    expect(loadDriveType({ rootPath: buildTestHostPath({ text: profileRootText }) })).toBe(
+      DRIVE_FIXED,
+    );
+  });
+
+  test(
+    'a probe compiled with the flags of the bridge echoes stdin byte-exact, ends with it, and reaches a long path through win32Api.ts',
+    async () => {
+      const executablePath = join(folder, 'compiledProbe.exe');
+      const build = await runChildProcess({
+        command: [
+          process.execPath,
+          'build',
+          ...COMPILED_PROBE_BUILD_FLAGS,
+          COMPILED_PROBE_ENTRY_PATH,
+          '--outfile',
+          executablePath,
+        ],
+        stdin: null,
+        timeoutMs: COMPILED_PROBE_TIMEOUT_MS,
+      });
+
+      expect(build).toMatchObject({ exitCode: 0, timedOut: false });
+
+      const input = new TextEncoder().encode(`1 ${ECHO_LINE}\n2 ${ECHO_LINE}\n`);
+      const probeRun = await runChildProcess({
+        command: [executablePath, folder],
+        stdin: input,
+        timeoutMs: COMPILED_PROBE_TIMEOUT_MS,
+      });
+
+      expect(probeRun).toMatchObject({ exitCode: 0, timedOut: false });
+      expect(Buffer.from(probeRun.stdout.subarray(0, input.byteLength))).toEqual(
+        Buffer.from(input),
+      );
+      expect(
+        parseProbeLines(new TextDecoder().decode(probeRun.stdout.subarray(input.byteLength))),
+      ).toEqual([
+        { finding: 'stdin', echoedLineCount: 2 },
+        {
+          finding: 'long path in the compiled probe',
+          mkdir: 'ok',
+          writeFile: 'ok',
+          lstat: 'ok isFile=true',
+          attributes: expect.stringMatching(ATTRIBUTES_HEX_PATTERN),
+          rm: 'ok',
+        },
+      ]);
+    },
+    COMPILED_PROBE_TEST_TIMEOUT_MS,
+  );
+
+  test.skipIf(!IS_CLOUD_PROBE_OPTED_IN)(
+    'a cloud-only file of the Cloud Files API reads as evicted, a populated folder as on this PC',
+    async () => {
+      const syncRoot = join(folder, 'syncRoot');
+
+      await mkdir(syncRoot);
+
+      const run = await runChildProcess({
+        command: [process.execPath, CLOUD_PLACEHOLDER_PROBE_PATH, syncRoot],
+        stdin: null,
+        timeoutMs: CHILD_TIMEOUT_MS,
+      });
+
+      expect(run).toMatchObject({ exitCode: 0, timedOut: false });
+
+      const stages = parseProbeLines(new TextDecoder().decode(run.stdout));
+
+      expect(stages).toContainEqual(
+        expect.objectContaining({ stage: 'cloud-only file', isEntryEvicted: true }),
+      );
+      expect(stages).toContainEqual(
+        expect.objectContaining({ stage: 'cloud-only folder', isEntryEvicted: false }),
+      );
+    },
+    CHILD_TIMEOUT_MS * 2,
   );
 });

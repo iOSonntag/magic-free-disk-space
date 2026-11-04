@@ -1,11 +1,13 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDeletionJournal, formatJournalLine } from '../../src/delete/deletionJournal.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
+
+/** The permission bits of a mode, without the bits of its file type. */
+const PERMISSION_BITS = 0o777;
 
 let fixtureRoot: FixtureRoot;
 
@@ -17,7 +19,7 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-describeAwaitingWin32Platform('formatJournalLine', () => {
+describe('formatJournalLine', () => {
   test('writes one JSON object per line', () => {
     expect(formatJournalLine({ entry: { kind: 'sessionStart', atMs: 5 } })).toBe(
       '{"kind":"sessionStart","atMs":5}\n',
@@ -25,10 +27,14 @@ describeAwaitingWin32Platform('formatJournalLine', () => {
   });
 });
 
-describeAwaitingWin32Platform('createDeletionJournal', () => {
+describe('createDeletionJournal', () => {
   test('creates the log folder, records the session start, and appends entries', async () => {
     const logPath = join(fixtureRoot.homeDir, 'Library/Logs/magic-free-disk-space/deletions.jsonl');
-    const journal = await createDeletionJournal({ logPath: logPath, nowMs: 100 });
+    const journal = await createDeletionJournal({
+      logPath: logPath,
+      ownerOnlyModes: null,
+      nowMs: 100,
+    });
 
     if (journal.kind === 'failed') {
       throw new Error(`Journal failed: ${journal.failure.reason}`);
@@ -49,10 +55,35 @@ describeAwaitingWin32Platform('createDeletionJournal', () => {
   test('keeps the lines of an earlier session', async () => {
     const logPath = join(fixtureRoot.homeDir, 'deletions.jsonl');
 
-    await createDeletionJournal({ logPath: logPath, nowMs: 1 });
-    await createDeletionJournal({ logPath: logPath, nowMs: 2 });
+    await createDeletionJournal({ logPath: logPath, ownerOnlyModes: null, nowMs: 1 });
+    await createDeletionJournal({ logPath: logPath, ownerOnlyModes: null, nowMs: 2 });
 
     expect((await readFile(logPath, 'utf8')).trimEnd().split('\n')).toHaveLength(2);
+  });
+
+  testOnPosix('creates the log folder and the log with the owner-only modes', async () => {
+    const logDirectory = join(fixtureRoot.homeDir, 'Logs');
+    const logPath = join(logDirectory, 'deletions.jsonl');
+
+    await createDeletionJournal({
+      logPath: logPath,
+      ownerOnlyModes: { directoryMode: 0o700, fileMode: 0o600 },
+      nowMs: 1,
+    });
+
+    expect((await stat(logDirectory)).mode & PERMISSION_BITS).toBe(0o700);
+    expect((await stat(logPath)).mode & PERMISSION_BITS).toBe(0o600);
+  });
+
+  testOnPosix('creates the log folder and the log with the defaults for no modes', async () => {
+    const logDirectory = join(fixtureRoot.homeDir, 'Logs');
+    const logPath = join(logDirectory, 'deletions.jsonl');
+    const umask = process.umask();
+
+    await createDeletionJournal({ logPath: logPath, ownerOnlyModes: null, nowMs: 1 });
+
+    expect((await stat(logDirectory)).mode & PERMISSION_BITS).toBe(0o777 & ~umask);
+    expect((await stat(logPath)).mode & PERMISSION_BITS).toBe(0o666 & ~umask);
   });
 
   test('fails with directoryUnavailable when a file stands where the folder belongs', async () => {
@@ -62,6 +93,7 @@ describeAwaitingWin32Platform('createDeletionJournal', () => {
 
     const journal = await createDeletionJournal({
       logPath: join(blockingFile, 'deletions.jsonl'),
+      ownerOnlyModes: null,
       nowMs: 1,
     });
 
@@ -76,6 +108,7 @@ describeAwaitingWin32Platform('createDeletionJournal', () => {
 
     const journal = await createDeletionJournal({
       logPath: join(logDirectory, 'deletions.jsonl'),
+      ownerOnlyModes: null,
       nowMs: 1,
     });
 
@@ -87,7 +120,11 @@ describeAwaitingWin32Platform('createDeletionJournal', () => {
 
   testOnPosix('an append fails once the log file became read-only', async () => {
     const logPath = join(fixtureRoot.homeDir, 'deletions.jsonl');
-    const journal = await createDeletionJournal({ logPath: logPath, nowMs: 1 });
+    const journal = await createDeletionJournal({
+      logPath: logPath,
+      ownerOnlyModes: null,
+      nowMs: 1,
+    });
 
     if (journal.kind === 'failed') {
       throw new Error(`Journal failed: ${journal.failure.reason}`);

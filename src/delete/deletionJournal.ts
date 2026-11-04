@@ -1,6 +1,7 @@
 import type { FileHandle } from 'node:fs/promises';
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import type { OwnerOnlyModes } from '../environment/buildEnvironment.js';
 import type {
   ExploreEngineUnit,
   ExploreProbeFailure,
@@ -145,19 +146,28 @@ export type DeletionJournal = {
   append(params: { entry: JournalEntry }): Promise<Result<null, JournalFailure>>;
 };
 
-/** Creates the log folder and writes the session start, so a journal that cannot record fails here. */
+/**
+ * Creates the log folder and writes the session start, so a journal that cannot record fails here.
+ * Creates the folder and the log with `ownerOnlyModes`, or with the system's defaults for `null`.
+ */
 export async function createDeletionJournal(params: {
   logPath: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
   nowMs: number;
 }): Promise<Result<DeletionJournal, JournalFailure>> {
-  const directoryCreated = await createJournalDirectory({ path: dirname(params.logPath) });
+  const directoryCreated = await createJournalDirectory({
+    path: dirname(params.logPath),
+    mode: params.ownerOnlyModes?.directoryMode ?? null,
+  });
 
   if (directoryCreated.kind === 'failed') {
     return directoryCreated;
   }
 
+  const fileMode = params.ownerOnlyModes?.fileMode ?? null;
   const sessionStarted = await appendJournalEntry({
     logPath: params.logPath,
+    fileMode: fileMode,
     entry: { kind: 'sessionStart', atMs: params.nowMs },
   });
 
@@ -170,7 +180,11 @@ export async function createDeletionJournal(params: {
     value: {
       logPath: params.logPath,
       append: (appendParams) =>
-        appendJournalEntry({ logPath: params.logPath, entry: appendParams.entry }),
+        appendJournalEntry({
+          logPath: params.logPath,
+          fileMode: fileMode,
+          entry: appendParams.entry,
+        }),
     },
   };
 }
@@ -179,11 +193,16 @@ export function formatJournalLine(params: { entry: JournalEntry }): string {
   return `${JSON.stringify(params.entry)}\n`;
 }
 
+/** `mode` `null` creates the folder with the system's default. */
 async function createJournalDirectory(params: {
   path: string;
+  mode: number | null;
 }): Promise<Result<null, JournalFailure>> {
   try {
-    await mkdir(params.path, { recursive: true, mode: 0o700 });
+    await mkdir(params.path, {
+      recursive: true,
+      ...(params.mode === null ? {} : { mode: params.mode }),
+    });
 
     return { kind: 'succeeded', value: null };
   } catch (error) {
@@ -196,9 +215,10 @@ async function createJournalDirectory(params: {
 
 async function appendJournalEntry(params: {
   logPath: string;
+  fileMode: number | null;
   entry: JournalEntry;
 }): Promise<Result<null, JournalFailure>> {
-  const opened = await openJournalFile({ logPath: params.logPath });
+  const opened = await openJournalFile({ logPath: params.logPath, fileMode: params.fileMode });
 
   if (opened.kind === 'failed') {
     return opened;
@@ -211,11 +231,13 @@ async function appendJournalEntry(params: {
   });
 }
 
+/** `fileMode` `null` creates the log with the system's default. */
 async function openJournalFile(params: {
   logPath: string;
+  fileMode: number | null;
 }): Promise<Result<FileHandle, JournalFailure>> {
   try {
-    const handle = await open(params.logPath, 'a', 0o600);
+    const handle = await open(params.logPath, 'a', params.fileMode ?? undefined);
 
     return { kind: 'succeeded', value: handle };
   } catch (error) {

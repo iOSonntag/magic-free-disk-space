@@ -125,7 +125,10 @@ export type ExploreEngineAnswerFailure =
   | ExploreEngineAnswerFailureRequestFailed
   | ExploreEngineAnswerFailureBadAnswer;
 
-/** No socket exists, or the first that exists refused the connect, as a stale one does. */
+/**
+ * No socket exists, as on a platform without the engine, or the first that exists refused the
+ * connect, as a stale one does.
+ */
 export type ExploreEngineFailureSocketMissing = { kind: 'socketMissing' };
 
 /** The first socket that exists is not a socket, or not the user's, so nothing was sent. */

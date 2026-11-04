@@ -8,6 +8,7 @@ import type { ModuleBoundary, ModuleName } from '../../src/moduleBoundary.js';
 import { moduleBoundary as pathBoundary } from '../../src/path/boundary.js';
 import { moduleBoundary as platformBoundary } from '../../src/platform/boundary.js';
 import { moduleBoundary as platformDarwinBoundary } from '../../src/platform/darwin/boundary.js';
+import { moduleBoundary as platformWin32Boundary } from '../../src/platform/win32/boundary.js';
 import { moduleBoundary as preferencesBoundary } from '../../src/preferences/boundary.js';
 import { moduleBoundary as reportBoundary } from '../../src/report/boundary.js';
 import { moduleBoundary as scanBoundary } from '../../src/scan/boundary.js';
@@ -27,6 +28,7 @@ export const moduleRegistry: Record<ModuleName, ModuleBoundary> = {
   path: pathBoundary,
   platform: platformBoundary,
   'platform/darwin': platformDarwinBoundary,
+  'platform/win32': platformWin32Boundary,
   preferences: preferencesBoundary,
   report: reportBoundary,
   scan: scanBoundary,
