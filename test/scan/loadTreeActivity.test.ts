@@ -132,6 +132,33 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
     expect(includedActivity).toBe('recent');
   });
 
+  test('skips a folder the eviction predicate marks as evicted', async () => {
+    const homeDir = fixtureRoot.homeDir;
+    const evictedDirPath = join(homeDir, 'a', 'b', 'c');
+
+    await createFixtureDirectory({ path: evictedDirPath });
+    await createFixtureFile({
+      path: join(evictedDirPath, 'new.txt'),
+      sizeBytes: 10,
+      modifiedMs: probeTimes.recentModifiedMs,
+    });
+    await updateModifiedMsInOrder({
+      paths: [evictedDirPath, join(homeDir, 'a', 'b'), join(homeDir, 'a'), homeDir],
+      modifiedMs: probeTimes.oldModifiedMs,
+    });
+
+    const activity = await loadTreeActivity({
+      path: homeDir,
+      cutoffMs: probeTimes.cutoffMs,
+      excludedNames: [],
+      maxEntries: 10_000,
+      deadlineMs: Date.now() + 60_000,
+      isEntryEvicted: (entry) => entry.path === evictedDirPath,
+    });
+
+    expect(activity).toBe('quiet');
+  });
+
   test('reports recent for a new file in the root folder', async () => {
     const homeDir = fixtureRoot.homeDir;
 
