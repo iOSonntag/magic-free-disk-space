@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -683,7 +683,7 @@ const probeCases: { probeId: 'pnpmStores' | 'pnpmStoresXdg'; rootNames: string[]
 ];
 
 for (const probeCase of probeCases) {
-  describe(`the probe ${probeCase.probeId}`, () => {
+  describeAwaitingWin32Platform(`the probe ${probeCase.probeId}`, () => {
     async function runProbe(params: { files: ProjectPinFile[] }): Promise<ExploreProbeOutcome> {
       const probes = startExploreProbes({
         environment: environment,

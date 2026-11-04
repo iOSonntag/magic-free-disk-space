@@ -19,7 +19,9 @@ import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -71,7 +73,11 @@ function buildApiLevelPins(...apiLevels: number[]): AndroidCompileSdkPins {
 }
 
 function buildExamplePlatformPath(folderName: string): AbsolutePath {
-  return buildTestAbsolutePath({ text: join(EXAMPLE_SDK_ROOT, 'platforms', folderName) });
+  return joinAbsolutePath({
+    rules: DARWIN_PATH_RULES,
+    parentPath: EXAMPLE_SDK_ROOT,
+    names: ['platforms', folderName],
+  });
 }
 
 function buildExampleState(): AndroidPlatformState {

@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { posix } from 'node:path';
 import type { ExplorePathUnitVscodeExtension } from '../../src/explore/exploreUnit.js';
 import type { CandidateProbed } from '../../src/scan/candidate.js';
 import { buildTestIdentity } from '../support/candidateFixtures.js';
@@ -35,11 +35,11 @@ export const FIXTURE_PROFILE_ID = '-1a2b3c4d';
 export const VSCODE_FOLDER_SIZE_BYTES = 4096;
 
 export function buildVscodeExtensionsPath(params: { homeDir: string }): string {
-  return join(params.homeDir, '.vscode/extensions');
+  return posix.join(params.homeDir, '.vscode/extensions');
 }
 
 export function buildVscodeProfilesPath(params: { homeDir: string }): string {
-  return join(params.homeDir, 'Library/Application Support/Code/User/profiles');
+  return posix.join(params.homeDir, 'Library/Application Support/Code/User/profiles');
 }
 
 /**
@@ -52,7 +52,7 @@ export function buildVscodeRegistryText(params: {
   form: 'current' | 'locationOnly';
 }): string {
   const entries = params.folderNames.map((folderName) => {
-    const folderPath = join(params.extensionsPath, folderName);
+    const folderPath = posix.join(params.extensionsPath, folderName);
     const [extensionId, version] = folderName.split(/-(?=\d)/);
     const entry = {
       identifier: { id: extensionId },
@@ -87,11 +87,11 @@ export async function createVscodeExtensionFolders(params: {
   folderNames: string[];
 }): Promise<void> {
   for (const folderName of params.folderNames) {
-    const folderPath = join(buildVscodeExtensionsPath(params), folderName);
+    const folderPath = posix.join(buildVscodeExtensionsPath(params), folderName);
 
     await createFixtureDirectory({ path: folderPath });
     await createFixtureFile({
-      path: join(folderPath, 'package.json'),
+      path: posix.join(folderPath, 'package.json'),
       sizeBytes: VSCODE_FOLDER_SIZE_BYTES,
       modifiedMs: Date.UTC(2026, 0, 1),
     });
@@ -118,7 +118,7 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
     ],
   });
   await writeFixtureTextFile({
-    path: join(extensionsPath, 'extensions.json'),
+    path: posix.join(extensionsPath, 'extensions.json'),
     text: buildVscodeRegistryText({
       extensionsPath: extensionsPath,
       folderNames: [DEFAULT_LISTED_FOLDER_NAME],
@@ -126,7 +126,7 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
     }),
   });
   await writeFixtureTextFile({
-    path: join(buildVscodeProfilesPath(params), FIXTURE_PROFILE_ID, 'extensions.json'),
+    path: posix.join(buildVscodeProfilesPath(params), FIXTURE_PROFILE_ID, 'extensions.json'),
     text: buildVscodeRegistryText({
       extensionsPath: extensionsPath,
       folderNames: [BETA_CURRENT_FOLDER_NAME, LISTED_OBSOLETE_FOLDER_NAME],
@@ -134,7 +134,7 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
     }),
   });
   await writeFixtureTextFile({
-    path: join(extensionsPath, '.obsolete'),
+    path: posix.join(extensionsPath, '.obsolete'),
     text: buildVscodeObsoleteText({
       folderNames: [OBSOLETE_FOLDER_NAME, LISTED_OBSOLETE_FOLDER_NAME],
     }),
@@ -147,7 +147,7 @@ export function buildObsoleteVscodeUnit(params: {
   return {
     kind: 'vscodeExtension',
     folderPath: buildTestAbsolutePath({
-      text: join(buildVscodeExtensionsPath(params), OBSOLETE_FOLDER_NAME),
+      text: posix.join(buildVscodeExtensionsPath(params), OBSOLETE_FOLDER_NAME),
     }),
     extensionId: 'example.alpha',
     version: '1.0.0',
@@ -159,7 +159,7 @@ export function buildOlderVscodeUnit(params: { homeDir: string }): ExplorePathUn
   return {
     kind: 'vscodeExtension',
     folderPath: buildTestAbsolutePath({
-      text: join(buildVscodeExtensionsPath(params), OLDER_FOLDER_NAME),
+      text: posix.join(buildVscodeExtensionsPath(params), OLDER_FOLDER_NAME),
     }),
     extensionId: 'example.beta',
     version: '2.0.0',

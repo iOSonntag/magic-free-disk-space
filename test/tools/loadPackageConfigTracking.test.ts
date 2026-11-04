@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, link, mkdir, realpath, symlink, truncate, unlink } from 'node:fs/promises';
+import {
+  chmod,
+  link,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  truncate,
+  unlink,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
 import { PACKAGE_CONFIG_CANDIDATES_MAX_COUNT } from '../../src/tools/decidePackageConfigTracking.js';
@@ -39,14 +50,14 @@ async function createDartTool(projectRoot: string): Promise<string> {
 
 /** Whether the volume of the fixtures answers a folder for a case variant of its name. */
 async function probeVolumeFoldsCase(): Promise<boolean> {
-  const probeRoot = await createFixtureRoot();
+  const probeDir = await mkdtemp(join(tmpdir(), 'magic-free-disk-space-case-probe-'));
 
   try {
-    await mkdir(join(probeRoot.rootDir, 'Probe'));
+    await mkdir(join(probeDir, 'Probe'));
 
-    return await isPresent(join(probeRoot.rootDir, 'probe'));
+    return await isPresent(join(probeDir, 'probe'));
   } finally {
-    await deleteFixtureRoot({ fixtureRoot: probeRoot });
+    await rm(probeDir, { recursive: true, force: true });
   }
 }
 
