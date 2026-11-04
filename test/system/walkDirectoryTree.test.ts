@@ -34,7 +34,7 @@ async function collectEntries(params: {
 }) {
   const entries: TreeEntry[] = [];
   const unreadables: TreeUnreadable[] = [];
-  let evictedFolderCount = 0;
+  const evictedEntries: EvictionCandidate[] = [];
   const walkEnd = await walkDirectoryTree({
     rootPath: treeRoot,
     isStatsNeeded: params.isStatsNeeded,
@@ -49,8 +49,8 @@ async function collectEntries(params: {
     onUnreadable: (unreadable) => {
       unreadables.push(unreadable);
     },
-    onEvictedEntrySkipped: () => {
-      evictedFolderCount += 1;
+    onEvictedEntrySkipped: (entry) => {
+      evictedEntries.push(entry);
     },
   });
   const relativePaths = entries.map((entry) => relative(treeRoot, entry.path)).toSorted();
@@ -60,7 +60,7 @@ async function collectEntries(params: {
     entries: entries,
     relativePaths: relativePaths,
     unreadables: unreadables,
-    evictedFolderCount: evictedFolderCount,
+    evictedEntries: evictedEntries,
   };
 }
 
@@ -76,7 +76,22 @@ describeAwaitingWin32Platform('walkDirectoryTree', () => {
     expect(walk.walkEnd).toBe('completed');
     expect(walk.relativePaths).toContain('b');
     expect(walk.relativePaths).not.toContain('b/marker.json');
-    expect(walk.evictedFolderCount).toBe(1);
+    expect(walk.evictedEntries).toEqual([{ path: evictedPath, kind: 'directory' }]);
+    expect(walk.unreadables).toEqual([]);
+  });
+
+  test('never visits an evicted file, and reports it as skipped', async () => {
+    const evictedPath = join(treeRoot, 'top.txt');
+
+    const walk = await collectEntries({
+      isStatsNeeded: true,
+      isEntryEvicted: (entry) => entry.path === evictedPath,
+    });
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.relativePaths).not.toContain('top.txt');
+    expect(walk.relativePaths).toContain('b/marker.json');
+    expect(walk.evictedEntries).toEqual([{ path: evictedPath, kind: 'file' }]);
     expect(walk.unreadables).toEqual([]);
   });
 

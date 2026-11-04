@@ -1,4 +1,6 @@
+import type { Result } from '../result.js';
 import type { FullDiskAccess } from './fullDiskAccess.js';
+import type { CommandFailure } from './loadCommandOutput.js';
 import type { FileKind } from './loadFileIdentity.js';
 
 /** An entry whose content the system may keep elsewhere, by its kind. */
@@ -15,4 +17,8 @@ export type SystemPlatform = {
   privacyDenialCode: string | null;
   /** Never throws. */
   loadFullDiskAccess: (params: { homeDir: string }) => Promise<FullDiskAccess>;
+  /** The command line of each running process, which tells what is in use. Never throws. */
+  loadRunningProcesses: (params: {
+    commandTimeoutMs: number;
+  }) => Promise<Result<string[], CommandFailure>>;
 };

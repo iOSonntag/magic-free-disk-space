@@ -155,14 +155,11 @@ function isAppBundleName(params: { name: string }): boolean {
   return params.name.toLowerCase().endsWith(APP_BUNDLE_SUFFIX);
 }
 
-/**
- * Reads the id from the first Info.plist that holds one; the failure is the macOS layout's.
- * `null` when that Info.plist names an empty id.
- */
+/** Reads the id from the first Info.plist that holds one; the failure is the macOS layout's. */
 async function loadBundleId(params: {
   bundlePath: string;
   commandTimeoutMs: number;
-}): Promise<Result<MacBundleId | null, CommandFailure>> {
+}): Promise<Result<MacBundleId, CommandFailure>> {
   const macBundleId = await loadInfoPlistBundleId({
     infoPlistPath: join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
     commandTimeoutMs: params.commandTimeoutMs,
@@ -189,7 +186,7 @@ async function loadBundleId(params: {
 async function loadInfoPlistBundleId(params: {
   infoPlistPath: string;
   commandTimeoutMs: number;
-}): Promise<Result<MacBundleId | null, CommandFailure>> {
+}): Promise<Result<MacBundleId, CommandFailure>> {
   const plutilResult = await loadCommandOutput({
     command: 'plutil',
     args: ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', params.infoPlistPath],
@@ -200,15 +197,7 @@ async function loadInfoPlistBundleId(params: {
     return plutilResult;
   }
 
-  const bundleId = parseMacBundleId({ text: plutilResult.value.trim() });
-
-  switch (bundleId.kind) {
-    case 'succeeded':
-      return bundleId;
-    // An empty id names no app, as no id does.
-    case 'failed':
-      return { kind: 'succeeded', value: null };
-  }
+  return { kind: 'succeeded', value: parseMacBundleId({ text: plutilResult.value.trim() }) };
 }
 
 /**
@@ -236,9 +225,7 @@ async function loadNestedBundleIds(params: {
     });
 
     if (bundleIdResult.kind === 'succeeded') {
-      if (bundleIdResult.value !== null) {
-        bundleIds.push(bundleIdResult.value);
-      }
+      bundleIds.push(bundleIdResult.value);
     } else if (bundleIdResult.failure.reason !== 'exitedWithError') {
       issues.push({
         path: nestedBundlePath,

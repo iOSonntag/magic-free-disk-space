@@ -6,7 +6,7 @@ import type { ScanIssue } from './issue.js';
 export type InstalledApp = {
   bundlePath: string;
   displayName: string;
-  /** `null` when its Info.plist could not be read or names an empty id. */
+  /** `null` when no Info.plist of it could be read; an empty id stays an id. */
   bundleId: MacBundleId | null;
   /** Bundle ids of helpers and extensions inside the app; they belong to the app. */
   nestedBundleIds: MacBundleId[];
@@ -28,10 +28,6 @@ export type ScanPlatformApps = ScanPlatformAppsOffered;
 /** What the scan takes from the operating system. */
 export type ScanPlatform = {
   apps: ScanPlatformApps;
-  /** The command line of each running process, which tells what is in use. Never throws. */
-  loadRunningProcesses: (params: {
-    commandTimeoutMs: number;
-  }) => Promise<Result<string[], CommandFailure>>;
   /** The real path of the active Xcode bundle, `null` for none. Never throws. */
   loadActiveXcodeBundlePath: (params: {
     commandTimeoutMs: number;

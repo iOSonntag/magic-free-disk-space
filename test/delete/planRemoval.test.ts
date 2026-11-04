@@ -1,36 +1,21 @@
 import { expect, test } from 'bun:test';
 import type { RemovalPlan } from '../../src/delete/planRemoval.js';
 import { planRemoval } from '../../src/delete/planRemoval.js';
-import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
-import {
-  DARWIN_DELETION_LOG_HOME_DIR_NAMES,
-  DARWIN_PATH_RULES,
-  DARWIN_PREFERENCES_HOME_DIR_NAMES,
-  DARWIN_PROTECTED_ROOT_PATHS,
-} from '../../src/platform/darwin/loadEnvironment.js';
-import {
-  PROTECTED_HOME_RELATIVE_PATHS,
-  SENSITIVE_HOME_RELATIVE_PATHS,
-} from '../../src/platform/darwin/protectedPaths.js';
+import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
 import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 
-const ENVIRONMENT = buildEnvironment({
+const ENVIRONMENT = buildDarwinEnvironment({
   nowMs: 0,
   user: buildTestUserIdentity({ uid: 501 }),
-  pathRules: DARWIN_PATH_RULES,
   homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
-  homeRealPath: '/Users/tester',
+  homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
   tempDir: '/private/tmp/tester',
-  tempRealPath: '/private/tmp/tester',
-  applicationRealPaths: ['/Applications'],
-  protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
-  protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
-  sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
-  deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
-  preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
+  tempRealPath: buildTestAbsolutePath({ text: '/private/tmp/tester' }),
+  applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
+  applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
 });
 
 const VALID_CANDIDATES: Candidate[] = [1, 2, 3, 4, 5, 6].map((index) =>

@@ -12,25 +12,15 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { buildEnvironment } from '../../src/environment/buildEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import {
-  DARWIN_DELETION_LOG_HOME_DIR_NAMES,
-  DARWIN_PATH_RULES,
-  DARWIN_PREFERENCES_HOME_DIR_NAMES,
-  DARWIN_PROTECTED_ROOT_PATHS,
-} from '../../src/platform/darwin/loadEnvironment.js';
-import {
-  PROTECTED_HOME_RELATIVE_PATHS,
-  SENSITIVE_HOME_RELATIVE_PATHS,
-} from '../../src/platform/darwin/protectedPaths.js';
+import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
 import { buildTestAbsolutePath, buildTestUserIdentity } from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
   rootDir: string;
   homeDir: AbsolutePath;
   tempDir: string;
-  applicationDir: string;
+  applicationDir: AbsolutePath;
 };
 
 export async function createFixtureRoot(): Promise<FixtureRoot> {
@@ -39,7 +29,7 @@ export async function createFixtureRoot(): Promise<FixtureRoot> {
     rootDir,
     homeDir: buildTestAbsolutePath({ text: join(rootDir, 'home') }),
     tempDir: join(rootDir, 'tmp'),
-    applicationDir: join(rootDir, 'Applications'),
+    applicationDir: buildTestAbsolutePath({ text: join(rootDir, 'Applications') }),
   };
 
   await mkdir(fixtureRoot.homeDir);
@@ -62,21 +52,16 @@ export async function loadTestEnvironment(params: {
   const tempRealPath = await realpath(params.fixtureRoot.tempDir);
   const applicationRealPath = await realpath(params.fixtureRoot.applicationDir);
 
-  return buildEnvironment({
+  return buildDarwinEnvironment({
     nowMs: params.nowMs,
     // The fixtures belong to the user that runs the tests.
     user: buildTestUserIdentity({ uid: process.getuid?.() ?? 0 }),
-    pathRules: DARWIN_PATH_RULES,
     homeDir: params.fixtureRoot.homeDir,
-    homeRealPath,
+    homeRealPath: buildTestAbsolutePath({ text: homeRealPath }),
     tempDir: params.fixtureRoot.tempDir,
-    tempRealPath,
-    applicationRealPaths: [applicationRealPath],
-    protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
-    protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
-    sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
-    deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
-    preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
+    tempRealPath: buildTestAbsolutePath({ text: tempRealPath }),
+    applicationDirs: [params.fixtureRoot.applicationDir],
+    applicationRealPaths: [buildTestAbsolutePath({ text: applicationRealPath })],
   });
 }
 

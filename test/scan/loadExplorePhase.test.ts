@@ -59,7 +59,7 @@ function buildExploreEntry(params: { id: string; probe: ExploreProbeId }): Catal
     path: params.id,
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'explore', probe: params.probe, advice: `Advice of ${params.id}.` },
   };
 }

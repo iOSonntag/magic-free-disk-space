@@ -7,6 +7,7 @@ import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExplorePlatform } from '../explore/explorePlatform.js';
+import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import {
   CANCELLED_TEXT,
   formatDeletionWarningLines,
@@ -116,7 +117,6 @@ export async function runCli(params: {
     arguments: parsed.value,
     environment: params.environment,
     tools: params.tools,
-    scan: params.scan,
     system: params.system,
     delete: params.delete,
     explore: params.explore,
@@ -166,7 +166,6 @@ async function runInteractiveDeletion(params: {
   arguments: CliArguments;
   environment: Environment;
   tools: ToolsPlatform;
-  scan: ScanPlatform;
   system: SystemPlatform;
   delete: DeletePlatform;
   explore: ExplorePlatform;
@@ -213,10 +212,13 @@ async function runInteractiveDeletion(params: {
     plan: plan,
     environment: params.environment,
     delete: params.delete,
-    scan: params.scan,
-    system: params.system,
-    explore: params.explore,
-    tools: params.tools,
+    loadRunningProcesses: params.system.loadRunningProcesses,
+    isEntryEvicted: params.system.isEntryEvicted,
+    probePlatform: buildExploreProbePlatform({
+      explore: params.explore,
+      tools: params.tools,
+      system: params.system,
+    }),
     clock: () => Date.now(),
   });
 

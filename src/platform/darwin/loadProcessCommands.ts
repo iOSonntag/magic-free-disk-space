@@ -1,7 +1,7 @@
 import type { Result } from '../../result.js';
-import { parseProcessCommandLines } from '../../scan/parseProcessCommandLines.js';
 import type { CommandFailure } from '../../system/loadCommandOutput.js';
 import { loadCommandOutput } from '../../system/loadCommandOutput.js';
+import { parseProcessCommandLines } from '../../system/parseProcessCommandLines.js';
 
 export async function loadProcessCommands(params: {
   commandTimeoutMs: number;

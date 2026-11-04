@@ -53,7 +53,7 @@ async function probeFullDiskAccessPath(params: {
     const failure = params.getFailure({ code: getErrorCode(error) });
 
     return readFailureVerdictToFullDiskAccess(
-      decideReadFailure({ failure, privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE }),
+      decideReadFailure({ failure: failure, privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE }),
     );
   }
 }

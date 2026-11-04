@@ -14,7 +14,7 @@ export function decideCatalogCandidate(params: {
   entry: CatalogEntry;
   path: string;
   measurement: Measurement;
-  owner: CatalogOwner;
+  owner: CatalogOwner | null;
   ownerBundlePaths: string[];
   ownerState: OwnerState;
   activity: ActivityProbe | null;
@@ -91,14 +91,15 @@ export function decideCatalogCandidate(params: {
 }
 
 /** An Apple-named child of a `children` entry belongs to macOS; the scanner skips it unmeasured. */
-export function isSystemOwnedTarget(params: { entry: CatalogEntry; owner: CatalogOwner }): boolean {
-  if (params.entry.scope === 'self') {
+export function isSystemOwnedTarget(params: {
+  entry: CatalogEntry;
+  owner: CatalogOwner | null;
+}): boolean {
+  if (params.entry.scope === 'self' || params.owner === null) {
     return false;
   }
 
   switch (params.owner.kind) {
-    case 'none':
-      return false;
     case 'bundleId':
       return isAppleBundleId({ bundleId: params.owner.bundleId });
   }

@@ -1,12 +1,11 @@
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute } from 'node:path';
-import type { CatalogFolder } from '../../catalog/catalogPlatform.js';
-import { resolveCatalogFolderPath } from '../../catalog/catalogPlatform.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
 import { buildEnvironment } from '../../environment/buildEnvironment.js';
 import { checkEnvironmentRoots } from '../../environment/checkEnvironmentRoots.js';
 import type { EnvironmentFailure } from '../../environment/environmentPlatform.js';
+import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -19,34 +18,28 @@ import { parsePosixUid } from '../../system/userIdentity.js';
 import { PROTECTED_HOME_RELATIVE_PATHS, SENSITIVE_HOME_RELATIVE_PATHS } from './protectedPaths.js';
 
 /** How macOS spells and compares an absolute path. */
-export const DARWIN_PATH_RULES: PathRules = {
-  rootForm: 'posix',
-  separator: '/',
-  caseFolding: 'exact',
-};
+export const DARWIN_PATH_RULES: PathRules = { rootForm: 'posix', separator: '/' };
 
 /** The root of the macOS file system, which is refused as a whole. */
-export const DARWIN_PROTECTED_ROOT_PATHS: AbsolutePath[] = [parseDarwinAbsolutePath({ text: '/' })];
+const DARWIN_PROTECTED_ROOT_PATHS: AbsolutePath[] = [parseDarwinAbsolutePath({ text: '/' })];
 
 /** The folder of the deletion log below the home folder, one name per level. */
-export const DARWIN_DELETION_LOG_HOME_DIR_NAMES: string[] = [
-  'Library',
-  'Logs',
-  'magic-free-disk-space',
-];
+const DARWIN_DELETION_LOG_HOME_DIR_NAMES: string[] = ['Library', 'Logs', 'magic-free-disk-space'];
 
 /** The folder of the bridge's preference file below the home folder, one name per level. */
-export const DARWIN_PREFERENCES_HOME_DIR_NAMES: string[] = [
+const DARWIN_PREFERENCES_HOME_DIR_NAMES: string[] = [
   'Library',
   'Application Support',
   'magic-free-disk-space',
 ];
 
-/** Where macOS apps are installed: for every user, and for the user alone. */
-export const DARWIN_APPLICATION_DIRS: CatalogFolder[] = [
-  { root: 'absolute', path: '/Applications' },
-  { root: 'home', path: 'Applications' },
-];
+/** Where macOS apps are installed for every user. */
+const DARWIN_SHARED_APPLICATION_DIR: AbsolutePath = parseDarwinAbsolutePath({
+  text: '/Applications',
+});
+
+/** Where macOS apps are installed for the user alone, below the home folder, one name per level. */
+const DARWIN_USER_APPLICATION_DIR_NAMES: string[] = ['Applications'];
 
 /** Homebrew's prefixes, Apple silicon's first, then Intel's. */
 export const DARWIN_HOMEBREW_PREFIX_PATHS: AbsolutePath[] = ['/opt/homebrew', '/usr/local'].map(
@@ -67,9 +60,14 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     };
   }
 
-  const applicationDirs = DARWIN_APPLICATION_DIRS.map((folder) =>
-    resolveCatalogFolderPath({ folder: folder, homeDir: homeDir.value }),
-  );
+  const applicationDirs = [
+    DARWIN_SHARED_APPLICATION_DIR,
+    joinAbsolutePath({
+      rules: DARWIN_PATH_RULES,
+      parentPath: homeDir.value,
+      names: DARWIN_USER_APPLICATION_DIR_NAMES,
+    }),
+  ];
 
   const homeRealPath = await loadRealPath({ path: homeDir.value });
 
@@ -113,22 +111,46 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
 
   return {
     kind: 'succeeded',
-    value: buildEnvironment({
+    value: buildDarwinEnvironment({
       nowMs: Date.now(),
       user: user,
-      pathRules: DARWIN_PATH_RULES,
       homeDir: homeDir.value,
       homeRealPath: homeRealPath.value,
       tempDir: tempDir.value,
       tempRealPath: tempRealPath.value,
+      applicationDirs: applicationDirs,
       applicationRealPaths: applicationRealPaths,
-      protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
-      protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
-      sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
-      deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
-      preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
     }),
   };
+}
+
+/** The environment of a run on macOS: the values read for the run, with the facts of macOS. */
+export function buildDarwinEnvironment(params: {
+  nowMs: number;
+  user: UserIdentity;
+  homeDir: AbsolutePath;
+  homeRealPath: AbsolutePath;
+  tempDir: string;
+  tempRealPath: AbsolutePath;
+  applicationDirs: AbsolutePath[];
+  applicationRealPaths: AbsolutePath[];
+}): Environment {
+  return buildEnvironment({
+    nowMs: params.nowMs,
+    user: params.user,
+    pathRules: DARWIN_PATH_RULES,
+    homeDir: params.homeDir,
+    homeRealPath: params.homeRealPath,
+    tempDir: params.tempDir,
+    tempRealPath: params.tempRealPath,
+    applicationDirs: params.applicationDirs,
+    applicationRealPaths: params.applicationRealPaths,
+    protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
+    protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
+    sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
+    deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
+    preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
+  });
 }
 
 /** A path of macOS this file spells out; throws for one that is not absolute, which is a bug. */
@@ -181,7 +203,31 @@ async function loadUserTempDir(): Promise<Result<string, EnvironmentFailure>> {
   return { kind: 'succeeded', value: tempDir };
 }
 
-async function loadRealPath(params: { path: string }): Promise<Result<string, EnvironmentFailure>> {
+/** The real path of `path`; unresolvable when it cannot be read or is not absolute. */
+async function loadRealPath(params: {
+  path: string;
+}): Promise<Result<AbsolutePath, EnvironmentFailure>> {
+  const realPathText = await loadRealPathText({ path: params.path });
+
+  if (realPathText.kind === 'failed') {
+    return realPathText;
+  }
+
+  const realPath = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: realPathText.value });
+
+  if (realPath.kind === 'failed') {
+    return {
+      kind: 'failed',
+      failure: { reason: 'unresolvable', path: params.path, code: 'notAbsolute' },
+    };
+  }
+
+  return { kind: 'succeeded', value: realPath.value };
+}
+
+async function loadRealPathText(params: {
+  path: string;
+}): Promise<Result<string, EnvironmentFailure>> {
   try {
     return { kind: 'succeeded', value: await realpath(params.path) };
   } catch (error) {
@@ -203,8 +249,8 @@ async function loadOwnerId(params: { path: string }): Promise<Result<number, Env
   }
 }
 
-async function loadExistingRealPaths(params: { paths: string[] }): Promise<string[]> {
-  const realPaths: string[] = [];
+async function loadExistingRealPaths(params: { paths: AbsolutePath[] }): Promise<AbsolutePath[]> {
+  const realPaths: AbsolutePath[] = [];
 
   for (const path of params.paths) {
     const result = await loadRealPath({ path: path });

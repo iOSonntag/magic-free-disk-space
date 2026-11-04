@@ -165,7 +165,6 @@ async function runBridgeWithLines(params: {
     value: environment,
   };
   const platform = buildTestPlatform({
-    fixtureRoot: fixtureRoot,
     catalogEntries: BRIDGE_CATALOG,
     toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
   });

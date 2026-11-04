@@ -7,6 +7,7 @@ import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { EnvironmentPlatform } from '../environment/environmentPlatform.js';
 import type { ExplorePlatform } from '../explore/explorePlatform.js';
+import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { Preferences, PreferencesSaveFailure } from '../preferences/preferencesFile.js';
 import { buildFullDiskAccessNotices } from '../report/buildFullDiskAccessNotices.js';
 import type { ScanView } from '../report/buildScanView.js';
@@ -458,10 +459,13 @@ async function answerDelete(params: {
     plan: params.state.plan,
     environment: params.state.environment,
     delete: params.context.delete,
-    scan: params.context.scan,
-    system: params.context.system,
-    explore: params.context.explore,
-    tools: params.context.tools,
+    loadRunningProcesses: params.context.system.loadRunningProcesses,
+    isEntryEvicted: params.context.system.isEntryEvicted,
+    probePlatform: buildExploreProbePlatform({
+      explore: params.context.explore,
+      tools: params.context.tools,
+      system: params.context.system,
+    }),
     clock: params.context.clock,
   });
 

@@ -55,13 +55,13 @@ export function buildTestUserIdentity(params: { uid: number }): UserIdentity {
 }
 
 export function buildTestMacBundleId(params: { text: string }): MacBundleId {
-  return unwrapFixtureValue({ parsed: parseMacBundleId(params), text: params.text });
+  return parseMacBundleId({ text: params.text });
 }
 
-/** The owner of a catalog entry: none for `null`, else the app of that bundle id. */
-export function buildTestCatalogOwner(params: { bundleId: string | null }): CatalogOwner {
+/** The owner of a catalog entry: `null` for no bundle id, else the app of that bundle id. */
+export function buildTestCatalogOwner(params: { bundleId: string | null }): CatalogOwner | null {
   if (params.bundleId === null) {
-    return { kind: 'none' };
+    return null;
   }
 
   return { kind: 'bundleId', bundleId: buildTestMacBundleId({ text: params.bundleId }) };

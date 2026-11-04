@@ -12,21 +12,19 @@ export function buildUpdateNotice(params: {
   outcome: UpdateCheckOutcome;
   texts: ReportTexts;
 }): UpdateNoticeView | null {
-  const outcome = params.outcome;
-
-  switch (outcome.kind) {
+  switch (params.outcome.kind) {
     case 'off':
     case 'unversioned':
     case 'current':
     case 'failed':
       return null;
     case 'newer': {
-      const releasePageUrl = buildReleasePageUrl(outcome.latest);
+      const releasePageUrl = buildReleasePageUrl(params.outcome.latest);
 
       return {
-        titleText: `Version ${formatReleaseVersion(outcome.latest)} is available`,
+        titleText: `Version ${formatReleaseVersion(params.outcome.latest)} is available`,
         lines: [
-          `You have version ${formatReleaseVersion(outcome.current)}.`,
+          `You have version ${formatReleaseVersion(params.outcome.current)}.`,
           params.texts.updateInstallText,
         ],
         downloadLink: {

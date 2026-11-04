@@ -118,7 +118,6 @@ async function runWithInput(params: {
     inputLines: params.inputLines,
   });
   const platform = buildTestPlatform({
-    fixtureRoot: fixtureRoot,
     catalogEntries: TEST_CATALOG,
     toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
   });
@@ -291,7 +290,6 @@ describeAwaitingWin32Platform('runCli safety', () => {
     };
 
     const platform = buildTestPlatform({
-      fixtureRoot: fixtureRoot,
       catalogEntries: TEST_CATALOG,
       toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
     });

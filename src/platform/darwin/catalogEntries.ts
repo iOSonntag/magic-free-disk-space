@@ -32,7 +32,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Developer/Xcode/iOS DeviceSupport',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -46,7 +46,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Developer/Xcode/watchOS DeviceSupport',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -60,7 +60,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Developer/Xcode/tvOS DeviceSupport',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -75,7 +75,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Developer/Xcode/Archives',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -122,7 +122,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Logs/CoreSimulator',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -136,7 +136,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Developer/CoreSimulator/Caches',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -150,7 +150,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Developer/CoreSimulator/Devices',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'simulatorDevices',
@@ -169,7 +169,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/Library/Developer/CoreSimulator',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'simulatorRuntimes',
@@ -189,7 +189,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/Library/Developer/CommandLineTools',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'advice',
       advice:
@@ -207,7 +207,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.android/avd',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'androidAvds',
@@ -227,7 +227,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Android/sdk/system-images',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'androidSystemImages',
@@ -247,7 +247,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Android/sdk/emulator',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'androidEmulator',
@@ -266,7 +266,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Android/sdk/platforms',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'androidPlatforms',
@@ -285,7 +285,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.gradle/caches',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -299,7 +299,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.gradle/wrapper/dists',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -313,7 +313,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.gradle/daemon',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -327,7 +327,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.dartServer/.analysis-driver',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -342,7 +342,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.pub-cache/hosted',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'dartPubCache',
@@ -361,7 +361,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.npm/_cacache',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -375,7 +375,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.bun/install/cache',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -389,7 +389,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/bun',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -404,7 +404,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/pnpm/store',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'pnpmStores',
@@ -424,7 +424,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.local/share/pnpm/store',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'pnpmStoresXdg',
@@ -443,7 +443,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/pnpm',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -457,7 +457,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/node-gyp',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -471,7 +471,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/ms-playwright',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -485,7 +485,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.cache/puppeteer',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -499,7 +499,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.nvm/versions/node',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'nvmVersions',
@@ -518,7 +518,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.asdf/installs',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'asdfVersions',
@@ -536,7 +536,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.local/share/mise/installs',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'miseVersions',
@@ -555,7 +555,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/CocoaPods',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -569,7 +569,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/org.swift.swiftpm/repositories',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -583,7 +583,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/org.swift.swiftpm/manifests',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -597,7 +597,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/composer',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -611,7 +611,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.cache/uv',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -625,7 +625,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/pip',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -639,7 +639,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.bundle/cache',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -653,7 +653,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.hex/packages',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -667,7 +667,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/Homebrew/downloads',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -681,7 +681,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/Homebrew/api',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -695,7 +695,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches/Homebrew/bootsnap',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -710,7 +710,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/opt/homebrew/Cellar',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'homebrewAppleSilicon',
@@ -730,7 +730,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/usr/local/Cellar',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'homebrewIntel',
@@ -750,7 +750,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/opt/homebrew/Caskroom',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'advice',
       advice:
@@ -769,7 +769,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/usr/local/Caskroom',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'advice',
       advice:
@@ -788,7 +788,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/opt/homebrew/lib/ruby/gems',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'advice',
       advice:
@@ -807,7 +807,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '/Library/Updates',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'advice',
       advice:
@@ -826,7 +826,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Application Support/MobileSync/Backup',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'advice',
       advice:
@@ -1063,7 +1063,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.vscode/extensions',
     scope: 'self',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: {
       kind: 'explore',
       probe: 'vscodeExtensions',
@@ -1114,7 +1114,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Caches',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -1128,7 +1128,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.cache',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -1143,7 +1143,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '.Trash',
     scope: 'children',
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
   {
@@ -1157,19 +1157,11 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
     path: '',
     scope: 'children',
     ageRule: 'staleDays',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   },
 ];
 
-/** The owner of an entry by the bundle id written above; a refused id is a slip in this file. */
 function buildBundleIdOwner(params: { text: string }): CatalogOwner {
-  const bundleId = parseMacBundleId({ text: params.text });
-
-  switch (bundleId.kind) {
-    case 'succeeded':
-      return { kind: 'bundleId', bundleId: bundleId.value };
-    case 'failed':
-      throw new Error(`The catalog names ${bundleId.failure} as an owner.`);
-  }
+  return { kind: 'bundleId', bundleId: parseMacBundleId({ text: params.text }) };
 }

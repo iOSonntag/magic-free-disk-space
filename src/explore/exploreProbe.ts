@@ -1,8 +1,10 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
+import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolName } from '../tools/toolInstallLocations.js';
+import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import type { ExplorePlatform } from './explorePlatform.js';
 import type {
   ExploreFileUnreadable,
@@ -19,6 +21,19 @@ export type ExploreProbePlatform = {
   /** The system slice's code of a privacy denial, for every read of the probes. */
   privacyDenialCode: string | null;
 };
+
+/** What the probes and their rechecks take of the explore, tools, and system slices. */
+export function buildExploreProbePlatform(params: {
+  explore: ExplorePlatform;
+  tools: ToolsPlatform;
+  system: SystemPlatform;
+}): ExploreProbePlatform {
+  return {
+    explore: params.explore,
+    homebrewPrefixPaths: params.tools.homebrewPrefixPaths,
+    privacyDenialCode: params.system.privacyDenialCode,
+  };
+}
 
 /**
  * What every probe gets: the processes read before any tool started, the time its commands and

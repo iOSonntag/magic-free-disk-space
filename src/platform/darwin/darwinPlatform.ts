@@ -3,11 +3,7 @@ import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
 import { isEntryEvicted } from './hasDatalessFlag.js';
 import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
-import {
-  DARWIN_APPLICATION_DIRS,
-  DARWIN_HOMEBREW_PREFIX_PATHS,
-  loadEnvironment,
-} from './loadEnvironment.js';
+import { DARWIN_HOMEBREW_PREFIX_PATHS, loadEnvironment } from './loadEnvironment.js';
 import { DARWIN_PRIVACY_DENIAL_CODE, loadFullDiskAccess } from './loadFullDiskAccess.js';
 import { loadInstalledApps } from './loadInstalledApps.js';
 import { loadProcessCommands } from './loadProcessCommands.js';
@@ -17,7 +13,6 @@ import {
   PNPM_XDG_STORE_ROOT_PATH_NAMES,
 } from './pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from './projectSearchEvidence.js';
-import { PROTECTED_HOME_RELATIVE_PATHS, SENSITIVE_HOME_RELATIVE_PATHS } from './protectedPaths.js';
 import { removeTree } from './removeTree.js';
 import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOT_RELATIVE_PATHS } from './scanHomeFolders.js';
 import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
@@ -25,12 +20,7 @@ import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
 /** Everything the app takes from macOS; the entry points hand each module its slice. */
 export const darwinPlatform: Platform = {
   environment: { loadEnvironment: loadEnvironment },
-  catalog: {
-    entries: CATALOG_ENTRIES,
-    applicationDirs: DARWIN_APPLICATION_DIRS,
-    protectedHomeRelativePaths: PROTECTED_HOME_RELATIVE_PATHS,
-    sensitiveHomeRelativePaths: SENSITIVE_HOME_RELATIVE_PATHS,
-  },
+  catalog: { entries: CATALOG_ENTRIES },
   tools: {
     installLocations: TOOL_INSTALL_LOCATIONS,
     homebrewPrefixPaths: DARWIN_HOMEBREW_PREFIX_PATHS,
@@ -47,7 +37,6 @@ export const darwinPlatform: Platform = {
   },
   scan: {
     apps: { appSection: 'offerUnusedApps', loadInstalledApps: loadInstalledApps },
-    loadRunningProcesses: loadProcessCommands,
     loadActiveXcodeBundlePath: loadActiveXcodeBundlePath,
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     userFileRootRelativePaths: USER_FILE_ROOT_RELATIVE_PATHS,
@@ -71,5 +60,6 @@ export const darwinPlatform: Platform = {
     isEntryEvicted: isEntryEvicted,
     privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE,
     loadFullDiskAccess: loadFullDiskAccess,
+    loadRunningProcesses: loadProcessCommands,
   },
 };

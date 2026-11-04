@@ -10,7 +10,6 @@ export const moduleBoundary = {
     'issue.ts',
     'limits.ts',
     'loadUnitMeasurement.ts',
-    'parseProcessCommandLines.ts',
     'placeCandidate.ts',
     'runScan.ts',
     'scanPlatform.ts',

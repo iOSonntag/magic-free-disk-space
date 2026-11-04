@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -11,6 +10,8 @@ export type Environment = {
   pathRules: PathRules;
   homeDir: AbsolutePath;
   tempDir: string;
+  /** The folders the platform's apps are installed in, whether they exist or not. */
+  applicationDirs: AbsolutePath[];
   /** The roots of the file system, which are refused as a whole. */
   protectedRootPaths: AbsolutePath[];
   /** Real paths under which a removal is allowed. */
@@ -29,15 +30,23 @@ export function buildEnvironment(params: {
   user: UserIdentity;
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  homeRealPath: string;
+  homeRealPath: AbsolutePath;
   tempDir: string;
-  tempRealPath: string;
+  tempRealPath: AbsolutePath;
+  /** The folders the platform's apps are installed in, whether they exist or not. */
+  applicationDirs: AbsolutePath[];
   /** The real paths of the platform's app folders that exist. */
-  applicationRealPaths: string[];
+  applicationRealPaths: AbsolutePath[];
   protectedRootPaths: AbsolutePath[];
-  /** Root-like folders below the home folder, which are never removed as a whole. */
+  /**
+   * Root-like folders below the home folder, which are never removed as a whole, spelled with the
+   * separator of `pathRules`; the empty path is the home folder itself.
+   */
   protectedHomeRelativePaths: string[];
-  /** Folders below the home folder that are never removed, neither whole nor in part. */
+  /**
+   * Folders below the home folder that are never removed, neither whole nor in part, spelled with
+   * the separator of `pathRules`.
+   */
   sensitiveHomeRelativePaths: string[];
   /** The folder of the deletion log below the home folder, one name per level. */
   deletionLogHomeDirNames: string[];
@@ -50,21 +59,38 @@ export function buildEnvironment(params: {
     pathRules: params.pathRules,
     homeDir: params.homeDir,
     tempDir: params.tempDir,
+    applicationDirs: params.applicationDirs,
     protectedRootPaths: params.protectedRootPaths,
     allowedRealRoots: [params.homeRealPath, params.tempRealPath, ...params.applicationRealPaths],
     protectedRealPaths: [
       ...params.protectedHomeRelativePaths.map((relativePath) =>
-        join(params.homeRealPath, relativePath),
+        joinHomeRelativePath({
+          rules: params.pathRules,
+          homeRealPath: params.homeRealPath,
+          relativePath: relativePath,
+        }),
       ),
       params.tempRealPath,
       ...params.protectedRootPaths,
     ],
     sensitiveRealPaths: [
       ...params.sensitiveHomeRelativePaths.map((relativePath) =>
-        join(params.homeRealPath, relativePath),
+        joinHomeRelativePath({
+          rules: params.pathRules,
+          homeRealPath: params.homeRealPath,
+          relativePath: relativePath,
+        }),
       ),
-      join(params.homeRealPath, ...params.deletionLogHomeDirNames),
-      join(params.homeRealPath, ...params.preferencesHomeDirNames),
+      joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: params.homeRealPath,
+        names: params.deletionLogHomeDirNames,
+      }),
+      joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: params.homeRealPath,
+        names: params.preferencesHomeDirNames,
+      }),
     ],
     deletionLogPath: joinAbsolutePath({
       rules: params.pathRules,
@@ -77,4 +103,15 @@ export function buildEnvironment(params: {
       names: params.preferencesHomeDirNames,
     }),
   };
+}
+
+/** The real path of a folder below the home folder, its relative path spelled under `rules`. */
+function joinHomeRelativePath(params: {
+  rules: PathRules;
+  homeRealPath: AbsolutePath;
+  relativePath: string;
+}): AbsolutePath {
+  const names = params.relativePath.split(params.rules.separator).filter((name) => name !== '');
+
+  return joinAbsolutePath({ rules: params.rules, parentPath: params.homeRealPath, names: names });
 }

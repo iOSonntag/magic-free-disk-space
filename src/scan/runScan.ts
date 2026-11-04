@@ -1,14 +1,14 @@
 import { join, sep } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
-import type { CatalogOwner } from '../catalog/catalogOwner.js';
 import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
-import { resolveCatalogFolderPath } from '../catalog/catalogPlatform.js';
 import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExplorePlatform } from '../explore/explorePlatform.js';
+import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js';
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
@@ -37,6 +37,7 @@ import { loadExplorePhase } from './loadExplorePhase.js';
 import { loadMeasuredPhase } from './loadMeasuredPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
+  buildAppOwner,
   findOwnerBundlePaths,
   resolveOwnerState,
   resolveTargetOwner,
@@ -117,7 +118,7 @@ export async function runScan(params: {
 }): Promise<ScanReport> {
   params.onProgress('Checking installed apps and running processes…');
 
-  const processCommandsLoad = params.scan.loadRunningProcesses({
+  const processCommandsLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
   const knownProcessCommandsLoad = processCommandsLoad.then((result) =>
@@ -153,11 +154,11 @@ export async function runScan(params: {
   // The probes run beside every phase; the Explore phase waits for them last.
   const probes = startExploreProbes({
     environment: params.environment,
-    platform: {
+    platform: buildExploreProbePlatform({
       explore: params.explore,
-      homebrewPrefixPaths: params.tools.homebrewPrefixPaths,
-      privacyDenialCode: params.system.privacyDenialCode,
-    },
+      tools: params.tools,
+      system: params.system,
+    }),
     toolInstallLocations: params.tools.installLocations,
     processCommands: knownProcessCommandsLoad,
     // A failed `xcode-select` counts as no active Xcode, so the simulator probe runs nothing.
@@ -170,11 +171,7 @@ export async function runScan(params: {
   });
   const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
     processCommandsLoad,
-    loadPlatformApps({
-      apps: params.scan.apps,
-      catalog: params.catalog,
-      homeDir: params.environment.homeDir,
-    }),
+    loadPlatformApps({ apps: params.scan.apps, appDirs: params.environment.applicationDirs }),
     activeXcodeBundlePathLoad,
   ]);
   const context: ScanContext = {
@@ -206,14 +203,20 @@ export async function runScan(params: {
   params.onProgress('Searching your projects for old build folders…');
   const artifacts = await loadArtifactPhase({ context: context, projectWalk: projectWalk });
 
-  params.onProgress('Measuring apps…');
-  const apps = await loadAppPhase({ context: context });
+  const apps = await loadAppPhaseOfAppSection({
+    apps: params.scan.apps,
+    context: context,
+    onProgress: params.onProgress,
+  });
 
   params.onProgress('Looking for large old files…');
   const userFiles = await loadUserFilePhase({ context: context });
 
-  params.onProgress('Looking for data of removed apps…');
-  const orphans = await loadOrphanPhase({ context: context });
+  const orphans = await loadOrphanPhaseOfAppSection({
+    apps: params.scan.apps,
+    context: context,
+    onProgress: params.onProgress,
+  });
 
   params.onProgress('Asking developer tools what they can clean…');
   const explore = await loadExplorePhase({
@@ -251,20 +254,45 @@ export async function runScan(params: {
   });
 }
 
-/** The platform's installed apps, read from the catalog's app folders as its app section says. */
+/** The platform's installed apps, read from the environment's app folders as its app section says. */
 function loadPlatformApps(params: {
   apps: ScanPlatformApps;
-  catalog: CatalogPlatform;
-  homeDir: string;
+  appDirs: AbsolutePath[];
 }): Promise<{ apps: InstalledApp[]; issues: ScanIssue[] }> {
   switch (params.apps.appSection) {
     case 'offerUnusedApps':
       return params.apps.loadInstalledApps({
-        appDirs: params.catalog.applicationDirs.map((folder) =>
-          resolveCatalogFolderPath({ folder: folder, homeDir: params.homeDir }),
-        ),
+        appDirs: params.appDirs,
         commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
       });
+  }
+}
+
+/** The installed apps measured and judged, as the platform's app section says. */
+function loadAppPhaseOfAppSection(params: {
+  apps: ScanPlatformApps;
+  context: ScanContext;
+  onProgress: (message: string) => void;
+}): Promise<ScanPhase> {
+  switch (params.apps.appSection) {
+    case 'offerUnusedApps':
+      params.onProgress('Measuring apps…');
+
+      return loadAppPhase({ context: params.context });
+  }
+}
+
+/** The data left by removed apps, as the platform's app section says. */
+function loadOrphanPhaseOfAppSection(params: {
+  apps: ScanPlatformApps;
+  context: ScanContext;
+  onProgress: (message: string) => void;
+}): Promise<ScanPhase> {
+  switch (params.apps.appSection) {
+    case 'offerUnusedApps':
+      params.onProgress('Looking for data of removed apps…');
+
+      return loadOrphanPhase({ context: params.context });
   }
 }
 
@@ -538,15 +566,6 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
   );
 
   return mergeScanPhases({ phases: namePhases });
-}
-
-/** An app owns its own bundle; one without a bundle id has no owner whose run can be told. */
-function buildAppOwner(params: { app: InstalledApp }): CatalogOwner {
-  if (params.app.bundleId === null) {
-    return { kind: 'none' };
-  }
-
-  return { kind: 'bundleId', bundleId: params.app.bundleId };
 }
 
 /**

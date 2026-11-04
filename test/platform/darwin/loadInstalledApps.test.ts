@@ -145,6 +145,29 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
     });
   });
 
+  test('an app whose Info.plist names an empty id keeps the empty id', async () => {
+    const fooPath = join(fixtureRoot.applicationDir, 'Foo.app');
+
+    await createFixtureBundle({ bundlePath: fooPath, bundleId: '' });
+
+    const result = await loadInstalledApps({
+      appDirs: [fixtureRoot.applicationDir],
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
+    });
+
+    expect(result).toEqual({
+      apps: [
+        {
+          bundlePath: fooPath,
+          displayName: 'Foo',
+          bundleId: buildTestMacBundleId({ text: '' }),
+          nestedBundleIds: [],
+        },
+      ],
+      issues: [],
+    });
+  });
+
   test('a missing app folder adds no apps and no issues', async () => {
     const result = await loadInstalledApps({
       appDirs: [join(fixtureRoot.rootDir, 'Missing')],

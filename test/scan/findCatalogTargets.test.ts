@@ -241,7 +241,7 @@ function buildCatalogEntry(params: {
     path: params.path,
     scope: params.scope,
     ageRule: 'none',
-    owner: { kind: 'none' },
+    owner: null,
     removal: { kind: 'delete' },
   };
 }

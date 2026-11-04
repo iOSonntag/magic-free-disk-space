@@ -57,7 +57,7 @@ export type CatalogEntry = {
   /** self: the path itself; children: each entry directly inside it. */
   scope: 'self' | 'children';
   ageRule: 'none' | 'staleDays';
-  /** The app that owns the data; while it runs, the entry is withheld. */
-  owner: CatalogOwner;
+  /** The app that owns the data, `null` for none; while it runs, the entry is withheld. */
+  owner: CatalogOwner | null;
   removal: CatalogRemoval;
 };

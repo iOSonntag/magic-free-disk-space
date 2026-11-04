@@ -227,6 +227,32 @@ describeAwaitingWin32Platform('walkProjects', () => {
     expect(residentWalk.isComplete).toBe(true);
   });
 
+  test('is not complete for an evicted pin file, and complete for an evicted file of another name', async () => {
+    const projectPath = join(fixtureRoot.homeDir, 'app');
+    const pinFilePath = join(projectPath, '.nvmrc');
+    const notesPath = join(projectPath, 'notes.txt');
+    await createFixtureDirectory({ path: projectPath });
+    await createEmptyFile({ path: pinFilePath });
+    await createEmptyFile({ path: notesPath });
+
+    const pinFileWalk = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      isEntryEvicted: (entry) => entry.path === pinFilePath,
+    });
+    const notesWalk = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      isEntryEvicted: (entry) => entry.path === notesPath,
+    });
+
+    expect(pinFileWalk).toEqual({ artifacts: [], pinFiles: [], isComplete: false, issues: [] });
+    expect(notesWalk).toEqual({
+      artifacts: [],
+      pinFiles: [buildPinFileRef({ path: pinFilePath, kind: 'nvmrc' })],
+      isComplete: true,
+      issues: [],
+    });
+  });
+
   test('returns nothing, and is complete, when the home folder is missing', async () => {
     const result = await walkTestProjects({
       homeDir: buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'missing-home') }),

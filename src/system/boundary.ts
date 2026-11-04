@@ -19,6 +19,7 @@ export const moduleBoundary = {
     'loadFileText.ts',
     'loadRealPath.ts',
     'parseJsonValue.ts',
+    'parseProcessCommandLines.ts',
     'readFailure.ts',
     'runFilesystemCall.ts',
     'systemPlatform.ts',

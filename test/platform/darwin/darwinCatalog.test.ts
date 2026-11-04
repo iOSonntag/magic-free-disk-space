@@ -14,8 +14,8 @@ import {
   loadTestEnvironment,
 } from '../../support/fixtureRoot.js';
 
-/** The owners a macOS entry may name: no app, or an app by its bundle id. */
-const DARWIN_OWNER_KINDS: CatalogOwner['kind'][] = ['none', 'bundleId'];
+/** The kinds of owner a macOS entry may name besides `null` for no app: an app by its bundle id. */
+const DARWIN_OWNER_KINDS: CatalogOwner['kind'][] = ['bundleId'];
 
 /** True when the entry's path lies in the folder its root names, in the environment. */
 function isResolvedUnderRoot(params: { entry: CatalogEntry; environment: Environment }): boolean {
@@ -57,7 +57,7 @@ describeAwaitingWin32Platform('the catalog of darwinPlatform', () => {
 
   test('every entry is owned by no app or by a bundle id', () => {
     const otherOwnerIds = darwinPlatform.catalog.entries
-      .filter((entry) => !DARWIN_OWNER_KINDS.includes(entry.owner.kind))
+      .filter((entry) => entry.owner !== null && !DARWIN_OWNER_KINDS.includes(entry.owner.kind))
       .map((entry) => entry.id);
 
     expect(otherOwnerIds).toEqual([]);

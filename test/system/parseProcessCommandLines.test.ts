@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseProcessCommandLines } from '../../src/scan/parseProcessCommandLines.js';
+import { parseProcessCommandLines } from '../../src/system/parseProcessCommandLines.js';
 
 describe('parseProcessCommandLines', () => {
   test('trims each line and drops the empty ones', () => {

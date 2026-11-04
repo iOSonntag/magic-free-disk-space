@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import {
   findOwnerBundlePaths,
   isAppleBundleId,
@@ -10,6 +11,32 @@ import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 import { buildTestCatalogOwner, buildTestMacBundleId } from '../support/parsedValueFixtures.js';
+
+/**
+ * The state of the owner of `Library/Caches/foo`, a child of a `children` entry, while `Foo.app`,
+ * whose Info.plist names an empty id, is the one installed app.
+ */
+function resolveFooCacheOwnerState(params: { processCommands: string[] | null }): OwnerState {
+  const foo = buildTestInstalledApp({
+    bundlePath: '/Applications/Foo.app',
+    displayName: 'Foo',
+    bundleId: '',
+  });
+  const owner = resolveTargetOwner({
+    entry: buildTestCatalogEntry({
+      scope: 'children',
+      owner: buildTestCatalogOwner({ bundleId: null }),
+    }),
+    path: '/home/Library/Caches/foo',
+    installedApps: [foo],
+  });
+
+  return resolveOwnerState({
+    owner: owner,
+    installedApps: [foo],
+    processCommands: params.processCommands,
+  });
+}
 
 describeAwaitingWin32Platform('isBundleIdShape', () => {
   test('accepts reverse-DNS names with three or more segments', () => {
@@ -189,6 +216,16 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
         processCommands: ['/Applications/Slack.app.old/Contents/MacOS/Slack'],
       }),
     ).toBe('stopped');
+  });
+
+  test('an app with an empty bundle id runs as the owner of a child named like it', () => {
+    expect(
+      resolveFooCacheOwnerState({ processCommands: ['/Applications/Foo.app/Contents/MacOS/Foo'] }),
+    ).toBe('running');
+  });
+
+  test('an app with an empty bundle id owns a child named like it while the process list is missing', () => {
+    expect(resolveFooCacheOwnerState({ processCommands: null })).toBe('unknown');
   });
 
   test('any of several copies of the app running marks it running', () => {
