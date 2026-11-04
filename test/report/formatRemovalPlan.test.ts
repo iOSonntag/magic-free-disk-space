@@ -1,8 +1,7 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { formatRemovalPlan } from '../../src/report/formatRemovalPlan.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestDartToolCandidate,
@@ -13,6 +12,9 @@ import {
   buildTestEvictCandidate,
   buildTestEvictTarget,
 } from '../support/evictCandidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
+
+const FIXTURE_HOME = buildExampleHome({ text: '/fixture/home' });
 
 function buildCandidate(params: {
   path: string;
@@ -30,7 +32,7 @@ function buildCandidate(params: {
   });
 }
 
-describeAwaitingWin32Platform('formatRemovalPlan', () => {
+describe('formatRemovalPlan', () => {
   test('writes out control characters in a path, so the plan cannot be rewritten', () => {
     const lines = formatRemovalPlan({
       plan: {
@@ -80,7 +82,7 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
 
   test('names the command that removes a tool item below its path', () => {
     const toolCandidate = buildTestToolCandidate({
-      homeDir: '/fixture/home',
+      home: FIXTURE_HOME,
       version: '20.1.0',
       allocatedBytes: 2000,
     });
@@ -123,7 +125,7 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
 
   test('names the command with the leading arguments of its tool', () => {
     const lines = formatRemovalPlan({
-      plan: { approved: [buildTestDartToolCandidate({ homeDir: '/fixture/home' })], refused: [] },
+      plan: { approved: [buildTestDartToolCandidate({ home: FIXTURE_HOME })], refused: [] },
     });
 
     expect(lines).toContain('   by running: dart --suppress-analytics pub cache gc --force');
@@ -132,7 +134,9 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
   test('lists a unit folder as a path deleted as it is, with no command', () => {
     const lines = formatRemovalPlan({
       plan: {
-        approved: [buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' })],
+        approved: [
+          buildTestVscodeExtensionCandidate({ home: buildExampleHome({ text: '/Users/example' }) }),
+        ],
         refused: [],
       },
     });

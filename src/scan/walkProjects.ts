@@ -6,6 +6,7 @@ import {
   matchProjectPinFile,
   matchProjectPinFileName,
 } from '../explore/projectPins/projectPins.js';
+import { isSameEntryName } from '../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -74,7 +75,13 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
-    if (entry.depth === 1 && params.excludedTopNames.includes(entry.name)) {
+    // Compared as the platform compares names, so `appdata` is `AppData` on Windows.
+    if (
+      entry.depth === 1 &&
+      params.excludedTopNames.some((name) =>
+        isSameEntryName({ rules: params.pathRules, name: name, otherName: entry.name }),
+      )
+    ) {
       return 'skip';
     }
 

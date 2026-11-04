@@ -1,12 +1,12 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice } from '../../src/scan/candidate.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
 
 function buildAdvice(params: { path: string }): Advice {
   return buildTestAdvice({
@@ -18,7 +18,7 @@ function buildAdvice(params: { path: string }): Advice {
   });
 }
 
-describeAwaitingWin32Platform('buildSectionTotals', () => {
+describe('buildSectionTotals', () => {
   test('holds no section for a scan that found nothing', () => {
     expect(buildSectionTotals({ candidates: [], advice: [] })).toEqual([]);
   });
@@ -34,7 +34,11 @@ describeAwaitingWin32Platform('buildSectionTotals', () => {
         }),
         buildTestCandidate({ path: '/fixture/a', risk: 'safe', allocatedBytes: 100 }),
         buildTestCandidate({ path: '/fixture/b', risk: 'review', allocatedBytes: 200 }),
-        buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0', allocatedBytes: 300 }),
+        buildTestToolCandidate({
+          home: buildExampleHome({ text: '/fixture' }),
+          version: '20.1.0',
+          allocatedBytes: 300,
+        }),
       ],
       advice: [buildAdvice({ path: '/fixture/store' })],
     });

@@ -27,7 +27,6 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -35,7 +34,11 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath, buildTestNvmNodeVersion } from '../support/parsedValueFixtures.js';
+import {
+  buildTestAbsolutePath,
+  buildTestHostPath,
+  buildTestNvmNodeVersion,
+} from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeStart } from './probeStartFixtures.js';
@@ -96,7 +99,7 @@ function listOfferedVersions(offers: NvmVersionOffers): string[] {
   return offers.offers.map((offer) => offer.version);
 }
 
-describeAwaitingWin32Platform('parseNvmNodeVersion', () => {
+describe('parseNvmNodeVersion', () => {
   test('passes a v<x.y.z> folder name and refuses any other', () => {
     expect(parseNvmNodeVersion({ folderName: 'v22.11.0' })).toEqual({
       kind: 'succeeded',
@@ -108,7 +111,7 @@ describeAwaitingWin32Platform('parseNvmNodeVersion', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseNvmrcPin', () => {
+describe('parseNvmrcPin', () => {
   test('takes the one version line, without comments and edge spaces', () => {
     expect(parseNvmrcPin({ text: '22\n' })).toBe('22');
     expect(parseNvmrcPin({ text: '# the node of this project\n  v24.19 # newest\r\n\n' })).toBe(
@@ -144,7 +147,7 @@ describeAwaitingWin32Platform('parseNvmrcPin', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseNvmAliasText', () => {
+describe('parseNvmAliasText', () => {
   test('takes the first line left after comments and blank lines, without trailing spaces', () => {
     expect(parseNvmAliasText({ text: 'v22.11.0\n' })).toBe('v22.11.0');
     expect(parseNvmAliasText({ text: '# set by hand\n\n   \nlts/iron  # the LTS\t\n' })).toBe(
@@ -160,7 +163,7 @@ describeAwaitingWin32Platform('parseNvmAliasText', () => {
   });
 });
 
-describeAwaitingWin32Platform('resolveNvmVersionPin', () => {
+describe('resolveNvmVersionPin', () => {
   const versions = [
     'v18.20.0',
     'v20.11.1',
@@ -289,7 +292,7 @@ describeAwaitingWin32Platform('resolveNvmVersionPin', () => {
   });
 });
 
-describeAwaitingWin32Platform('decideNvmVersionOffers', () => {
+describe('decideNvmVersionOffers', () => {
   const folderNames = ['v20.11.1', 'v22.3.0', 'v22.11.0', 'v24.19.1'];
 
   test('offers each version neither the default nor any .nvmrc resolves to', () => {
@@ -390,7 +393,7 @@ describeAwaitingWin32Platform('decideNvmVersionOffers', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildNvmVersionFindings', () => {
+describe('buildNvmVersionFindings', () => {
   const folderPath = buildTestAbsolutePath({ text: `${FIXTURE_VERSIONS_PATH}/v20.11.1` });
   const version = buildTestNvmNodeVersion({ text: 'v20.11.1' });
   const pinFiles: ProjectPinFileRef[] = [
@@ -497,7 +500,7 @@ describeAwaitingWin32Platform('buildNvmVersionFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareNvmVersionUnit', () => {
+describe('compareNvmVersionUnit', () => {
   const state = buildFixtureState({ folderNames: ['v20.11.1', 'v22.11.0'] });
   const unit: ExplorePathUnitNvmVersion = {
     kind: 'nvmVersion',
@@ -548,7 +551,10 @@ describeAwaitingWin32Platform('compareNvmVersionUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home', () => {
+// nvm is explored on macOS alone.
+const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
+
+describeOnDarwin('the nvm probe and recheck against a fixture home', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let versionsPath: string;
@@ -579,12 +585,12 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
     return path;
   }
 
-  async function writeNvmrc(params: { projectName: string; text: string }): Promise<string> {
+  async function writeNvmrc(params: { projectName: string; text: string }): Promise<AbsolutePath> {
     const path = join(environment.homeDir, params.projectName, '.nvmrc');
 
     await writeFixtureTextFile({ path: path, text: params.text });
 
-    return path;
+    return buildTestHostPath({ text: path });
   }
 
   async function probeNvmVersions(projectPins: ProjectPinsLoad): Promise<unknown> {
@@ -596,7 +602,7 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
   }
 
   function buildVersionFolderPath(folderName: string): AbsolutePath {
-    return buildTestAbsolutePath({ text: join(versionsPath, folderName) });
+    return buildTestHostPath({ text: join(versionsPath, folderName) });
   }
 
   test('offers the versions neither the default alias nor a .nvmrc resolves to', async () => {
@@ -620,7 +626,7 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
             kind: 'nvmVersion',
             folderPath: buildVersionFolderPath('v24.19.1'),
             version: buildTestNvmNodeVersion({ text: 'v24.19.1' }),
-            pinFiles: [{ path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' }],
+            pinFiles: [{ path: nvmrcPath, kind: 'nvmrc' }],
           },
           evidenceLines: [
             'The default alias resolves to v20.11.1.',
@@ -661,7 +667,7 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
   test('answers unreadable at a .nvmrc the scan could not read', async () => {
     await createVersionFolders(['v20.11.1']);
     const pinFile = buildTestPinFileUnreadable({
-      path: join(environment.homeDir, 'app', '.nvmrc'),
+      path: buildTestHostPath({ text: join(environment.homeDir, 'app', '.nvmrc') }),
       kind: 'nvmrc',
     });
 
@@ -703,7 +709,7 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
         kind: 'nvmVersion',
         folderPath: buildVersionFolderPath('v20.11.1'),
         version: buildTestNvmNodeVersion({ text: 'v20.11.1' }),
-        pinFiles: [{ path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' }],
+        pinFiles: [{ path: nvmrcPath, kind: 'nvmrc' }],
       };
     }
 

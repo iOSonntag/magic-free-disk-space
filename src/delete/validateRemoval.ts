@@ -15,6 +15,7 @@ export type RemovalDecision = RemovalDecisionApproved | RemovalDecisionRefused;
 /**
  * Refuses a candidate marked `never`, then one at the first target `findRemovalRefusal` refuses.
  * A tool item and an engine item pass, since their own tool or engine removes them after a recheck.
+ * A Recycle Bin passes only for a drive root the environment lists, which the system empties.
  */
 export function validateRemoval(params: {
   candidate: Candidate;

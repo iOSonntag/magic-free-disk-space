@@ -1,12 +1,13 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureFile, loadTestEnvironment, withFixtureRoot } from '../support/fixtureRoot.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
+
+const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
 
 // Both are large enough to offer, and the snippet is smaller than the previews.
 const PREVIEWS_FILE_BYTES = 4 * SCAN_LIMITS.minOfferedBytes;
@@ -77,7 +78,7 @@ async function loadOnlyAdvice(params: {
   return advice;
 }
 
-describeAwaitingWin32Platform('the carve of the Xcode previews out of the user data advice', () => {
+describeOnDarwin('the carve of the Xcode previews out of the user data advice', () => {
   test('offers the previews, and sizes the advice without their bytes', async () => {
     await withUserData({
       run: async (fixture) => {

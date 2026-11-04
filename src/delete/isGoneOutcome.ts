@@ -6,6 +6,7 @@ export function isGoneOutcome(kind: RemovalOutcomeKind): boolean {
     case 'removed':
     case 'alreadyGone':
       return true;
+    case 'partlyRemoved':
     case 'changedSinceScan':
     case 'ownerRunning':
     case 'permissionDenied':

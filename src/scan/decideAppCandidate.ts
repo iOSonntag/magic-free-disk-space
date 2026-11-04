@@ -88,7 +88,7 @@ export function decideAppCandidate(params: {
       removal: {
         kind: 'deletePaths',
         targets: [{ path: path, identity: params.measurement.identity }],
-        ownerBundlePaths: [path],
+        owner: { kind: 'bundles', bundlePaths: [path] },
       },
     },
   };

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -28,7 +28,6 @@ import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -39,7 +38,7 @@ import {
   buildTestAbsolutePath,
   buildTestHomebrewFormulaName,
 } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
 import {
@@ -136,7 +135,7 @@ function buildOrphansUnit(params: { cellarPath: string }): ExploreToolUnitHomebr
   };
 }
 
-describeAwaitingWin32Platform('parseHomebrewCellarPath', () => {
+describe('parseHomebrewCellarPath', () => {
   test('reads the one path brew prints', () => {
     expect(
       parseHomebrewCellarPath({
@@ -165,7 +164,7 @@ describeAwaitingWin32Platform('parseHomebrewCellarPath', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
+describe('parseHomebrewCleanupDryRun', () => {
   test('reads every Would remove line with its size, and skips the closing line', () => {
     const removals = parseHomebrewCleanupDryRun({
       pathRules: DARWIN_PATH_RULES,
@@ -221,7 +220,7 @@ describeAwaitingWin32Platform('parseHomebrewCleanupDryRun', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildHomebrewOldVersions', () => {
+describe('buildHomebrewOldVersions', () => {
   test('groups the kegs of its own Cellar by formula and ignores every other line', () => {
     const removals = parseHomebrewCleanupDryRun({
       pathRules: DARWIN_PATH_RULES,
@@ -345,7 +344,7 @@ describeAwaitingWin32Platform('buildHomebrewOldVersions', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseHomebrewAutoremoveDryRun', () => {
+describe('parseHomebrewAutoremoveDryRun', () => {
   test('reads each listed formula, a tap formula by its name', () => {
     expect(parseHomebrewAutoremoveDryRun({ stdoutText: HOMEBREW_AUTOREMOVE_DRY_RUN_TEXT })).toEqual(
       { kind: 'succeeded', value: [libyaml, libfoo] },
@@ -376,7 +375,7 @@ describeAwaitingWin32Platform('parseHomebrewAutoremoveDryRun', () => {
   });
 });
 
-describeAwaitingWin32Platform('decideHomebrewOrphans', () => {
+describe('decideHomebrewOrphans', () => {
   test('judges no orphans when none is listed', () => {
     expect(decideHomebrewOrphans({ orphans: [] })).toEqual({ kind: 'judged', orphans: [] });
   });
@@ -405,7 +404,7 @@ describeAwaitingWin32Platform('decideHomebrewOrphans', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildHomebrewFindings', () => {
+describe('buildHomebrewFindings', () => {
   test('offers each formula with old versions and the orphans together', () => {
     const probeFindings = buildHomebrewFindings({ tool: brew, state: state, processCommands: [] });
     const findings = probeFindings.findings;
@@ -467,7 +466,7 @@ describeAwaitingWin32Platform('buildHomebrewFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareHomebrewUnit', () => {
+describe('compareHomebrewUnit', () => {
   test('is unchanged while the fresh kegs are a subset of the scanned ones and brew is idle', () => {
     const oneKegLeft: HomebrewState = {
       ...state,
@@ -535,7 +534,8 @@ describeAwaitingWin32Platform('compareHomebrewUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('with fake brews', () => {
+// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
+describeOnPosix('with fake brews', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let appleSiliconCellarPath: string;

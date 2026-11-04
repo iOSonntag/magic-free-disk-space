@@ -10,7 +10,6 @@ import {
   startExploreProbeScan,
   startExploreProbes,
 } from '../../src/explore/startExploreProbes.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -20,7 +19,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -133,7 +132,8 @@ function buildProbeScan(params: Partial<ExploreProbeStart>): ExploreProbeScan {
   return startExploreProbeScan(buildProbeStart(params));
 }
 
-describeAwaitingWin32Platform('startExploreProbes', () => {
+// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
+describeOnPosix('startExploreProbes', () => {
   test('finds the units of every tool with the activity of each, all judged', async () => {
     const tools = await createWorkingTools();
 
@@ -380,7 +380,13 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       setTimeout(resolve, timeoutMs + EXPLORE_PROBE_DEADLINE_GRACE_MS + 200);
     });
     const pinnedProjectPins = buildTestProjectPins({
-      files: [buildTestPinFileText({ path: '/work/app/.nvmrc', kind: 'nvmrc', text: '22\n' })],
+      files: [
+        buildTestPinFileText({
+          path: buildTestAbsolutePath({ text: '/work/app/.nvmrc' }),
+          kind: 'nvmrc',
+          text: '22\n',
+        }),
+      ],
     });
     const builtProjectPins: ProjectPins[] = [];
 

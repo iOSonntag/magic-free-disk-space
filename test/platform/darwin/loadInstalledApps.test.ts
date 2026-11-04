@@ -1,9 +1,8 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadInstalledApps } from '../../../src/platform/darwin/loadInstalledApps.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../../src/system/limits.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -51,7 +50,7 @@ async function createFixtureBundle(params: {
   );
 }
 
-describeAwaitingWin32Platform('loadInstalledApps', () => {
+describe.skipIf(process.platform !== 'darwin')('loadInstalledApps', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

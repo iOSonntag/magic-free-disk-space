@@ -19,7 +19,6 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -29,7 +28,8 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 import type { FakeEngine } from './engineFixtures.js';
@@ -531,7 +531,8 @@ describe('the engine probe on a platform without the engine', () => {
   });
 });
 
-describeAwaitingWin32Platform('the engine probe and its removal over a fake engine', () => {
+// The fake engine serves on a Unix socket, as the engines of macOS do.
+describeOnPosix('the engine probe and its removal over a fake engine', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let socketPath: AbsolutePath;
@@ -539,7 +540,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
   beforeEach(async () => {
     fixtureRoot = await createFixtureRoot();
     environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-    socketPath = buildTestAbsolutePath({ text: join(environment.homeDir, 'engine.sock') });
+    socketPath = buildTestHostPath({ text: join(environment.homeDir, 'engine.sock') });
   });
 
   afterEach(async () => {
@@ -740,7 +741,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
     const colima = CONTAINER_ENGINES.colimaEngine;
 
     function buildColimaPath(names: string[]): AbsolutePath {
-      return buildTestAbsolutePath({ text: join(environment.homeDir, '.colima', ...names) });
+      return buildTestHostPath({ text: join(environment.homeDir, '.colima', ...names) });
     }
 
     /** Serves a fake engine in the profile's folder with one unused volume named after it. */

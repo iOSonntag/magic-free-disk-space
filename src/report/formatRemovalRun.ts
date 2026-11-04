@@ -2,6 +2,7 @@ import type {
   RemovalOutcome,
   RemovalOutcomeCoded,
   RemovalOutcomeKind,
+  RemovalOutcomePartlyRemoved,
   RemovalOutcomeToolFailed,
   RemovalRun,
 } from '../delete/deleteCandidates.js';
@@ -15,6 +16,7 @@ import { isEngineOutcome, sumFreedSpace } from './sumFreedSpace.js';
 
 const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   removed: 'deleted',
+  partlyRemoved: 'partly deleted',
   alreadyGone: 'already gone',
   changedSinceScan: 'changed since the scan, left alone',
   ownerRunning: 'its app or tool is running now, left alone',
@@ -47,11 +49,33 @@ export function formatAvailableSpaceLine(params: { availableBytes: number }): st
 }
 
 function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
-  if (params.outcome.outcome === 'toolFailed') {
-    return formatToolFailedLines({ outcome: params.outcome });
+  switch (params.outcome.outcome) {
+    case 'toolFailed':
+      return formatToolFailedLines({ outcome: params.outcome });
+    case 'partlyRemoved':
+      return [formatPartlyRemovedLine({ outcome: params.outcome })];
+    case 'removed':
+    case 'alreadyGone':
+    case 'changedSinceScan':
+    case 'ownerRunning':
+    case 'permissionDenied':
+    case 'failed':
+    case 'notAttempted':
+    case 'engineInUse':
+    case 'engineNotRunning':
+      return [formatCodedOutcomeLine({ outcome: params.outcome })];
   }
+}
 
-  return [formatCodedOutcomeLine({ outcome: params.outcome })];
+/** How many entries stayed: files another program held open, or content kept only online. */
+function formatPartlyRemovedLine(params: { outcome: RemovalOutcomePartlyRemoved }): string {
+  const stayedText = formatCount({
+    count: params.outcome.stayedEntryCount,
+    singular: 'entry',
+    plural: 'entries',
+  });
+
+  return `- ${outcomeTexts.partlyRemoved}: ${formatCandidateItemText({ candidate: params.outcome.candidate })} (${stayedText} stayed, in use by another program or kept only online; ${formatBytes(params.outcome.freedBytes)} freed)`;
 }
 
 function formatCodedOutcomeLine(params: { outcome: RemovalOutcomeCoded }): string {

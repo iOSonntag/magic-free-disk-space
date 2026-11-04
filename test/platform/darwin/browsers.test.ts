@@ -1,7 +1,6 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { BROWSER_ENTRIES } from '../../../src/platform/darwin/catalog/browsers.js';
 import { CATALOG_ENTRIES } from '../../../src/platform/darwin/catalogEntries.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import { buildRiskAndPathById } from './catalogPins.js';
 
 /** The caches inside one Chromium profile. */
@@ -36,7 +35,7 @@ const CHROMIUM_USER_DATA_ENTRIES: Record<string, string> = {
   'vivaldi-profile-caches': 'com.vivaldi.Vivaldi',
 };
 
-describeAwaitingWin32Platform('BROWSER_ENTRIES', () => {
+describe('BROWSER_ENTRIES', () => {
   test('pins the risk and the path of every entry', () => {
     expect(buildRiskAndPathById(BROWSER_ENTRIES)).toEqual({
       'brave-cache': ['safe', 'Library/Caches/BraveSoftware/Brave-Browser'],

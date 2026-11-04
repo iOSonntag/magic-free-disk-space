@@ -44,6 +44,7 @@ import type {
   VagrantBoxProvider,
   VagrantBoxVersion,
 } from '../../src/explore/vagrantBoxes/vagrantBoxNames.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { PathRules } from '../../src/path/pathRules.js';
@@ -80,6 +81,26 @@ export function buildTestWindowsPath(params: { text: string }): AbsolutePath {
   return unwrapFixtureValue({
     parsed: parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.text }),
     text: params.text,
+  });
+}
+
+/**
+ * A home folder with the rules its paths follow: the environment of a test on the fixture root,
+ * which the host names, or an example one.
+ */
+export type FixtureHome = { pathRules: PathRules; homeDir: AbsolutePath };
+
+/** An example macOS home, such as `/Users/example`, the same on every host. */
+export function buildExampleHome(params: { text: string }): FixtureHome {
+  return { pathRules: DARWIN_PATH_RULES, homeDir: buildTestAbsolutePath({ text: params.text }) };
+}
+
+/** The path of `path`, written with `/`, below the home, joined under the home's rules. */
+export function joinBelowHome(params: { home: FixtureHome; path: string }): AbsolutePath {
+  return joinAbsolutePath({
+    rules: params.home.pathRules,
+    parentPath: params.home.homeDir,
+    names: params.path.split('/'),
   });
 }
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Risk } from '../../src/catalog/catalog.js';
@@ -9,14 +9,11 @@ import type {
   ProjectPinFileRef,
 } from '../../src/explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
 import type { EntryEvictionCheck } from '../../src/system/entryReads.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -27,7 +24,8 @@ import {
   loadTestEnvironment,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath, HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { runTestScan } from '../support/scanRunFixtures.js';
 
@@ -68,7 +66,7 @@ async function createDatedRustProject(params: {
 }
 
 function buildPinFileRef(params: { path: string; kind: ProjectPinFileKind }): ProjectPinFileRef {
-  return { path: buildTestAbsolutePath({ text: params.path }), kind: params.kind };
+  return { path: buildTestHostPath({ text: params.path }), kind: params.kind };
 }
 
 function comparePinFilePaths(left: ProjectPinFileRef, right: ProjectPinFileRef): number {
@@ -84,7 +82,7 @@ function walkTestProjects(params: {
   isEntryEvicted?: EntryEvictionCheck;
 }): Promise<ProjectWalk> {
   return walkProjects({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: HOST_PATH_RULES,
     homeDir: params.homeDir,
     excludedTopNames: params.excludedTopNames ?? [],
     rules: params.rules ?? PROJECT_ARTIFACT_RULES,
@@ -94,11 +92,11 @@ function walkTestProjects(params: {
       privateBytes: null,
       isEntryEvicted: params.isEntryEvicted ?? (() => false),
     }),
-    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
   });
 }
 
-describeAwaitingWin32Platform('walkProjects', () => {
+describe('walkProjects', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -231,6 +229,40 @@ describeAwaitingWin32Platform('walkProjects', () => {
     ]);
   });
 
+  test.skipIf(process.platform !== 'win32')(
+    'skips a top folder named as an excluded name in another case, as Windows compares names',
+    async () => {
+      const projectPath = join(fixtureRoot.homeDir, 'appdata', 'app');
+      await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
+      await createEmptyFile({ path: join(projectPath, 'package.json') });
+
+      const result = await walkTestProjects({
+        homeDir: fixtureRoot.homeDir,
+        excludedTopNames: ['AppData'],
+      });
+
+      expect(result.artifacts).toEqual([]);
+    },
+  );
+
+  test.skipIf(process.platform !== 'darwin')(
+    'walks a top folder whose name differs from an excluded name in case, as macOS compares names',
+    async () => {
+      const projectPath = join(fixtureRoot.homeDir, 'library', 'app');
+      await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
+      await createEmptyFile({ path: join(projectPath, 'package.json') });
+
+      const result = await walkTestProjects({
+        homeDir: fixtureRoot.homeDir,
+        excludedTopNames: ['Library'],
+      });
+
+      expect(result.artifacts.map((finding) => finding.artifactPath)).toEqual([
+        join(projectPath, 'node_modules'),
+      ]);
+    },
+  );
+
   test('does not find an artifact deeper than maxDepth, but finds one at maxDepth', async () => {
     const projectPath = join(fixtureRoot.homeDir, 'work', 'app');
     await createFixtureDirectory({ path: join(projectPath, 'node_modules') });
@@ -336,7 +368,7 @@ describeAwaitingWin32Platform('walkProjects', () => {
 
   test('returns nothing, and is complete, when the home folder is missing', async () => {
     const result = await walkTestProjects({
-      homeDir: buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, 'missing-home') }),
+      homeDir: buildTestHostPath({ text: join(fixtureRoot.rootDir, 'missing-home') }),
     });
 
     expect(result).toEqual({ artifacts: [], pinFiles: [], isComplete: true, issues: [] });

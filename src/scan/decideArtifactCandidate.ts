@@ -49,7 +49,7 @@ export function decideArtifactCandidate(params: {
       removal: {
         kind: 'deletePaths',
         targets: [{ path: path, identity: params.measurement.identity }],
-        ownerBundlePaths: [],
+        owner: { kind: 'none' },
       },
     },
   };

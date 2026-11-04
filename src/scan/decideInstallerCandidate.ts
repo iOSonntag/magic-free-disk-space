@@ -88,7 +88,7 @@ export function decideInstallerCandidate(params: {
       removal: {
         kind: 'deletePaths',
         targets: [{ path: params.app.bundlePath, identity: params.measurement.identity }],
-        ownerBundlePaths: [params.app.bundlePath],
+        owner: { kind: 'bundles', bundlePaths: [params.app.bundlePath] },
       },
     },
   };

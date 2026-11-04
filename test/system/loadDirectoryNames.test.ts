@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadDirectoryNames } from '../../src/system/loadDirectoryNames.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -14,7 +13,7 @@ import { testOnPosix } from '../support/posixOnly.js';
 
 const fixtureModifiedMs = Date.UTC(2024, 0, 15, 12, 0, 0);
 
-describeAwaitingWin32Platform('loadDirectoryNames', () => {
+describe('loadDirectoryNames', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

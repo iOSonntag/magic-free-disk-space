@@ -3,13 +3,17 @@ import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ExploreProbeFailure } from '../explore/exploreUnit.js';
 import { buildUnitRunArguments, listEngineUnitIds } from '../explore/exploreUnit.js';
 import { recheckExplorePathUnit } from '../explore/recheckExploreUnit.js';
+import type { PathRules } from '../path/pathRules.js';
 import type {
   Candidate,
   CandidateRemovalDeletePaths,
   CandidateRemovalDeleteUnitPaths,
+  CandidateRemovalEmptyRecycleBin,
+  RemovalOwner,
   RemovalTarget,
   RemovalTargets,
 } from '../scan/candidate.js';
+import { isExecutableOwnerRunning } from '../scan/isExecutableOwnerRunning.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
 import type { EntryReads } from '../system/entryReads.js';
@@ -20,7 +24,7 @@ import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
 import type { ReadFailure } from '../system/readFailure.js';
 import { callEngineCandidate } from './callEngineCandidate.js';
 import { decideTargetsOutcome } from './decideTargetsOutcome.js';
-import type { DeletePlatform } from './deletePlatform.js';
+import type { DeletePlatform, DeletePlatformTrash, TreeRemoval } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import { evictCandidateFiles } from './evictCandidateFiles.js';
 import { fileFailureToOutcome } from './fileFailureToOutcome.js';
@@ -29,6 +33,7 @@ import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
 
 export type RemovalOutcomeKind =
   | 'removed'
+  | 'partlyRemoved'
   | 'alreadyGone'
   | 'changedSinceScan'
   | 'ownerRunning'
@@ -41,8 +46,8 @@ export type RemovalOutcomeKind =
   /** The engine's socket was gone or refused the connect, so nothing was sent; the item stays. */
   | 'engineNotRunning';
 
-/** The outcomes that carry an error code rather than a tool failure. */
-export type RemovalOutcomeCodedKind = Exclude<RemovalOutcomeKind, 'toolFailed'>;
+/** The outcomes that carry an error code rather than a tool failure or the entries that stayed. */
+export type RemovalOutcomeCodedKind = Exclude<RemovalOutcomeKind, 'toolFailed' | 'partlyRemoved'>;
 
 export type RemovalOutcomeCoded = {
   candidate: Candidate;
@@ -65,7 +70,22 @@ export type RemovalOutcomeToolFailed = {
   failure: ExploreProbeFailure;
 };
 
-export type RemovalOutcome = RemovalOutcomeCoded | RemovalOutcomeToolFailed;
+/**
+ * An item whose removal left entries of a target that another program held, or whose content only
+ * a cloud store keeps; `freedBytes` is the drop to what a measurement after the removal still
+ * found, and `stayedEntryCount` the entries left of the first target that stayed.
+ */
+export type RemovalOutcomePartlyRemoved = {
+  candidate: Candidate;
+  freedBytes: number;
+  outcome: 'partlyRemoved';
+  stayedEntryCount: number;
+};
+
+/** The outcome of an item deleted as its targets. */
+type TargetsRemovalOutcome = RemovalOutcomeCoded | RemovalOutcomePartlyRemoved;
+
+export type RemovalOutcome = TargetsRemovalOutcome | RemovalOutcomeToolFailed;
 
 export type RemovalRun = {
   outcomes: RemovalOutcome[];
@@ -77,6 +97,7 @@ const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
 /** Whether the outcome left its item in place through a failure, which the run reports. */
 export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
   switch (kind) {
+    case 'partlyRemoved':
     case 'permissionDenied':
     case 'failed':
     case 'toolFailed':
@@ -97,14 +118,14 @@ export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
  * outcome entries after it. A target goes only while its identity still matches the scan and no
  * owner app runs in the processes `loadProcessCommands` read once after the confirmation; `null`
  * withholds every owned item. A tool item, a unit deleted as its paths, an evict, and an engine's
- * unit are checked again first and go only while the unit is still unchanged and idle. A journal
- * failure stops the run.
+ * unit are checked again first and go only while the unit is still unchanged and idle. A Recycle
+ * Bin is emptied only while it holds what the scan counted. A journal failure stops the run.
  */
 export async function deleteCandidates(params: {
   candidates: Candidate[];
   journal: DeletionJournal;
   environment: Environment;
-  /** The delete slice, whose `removeTree` removes each path. */
+  /** The delete slice, whose `removeTree` removes each path and whose `trash` empties a bin. */
   delete: DeletePlatform;
   /** What the rechecks of the units read by. */
   probePlatform: ExploreProbePlatform;
@@ -190,6 +211,15 @@ function buildIntentEntry(params: { candidate: Candidate; atMs: number }): Journ
         allocatedBytes: params.candidate.allocatedBytes,
         targetPaths: params.candidate.removal.targets.map((target) => target.path),
       };
+    // The system empties the bin as one unit, which its outcome entry records at the bin's path.
+    case 'emptyRecycleBin':
+      return {
+        kind: 'intent',
+        atMs: params.atMs,
+        path: params.candidate.path,
+        allocatedBytes: params.candidate.allocatedBytes,
+        targetPaths: [params.candidate.path],
+      };
     case 'evictUnitFiles':
       return {
         kind: 'evictIntent',
@@ -233,6 +263,7 @@ async function removeCandidate(params: {
       return deletePathsCandidate({
         candidate: params.candidate,
         removal: params.candidate.removal,
+        environment: params.environment,
         delete: params.delete,
         entryReads: params.entryReads,
         processCommands: params.processCommands,
@@ -254,6 +285,7 @@ async function removeCandidate(params: {
         candidate: params.candidate,
         removal: params.candidate.removal,
         environment: params.environment,
+        toolProcesses: params.probePlatform.toolProcesses,
         clock: params.clock,
       });
     case 'callEngine':
@@ -261,6 +293,13 @@ async function removeCandidate(params: {
         candidate: params.candidate,
         removal: params.candidate.removal,
         user: params.environment.user,
+        clock: params.clock,
+      });
+    case 'emptyRecycleBin':
+      return emptyRecycleBinCandidate({
+        candidate: params.candidate,
+        removal: params.candidate.removal,
+        trash: params.delete.trash,
         clock: params.clock,
       });
     case 'runTool': {
@@ -284,7 +323,8 @@ async function removeCandidate(params: {
 
 /**
  * The outcome of a removal and the journal entries that record it, in the order they happened: one
- * per target of an item of paths or an evict, one for a tool's run or an engine's call.
+ * per target of an item of paths or an evict, one for a tool's run, an engine's call, or a
+ * Recycle Bin.
  */
 export type RecordedRemoval = {
   outcome: RemovalOutcome;
@@ -360,6 +400,7 @@ export function toolCandidateRunToRemoval(params: {
 async function deletePathsCandidate(params: {
   candidate: Candidate;
   removal: CandidateRemovalDeletePaths;
+  environment: Environment;
   delete: DeletePlatform;
   entryReads: EntryReads;
   processCommands: string[] | null;
@@ -367,7 +408,8 @@ async function deletePathsCandidate(params: {
 }): Promise<RecordedRemoval> {
   if (
     isOwnerPossiblyRunning({
-      ownerBundlePaths: params.removal.ownerBundlePaths,
+      owner: params.removal.owner,
+      pathRules: params.environment.pathRules,
       processCommands: params.processCommands,
     })
   ) {
@@ -387,6 +429,79 @@ async function deletePathsCandidate(params: {
     entryReads: params.entryReads,
     clock: params.clock,
   });
+}
+
+/**
+ * Empties the Recycle Bin of the drive only while a fresh count still finds what the scan
+ * counted; anything thrown away since would go unseen. The system empties the bin as one unit,
+ * which frees its scanned size; one entry at the bin's path.
+ */
+function emptyRecycleBinCandidate(params: {
+  candidate: Candidate;
+  removal: CandidateRemovalEmptyRecycleBin;
+  trash: DeletePlatformTrash;
+  clock: () => number;
+}): RecordedRemoval {
+  const emptying = emptyScannedRecycleBin({ removal: params.removal, trash: params.trash });
+
+  return {
+    outcome: {
+      candidate: params.candidate,
+      freedBytes: emptying.outcome === 'removed' ? params.candidate.allocatedBytes : 0,
+      outcome: emptying.outcome,
+      code: emptying.code,
+    },
+    outcomeEntries: [
+      {
+        kind: 'outcome',
+        atMs: params.clock(),
+        path: params.candidate.path,
+        outcome: emptying.outcome,
+        code: emptying.code,
+      },
+    ],
+  };
+}
+
+/** What emptying the bin made of it, with the error text of a failed count or emptying. */
+function emptyScannedRecycleBin(params: {
+  removal: CandidateRemovalEmptyRecycleBin;
+  trash: DeletePlatformTrash;
+}): { outcome: RemovalOutcomeCodedKind; code: string | null } {
+  switch (params.trash.kind) {
+    // A platform whose trash is a folder has no Recycle Bin to empty.
+    case 'catalogFolder':
+      return { outcome: 'failed', code: null };
+    case 'recycleBins': {
+      const driveRootPath = params.removal.driveRootPath;
+      const content = params.trash.loadRecycleBin({ driveRootPath: driveRootPath });
+
+      if (content.kind === 'failed') {
+        return { outcome: 'failed', code: content.failure };
+      }
+
+      if (content.value.itemCount === 0) {
+        return { outcome: 'alreadyGone', code: null };
+      }
+
+      const scanned = params.removal.scannedContent;
+
+      if (
+        content.value.itemCount !== scanned.itemCount ||
+        content.value.sizeBytes !== scanned.sizeBytes
+      ) {
+        return { outcome: 'changedSinceScan', code: null };
+      }
+
+      const emptied = params.trash.emptyRecycleBin({ driveRootPath: driveRootPath });
+
+      if (emptied.kind === 'failed') {
+        return { outcome: 'failed', code: emptied.failure };
+      }
+
+      return { outcome: 'removed', code: null };
+    }
+  }
 }
 
 /**
@@ -484,13 +599,24 @@ function readFailureToOutcomeKind(failure: ReadFailure): RemovalOutcomeCodedKind
 }
 
 /** What became of one target, and whether its delete ran, which may have taken part of it. */
-type TargetOutcome = {
+type TargetOutcomeCoded = {
   path: string;
   atMs: number;
   outcome: RemovalOutcomeCodedKind;
   code: string | null;
   deleteRan: boolean;
 };
+
+/** The target's delete ran and left `stayedEntryCount` of its entries where they were. */
+type TargetOutcomePartlyRemoved = {
+  path: string;
+  atMs: number;
+  outcome: 'partlyRemoved';
+  stayedEntryCount: number;
+  deleteRan: true;
+};
+
+type TargetOutcome = TargetOutcomeCoded | TargetOutcomePartlyRemoved;
 
 /**
  * Deletes each target in turn, each only while its identity still matches the scan, so a target
@@ -519,14 +645,37 @@ async function deleteScannedTargets(params: {
       presentBytes: presentBytes,
       entryReads: params.entryReads,
     }),
-    outcomeEntries: mapNonEmpty(targetOutcomes, (targetOutcome) => ({
-      kind: 'outcome',
-      atMs: targetOutcome.atMs,
-      path: targetOutcome.path,
-      outcome: targetOutcome.outcome,
-      code: targetOutcome.code,
-    })),
+    outcomeEntries: mapNonEmpty(targetOutcomes, targetOutcomeToJournalEntry),
   };
+}
+
+function targetOutcomeToJournalEntry(targetOutcome: TargetOutcome): JournalEntry {
+  switch (targetOutcome.outcome) {
+    case 'partlyRemoved':
+      return {
+        kind: 'outcome',
+        atMs: targetOutcome.atMs,
+        path: targetOutcome.path,
+        outcome: 'partlyRemoved',
+        stayedEntryCount: targetOutcome.stayedEntryCount,
+      };
+    case 'removed':
+    case 'alreadyGone':
+    case 'changedSinceScan':
+    case 'ownerRunning':
+    case 'permissionDenied':
+    case 'failed':
+    case 'notAttempted':
+    case 'engineInUse':
+    case 'engineNotRunning':
+      return {
+        kind: 'outcome',
+        atMs: targetOutcome.atMs,
+        path: targetOutcome.path,
+        outcome: targetOutcome.outcome,
+        code: targetOutcome.code,
+      };
+  }
 }
 
 /**
@@ -606,13 +755,11 @@ async function deleteScannedTarget(params: {
   const removed = await params.delete.removeTree({ path: params.target.path });
 
   if (removed.kind === 'succeeded') {
-    return {
+    return treeRemovalToTargetOutcome({
       path: params.target.path,
+      removal: removed.value,
       atMs: params.clock(),
-      outcome: 'removed',
-      code: null,
-      deleteRan: true,
-    };
+    });
   }
 
   return {
@@ -622,6 +769,31 @@ async function deleteScannedTarget(params: {
     code: removed.failure,
     deleteRan: true,
   };
+}
+
+function treeRemovalToTargetOutcome(params: {
+  path: string;
+  removal: TreeRemoval;
+  atMs: number;
+}): TargetOutcome {
+  switch (params.removal.kind) {
+    case 'removed':
+      return {
+        path: params.path,
+        atMs: params.atMs,
+        outcome: 'removed',
+        code: null,
+        deleteRan: true,
+      };
+    case 'partlyRemoved':
+      return {
+        path: params.path,
+        atMs: params.atMs,
+        outcome: 'partlyRemoved',
+        stayedEntryCount: params.removal.stayedEntryCount,
+        deleteRan: true,
+      };
+  }
 }
 
 /**
@@ -635,7 +807,7 @@ async function loadTargetsOutcome(params: {
   targetOutcomes: [TargetOutcome, ...TargetOutcome[]];
   presentBytes: number;
   entryReads: EntryReads;
-}): Promise<RemovalOutcomeCoded> {
+}): Promise<TargetsRemovalOutcome> {
   const decision = decideTargetsOutcome({
     targets: params.targetOutcomes,
     getOutcome: (targetOutcome) => targetOutcome.outcome,
@@ -651,12 +823,11 @@ async function loadTargetsOutcome(params: {
   }
 
   if (!params.targetOutcomes.some((targetOutcome) => targetOutcome.deleteRan)) {
-    return {
+    return buildStayedTargetOutcome({
       candidate: params.candidate,
+      target: decision.target,
       freedBytes: 0,
-      outcome: decision.target.outcome,
-      code: decision.target.code,
-    };
+    });
   }
 
   const left = await loadPathMeasurement({
@@ -665,31 +836,82 @@ async function loadTargetsOutcome(params: {
     entryReads: params.entryReads,
   });
 
-  return {
+  return buildStayedTargetOutcome({
     candidate: params.candidate,
+    target: decision.target,
     freedBytes: getMeasuredFreedBytes({ beforeBytes: params.presentBytes, after: left }),
-    outcome: decision.target.outcome,
-    code: decision.target.code,
-  };
+  });
 }
 
-/** An owned item is withheld while its app runs, or while that cannot be checked. */
+/** The item's outcome named by the first target that stayed, whole or in part. */
+function buildStayedTargetOutcome(params: {
+  candidate: Candidate;
+  target: TargetOutcome;
+  freedBytes: number;
+}): TargetsRemovalOutcome {
+  switch (params.target.outcome) {
+    case 'partlyRemoved':
+      return {
+        candidate: params.candidate,
+        freedBytes: params.freedBytes,
+        outcome: 'partlyRemoved',
+        stayedEntryCount: params.target.stayedEntryCount,
+      };
+    case 'removed':
+    case 'alreadyGone':
+    case 'changedSinceScan':
+    case 'ownerRunning':
+    case 'permissionDenied':
+    case 'failed':
+    case 'notAttempted':
+    case 'engineInUse':
+    case 'engineNotRunning':
+      return {
+        candidate: params.candidate,
+        freedBytes: params.freedBytes,
+        outcome: params.target.outcome,
+        code: params.target.code,
+      };
+  }
+}
+
+/**
+ * An owned item is withheld while its app or its program runs, or while that cannot be checked.
+ * An owner whose bundle no installed app carries owns nothing that runs.
+ */
 function isOwnerPossiblyRunning(params: {
-  ownerBundlePaths: string[];
+  owner: RemovalOwner;
+  pathRules: PathRules;
   processCommands: string[] | null;
 }): boolean {
-  if (params.ownerBundlePaths.length === 0) {
-    return false;
-  }
+  switch (params.owner.kind) {
+    case 'none':
+      return false;
+    case 'bundles':
+      if (params.owner.bundlePaths.length === 0) {
+        return false;
+      }
 
-  if (params.processCommands === null) {
-    return true;
-  }
+      if (params.processCommands === null) {
+        return true;
+      }
 
-  return isAnyBundleRunning({
-    bundlePaths: params.ownerBundlePaths,
-    processCommands: params.processCommands,
-  });
+      return isAnyBundleRunning({
+        bundlePaths: params.owner.bundlePaths,
+        processCommands: params.processCommands,
+      });
+    case 'executable':
+      if (params.processCommands === null) {
+        return true;
+      }
+
+      return isExecutableOwnerRunning({
+        pathRules: params.pathRules,
+        imageNames: params.owner.imageNames,
+        installFolderPath: params.owner.installFolderPath,
+        processImagePaths: params.processCommands,
+      });
+  }
 }
 
 function isSameIdentity(params: { current: FileIdentity; scanned: FileIdentity }): boolean {

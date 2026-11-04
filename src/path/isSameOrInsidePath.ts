@@ -34,6 +34,18 @@ export function mayBeSameOrInsidePath(params: {
   });
 }
 
+/** True when two entry names name the same entry: exactly on POSIX, without case on Windows. */
+export function isSameEntryName(params: {
+  rules: PathRules;
+  name: string;
+  otherName: string;
+}): boolean {
+  return (
+    foldUnderRules({ rules: params.rules, text: params.name }) ===
+    foldUnderRules({ rules: params.rules, text: params.otherName })
+  );
+}
+
 function foldUnderRules(params: { rules: PathRules; text: string }): string {
   switch (params.rules.rootForm) {
     case 'posix':

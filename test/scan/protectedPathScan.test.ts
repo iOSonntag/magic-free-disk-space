@@ -1,9 +1,10 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { HomeFixtureFile } from '../platform/darwin/catalogScan.js';
 import { withScannedCatalogHome } from '../platform/darwin/catalogScan.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+
+const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
 
 /** The files below the fixture home: the deletion log, an app's log, and a preview. */
 const HOME_FILES: HomeFixtureFile[] = [
@@ -12,7 +13,7 @@ const HOME_FILES: HomeFixtureFile[] = [
   'Library/Messages/Caches/Previews/Attachments/ab/preview.jpg',
 ].map((path) => ({ path: path, sizeBytes: SCAN_LIMITS.minOfferedBytes }));
 
-describeAwaitingWin32Platform('the scan of the paths the removal never touches', () => {
+describeOnDarwin('the scan of the paths the removal never touches', () => {
   test('the app logs neither offer nor advise the deletion log, and skip it', async () => {
     await withScannedCatalogHome({
       entryIds: ['user-logs'],

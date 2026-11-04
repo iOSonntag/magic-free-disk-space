@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -14,13 +14,13 @@ import { compareSimulatorRuntime } from '../../src/explore/simulatorRuntimes/rec
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
@@ -91,7 +91,7 @@ function buildWorkingAnswers(params: { homeDir: string }): ProbeFakeAnswer[] {
   ];
 }
 
-describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
+describe('parseSimulatorRuntimeList', () => {
   test('reads each runtime with its id, identifier, image, and last use', () => {
     const state = parseFixtureState();
 
@@ -169,7 +169,7 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
+describe('buildSimulatorRuntimeFindings', () => {
   test('offers only the deletable runtime unused since the cutoff that no available device runs on', () => {
     const findings = buildSimulatorRuntimeFindings({
       tool: tool,
@@ -232,7 +232,7 @@ describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
+describe('compareSimulatorRuntime', () => {
   const unit = buildOfferedUnit({ tool: tool });
 
   test('answers unchanged, and busy while Simulator.app runs or the processes are unknown', () => {
@@ -311,7 +311,8 @@ describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
   });
 });
 
-describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', () => {
+// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
+describeOnPosix('the simulator runtime probe with a fake xcrun', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -27,9 +27,9 @@ import type {
 import { PINNED_VERSION_REINSTALL_EXPLANATION } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -41,8 +41,9 @@ import {
   buildTestAbsolutePath,
   buildTestAsdfToolName,
   buildTestAsdfToolVersion,
+  buildTestHostPath,
 } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import { buildTestProbeStart } from './probeStartFixtures.js';
@@ -86,6 +87,9 @@ const pinFileText: ProjectPinFileText = {
 
 const pinFileRef: ProjectPinFileRef = { path: pinFileText.path, kind: pinFileText.kind };
 
+/** A `.tool-versions` the probe only reads from its pins, never from the disk. */
+const pinsOnlyToolVersionsPath = buildTestAbsolutePath({ text: '/project/.tool-versions' });
+
 const textPins: ToolPins = { kind: 'texts', files: [pinFileText] };
 
 function buildInstalledState(params: Partial<AsdfStateInstalled>): AsdfState {
@@ -108,7 +112,7 @@ function buildOldVersionUnit(): ExploreToolUnitAsdfVersion {
   };
 }
 
-describeAwaitingWin32Platform('parseAsdfToolName and parseAsdfToolVersion', () => {
+describe('parseAsdfToolName and parseAsdfToolVersion', () => {
   test('accept the names asdf installs', () => {
     expect(parseAsdfToolName({ folderName: 'java' }).kind).toBe('succeeded');
     expect(parseAsdfToolVersion({ folderName: 'adoptopenjdk-17.0.1+12' })).toEqual({
@@ -125,7 +129,7 @@ describeAwaitingWin32Platform('parseAsdfToolName and parseAsdfToolVersion', () =
   });
 });
 
-describeAwaitingWin32Platform('parseToolVersionsText', () => {
+describe('parseToolVersionsText', () => {
   test('reads tool lines and skips comments, blank lines, and lines without a version', () => {
     const text = [
       '# the tools of this project',
@@ -143,7 +147,7 @@ describeAwaitingWin32Platform('parseToolVersionsText', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseAsdfToolVersionsPins', () => {
+describe('parseAsdfToolVersionsPins', () => {
   test('maps ref: to its folder and drops system and path:', () => {
     const file: ProjectPinFileText = {
       ...pinFileText,
@@ -158,7 +162,7 @@ describeAwaitingWin32Platform('parseAsdfToolVersionsPins', () => {
   });
 });
 
-describeAwaitingWin32Platform('isAsdfLegacyVersionFileOn', () => {
+describe('isAsdfLegacyVersionFileOn', () => {
   test('reads the key with spaces and a comment', () => {
     expect(isAsdfLegacyVersionFileOn({ text: '  legacy_version_file =  yes  # on\n' })).toBe(true);
   });
@@ -221,7 +225,7 @@ describeAwaitingWin32Platform('isAsdfLegacyVersionFileOn', () => {
   });
 });
 
-describeAwaitingWin32Platform('decideAsdfVersionOffers', () => {
+describe('decideAsdfVersionOffers', () => {
   test('offers each version no .tool-versions names', () => {
     const offers = decideAsdfVersionOffers({ state: buildInstalledState({}), toolPins: textPins });
 
@@ -301,7 +305,7 @@ describeAwaitingWin32Platform('decideAsdfVersionOffers', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildAsdfVersionFindings', () => {
+describe('buildAsdfVersionFindings', () => {
   test('builds a careful finding with its pin files and evidence', () => {
     const findings = buildAsdfVersionFindings({
       tool: tool,
@@ -344,7 +348,7 @@ describeAwaitingWin32Platform('buildAsdfVersionFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareAsdfVersionUnit', () => {
+describe('compareAsdfVersionUnit', () => {
   test('is unchanged while the version is still offered and idle', () => {
     expect(
       compareAsdfVersionUnit({
@@ -404,7 +408,8 @@ describeAwaitingWin32Platform('compareAsdfVersionUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home', () => {
+// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
+describeOnPosix('the asdf probe and recheck against a fixture home', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -434,12 +439,12 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
     });
   }
 
-  async function writePinFile(params: { text: string }): Promise<string> {
+  async function writePinFile(params: { text: string }): Promise<AbsolutePath> {
     const path = join(environment.homeDir, 'project', '.tool-versions');
 
     await writeFixtureTextFile({ path: path, text: params.text });
 
-    return path;
+    return buildTestHostPath({ text: path });
   }
 
   async function createAsdf(): Promise<string> {
@@ -506,7 +511,10 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
       await runAsdfProbe({
         files: [
           buildTestPinFileText({ path: pinPath, kind: 'toolVersions', text: 'nodejs 20.11.1\n' }),
-          buildTestPinFileUnreadable({ path: '/elsewhere/.nvmrc', kind: 'nvmrc' }),
+          buildTestPinFileUnreadable({
+            path: buildTestAbsolutePath({ text: '/elsewhere/.nvmrc' }),
+            kind: 'nvmrc',
+          }),
         ],
         asdfPath: asdfPath,
       }),
@@ -539,7 +547,7 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
       await runAsdfProbe({
         files: [
           buildTestPinFileText({
-            path: '/project/.tool-versions',
+            path: pinsOnlyToolVersionsPath,
             kind: 'toolVersions',
             text: 'nodejs lts 20.11.1\n',
           }),
@@ -577,7 +585,7 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
     expect(
       await runAsdfProbe({
         files: [
-          buildTestPinFileUnreadable({ path: '/project/.tool-versions', kind: 'toolVersions' }),
+          buildTestPinFileUnreadable({ path: pinsOnlyToolVersionsPath, kind: 'toolVersions' }),
         ],
         asdfPath: await createAsdf(),
       }),
@@ -593,7 +601,7 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
 
     expect(
       await runAsdfProbe({
-        files: [buildTestPinFileUnfit({ path: '/project/.tool-versions', kind: 'toolVersions' })],
+        files: [buildTestPinFileUnfit({ path: pinsOnlyToolVersionsPath, kind: 'toolVersions' })],
         asdfPath: await createAsdf(),
       }),
     ).toEqual({ kind: 'probed', findings: [], isComplete: true });

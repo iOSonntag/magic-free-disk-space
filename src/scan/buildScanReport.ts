@@ -3,6 +3,7 @@ import type { ScanIssue } from './issue.js';
 import { placeCandidate } from './placeCandidate.js';
 import { rankByPlace, rankBySize } from './rankCandidates.js';
 import type { ScanReport, SkippedItem } from './runScan.js';
+import type { AdvisedApp } from './scanPlatform.js';
 
 /** The share of one decision in each part of the report; all but one part are empty. */
 type DecisionPartition = {
@@ -17,6 +18,7 @@ type DecisionPartition = {
  */
 export function buildScanReport(params: {
   decisions: CandidateDecision[];
+  appAdvice: AdvisedApp[];
   evictedEntryCount: number;
   issues: ScanIssue[];
 }): ScanReport {
@@ -29,6 +31,7 @@ export function buildScanReport(params: {
     candidates: candidates,
     safeNumbers: listSafeNumbers({ candidates: candidates }),
     advice: rankBySize({ items: partitions.flatMap((partition) => partition.advice) }),
+    appAdvice: params.appAdvice,
     skipped: partitions.flatMap((partition) => partition.skipped),
     evictedEntryCount: params.evictedEntryCount,
     issues: params.issues,

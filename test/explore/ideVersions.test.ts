@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -14,7 +14,6 @@ import { loadIdeVersionFindings } from '../../src/explore/ideVersions/loadIdeVer
 import type { IdeVersionFolder } from '../../src/explore/ideVersions/loadIdeVersionState.js';
 import { recheckIdeVersionUnit } from '../../src/explore/ideVersions/recheckIdeVersionUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -139,7 +138,7 @@ function listFolderLines(params: {
     .toSorted();
 }
 
-describeAwaitingWin32Platform('decideIdeVersionOffers', () => {
+describe('decideIdeVersionOffers', () => {
   test('offers each folder of a version older than the newest of its product in any root', () => {
     const oldCachesPath = buildValuePath('Caches', 'JetBrains', 'IntelliJIdea2023.3');
 
@@ -237,7 +236,7 @@ describeAwaitingWin32Platform('decideIdeVersionOffers', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareIdeVersionUnit', () => {
+describe('compareIdeVersionUnit', () => {
   const oldCachesPath = buildValuePath('Caches', 'JetBrains', OLD_IDEA);
   const unit: ExplorePathUnitIdeVersionFolder = {
     kind: 'ideVersionFolder',
@@ -309,7 +308,7 @@ describeAwaitingWin32Platform('compareIdeVersionUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
+describe('loadIdeVersionFindings', () => {
   test('offers the caches, logs, plugins, and settings of each version a newer one outdates', async () => {
     await withIdeHome({
       run: async (fixture) => {
@@ -475,7 +474,7 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckIdeVersionUnit', () => {
+describe('recheckIdeVersionUnit', () => {
   test('is unchanged while the version is still outdated, and busy while it runs', async () => {
     await withIdeHome({
       run: async (fixture) => {

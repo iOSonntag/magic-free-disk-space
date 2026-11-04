@@ -21,7 +21,6 @@ import { parseOllamaModelName } from '../../src/explore/ollamaModels/parseOllama
 import { recheckOllamaModelUnit } from '../../src/explore/ollamaModels/recheckOllamaModelUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   createFixtureFile,
   updateModifiedMs,
@@ -383,7 +382,7 @@ describe('formatOllamaModelName', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
+describe('loadOllamaModelFindings', () => {
   test('offers each model with only the blobs no other manifest names', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -499,7 +498,7 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
+describe('recheckOllamaModelUnit', () => {
   test('is unchanged while the model keeps its blobs, and busy while Ollama runs', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,

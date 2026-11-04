@@ -11,6 +11,7 @@ export function formatCandidateItemText(params: { candidate: Candidate }): strin
     case 'deleteUnitPaths':
     case 'runTool':
     case 'evictUnitFiles':
+    case 'emptyRecycleBin':
       return formatDisplayText({ text: params.candidate.path });
     case 'callEngine':
       return formatDisplayText({

@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import { lstat, open, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { TreeRemoval } from '../../delete/deletePlatform.js';
 import type { Result } from '../../result.js';
 import { getErrorCode } from '../../system/getErrorCode.js';
 
@@ -32,9 +33,10 @@ export type TreeRemovalUser = { id: number; groupIds: number[] };
 /**
  * Removes the path recursively; a symbolic link inside is removed itself, never its target. When
  * that fails, it adds owner write to each read-only folder inside that the user owns and that is
- * no link, such as those of Go's module cache, and tries once more.
+ * no link, such as those of Go's module cache, and tries once more. An entry that still cannot be
+ * removed fails the whole removal, so it never ends partly removed.
  */
-export async function removeTree(params: { path: string }): Promise<Result<null, string>> {
+export async function removeTree(params: { path: string }): Promise<Result<TreeRemoval, string>> {
   return removeTreeAsUser({ path: params.path, user: getProcessUser() });
 }
 
@@ -45,7 +47,7 @@ export async function removeTree(params: { path: string }): Promise<Result<null,
 export async function removeTreeAsUser(params: {
   path: string;
   user: TreeRemovalUser | null;
-}): Promise<Result<null, string>> {
+}): Promise<Result<TreeRemoval, string>> {
   const removed = await removePath({ path: params.path });
 
   if (removed.kind === 'succeeded' || params.user === null) {
@@ -114,11 +116,11 @@ function getProcessUser(): TreeRemovalUser | null {
   return { id: id, groupIds: process.getgroups?.() ?? [] };
 }
 
-async function removePath(params: { path: string }): Promise<Result<null, string>> {
+async function removePath(params: { path: string }): Promise<Result<TreeRemoval, string>> {
   try {
     await rm(params.path, { recursive: true });
 
-    return { kind: 'succeeded', value: null };
+    return { kind: 'succeeded', value: { kind: 'removed' } };
   } catch (error) {
     return { kind: 'failed', failure: getErrorCode(error) };
   }

@@ -10,6 +10,7 @@ import type { EntryReads } from '../system/entryReads.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
+import type { ToolProcessPlatform } from '../tools/toolsPlatform.js';
 
 export const TOOL_RUN_TIMEOUT_MS = 600_000;
 
@@ -91,6 +92,7 @@ export async function runToolCandidate(params: {
         unit: params.unit,
         tool: trustedTool.value,
         environment: params.environment,
+        toolProcesses: params.probePlatform.toolProcesses,
         entryReads: params.entryReads,
         before: before,
         timeoutMs: params.timeoutMs,
@@ -103,6 +105,7 @@ async function runCheckedUnitCommand(params: {
   unit: ExploreToolUnit;
   tool: LocatedTool;
   environment: Environment;
+  toolProcesses: ToolProcessPlatform;
   entryReads: EntryReads;
   before: PathMeasurement;
   timeoutMs: number;
@@ -113,6 +116,7 @@ async function runCheckedUnitCommand(params: {
     homeDir: params.environment.homeDir,
     tempDir: params.environment.tempDir,
     timeoutMs: params.timeoutMs,
+    processes: params.toolProcesses,
   });
   const after = await loadPathMeasurement({
     paths: listUnitPaths(params.unit),

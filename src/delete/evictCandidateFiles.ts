@@ -7,6 +7,7 @@ import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
+import type { ToolProcessPlatform } from '../tools/toolsPlatform.js';
 import { decideTargetsOutcome } from './decideTargetsOutcome.js';
 import type {
   RecordedRemoval,
@@ -43,6 +44,8 @@ export async function evictCandidateFiles(params: {
   candidate: Candidate;
   removal: CandidateRemovalEvictUnitFiles;
   environment: Environment;
+  /** How the evict tool's process starts and ends. */
+  toolProcesses: ToolProcessPlatform;
   clock: () => number;
 }): Promise<RecordedRemoval> {
   const trustedTool = await loadTrustedTool({
@@ -57,7 +60,12 @@ export async function evictCandidateFiles(params: {
       );
     }
 
-    return evictFile({ target: target, tool: trustedTool.value, environment: params.environment });
+    return evictFile({
+      target: target,
+      tool: trustedTool.value,
+      environment: params.environment,
+      toolProcesses: params.toolProcesses,
+    });
   };
 
   // One after another: each file is checked right before its own evict.
@@ -76,6 +84,7 @@ async function evictFile(params: {
   target: EvictTarget;
   tool: LocatedTool;
   environment: Environment;
+  toolProcesses: ToolProcessPlatform;
 }): Promise<EvictFileOutcome> {
   const stats = await loadEntryStats({ path: params.target.path });
 
@@ -107,6 +116,7 @@ async function evictFile(params: {
     homeDir: params.environment.homeDir,
     tempDir: params.environment.tempDir,
     timeoutMs: EVICT_FILE_TIMEOUT_MS,
+    processes: params.toolProcesses,
   });
 
   // `brctl` documents no exit status, so any but 0 keeps the file.

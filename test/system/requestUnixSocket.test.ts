@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { link, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { requestUnixSocket } from '../../src/system/requestUnixSocket.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { buildTestUserIdentity, buildTestWindowsUser } from '../support/parsedValueFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 const USER = buildTestUserIdentity({ uid: process.getuid?.() ?? 0 });
 
@@ -33,7 +33,7 @@ function startCountingServer(params: {
   return { server: server, requestPaths: requestPaths };
 }
 
-describeAwaitingWin32Platform('requestUnixSocket', () => {
+describeOnPosix('requestUnixSocket', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

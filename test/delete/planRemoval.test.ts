@@ -1,8 +1,7 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { RemovalPlan } from '../../src/delete/planRemoval.js';
 import { planRemoval } from '../../src/delete/planRemoval.js';
 import type { Candidate } from '../../src/scan/candidate.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
 import { buildTestMacEnvironment } from '../support/fixtureRoot.js';
 
@@ -58,7 +57,7 @@ function planInsideRanking(params: {
   return planned.value;
 }
 
-describeAwaitingWin32Platform('planRemoval', () => {
+describe('planRemoval', () => {
   test('approves exactly the selection, for every one of the 64 subsets of six items', () => {
     const selections = buildAllSelections(6);
 

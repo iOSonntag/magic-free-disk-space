@@ -25,10 +25,12 @@ import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
 import { mapNonEmpty } from '../../src/system/nonEmptyList.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
+import type { FixtureHome } from './parsedValueFixtures.js';
 import {
   buildTestAbsolutePath,
   buildTestMiseToolName,
   buildTestMiseToolVersion,
+  joinBelowHome,
 } from './parsedValueFixtures.js';
 
 let nextTestIno = 1000n;
@@ -123,7 +125,7 @@ export function buildTestCandidate(
           }),
         },
       ],
-      ownerBundlePaths: [],
+      owner: { kind: 'none' },
     },
   };
 }
@@ -198,15 +200,16 @@ export function buildTestRemovalOutcome(params: {
   };
 }
 
-/** A tool item of a mise version under `homeDir`; its tool path is made up and never runs. */
+/** A tool item of a mise version below the home; its tool path is made up and never runs. */
 export function buildTestToolCandidate(params: {
-  homeDir: string;
+  home: FixtureHome;
   version: string;
   risk?: Risk;
   allocatedBytes?: number;
 }): Candidate {
-  const installPath = buildTestAbsolutePath({
-    text: `${params.homeDir}/.local/share/mise/installs/node/${params.version}`,
+  const installPath = joinBelowHome({
+    home: params.home,
+    path: `.local/share/mise/installs/node/${params.version}`,
   });
 
   return buildTestProbedCandidate({
@@ -222,7 +225,7 @@ export function buildTestToolCandidate(params: {
       kind: 'runTool',
       unit: {
         kind: 'miseVersion',
-        tool: { name: 'mise', path: `${params.homeDir}/.local/bin/mise` },
+        tool: { name: 'mise', path: joinBelowHome({ home: params.home, path: '.local/bin/mise' }) },
         miseToolName: buildTestMiseToolName({ text: 'node' }),
         version: buildTestMiseToolVersion({ text: params.version }),
         installPath: installPath,
@@ -233,11 +236,11 @@ export function buildTestToolCandidate(params: {
 }
 
 /**
- * The tool item of the Dart pub cache under `homeDir`, whose tool has leading arguments; its tool
+ * The tool item of the Dart pub cache below the home, whose tool has leading arguments; its tool
  * path is made up and never runs.
  */
-export function buildTestDartToolCandidate(params: { homeDir: string }): Candidate {
-  const cachePath = `${params.homeDir}/.pub-cache`;
+export function buildTestDartToolCandidate(params: { home: FixtureHome }): Candidate {
+  const cachePath = joinBelowHome({ home: params.home, path: '.pub-cache' });
 
   return buildTestProbedCandidate({
     path: cachePath,
@@ -252,8 +255,10 @@ export function buildTestDartToolCandidate(params: { homeDir: string }): Candida
       kind: 'runTool',
       unit: {
         kind: 'dartPubCache',
-        tool: { name: 'dart', path: `${params.homeDir}/.local/bin/dart` },
-        gcPaths: [buildTestAbsolutePath({ text: `${cachePath}/hosted/pub.dev/example_a-1.0.0` })],
+        tool: { name: 'dart', path: joinBelowHome({ home: params.home, path: '.local/bin/dart' }) },
+        gcPaths: [
+          joinBelowHome({ home: params.home, path: '.pub-cache/hosted/pub.dev/example_a-1.0.0' }),
+        ],
       },
     },
     evidenceLines: ['`dart pub cache gc` would delete 1 cache entry'],

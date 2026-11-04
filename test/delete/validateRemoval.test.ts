@@ -2,9 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { CandidateProbed } from '../../src/scan/candidate.js';
+import type { CandidateProbed, CandidateRecycleBin } from '../../src/scan/candidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestEngineCandidate,
@@ -13,7 +12,7 @@ import {
 } from '../support/candidateFixtures.js';
 import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
 const ENVIRONMENT = buildTestMacEnvironment();
 
@@ -41,6 +40,29 @@ function validate(params: {
 /** The decision on `path` in the example environment of Windows. */
 function validateOnWindows(params: { path: string; kind?: FileKind }) {
   return validate({ ...params, environment: EXAMPLE_WIN32_ENVIRONMENT });
+}
+
+/** The Recycle Bin of the drive at `driveRootText`, as the scan offers it. */
+function buildRecycleBinCandidate(params: {
+  driveRootText: string;
+  risk?: Risk;
+}): CandidateRecycleBin {
+  return {
+    ...buildTestCandidate({
+      path: `${params.driveRootText}$Recycle.Bin`,
+      title: 'Recycle Bin',
+      category: 'trash',
+      risk: params.risk ?? 'careful',
+      allocatedBytes: 4096,
+      entryCount: 2,
+    }),
+    origin: { kind: 'recycleBin' },
+    removal: {
+      kind: 'emptyRecycleBin',
+      driveRootPath: buildTestWindowsPath({ text: params.driveRootText }),
+      scannedContent: { sizeBytes: 4096, itemCount: 2 },
+    },
+  };
 }
 
 describe('validateRemoval on Windows', () => {
@@ -73,6 +95,38 @@ describe('validateRemoval on Windows', () => {
     }
   });
 
+  test('approves the Recycle Bin of a fixed drive the environment lists, and no other', () => {
+    for (const driveRootText of ['C:\\', 'D:\\']) {
+      const candidate = buildRecycleBinCandidate({ driveRootText: driveRootText });
+
+      expect(
+        validateRemoval({ candidate: candidate, environment: EXAMPLE_WIN32_ENVIRONMENT }),
+      ).toEqual({ kind: 'approved', candidate: candidate });
+    }
+
+    expect(
+      validateRemoval({
+        candidate: buildRecycleBinCandidate({ driveRootText: 'E:\\' }),
+        environment: EXAMPLE_WIN32_ENVIRONMENT,
+      }),
+    ).toEqual({ kind: 'refused', path: 'E:\\', reason: 'outsideAllowedRoot' });
+    expect(
+      validateRemoval({
+        candidate: buildRecycleBinCandidate({ driveRootText: 'C:\\' }),
+        environment: ENVIRONMENT,
+      }),
+    ).toMatchObject({ kind: 'refused', reason: 'outsideAllowedRoot' });
+  });
+
+  test('refuses a Recycle Bin marked never', () => {
+    expect(
+      validateRemoval({
+        candidate: buildRecycleBinCandidate({ driveRootText: 'C:\\', risk: 'never' }),
+        environment: EXAMPLE_WIN32_ENVIRONMENT,
+      }),
+    ).toMatchObject({ kind: 'refused', reason: 'neverRisk' });
+  });
+
   test('refuses a path on another drive and one that names no drive', () => {
     for (const path of ['D:\\Data\\old.zip', '\\\\server\\share\\x', 'C:Users\\tester\\x']) {
       expect(validateOnWindows({ path: path, kind: 'file' })).toMatchObject({
@@ -82,7 +136,7 @@ describe('validateRemoval on Windows', () => {
   });
 });
 
-describeAwaitingWin32Platform('validateRemoval', () => {
+describe('validateRemoval', () => {
   test('approves files and folders strictly inside an allowed root', () => {
     expect(validate({ path: buildHomePath('Library/Caches/com.example.app') }).kind).toBe(
       'approved',
@@ -187,7 +241,7 @@ describeAwaitingWin32Platform('validateRemoval', () => {
   test('approves a tool item of any other risk, and refuses one marked never', () => {
     for (const risk of ['safe', 'careful', 'review'] as const) {
       const candidate = buildTestToolCandidate({
-        homeDir: TEST_MAC_HOME_DIR,
+        home: ENVIRONMENT,
         version: '20.1.0',
         risk: risk,
       });
@@ -199,7 +253,7 @@ describeAwaitingWin32Platform('validateRemoval', () => {
     }
 
     const neverCandidate = buildTestToolCandidate({
-      homeDir: TEST_MAC_HOME_DIR,
+      home: ENVIRONMENT,
       version: '20.1.0',
       risk: 'never',
     });

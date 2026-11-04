@@ -33,6 +33,15 @@ export type JournalEntryOutcome = {
   code: string | null;
 };
 
+/** The target of a deleted item is gone but for `stayedEntryCount` entries, after the deletion. */
+export type JournalEntryOutcomePartlyRemoved = {
+  kind: 'outcome';
+  atMs: number;
+  path: string;
+  outcome: 'partlyRemoved';
+  stayedEntryCount: number;
+};
+
 /** Before the files of a folder are evicted; their copies stay with the cloud. */
 export type JournalEntryEvictIntent = {
   kind: 'evictIntent';
@@ -124,6 +133,7 @@ export type JournalEntry =
   | JournalEntrySessionStart
   | JournalEntryIntent
   | JournalEntryOutcome
+  | JournalEntryOutcomePartlyRemoved
   | JournalEntryToolIntent
   | JournalEntryToolOutcomeRemoved
   | JournalEntryToolOutcomeSkipped

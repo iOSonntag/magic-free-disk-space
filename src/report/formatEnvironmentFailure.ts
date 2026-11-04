@@ -3,7 +3,7 @@ import { formatDisplayText } from './formatDisplayText.js';
 
 /** The text with which the tool refuses to start on an operating system it does not run on. */
 export function formatUnsupportedPlatform(): string {
-  return 'This tool runs on macOS only.';
+  return 'This tool runs on macOS and Windows only.';
 }
 
 export function formatEnvironmentFailure(params: { failure: EnvironmentFailure }): string {

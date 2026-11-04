@@ -3,6 +3,7 @@ import { runBridge } from './bridge/runBridge.js';
 import { darwinPlatform } from './platform/darwin/darwinPlatform.js';
 import type { Platform } from './platform/platform.js';
 import { parsePlatformId } from './platform/platform.js';
+import { win32Platform } from './platform/win32/win32Platform.js';
 import { loadPreferences, saveIsUpdateCheckEnabled } from './preferences/preferencesFile.js';
 import { formatUnsupportedPlatform } from './report/formatEnvironmentFailure.js';
 import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
@@ -46,14 +47,27 @@ async function main(): Promise<number> {
     case 'darwin':
       return runBridgeOnPlatform({ platform: darwinPlatform });
     case 'win32':
-      return refuseUnsupportedPlatform();
+      return runBridgeOnPlatform({ platform: win32Platform });
   }
 }
 
-/** Runs the bridge with the platform's slices, its tools stopped on every end of the process. */
+/**
+ * Runs the bridge with the platform's slices, its tools stopped on every end of the process until
+ * the bridge ended: once its input closed it ends, and no listener left keeps the process running.
+ */
 async function runBridgeOnPlatform(params: { platform: Platform }): Promise<number> {
-  stopRunningToolsOnProcessEnd({ processEndSignals: params.platform.tools.processEndSignals });
+  const releaseProcessEnd = stopRunningToolsOnProcessEnd({
+    processEndSignals: params.platform.tools.processEndSignals,
+  });
 
+  try {
+    return await runBridgeToEnd({ platform: params.platform });
+  } finally {
+    releaseProcessEnd();
+  }
+}
+
+async function runBridgeToEnd(params: { platform: Platform }): Promise<number> {
   const releaseVersion = getReleaseVersion();
   const end = await runBridge({
     io: createBridgeIo(),

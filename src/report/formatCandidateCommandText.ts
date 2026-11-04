@@ -5,7 +5,8 @@ import { formatDisplayText } from './formatDisplayText.js';
 
 /**
  * `<tool name> <arguments>` of a tool item, as `formatToolCommandText` words it. `null` for an item
- * deleted as its paths, evicted, or removed over its engine's API, since none runs a command.
+ * deleted as its paths, evicted, removed over its engine's API, or a Recycle Bin, which the system
+ * empties, since none runs a command.
  */
 export function formatCandidateCommandText(params: { candidate: Candidate }): string | null {
   switch (params.candidate.removal.kind) {
@@ -13,6 +14,7 @@ export function formatCandidateCommandText(params: { candidate: Candidate }): st
     case 'deleteUnitPaths':
     case 'evictUnitFiles':
     case 'callEngine':
+    case 'emptyRecycleBin':
       return null;
     case 'runTool':
       return formatToolCommandText({ unit: params.candidate.removal.unit });

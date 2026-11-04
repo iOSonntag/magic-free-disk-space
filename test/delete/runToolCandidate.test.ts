@@ -25,7 +25,6 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -37,7 +36,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 
 const TIMEOUT_MS = 10_000;
@@ -195,7 +194,9 @@ async function loadNoProcessCommands(): Promise<string[] | null> {
   return [];
 }
 
-describeAwaitingWin32Platform('runToolCandidate', () => {
+// A fake tool runs only once it is trusted, which POSIX owners and modes decide; no tool is
+// trusted on Windows.
+describeOnPosix('runToolCandidate', () => {
   test('runs the command of an unchanged unit and reports the measured drop', async () => {
     const unit = await createMiseUnit('20.1.0');
 

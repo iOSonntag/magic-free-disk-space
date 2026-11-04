@@ -4,10 +4,21 @@ import type { FullDiskAccess } from './fullDiskAccess.js';
 import type { CommandFailure } from './loadCommandOutput.js';
 import type { VolumeSpace } from './volumeSpace.js';
 
-/** The command line of each running process, which tells what is in use. Never throws. */
+/** A call of the operating system that listed the processes failed, with its error code. */
+export type ProcessListingCallFailure = { reason: 'callFailed'; call: string; code: number };
+
+/** Why the processes could not be listed: by the command that lists them, or by a system call. */
+export type RunningProcessesFailure = CommandFailure | ProcessListingCallFailure;
+
+/**
+ * Each running process by what tells what is in use: its command line on macOS, and on Windows the
+ * full path of its image, since Windows gives no other process's arguments to a reader. A process
+ * whose image path cannot be read is its image's file name. `commandTimeoutMs` bounds a listing that
+ * runs a command. Never throws.
+ */
 export type RunningProcessesLoad = (params: {
   commandTimeoutMs: number;
-}) => Promise<Result<string[], CommandFailure>>;
+}) => Promise<Result<string[], RunningProcessesFailure>>;
 
 /** What the system mechanisms take from the operating system. */
 export type SystemPlatform = {

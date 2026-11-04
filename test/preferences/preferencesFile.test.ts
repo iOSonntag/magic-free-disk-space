@@ -7,7 +7,6 @@ import {
   loadPreferences,
   saveIsUpdateCheckEnabled,
 } from '../../src/preferences/preferencesFile.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -38,14 +37,14 @@ async function writePreferencesFile(text: string): Promise<void> {
   await writeFile(preferencesPath, text);
 }
 
-describeAwaitingWin32Platform('the place of the preferences', () => {
-  test('lives in the support folder of the app', () => {
-    expect(preferencesPath).toBe(
-      join(
-        fixtureRoot.homeDir,
-        'Library/Application Support/magic-free-disk-space/preferences.json',
-      ),
-    );
+describe('the place of the preferences', () => {
+  test('lives in the support folder of the app, below LocalAppData on Windows', () => {
+    const supportFolderPath =
+      process.platform === 'win32'
+        ? join(fixtureRoot.homeDir, 'AppData', 'Local', 'magic-free-disk-space')
+        : join(fixtureRoot.homeDir, 'Library', 'Application Support', 'magic-free-disk-space');
+
+    expect(preferencesPath).toBe(join(supportFolderPath, 'preferences.json'));
   });
 });
 

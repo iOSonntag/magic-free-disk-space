@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
@@ -6,9 +6,9 @@ import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
 import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
+import type { AdvisedApp } from '../../src/scan/scanPlatform.js';
 import { createAndroidAvdHome, writeAndroidSystemImage } from '../explore/androidFixtures.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { TestUnitPathsCandidateParams } from '../support/candidateFixtures.js';
 import {
   buildTestAdvice,
@@ -23,9 +23,13 @@ import {
   updateModifiedMs,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildExampleHome, buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { withFixtureHome } from '../support/probeRunFixtures.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
+
+// The scans read the entries of the macOS catalog in a fixture home of the host, which only macOS
+// lays out as those entries expect.
+const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
 
 const HOME_DIR = '/Users/example';
 
@@ -57,11 +61,13 @@ const vscodeAdvice: Advice = buildTestAdvice({
   allocatedBytes: 65_536,
 });
 
-const vscodeCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR });
+const vscodeCandidate = buildTestVscodeExtensionCandidate({
+  home: buildExampleHome({ text: HOME_DIR }),
+});
 
 const vscodeOffer: CandidateDecision = { kind: 'offer', candidate: vscodeCandidate };
 
-describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
+describe('buildScanReportOfPhases', () => {
   test('keeps the offers of an incomplete probe and shows the advice of its entry', () => {
     const report = buildScanReportOfPhases({
       environment: ENVIRONMENT,
@@ -71,6 +77,7 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
         decisions: [{ kind: 'advice', advice: vscodeAdvice }],
         issues: [{ path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' }],
       },
+      appAdvice: [],
       evictedEntryCount: 2,
     });
 
@@ -89,6 +96,7 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
       reservedEntryPaths: [vscodeAdvice.path],
       phases: [{ decisions: [vscodeOffer, { kind: 'advice', advice: vscodeAdvice }], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
+      appAdvice: [],
       evictedEntryCount: 0,
     });
 
@@ -223,9 +231,29 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
       { path: `${DOWNLOADS_PATH}/archive.iso`, reason: 'overlapsEarlierCandidate' },
     ]);
   });
+
+  test('keeps the installed apps beside the offers, never among them', () => {
+    const app: AdvisedApp = {
+      displayName: 'Example',
+      installFolderPath: `${HOME_DIR}/.vscode`,
+      estimatedBytes: 1024,
+    };
+
+    const report = buildScanReportOfPhases({
+      environment: ENVIRONMENT,
+      reservedEntryPaths: [],
+      phases: [{ decisions: [vscodeOffer], issues: [] }],
+      incompleteExploreAdvice: { decisions: [], issues: [] },
+      appAdvice: [app],
+      evictedEntryCount: 0,
+    });
+
+    expect(report.candidates).toEqual([vscodeCandidate]);
+    expect(report.appAdvice).toEqual([app]);
+  });
 });
 
-describeAwaitingWin32Platform('runScan', () => {
+describeOnDarwin('runScan', () => {
   test('never shows a section larger while it scans than the report makes it, for a folder a probe claims', async () => {
     await withFixtureHome({
       nowMs: SCAN_NOW_MS,
@@ -290,7 +318,7 @@ describeAwaitingWin32Platform('runScan', () => {
           abi: 'arm64-v8a',
         });
         const imagePath = join(imageFolderPath, 'system.img');
-        await createAndroidAvdHome({ homeDir: home.fixtureRoot.homeDir });
+        await createAndroidAvdHome({ environment: home.environment });
         await createFixtureFile({
           path: imagePath,
           sizeBytes: SCAN_LIMITS.minUserFileBytes,
@@ -456,6 +484,7 @@ function buildReportOfPhases(params: {
     reservedEntryPaths: params.reservedEntryPaths,
     phases: params.phases.map((decisions) => ({ decisions: decisions, issues: [] })),
     incompleteExploreAdvice: { decisions: [], issues: [] },
+    appAdvice: [],
     evictedEntryCount: 0,
   });
 }

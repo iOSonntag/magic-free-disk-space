@@ -21,9 +21,10 @@ import {
   placeCandidate,
 } from '../scan/placeCandidate.js';
 import type { ScanProgress, ScanReport, SkippedItem } from '../scan/runScan.js';
+import type { AdvisedApp } from '../scan/scanPlatform.js';
 import type { VolumeSpace } from '../system/volumeSpace.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
-import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
+import { formatBytes, formatSizeText, formatTotalSizeText } from './formatBytes.js';
 import { formatCandidateCommandText } from './formatCandidateCommandText.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
@@ -48,6 +49,23 @@ export type ScanView = {
   notices: NoticeView[];
   /** What each section holds, Explore items and advice in the section of their category. */
   sectionTotals: SectionTotalView[];
+  /**
+   * `null` when the scan listed no installed app as advice, as on macOS, whose unused apps are
+   * items of their own.
+   */
+  appAdvice: AppAdviceView | null;
+};
+
+/** The installed apps, largest first, which the person uninstalls the way the system does. */
+export type AppAdviceView = { titleText: string; introText: string; items: AppAdviceItemView[] };
+
+/** An installed app the scan only advises about: never selectable, and in no section. */
+export type AppAdviceItemView = {
+  title: string;
+  risk: Risk;
+  riskText: string;
+  sizeText: string;
+  detailLines: ItemDetailLine[];
 };
 
 /** A section's total with the title a client shows the section by. */
@@ -97,7 +115,10 @@ export type ExploreView = {
 /** What the tool never removes: places the person handles with the owning tool. */
 type AdviceGroupView = { titleText: string; items: AdviceItemView[] };
 
-/** The source of an item as a client words it; catalog items in the Trash read as `trash`. */
+/**
+ * The source of an item as a client words it; catalog items in the Trash and a Recycle Bin read
+ * as `trash`.
+ */
 type ItemOriginView =
   | 'catalog'
   | 'trash'
@@ -197,6 +218,19 @@ const EXPLORE_INTRO_TEXT =
 
 const ADVICE_GROUP_TITLE_TEXT = 'Handle these yourself; this tool never deletes them';
 
+const APP_ADVICE_TITLE_TEXT = 'Installed apps';
+
+// Only Windows lists its apps as advice, so the words are its own.
+const APP_ADVICE_INTRO_TEXT =
+  'Uninstall the apps you no longer use in Settings > Apps; this tool never deletes an app.';
+
+const APP_ADVICE_EXPLANATION_TEXT = 'Installed on this PC, as Settings > Apps lists it.';
+
+const APP_ADVICE_ADVICE_TEXT = 'Uninstall it in Settings > Apps if you no longer use it.';
+
+/** An app whose installer wrote no size. */
+const APP_SIZE_UNKNOWN_TEXT = 'size unknown';
+
 function buildSectionTitleTexts(params: { texts: ReportTexts }): Record<ConsumerSection, string> {
   return {
     caches: 'Caches',
@@ -220,6 +254,7 @@ const originViews: Record<CandidateOrigin['kind'], ItemOriginView> = {
   userFile: 'largeFile',
   leftover: 'leftover',
   explore: 'explore',
+  recycleBin: 'trash',
 };
 
 const riskTexts: Record<Risk, string> = {
@@ -365,6 +400,33 @@ export function buildScanView(params: {
       ...buildPrivateSizeFallbackNotices({ report: params.report, texts: params.texts }),
     ],
     sectionTotals: sectionTotalViews,
+    appAdvice: buildAppAdviceView({ apps: params.report.appAdvice }),
+  };
+}
+
+/** Each app with the size the system estimates for it, and its install folder where it names one. */
+function buildAppAdviceView(params: { apps: AdvisedApp[] }): AppAdviceView | null {
+  if (params.apps.length === 0) {
+    return null;
+  }
+
+  return {
+    titleText: APP_ADVICE_TITLE_TEXT,
+    introText: APP_ADVICE_INTRO_TEXT,
+    items: params.apps.map((app) => ({
+      title: formatDisplayText({ text: app.displayName }),
+      risk: 'review',
+      riskText: riskTexts.review,
+      sizeText:
+        app.estimatedBytes === null ? APP_SIZE_UNKNOWN_TEXT : formatBytes(app.estimatedBytes),
+      detailLines: [
+        ...(app.installFolderPath === null
+          ? []
+          : [buildDetailLine({ kind: 'path', text: app.installFolderPath })]),
+        buildDetailLine({ kind: 'explanation', text: APP_ADVICE_EXPLANATION_TEXT }),
+        buildDetailLine({ kind: 'advice', text: APP_ADVICE_ADVICE_TEXT }),
+      ],
+    })),
   };
 }
 

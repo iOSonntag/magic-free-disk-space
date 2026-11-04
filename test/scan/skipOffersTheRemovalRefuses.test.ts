@@ -1,12 +1,19 @@
 import { describe, expect, test } from 'bun:test';
-import type { Candidate, CandidateDecision, SkipReason } from '../../src/scan/candidate.js';
+import type {
+  Candidate,
+  CandidateDecision,
+  CandidateRecycleBin,
+  SkipReason,
+} from '../../src/scan/candidate.js';
 import { skipOffersTheRemovalRefuses } from '../../src/scan/skipOffersTheRemovalRefuses.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import {
   buildTestEvictCandidate,
   buildTestEvictTarget,
 } from '../support/evictCandidateFixtures.js';
 import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
+import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
 const HOME_DIR = '/Users/example';
 
@@ -121,7 +128,9 @@ describe('skipOffersTheRemovalRefuses', () => {
   test('keeps a tool item, whose tool removes what it owns', () => {
     expect(
       listSkipReasons({
-        candidates: [buildTestToolCandidate({ homeDir: HOME_DIR, version: '20.1.0' })],
+        candidates: [
+          buildTestToolCandidate({ home: buildExampleHome({ text: HOME_DIR }), version: '20.1.0' }),
+        ],
       }),
     ).toEqual([null]);
   });
@@ -137,4 +146,41 @@ describe('skipOffersTheRemovalRefuses', () => {
       }),
     ).toEqual([{ kind: 'skip', path: path, reason: 'protectedPath' }, skip]);
   });
+
+  test('keeps the Recycle Bin of a drive the environment lists, and skips that of another', () => {
+    const decisions = skipOffersTheRemovalRefuses({
+      environment: EXAMPLE_WIN32_ENVIRONMENT,
+      decisions: ['D:\\', 'E:\\'].map(
+        (driveRootText): CandidateDecision => ({
+          kind: 'offer',
+          candidate: buildRecycleBinCandidate({ driveRootText: driveRootText }),
+        }),
+      ),
+    });
+
+    expect(decisions.map((decision) => decision.kind)).toEqual(['offer', 'skip']);
+    expect(decisions[1]).toEqual({
+      kind: 'skip',
+      path: 'E:\\$Recycle.Bin',
+      reason: 'outsideAllowedRoot',
+    });
+  });
 });
+
+/** The Recycle Bin of the drive at `driveRootText`, as the scan offers it. */
+function buildRecycleBinCandidate(params: { driveRootText: string }): CandidateRecycleBin {
+  return {
+    ...buildTestCandidate({
+      path: `${params.driveRootText}$Recycle.Bin`,
+      title: 'Recycle Bin',
+      category: 'trash',
+      risk: 'careful',
+    }),
+    origin: { kind: 'recycleBin' },
+    removal: {
+      kind: 'emptyRecycleBin',
+      driveRootPath: buildTestWindowsPath({ text: params.driveRootText }),
+      scannedContent: { sizeBytes: 4096, itemCount: 2 },
+    },
+  };
+}

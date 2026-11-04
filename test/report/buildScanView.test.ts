@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { WIN32_REPORT_TEXTS } from '../../src/platform/win32/reportTexts.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
@@ -11,13 +11,13 @@ import type { ScanIssue } from '../../src/scan/issue.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
 import type { VolumeSpace } from '../../src/system/volumeSpace.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestEngineCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
   buildProtocolFixtureReport,
@@ -31,6 +31,12 @@ const MB = 1_000_000;
 const TEXTS = darwinPlatform.report;
 
 const HOME_DIR = PROTOCOL_FIXTURE_HOME_DIR;
+
+const HOME = buildExampleHome({ text: HOME_DIR });
+
+// The fixture of the bridge's events is the scan of a macOS home, and a path below a home reads
+// as `~/…` only with the separator of macOS, which the display path takes from the host.
+const testOnDarwin = test.skipIf(process.platform !== 'darwin');
 
 function buildAdvice(params: {
   path: string;
@@ -65,6 +71,7 @@ function buildRankedReport(params: {
 
   return buildScanReport({
     decisions: [...offers, ...advice],
+    appAdvice: [],
     evictedEntryCount: 0,
     issues: params.issues ?? [],
   });
@@ -91,7 +98,7 @@ function listNumbersTopToBottom(params: { view: ScanView }): number[] {
   return [...sectionNumbers, ...exploreNumbers];
 }
 
-describeAwaitingWin32Platform('buildScanView', () => {
+describe('buildScanView', () => {
   test('shows an empty scan as its summary alone, with the disk it read', () => {
     expect(buildView({ report: EMPTY_REPORT, disk: PROTOCOL_FIXTURE_DISK })).toEqual({
       summary: {
@@ -109,16 +116,80 @@ describeAwaitingWin32Platform('buildScanView', () => {
       skipped: null,
       notices: [],
       sectionTotals: [],
+      appAdvice: null,
     });
   });
 
-  test('gives the scanned event of the protocol fixture for the scan it shows', async () => {
-    const fixtureEvent = await loadProtocolFixtureEventOfKind('scanned');
+  test('shows the installed apps of advice beside the sections, unnumbered, with what is known', () => {
+    const view = buildScanView({
+      texts: WIN32_REPORT_TEXTS,
+      report: {
+        ...EMPTY_REPORT,
+        appAdvice: [
+          {
+            displayName: 'Example\u001b[2J Editor',
+            installFolderPath: 'C:\\Program Files\\Example Editor',
+            estimatedBytes: 3 * MB,
+          },
+          { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
+        ],
+      },
+      fullDiskAccessHolder: 'app',
+      homeDir: HOME_DIR,
+      disk: null,
+    });
 
-    const view = buildView({ report: buildProtocolFixtureReport(), disk: PROTOCOL_FIXTURE_DISK });
-
-    expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
+    expect(view.summary).toEqual({
+      titleText: 'Nothing to delete was found.',
+      lines: [],
+      totalBytes: 0,
+      isTotalComplete: true,
+      safeBytes: 0,
+      isSafeComplete: true,
+      disk: null,
+    });
+    expect(view.safeNumbers).toEqual([]);
+    expect(view.sectionTotals).toEqual([]);
+    expect(view.appAdvice).toEqual({
+      titleText: 'Installed apps',
+      introText:
+        'Uninstall the apps you no longer use in Settings > Apps; this tool never deletes an app.',
+      items: [
+        {
+          title: 'Example\\u{1b}[2J Editor',
+          risk: 'review',
+          riskText: 'review',
+          sizeText: '3.0 MB',
+          detailLines: [
+            { kind: 'path', text: 'C:\\Program Files\\Example Editor' },
+            { kind: 'explanation', text: 'Installed on this PC, as Settings > Apps lists it.' },
+            { kind: 'advice', text: 'Uninstall it in Settings > Apps if you no longer use it.' },
+          ],
+        },
+        {
+          title: 'Example Tool',
+          risk: 'review',
+          riskText: 'review',
+          sizeText: 'size unknown',
+          detailLines: [
+            { kind: 'explanation', text: 'Installed on this PC, as Settings > Apps lists it.' },
+            { kind: 'advice', text: 'Uninstall it in Settings > Apps if you no longer use it.' },
+          ],
+        },
+      ],
+    });
   });
+
+  testOnDarwin(
+    'gives the scanned event of the protocol fixture for the scan it shows',
+    async () => {
+      const fixtureEvent = await loadProtocolFixtureEventOfKind('scanned');
+
+      const view = buildView({ report: buildProtocolFixtureReport(), disk: PROTOCOL_FIXTURE_DISK });
+
+      expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
+    },
+  );
 
   test('counts the entries left in iCloud into the skipped items, on a line of their own', () => {
     const view = buildView({
@@ -179,6 +250,80 @@ describeAwaitingWin32Platform('buildScanView', () => {
       },
     ]);
     expect(view.safeNumbers).toEqual([]);
+  });
+
+  test('shows the Recycle Bin of a drive as an item of the Recycle Bin section, with no command', () => {
+    const view = buildScanView({
+      texts: WIN32_REPORT_TEXTS,
+      report: buildRankedReport({
+        candidates: [
+          {
+            path: 'C:\\$Recycle.Bin',
+            title: 'Recycle Bin (C:)',
+            category: 'trash',
+            risk: 'careful',
+            origin: { kind: 'recycleBin' },
+            explanation: 'Files you deleted.',
+            regeneration: 'None.',
+            allocatedBytes: 2 * MB,
+            entryCount: 3,
+            isComplete: true,
+            privateSizeFallbackCount: 0,
+            lastUsedAtMs: null,
+            downloadedAtMs: null,
+            appName: null,
+            removal: {
+              kind: 'emptyRecycleBin',
+              driveRootPath: buildTestWindowsPath({ text: 'C:\\' }),
+              scannedContent: { sizeBytes: 2 * MB, itemCount: 3 },
+            },
+          },
+        ],
+      }),
+      fullDiskAccessHolder: 'app',
+      homeDir: HOME_DIR,
+      disk: null,
+    });
+
+    expect<unknown>(view.sections).toEqual([
+      {
+        key: 'trash',
+        titleText: 'Recycle Bin',
+        sizeText: '2.0 MB',
+        isInitiallyExpanded: false,
+        items: [],
+        checkGroup: {
+          titleText: 'Check before deleting',
+          items: [
+            {
+              number: 1,
+              key: 'recycleBin:C:\\$Recycle.Bin',
+              title: 'Recycle Bin (C:)',
+              risk: 'careful',
+              riskText: 'careful',
+              sizeText: '2.0 MB',
+              detailLines: [
+                { kind: 'path', text: 'C:\\$Recycle.Bin' },
+                { kind: 'explanation', text: 'Files you deleted.' },
+                { kind: 'regeneration', text: 'None.' },
+              ],
+              sectionKey: 'trash',
+              group: 'careful',
+              origin: 'trash',
+              removal: 'delete',
+              allocatedBytes: 2 * MB,
+              isComplete: true,
+              displayPath: 'C:\\$Recycle.Bin',
+              revealPath: 'C:\\$Recycle.Bin',
+              lastUsedAt: null,
+              downloadedAt: null,
+              appName: null,
+              matchedBy: null,
+            },
+          ],
+        },
+      },
+    ]);
   });
 
   test('shows a never item in its check group and counts it in no space the summary names', () => {
@@ -290,42 +435,45 @@ describeAwaitingWin32Platform('buildScanView', () => {
     ]);
   });
 
-  test('shows a safe item a probe found under Explore, in the review group of its section', () => {
-    const toolCandidate = buildTestToolCandidate({
-      homeDir: HOME_DIR,
-      version: '20.1.0',
-      allocatedBytes: 2 * MB,
-    });
-    const view = buildView({ report: buildRankedReport({ candidates: [toolCandidate] }) });
-
-    expect(view.sections).toEqual([]);
-    expect(view.explore?.items).toEqual([
-      expect.objectContaining({
-        number: 1,
-        key: 'explore:miseVersions:miseVersion:node@20.1.0',
-        sectionKey: 'developerTools',
-        group: 'review',
-        origin: 'explore',
-        removal: 'tool',
-        displayPath: '~/.local/share/mise/installs/node/20.1.0',
-        revealPath: `${HOME_DIR}/.local/share/mise/installs/node/20.1.0`,
-      }),
-    ]);
-    expect(view.summary.safeBytes).toBe(0);
-    expect(view.sectionTotals).toEqual([
-      {
-        sectionKey: 'developerTools',
+  testOnDarwin(
+    'shows a safe item a probe found under Explore, in the review group of its section',
+    () => {
+      const toolCandidate = buildTestToolCandidate({
+        home: HOME,
+        version: '20.1.0',
         allocatedBytes: 2 * MB,
-        isComplete: true,
-        removableBytes: 2 * MB,
-        isRemovableComplete: true,
-        itemCount: 1,
-        safeBytes: 0,
-        adviceCount: 0,
-        titleText: 'Developer tools',
-      },
-    ]);
-  });
+      });
+      const view = buildView({ report: buildRankedReport({ candidates: [toolCandidate] }) });
+
+      expect(view.sections).toEqual([]);
+      expect(view.explore?.items).toEqual([
+        expect.objectContaining({
+          number: 1,
+          key: 'explore:miseVersions:miseVersion:node@20.1.0',
+          sectionKey: 'developerTools',
+          group: 'review',
+          origin: 'explore',
+          removal: 'tool',
+          displayPath: '~/.local/share/mise/installs/node/20.1.0',
+          revealPath: `${HOME_DIR}/.local/share/mise/installs/node/20.1.0`,
+        }),
+      ]);
+      expect(view.summary.safeBytes).toBe(0);
+      expect(view.sectionTotals).toEqual([
+        {
+          sectionKey: 'developerTools',
+          allocatedBytes: 2 * MB,
+          isComplete: true,
+          removableBytes: 2 * MB,
+          isRemovableComplete: true,
+          itemCount: 1,
+          safeBytes: 0,
+          adviceCount: 0,
+          titleText: 'Developer tools',
+        },
+      ]);
+    },
+  );
 
   test('titles each section total as its section, the Trash by the name of the platform', () => {
     const view = buildView({
@@ -376,7 +524,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
     });
   });
 
-  test('shows Explore with advice only when the scan offered no Explore item', () => {
+  testOnDarwin('shows Explore with advice only when the scan offered no Explore item', () => {
     const view = buildView({
       report: {
         ...EMPTY_REPORT,
@@ -449,23 +597,29 @@ describeAwaitingWin32Platform('buildScanView', () => {
     ]);
   });
 
-  test('shows an engine item with nothing to reveal and the paths of a unit as deleted', () => {
-    const engineCandidate = buildTestEngineCandidate({ homeDir: HOME_DIR, allocatedBytes: 2 * MB });
-    const unitCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR });
-    const view = buildView({
-      report: buildRankedReport({ candidates: [engineCandidate, unitCandidate] }),
-    });
+  testOnDarwin(
+    'shows an engine item with nothing to reveal and the paths of a unit as deleted',
+    () => {
+      const engineCandidate = buildTestEngineCandidate({
+        homeDir: HOME_DIR,
+        allocatedBytes: 2 * MB,
+      });
+      const unitCandidate = buildTestVscodeExtensionCandidate({ home: HOME });
+      const view = buildView({
+        report: buildRankedReport({ candidates: [engineCandidate, unitCandidate] }),
+      });
 
-    expect(view.explore?.items).toEqual([
-      expect.objectContaining({
-        key: `explore:dockerDesktopEngine:engineBuildCache:dockerDesktopEngine:${HOME_DIR}/.docker/run/docker.sock`,
-        removal: 'engine',
-        displayPath: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
-        revealPath: null,
-      }),
-      expect.objectContaining({ removal: 'delete', revealPath: unitCandidate.path }),
-    ]);
-  });
+      expect(view.explore?.items).toEqual([
+        expect.objectContaining({
+          key: `explore:dockerDesktopEngine:engineBuildCache:dockerDesktopEngine:${HOME_DIR}/.docker/run/docker.sock`,
+          removal: 'engine',
+          displayPath: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
+          revealPath: null,
+        }),
+        expect.objectContaining({ removal: 'delete', revealPath: unitCandidate.path }),
+      ]);
+    },
+  );
 
   test('gives an advice the app or the Settings pane that handles its place', () => {
     const photosAdvice: Advice = {
@@ -615,7 +769,11 @@ describeAwaitingWin32Platform('buildScanView', () => {
   test('numbers ascend top to bottom across the sections and Explore', () => {
     const report = buildRankedReport({
       candidates: [
-        buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0', allocatedBytes: 9 * MB }),
+        buildTestToolCandidate({
+          home: buildExampleHome({ text: '/fixture' }),
+          version: '20.1.0',
+          allocatedBytes: 9 * MB,
+        }),
         buildTestCandidate({
           path: '/fixture/.Trash',
           title: 'Trash',
@@ -762,7 +920,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
     expect(view.notices).toEqual([]);
   });
 
-  test('writes out control characters in every text that comes from outside', () => {
+  testOnDarwin('writes out control characters in every text that comes from outside', () => {
     const view = buildView({
       report: buildRankedReport({
         candidates: [

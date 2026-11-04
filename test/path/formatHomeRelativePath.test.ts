@@ -1,26 +1,41 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { sep } from 'node:path';
 import { formatHomeRelativePath } from '../../src/path/formatHomeRelativePath.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 
-const HOME_DIR = '/Users/me';
+/** The path of `names` below the root, with the separator of the host, which the formatter reads. */
+function buildRootedPath(names: string[]): string {
+  return ['', ...names].join(sep);
+}
 
-describeAwaitingWin32Platform('formatHomeRelativePath', () => {
+/** The path `~` and `names` below it, as the formatter shows a path inside the home folder. */
+function buildTildePath(names: string[]): string {
+  return ['~', ...names].join(sep);
+}
+
+const HOME_DIR = buildRootedPath(['Users', 'me']);
+
+describe('formatHomeRelativePath', () => {
   test('shows the home folder and a path inside it from ~', () => {
     expect(formatHomeRelativePath({ path: HOME_DIR, homeDir: HOME_DIR })).toBe('~');
-    expect(formatHomeRelativePath({ path: `${HOME_DIR}/Movies/a.mov`, homeDir: HOME_DIR })).toBe(
-      '~/Movies/a.mov',
-    );
-    expect(formatHomeRelativePath({ path: `${HOME_DIR}/Movies`, homeDir: `${HOME_DIR}/` })).toBe(
-      '~/Movies',
-    );
+    expect(
+      formatHomeRelativePath({
+        path: buildRootedPath(['Users', 'me', 'Movies', 'a.mov']),
+        homeDir: HOME_DIR,
+      }),
+    ).toBe(buildTildePath(['Movies', 'a.mov']));
+    expect(
+      formatHomeRelativePath({
+        path: buildRootedPath(['Users', 'me', 'Movies']),
+        homeDir: `${HOME_DIR}${sep}`,
+      }),
+    ).toBe(buildTildePath(['Movies']));
   });
 
   test('keeps a path outside the home folder, and one that only shares its name prefix', () => {
-    expect(formatHomeRelativePath({ path: '/Applications/Xcode.app', homeDir: HOME_DIR })).toBe(
-      '/Applications/Xcode.app',
-    );
-    expect(formatHomeRelativePath({ path: '/Users/meier/a', homeDir: HOME_DIR })).toBe(
-      '/Users/meier/a',
-    );
+    const appPath = buildRootedPath(['Applications', 'Xcode.app']);
+    const neighbourPath = buildRootedPath(['Users', 'meier', 'a']);
+
+    expect(formatHomeRelativePath({ path: appPath, homeDir: HOME_DIR })).toBe(appPath);
+    expect(formatHomeRelativePath({ path: neighbourPath, homeDir: HOME_DIR })).toBe(neighbourPath);
   });
 });

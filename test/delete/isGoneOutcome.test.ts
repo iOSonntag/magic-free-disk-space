@@ -6,6 +6,7 @@ describe('isGoneOutcome', () => {
   test('is true only for the outcomes that leave their item gone', () => {
     const kinds: RemovalOutcomeKind[] = [
       'removed',
+      'partlyRemoved',
       'alreadyGone',
       'changedSinceScan',
       'ownerRunning',

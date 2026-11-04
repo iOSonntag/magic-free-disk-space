@@ -2,6 +2,9 @@ import type { Pointer } from 'bun:ffi';
 import { dlopen, FFIType, read, toArrayBuffer } from 'bun:ffi';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
+import type { DriveRoot } from './driveRoot.js';
+import type { ProcessEntry } from './processEntry.js';
+import { createProcessEntryBuffer, parseProcessEntry } from './processEntry.js';
 
 declare const windowsHandleBrand: unique symbol;
 
@@ -34,12 +37,22 @@ const TOKEN_USER_BUFFER_BYTES = 128;
 const SE_FILE_OBJECT = 1;
 const OWNER_SECURITY_INFORMATION = 0x1;
 
-/** `HKEY_CURRENT_USER` is `(HKEY)(ULONG_PTR)(LONG)0x80000001`, sign-extended to 64 bits. */
+/**
+ * `HKEY_CURRENT_USER` and `HKEY_LOCAL_MACHINE` are `(HKEY)(ULONG_PTR)(LONG)0x80000001` and
+ * `0x80000002`, sign-extended to 64 bits.
+ */
 const HKEY_CURRENT_USER = 0xffffffff80000001n;
+const HKEY_LOCAL_MACHINE = 0xffffffff80000002n;
 const KEY_READ = 0x20019;
 const RRF_RT_REG_SZ = 0x2;
+const RRF_RT_REG_DWORD = 0x10;
 const ERROR_SUCCESS = 0;
+const ERROR_FILE_NOT_FOUND = 2;
+const ERROR_NO_MORE_FILES = 18;
 const ERROR_NO_MORE_ITEMS = 259;
+
+/** The flags that open the 64-bit or the 32-bit view of a redirected key. */
+const KEY_WOW64_FLAGS: Record<RegistryView, number> = { shared: 0, bits64: 0x100, bits32: 0x200 };
 
 /** A key name has at most 255 characters, a value at most 32 767, each with its NUL. */
 const REGISTRY_KEY_NAME_UNITS = 256;
@@ -47,6 +60,57 @@ const REGISTRY_VALUE_BYTES = 65_536;
 
 /** A path of Windows has at most 32 767 UTF-16 code units. */
 const MAX_WIDE_STRING_UNITS = 32_767;
+
+/** What `CreateToolhelp32Snapshot` and `CreateFileW` return when they fail. */
+const INVALID_HANDLE_VALUE = 0xffffffffffffffffn;
+const TH32CS_SNAPPROCESS = 0x2;
+const PROCESS_TERMINATE = 0x1;
+const PROCESS_SET_QUOTA = 0x100;
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+/** `JobObjectExtendedLimitInformation` and the limit that ends every process of a closed job. */
+const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9;
+const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
+
+/**
+ * `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` on x64 and arm64: the basic limits of 64 bytes, whose
+ * `LimitFlags` sits at byte 16, then the I/O counters and four sizes.
+ */
+const JOB_EXTENDED_LIMIT_BYTES = 144;
+const JOB_LIMIT_FLAGS_OFFSET = 16;
+
+/** `FILE_ATTRIBUTE_NORMAL`, which `SetFileAttributesW` takes for an entry with no other bit. */
+const FILE_ATTRIBUTE_NORMAL = 0x80;
+
+/** `SHQUERYRBINFO` on x64 and arm64: `cbSize`, then the size and the item count at 8 and 16. */
+const RECYCLE_BIN_INFO_BYTES = 24;
+
+/** Empties without asking, without a progress window, and without a sound. */
+const SHERB_SILENT = 0x7;
+
+/** The registry views a key can be read in. */
+export type RegistryView = 'shared' | 'bits64' | 'bits32';
+
+/** The two hives the Uninstall keys live in. */
+export type RegistryHive = 'currentUser' | 'localMachine';
+
+/** The values of one Uninstall subkey, each `null` where the subkey lacks it or holds another type. */
+export type UninstallKeyValues = {
+  keyName: string;
+  displayName: string | null;
+  uninstallString: string | null;
+  installLocation: string | null;
+  estimatedSize: number | null;
+  systemComponent: number | null;
+  parentKeyName: string | null;
+  releaseType: string | null;
+};
+
+/** What `SHQueryRecycleBinW` counts in the Recycle Bin of one drive. */
+export type RecycleBinCount = { sizeBytes: number; itemCount: number };
+
+/** What `GetDiskFreeSpaceExW` reads of one volume for the calling user. */
+export type DiskFreeSpace = { totalBytes: number; availableBytes: number };
 
 type Kernel32 = ReturnType<typeof openKernel32>;
 type Advapi32 = ReturnType<typeof openAdvapi32>;
@@ -64,7 +128,27 @@ function openKernel32() {
     GetFileAttributesW: { args: [FFIType.ptr], returns: FFIType.u32 },
     GetLogicalDrives: { args: [], returns: FFIType.u32 },
     GetDriveTypeW: { args: [FFIType.ptr], returns: FFIType.u32 },
+    GetDiskFreeSpaceExW: {
+      args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+      returns: FFIType.i32,
+    },
+    SetFileAttributesW: { args: [FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
     GetCurrentProcess: { args: [], returns: FFIType.u64 },
+    OpenProcess: { args: [FFIType.u32, FFIType.i32, FFIType.u32], returns: FFIType.u64 },
+    QueryFullProcessImageNameW: {
+      args: [FFIType.u64, FFIType.u32, FFIType.ptr, FFIType.ptr],
+      returns: FFIType.i32,
+    },
+    CreateToolhelp32Snapshot: { args: [FFIType.u32, FFIType.u32], returns: FFIType.u64 },
+    Process32FirstW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+    Process32NextW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+    CreateJobObjectW: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.u64 },
+    SetInformationJobObject: {
+      args: [FFIType.u64, FFIType.u32, FFIType.ptr, FFIType.u32],
+      returns: FFIType.i32,
+    },
+    AssignProcessToJobObject: { args: [FFIType.u64, FFIType.u64], returns: FFIType.i32 },
+    TerminateJobObject: { args: [FFIType.u64, FFIType.u32], returns: FFIType.i32 },
     CloseHandle: { args: [FFIType.u64], returns: FFIType.i32 },
     LocalFree: { args: [FFIType.u64], returns: FFIType.u64 },
     GetLastError: { args: [], returns: FFIType.u32 },
@@ -131,6 +215,8 @@ function openShell32() {
       args: [FFIType.ptr, FFIType.u32, FFIType.u64, FFIType.ptr],
       returns: FFIType.i32,
     },
+    SHQueryRecycleBinW: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+    SHEmptyRecycleBinW: { args: [FFIType.u64, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
   });
 }
 
@@ -177,6 +263,42 @@ export function loadDriveType(params: { rootPath: AbsolutePath }): number {
   return kernel32.symbols.GetDriveTypeW(
     toWideString({ text: toExtendedLengthPath({ path: params.rootPath }) }),
   );
+}
+
+/**
+ * The size of the volume that holds the folder at `folderPath` and the bytes free on it, each as
+ * far as the disk quota lets the calling user use them.
+ */
+export function loadDiskFreeSpace(params: {
+  folderPath: AbsolutePath;
+}): Result<DiskFreeSpace, Win32CallFailure> {
+  kernel32 ??= openKernel32();
+
+  const availableBytes = new BigUint64Array(1);
+  const totalBytes = new BigUint64Array(1);
+  // A UNC folder must end with a backslash; a drive folder may.
+  const folderText = params.folderPath.endsWith('\\')
+    ? params.folderPath
+    : `${params.folderPath}\\`;
+
+  const isRead = kernel32.symbols.GetDiskFreeSpaceExW(
+    toWideString({ text: folderText }),
+    availableBytes,
+    totalBytes,
+    null,
+  );
+
+  if (isRead === 0) {
+    return failWithLastError({ call: 'GetDiskFreeSpaceExW' });
+  }
+
+  return {
+    kind: 'succeeded',
+    value: {
+      totalBytes: Number(totalBytes[0] ?? 0n),
+      availableBytes: Number(availableBytes[0] ?? 0n),
+    },
+  };
 }
 
 /**
@@ -339,13 +461,296 @@ export function loadCurrentUserSubkeyStrings(params: {
   }
 }
 
-function listSubkeyStrings(params: {
-  key: bigint;
-  valueName: string;
-}): Result<string[], Win32CallFailure> {
+/**
+ * The values of each subkey of the key `keyPath` of the hive, in the given view, in the order of
+ * the subkeys. A key that does not exist holds no subkeys.
+ */
+export function loadUninstallKeyValues(params: {
+  hive: RegistryHive;
+  view: RegistryView;
+  keyPath: string;
+}): Result<UninstallKeyValues[], Win32CallFailure> {
   advapi32 ??= openAdvapi32();
 
-  const values: string[] = [];
+  const keyHandle = new BigUint64Array(1);
+  const openStatus = advapi32.symbols.RegOpenKeyExW(
+    params.hive === 'currentUser' ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE,
+    toWideString({ text: params.keyPath }),
+    0,
+    KEY_READ | KEY_WOW64_FLAGS[params.view],
+    keyHandle,
+  );
+
+  if (openStatus === ERROR_FILE_NOT_FOUND) {
+    return { kind: 'succeeded', value: [] };
+  }
+
+  if (openStatus !== ERROR_SUCCESS) {
+    return { kind: 'failed', failure: { call: 'RegOpenKeyExW', code: openStatus } };
+  }
+
+  const key = readAddress(keyHandle);
+
+  try {
+    const subkeyNames = listSubkeyNames({ key: key });
+
+    if (subkeyNames.kind === 'failed') {
+      return subkeyNames;
+    }
+
+    return {
+      kind: 'succeeded',
+      value: subkeyNames.value.map((subkeyName) => {
+        const subkey = { key: key, subkeyName: subkeyName };
+
+        return {
+          keyName: subkeyName,
+          displayName: loadSubkeyString({ ...subkey, valueName: 'DisplayName' }),
+          uninstallString: loadSubkeyString({ ...subkey, valueName: 'UninstallString' }),
+          installLocation: loadSubkeyString({ ...subkey, valueName: 'InstallLocation' }),
+          estimatedSize: loadSubkeyNumber({ ...subkey, valueName: 'EstimatedSize' }),
+          systemComponent: loadSubkeyNumber({ ...subkey, valueName: 'SystemComponent' }),
+          parentKeyName: loadSubkeyString({ ...subkey, valueName: 'ParentKeyName' }),
+          releaseType: loadSubkeyString({ ...subkey, valueName: 'ReleaseType' }),
+        };
+      }),
+    };
+  } finally {
+    advapi32.symbols.RegCloseKey(key);
+  }
+}
+
+/**
+ * Each running process by its id and the file name of its image, as `Process32FirstW` and
+ * `Process32NextW` list a snapshot of them.
+ */
+export function listProcesses(): Result<ProcessEntry[], Win32CallFailure> {
+  kernel32 ??= openKernel32();
+
+  const snapshot = kernel32.symbols.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+  if (snapshot === INVALID_HANDLE_VALUE) {
+    return failWithLastError({ call: 'CreateToolhelp32Snapshot' });
+  }
+
+  try {
+    const processes: ProcessEntry[] = [];
+    const entry = createProcessEntryBuffer();
+    let isListed = kernel32.symbols.Process32FirstW(snapshot, entry);
+
+    while (isListed !== 0) {
+      processes.push(parseProcessEntry({ bytes: entry }));
+      isListed = kernel32.symbols.Process32NextW(snapshot, entry);
+    }
+
+    const endCode = kernel32.symbols.GetLastError();
+
+    if (endCode !== ERROR_NO_MORE_FILES) {
+      return { kind: 'failed', failure: { call: 'Process32NextW', code: endCode } };
+    }
+
+    return { kind: 'succeeded', value: processes };
+  } finally {
+    kernel32.symbols.CloseHandle(snapshot);
+  }
+}
+
+/**
+ * The full path of the image of the process `processId`. Fails for a process this user may not
+ * query, such as a protected process or one of another user.
+ */
+export function loadProcessImagePath(params: {
+  processId: number;
+}): Result<string, Win32CallFailure> {
+  kernel32 ??= openKernel32();
+
+  const processHandle = kernel32.symbols.OpenProcess(
+    PROCESS_QUERY_LIMITED_INFORMATION,
+    0,
+    params.processId,
+  );
+
+  if (processHandle === 0n) {
+    return failWithLastError({ call: 'OpenProcess' });
+  }
+
+  try {
+    const pathBuffer = new Uint16Array(MAX_WIDE_STRING_UNITS + 1);
+    const pathUnits = new Uint32Array([pathBuffer.length]);
+    const isRead = kernel32.symbols.QueryFullProcessImageNameW(
+      processHandle,
+      0,
+      pathBuffer,
+      pathUnits,
+    );
+
+    if (isRead === 0) {
+      return failWithLastError({ call: 'QueryFullProcessImageNameW' });
+    }
+
+    return {
+      kind: 'succeeded',
+      value: Buffer.from(pathBuffer.buffer, 0, (pathUnits[0] ?? 0) * 2).toString('utf16le'),
+    };
+  } finally {
+    kernel32.symbols.CloseHandle(processHandle);
+  }
+}
+
+/**
+ * A new job whose processes Windows ends once its last handle closes, so a tool in it dies with
+ * the app however the app ends. Close it with `closeHandle`.
+ */
+export function createKillOnCloseJob(): Result<WindowsHandle, Win32CallFailure> {
+  kernel32 ??= openKernel32();
+
+  const job = kernel32.symbols.CreateJobObjectW(null, null);
+
+  if (job === 0n) {
+    return failWithLastError({ call: 'CreateJobObjectW' });
+  }
+
+  const limits = new Uint8Array(JOB_EXTENDED_LIMIT_BYTES);
+
+  new DataView(limits.buffer).setUint32(
+    JOB_LIMIT_FLAGS_OFFSET,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    true,
+  );
+
+  const isSet = kernel32.symbols.SetInformationJobObject(
+    job,
+    JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
+    limits,
+    JOB_EXTENDED_LIMIT_BYTES,
+  );
+
+  if (isSet === 0) {
+    const failure = failWithLastError({ call: 'SetInformationJobObject' });
+
+    kernel32.symbols.CloseHandle(job);
+
+    return failure;
+  }
+
+  // The brand records that the handle came from CreateJobObjectW.
+  return { kind: 'succeeded', value: job as WindowsHandle };
+}
+
+/** Puts the process `processId` into the job; each process it starts from then on joins it too. */
+export function assignProcessToJob(params: {
+  job: WindowsHandle;
+  processId: number;
+}): Result<null, Win32CallFailure> {
+  kernel32 ??= openKernel32();
+
+  const processHandle = kernel32.symbols.OpenProcess(
+    PROCESS_SET_QUOTA | PROCESS_TERMINATE,
+    0,
+    params.processId,
+  );
+
+  if (processHandle === 0n) {
+    return failWithLastError({ call: 'OpenProcess' });
+  }
+
+  try {
+    if (kernel32.symbols.AssignProcessToJobObject(params.job, processHandle) === 0) {
+      return failWithLastError({ call: 'AssignProcessToJobObject' });
+    }
+
+    return { kind: 'succeeded', value: null };
+  } finally {
+    kernel32.symbols.CloseHandle(processHandle);
+  }
+}
+
+/** Ends every process of the job with the exit code 1. */
+export function terminateJob(params: { job: WindowsHandle }): Result<null, Win32CallFailure> {
+  kernel32 ??= openKernel32();
+
+  if (kernel32.symbols.TerminateJobObject(params.job, 1) === 0) {
+    return failWithLastError({ call: 'TerminateJobObject' });
+  }
+
+  return { kind: 'succeeded', value: null };
+}
+
+/** Sets the `FILE_ATTRIBUTE_*` bits of the entry at `path`; no bit set at all is `NORMAL`. */
+export function setFileAttributes(params: {
+  path: AbsolutePath;
+  attributes: number;
+}): Result<null, Win32CallFailure> {
+  kernel32 ??= openKernel32();
+
+  const isSet = kernel32.symbols.SetFileAttributesW(
+    toWideString({ text: toExtendedLengthPath({ path: params.path }) }),
+    params.attributes === 0 ? FILE_ATTRIBUTE_NORMAL : params.attributes,
+  );
+
+  if (isSet === 0) {
+    return failWithLastError({ call: 'SetFileAttributesW' });
+  }
+
+  return { kind: 'succeeded', value: null };
+}
+
+/**
+ * The size and item count of the Recycle Bin of the drive whose root is `driveRoot`, such as
+ * `C:\`. The HRESULT of a failure is its code.
+ */
+export function loadRecycleBinCount(params: {
+  driveRoot: DriveRoot;
+}): Result<RecycleBinCount, Win32CallFailure> {
+  shell32 ??= openShell32();
+
+  const info = new Uint8Array(RECYCLE_BIN_INFO_BYTES);
+  const view = new DataView(info.buffer);
+
+  view.setUint32(0, RECYCLE_BIN_INFO_BYTES, true);
+
+  const hresult = shell32.symbols.SHQueryRecycleBinW(
+    toWideString({ text: params.driveRoot }),
+    info,
+  );
+
+  if (hresult < 0) {
+    return { kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: hresult >>> 0 } };
+  }
+
+  return {
+    kind: 'succeeded',
+    value: {
+      sizeBytes: Number(view.getBigInt64(8, true)),
+      itemCount: Number(view.getBigInt64(16, true)),
+    },
+  };
+}
+
+/**
+ * Empties the Recycle Bin of the drive whose root is `driveRoot`, without asking, a progress
+ * window, or a sound. The HRESULT of a failure is its code.
+ */
+export function emptyRecycleBin(params: { driveRoot: DriveRoot }): Result<null, Win32CallFailure> {
+  shell32 ??= openShell32();
+
+  const hresult = shell32.symbols.SHEmptyRecycleBinW(
+    0n,
+    toWideString({ text: params.driveRoot }),
+    SHERB_SILENT,
+  );
+
+  if (hresult < 0) {
+    return { kind: 'failed', failure: { call: 'SHEmptyRecycleBinW', code: hresult >>> 0 } };
+  }
+
+  return { kind: 'succeeded', value: null };
+}
+
+function listSubkeyNames(params: { key: bigint }): Result<string[], Win32CallFailure> {
+  advapi32 ??= openAdvapi32();
+
+  const names: string[] = [];
   const nameBuffer = new Uint16Array(REGISTRY_KEY_NAME_UNITS);
   const nameLength = new Uint32Array(1);
 
@@ -364,26 +769,66 @@ function listSubkeyStrings(params: {
     );
 
     if (enumStatus === ERROR_NO_MORE_ITEMS) {
-      return { kind: 'succeeded', value: values };
+      return { kind: 'succeeded', value: names };
     }
 
     if (enumStatus !== ERROR_SUCCESS) {
       return { kind: 'failed', failure: { call: 'RegEnumKeyExW', code: enumStatus } };
     }
 
-    const subkeyName = Buffer.from(nameBuffer.buffer, 0, (nameLength[0] ?? 0) * 2).toString(
-      'utf16le',
-    );
-    const value = loadSubkeyString({
-      key: params.key,
-      subkeyName: subkeyName,
-      valueName: params.valueName,
-    });
-
-    if (value !== null) {
-      values.push(value);
-    }
+    names.push(Buffer.from(nameBuffer.buffer, 0, (nameLength[0] ?? 0) * 2).toString('utf16le'));
   }
+}
+
+/** The `REG_DWORD` value of the subkey, or `null` when it has none. */
+function loadSubkeyNumber(params: {
+  key: bigint;
+  subkeyName: string;
+  valueName: string;
+}): number | null {
+  advapi32 ??= openAdvapi32();
+
+  const value = new Uint32Array(1);
+  const valueBytes = new Uint32Array([value.byteLength]);
+  const status = advapi32.symbols.RegGetValueW(
+    params.key,
+    toWideString({ text: params.subkeyName }),
+    toWideString({ text: params.valueName }),
+    RRF_RT_REG_DWORD,
+    null,
+    value,
+    valueBytes,
+  );
+
+  if (status !== ERROR_SUCCESS) {
+    return null;
+  }
+
+  return value[0] ?? null;
+}
+
+function listSubkeyStrings(params: {
+  key: bigint;
+  valueName: string;
+}): Result<string[], Win32CallFailure> {
+  const subkeyNames = listSubkeyNames({ key: params.key });
+
+  if (subkeyNames.kind === 'failed') {
+    return subkeyNames;
+  }
+
+  return {
+    kind: 'succeeded',
+    value: subkeyNames.value.flatMap((subkeyName) => {
+      const value = loadSubkeyString({
+        key: params.key,
+        subkeyName: subkeyName,
+        valueName: params.valueName,
+      });
+
+      return value === null ? [] : [value];
+    }),
+  };
 }
 
 /** The string value of the subkey, or `null` when it has none that fits the buffer. */

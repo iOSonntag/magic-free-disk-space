@@ -5,8 +5,8 @@ import {
 } from '../../src/report/formatEnvironmentFailure.js';
 
 describe('formatUnsupportedPlatform', () => {
-  test('names the operating system the tool runs on', () => {
-    expect(formatUnsupportedPlatform()).toBe('This tool runs on macOS only.');
+  test('names the operating systems the tool runs on', () => {
+    expect(formatUnsupportedPlatform()).toBe('This tool runs on macOS and Windows only.');
   });
 });
 

@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
 import type { OrphanNameMatch } from '../../../src/scan/decideOrphanCandidate.js';
 import {
@@ -6,7 +6,6 @@ import {
   matchOrphanName,
 } from '../../../src/scan/decideOrphanCandidate.js';
 import type { OrphanLocation } from '../../../src/scan/scanPlatform.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import { buildTestInstalledApp } from '../../support/installedAppFixtures.js';
 
 const installed = buildOrphanInstalledFacts({
@@ -22,7 +21,13 @@ const installed = buildOrphanInstalledFacts({
 });
 
 function getLocation(params: { lastName: string }): OrphanLocation {
-  const location = darwinPlatform.scan.apps.orphanLocations.find(
+  const apps = darwinPlatform.scan.apps;
+
+  if (apps.appSection !== 'offerUnusedApps') {
+    throw new Error('The apps of macOS offer no unused apps.');
+  }
+
+  const location = apps.orphanLocations.find(
     (candidate) => candidate.pathNames.at(-1) === params.lastName,
   );
 
@@ -41,7 +46,7 @@ function matchNameIn(params: { name: string; lastName: string }): OrphanNameMatc
   });
 }
 
-describeAwaitingWin32Platform('the orphan locations of macOS', () => {
+describe('the orphan locations of macOS', () => {
   test.each(['HTTPStorages', 'WebKit'])(
     'match a bundle id of no installed app in %s, and skip a plain name',
     (lastName) => {

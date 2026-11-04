@@ -1,7 +1,6 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { skipOfferHoldingOtherVolume } from '../../src/scan/skipOfferHoldingOtherVolume.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
@@ -18,7 +17,7 @@ function measure(params: { holdsOtherVolume: boolean }) {
   });
 }
 
-describeAwaitingWin32Platform('skipOfferHoldingOtherVolume', () => {
+describe('skipOfferHoldingOtherVolume', () => {
   test('skips an offer whose tree holds another volume', () => {
     const offer: CandidateDecision = {
       kind: 'offer',

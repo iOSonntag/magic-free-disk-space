@@ -26,6 +26,7 @@ import { removeTree } from './removeTree.js';
 import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOTS } from './scanHomeFolders.js';
 import { DARWIN_SYSTEM_APPS, MAIL_BUNDLE_PATHS } from './systemApps.js';
 import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
+import { DARWIN_TOOL_PROCESSES } from './toolProcesses.js';
 import { VSCODE_PROFILES_ROOT } from './vscodeProfilesRoot.js';
 
 /** Everything the app takes from macOS; the entry points hand each module its slice. */
@@ -45,20 +46,24 @@ export const darwinPlatform: Platform = {
       // 128 plus the number of SIGTERM.
       { signal: 'SIGTERM', exitCode: 143 },
     ],
+    processes: DARWIN_TOOL_PROCESSES,
   },
   scan: {
     apps: {
       appSection: 'offerUnusedApps',
       loadInstalledApps: loadInstalledApps,
       orphanLocations: ORPHAN_LOCATIONS,
+      xcodeBundleIdPrefix: 'com.apple.dt.Xcode',
     },
     systemApps: DARWIN_SYSTEM_APPS,
+    // The Trash is the catalog's entry `.Trash`.
+    trash: { kind: 'catalogFolder' },
     loadActiveXcodeBundlePath: loadActiveXcodeBundlePath,
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     projectArtifactRules: PROJECT_ARTIFACT_RULES,
     userFileRoots: USER_FILE_ROOTS,
   },
-  delete: { removeTree: removeTree },
+  delete: { removeTree: removeTree, trash: { kind: 'catalogFolder' } },
   explore: {
     pnpmHomes: PNPM_HOMES,
     pnpmStoreRoot: PNPM_STORE_ROOT,

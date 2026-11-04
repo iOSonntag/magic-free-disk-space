@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { isSameOrInsidePath, mayBeSameOrInsidePath } from '../../src/path/isSameOrInsidePath.js';
+import {
+  isSameEntryName,
+  isSameOrInsidePath,
+  mayBeSameOrInsidePath,
+} from '../../src/path/isSameOrInsidePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 
@@ -60,5 +64,23 @@ describe('mayBeSameOrInsidePath', () => {
         parentPath: 'C:\\Users',
       }),
     ).toBe(true);
+  });
+});
+
+describe('isSameEntryName', () => {
+  test('compares the names of POSIX entries exactly', () => {
+    expect(isSameEntryName({ rules: RULES, name: 'node_modules', otherName: 'node_modules' })).toBe(
+      true,
+    );
+    expect(isSameEntryName({ rules: RULES, name: 'Library', otherName: 'library' })).toBe(false);
+  });
+
+  test('compares the names of Windows entries without case', () => {
+    expect(
+      isSameEntryName({ rules: WIN32_PATH_RULES, name: 'AppData', otherName: 'APPDATA' }),
+    ).toBe(true);
+    expect(
+      isSameEntryName({ rules: WIN32_PATH_RULES, name: 'AppData', otherName: 'AppData2' }),
+    ).toBe(false);
   });
 });

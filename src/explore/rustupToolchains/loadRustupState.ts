@@ -30,6 +30,7 @@ export async function loadRustupState(params: {
     probe: RUSTUP_TOOLCHAIN_LIST_PROBE,
     tool: params.run.tool,
     environment: params.run.environment,
+    platform: params.run.platform,
     deadlineMs: params.run.deadlineMs,
   });
 
@@ -41,6 +42,7 @@ export async function loadRustupState(params: {
     probe: RUSTUP_OVERRIDE_LIST_PROBE,
     tool: params.run.tool,
     environment: params.run.environment,
+    platform: params.run.platform,
     deadlineMs: params.run.deadlineMs,
   });
 

@@ -111,6 +111,16 @@ const VSCODE_BUNDLE_PATH_PART = '/Visual Studio Code.app/Contents/';
 // pnpm or pnpx as the last segment of a path or the whole program, its launcher or its script.
 const PNPM_PROGRAM_PATTERN = /(^|\/)pnp[mx](\.[cm]?js)?( |$)/;
 
+// On Windows a process is the path of its image, or its file name alone: the emulator's launcher
+// and the `qemu-system-<arch>` of each running AVD.
+const ANDROID_EMULATOR_WINDOWS_IMAGE_PATTERN = /(^|\\)(emulator|qemu-system-[^\\]+)\.exe$/i;
+
+// The app and each of its helpers run as its one image on Windows.
+const VSCODE_WINDOWS_IMAGE_PATTERN = /(^|\\)code\.exe$/i;
+
+// pnpm's own build, or Node, which may run pnpm's script: Windows lists no arguments to tell.
+const PNPM_WINDOWS_IMAGE_PATTERN = /(^|\\)(pnpm|pnpx|node)\.exe$/i;
+
 // Each program as the last segment of a path or the whole executable.
 const VAGRANT_PROGRAM_PATTERN = /(^|\/)vagrant( |$)/;
 
@@ -138,7 +148,8 @@ const CLAUDE_PROGRAM_PATTERN = /(^|\/)claude( |$)/;
 
 /**
  * The one busy rule of the explore units, at the scan and right before a run. `unknown` only for
- * a unit whose rule reads the processes while they are `null`.
+ * a unit whose rule reads the processes while they are `null`. Each process is a command line on
+ * macOS and an image path on Windows; the rule of each unit Windows explores knows both forms.
  */
 export function decideUnitActivity(params: {
   facts: UnitActivityFacts;
@@ -160,7 +171,8 @@ export function decideUnitActivity(params: {
         processCommands: params.processCommands,
         isOwnerProcess: (command) =>
           command.includes(ANDROID_EMULATOR_QEMU_PATH_PART) ||
-          ANDROID_EMULATOR_LAUNCHER_PATTERN.test(command),
+          ANDROID_EMULATOR_LAUNCHER_PATTERN.test(command) ||
+          ANDROID_EMULATOR_WINDOWS_IMAGE_PATTERN.test(command),
       });
     case 'homebrew':
       return decideProcessActivity({
@@ -170,7 +182,8 @@ export function decideUnitActivity(params: {
     case 'vscodeExtension':
       return decideProcessActivity({
         processCommands: params.processCommands,
-        isOwnerProcess: (command) => command.includes(VSCODE_BUNDLE_PATH_PART),
+        isOwnerProcess: (command) =>
+          command.includes(VSCODE_BUNDLE_PATH_PART) || VSCODE_WINDOWS_IMAGE_PATTERN.test(command),
       });
     case 'versionFolder': {
       const folderPathPrefix = `${params.facts.folderPath}/`;
@@ -183,7 +196,8 @@ export function decideUnitActivity(params: {
     case 'pnpmStore':
       return decideProcessActivity({
         processCommands: params.processCommands,
-        isOwnerProcess: (command) => PNPM_PROGRAM_PATTERN.test(command),
+        isOwnerProcess: (command) =>
+          PNPM_PROGRAM_PATTERN.test(command) || PNPM_WINDOWS_IMAGE_PATTERN.test(command),
       });
     case 'vagrant':
       return decideProcessActivity({

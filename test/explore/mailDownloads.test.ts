@@ -1,13 +1,12 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadMailDownloadFindings } from '../../src/explore/mailDownloads/loadMailDownloadFindings.js';
 import { recheckMailDownloadsUnit } from '../../src/explore/mailDownloads/recheckMailDownloadsUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
@@ -47,7 +46,7 @@ async function createMailFile(params: { path: string; accessedMs?: number }): Pr
   });
 }
 
-describeAwaitingWin32Platform('the Mail Downloads probe', () => {
+describe('the Mail Downloads probe', () => {
   test('finds the attachment copies saved and read before the cutoff and never changed', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -74,15 +73,15 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
             {
               unit: {
                 kind: 'mailDownloads',
-                folderPath: buildTestAbsolutePath({ text: folder }),
+                folderPath: buildTestHostPath({ text: folder }),
                 cutoffMs: STALE_CUTOFF_MS,
                 foundFiles: [
                   {
-                    path: buildTestAbsolutePath({ text: join(folder, 'A1', 'saved.pdf') }),
+                    path: buildTestHostPath({ text: join(folder, 'A1', 'saved.pdf') }),
                     modifiedMs: OLD_MS,
                   },
                   {
-                    path: buildTestAbsolutePath({ text: join(folder, 'B2', 'Deep', 'scan.jpg') }),
+                    path: buildTestHostPath({ text: join(folder, 'B2', 'Deep', 'scan.jpg') }),
                     modifiedMs: OLD_MS,
                   },
                 ],
@@ -92,7 +91,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
               regeneration: expect.any(String),
               risk: 'review',
               evidenceLines: [expect.stringContaining('2 attachments')],
-              displayPath: buildTestAbsolutePath({ text: folder }),
+              displayPath: buildTestHostPath({ text: folder }),
               activity: 'idle',
             },
           ],
@@ -124,7 +123,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
           getUnitOfKind({ findings: probed, kind: 'mailDownloads' }).foundFiles.map(
             (file) => file.path,
           ),
-        ).toEqual([buildTestAbsolutePath({ text: savedPath })]);
+        ).toEqual([buildTestHostPath({ text: savedPath })]);
       },
     });
   });
@@ -164,7 +163,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckMailDownloadsUnit', () => {
+describe('recheckMailDownloadsUnit', () => {
   test('finds a unit unchanged, then changed once a file was opened or changed', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,

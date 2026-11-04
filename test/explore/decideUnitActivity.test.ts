@@ -1,7 +1,6 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { UnitActivityFacts } from '../../src/explore/decideUnitActivity.js';
 import { decideUnitActivity } from '../../src/explore/decideUnitActivity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 const SIMULATOR_APP_COMMAND =
@@ -9,7 +8,10 @@ const SIMULATOR_APP_COMMAND =
 
 const UNRELATED_COMMAND = '/usr/bin/some-daemon';
 
-/** Each unit kind whose busy rule only reads the processes, with a command of its owner. */
+/**
+ * Each unit kind whose busy rule only reads the processes, with a command of its owner: a command
+ * line on macOS, and on Windows the path of its image or its file name alone.
+ */
 const PROCESS_RULES: { facts: UnitActivityFacts; ownerCommands: string[] }[] = [
   { facts: { kind: 'simulatorRuntime' }, ownerCommands: [SIMULATOR_APP_COMMAND] },
   {
@@ -18,6 +20,11 @@ const PROCESS_RULES: { facts: UnitActivityFacts; ownerCommands: string[] }[] = [
       '/Users/example/Library/Android/sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64 -avd Pixel',
       '/Users/example/Library/Android/sdk/emulator/emulator -avd Pixel',
       'emulator',
+      'C:\\Users\\example\\AppData\\Local\\Android\\Sdk\\emulator\\emulator.exe',
+      'C:\\Users\\example\\AppData\\Local\\Android\\Sdk\\emulator\\qemu\\windows-x86_64\\qemu-system-x86_64.exe',
+      'qemu-system-x86_64.exe',
+      'EMULATOR.EXE',
+      '\\\\server\\share\\emulator.exe',
     ],
   },
   {
@@ -31,6 +38,8 @@ const PROCESS_RULES: { facts: UnitActivityFacts; ownerCommands: string[] }[] = [
     ownerCommands: [
       '/Applications/Visual Studio Code.app/Contents/MacOS/Electron',
       '/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper',
+      'C:\\Users\\example\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
+      'CODE.EXE',
     ],
   },
   {
@@ -41,6 +50,9 @@ const PROCESS_RULES: { facts: UnitActivityFacts; ownerCommands: string[] }[] = [
       '/opt/homebrew/bin/pnpm store prune',
       'pnpx create-vite',
       'pnpm',
+      'C:\\Users\\example\\AppData\\Local\\pnpm\\pnpm.exe',
+      'Pnpm.EXE',
+      'C:\\Program Files\\nodejs\\node.exe',
     ],
   },
 ];
@@ -92,7 +104,7 @@ const RUSTUP_TOOLCHAIN_PATH = buildTestAbsolutePath({
   text: `${RUSTUP_TOOLCHAINS_PATH}/nightly-aarch64-apple-darwin`,
 });
 
-describeAwaitingWin32Platform('decideUnitActivity', () => {
+describe('decideUnitActivity', () => {
   test('a shut-down device is idle while Simulator.app does not run', () => {
     expect(
       decideUnitActivity({
@@ -166,7 +178,21 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'android' },
-        processCommands: ['/usr/local/bin/emulator-check accel', '/opt/example/emulators/run'],
+        processCommands: [
+          '/usr/local/bin/emulator-check accel',
+          '/opt/example/emulators/run',
+          'C:\\tools\\myemulator.exe',
+          'C:\\tools\\emulator.exe.bak',
+        ],
+      }),
+    ).toBe('idle');
+  });
+
+  test('a VS Code unit stays idle beside an image whose name only holds the word code', () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'vscodeExtension' },
+        processCommands: ['C:\\tools\\vscode-helper.exe', 'C:\\tools\\mycode.exe'],
       }),
     ).toBe('idle');
   });
@@ -175,7 +201,12 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'pnpmStore' },
-        processCommands: ['/usr/local/bin/pnpm-sync watch', '/opt/example/pnpmx/run'],
+        processCommands: [
+          '/usr/local/bin/pnpm-sync watch',
+          '/opt/example/pnpmx/run',
+          'C:\\tools\\pnpm-sync.exe',
+          'C:\\tools\\pnpx-tools.exe',
+        ],
       }),
     ).toBe('idle');
   });

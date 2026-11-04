@@ -1,11 +1,11 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import { parseGitDirFilePath } from '../../src/tools/parseGitDirFilePath.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 
-describeAwaitingWin32Platform('parseGitDirFilePath', () => {
-  test('resolves a relative git dir against the folder', () => {
+describe('parseGitDirFilePath', () => {
+  test('resolves a relative git dir against the folder, by the separator of the host', () => {
     expect(parseGitDirFilePath({ text: 'gitdir: ../.git/modules/sub', folder: '/super/sub' })).toBe(
-      '/super/.git/modules/sub',
+      join('/super', '.git', 'modules', 'sub'),
     );
   });
 

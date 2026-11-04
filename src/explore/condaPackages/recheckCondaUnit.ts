@@ -19,6 +19,7 @@ export async function recheckCondaUnit(params: {
     probe: CONDA_CLEAN_DRY_RUN_PROBE,
     tool: params.run.tool,
     environment: params.run.environment,
+    platform: params.run.platform,
     deadlineMs: params.run.deadlineMs,
   });
 

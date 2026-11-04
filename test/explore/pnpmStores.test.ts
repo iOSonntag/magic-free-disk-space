@@ -28,9 +28,7 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { PNPM_STORE_ROOT, PNPM_XDG_STORE_ROOT } from '../../src/platform/darwin/pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -44,6 +42,7 @@ import {
   buildTestHostPath,
   buildTestPnpmStoreVersion,
 } from '../support/parsedValueFixtures.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeStart } from './probeStartFixtures.js';
@@ -65,6 +64,10 @@ const NO_INSTALLS: PnpmInstallState = { installs: [] };
 
 const PNPM_11_INSTALL_ID = '1375b-1a0a4cad7f8';
 
+// asdf, mise, nvm, corepack's cache, Homebrew, the XDG home, and the launcher script keep pnpm at
+// places of macOS; on Windows pnpm is explored in its own home alone.
+const testOnDarwin = test.skipIf(process.platform !== 'darwin');
+
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
 let probePlatform: ExploreProbePlatform;
@@ -80,6 +83,29 @@ beforeEach(async () => {
 afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
+
+/** pnpm's homes of the probe platform, in the fixture environment. */
+function resolvePnpmHomePaths(): AbsolutePath[] {
+  return probePlatform.explore.pnpmHomes.map((location) =>
+    resolveCatalogLocation({ environment: environment, location: location }),
+  );
+}
+
+/** A path below pnpm's own home of the host, the first of its homes, in the fixture environment. */
+function buildPnpmHomePath(...names: string[]): string {
+  const [pnpmHomePath] = resolvePnpmHomePaths();
+
+  if (pnpmHomePath === undefined) {
+    throw new Error('The host has no pnpm home.');
+  }
+
+  return join(pnpmHomePath, ...names);
+}
+
+/** A file of the example project at `PROJECT_PATH`, which no probe reads from the disk. */
+function buildProjectFilePath(fileName: string): AbsolutePath {
+  return buildTestAbsolutePath({ text: `${PROJECT_PATH}/${fileName}` });
+}
 
 /** Creates the folders `folderNames` in the store at `storeRoot` of the fixture environment. */
 async function createStoreFolders(params: {
@@ -172,7 +198,7 @@ function parseOnePin(params: { kind: ProjectPinFileKind; text: string }): PnpmPi
   return parsePnpmPins({
     files: [
       {
-        path: buildTestAbsolutePath({ text: `${PROJECT_PATH}/pin` }),
+        path: buildProjectFilePath('pin'),
         kind: params.kind,
         text: params.text,
       },
@@ -180,7 +206,7 @@ function parseOnePin(params: { kind: ProjectPinFileKind; text: string }): PnpmPi
   });
 }
 
-describeAwaitingWin32Platform('parsePnpmVersionMajor', () => {
+describe('parsePnpmVersionMajor', () => {
   const majorCases: { text: string; major: number }[] = [
     { text: '10.22.0_1', major: 10 },
     { text: '11.0.0-rc.1', major: 11 },
@@ -202,7 +228,7 @@ describeAwaitingWin32Platform('parsePnpmVersionMajor', () => {
   }
 });
 
-describeAwaitingWin32Platform('mapPnpmMajorToStoreVersion', () => {
+describe('mapPnpmMajorToStoreVersion', () => {
   const storeVersionCases: { major: number; storeVersion: string }[] = [
     { major: 7, storeVersion: 'v3' },
     { major: 9, storeVersion: 'v3' },
@@ -226,7 +252,7 @@ describeAwaitingWin32Platform('mapPnpmMajorToStoreVersion', () => {
   }
 });
 
-describeAwaitingWin32Platform('parsePnpmPins', () => {
+describe('parsePnpmPins', () => {
   const majorsCases: { kind: ProjectPinFileKind; text: string; majors: number[] }[] = [
     { kind: 'packageJson', text: '{"packageManager": "pnpm@10.14.0"}', majors: [10] },
     { kind: 'packageJson', text: '{"packageManager": "pnpm@11.1.2+sha512.0a1b"}', majors: [11] },
@@ -363,7 +389,7 @@ describeAwaitingWin32Platform('parsePnpmPins', () => {
   }
 });
 
-describeAwaitingWin32Platform('decidePnpmStoreOffers', () => {
+describe('decidePnpmStoreOffers', () => {
   test('offers each store version no installed or pinned pnpm uses', () => {
     const offers = decidePnpmStoreOffers({
       storeState: buildStoreState({ folderNames: ['v2', 'v3'] }),
@@ -487,14 +513,14 @@ describeAwaitingWin32Platform('decidePnpmStoreOffers', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildPnpmStoreFindings', () => {
+describe('buildPnpmStoreFindings', () => {
   const storeRoot = buildTestAbsolutePath({ text: '/store' });
   const folderPath = buildTestAbsolutePath({ text: '/store/v3' });
   const storeVersion = buildTestPnpmStoreVersion({ text: 'v3' });
 
   test('builds a careful finding with its evidence and the incomplete-search line', () => {
     const pinFile = buildTestPinFileText({
-      path: `${PROJECT_PATH}/package.json`,
+      path: buildProjectFilePath('package.json'),
       kind: 'packageJson',
       text: '{}',
     });
@@ -567,7 +593,7 @@ describeAwaitingWin32Platform('buildPnpmStoreFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('comparePnpmStoreUnit', () => {
+describe('comparePnpmStoreUnit', () => {
   const unit: ExplorePathUnitPnpmStore = {
     kind: 'pnpmStore',
     storeRoot: buildTestAbsolutePath({ text: '/store' }),
@@ -614,14 +640,7 @@ describeAwaitingWin32Platform('comparePnpmStoreUnit', () => {
 });
 
 describe('loadPnpmInstallState', () => {
-  /** pnpm's homes of the probe platform, in the fixture environment. */
-  function resolvePnpmHomePaths(): AbsolutePath[] {
-    return probePlatform.explore.pnpmHomes.map((location) =>
-      resolveCatalogLocation({ environment: environment, location: location }),
-    );
-  }
-
-  test('reads the Cellar folders and the npm globals of each Homebrew prefix', async () => {
+  testOnDarwin('reads the Cellar folders and the npm globals of each Homebrew prefix', async () => {
     const prefixPath = buildTestHostPath({ text: join(fixtureRoot.rootDir, 'homebrew') });
     const cellarPath = join(prefixPath, 'Cellar', 'pnpm', '10.14.0_1');
     const npmGlobalPath = join(prefixPath, 'lib', 'node_modules', 'pnpm');
@@ -658,7 +677,7 @@ describe('loadPnpmInstallState', () => {
   });
 
   test('keeps a global package.json with no version as an install without a version', async () => {
-    const packageFolder = join(homeDir, 'Library/pnpm/global/5/node_modules/pnpm');
+    const packageFolder = buildPnpmHomePath('global/5/node_modules/pnpm');
     await writeFixtureTextFile({
       path: join(packageFolder, 'package.json'),
       text: '{"name": "pnpm"}',
@@ -682,9 +701,13 @@ describe('loadPnpmInstallState', () => {
 type StoreVersionsOffered = { storeVersions: string[]; isComplete: boolean };
 
 const probeCases: { probeId: 'pnpmStores' | 'pnpmStoresXdg'; storeRoot: CatalogLocation }[] = [
-  { probeId: 'pnpmStores', storeRoot: PNPM_STORE_ROOT },
-  { probeId: 'pnpmStoresXdg', storeRoot: PNPM_XDG_STORE_ROOT },
+  { probeId: 'pnpmStores', storeRoot: HOST_PLATFORM.explore.pnpmStoreRoot },
 ];
+
+// The XDG store is a place of the host only where pnpm has a default for it.
+if (HOST_PLATFORM.explore.pnpmXdgStoreRoot !== null) {
+  probeCases.push({ probeId: 'pnpmStoresXdg', storeRoot: HOST_PLATFORM.explore.pnpmXdgStoreRoot });
+}
 
 for (const probeCase of probeCases) {
   describe(`the probe ${probeCase.probeId}`, () => {
@@ -752,14 +775,20 @@ for (const probeCase of probeCases) {
       });
     });
 
-    const installPlaces: { place: string; createInstall: () => Promise<void> }[] = [
+    const installPlaces: {
+      place: string;
+      isMacOsPlace: boolean;
+      createInstall: () => Promise<void>;
+    }[] = [
       {
         place: 'asdf',
+        isMacOsPlace: true,
         createInstall: () =>
           createFixtureDirectory({ path: join(homeDir, '.asdf/installs/pnpm/10.8.1') }),
       },
       {
         place: 'mise',
+        isMacOsPlace: true,
         createInstall: () =>
           createFixtureDirectory({
             path: join(homeDir, '.local/share/mise/installs/pnpm/10.22.0'),
@@ -767,36 +796,40 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'corepack v1',
+        isMacOsPlace: true,
         createInstall: () =>
           createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/v1/pnpm/10.14.0') }),
       },
       {
         place: 'corepack',
+        isMacOsPlace: true,
         createInstall: () =>
           createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/pnpm/10.14.0') }),
       },
       {
         place: "pnpm's .tools",
+        isMacOsPlace: false,
         createInstall: () =>
-          createFixtureDirectory({ path: join(homeDir, 'Library/pnpm/.tools/pnpm/10.22.0') }),
+          createFixtureDirectory({ path: buildPnpmHomePath('.tools/pnpm/10.22.0') }),
       },
       {
         place: "pnpm's .tools of @pnpm/exe",
+        isMacOsPlace: false,
         createInstall: () =>
-          createFixtureDirectory({
-            path: join(homeDir, 'Library/pnpm/.tools/@pnpm+exe/10.22.0'),
-          }),
+          createFixtureDirectory({ path: buildPnpmHomePath('.tools/@pnpm+exe/10.22.0') }),
       },
       {
         place: "pnpm's global folder",
+        isMacOsPlace: false,
         createInstall: () =>
           writePnpmPackage({
-            packageFolder: join(homeDir, 'Library/pnpm/global/5/node_modules/pnpm'),
+            packageFolder: buildPnpmHomePath('global/5/node_modules/pnpm'),
             version: '10.14.0',
           }),
       },
       {
         place: 'the npm globals of an asdf node',
+        isMacOsPlace: true,
         createInstall: () =>
           writePnpmPackage({
             packageFolder: join(homeDir, '.asdf/installs/nodejs/22.1.0/lib/node_modules/pnpm'),
@@ -805,6 +838,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'the npm globals of a mise node',
+        isMacOsPlace: true,
         createInstall: () =>
           writePnpmPackage({
             packageFolder: join(
@@ -816,6 +850,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'the npm globals of an nvm node',
+        isMacOsPlace: true,
         createInstall: () =>
           writePnpmPackage({
             packageFolder: join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/pnpm'),
@@ -825,7 +860,9 @@ for (const probeCase of probeCases) {
     ];
 
     for (const installPlace of installPlaces) {
-      test(`keeps a store version a pnpm in ${installPlace.place} uses`, async () => {
+      const testOfPlace = installPlace.isMacOsPlace ? testOnDarwin : test;
+
+      testOfPlace(`keeps a store version a pnpm in ${installPlace.place} uses`, async () => {
         await createStore({ folderNames: ['v3', 'v10'] });
         await installPlace.createInstall();
 
@@ -836,19 +873,22 @@ for (const probeCase of probeCases) {
       });
     }
 
-    test("offers nothing beside a pnpm in mise's folder of the backend key npm:pnpm", async () => {
-      await createStore({ folderNames: ['v3'] });
-      await createFixtureDirectory({
-        path: join(homeDir, '.local/share/mise/installs/npm-pnpm/9.15.9'),
-      });
+    testOnDarwin(
+      "offers nothing beside a pnpm in mise's folder of the backend key npm:pnpm",
+      async () => {
+        await createStore({ folderNames: ['v3'] });
+        await createFixtureDirectory({
+          path: join(homeDir, '.local/share/mise/installs/npm-pnpm/9.15.9'),
+        });
 
-      expect(await loadOfferedVersions({ files: [] })).toEqual({
-        storeVersions: [],
-        isComplete: false,
-      });
-    });
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      },
+    );
 
-    test("keeps a store version a pnpm in Homebrew's Cellar uses", async () => {
+    testOnDarwin("keeps a store version a pnpm in Homebrew's Cellar uses", async () => {
       await createStore({ folderNames: ['v3', 'v10'] });
       const prefixPath = buildTestHostPath({ text: join(fixtureRoot.rootDir, 'homebrew') });
       await createFixtureDirectory({ path: join(prefixPath, 'Cellar', 'pnpm', '10.14.0_1') });
@@ -869,7 +909,7 @@ for (const probeCase of probeCases) {
     ];
 
     for (const prefixPlace of homebrewPrefixPlaces) {
-      test(`offers nothing beside a pnpm in ${prefixPlace.place}`, async () => {
+      testOnDarwin(`offers nothing beside a pnpm in ${prefixPlace.place}`, async () => {
         await createStore({ folderNames: ['v10'] });
         const prefixPath = buildTestHostPath({ text: join(fixtureRoot.rootDir, 'homebrew') });
         const installPath = join(prefixPath, ...prefixPlace.installPathNames);
@@ -883,22 +923,31 @@ for (const probeCase of probeCases) {
       });
     }
 
-    const exePackagePlaces: { place: string; packageFolderNames: string[] }[] = [
+    const exePackagePlaces: {
+      place: string;
+      isMacOsPlace: boolean;
+      buildPackageFolder: () => string;
+    }[] = [
       {
         place: "pnpm's global folder",
-        packageFolderNames: ['Library/pnpm/global/5/node_modules/@pnpm/exe'],
+        isMacOsPlace: false,
+        buildPackageFolder: () => buildPnpmHomePath('global/5/node_modules/@pnpm/exe'),
       },
       {
         place: 'the npm globals of an nvm node',
-        packageFolderNames: ['.nvm/versions/node/v22.1.0/lib/node_modules/@pnpm/exe'],
+        isMacOsPlace: true,
+        buildPackageFolder: () =>
+          join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/@pnpm/exe'),
       },
     ];
 
     for (const exePlace of exePackagePlaces) {
-      test(`offers nothing beside a @pnpm/exe in ${exePlace.place}`, async () => {
+      const testOfPlace = exePlace.isMacOsPlace ? testOnDarwin : test;
+
+      testOfPlace(`offers nothing beside a @pnpm/exe in ${exePlace.place}`, async () => {
         await createStore({ folderNames: ['v10'] });
         await writePnpmPackage({
-          packageFolder: join(homeDir, ...exePlace.packageFolderNames),
+          packageFolder: exePlace.buildPackageFolder(),
           version: '10.14.0',
         });
 
@@ -909,23 +958,23 @@ for (const probeCase of probeCases) {
       });
     }
 
-    test('offers nothing and is not judged beside the standalone pnpm executable', async () => {
+    testOnDarwin(
+      'offers nothing and is not judged beside the standalone pnpm executable',
+      async () => {
+        await createStore({ folderNames: ['v10'] });
+        await writeFixtureTextFile({ path: buildPnpmHomePath('pnpm'), text: 'Ïúíþ executable' });
+
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: [],
+          isComplete: false,
+        });
+      },
+    );
+
+    testOnDarwin('counts a pnpm shell script in pnpm home for nothing', async () => {
       await createStore({ folderNames: ['v10'] });
       await writeFixtureTextFile({
-        path: join(homeDir, 'Library/pnpm/pnpm'),
-        text: 'Ïúíþ executable',
-      });
-
-      expect(await loadOfferedVersions({ files: [] })).toEqual({
-        storeVersions: [],
-        isComplete: false,
-      });
-    });
-
-    test('counts a pnpm shell script in pnpm home for nothing', async () => {
-      await createStore({ folderNames: ['v10'] });
-      await writeFixtureTextFile({
-        path: join(homeDir, 'Library/pnpm/pnpm'),
+        path: buildPnpmHomePath('pnpm'),
         text: '#!/bin/sh\nexec "$basedir/.tools/pnpm/10.14.0/bin/pnpm" "$@"\n',
       });
 
@@ -937,11 +986,13 @@ for (const probeCase of probeCases) {
 
     const pnpmHomeInstallCases: {
       place: string;
+      isMacOsPlace: boolean;
       storeFolderName: string;
       createInstall: () => Promise<void>;
     }[] = [
       {
         place: "the global folder of pnpm's XDG home",
+        isMacOsPlace: true,
         storeFolderName: 'v10',
         createInstall: () =>
           writePnpmPackage({
@@ -951,40 +1002,37 @@ for (const probeCase of probeCases) {
       },
       {
         place: '.tools/pnpm-exe beside its launcher script',
+        isMacOsPlace: true,
         storeFolderName: 'v10',
         createInstall: async () => {
           await writeFixtureTextFile({
-            path: join(homeDir, 'Library/pnpm/.tools/pnpm-exe/10.22.0/pnpm'),
+            path: buildPnpmHomePath('.tools/pnpm-exe/10.22.0/pnpm'),
             text: 'Ïúíþ executable',
           });
           await writeFixtureTextFile({
-            path: join(homeDir, 'Library/pnpm/pnpm'),
+            path: buildPnpmHomePath('pnpm'),
             text: '#!/bin/sh\nexec "$basedir/.tools/pnpm-exe/10.22.0/pnpm" "$@"\n',
           });
         },
       },
       {
         place: "an install folder of pnpm 11's global layout",
+        isMacOsPlace: false,
         storeFolderName: 'v11',
         createInstall: () =>
           writePnpmPackage({
-            packageFolder: join(
-              homeDir,
-              'Library/pnpm/global/v11',
-              PNPM_11_INSTALL_ID,
-              'node_modules/pnpm',
-            ),
+            packageFolder: buildPnpmHomePath('global/v11', PNPM_11_INSTALL_ID, 'node_modules/pnpm'),
             version: '11.1.2',
           }),
       },
       {
         place: "an install folder of pnpm 11's global layout as @pnpm/exe",
+        isMacOsPlace: false,
         storeFolderName: 'v11',
         createInstall: () =>
           writePnpmPackage({
-            packageFolder: join(
-              homeDir,
-              'Library/pnpm/global/v11',
+            packageFolder: buildPnpmHomePath(
+              'global/v11',
               PNPM_11_INSTALL_ID,
               'node_modules/@pnpm/exe',
             ),
@@ -994,7 +1042,9 @@ for (const probeCase of probeCases) {
     ];
 
     for (const homeInstallCase of pnpmHomeInstallCases) {
-      test(`offers nothing beside a pnpm in ${homeInstallCase.place}`, async () => {
+      const testOfPlace = homeInstallCase.isMacOsPlace ? testOnDarwin : test;
+
+      testOfPlace(`offers nothing beside a pnpm in ${homeInstallCase.place}`, async () => {
         await createStore({ folderNames: [homeInstallCase.storeFolderName] });
         await homeInstallCase.createInstall();
 
@@ -1010,7 +1060,7 @@ for (const probeCase of probeCases) {
         `keeps the store version the global package ${packageName} of pnpm 11 links into`,
         async () => {
           const storeRoot = await createStore({ folderNames: ['v11'] });
-          const globalInstallsPath = join(homeDir, 'Library/pnpm/global/v11');
+          const globalInstallsPath = buildPnpmHomePath('global/v11');
           const installFolderPath = join(globalInstallsPath, PNPM_11_INSTALL_ID);
           await linkGlobalPackageIntoStore({
             storeRoot: storeRoot,
@@ -1036,7 +1086,7 @@ for (const probeCase of probeCases) {
             storeRoot: storeRoot,
             storeFolderName: 'v10',
             packageName: packageName,
-            linkPath: join(homeDir, 'Library/pnpm/global/5/node_modules', packageName),
+            linkPath: join(buildPnpmHomePath('global/5/node_modules'), packageName),
           });
 
           expect(await loadOfferedVersions({ files: [] })).toEqual({
@@ -1103,7 +1153,7 @@ for (const probeCase of probeCases) {
       test(`keeps a store version a ${pinCase.kind} pins`, async () => {
         await createStore({ folderNames: ['v3', 'v10'] });
         const pinFile = buildTestPinFileText({
-          path: `${PROJECT_PATH}/pin`,
+          path: buildProjectFilePath('pin'),
           kind: pinCase.kind,
           text: pinCase.text,
         });
@@ -1118,7 +1168,7 @@ for (const probeCase of probeCases) {
     test('offers nothing beside a package.json that pins pnpm 10 by devEngines.packageManager alone', async () => {
       await createStore({ folderNames: ['v10'] });
       const pinFile = buildTestPinFileText({
-        path: `${PROJECT_PATH}/package.json`,
+        path: buildProjectFilePath('package.json'),
         kind: 'packageJson',
         text: JSON.stringify({
           devEngines: { packageManager: { name: 'pnpm', version: '10.14.0' } },
@@ -1134,7 +1184,7 @@ for (const probeCase of probeCases) {
     test('offers nothing while an unfit pin file pins every store version', async () => {
       await createStore({ folderNames: ['v3'] });
       const pinFile = buildTestPinFileUnfit({
-        path: `${PROJECT_PATH}/package.json`,
+        path: buildProjectFilePath('package.json'),
         kind: 'packageJson',
       });
 
@@ -1172,7 +1222,7 @@ for (const probeCase of probeCases) {
 
     test('offers nothing and is not judged for an installed pnpm of an unknown major', async () => {
       await createStore({ folderNames: ['v3'] });
-      await createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/v1/pnpm/13.0.0') });
+      await createFixtureDirectory({ path: buildPnpmHomePath('.tools/pnpm/13.0.0') });
 
       expect(await loadOfferedVersions({ files: [] })).toEqual({
         storeVersions: [],
@@ -1191,7 +1241,7 @@ for (const probeCase of probeCases) {
 
     test('answers unreadable at an unreadable pin file of pnpm', async () => {
       await createStore({ folderNames: ['v3'] });
-      const pinPath = `${PROJECT_PATH}/package.json`;
+      const pinPath = buildProjectFilePath('package.json');
       const pinFile = buildTestPinFileUnreadable({ path: pinPath, kind: 'packageJson' });
 
       expect(await runProbe({ files: [pinFile] })).toEqual({
@@ -1204,7 +1254,7 @@ for (const probeCase of probeCases) {
     test('ignores an unreadable pin file of another tool', async () => {
       await createStore({ folderNames: ['v3'] });
       const pinFile = buildTestPinFileUnreadable({
-        path: `${PROJECT_PATH}/build.gradle`,
+        path: buildProjectFilePath('build.gradle'),
         kind: 'gradle',
       });
 
@@ -1229,6 +1279,25 @@ for (const probeCase of probeCases) {
   });
 }
 
+describe.skipIf(HOST_PLATFORM.explore.pnpmXdgStoreRoot !== null)(
+  'the probe pnpmStoresXdg where pnpm has no XDG store',
+  () => {
+    test('is judged with no findings beside a store of the XDG layout', async () => {
+      await createFixtureDirectory({ path: join(homeDir, '.local/share/pnpm/store/v3') });
+
+      const probes = startExploreProbes(
+        buildTestProbeStart({ environment: environment, platform: probePlatform }),
+      );
+
+      expect(await probes.outcomes.pnpmStoresXdg).toEqual({
+        kind: 'probed',
+        findings: [],
+        isComplete: true,
+      });
+    });
+  },
+);
+
 describe('the recheck of a pnpm store unit', () => {
   let storeRoot: AbsolutePath;
   let pinPath: AbsolutePath;
@@ -1236,7 +1305,7 @@ describe('the recheck of a pnpm store unit', () => {
 
   beforeEach(async () => {
     storeRoot = await createStoreFolders({
-      storeRoot: PNPM_STORE_ROOT,
+      storeRoot: HOST_PLATFORM.explore.pnpmStoreRoot,
       folderNames: ['v10'],
     });
     pinPath = buildTestHostPath({ text: join(homeDir, 'projects/app/package.json') });
@@ -1275,7 +1344,7 @@ describe('the recheck of a pnpm store unit', () => {
   });
 
   test('is changed once a pnpm of its store version is installed', async () => {
-    await createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/v1/pnpm/10.14.0') });
+    await createFixtureDirectory({ path: buildPnpmHomePath('.tools/pnpm/10.14.0') });
 
     expect(
       await recheckExplorePathUnit({

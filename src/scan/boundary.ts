@@ -10,6 +10,7 @@ export const moduleBoundary = {
     'candidate.ts',
     'candidateOrigin.ts',
     'findRemovalRefusal.ts',
+    'isExecutableOwnerRunning.ts',
     'issue.ts',
     'limits.ts',
     'loadPathMeasurement.ts',

@@ -10,7 +10,9 @@ import type {
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
 import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
+import type { RemovalOwner } from './candidate.js';
 import { isExecutableOwnerRunning } from './isExecutableOwnerRunning.js';
 import type { InstalledApp, SystemApp } from './scanPlatform.js';
 
@@ -265,6 +267,44 @@ function findOwnerInstalledAppName(params: {
 }
 
 /**
+ * The owner whose running process the deletion of the path checks again: the bundles of the
+ * installed and system apps that are a bundle owner, as `findOwnerBundlePaths` tells them, or the
+ * program of an executable owner.
+ */
+export function findRemovalOwner(params: {
+  owner: CatalogOwner | null;
+  environment: Environment;
+  installedApps: InstalledApp[];
+  systemApps: SystemApp[];
+}): RemovalOwner {
+  if (params.owner === null) {
+    return { kind: 'none' };
+  }
+
+  switch (params.owner.kind) {
+    case 'bundleId':
+    case 'bundleIdFamily':
+      return {
+        kind: 'bundles',
+        bundlePaths: findOwnerBundlePaths({
+          owner: params.owner,
+          installedApps: params.installedApps,
+          systemApps: params.systemApps,
+        }),
+      };
+    case 'executable':
+      return {
+        kind: 'executable',
+        imageNames: params.owner.imageNames,
+        installFolderPath: resolveInstallFolderPath({
+          owner: params.owner,
+          environment: params.environment,
+        }),
+      };
+  }
+}
+
+/**
  * Returns `stopped` for no owner, `unknown` for any owner while the process list is missing,
  * `stopped` for a bundle owner that no installed or system app is, and `running` when a process
  * runs from the bundle of any app that is the owner, or runs the owner's program.
@@ -310,13 +350,10 @@ function resolveExecutableOwnerState(params: {
   const isRunning = isExecutableOwnerRunning({
     pathRules: params.environment.pathRules,
     imageNames: params.owner.imageNames,
-    installFolderPath:
-      params.owner.installFolder === null
-        ? null
-        : resolveCatalogLocation({
-            environment: params.environment,
-            location: params.owner.installFolder,
-          }),
+    installFolderPath: resolveInstallFolderPath({
+      owner: params.owner,
+      environment: params.environment,
+    }),
     processImagePaths: params.processCommands,
   });
 
@@ -325,6 +362,20 @@ function resolveExecutableOwnerState(params: {
   }
 
   return 'stopped';
+}
+
+function resolveInstallFolderPath(params: {
+  owner: CatalogOwnerExecutable;
+  environment: Environment;
+}): AbsolutePath | null {
+  if (params.owner.installFolder === null) {
+    return null;
+  }
+
+  return resolveCatalogLocation({
+    environment: params.environment,
+    location: params.owner.installFolder,
+  });
 }
 
 function resolveBundleOwnerState(params: {

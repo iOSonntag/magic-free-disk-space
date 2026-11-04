@@ -11,8 +11,8 @@ import type { VagrantBox } from '../../src/explore/vagrantBoxes/parseVagrantBoxL
 import { parseVagrantBoxList } from '../../src/explore/vagrantBoxes/parseVagrantBoxList.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
@@ -238,7 +238,8 @@ describe('compareVagrantBoxUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('the Vagrant box probe with a fake vagrant', () => {
+// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
+describeOnPosix('the Vagrant box probe with a fake vagrant', () => {
   async function createFakeVagrant(params: {
     home: FixtureHome;
     exitCode: number;

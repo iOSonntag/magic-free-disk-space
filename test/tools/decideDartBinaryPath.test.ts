@@ -1,17 +1,20 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import {
   decideDartBinaryPath,
   listFlutterWrapperPaths,
 } from '../../src/tools/decideDartBinaryPath.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 
-const FLUTTER_WRAPPER_PATH = '/opt/example/flutter/bin/dart';
+// The paths join by the separator of the host, as the decision itself joins them.
+const FLUTTER_ROOT = join('/opt', 'example', 'flutter');
 
-const FLUTTER_SCRIPT_PATH = '/opt/example/flutter/bin/flutter';
+const FLUTTER_WRAPPER_PATH = join(FLUTTER_ROOT, 'bin', 'dart');
 
-const FLUTTER_SDK_DART_PATH = '/opt/example/flutter/bin/cache/dart-sdk/bin/dart';
+const FLUTTER_SCRIPT_PATH = join(FLUTTER_ROOT, 'bin', 'flutter');
 
-describeAwaitingWin32Platform('listFlutterWrapperPaths', () => {
+const FLUTTER_SDK_DART_PATH = join(FLUTTER_ROOT, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
+
+describe('listFlutterWrapperPaths', () => {
   test('lists the Flutter script and the SDK binary beside a `bin/dart`', () => {
     expect(listFlutterWrapperPaths({ realPath: FLUTTER_WRAPPER_PATH })).toEqual([
       FLUTTER_SCRIPT_PATH,
@@ -25,7 +28,7 @@ describeAwaitingWin32Platform('listFlutterWrapperPaths', () => {
   });
 });
 
-describeAwaitingWin32Platform('decideDartBinaryPath', () => {
+describe('decideDartBinaryPath', () => {
   test("takes the SDK binary behind Flutter's wrapper", () => {
     expect(
       decideDartBinaryPath({

@@ -18,6 +18,9 @@ export type CandidateOriginLeftover = { kind: 'leftover'; matchedBy: LeftoverMat
 
 export type CandidateOriginExplore = { kind: 'explore'; probe: ExploreProbeId };
 
+/** The Recycle Bin of one drive, which its path tells apart from the bins of the other drives. */
+export type CandidateOriginRecycleBin = { kind: 'recycleBin' };
+
 /** The source that found an item, with the id that source knows it by. */
 export type CandidateOrigin =
   | CandidateOriginCatalog
@@ -25,7 +28,8 @@ export type CandidateOrigin =
   | CandidateOriginApplication
   | CandidateOriginUserFile
   | CandidateOriginLeftover
-  | CandidateOriginExplore;
+  | CandidateOriginExplore
+  | CandidateOriginRecycleBin;
 
 declare const itemKeyBrand: unique symbol;
 
@@ -53,6 +57,7 @@ function listOriginKeyParts(params: { origin: CandidateOrigin }): string[] {
       return [params.origin.bundleId];
     case 'userFile':
     case 'leftover':
+    case 'recycleBin':
       return [];
     case 'explore':
       return [params.origin.probe];
@@ -67,6 +72,7 @@ function formatItemPlaceKey(params: { item: Candidate | Advice }): string {
 
   switch (params.item.removal.kind) {
     case 'deletePaths':
+    case 'emptyRecycleBin':
       return params.item.path;
     case 'runTool':
     case 'deleteUnitPaths':

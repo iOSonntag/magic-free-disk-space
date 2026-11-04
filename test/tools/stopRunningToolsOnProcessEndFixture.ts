@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { runToolCommand, stopRunningToolsOnProcessEnd } from '../../src/tools/runToolCommand.js';
 import type { ProcessEndSignal } from '../../src/tools/toolsPlatform.js';
 import { createFakeTool } from '../support/fakeTool.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 
 /** Codes no signal's default action gives, so an exit with one proves the listener ran. */
 export const FIXTURE_SIGNAL_EXIT_CODES: Record<ProcessEndSignal, number> = {
@@ -43,6 +44,7 @@ await Bun.sleep(60_000);`,
     homeDir: params.homeDir,
     tempDir: params.tempDir,
     timeoutMs: 60_000,
+    processes: HOST_PLATFORM.tools.processes,
   });
 }
 

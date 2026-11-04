@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import type { BridgeEnd, BridgeEvent } from '../../src/bridge/runBridge.js';
 import { runBridge } from '../../src/bridge/runBridge.js';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
@@ -13,7 +13,6 @@ import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
 import type { VolumeSpace } from '../../src/system/volumeSpace.js';
 import type { LatestReleaseFetchResult } from '../../src/update/fetchLatestReleaseVersion.js';
 import type { ReleaseVersion } from '../../src/update/releaseVersion.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -24,6 +23,7 @@ import {
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
+  listFixturePathsBesideLog,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildTestPlatform } from '../support/platformFixtures.js';
@@ -123,14 +123,11 @@ async function createSizedFile(params: { path: string; mib: number }): Promise<v
   await createFixtureFile({ path: params.path, sizeBytes: params.mib * MIB, modifiedMs: NOW_MS });
 }
 
-/** Every file and folder under the fixture root, except the log folder a deletion creates. */
 async function listFixturePaths(): Promise<string[]> {
-  const entries = await readdir(fixtureRoot.rootDir, { recursive: true });
-
-  return entries
-    .map((entry) => relative(fixtureRoot.rootDir, join(fixtureRoot.rootDir, entry)))
-    .filter((path) => !path.startsWith('home/Library/Logs'))
-    .toSorted();
+  return listFixturePathsBesideLog({
+    fixtureRoot: fixtureRoot,
+    deletionLogPath: environment.deletionLogPath,
+  });
 }
 
 /** The time of every entry of the deletion log, in the order written. */
@@ -388,7 +385,7 @@ function listRecordShapeMismatches(params: {
   );
 }
 
-describeAwaitingWin32Platform('runBridge', () => {
+describe('runBridge', () => {
   test('scans and answers with the view of the scan, numbered top to bottom', async () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
@@ -716,7 +713,10 @@ describeAwaitingWin32Platform('runBridge', () => {
   });
 
   test('a log that cannot be created deletes nothing and keeps the scan', async () => {
-    await writeFile(join(fixtureRoot.homeDir, 'Library/Logs'), 'a file where the folder belongs');
+    const logFolderPath = dirname(environment.deletionLogPath);
+
+    await mkdir(dirname(logFolderPath), { recursive: true });
+    await writeFile(logFolderPath, 'a file where the folder belongs');
 
     const before = await listFixturePaths();
     const { events } = await runBridgeWithLines({

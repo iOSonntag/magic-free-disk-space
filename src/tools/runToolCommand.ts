@@ -1,14 +1,10 @@
-import type { ChildProcessByStdio } from 'node:child_process';
-import { spawn } from 'node:child_process';
-import type { Readable } from 'node:stream';
 import type { Result } from '../result.js';
-import { getErrorCode } from '../system/getErrorCode.js';
 import { buildToolProcessEnvironment } from './buildToolProcessEnvironment.js';
 import type { LocatedTool } from './findTrustedTool.js';
 import type { ToolName } from './toolInstallLocations.js';
-import type { ProcessEndSignalExit } from './toolsPlatform.js';
+import type { ProcessEndSignalExit, StartedTool, ToolProcessPlatform } from './toolsPlatform.js';
 
-/** The tool's group is killed once its standard output passes this size. */
+/** The tool and every process it started are stopped once its standard output passes this size. */
 export const TOOL_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 const STDERR_TAIL_MAX_BYTES = 4 * 1024;
@@ -69,13 +65,12 @@ export type ToolCommandFailure =
 
 type ToolCommandResult = Result<ToolCommandOutput, ToolCommandFailure>;
 
-type ToolProcess = ChildProcessByStdio<null, Readable, Readable>;
-
-/** Each tool whose run has not settled yet, so `stopRunningTools` can reach its group. */
-const runningToolProcesses = new Set<ToolProcess>();
+/** Each tool whose run has not settled yet, so `stopRunningTools` can reach its processes. */
+const runningTools = new Set<StartedTool>();
 
 /**
- * Runs the tool in a process group of its own, in `tempDir`, with the environment
+ * Runs the tool as `processes` starts it, so its end reaches every process it started, in
+ * `tempDir` (so no tool reads config from the folder the app started in), with the environment
  * `buildToolProcessEnvironment` builds and the arguments `buildToolArguments` builds. Only exit 0
  * succeeds.
  */
@@ -85,23 +80,30 @@ export async function runToolCommand(params: {
   homeDir: string;
   tempDir: string;
   timeoutMs: number;
+  processes: ToolProcessPlatform;
 }): Promise<ToolCommandResult> {
-  const started = startToolProcess({
-    tool: params.tool,
+  const started = params.processes.startTool({
+    path: params.tool.path,
     args: buildToolArguments({ name: params.tool.name, args: params.args }),
-    homeDir: params.homeDir,
-    tempDir: params.tempDir,
+    cwd: params.tempDir,
+    env: buildToolProcessEnvironment({
+      tool: params.tool,
+      homeDir: params.homeDir,
+      tempDir: params.tempDir,
+      processes: params.processes,
+    }),
   });
 
   if (started.kind === 'failed') {
     return { kind: 'failed', failure: { reason: 'spawnFailed', message: started.failure } };
   }
 
-  runningToolProcesses.add(started.value);
+  runningTools.add(started.value);
 
-  const result = await gatherToolCompletion({ child: started.value, timeoutMs: params.timeoutMs });
+  const result = await gatherToolCompletion({ tool: started.value, timeoutMs: params.timeoutMs });
 
-  runningToolProcesses.delete(started.value);
+  runningTools.delete(started.value);
+  started.value.release();
 
   return result;
 }
@@ -112,69 +114,56 @@ export function buildToolArguments(params: { name: ToolName; args: string[] }): 
 }
 
 /**
- * Kills the group of every tool whose run has not settled, which no signal to the app reaches; a
- * group already gone is no error. Each of those runs then settles.
+ * Ends every tool whose run has not settled, with every process it started, which no signal to
+ * the app reaches; ones already gone are no error. Each of those runs then settles.
  */
 export function stopRunningTools(): void {
-  for (const child of runningToolProcesses) {
-    killProcessGroup({ child: child });
+  for (const tool of runningTools) {
+    tool.stop();
   }
 }
 
 /**
- * Stops every running tool when the process exits, and on each signal exits with its code. A tool
- * runs in a process group of its own, which outlives the process unless it is stopped here.
+ * Stops every running tool when the process exits, and on each signal exits with its code: a
+ * tool's processes may outlive the app unless they are stopped here. The returned function
+ * removes these listeners again, as an app does that ends once its input ended, since a listener
+ * of a signal may keep the process running on Windows.
  */
 export function stopRunningToolsOnProcessEnd(params: {
   processEndSignals: ProcessEndSignalExit[];
-}): void {
-  process.on('exit', () => {
-    stopRunningTools();
-  });
-
-  for (const processEnd of params.processEndSignals) {
-    process.on(processEnd.signal, () => {
+}): () => void {
+  const signalListeners = params.processEndSignals.map((processEnd) => {
+    function onSignal(): void {
       stopRunningTools();
       process.exit(processEnd.exitCode);
-    });
-  }
-}
+    }
 
-function startToolProcess(params: {
-  tool: LocatedTool;
-  args: string[];
-  homeDir: string;
-  tempDir: string;
-}): Result<ToolProcess, string> {
-  const environment = buildToolProcessEnvironment({
-    tool: params.tool,
-    homeDir: params.homeDir,
-    tempDir: params.tempDir,
+    process.on(processEnd.signal, onSignal);
+
+    return { signal: processEnd.signal, listener: onSignal };
   });
 
-  try {
-    // The temporary folder, so no tool reads config from the folder the app started in.
-    const child = spawn(params.tool.path, params.args, {
-      cwd: params.tempDir,
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: environment,
-    });
+  process.on('exit', stopRunningTools);
 
-    return { kind: 'succeeded', value: child };
-  } catch (error) {
-    return { kind: 'failed', failure: error instanceof Error ? error.message : String(error) };
-  }
+  return () => {
+    process.off('exit', stopRunningTools);
+
+    for (const signalListener of signalListeners) {
+      process.off(signalListener.signal, signalListener.listener);
+    }
+  };
 }
 
 /**
  * Settles once: at the limit, at the output cap, at a spawn error, or once the tool exited and
- * its streams closed. Every end kills what is left of the tool's group before it settles.
+ * its streams closed. Every end stops what is left of the tool's processes before it settles.
  */
 function gatherToolCompletion(params: {
-  child: ToolProcess;
+  tool: StartedTool;
   timeoutMs: number;
 }): Promise<ToolCommandResult> {
+  const child = params.tool.process;
+
   return new Promise((resolve) => {
     const stdoutChunks: Buffer[] = [];
     let stdoutBytes = 0;
@@ -192,7 +181,7 @@ function gatherToolCompletion(params: {
     }
 
     const timer = setTimeout(() => {
-      killProcessGroup({ child: params.child });
+      params.tool.stop();
       settle({
         kind: 'failed',
         failure: {
@@ -203,7 +192,7 @@ function gatherToolCompletion(params: {
       });
     }, params.timeoutMs);
 
-    params.child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout.on('data', (chunk: Buffer) => {
       if (settled) {
         return;
       }
@@ -211,7 +200,7 @@ function gatherToolCompletion(params: {
       stdoutBytes += chunk.length;
 
       if (stdoutBytes > TOOL_MAX_OUTPUT_BYTES) {
-        killProcessGroup({ child: params.child });
+        params.tool.stop();
         settle({
           kind: 'failed',
           failure: {
@@ -227,22 +216,22 @@ function gatherToolCompletion(params: {
       stdoutChunks.push(chunk);
     });
 
-    params.child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr.on('data', (chunk: Buffer) => {
       stderrTail = keepStderrTail(Buffer.concat([stderrTail, chunk]));
     });
 
-    // A spawn error leaves no group; an error of a started tool still may.
-    params.child.on('error', (error) => {
-      killProcessGroup({ child: params.child });
+    // A spawn error leaves no process; an error of a started tool may leave some.
+    child.on('error', (error) => {
+      params.tool.stop();
       settle({ kind: 'failed', failure: { reason: 'spawnFailed', message: error.message } });
     });
 
-    // A process the tool left behind would hold the streams open; killing its group lets them close.
-    params.child.on('exit', () => {
-      killProcessGroup({ child: params.child });
+    // A process the tool left behind would hold the streams open; stopping it lets them close.
+    child.on('exit', () => {
+      params.tool.stop();
     });
 
-    params.child.on('close', (exitCode, signal) => {
+    child.on('close', (exitCode, signal) => {
       settle(
         toolEndToResult({
           exitCode: exitCode,
@@ -292,26 +281,4 @@ function keepStderrTail(stderr: Buffer): Buffer {
   }
 
   return stderr.subarray(stderr.length - STDERR_TAIL_MAX_BYTES);
-}
-
-/** Kills the tool and every process of its group; a group already gone is no error. */
-function killProcessGroup(params: { child: ToolProcess }): void {
-  if (params.child.pid === undefined) {
-    return;
-  }
-
-  try {
-    process.kill(-params.child.pid, 'SIGKILL');
-  } catch (error) {
-    if (!isGroupGoneError(error)) {
-      throw error;
-    }
-  }
-}
-
-// macOS answers EPERM, not ESRCH, for a group whose last members are zombies not yet reaped.
-function isGroupGoneError(error: unknown): boolean {
-  const code = getErrorCode(error);
-
-  return code === 'ESRCH' || code === 'EPERM';
 }

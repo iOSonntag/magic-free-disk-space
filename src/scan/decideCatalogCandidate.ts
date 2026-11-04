@@ -8,7 +8,12 @@ import type {
 import { isEngineProbeId } from '../catalog/catalog.js';
 import type { CatalogOwner } from '../catalog/catalogOwner.js';
 import type { PathRules } from '../path/pathRules.js';
-import type { CandidateDecision, SkipReason, TargetsMeasurement } from './candidate.js';
+import type {
+  CandidateDecision,
+  RemovalOwner,
+  SkipReason,
+  TargetsMeasurement,
+} from './candidate.js';
 import { hasSymbolicLinkTarget } from './candidate.js';
 import type { ActivityProbe } from './loadTreeActivity.js';
 import type { OwnerState } from './resolveOwnerState.js';
@@ -25,7 +30,8 @@ export function decideCatalogCandidate(params: {
   path: string;
   measurement: TargetsMeasurement;
   owner: CatalogOwner | null;
-  ownerBundlePaths: string[];
+  /** The owner the deletion checks again, as `findRemovalOwner` finds it. */
+  removalOwner: RemovalOwner;
   ownerState: OwnerState;
   /** The installed app of the owner, by its name; `null` for none. */
   ownerAppName: string | null;
@@ -88,7 +94,7 @@ export function decideCatalogCandidate(params: {
           removal: {
             kind: 'deletePaths',
             targets: params.measurement.targets,
-            ownerBundlePaths: params.ownerBundlePaths,
+            owner: params.removalOwner,
           },
         },
       };

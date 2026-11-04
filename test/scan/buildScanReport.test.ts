@@ -1,12 +1,15 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Candidate, CandidateDecision } from '../../src/scan/candidate.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import type { AdvisedApp } from '../../src/scan/scanPlatform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
+
+const HOME = buildExampleHome({ text: '/home' });
 
 function buildOffers(candidates: Candidate[]): CandidateDecision[] {
   return candidates.map(
@@ -14,7 +17,7 @@ function buildOffers(candidates: Candidate[]): CandidateDecision[] {
   );
 }
 
-describeAwaitingWin32Platform('buildScanReport', () => {
+describe('buildScanReport', () => {
   test('ranks offers and advice by size and keeps every skip and issue', () => {
     const small = buildTestCandidate({ path: '/home/small', allocatedBytes: 10 });
     const large = buildTestCandidate({ path: '/home/large', allocatedBytes: 1000 });
@@ -35,10 +38,22 @@ describeAwaitingWin32Platform('buildScanReport', () => {
     ];
     const issue = { path: '/home/locked', reason: 'permissionDenied' as const, detail: 'EACCES' };
 
-    const report = buildScanReport({ decisions: decisions, evictedEntryCount: 3, issues: [issue] });
+    const app: AdvisedApp = {
+      displayName: 'Example',
+      installFolderPath: null,
+      estimatedBytes: 2048,
+    };
+
+    const report = buildScanReport({
+      decisions: decisions,
+      appAdvice: [app],
+      evictedEntryCount: 3,
+      issues: [issue],
+    });
 
     expect(report.candidates).toEqual([large, small]);
     expect(report.advice.map((item) => item.path)).toEqual(['/opt/tool']);
+    expect(report.appAdvice).toEqual([app]);
     expect(report.skipped).toEqual([{ path: '/home/held', reason: 'ownerRunning' }]);
     expect(report.evictedEntryCount).toBe(3);
     expect(report.issues).toEqual([issue]);
@@ -53,18 +68,19 @@ describeAwaitingWin32Platform('buildScanReport', () => {
     });
     const safeLarge = buildTestCandidate({ path: '/home/safe-large', allocatedBytes: 1000 });
     const toolSmall = buildTestToolCandidate({
-      homeDir: '/home',
+      home: HOME,
       version: '18.0.0',
       allocatedBytes: 100,
     });
     const toolLarge = buildTestToolCandidate({
-      homeDir: '/home',
+      home: HOME,
       version: '20.1.0',
       allocatedBytes: 5000,
     });
 
     const report = buildScanReport({
       decisions: buildOffers([toolSmall, safeSmall, toolLarge, careful, safeLarge]),
+      appAdvice: [],
       evictedEntryCount: 0,
       issues: [],
     });
@@ -105,13 +121,14 @@ describeAwaitingWin32Platform('buildScanReport', () => {
       allocatedBytes: 20,
     });
     const toolSafe = buildTestToolCandidate({
-      homeDir: '/home',
+      home: HOME,
       version: '20.1.0',
       allocatedBytes: 99_000,
     });
 
     const report = buildScanReport({
       decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, projectReview, cacheSafe]),
+      appAdvice: [],
       evictedEntryCount: 0,
       issues: [],
     });

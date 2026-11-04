@@ -1,13 +1,11 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { UserFileFinding } from '../../src/scan/findLargeUserFiles.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
 import type { EntryReads } from '../../src/system/entryReads.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestEntryReads, loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -16,6 +14,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const MIN_ALLOCATED_BYTES = 1024 * 1024;
@@ -34,12 +33,12 @@ async function findFiles(params: {
     artifactRules: PROJECT_ARTIFACT_RULES,
     minAllocatedBytes: MIN_ALLOCATED_BYTES,
     deadlineMs: params.deadlineMs ?? FAR_FUTURE_DEADLINE_MS,
-    entryReads: params.entryReads ?? darwinPlatform.system.entryReads,
-    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
   });
 }
 
-describeAwaitingWin32Platform('findLargeUserFiles', () => {
+describe('findLargeUserFiles', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

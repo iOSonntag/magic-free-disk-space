@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildSimulatorDeviceFindings } from '../../src/explore/simulatorDevices/buildSimulatorDeviceFindings.js';
 import {
   parseSimulatorDeviceList,
@@ -7,7 +7,6 @@ import {
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   AVAILABLE_UNDATED_DEVICE_UDID,
   BOOTED_DEVICE_UDID,
@@ -32,7 +31,7 @@ function parseFixtureDevices() {
   return parsed.value;
 }
 
-describeAwaitingWin32Platform('parseSimulatorDeviceUdid', () => {
+describe('parseSimulatorDeviceUdid', () => {
   test('passes a UUID in either case', () => {
     expect(parseSimulatorDeviceUdid({ text: '11111111-aaaa-4aaa-8aaa-111111111111' }).kind).toBe(
       'succeeded',
@@ -49,7 +48,7 @@ describeAwaitingWin32Platform('parseSimulatorDeviceUdid', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseAbsolutePath', () => {
+describe('parseAbsolutePath', () => {
   test('passes an absolute path and rejects a relative one', () => {
     expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: '/Users/example/data' }).kind).toBe(
       'succeeded',
@@ -59,7 +58,7 @@ describeAwaitingWin32Platform('parseAbsolutePath', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
+describe('parseSimulatorDeviceList', () => {
   test('reads each device with its runtime', () => {
     const devices = parseFixtureDevices();
 
@@ -154,7 +153,7 @@ describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildSimulatorDeviceFindings', () => {
+describe('buildSimulatorDeviceFindings', () => {
   test('offers the unavailable and the booted unavailable device, no available one', () => {
     const findings = buildSimulatorDeviceFindings({
       tool: tool,

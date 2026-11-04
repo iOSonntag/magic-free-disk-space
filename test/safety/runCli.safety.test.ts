@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { runCli } from '../../src/cli/runCli.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -15,6 +14,7 @@ import {
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
+  listFixturePathsBesideLog,
   loadTestEnvironment,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
@@ -25,6 +25,8 @@ import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 const MIB = 1_048_576;
 const NOW_MS = Date.now();
 const OLD_MS = NOW_MS - 400 * 86_400_000;
+
+const testOnDarwin = test.skipIf(process.platform !== 'darwin');
 
 // The catalog of these tests: home and temp entries only, so no test reads a real system folder.
 const TEST_CATALOG: CatalogEntry[] = [
@@ -105,14 +107,11 @@ async function createFixtureHome(): Promise<void> {
   });
 }
 
-/** Every file and folder under the fixture root, except the log folder a deletion creates. */
 async function listFixturePaths(): Promise<string[]> {
-  const entries = await readdir(fixtureRoot.rootDir, { recursive: true });
-
-  return entries
-    .map((entry) => relative(fixtureRoot.rootDir, join(fixtureRoot.rootDir, entry)))
-    .filter((path) => !path.startsWith('home/Library/Logs'))
-    .toSorted();
+  return listFixturePathsBesideLog({
+    fixtureRoot: fixtureRoot,
+    deletionLogPath: environment.deletionLogPath,
+  });
 }
 
 async function runWithInput(params: {
@@ -148,7 +147,7 @@ async function runWithInput(params: {
   return { exitCode: exitCode, io: io };
 }
 
-describeAwaitingWin32Platform('runCli safety', () => {
+describe('runCli safety', () => {
   test('the ranking of the fixture home is the one these tests rely on', async () => {
     const { exitCode, io } = await runWithInput({ argv: ['--list'], inputLines: [] });
     const out = io.outText();
@@ -327,7 +326,10 @@ describeAwaitingWin32Platform('runCli safety', () => {
   });
 
   test('stops with exit 4 and deletes nothing when the log cannot be created', async () => {
-    await writeFile(join(fixtureRoot.homeDir, 'Library/Logs'), 'a file where the folder belongs');
+    const logFolderPath = dirname(environment.deletionLogPath);
+
+    await mkdir(dirname(logFolderPath), { recursive: true });
+    await writeFile(logFolderPath, 'a file where the folder belongs');
 
     const before = await listFixturePaths();
     const { exitCode, io } = await runWithInput({ argv: [], inputLines: ['1-3', 'DELETE'] });
@@ -337,25 +339,31 @@ describeAwaitingWin32Platform('runCli safety', () => {
     expect(await listFixturePaths()).toEqual(before);
   });
 
-  test('offers the old container of a removed app, but not one that changed recently', async () => {
-    const containersDir = join(fixtureRoot.homeDir, 'Library/Containers');
+  // The containers of removed apps are a place of macOS alone.
+  testOnDarwin(
+    'offers the old container of a removed app, but not one that changed recently',
+    async () => {
+      const containersDir = join(fixtureRoot.homeDir, 'Library/Containers');
 
-    await createSizedFile(join(containersDir, 'com.example.gone/Data/blob.bin'), 2 * MIB);
-    await updateModifiedMs({
-      path: join(containersDir, 'com.example.gone/Data'),
-      modifiedMs: OLD_MS,
-    });
-    await updateModifiedMs({ path: join(containersDir, 'com.example.gone'), modifiedMs: OLD_MS });
-    // Its folders keep the time of now: the app still runs from somewhere else.
-    await createSizedFile(join(containersDir, 'com.example.elsewhere/Data/blob.bin'), 2 * MIB);
+      await createSizedFile(join(containersDir, 'com.example.gone/Data/blob.bin'), 2 * MIB);
+      await updateModifiedMs({
+        path: join(containersDir, 'com.example.gone/Data'),
+        modifiedMs: OLD_MS,
+      });
+      await updateModifiedMs({ path: join(containersDir, 'com.example.gone'), modifiedMs: OLD_MS });
+      // Its folders keep the time of now: the app still runs from somewhere else.
+      await createSizedFile(join(containersDir, 'com.example.elsewhere/Data/blob.bin'), 2 * MIB);
 
-    const { io } = await runWithInput({ argv: ['--list'], inputLines: [] });
+      const { io } = await runWithInput({ argv: ['--list'], inputLines: [] });
 
-    expect(io.outText()).toContain('Data of an app that is no longer installed (com.example.gone)');
-    expect(io.outText()).not.toContain('com.example.elsewhere');
-  });
+      expect(io.outText()).toContain(
+        'Data of an app that is no longer installed (com.example.gone)',
+      );
+      expect(io.outText()).not.toContain('com.example.elsewhere');
+    },
+  );
 
-  test('offers no container while an installed app could not be read', async () => {
+  testOnDarwin('offers no container while an installed app could not be read', async () => {
     const containerDir = join(fixtureRoot.homeDir, 'Library/Containers/com.example.gone');
 
     await createSizedFile(join(containerDir, 'Data/blob.bin'), 2 * MIB);

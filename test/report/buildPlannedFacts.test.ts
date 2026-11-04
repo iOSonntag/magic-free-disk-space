@@ -1,15 +1,17 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildPlannedFacts } from '../../src/report/buildPlannedFacts.js';
 import { formatDeletionWarningLines } from '../../src/report/formatDeletionConfirmation.js';
 import { formatRemovalPlan } from '../../src/report/formatRemovalPlan.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
   buildProtocolFixturePlan,
   buildProtocolFixtureReport,
 } from '../support/protocolFixtureScan.js';
+
+const FIXTURE_HOME = buildExampleHome({ text: '/fixture' });
 
 const SAFE_CACHE = buildTestCandidate({
   path: '/fixture/cache',
@@ -28,7 +30,7 @@ const OLD_VIDEO = buildTestCandidate({
 });
 
 const TOOL_VERSION = buildTestToolCandidate({
-  homeDir: '/fixture',
+  home: FIXTURE_HOME,
   version: '20.1.0',
   risk: 'careful',
   allocatedBytes: 2000,
@@ -36,7 +38,7 @@ const TOOL_VERSION = buildTestToolCandidate({
 
 const RANKED = [SAFE_CACHE, OLD_VIDEO, TOOL_VERSION];
 
-describeAwaitingWin32Platform('buildPlannedFacts', () => {
+describe('buildPlannedFacts', () => {
   test('gives the planned event of the protocol fixture for the plan it shows', async () => {
     const plan = buildProtocolFixturePlan();
 
@@ -107,7 +109,7 @@ describeAwaitingWin32Platform('buildPlannedFacts', () => {
 
   test('gives a safe item a probe found the review group its scan shows it in', () => {
     const probedSafeVersion = buildTestToolCandidate({
-      homeDir: '/fixture',
+      home: FIXTURE_HOME,
       version: '18.0.0',
       risk: 'safe',
     });

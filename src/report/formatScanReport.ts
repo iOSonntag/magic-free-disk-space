@@ -2,6 +2,8 @@ import type { ScanReport } from '../scan/runScan.js';
 import type { VolumeSpace } from '../system/volumeSpace.js';
 import type {
   AdviceItemView,
+  AppAdviceItemView,
+  AppAdviceView,
   CheckGroupView,
   ExploreView,
   ItemDetailLine,
@@ -46,6 +48,7 @@ export function formatScanReport(params: {
     ...formatListBlockLines({ titleText: view.summary.titleText, lines: view.summary.lines }),
     ...view.sections.flatMap((section) => formatSectionLines({ section: section })),
     ...formatExploreLines({ explore: view.explore }),
+    ...formatAppAdviceLines({ appAdvice: view.appAdvice }),
     ...formatSeparatedBlockLines({ block: view.skipped }),
     ...view.notices.flatMap((notice) => formatSeparatedBlockLines({ block: notice })),
   ];
@@ -96,12 +99,29 @@ function formatExploreLines(params: { explore: ExploreView | null }): string[] {
   return lines;
 }
 
+/** The installed apps carry no number either: the tool never deletes an app it only advises on. */
+function formatAppAdviceLines(params: { appAdvice: AppAdviceView | null }): string[] {
+  if (params.appAdvice === null) {
+    return [];
+  }
+
+  return [
+    '',
+    `${params.appAdvice.titleText}:`,
+    params.appAdvice.introText,
+    ...params.appAdvice.items.flatMap((item) => formatItemLines({ leadText: '-', item: item })),
+  ];
+}
+
 function formatNumberedItemLines(params: { item: ItemView }): string[] {
   return formatItemLines({ leadText: `${params.item.number}.`, item: params.item });
 }
 
 /** The lead is the number of a selectable item, or `-` for an advice item. */
-function formatItemLines(params: { leadText: string; item: ItemView | AdviceItemView }): string[] {
+function formatItemLines(params: {
+  leadText: string;
+  item: ItemView | AdviceItemView | AppAdviceItemView;
+}): string[] {
   return [
     `${params.leadText} ${params.item.sizeText} [${params.item.riskText}] ${params.item.title}`,
     ...params.item.detailLines.map((line) => formatDetailLine({ line: line })),

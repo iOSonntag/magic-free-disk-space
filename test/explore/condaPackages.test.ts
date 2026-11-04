@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { loadCondaPackageFindings } from '../../src/explore/condaPackages/loadCondaPackageFindings.js';
 import { parseCondaCleanDryRun } from '../../src/explore/condaPackages/parseCondaCleanDryRun.js';
@@ -7,7 +7,6 @@ import type { ExploreToolUnitCondaPackages } from '../../src/explore/exploreUnit
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
@@ -41,7 +40,7 @@ function buildDryRunText(params: { tarballs: string[]; packages: string[] }): st
   );
 }
 
-describeAwaitingWin32Platform('parseCondaCleanDryRun', () => {
+describe('parseCondaCleanDryRun', () => {
   test('joins each listed name to its package folder', () => {
     expect(
       parseCondaCleanDryRun({
@@ -92,7 +91,7 @@ describeAwaitingWin32Platform('parseCondaCleanDryRun', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadCondaPackageFindings and recheckCondaUnit', () => {
+describe('loadCondaPackageFindings and recheckCondaUnit', () => {
   /** A fake conda in the fixture's `bin` whose dry run would remove `tarballs` and `packages`. */
   async function createFakeConda(params: {
     home: FixtureHome;

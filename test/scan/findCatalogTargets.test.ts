@@ -1,12 +1,10 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, CatalogRoot } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { CatalogTarget } from '../../src/scan/findCatalogTargets.js';
 import { findCatalogTargets } from '../../src/scan/findCatalogTargets.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -16,13 +14,17 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const TEST_NOW_MS = 1_700_000_000_000;
 
-const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = HOST_PLATFORM.system.privacyDenialCode;
 
-describeAwaitingWin32Platform('findCatalogTargets', () => {
+// Only macOS has a per-user folder of the system's caches; Windows keeps its caches in AppData.
+const testOnDarwin = test.skipIf(process.platform !== 'darwin');
+
+describe('findCatalogTargets', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -141,7 +143,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
   });
 
-  test('a user cache entry lies below the user cache folder', async () => {
+  testOnDarwin('a user cache entry lies below the user cache folder', async () => {
     const metalDir = join(fixtureRoot.userCacheDir, 'com.example.app', 'com.apple.metal');
     await createFixtureDirectory({ path: metalDir });
     const entry = buildCatalogEntry({

@@ -45,7 +45,7 @@ export function decideUserFileCandidate(params: {
       removal: {
         kind: 'deletePaths',
         targets: [{ path: path, identity: params.finding.identity }],
-        ownerBundlePaths: [],
+        owner: { kind: 'none' },
       },
     },
   };

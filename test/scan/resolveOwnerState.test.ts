@@ -5,6 +5,7 @@ import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import {
   findOwnerAppName,
   findOwnerBundlePaths,
+  findRemovalOwner,
   isAppleBundleId,
   isBundleIdShape,
   isOwnerUninstalled,
@@ -13,7 +14,6 @@ import {
   resolveTargetOwner,
 } from '../../src/scan/resolveOwnerState.js';
 import type { SystemApp } from '../../src/scan/scanPlatform.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import {
   EXAMPLE_DARWIN_ENVIRONMENT,
@@ -24,6 +24,7 @@ import {
   buildTestCatalogOwner,
   buildTestMacBundleId,
   buildTestWindowsImageName,
+  buildTestWindowsPath,
 } from '../support/parsedValueFixtures.js';
 import { getCatalogEntry } from '../support/scanRunFixtures.js';
 
@@ -79,7 +80,7 @@ function resolveCodeOwnerState(params: { processImagePaths: string[] | null }): 
   });
 }
 
-describeAwaitingWin32Platform('isBundleIdShape', () => {
+describe('isBundleIdShape', () => {
   test('accepts reverse-DNS names with three or more segments', () => {
     expect(isBundleIdShape({ name: 'com.example.app' })).toBe(true);
     expect(isBundleIdShape({ name: 'com.example.app-beta.helper' })).toBe(true);
@@ -94,7 +95,7 @@ describeAwaitingWin32Platform('isBundleIdShape', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseBundleIdShapedName', () => {
+describe('parseBundleIdShapedName', () => {
   test('takes a bundle-id-shaped name as it is', () => {
     expect(parseBundleIdShapedName({ name: 'com.example.app' })).toEqual(
       buildTestMacBundleId({ text: 'com.example.app' }),
@@ -127,7 +128,7 @@ describeAwaitingWin32Platform('parseBundleIdShapedName', () => {
   });
 });
 
-describeAwaitingWin32Platform('isAppleBundleId', () => {
+describe('isAppleBundleId', () => {
   test('matches the com.apple. prefix and the group.com.apple. prefix only', () => {
     expect(isAppleBundleId({ bundleId: buildTestMacBundleId({ text: 'com.apple.Safari' }) })).toBe(
       true,
@@ -144,7 +145,7 @@ describeAwaitingWin32Platform('isAppleBundleId', () => {
   });
 });
 
-describeAwaitingWin32Platform('resolveTargetOwner', () => {
+describe('resolveTargetOwner', () => {
   test('takes the owner of a path entry', () => {
     const entry = buildTestCatalogEntry({
       selection: { kind: 'path' },
@@ -204,7 +205,53 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
   });
 });
 
-describeAwaitingWin32Platform('findOwnerBundlePaths', () => {
+describe('findRemovalOwner', () => {
+  test('is no owner for a path without one', () => {
+    expect(
+      findRemovalOwner({
+        owner: null,
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        installedApps: [],
+        systemApps: [],
+      }),
+    ).toEqual({ kind: 'none' });
+  });
+
+  test('is the bundles that carry the id of a bundle owner', () => {
+    const slack = buildTestInstalledApp({
+      bundlePath: '/Applications/Slack.app',
+      bundleId: 'com.example.slack',
+    });
+
+    expect(
+      findRemovalOwner({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        installedApps: [slack],
+        systemApps: [],
+      }),
+    ).toEqual({ kind: 'bundles', bundlePaths: ['/Applications/Slack.app'] });
+  });
+
+  test('is the program of an executable owner, its install folder resolved', () => {
+    expect(
+      findRemovalOwner({
+        owner: CODE_OWNER,
+        environment: EXAMPLE_WIN32_ENVIRONMENT,
+        installedApps: [],
+        systemApps: [],
+      }),
+    ).toEqual({
+      kind: 'executable',
+      imageNames: [buildTestWindowsImageName({ text: 'Code.exe' })],
+      installFolderPath: buildTestWindowsPath({
+        text: 'C:\\Users\\tester\\AppData\\Local\\Programs\\Microsoft VS Code',
+      }),
+    });
+  });
+});
+
+describe('findOwnerBundlePaths', () => {
   test('lists every installed bundle carrying the id, as app or as helper', () => {
     const apps = [
       buildTestInstalledApp({ bundlePath: '/Applications/A.app', bundleId: 'com.example.a' }),
@@ -233,7 +280,7 @@ describeAwaitingWin32Platform('findOwnerBundlePaths', () => {
   });
 });
 
-describeAwaitingWin32Platform('findOwnerAppName', () => {
+describe('findOwnerAppName', () => {
   const host = buildTestInstalledApp({
     bundlePath: '/Applications/Host.app',
     displayName: 'Host',
@@ -284,7 +331,7 @@ describeAwaitingWin32Platform('findOwnerAppName', () => {
   });
 });
 
-describeAwaitingWin32Platform('isOwnerUninstalled', () => {
+describe('isOwnerUninstalled', () => {
   const host = buildTestInstalledApp({
     bundlePath: '/Applications/Host.app',
     bundleId: 'com.example.host',
@@ -324,7 +371,7 @@ describeAwaitingWin32Platform('isOwnerUninstalled', () => {
   });
 });
 
-describeAwaitingWin32Platform('resolveOwnerState', () => {
+describe('resolveOwnerState', () => {
   const slack = buildTestInstalledApp({
     bundlePath: '/Applications/Slack.app',
     bundleId: 'com.example.slack',
@@ -442,7 +489,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
   });
 });
 
-describeAwaitingWin32Platform('a system app owner', () => {
+describe('a system app owner', () => {
   const notes: SystemApp = {
     bundlePath: '/fixture/System/Applications/Notes.app',
     displayName: 'Notes',
@@ -528,7 +575,7 @@ describeAwaitingWin32Platform('a system app owner', () => {
   });
 });
 
-describeAwaitingWin32Platform('a bundle id family owner', () => {
+describe('a bundle id family owner', () => {
   const owner: CatalogOwner = {
     kind: 'bundleIdFamily',
     bundleIdPrefixes: ['com.adobe.PremierePro', 'com.adobe.ame'],

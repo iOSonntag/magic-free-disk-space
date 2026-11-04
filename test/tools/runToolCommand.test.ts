@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -8,10 +8,10 @@ import {
   TOOL_MAX_OUTPUT_BYTES,
 } from '../../src/tools/runToolCommand.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
@@ -42,6 +42,7 @@ async function runFakeTool(params: {
     homeDir: fixtureRoot.homeDir,
     tempDir: fixtureRoot.tempDir,
     timeoutMs: params.timeoutMs ?? 10_000,
+    processes: HOST_PLATFORM.tools.processes,
   });
 }
 
@@ -100,7 +101,31 @@ async function waitUntilPresent(path: string): Promise<void> {
   throw new Error(`${path} did not appear.`);
 }
 
-describeAwaitingWin32Platform('runToolCommand', () => {
+/** The entries the fixed environment of a mise run holds on the host, its tool folder given. */
+function buildExpectedMiseEnvironmentLines(params: { toolFolderPath: string }): string[] {
+  if (process.platform !== 'win32') {
+    return [
+      `HOME=${fixtureRoot.homeDir}`,
+      `TMPDIR=${fixtureRoot.tempDir}`,
+      'LANG=en_US.UTF-8',
+      `PATH=${params.toolFolderPath}:/usr/bin:/bin:/usr/sbin:/sbin`,
+      'MISE_OFFLINE=1',
+    ];
+  }
+
+  const systemRoot = process.env.SystemRoot ?? '';
+
+  return [
+    `USERPROFILE=${fixtureRoot.homeDir}`,
+    `TEMP=${fixtureRoot.tempDir}`,
+    `TMP=${fixtureRoot.tempDir}`,
+    `SystemRoot=${systemRoot}`,
+    `PATH=${params.toolFolderPath};${systemRoot}\\System32;${systemRoot}`,
+    'MISE_OFFLINE=1',
+  ];
+}
+
+describe('runToolCommand', () => {
   test('returns the output and the stderr tail of a run that exits with 0', async () => {
     const result = await runFakeTool({
       name: 'xcrun',
@@ -223,15 +248,13 @@ for (;;) {
         return;
       }
 
-      const lines = result.value.stdoutText.split('\n');
+      const lines = result.value.stdoutText.split(/\r?\n/);
 
-      expect(lines).toContain(`HOME=${fixtureRoot.homeDir}`);
-      expect(lines).toContain(`TMPDIR=${fixtureRoot.tempDir}`);
-      expect(lines).toContain('LANG=en_US.UTF-8');
-      expect(lines).toContain(
-        `PATH=${join(fixtureRoot.rootDir, 'bin')}:/usr/bin:/bin:/usr/sbin:/sbin`,
+      expect(lines).toEqual(
+        expect.arrayContaining(
+          buildExpectedMiseEnvironmentLines({ toolFolderPath: join(fixtureRoot.rootDir, 'bin') }),
+        ),
       );
-      expect(lines).toContain('MISE_OFFLINE=1');
       expect(result.value.stdoutText).not.toContain('MAGIC_FREE_DISK_SPACE_TEST_MARKER');
     } finally {
       delete process.env.MAGIC_FREE_DISK_SPACE_TEST_MARKER;
@@ -278,6 +301,34 @@ await Bun.sleep(60_000);`,
     },
   );
 
+  // Windows ends the processes of a tool's job with an exit code, never a signal.
+  test.skipIf(process.platform !== 'win32')(
+    'stopRunningTools ends the job of a running tool with all it started, and the run settles',
+    async () => {
+      const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
+      const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
+      const run = runFakeTool({
+        name: 'xcrun',
+        body: `import { spawn } from 'node:child_process';
+import { renameSync, writeFileSync } from 'node:fs';
+${buildStartGrandchildBody(grandchildPidFile)}
+writeFileSync(${JSON.stringify(`${toolPidFile}.partial`)}, String(process.pid));
+renameSync(${JSON.stringify(`${toolPidFile}.partial`)}, ${JSON.stringify(toolPidFile)});
+await Bun.sleep(60_000);`,
+        timeoutMs: 60_000,
+      });
+
+      await waitUntilPresent(toolPidFile);
+      stopRunningTools();
+
+      const result = await run;
+
+      expect(result).toMatchObject({ kind: 'failed', failure: { reason: 'exitedWithError' } });
+      expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
+      expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
+    },
+  );
+
   test('puts the leading argument of dart before the arguments', async () => {
     const result = await runFakeTool({
       name: 'dart',
@@ -314,6 +365,7 @@ await Bun.sleep(60_000);`,
       homeDir: fixtureRoot.homeDir,
       tempDir: fixtureRoot.tempDir,
       timeoutMs: 5_000,
+      processes: HOST_PLATFORM.tools.processes,
     });
 
     expect(result.kind).toBe('failed');

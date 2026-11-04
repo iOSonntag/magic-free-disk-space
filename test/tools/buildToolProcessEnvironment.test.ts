@@ -1,13 +1,14 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { DARWIN_TOOL_PROCESSES } from '../../src/platform/darwin/toolProcesses.js';
 import { buildToolProcessEnvironment } from '../../src/tools/buildToolProcessEnvironment.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 
-describeAwaitingWin32Platform('buildToolProcessEnvironment', () => {
+describe('buildToolProcessEnvironment', () => {
   test('holds exactly the fixed entries, with the tool folder first in PATH', () => {
     const environment = buildToolProcessEnvironment({
       tool: { name: 'xcrun', path: '/usr/bin/xcrun' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
+      processes: DARWIN_TOOL_PROCESSES,
     });
 
     expect(environment).toEqual({
@@ -23,6 +24,7 @@ describeAwaitingWin32Platform('buildToolProcessEnvironment', () => {
       tool: { name: 'mise', path: '/opt/homebrew/Cellar/mise/1.0.0/bin/mise' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
+      processes: DARWIN_TOOL_PROCESSES,
     });
 
     expect(environment).toEqual({
@@ -39,6 +41,7 @@ describeAwaitingWin32Platform('buildToolProcessEnvironment', () => {
       tool: { name: 'dart', path: '/sdk/flutter/bin/cache/dart-sdk/bin/dart' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
+      processes: DARWIN_TOOL_PROCESSES,
     });
 
     expect(Object.keys(environment).toSorted()).toEqual(['HOME', 'LANG', 'PATH', 'TMPDIR']);
@@ -49,11 +52,13 @@ describeAwaitingWin32Platform('buildToolProcessEnvironment', () => {
       tool: { name: 'brewAppleSilicon', path: '/opt/homebrew/bin/brew' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
+      processes: DARWIN_TOOL_PROCESSES,
     });
     const intel = buildToolProcessEnvironment({
       tool: { name: 'brewIntel', path: '/usr/local/bin/brew' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
+      processes: DARWIN_TOOL_PROCESSES,
     });
 
     expect(appleSilicon.HOMEBREW_NO_COLOR).toBe('1');

@@ -1,9 +1,8 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildDartPubCacheFindings } from '../../src/explore/dartPubCache/buildDartPubCacheFindings.js';
 import { parseDartPubCacheGc } from '../../src/explore/dartPubCache/parseDartPubCacheGc.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildDartGcDryRunText,
   buildDartGcPaths,
@@ -15,7 +14,7 @@ const tool: LocatedTool = { name: 'dart', path: '/opt/example/dart-sdk/bin/dart'
 
 const gcPaths = buildDartGcPaths({ homeDir: FIXTURE_HOME_DIR });
 
-describeAwaitingWin32Platform('parseDartPubCacheGc', () => {
+describe('parseDartPubCacheGc', () => {
   test('reads the paths after "Would delete:"', () => {
     expect(
       parseDartPubCacheGc({
@@ -53,7 +52,7 @@ describeAwaitingWin32Platform('parseDartPubCacheGc', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildDartPubCacheFindings', () => {
+describe('buildDartPubCacheFindings', () => {
   test('offers one unit for the whole set, with the count and three samples shown with ~', () => {
     const findings = buildDartPubCacheFindings({
       tool: tool,

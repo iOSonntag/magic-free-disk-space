@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -19,7 +19,6 @@ import {
   FLUTTER_SETTINGS_PATHS,
 } from '../../src/platform/darwin/androidSdkRoot.js';
 import type { Result } from '../../src/result.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -28,7 +27,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import {
   ANDROID_RECENT_USE_MS,
@@ -45,7 +44,7 @@ import {
   buildTestPinFileText,
 } from './projectPinsFixtures.js';
 
-describeAwaitingWin32Platform('parseAndroidLocalPropertiesSdkDir', () => {
+describe('parseAndroidLocalPropertiesSdkDir', () => {
   test('reads the last sdk.dir with its escapes undone and skips comments', () => {
     expect(
       parseAndroidLocalPropertiesSdkDir({
@@ -77,7 +76,7 @@ ndk.dir=/ndk
   });
 });
 
-describeAwaitingWin32Platform('parseFlutterSettingsAndroidSdk', () => {
+describe('parseFlutterSettingsAndroidSdk', () => {
   test('reads the android-sdk string of the JSON settings', () => {
     expect(
       parseFlutterSettingsAndroidSdk({
@@ -94,7 +93,7 @@ describeAwaitingWin32Platform('parseFlutterSettingsAndroidSdk', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
+describe('loadAndroidSdkRoots', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -108,7 +107,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
   });
 
   function buildSdkPath(name: string): AbsolutePath {
-    return buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, name) });
+    return buildTestHostPath({ text: join(fixtureRoot.rootDir, name) });
   }
 
   async function writeFlutterSettings(params: {
@@ -123,7 +122,9 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
 
   function buildLocalProperties(sdkDir: string): ProjectPinFile {
     return buildTestPinFileText({
-      path: join(fixtureRoot.homeDir, 'code', 'app', 'android', 'local.properties'),
+      path: buildTestHostPath({
+        text: join(fixtureRoot.homeDir, 'code', 'app', 'android', 'local.properties'),
+      }),
       kind: 'androidLocalProperties',
       text: `sdk.dir=${sdkDir}\n`,
     });
@@ -148,7 +149,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
 
   /** The platform SDK's root, the one whose failed read fails the probes. */
   function buildPlatformRoot(): AndroidSdkRoot {
-    return { path: buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir }), isRequired: true };
+    return { path: buildAndroidSdkRoot({ environment: environment }), isRequired: true };
   }
 
   /** The probes over the fixture home with `projectPins`, judging use by the Android cutoff. */
@@ -172,7 +173,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      homeDir: fixtureRoot.homeDir,
+      environment: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -291,7 +292,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      homeDir: fixtureRoot.homeDir,
+      environment: environment,
       name: 'Pixel',
       imageSysdir: usedSysdir,
       lastUsedAtMs: ANDROID_RECENT_USE_MS,

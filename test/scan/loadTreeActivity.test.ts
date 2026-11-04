@@ -1,11 +1,9 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, lutimes, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
 import type { EntryReads } from '../../src/system/entryReads.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -15,6 +13,7 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -52,11 +51,11 @@ async function loadActivity(params: {
     excludedPaths: params.excludedPaths ?? new Set(),
     maxEntries: params.maxEntries ?? 10_000,
     deadlineMs: params.deadlineMs ?? Date.now() + TEST_WALK_DURATION_MS,
-    entryReads: params.entryReads ?? darwinPlatform.system.entryReads,
+    entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
   });
 }
 
-describeAwaitingWin32Platform('loadTreeActivity', () => {
+describe('loadTreeActivity', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

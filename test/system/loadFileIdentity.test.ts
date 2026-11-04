@@ -1,9 +1,8 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, realpath, symlink } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { basename, dirname, join } from 'node:path';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -21,7 +20,7 @@ async function loadExpectedRealPath(params: { path: string }): Promise<string> {
   return join(parentRealPath, basename(params.path));
 }
 
-describeAwaitingWin32Platform('loadFileIdentity', () => {
+describe('loadFileIdentity', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -32,7 +31,8 @@ describeAwaitingWin32Platform('loadFileIdentity', () => {
     await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
-  test('reads a socket as other, resolving it through its folder', async () => {
+  // A socket in a folder is a POSIX entry; Windows listens on a named pipe outside the tree.
+  testOnPosix('reads a socket as other, resolving it through its folder', async () => {
     const socketPath = join(fixtureRoot.rootDir, 's');
     const server = createServer();
 

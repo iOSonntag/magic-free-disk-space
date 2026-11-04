@@ -33,13 +33,13 @@ describe('WIN32_CATALOG', () => {
 
   test('owns every entry by no program or by images of its own program', () => {
     const otherOwnerIds = WIN32_CATALOG.entries
-      .filter((entry) => entry.owner !== null && entry.owner.kind !== 'executable')
+      .filter((entry) => entry.owner !== null && entry.owner.app.kind !== 'executable')
       .map((entry) => entry.id);
     const sharedImageIds = WIN32_CATALOG.entries
       .filter(
         (entry) =>
-          entry.owner?.kind === 'executable' &&
-          entry.owner.imageNames.some((imageName) => SHARED_IMAGE_NAMES.includes(imageName)),
+          entry.owner?.app.kind === 'executable' &&
+          entry.owner.app.imageNames.some((imageName) => SHARED_IMAGE_NAMES.includes(imageName)),
       )
       .map((entry) => entry.id);
 
@@ -117,7 +117,8 @@ describe('WIN32_CATALOG', () => {
 /** Every location of the catalog: entries, install folders, probes, file roots, guarded folders. */
 function listNamedLocations(): NamedLocation[] {
   const entryLocations = WIN32_CATALOG.entries.flatMap((entry) => {
-    const installFolder = entry.owner?.kind === 'executable' ? entry.owner.installFolder : null;
+    const installFolder =
+      entry.owner?.app.kind === 'executable' ? entry.owner.app.installFolder : null;
 
     return [
       { name: entry.id, location: entry },
@@ -152,14 +153,16 @@ function listNamedLocations(): NamedLocation[] {
 }
 
 /**
- * Whether the entry offers the guarded path or a folder holding it: a `self` entry by its own
- * folder, a `children` entry by any child of its folder.
+ * Whether the entry offers the guarded path or a folder holding it: a `path` entry by its own
+ * folder, a `profileFolders` entry by its own folder too, which may itself be a profile, and a
+ * `children` entry by any child of its folder.
  */
 function isOfferingGuardedPath(params: { entry: CatalogEntry; guardedPath: string }): boolean {
   const entryPath = resolveEntryPath({ entry: params.entry });
 
-  switch (params.entry.scope) {
-    case 'self':
+  switch (params.entry.selection.kind) {
+    case 'path':
+    case 'profileFolders':
       return isSameOrInsidePath({
         rules: ENVIRONMENT.pathRules,
         path: params.guardedPath,
@@ -180,8 +183,8 @@ function isMisplacedBrowserCache(params: {
 }): boolean {
   const entryPath = resolveEntryPath({ entry: params.entry });
   const isBrowserOwned =
-    params.entry.owner?.kind === 'executable' &&
-    params.entry.owner.imageNames.some((imageName) =>
+    params.entry.owner?.app.kind === 'executable' &&
+    params.entry.owner.app.imageNames.some((imageName) =>
       CHROMIUM_BROWSER_IMAGE_NAMES.includes(imageName),
     );
   const userDataPath =
@@ -194,7 +197,7 @@ function isMisplacedBrowserCache(params: {
   }
 
   return (
-    params.entry.scope !== 'self' ||
+    params.entry.selection.kind !== 'path' ||
     !isStrictlyInsidePath({
       path: entryPath,
       parentPath: buildDefaultProfilePath({ userDataPath: userDataPath }),

@@ -1,15 +1,16 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { deleteCandidates } from '../../src/delete/deleteCandidates.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createTestJournal } from '../support/deletionJournalFixtures.js';
 import { createFixtureFile, isPresent } from '../support/fixtureRoot.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { withFixtureHome } from '../support/probeRunFixtures.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
+
+const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
 
 /** The time of every scan and delete, half a year after the previews were written. */
 const NOW_MS = Date.UTC(2026, 6, 1);
@@ -38,7 +39,7 @@ async function createPreview(params: { environment: Environment }): Promise<stri
   return path;
 }
 
-describeAwaitingWin32Platform('the data of a system app', () => {
+describeOnDarwin('the data of a system app', () => {
   test('stays while its app runs, though no app folder lists the app', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -74,7 +75,10 @@ describeAwaitingWin32Platform('the data of a system app', () => {
           {
             path: getPreviewsPath({ environment: home.environment }),
             appName: 'Messages',
-            removal: { kind: 'deletePaths', ownerBundlePaths: [MESSAGES_BUNDLE_PATH] },
+            removal: {
+              kind: 'deletePaths',
+              owner: { kind: 'bundles', bundlePaths: [MESSAGES_BUNDLE_PATH] },
+            },
           },
         ]);
 

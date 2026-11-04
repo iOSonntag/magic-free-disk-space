@@ -1,9 +1,8 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { decideAppCandidate } from '../../src/scan/decideAppCandidate.js';
 import { DAY_MS } from '../../src/scan/limits.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import type { SystemInstaller } from '../../src/scan/scanPlatform.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
@@ -51,7 +50,7 @@ function decide(params: {
   });
 }
 
-describeAwaitingWin32Platform('decideAppCandidate for a macOS installer', () => {
+describe('decideAppCandidate for a macOS installer', () => {
   test('offers an old installer of another release as an installer to review', () => {
     const decision = decide({});
 
@@ -62,7 +61,7 @@ describeAwaitingWin32Platform('decideAppCandidate for a macOS installer', () => 
       origin: { kind: 'application', bundleId: 'com.apple.InstallAssistant' },
       explanation: 'An installer of macOS 15, while this Mac runs macOS 26.',
       downloadedAtMs: NOW_MS - 30 * DAY_MS,
-      removal: { kind: 'deletePaths', ownerBundlePaths: [INSTALLER_PATH] },
+      removal: { kind: 'deletePaths', owner: { kind: 'bundles', bundlePaths: [INSTALLER_PATH] } },
     });
   });
 

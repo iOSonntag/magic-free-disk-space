@@ -10,10 +10,8 @@ import type { ProjectPinFileKind } from '../../src/explore/projectPins/projectPi
 import { matchProjectPinFile } from '../../src/explore/projectPins/projectPins.js';
 import { buildProjectSearchEvidence } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import { selectToolPins } from '../../src/explore/projectPins/selectToolPins.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -21,7 +19,12 @@ import {
   deleteFixtureRoot,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import {
+  buildTestAbsolutePath,
+  buildTestHostPath,
+  HOST_PATH_RULES,
+} from '../support/parsedValueFixtures.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import {
   buildTestPinFileText,
@@ -30,13 +33,13 @@ import {
   buildTestProjectPins,
 } from './projectPinsFixtures.js';
 
-const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = HOST_PLATFORM.system.privacyDenialCode;
 
 const NO_SIBLINGS: ReadonlySet<string> = new Set();
 
 const PNPM_LOCK_SIBLINGS: ReadonlySet<string> = new Set(['package.json', 'pnpm-lock.yaml']);
 
-describeAwaitingWin32Platform('matchProjectPinFile', () => {
+describe('matchProjectPinFile', () => {
   const sharedNameKinds: [string, ProjectPinFileKind][] = [
     ['.tool-versions', 'toolVersions'],
     ['.nvmrc', 'nvmrc'],
@@ -101,14 +104,23 @@ describeAwaitingWin32Platform('matchProjectPinFile', () => {
   });
 });
 
-describeAwaitingWin32Platform('selectToolPins', () => {
+/** An example path below `/work`, such as `a/.nvmrc`, the same on every host. */
+function buildWorkPath(relativePath: string): AbsolutePath {
+  return buildTestAbsolutePath({ text: `/work/${relativePath}` });
+}
+
+describe('selectToolPins', () => {
   test('keeps the texts of the files of its kinds, each with its kind', () => {
     const selected = selectToolPins({
       pins: [
-        buildTestPinFileText({ path: '/work/a/package.json', kind: 'packageJson', text: '{}' }),
-        buildTestPinFileText({ path: '/work/a/.nvmrc', kind: 'nvmrc', text: '22' }),
         buildTestPinFileText({
-          path: '/work/b/.tool-versions',
+          path: buildWorkPath('a/package.json'),
+          kind: 'packageJson',
+          text: '{}',
+        }),
+        buildTestPinFileText({ path: buildWorkPath('a/.nvmrc'), kind: 'nvmrc', text: '22' }),
+        buildTestPinFileText({
+          path: buildWorkPath('b/.tool-versions'),
           kind: 'toolVersions',
           text: 'pnpm 9',
         }),
@@ -121,16 +133,8 @@ describeAwaitingWin32Platform('selectToolPins', () => {
       value: {
         kind: 'texts',
         files: [
-          {
-            path: buildTestAbsolutePath({ text: '/work/a/package.json' }),
-            kind: 'packageJson',
-            text: '{}',
-          },
-          {
-            path: buildTestAbsolutePath({ text: '/work/b/.tool-versions' }),
-            kind: 'toolVersions',
-            text: 'pnpm 9',
-          },
+          { path: buildWorkPath('a/package.json'), kind: 'packageJson', text: '{}' },
+          { path: buildWorkPath('b/.tool-versions'), kind: 'toolVersions', text: 'pnpm 9' },
         ],
       },
     });
@@ -146,10 +150,10 @@ describeAwaitingWin32Platform('selectToolPins', () => {
   test('fails with the path of the first unreadable file of its kinds', () => {
     const selected = selectToolPins({
       pins: [
-        buildTestPinFileText({ path: '/work/a/.nvmrc', kind: 'nvmrc', text: '22' }),
-        buildTestPinFileUnfit({ path: '/work/b/.nvmrc', kind: 'nvmrc' }),
-        buildTestPinFileUnreadable({ path: '/work/c/.nvmrc', kind: 'nvmrc' }),
-        buildTestPinFileUnreadable({ path: '/work/d/.nvmrc', kind: 'nvmrc' }),
+        buildTestPinFileText({ path: buildWorkPath('a/.nvmrc'), kind: 'nvmrc', text: '22' }),
+        buildTestPinFileUnfit({ path: buildWorkPath('b/.nvmrc'), kind: 'nvmrc' }),
+        buildTestPinFileUnreadable({ path: buildWorkPath('c/.nvmrc'), kind: 'nvmrc' }),
+        buildTestPinFileUnreadable({ path: buildWorkPath('d/.nvmrc'), kind: 'nvmrc' }),
       ],
       kinds: ['nvmrc'],
     });
@@ -168,11 +172,11 @@ describeAwaitingWin32Platform('selectToolPins', () => {
     const selected = selectToolPins({
       pins: [
         buildTestPinFileText({
-          path: '/work/a/build.gradle',
+          path: buildWorkPath('a/build.gradle'),
           kind: 'gradle',
           text: 'compileSdk 34',
         }),
-        buildTestPinFileUnfit({ path: '/work/b/build.gradle', kind: 'gradle' }),
+        buildTestPinFileUnfit({ path: buildWorkPath('b/build.gradle'), kind: 'gradle' }),
       ],
       kinds: ['gradle'],
     });
@@ -183,9 +187,9 @@ describeAwaitingWin32Platform('selectToolPins', () => {
   test('is changed by no unfit or unreadable file of other kinds', () => {
     const selected = selectToolPins({
       pins: [
-        buildTestPinFileUnreadable({ path: '/work/a/build.gradle', kind: 'gradle' }),
-        buildTestPinFileUnfit({ path: '/work/b/mise.toml', kind: 'miseConfig' }),
-        buildTestPinFileText({ path: '/work/c/.nvmrc', kind: 'nvmrc', text: '22' }),
+        buildTestPinFileUnreadable({ path: buildWorkPath('a/build.gradle'), kind: 'gradle' }),
+        buildTestPinFileUnfit({ path: buildWorkPath('b/mise.toml'), kind: 'miseConfig' }),
+        buildTestPinFileText({ path: buildWorkPath('c/.nvmrc'), kind: 'nvmrc', text: '22' }),
       ],
       kinds: ['nvmrc'],
     });
@@ -194,15 +198,13 @@ describeAwaitingWin32Platform('selectToolPins', () => {
       kind: 'succeeded',
       value: {
         kind: 'texts',
-        files: [
-          { path: buildTestAbsolutePath({ text: '/work/c/.nvmrc' }), kind: 'nvmrc', text: '22' },
-        ],
+        files: [{ path: buildWorkPath('c/.nvmrc'), kind: 'nvmrc', text: '22' }],
       },
     });
   });
 });
 
-describeAwaitingWin32Platform('buildProjectSearchEvidence', () => {
+describe('buildProjectSearchEvidence', () => {
   test('adds the incomplete-search line only when the walk was not complete', () => {
     expect(
       buildProjectSearchEvidence({
@@ -219,7 +221,7 @@ describeAwaitingWin32Platform('buildProjectSearchEvidence', () => {
   });
 });
 
-describeAwaitingWin32Platform('loading the pins', () => {
+describe('loading the pins', () => {
   let fixtureRoot: FixtureRoot;
   let homeRealPath: string;
   let trackedConfigsPath: string;
@@ -234,6 +236,16 @@ describeAwaitingWin32Platform('loading the pins', () => {
     await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
+  /** A path below the fixture home under the rules of the host. */
+  function buildHomePath(...names: string[]): AbsolutePath {
+    return buildTestHostPath({ text: join(fixtureRoot.homeDir, ...names) });
+  }
+
+  /** A path below the real path of the fixture home, as a resolved link names it. */
+  function buildHomeRealPath(...names: string[]): AbsolutePath {
+    return buildTestHostPath({ text: join(homeRealPath, ...names) });
+  }
+
   async function createTrackedConfigLink(params: {
     name: string;
     targetPath: string;
@@ -244,18 +256,15 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
   describe('loadProjectPinFiles', () => {
     test('reads each path once with its first kind, and drops a file that is gone', async () => {
-      const nvmrcPath = join(fixtureRoot.homeDir, '.nvmrc');
+      const nvmrcPath = buildHomePath('.nvmrc');
       await writeFile(nvmrcPath, '22\n');
 
       const files = await loadProjectPinFiles({
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         files: [
-          { path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' },
-          { path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'toolVersions' },
-          {
-            path: buildTestAbsolutePath({ text: join(fixtureRoot.homeDir, 'gone', '.nvmrc') }),
-            kind: 'nvmrc',
-          },
+          { path: nvmrcPath, kind: 'nvmrc' },
+          { path: nvmrcPath, kind: 'toolVersions' },
+          { path: buildHomePath('gone', '.nvmrc'), kind: 'nvmrc' },
         ],
       });
 
@@ -265,8 +274,8 @@ describeAwaitingWin32Platform('loading the pins', () => {
     });
 
     test('keeps a folder and a file over the read limit as unfit', async () => {
-      const folderPath = join(fixtureRoot.homeDir, 'a', '.tool-versions');
-      const largePath = join(fixtureRoot.homeDir, '.tool-versions');
+      const folderPath = buildHomePath('a', '.tool-versions');
+      const largePath = buildHomePath('.tool-versions');
       await createFixtureDirectory({ path: folderPath });
       await writeFile(largePath, '');
       await truncate(largePath, EXPLORE_FILE_MAX_BYTES + 1);
@@ -274,8 +283,8 @@ describeAwaitingWin32Platform('loading the pins', () => {
       const files = await loadProjectPinFiles({
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         files: [
-          { path: buildTestAbsolutePath({ text: folderPath }), kind: 'toolVersions' },
-          { path: buildTestAbsolutePath({ text: largePath }), kind: 'toolVersions' },
+          { path: folderPath, kind: 'toolVersions' },
+          { path: largePath, kind: 'toolVersions' },
         ],
       });
 
@@ -285,15 +294,15 @@ describeAwaitingWin32Platform('loading the pins', () => {
       ]);
     });
 
-    test('keeps a file it cannot read as unreadable', async () => {
-      const gradlePath = join(fixtureRoot.homeDir, 'build.gradle');
+    testOnPosix('keeps a file it cannot read as unreadable', async () => {
+      const gradlePath = buildHomePath('build.gradle');
       await writeFile(gradlePath, 'android {}\n');
       await chmod(gradlePath, 0o000);
 
       try {
         const files = await loadProjectPinFiles({
           privacyDenialCode: PRIVACY_DENIAL_CODE,
-          files: [{ path: buildTestAbsolutePath({ text: gradlePath }), kind: 'gradle' }],
+          files: [{ path: gradlePath, kind: 'gradle' }],
         });
 
         expect(files).toEqual([buildTestPinFileUnreadable({ path: gradlePath, kind: 'gradle' })]);
@@ -305,14 +314,14 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
   describe('loadProjectPins', () => {
     test('reads only the walked files when mise tracks no configs', async () => {
-      const nvmrcPath = join(fixtureRoot.homeDir, '.nvmrc');
+      const nvmrcPath = buildHomePath('.nvmrc');
       await writeFile(nvmrcPath, '22\n');
 
       const pins = await loadProjectPins({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: HOST_PATH_RULES,
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
-        walkedPinFiles: [{ path: buildTestAbsolutePath({ text: nvmrcPath }), kind: 'nvmrc' }],
+        walkedPinFiles: [{ path: nvmrcPath, kind: 'nvmrc' }],
         isWalkComplete: false,
       });
 
@@ -325,7 +334,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       });
     });
 
-    test('adds the targets of the tracked configs that have a pin file name', async () => {
+    testOnPosix('adds the targets of the tracked configs that have a pin file name', async () => {
       const worktreePath = join(fixtureRoot.homeDir, '.claude', 'worktrees', 'one');
       const globalConfigPath = join(fixtureRoot.homeDir, '.config', 'mise', 'config.toml');
       const pnpmProjectPath = join(fixtureRoot.homeDir, 'web');
@@ -357,7 +366,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
       await writeFile(join(trackedConfigsPath, 'not-a-link.toml'), '[tools]\n');
 
       const pins = await loadProjectPins({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: HOST_PATH_RULES,
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [],
@@ -369,17 +378,17 @@ describeAwaitingWin32Platform('loading the pins', () => {
         value: buildTestProjectPins({
           files: [
             buildTestPinFileText({
-              path: join(homeRealPath, '.claude', 'worktrees', 'one', 'mise.toml'),
+              path: buildHomeRealPath('.claude', 'worktrees', 'one', 'mise.toml'),
               kind: 'miseConfig',
               text: '[tools]\nnode = "22"\n',
             }),
             buildTestPinFileText({
-              path: join(homeRealPath, '.config', 'mise', 'config.toml'),
+              path: buildHomeRealPath('.config', 'mise', 'config.toml'),
               kind: 'miseConfig',
               text: '[tools]\npnpm = "12"\n',
             }),
             buildTestPinFileText({
-              path: join(homeRealPath, 'web', 'package.json'),
+              path: buildHomeRealPath('web', 'package.json'),
               kind: 'packageJson',
               text: '{}',
             }),
@@ -389,18 +398,16 @@ describeAwaitingWin32Platform('loading the pins', () => {
       });
     });
 
-    test('reads a file both sources found once', async () => {
-      const miseConfigPath = join(homeRealPath, 'app', 'mise.toml');
+    testOnPosix('reads a file both sources found once', async () => {
+      const miseConfigPath = buildHomeRealPath('app', 'mise.toml');
       await writeFixtureTextFile({ path: miseConfigPath, text: '[tools]\n' });
       await createTrackedConfigLink({ name: 'a1', targetPath: miseConfigPath });
 
       const pins = await loadProjectPins({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: HOST_PATH_RULES,
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
-        walkedPinFiles: [
-          { path: buildTestAbsolutePath({ text: miseConfigPath }), kind: 'miseConfig' },
-        ],
+        walkedPinFiles: [{ path: miseConfigPath, kind: 'miseConfig' }],
         isWalkComplete: true,
       });
 
@@ -414,13 +421,13 @@ describeAwaitingWin32Platform('loading the pins', () => {
       });
     });
 
-    test('fails at the tracked-configs folder when it cannot be listed', async () => {
+    testOnPosix('fails at the tracked-configs folder when it cannot be listed', async () => {
       await createFixtureDirectory({ path: trackedConfigsPath });
       await chmod(trackedConfigsPath, 0o000);
 
       try {
         const pins = await loadProjectPins({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: HOST_PATH_RULES,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
@@ -451,7 +458,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: HOST_PATH_RULES,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
@@ -480,7 +487,7 @@ describeAwaitingWin32Platform('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: HOST_PATH_RULES,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],

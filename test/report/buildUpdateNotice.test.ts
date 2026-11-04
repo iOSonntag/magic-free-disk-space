@@ -1,12 +1,11 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildUpdateNotice } from '../../src/report/buildUpdateNotice.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 
 const TEXTS = darwinPlatform.report;
 
-describeAwaitingWin32Platform('buildUpdateNotice', () => {
+describe('buildUpdateNotice', () => {
   test('builds the notice of the protocol fixture for a newer release', async () => {
     const notice = buildUpdateNotice({
       outcome: {

@@ -1,18 +1,18 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type {
   RemovalOutcomeCoded,
   RemovalOutcomeCodedKind,
+  RemovalOutcomePartlyRemoved,
   RemovalOutcomeToolFailed,
 } from '../../src/delete/deleteCandidates.js';
 import { formatAvailableSpaceLine, formatRemovalRun } from '../../src/report/formatRemovalRun.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestEngineCandidate,
   buildTestRemovalOutcome,
 } from '../support/candidateFixtures.js';
 
-describeAwaitingWin32Platform('formatRemovalRun', () => {
+describe('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
     const lines = formatRemovalRun({ run: { outcomes: [], journalFailure: null } });
 
@@ -128,6 +128,33 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
 
     expect(lines.some((line) => line.includes(cleaned.path))).toBe(false);
     expect(lines[0]).toBe('- deleted: Docker Desktop build cache, in Docker Desktop');
+  });
+
+  test('names how many entries of a partly deleted item stayed, counts what it freed, and counts it as not deleted', () => {
+    const lines = formatRemovalRun({
+      run: {
+        outcomes: [
+          buildPartlyRemovedOutcome({
+            path: 'C:\\fixture\\cache',
+            freedBytes: 6144,
+            stayedEntryCount: 2,
+          }),
+          buildPartlyRemovedOutcome({
+            path: 'C:\\fixture\\held',
+            freedBytes: 0,
+            stayedEntryCount: 1,
+          }),
+        ],
+        journalFailure: null,
+      },
+    });
+
+    expect(lines).toEqual([
+      '- partly deleted: C:\\fixture\\cache (2 entries stayed, in use by another program or kept only online; 6.1 KB freed)',
+      '- partly deleted: C:\\fixture\\held (1 entry stayed, in use by another program or kept only online; 0 B freed)',
+      'Freed about 6.1 KB in 0 items.',
+      '2 items could not be deleted.',
+    ]);
   });
 
   test('omits the summary lines that do not apply', () => {
@@ -296,6 +323,19 @@ function buildPathOutcome(params: {
     freedBytes: params.freedBytes,
     code: params.code ?? null,
   });
+}
+
+function buildPartlyRemovedOutcome(params: {
+  path: string;
+  freedBytes: number;
+  stayedEntryCount: number;
+}): RemovalOutcomePartlyRemoved {
+  return {
+    candidate: buildTestCandidate({ path: params.path }),
+    freedBytes: params.freedBytes,
+    outcome: 'partlyRemoved',
+    stayedEntryCount: params.stayedEntryCount,
+  };
 }
 
 function buildToolFailedOutcome(params: {

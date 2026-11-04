@@ -202,6 +202,7 @@ export function buildProtocolFixtureReport(): ScanReport {
   ];
   const report = buildScanReport({
     decisions: decisions,
+    appAdvice: [],
     evictedEntryCount: 0,
     issues: [
       { path: `${HOME_DIR}/Library/Mail`, reason: 'privacyDenied', detail: 'EPERM' },

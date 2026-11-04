@@ -295,6 +295,7 @@ async function loadAndroidAvd(params: {
   }
 
   const imageSysdir = await loadAndroidImageSysdir({
+    pathRules: params.pathRules,
     avdPath: avdPath.value,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -327,6 +328,7 @@ async function loadAndroidAvd(params: {
 
 /** `null` when `config.ini` is absent or unfit, or holds no `image.sysdir.1`. */
 async function loadAndroidImageSysdir(params: {
+  pathRules: PathRules;
   avdPath: AbsolutePath;
   privacyDenialCode: string | null;
 }): Promise<Result<string | null, ExploreFileUnreadable>> {
@@ -345,11 +347,38 @@ async function loadAndroidImageSysdir(params: {
 
   const imageSysdir = parseAndroidIniText({ text: configIni.value.text }).get(IMAGE_SYSDIR_KEY);
 
-  if (imageSysdir === undefined || imageSysdir === '') {
+  if (imageSysdir === undefined) {
     return { kind: 'succeeded', value: null };
   }
 
-  return { kind: 'succeeded', value: imageSysdir };
+  return {
+    kind: 'succeeded',
+    value: parseAndroidImageSysdir({ pathRules: params.pathRules, text: imageSysdir }),
+  };
+}
+
+/**
+ * The `image.sysdir.1` of an AVD, relative to the SDK, in the separator of `pathRules`; `null`
+ * for an empty one. The SDK on Windows writes it with backslashes, and a hand-made AVD may carry
+ * slashes, so on Windows both separate its names; on macOS the text stays as written.
+ */
+export function parseAndroidImageSysdir(params: {
+  pathRules: PathRules;
+  text: string;
+}): string | null {
+  if (params.text === '') {
+    return null;
+  }
+
+  switch (params.pathRules.rootForm) {
+    case 'posix':
+      return params.text;
+    case 'win32': {
+      const names = params.text.split(/[\\/]/).filter((name) => name !== '');
+
+      return names.length === 0 ? null : names.join(params.pathRules.separator);
+    }
+  }
 }
 
 async function loadAndroidAvdLastUsedAtMs(params: {

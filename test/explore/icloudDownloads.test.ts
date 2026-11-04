@@ -15,9 +15,8 @@ import { DAY_MS } from '../../src/scan/limits.js';
 import type { EntryStats } from '../../src/system/loadEntryStats.js';
 import type { FileIdentity } from '../../src/system/loadFileIdentity.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, createFixtureFile } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
@@ -184,7 +183,7 @@ describe('isEvictFileUnchanged', () => {
   });
 });
 
-describeAwaitingWin32Platform('the iCloud Drive probe', () => {
+describe('the iCloud Drive probe', () => {
   test('finds downloaded files untouched since the cutoff, one unit per folder', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -297,7 +296,7 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
 
         expect(unit.foundFiles).toEqual([
           {
-            path: buildTestAbsolutePath({ text: filePath }),
+            path: buildTestHostPath({ text: filePath }),
             modifiedMs: OLD_MS,
             accessedMs: accessedMs,
           },

@@ -10,7 +10,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, parse } from 'node:path';
+import { dirname, join, parse, relative, sep } from 'node:path';
 import type {
   Environment,
   WindowsKnownFolderPaths,
@@ -206,6 +206,33 @@ export async function writeFixtureTextFile(params: { path: string; text: string 
   await writeFile(params.path, params.text);
 }
 
+/**
+ * Every file and folder under the fixture root by its path below the root, with `/` between its
+ * names on every host, except the folder of the deletion log at `deletionLogPath`, what it holds,
+ * and the folders above it, which a deletion creates.
+ */
+export async function listFixturePathsBesideLog(params: {
+  fixtureRoot: FixtureRoot;
+  deletionLogPath: string;
+}): Promise<string[]> {
+  const rootDir = params.fixtureRoot.rootDir;
+  const entries = await readdir(rootDir, { recursive: true });
+  const logFolderPath = buildPathBelowRoot({
+    rootDir: rootDir,
+    path: dirname(params.deletionLogPath),
+  });
+
+  return entries
+    .map((entry) => buildPathBelowRoot({ rootDir: rootDir, path: join(rootDir, entry) }))
+    .filter(
+      (path) =>
+        path !== logFolderPath &&
+        !path.startsWith(`${logFolderPath}/`) &&
+        !logFolderPath.startsWith(`${path}/`),
+    )
+    .toSorted();
+}
+
 /** Whether anything is at `path`; a symbolic link counts itself, whatever its target. */
 export async function isPresent(path: string): Promise<boolean> {
   return lstat(path).then(
@@ -222,6 +249,10 @@ export async function updateModifiedMs(params: {
   const modifiedSeconds = params.modifiedMs / 1000;
 
   await utimes(params.path, modifiedSeconds, modifiedSeconds);
+}
+
+function buildPathBelowRoot(params: { rootDir: string; path: string }): string {
+  return relative(params.rootDir, params.path).split(sep).join('/');
 }
 
 async function loadTestFolder(params: { path: AbsolutePath }): Promise<TestFolder> {

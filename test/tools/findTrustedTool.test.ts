@@ -1,15 +1,17 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { findTrustedTool, loadTrustedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../src/tools/toolInstallLocations.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { createActiveProject, writeDartVersionFile } from '../support/flutterSdkFixtures.js';
-import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
+import {
+  buildTestUserIdentity,
+  buildTestWindowsUser,
+  HOST_PATH_RULES,
+} from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
@@ -39,14 +41,16 @@ async function createMise(params: { folder: string; mode?: number }): Promise<st
   });
 }
 
-describeAwaitingWin32Platform('findTrustedTool', () => {
-  test('returns the real path of a trusted binary', async () => {
+// Trust rests on the POSIX owner and mode of a binary; a Windows user trusts none, as the last
+// suite shows.
+describe('findTrustedTool', () => {
+  testOnPosix('returns the real path of a trusted binary', async () => {
     const path = await createMise({ folder: 'trusted' });
 
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(path)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -68,7 +72,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(link)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -85,7 +89,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(path)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -141,7 +145,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
         buildAbsoluteLocation(join(fixtureRoot.rootDir, 'missing', 'mise')),
         buildAbsoluteLocation(link),
       ],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -162,7 +166,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
         buildAbsoluteLocation(trusted),
         buildAbsoluteLocation(later),
       ],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -184,7 +188,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
         buildAbsoluteLocation(notExecutable),
         buildAbsoluteLocation(writable),
       ],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -199,7 +203,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     });
   });
 
-  test('resolves a home location against the home folder', async () => {
+  testOnPosix('resolves a home location against the home folder', async () => {
     const path = await createFakeTool({
       folder: join(fixtureRoot.homeDir, '.local', 'bin'),
       name: 'mise',
@@ -209,7 +213,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [{ kind: 'path', root: 'home', path: '.local/bin/mise' }],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -220,7 +224,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     });
   });
 
-  test('finds the Dart binary of a Flutter SDK that an active root names', async () => {
+  testOnPosix('finds the Dart binary of a Flutter SDK that an active root names', async () => {
     const dart = await createActiveFlutterSdk({
       folder: 'flutter',
       activeRootFileName: 'abcdef',
@@ -230,7 +234,7 @@ describeAwaitingWin32Platform('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -273,8 +277,8 @@ async function createActiveFlutterSdk(params: {
   return dart;
 }
 
-describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => {
-  test('skips a Dart older than 3.11 whose active root sorts first', async () => {
+describe('findTrustedTool with the version of dart', () => {
+  testOnPosix('skips a Dart older than 3.11 whose active root sorts first', async () => {
     await createActiveFlutterSdk({
       folder: 'flutter-old',
       activeRootFileName: 'aa',
@@ -289,7 +293,7 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -300,7 +304,7 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
     });
   });
 
-  test('fails as not found when only a Dart older than 3.11 exists', async () => {
+  testOnPosix('fails as not found when only a Dart older than 3.11 exists', async () => {
     await createActiveFlutterSdk({
       folder: 'flutter-old',
       activeRootFileName: 'aa',
@@ -310,7 +314,7 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -339,7 +343,7 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }, buildAbsoluteLocation(link)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -351,7 +355,7 @@ describeAwaitingWin32Platform('findTrustedTool with the version of dart', () => 
   });
 });
 
-describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", () => {
+describe("findTrustedTool with Flutter's wrapper of dart", () => {
   /**
    * A made-up Flutter root with its `bin/dart` wrapper and `bin/flutter` script, the SDK binary
    * when `sdkDartMode` is given, and a link to the wrapper at a fixed location, which it returns.
@@ -398,7 +402,7 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -419,7 +423,7 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -436,7 +440,7 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -450,7 +454,7 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: HOST_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -465,28 +469,31 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     });
   });
 
-  test('keeps the `bin/dart` of a Dart SDK, which has no Flutter script beside it', async () => {
-    const dart = await createFakeTool({
-      folder: join(fixtureRoot.rootDir, 'dart-sdk', 'bin'),
-      name: 'dart',
-      body: 'process.exit(0);',
-    });
+  testOnPosix(
+    'keeps the `bin/dart` of a Dart SDK, which has no Flutter script beside it',
+    async () => {
+      const dart = await createFakeTool({
+        folder: join(fixtureRoot.rootDir, 'dart-sdk', 'bin'),
+        name: 'dart',
+        body: 'process.exit(0);',
+      });
 
-    await writeDartVersionFile({ dartPath: dart, version: '3.11.0' });
+      await writeDartVersionFile({ dartPath: dart, version: '3.11.0' });
 
-    const found = await findTrustedTool({
-      name: 'dart',
-      locations: [buildAbsoluteLocation(dart)],
-      pathRules: DARWIN_PATH_RULES,
-      homeDir: fixtureRoot.homeDir,
-      user: user,
-    });
+      const found = await findTrustedTool({
+        name: 'dart',
+        locations: [buildAbsoluteLocation(dart)],
+        pathRules: HOST_PATH_RULES,
+        homeDir: fixtureRoot.homeDir,
+        user: user,
+      });
 
-    expect(found).toEqual({
-      kind: 'succeeded',
-      value: { name: 'dart', path: await realpath(dart) },
-    });
-  });
+      expect(found).toEqual({
+        kind: 'succeeded',
+        value: { name: 'dart', path: await realpath(dart) },
+      });
+    },
+  );
 
   testOnPosix('loadTrustedTool reads the wrapper the same way', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
@@ -494,6 +501,26 @@ describeAwaitingWin32Platform("findTrustedTool with Flutter's wrapper of dart", 
     expect(await loadTrustedTool({ name: 'dart', path: layout.linkPath, user: user })).toEqual({
       kind: 'succeeded',
       value: { name: 'dart', path: await realpath(layout.sdkDartPath) },
+    });
+  });
+});
+
+describe('findTrustedTool for a Windows user', () => {
+  test('trusts no binary, and names the first one it found with its owner unchecked', async () => {
+    const path = await createMise({ folder: 'first' });
+    const later = await createMise({ folder: 'second' });
+
+    const found = await findTrustedTool({
+      name: 'mise',
+      locations: [buildAbsoluteLocation(path), buildAbsoluteLocation(later)],
+      pathRules: HOST_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+      user: buildTestWindowsUser({ sidText: 'S-1-5-21-1-2-3-1001' }),
+    });
+
+    expect(found).toEqual({
+      kind: 'failed',
+      failure: { reason: 'untrusted', path: await realpath(path), detail: 'ownerUnchecked' },
     });
   });
 });

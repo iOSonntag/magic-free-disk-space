@@ -1,6 +1,5 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestEvictCandidate,
   buildTestEvictTarget,
@@ -11,7 +10,7 @@ const ENVIRONMENT = buildTestMacEnvironment();
 
 const CLOUD_DOCS = `${TEST_MAC_HOME_DIR}/Library/Mobile Documents/com~apple~CloudDocs`;
 
-describeAwaitingWin32Platform('validateRemoval of an evict', () => {
+describe('validateRemoval of an evict', () => {
   test('approves an evict of files inside iCloud Drive', () => {
     const candidate = buildTestEvictCandidate({
       folderPath: `${CLOUD_DOCS}/Projects`,

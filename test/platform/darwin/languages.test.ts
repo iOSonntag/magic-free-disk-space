@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { LANGUAGE_ENTRIES } from '../../../src/platform/darwin/catalog/languages.js';
 import { SCAN_LIMITS } from '../../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import { buildRiskAndPathById } from './catalogPins.js';
 import { listCatalogOffers, withScannedCatalogHome } from './catalogScan.js';
 
@@ -38,7 +37,8 @@ describe('LANGUAGE_ENTRIES', () => {
   });
 });
 
-describeAwaitingWin32Platform('the scan of the language entries', () => {
+// Only macOS scans its catalog; Windows scans its own.
+describe.skipIf(process.platform !== 'darwin')('the scan of the language entries', () => {
   test("offers Deno's downloads and compiled code, never the data its scripts stored", async () => {
     await withScannedCatalogHome({
       entryIds: ['deno-cache', 'user-caches'],

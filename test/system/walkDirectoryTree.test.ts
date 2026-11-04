@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import type { EntryEvictionCheck, EvictionCandidate } from '../../src/system/entryReads.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
@@ -57,7 +56,10 @@ async function collectEntries(params: {
       evictedEntries.push(entry);
     },
   });
-  const relativePaths = entries.map((entry) => relative(treeRoot, entry.path)).toSorted();
+  // The paths compare with `/` on every host, as the fixtures write them.
+  const relativePaths = entries
+    .map((entry) => relative(treeRoot, entry.path).split(sep).join('/'))
+    .toSorted();
 
   return {
     walkEnd: walkEnd,
@@ -68,7 +70,7 @@ async function collectEntries(params: {
   };
 }
 
-describeAwaitingWin32Platform('walkDirectoryTree', () => {
+describe('walkDirectoryTree', () => {
   test('visits an evicted folder but never reads it, and reports it as skipped', async () => {
     const evictedPath = join(treeRoot, 'b');
 

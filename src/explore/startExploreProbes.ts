@@ -417,6 +417,7 @@ function buildCommandProbe<T>(params: {
         probe: params.definition,
         tool: run.tool,
         environment: run.environment,
+        platform: run.platform,
         deadlineMs: run.deadlineMs,
       });
 

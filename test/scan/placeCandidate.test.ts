@@ -1,13 +1,13 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import type { CandidatePlace } from '../../src/scan/placeCandidate.js';
 import { compareCandidatePlaces, placeCandidate } from '../../src/scan/placeCandidate.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
 
 const RISKS: Risk[] = ['safe', 'review', 'careful', 'never'];
 
-describeAwaitingWin32Platform('placeCandidate', () => {
+describe('placeCandidate', () => {
   test('groups a matched item by its risk, a never item under review', () => {
     expect(
       RISKS.map((risk) => placeCandidate(buildTestCandidate({ path: '/fixture/a', risk: risk }))),
@@ -23,7 +23,11 @@ describeAwaitingWin32Platform('placeCandidate', () => {
     expect(
       RISKS.map((risk) =>
         placeCandidate(
-          buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0', risk: risk }),
+          buildTestToolCandidate({
+            home: buildExampleHome({ text: '/fixture' }),
+            version: '20.1.0',
+            risk: risk,
+          }),
         ),
       ),
     ).toEqual([
@@ -47,7 +51,7 @@ describeAwaitingWin32Platform('placeCandidate', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareCandidatePlaces', () => {
+describe('compareCandidatePlaces', () => {
   test('orders by section, then safe, review, and careful within one, Explore last', () => {
     const places: CandidatePlace[] = [
       { kind: 'explore', section: 'caches', group: 'review' },

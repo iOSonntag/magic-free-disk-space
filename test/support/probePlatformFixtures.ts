@@ -1,18 +1,18 @@
 import type { ExploreProbePlatform } from '../../src/explore/exploreProbe.js';
 import { buildExploreProbePlatform } from '../../src/explore/exploreProbe.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { HOST_PLATFORM } from './platformFixtures.js';
 
 /**
- * The macOS facts a probe reads, without a Homebrew prefix, so no test reads the real ones; a
+ * The host's facts a probe reads, without a Homebrew prefix, so no test reads the real ones; a
  * test of the prefixes passes its fixture prefixes.
  */
 export function buildTestProbePlatform(
   overrides: Partial<ExploreProbePlatform> = {},
 ): ExploreProbePlatform {
   const probePlatform = buildExploreProbePlatform({
-    explore: darwinPlatform.explore,
-    tools: { ...darwinPlatform.tools, homebrewPrefixPaths: [] },
-    system: darwinPlatform.system,
+    explore: HOST_PLATFORM.explore,
+    tools: { ...HOST_PLATFORM.tools, homebrewPrefixPaths: [] },
+    system: HOST_PLATFORM.system,
   });
 
   return { ...probePlatform, ...overrides };

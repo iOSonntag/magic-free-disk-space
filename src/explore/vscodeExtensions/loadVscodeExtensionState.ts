@@ -1,9 +1,10 @@
-import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { basename, dirname, posix, win32 } from 'node:path';
 import type { CatalogLocation } from '../../catalog/catalog.js';
 import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
@@ -20,6 +21,9 @@ const EXTENSIONS_FOLDER_NAMES = ['.vscode', 'extensions'];
 const REGISTRY_FILE_NAME = 'extensions.json';
 
 const OBSOLETE_FILE_NAME = '.obsolete';
+
+/** A `file:` URI path that starts at a drive, such as `/c:/Users`. */
+const URI_DRIVE_PATH_PATTERN = /^\/[A-Za-z]:\//;
 
 /**
  * VS Code's own parse of an extension folder name (`ExtensionKeyRegex`): `<publisher>.<name>`, a
@@ -234,6 +238,7 @@ async function loadListedFolderNames(params: {
   }
 
   const folderPaths = await loadRegistriesFolderPaths({
+    pathRules: params.pathRules,
     registries: registries.value,
     extensionsPath: params.extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
@@ -272,15 +277,17 @@ async function loadListedFolderNames(params: {
 
 /** The folder paths of every registry together; `null` when one leaves the probe unjudged. */
 async function loadRegistriesFolderPaths(params: {
+  pathRules: PathRules;
   registries: VscodeRegistry[];
   extensionsPath: AbsolutePath;
   privacyDenialCode: string | null;
-}): Promise<Result<string[] | null, ExploreFileUnreadable>> {
-  const folderPaths: string[] = [];
+}): Promise<Result<AbsolutePath[] | null, ExploreFileUnreadable>> {
+  const folderPaths: AbsolutePath[] = [];
   let isEveryRegistryJudged = true;
 
   for (const registry of params.registries) {
     const registryFolderPaths = await loadRegistryFolderPaths({
+      pathRules: params.pathRules,
       registry: registry,
       extensionsPath: params.extensionsPath,
       privacyDenialCode: params.privacyDenialCode,
@@ -366,10 +373,11 @@ async function listRegistries(params: {
 
 /** The resolved folder paths the registry lists; `null` when it leaves the folders unjudged. */
 async function loadRegistryFolderPaths(params: {
+  pathRules: PathRules;
   registry: VscodeRegistry;
   extensionsPath: AbsolutePath;
   privacyDenialCode: string | null;
-}): Promise<Result<string[] | null, ExploreFileUnreadable>> {
+}): Promise<Result<AbsolutePath[] | null, ExploreFileUnreadable>> {
   const read = await loadExploreFileText({
     path: params.registry.path,
     privacyDenialCode: params.privacyDenialCode,
@@ -388,6 +396,7 @@ async function loadRegistryFolderPaths(params: {
       return {
         kind: 'succeeded',
         value: parseRegistryFolderPaths({
+          pathRules: params.pathRules,
           text: read.value.text,
           extensionsPath: params.extensionsPath,
         }),
@@ -395,21 +404,26 @@ async function loadRegistryFolderPaths(params: {
   }
 }
 
-/** `null` when the registry is no list or an entry names no folder, so it never reads as empty. */
-function parseRegistryFolderPaths(params: {
+/**
+ * The folder paths an `extensions.json` lists, each under `pathRules`; `null` when the registry is
+ * no list or an entry names no folder, so it never reads as empty.
+ */
+export function parseRegistryFolderPaths(params: {
+  pathRules: PathRules;
   text: string;
   extensionsPath: AbsolutePath;
-}): string[] | null {
+}): AbsolutePath[] | null {
   const registry = parseJsonValue({ text: params.text });
 
   if (registry.kind === 'failed' || !Array.isArray(registry.value)) {
     return null;
   }
 
-  const folderPaths: string[] = [];
+  const folderPaths: AbsolutePath[] = [];
 
   for (const entry of registry.value) {
     const folderPath = parseRegistryEntryFolderPath({
+      pathRules: params.pathRules,
       entry: entry,
       extensionsPath: params.extensionsPath,
     });
@@ -432,9 +446,10 @@ function parseRegistryFolderPaths(params: {
  * VS Code skips one whose only location is a string.
  */
 function parseRegistryEntryFolderPath(params: {
+  pathRules: PathRules;
   entry: unknown;
   extensionsPath: AbsolutePath;
-}): Result<string | null, string> {
+}): Result<AbsolutePath | null, string> {
   if (!isJsonObject(params.entry)) {
     return { kind: 'failed', failure: 'an entry is no object' };
   }
@@ -442,7 +457,13 @@ function parseRegistryEntryFolderPath(params: {
   const relativeLocation = params.entry.relativeLocation;
 
   if (typeof relativeLocation === 'string' && relativeLocation !== '') {
-    return { kind: 'succeeded', value: resolve(params.extensionsPath, relativeLocation) };
+    return parseFolderPath({
+      pathRules: params.pathRules,
+      text: resolveUnderRules({
+        pathRules: params.pathRules,
+        paths: [params.extensionsPath, relativeLocation],
+      }),
+    });
   }
 
   const location = params.entry.location;
@@ -451,11 +472,52 @@ function parseRegistryEntryFolderPath(params: {
     return { kind: 'succeeded', value: null };
   }
 
-  if (!isJsonObject(location) || typeof location.path !== 'string' || !isAbsolute(location.path)) {
+  if (!isJsonObject(location) || typeof location.path !== 'string') {
     return { kind: 'failed', failure: 'an entry names no folder' };
   }
 
-  return { kind: 'succeeded', value: resolve(location.path) };
+  return parseFolderPath({
+    pathRules: params.pathRules,
+    text: parseLocationUriPath({ pathRules: params.pathRules, uriPath: location.path }),
+  });
+}
+
+/**
+ * The file path a `file:` URI path names. A URI path always starts at `/`, so on Windows it holds
+ * the drive after it, as `/c:/Users/…`; that slash goes, and `parseAbsolutePath` turns the rest
+ * into `C:\Users\…`. `null` for a path that is not absolute.
+ */
+function parseLocationUriPath(params: { pathRules: PathRules; uriPath: string }): string | null {
+  switch (params.pathRules.rootForm) {
+    case 'posix':
+      return posix.isAbsolute(params.uriPath) ? posix.resolve(params.uriPath) : null;
+    case 'win32':
+      return URI_DRIVE_PATH_PATTERN.test(params.uriPath) ? params.uriPath.slice(1) : null;
+  }
+}
+
+/** Resolves `paths` as the platform's path rules resolve them, never against the host's. */
+function resolveUnderRules(params: { pathRules: PathRules; paths: string[] }): string {
+  switch (params.pathRules.rootForm) {
+    case 'posix':
+      return posix.resolve(...params.paths);
+    case 'win32':
+      return win32.resolve(...params.paths);
+  }
+}
+
+function parseFolderPath(params: {
+  pathRules: PathRules;
+  text: string | null;
+}): Result<AbsolutePath, string> {
+  const folderPath =
+    params.text === null ? null : parseAbsolutePath({ rules: params.pathRules, text: params.text });
+
+  if (folderPath === null || folderPath.kind === 'failed') {
+    return { kind: 'failed', failure: 'an entry names no folder' };
+  }
+
+  return folderPath;
 }
 
 /**

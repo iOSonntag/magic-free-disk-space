@@ -1,11 +1,9 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { PathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import type { EntryReads } from '../../src/system/entryReads.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestEntryReads, loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -15,6 +13,7 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const FAR_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
@@ -27,7 +26,7 @@ async function loadMeasurement(params: {
   return loadPathMeasurement({
     paths: params.paths,
     deadlineMs: params.deadlineMs ?? FAR_DEADLINE_MS,
-    entryReads: params.entryReads ?? darwinPlatform.system.entryReads,
+    entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
   });
 }
 
@@ -39,7 +38,7 @@ async function sumAllocatedBytes(paths: string[]): Promise<number> {
   return entryBytes.reduce((sum, bytes) => sum + bytes, 0);
 }
 
-describeAwaitingWin32Platform('loadPathMeasurement', () => {
+describe('loadPathMeasurement', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -318,7 +317,8 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
     expect(measurement.latestModifiedMs).toBe(1_700_000_000_000);
   });
 
-  test('holds another volume when any path does, a missing one counting false', async () => {
+  // `/dev` is a volume of its own on a POSIX system alone.
+  testOnPosix('holds another volume when any path does, a missing one counting false', async () => {
     const filePath = join(fixtureRoot.homeDir, 'example.sha256');
     const missingPath = join(fixtureRoot.homeDir, 'gone');
 
@@ -332,7 +332,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
   });
 });
 
-describeAwaitingWin32Platform('getMeasuredFreedBytes', () => {
+describe('getMeasuredFreedBytes', () => {
   test('is the drop from the size before to the size after', () => {
     expect(
       getMeasuredFreedBytes({

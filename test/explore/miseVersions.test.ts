@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildMiseVersionFindings } from '../../src/explore/miseVersions/buildMiseVersionFindings.js';
 import {
   parseMisePrunableVersions,
@@ -7,7 +7,6 @@ import {
 } from '../../src/explore/miseVersions/parseMisePrunableVersions.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
 import {
   buildMiseInstallPath,
@@ -27,7 +26,7 @@ const nodeInstallPath = buildMiseInstallPath({
   version: '20.1.0',
 });
 
-describeAwaitingWin32Platform('parseMiseToolName and parseMiseToolVersion', () => {
+describe('parseMiseToolName and parseMiseToolVersion', () => {
   test('pass the names and versions mise prints', () => {
     expect(parseMiseToolName({ text: 'aqua:cli/cli' })).toEqual({
       kind: 'succeeded',
@@ -44,7 +43,7 @@ describeAwaitingWin32Platform('parseMiseToolName and parseMiseToolVersion', () =
   });
 });
 
-describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
+describe('parseMisePrunableVersions', () => {
   test('reads each prunable version with its install path', () => {
     expect(
       parseMisePrunableVersions({
@@ -100,7 +99,7 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildMiseVersionFindings', () => {
+describe('buildMiseVersionFindings', () => {
   test('offers each version with its install path shown with ~', () => {
     const findings = buildMiseVersionFindings({
       tool: tool,

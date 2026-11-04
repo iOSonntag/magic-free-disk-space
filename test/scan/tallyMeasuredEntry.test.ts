@@ -1,11 +1,10 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { EntryTallyTotals, MeasuredEntry } from '../../src/scan/tallyMeasuredEntry.js';
 import {
   createEntryTally,
   getEntryTallyTotals,
   tallyMeasuredEntry,
 } from '../../src/scan/tallyMeasuredEntry.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 
 const DEV = 16_777_232n;
 
@@ -39,7 +38,7 @@ function tallyOfferPaths(paths: MeasuredEntry[][]): EntryTallyTotals {
   return getEntryTallyTotals(tally);
 }
 
-describeAwaitingWin32Platform('tallyMeasuredEntry', () => {
+describe('tallyMeasuredEntry', () => {
   test('counts a single-link file by its private size', () => {
     const totals = tallyOfferPaths([
       [buildFileEntry({ ino: 1n, linkCount: 1, allocatedBytes: 1_048_576, privateBytes: 16_384 })],

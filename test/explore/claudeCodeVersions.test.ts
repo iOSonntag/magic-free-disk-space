@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -12,9 +12,9 @@ import type {
 import { recheckClaudeCodeVersionUnit } from '../../src/explore/claudeCodeVersions/recheckClaudeCodeVersionUnit.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type { ExplorePathUnitClaudeCodeVersion } from '../../src/explore/exploreUnit.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   buildTestProbeRun,
@@ -86,7 +86,7 @@ function buildValueState(params: {
 
 const VALUE_VERSIONS = ['2.0.1', '2.0.9', '2.1.0', '2.1.3', '2.1.4', '2.1.30'];
 
-describeAwaitingWin32Platform('decideClaudeCodeVersionOffers', () => {
+describe('decideClaudeCodeVersionOffers', () => {
   test("offers the versions past the two newest, newest first, but the launcher's", () => {
     expect(
       decideClaudeCodeVersionOffers({
@@ -115,7 +115,7 @@ describeAwaitingWin32Platform('decideClaudeCodeVersionOffers', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareClaudeCodeVersionUnit', () => {
+describe('compareClaudeCodeVersionUnit', () => {
   const unit: ExplorePathUnitClaudeCodeVersion = {
     kind: 'claudeCodeVersion',
     version: '2.1.3',
@@ -157,66 +157,77 @@ describeAwaitingWin32Platform('compareClaudeCodeVersionUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadClaudeCodeVersionFindings', () => {
-  test("keeps the two newest versions and the launcher's, and offers the others as safe", async () => {
-    await withClaudeHome({
-      run: async (fixture) => {
-        await createVersions(fixture);
+// A test that links the launcher runs on POSIX only, as the launcher is a symbolic link.
+describe('loadClaudeCodeVersionFindings', () => {
+  testOnPosix(
+    "keeps the two newest versions and the launcher's, and offers the others as safe",
+    async () => {
+      await withClaudeHome({
+        run: async (fixture) => {
+          await createVersions(fixture);
 
-        const probed = getProbeFindings(
-          await loadClaudeCodeVersionFindings(
-            buildTestProbeRun({ environment: fixture.environment }),
-          ),
-        );
-        const units = listUnitsOfKind({ findings: probed, kind: 'claudeCodeVersion' });
+          const probed = getProbeFindings(
+            await loadClaudeCodeVersionFindings(
+              buildTestProbeRun({ environment: fixture.environment }),
+            ),
+          );
+          const units = listUnitsOfKind({ findings: probed, kind: 'claudeCodeVersion' });
 
-        expect(probed.isComplete).toBe(true);
-        expect(units.map((unit) => unit.version).toSorted()).toEqual(['2.0.1', '2.1.0', '2.1.3']);
-        expect(units.map((unit): string => unit.folderPath).toSorted()).toEqual(
-          ['2.0.1', '2.1.0', '2.1.3'].map((version) => join(fixture.versionsPath, version)),
-        );
-        expect(probed.findings.map((finding) => [finding.risk, finding.activity])).toEqual([
-          ['safe', 'idle'],
-          ['safe', 'idle'],
-          ['safe', 'idle'],
-        ]);
+          expect(probed.isComplete).toBe(true);
+          expect(units.map((unit) => unit.version).toSorted()).toEqual(['2.0.1', '2.1.0', '2.1.3']);
+          expect(units.map((unit): string => unit.folderPath).toSorted()).toEqual(
+            ['2.0.1', '2.1.0', '2.1.3'].map((version) => join(fixture.versionsPath, version)),
+          );
+          expect(probed.findings.map((finding) => [finding.risk, finding.activity])).toEqual([
+            ['safe', 'idle'],
+            ['safe', 'idle'],
+            ['safe', 'idle'],
+          ]);
 
-        const busy = getProbeFindings(
-          await loadClaudeCodeVersionFindings(
-            buildTestProbeRun({
-              environment: fixture.environment,
-              processCommands: ['claude --continue'],
-            }),
-          ),
-        );
+          const busy = getProbeFindings(
+            await loadClaudeCodeVersionFindings(
+              buildTestProbeRun({
+                environment: fixture.environment,
+                processCommands: ['claude --continue'],
+              }),
+            ),
+          );
 
-        expect(busy.findings.map((finding) => finding.activity)).toEqual(['busy', 'busy', 'busy']);
-      },
-    });
-  });
+          expect(busy.findings.map((finding) => finding.activity)).toEqual([
+            'busy',
+            'busy',
+            'busy',
+          ]);
+        },
+      });
+    },
+  );
 
-  test('offers nothing and is incomplete without the launcher, or with one that leads elsewhere', async () => {
-    await withClaudeHome({
-      run: async (fixture) => {
-        await createVersions(fixture);
-        await rm(fixture.launcherPath);
+  testOnPosix(
+    'offers nothing and is incomplete without the launcher, or with one that leads elsewhere',
+    async () => {
+      await withClaudeHome({
+        run: async (fixture) => {
+          await createVersions(fixture);
+          await rm(fixture.launcherPath);
 
-        const run = buildTestProbeRun({ environment: fixture.environment });
+          const run = buildTestProbeRun({ environment: fixture.environment });
 
-        expect(await loadClaudeCodeVersionFindings(run)).toEqual({
-          kind: 'succeeded',
-          value: { findings: [], isComplete: false },
-        });
+          expect(await loadClaudeCodeVersionFindings(run)).toEqual({
+            kind: 'succeeded',
+            value: { findings: [], isComplete: false },
+          });
 
-        await writeFixtureTextFile({ path: fixture.launcherPath, text: 'custom launcher' });
+          await writeFixtureTextFile({ path: fixture.launcherPath, text: 'custom launcher' });
 
-        expect(await loadClaudeCodeVersionFindings(run)).toEqual({
-          kind: 'succeeded',
-          value: { findings: [], isComplete: false },
-        });
-      },
-    });
-  });
+          expect(await loadClaudeCodeVersionFindings(run)).toEqual({
+            kind: 'succeeded',
+            value: { findings: [], isComplete: false },
+          });
+        },
+      });
+    },
+  );
 
   test('finds nothing and is complete without the versions folder', async () => {
     await withClaudeHome({
@@ -231,7 +242,8 @@ describeAwaitingWin32Platform('loadClaudeCodeVersionFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckClaudeCodeVersionUnit', () => {
+// The launcher is a symbolic link.
+describeOnPosix('recheckClaudeCodeVersionUnit', () => {
   test('is unchanged while the version is still old, and changed once the launcher runs it', async () => {
     await withClaudeHome({
       run: async (fixture) => {

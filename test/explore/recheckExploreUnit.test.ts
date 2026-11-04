@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -15,7 +15,6 @@ import {
 } from '../../src/explore/recheckExploreUnit.js';
 import type { SimulatorDevice } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -27,6 +26,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { ProbeCommandName } from './probeFakeTools.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
@@ -99,7 +99,7 @@ const miseUnit: ExploreToolUnitMiseVersion = {
   installPath: nodeInstallPath,
 };
 
-describeAwaitingWin32Platform('compareSimulatorDevice', () => {
+describe('compareSimulatorDevice', () => {
   test('is unchanged while the device is still listed and offered', () => {
     expect(
       compareSimulatorDevice({
@@ -152,7 +152,7 @@ describeAwaitingWin32Platform('compareSimulatorDevice', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareDartPubCache', () => {
+describe('compareDartPubCache', () => {
   test('is unchanged for the same set or a subset, even when ps failed', () => {
     expect(
       compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths, processCommands: null }),
@@ -181,7 +181,7 @@ describeAwaitingWin32Platform('compareDartPubCache', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareMiseVersion', () => {
+describe('compareMiseVersion', () => {
   test('is unchanged while the version is still prunable at the same path, even when ps failed', () => {
     expect(
       compareMiseVersion({
@@ -219,7 +219,8 @@ describeAwaitingWin32Platform('compareMiseVersion', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckExploreUnit', () => {
+// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
+describeOnPosix('recheckExploreUnit', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

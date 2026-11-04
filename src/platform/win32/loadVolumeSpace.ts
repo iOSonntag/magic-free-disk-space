@@ -1,0 +1,24 @@
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { VolumeSpace } from '../../system/volumeSpace.js';
+import { WIN32_PATH_RULES } from './loadEnvironment.js';
+import { loadDiskFreeSpace } from './win32Api.js';
+
+/**
+ * The capacity and the available space of the volume that holds the folder at `path`, as far as
+ * the disk quota lets the user use them. `null` when the volume cannot be read. Never throws.
+ */
+export async function loadVolumeSpace(path: string): Promise<VolumeSpace | null> {
+  const folderPath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: path });
+
+  if (folderPath.kind === 'failed') {
+    return null;
+  }
+
+  const space = loadDiskFreeSpace({ folderPath: folderPath.value });
+
+  if (space.kind === 'failed') {
+    return null;
+  }
+
+  return { capacityBytes: space.value.totalBytes, availableBytes: space.value.availableBytes };
+}

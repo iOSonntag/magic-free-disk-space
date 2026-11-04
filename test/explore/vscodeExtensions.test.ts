@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../../src/explore/exploreUnit.js';
 import { loadVscodeExtensionFindings } from '../../src/explore/vscodeExtensions/loadVscodeExtensionFindings.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -14,6 +14,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbeRun, getProbeFindings } from '../support/probeRunFixtures.js';
 import {
@@ -30,7 +31,7 @@ import {
   LISTED_OBSOLETE_FOLDER_NAME,
   OBSOLETE_FOLDER_NAME,
   OLDER_FOLDER_NAME,
-  VSCODE_APP_COMMAND,
+  VSCODE_HOST_PROCESS,
 } from './vscodeExtensionFixtures.js';
 
 const LINKED_OLDER_FOLDER_NAME = 'pub.ext-1.0.0';
@@ -39,12 +40,12 @@ const LINKED_NEWER_FOLDER_NAME = 'pub.ext-1.1.0';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
-let extensionsPath: string;
+let extensionsPath: AbsolutePath;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  extensionsPath = buildVscodeExtensionsPath({ homeDir: environment.homeDir });
+  extensionsPath = buildVscodeExtensionsPath({ home: environment });
 });
 
 afterEach(async () => {
@@ -67,15 +68,18 @@ async function loadFindings(processCommands: string[] | null = []): Promise<Expl
 async function createLinkedVscodeInstallation(
   params: { profileExtensionsPath: string | null } = { profileExtensionsPath: null },
 ): Promise<void> {
-  const profileExtensionsPath = params.profileExtensionsPath ?? (await realpath(extensionsPath));
+  const profileExtensionsPath = buildTestHostPath({
+    text: params.profileExtensionsPath ?? (await realpath(extensionsPath)),
+  });
 
   await createVscodeExtensionFolders({
-    homeDir: environment.homeDir,
+    home: environment,
     folderNames: [LINKED_OLDER_FOLDER_NAME, LINKED_NEWER_FOLDER_NAME],
   });
   await writeFixtureTextFile({
     path: join(extensionsPath, 'extensions.json'),
     text: buildVscodeRegistryText({
+      pathRules: environment.pathRules,
       extensionsPath: extensionsPath,
       folderNames: [LINKED_NEWER_FOLDER_NAME],
       form: 'current',
@@ -83,11 +87,12 @@ async function createLinkedVscodeInstallation(
   });
   await writeFixtureTextFile({
     path: join(
-      buildVscodeProfilesPath({ homeDir: environment.homeDir }),
+      buildVscodeProfilesPath({ environment: environment }),
       FIXTURE_PROFILE_ID,
       'extensions.json',
     ),
     text: buildVscodeRegistryText({
+      pathRules: environment.pathRules,
       extensionsPath: profileExtensionsPath,
       folderNames: [LINKED_OLDER_FOLDER_NAME],
       form: 'locationOnly',
@@ -99,16 +104,16 @@ function listFolderPaths(findings: ExploreFinding[]): string[] {
   return findings.map((finding) => finding.displayPath);
 }
 
-describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
+describe('loadVscodeExtensionFindings', () => {
   test('offers the obsolete folder and the older version that no registry lists', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
 
     const probed = await loadFindings();
 
     expect(probed.isComplete).toBe(true);
     expect(probed.findings).toEqual([
       {
-        unit: buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
+        unit: buildObsoleteVscodeUnit({ home: environment }),
         title: 'VS Code extension example.alpha 1.0.0',
         explanation:
           'An extension folder VS Code marked for removal after an uninstall or an update.',
@@ -122,7 +127,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
         activity: 'idle',
       },
       {
-        unit: buildOlderVscodeUnit({ homeDir: environment.homeDir }),
+        unit: buildOlderVscodeUnit({ home: environment }),
         title: 'VS Code extension example.beta 2.0.0',
         explanation: 'An older version of an extension, left beside a newer version of it.',
         regeneration: 'VS Code downloads it again only if you install this version again.',
@@ -138,7 +143,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
   });
 
   test('offers a folder that is both obsolete and outdated as obsolete', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await writeFixtureTextFile({
       path: join(extensionsPath, '.obsolete'),
       text: buildVscodeObsoleteText({ folderNames: [OLDER_FOLDER_NAME] }),
@@ -147,15 +152,16 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
     const probed = await loadFindings();
 
     expect(probed.findings.map((finding) => finding.unit)).toEqual([
-      { ...buildOlderVscodeUnit({ homeDir: environment.homeDir }), reason: 'obsolete' },
+      { ...buildOlderVscodeUnit({ home: environment }), reason: 'obsolete' },
     ]);
   });
 
   test('never offers a folder a registry lists, matched without case', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await writeFixtureTextFile({
       path: join(extensionsPath, 'extensions.json'),
       text: buildVscodeRegistryText({
+        pathRules: environment.pathRules,
         extensionsPath: extensionsPath,
         folderNames: [DEFAULT_LISTED_FOLDER_NAME, OBSOLETE_FOLDER_NAME.toUpperCase()],
         form: 'current',
@@ -168,7 +174,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
   });
 
   test('takes an entry whose only location is a string as listing nothing, as VS Code does', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await writeFixtureTextFile({
       path: join(extensionsPath, 'extensions.json'),
       text: JSON.stringify([
@@ -183,9 +189,9 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
   });
 
   test('marks an offer busy while VS Code runs and unknown when the processes are unknown', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
 
-    const running = await loadFindings([VSCODE_APP_COMMAND]);
+    const running = await loadFindings([VSCODE_HOST_PROCESS]);
     const unknown = await loadFindings(null);
 
     expect(running.findings.map((finding) => finding.activity)).toEqual(['busy', 'busy']);
@@ -193,7 +199,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
   });
 
   test('ignores a file and a name that is no extension folder', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await writeFixtureTextFile({
       path: join(extensionsPath, 'example.alpha-0.1.0'),
       text: 'a file',
@@ -235,21 +241,24 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
     },
   );
 
-  test('never offers a version a profile lists through a second link to the extensions folder', async () => {
-    const realExtensionsPath = join(environment.homeDir, 'real-vscode-extensions');
-    const secondLinkPath = join(environment.homeDir, 'second-vscode-extensions');
+  testOnPosix(
+    'never offers a version a profile lists through a second link to the extensions folder',
+    async () => {
+      const realExtensionsPath = join(environment.homeDir, 'real-vscode-extensions');
+      const secondLinkPath = join(environment.homeDir, 'second-vscode-extensions');
 
-    await createFixtureDirectory({ path: realExtensionsPath });
-    await createFixtureDirectory({ path: join(environment.homeDir, '.vscode') });
-    await symlink(realExtensionsPath, extensionsPath);
-    await symlink(realExtensionsPath, secondLinkPath);
-    await createLinkedVscodeInstallation({ profileExtensionsPath: secondLinkPath });
+      await createFixtureDirectory({ path: realExtensionsPath });
+      await createFixtureDirectory({ path: join(environment.homeDir, '.vscode') });
+      await symlink(realExtensionsPath, extensionsPath);
+      await symlink(realExtensionsPath, secondLinkPath);
+      await createLinkedVscodeInstallation({ profileExtensionsPath: secondLinkPath });
 
-    expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
-  });
+      expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
+    },
+  );
 
-  test('offers a linked extension folder, which the scan then skips as a link', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+  testOnPosix('offers a linked extension folder, which the scan then skips as a link', async () => {
+    await createVscodeInstallation({ environment: environment });
     await symlink(
       join(extensionsPath, DEFAULT_LISTED_FOLDER_NAME),
       join(extensionsPath, 'example.epsilon-0.9.0'),
@@ -263,20 +272,20 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read finds', () => {
+describe('loadVscodeExtensionFindings by what each read finds', () => {
   test('judges no extensions folder as nothing installed', async () => {
     expect(await loadFindings()).toEqual({ findings: [], isComplete: true });
   });
 
   test('judges nothing without the default registry, never reading it as listing nothing', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await rm(join(extensionsPath, 'extensions.json'));
 
     expect(await loadFindings()).toEqual({ findings: [], isComplete: false });
   });
 
   test('judges nothing when the default registry does not parse or is unfit', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await writeFixtureTextFile({
       path: join(extensionsPath, 'extensions.json'),
       text: '{"not": "a list"}',
@@ -298,8 +307,8 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read fin
   });
 
   test('adds nothing for no profiles folder, a profile without a registry, or a stray file', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
-    await rm(buildVscodeProfilesPath({ homeDir: environment.homeDir }), { recursive: true });
+    await createVscodeInstallation({ environment: environment });
+    await rm(buildVscodeProfilesPath({ environment: environment }), { recursive: true });
 
     const withoutProfiles = await loadFindings();
 
@@ -310,7 +319,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read fin
       join(extensionsPath, LISTED_OBSOLETE_FOLDER_NAME),
     ]);
 
-    const profilesPath = buildVscodeProfilesPath({ homeDir: environment.homeDir });
+    const profilesPath = buildVscodeProfilesPath({ environment: environment });
 
     await createFixtureDirectory({ path: join(profilesPath, 'empty-profile') });
     await writeFixtureTextFile({ path: join(profilesPath, '.DS_Store'), text: 'stray' });
@@ -319,10 +328,10 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read fin
   });
 
   test("judges nothing when a profile's registry does not parse", async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await writeFixtureTextFile({
       path: join(
-        buildVscodeProfilesPath({ homeDir: environment.homeDir }),
+        buildVscodeProfilesPath({ environment: environment }),
         FIXTURE_PROFILE_ID,
         'extensions.json',
       ),
@@ -333,7 +342,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read fin
   });
 
   test('offers only older versions without .obsolete, and judges them all', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await rm(join(extensionsPath, '.obsolete'));
 
     const probed = await loadFindings();
@@ -343,7 +352,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read fin
   });
 
   test('still offers older versions when .obsolete does not parse, but not as complete', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await writeFixtureTextFile({ path: join(extensionsPath, '.obsolete'), text: '["no object"]' });
 
     const probed = await loadFindings();
@@ -353,7 +362,7 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read fin
   });
 
   testOnPosix('fails with the path of a read that was denied', async () => {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ environment: environment });
     await chmod(join(extensionsPath, 'extensions.json'), 0o000);
 
     expect(await loadVscodeExtensionFindings(buildRun([]))).toEqual({
@@ -366,32 +375,35 @@ describeAwaitingWin32Platform('loadVscodeExtensionFindings by what each read fin
     });
   });
 
-  test('fails with the path of an extensions folder or a profiles folder it cannot list', async () => {
-    const profilesPath = buildVscodeProfilesPath({ homeDir: environment.homeDir });
+  testOnPosix(
+    'fails with the path of an extensions folder or a profiles folder it cannot list',
+    async () => {
+      const profilesPath = buildVscodeProfilesPath({ environment: environment });
 
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+      await createVscodeInstallation({ environment: environment });
 
-    try {
-      await chmod(profilesPath, 0o000);
+      try {
+        await chmod(profilesPath, 0o000);
 
-      expect(await loadVscodeExtensionFindings(buildRun([]))).toMatchObject({
-        kind: 'failed',
-        failure: { reason: 'fileUnreadable', path: profilesPath },
-      });
+        expect(await loadVscodeExtensionFindings(buildRun([]))).toMatchObject({
+          kind: 'failed',
+          failure: { reason: 'fileUnreadable', path: profilesPath },
+        });
 
-      await chmod(profilesPath, 0o700);
-      await chmod(extensionsPath, 0o000);
+        await chmod(profilesPath, 0o700);
+        await chmod(extensionsPath, 0o000);
 
-      expect(await loadVscodeExtensionFindings(buildRun([]))).toMatchObject({
-        kind: 'failed',
-        failure: { reason: 'fileUnreadable', path: extensionsPath },
-      });
-    } finally {
-      // The fixture root is deleted after the test, which a folder nobody may list prevents.
-      await chmod(profilesPath, 0o700);
-      await chmod(extensionsPath, 0o700);
-    }
-  });
+        expect(await loadVscodeExtensionFindings(buildRun([]))).toMatchObject({
+          kind: 'failed',
+          failure: { reason: 'fileUnreadable', path: extensionsPath },
+        });
+      } finally {
+        // The fixture root is deleted after the test, which a folder nobody may list prevents.
+        await chmod(profilesPath, 0o700);
+        await chmod(extensionsPath, 0o700);
+      }
+    },
+  );
 
   test('offers no folder of an empty extensions folder', async () => {
     await createFixtureDirectory({ path: extensionsPath });

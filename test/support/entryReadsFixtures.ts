@@ -1,7 +1,7 @@
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import type { EntryEvictionCheck, EntryReads } from '../../src/system/entryReads.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
+import { HOST_PLATFORM } from './platformFixtures.js';
 
 /**
  * Entry reads that answer from the test: `privateBytes` as the private size of every file, `null`
@@ -29,14 +29,14 @@ export async function loadEntryAllocatedBytes(params: { path: string }): Promise
 }
 
 /**
- * What the scan measures at `paths` as one tally, each entry inside them counted, by the
+ * What the scan measures at `paths` as one tally, each entry inside them counted, by the host
  * platform's entry reads.
  */
 export async function loadMeasuredAllocatedBytes(params: { paths: string[] }): Promise<number> {
   const measurement = await loadPathMeasurement({
     paths: params.paths,
     deadlineMs: Date.now() + 60_000,
-    entryReads: darwinPlatform.system.entryReads,
+    entryReads: HOST_PLATFORM.system.entryReads,
   });
 
   return measurement.allocatedBytes;
