@@ -16,9 +16,13 @@ final class IdleState extends CleanerState {
 }
 
 final class ScanningState extends CleanerState {
-  const ScanningState({required this.progressMessage});
+  const ScanningState({required this.progressMessage, this.progress});
 
   final String progressMessage;
+
+  /// The bridge's latest progress, with the sections found so far; `null`
+  /// until its first.
+  final ProgressEvent? progress;
 }
 
 /// A state that holds a scan and the numbers selected of it.
@@ -55,9 +59,9 @@ final class DeletingState extends CleanerState {
 }
 
 final class DeletedState extends CleanerState {
-  const DeletedState({required this.lines});
+  const DeletedState({required this.result});
 
-  final List<String> lines;
+  final DeletedEvent result;
 }
 
 const String _deletionStoppedText =
@@ -95,8 +99,13 @@ class CleanerController extends ChangeNotifier {
     _setState(const ScanningState(progressMessage: 'Starting the scan…'));
     final ScanAnswer? answer = await _request(
       () => _bridge.scan(
-        onProgress: (String message) {
-          _setState(ScanningState(progressMessage: message));
+        onProgress: (ProgressEvent progress) {
+          _setState(
+            ScanningState(
+              progressMessage: progress.message,
+              progress: progress,
+            ),
+          );
         },
       ),
     );
@@ -178,7 +187,7 @@ class CleanerController extends ChangeNotifier {
       case null:
         return;
       case DeletedEvent():
-        _setState(DeletedState(lines: answer.lines));
+        _setState(DeletedState(result: answer));
       case CancelledEvent():
         _showList(current, notice: answer.message);
       case FailedEvent():

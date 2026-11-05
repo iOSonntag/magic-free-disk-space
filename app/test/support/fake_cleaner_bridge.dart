@@ -6,6 +6,13 @@ const StatusEvent grantedStatus = StatusEvent(
   notices: [],
 );
 
+/// The progress the fake bridge sends before each scan answer.
+const ProgressEvent appsProgress = ProgressEvent(
+  message: 'Measuring apps…',
+  phase: ScanPhase.apps,
+  found: [],
+);
+
 /// A bridge that answers with what the test set on it and records the kind
 /// of each request when it is sent; like the process client, it sends each
 /// request only after the answer of the one before.
@@ -29,13 +36,15 @@ final class FakeCleanerBridge implements CleanerBridge {
   }
 
   @override
-  Future<ScanAnswer> scan({required void Function(String message) onProgress}) {
+  Future<ScanAnswer> scan({
+    required void Function(ProgressEvent progress) onProgress,
+  }) {
     return _answerRequest('scan', () async {
       final Object? error = scanError;
       if (error != null) {
         throw error;
       }
-      onProgress('Measuring apps…');
+      onProgress(appsProgress);
       return scanAnswer;
     });
   }

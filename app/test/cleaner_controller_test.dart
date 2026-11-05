@@ -322,16 +322,19 @@ void main() {
 
     test('a scan reaches the scanned state through its progress', () async {
       final List<String> progressMessages = [];
+      final List<ProgressEvent?> progressEvents = [];
       controller.addListener(() {
         final CleanerState state = controller.state;
         if (state is ScanningState) {
           progressMessages.add(state.progressMessage);
+          progressEvents.add(state.progress);
         }
       });
 
       await controller.scan();
 
-      expect(progressMessages, contains('Measuring apps…'));
+      expect(progressMessages, ['Starting the scan…', 'Measuring apps…']);
+      expect(progressEvents, [null, same(appsProgress)]);
       final ScannedState state = controller.state as ScannedState;
       expect(state.scan, same(scannedEvent));
       expect(state.selectedNumbers, isEmpty);
@@ -355,7 +358,7 @@ void main() {
       await controller.confirmDeletion('DELETE');
 
       expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
-      expect((controller.state as DeletedState).lines, ['Freed 6.0 MB.']);
+      expect((controller.state as DeletedState).result, same(deletedEvent));
       expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete']);
     });
 

@@ -59,10 +59,12 @@ done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (String _) {}),
+      client.scan(onProgress: (ProgressEvent _) {}),
       throwsFormatException,
     );
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer answer = await client.scan(
+      onProgress: (ProgressEvent _) {},
+    );
 
     expect((answer as ScannedEvent).summary.titleText, 'fresh');
   });
@@ -79,7 +81,7 @@ done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (String _) {}),
+      client.scan(onProgress: (ProgressEvent _) {}),
       throwsA(
         isA<BridgeStoppedException>()
             .having((error) => error.exitCode, 'exitCode', 3)
@@ -115,7 +117,9 @@ sleep 0.2
 exit 1
 ''');
 
-      final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+      final Future<ScanAnswer> scan = client.scan(
+        onProgress: (ProgressEvent _) {},
+      );
       final Future<StatusAnswer> status = client.status();
 
       await expectLater(scan, throwsFormatException);
@@ -146,10 +150,12 @@ done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (String _) {}),
+      client.scan(onProgress: (ProgressEvent _) {}),
       throwsFormatException,
     );
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer answer = await client.scan(
+      onProgress: (ProgressEvent _) {},
+    );
 
     expect((answer as ScannedEvent).summary.titleText, 'fresh');
   });
@@ -163,7 +169,7 @@ done
 ''');
     final Completer<void> progressSeen = Completer<void>();
     final Future<ScanAnswer> answer = client.scan(
-      onProgress: (String _) => progressSeen.complete(),
+      onProgress: (ProgressEvent _) => progressSeen.complete(),
     );
     await progressSeen.future;
 
@@ -180,7 +186,9 @@ while read -r request; do
   sleep 5
 done
 ''');
-      final Future<ScanAnswer> answer = client.scan(onProgress: (String _) {});
+      final Future<ScanAnswer> answer = client.scan(
+        onProgress: (ProgressEvent _) {},
+      );
 
       client.dispose();
 
@@ -238,7 +246,9 @@ while read -r request; do
 done
 ''');
 
-    final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+    final Future<ScanAnswer> scan = client.scan(
+      onProgress: (ProgressEvent _) {},
+    );
     final Future<UpdateCheckSetAnswer> save = client.setUpdateCheck(false);
 
     await expectLater(scan, throwsFormatException);
@@ -274,11 +284,14 @@ while read -r request; do
   echo '${buildScannedLine('done')}'
 done
 ''');
-    final List<String> progress = [];
+    final List<ProgressEvent> progress = [];
 
     final ScanAnswer answer = await client.scan(onProgress: progress.add);
 
-    expect(progress, ['Measuring apps…']);
+    expect(progress.map((ProgressEvent event) => event.message), [
+      'Measuring apps…',
+    ]);
+    expect(progress.single.phase, ScanPhase.apps);
     expect((answer as ScannedEvent).summary.titleText, 'done');
   });
 
@@ -318,7 +331,9 @@ done
     client = await createClientOverScript(failingFirstStartScript);
 
     final StatusAnswer status = await client.status();
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer answer = await client.scan(
+      onProgress: (ProgressEvent _) {},
+    );
 
     expect(
       status,
@@ -334,8 +349,12 @@ done
   test('a failed scan whose bridge stops leads the next request to a new bridge that answers', () async {
     client = await createClientOverScript(failingFirstStartScript);
 
-    final ScanAnswer failed = await client.scan(onProgress: (String _) {});
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer failed = await client.scan(
+      onProgress: (ProgressEvent _) {},
+    );
+    final ScanAnswer answer = await client.scan(
+      onProgress: (ProgressEvent _) {},
+    );
 
     expect(failed, isA<FailedEvent>());
     expect((answer as ScannedEvent).summary.titleText, 'fresh');

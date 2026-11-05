@@ -68,7 +68,7 @@ class CleanerPage extends StatelessWidget {
                   ),
                   DeletingState() => const _ProgressView(message: 'Deleting…'),
                   DeletedState() => _DeletedView(
-                    lines: state.lines,
+                    lines: state.result.lines,
                     onScan: controller.scan,
                   ),
                 },
