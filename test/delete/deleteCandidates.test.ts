@@ -7,6 +7,7 @@ import {
   isUnremovedOutcome,
   toolCandidateRunToRemoval,
 } from '../../src/delete/deleteCandidates.js';
+import type { DeletePlatform } from '../../src/delete/deletePlatform.js';
 import type { DeletionJournal, JournalEntry } from '../../src/delete/deletionJournal.js';
 import { createDeletionJournal } from '../../src/delete/deletionJournal.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -16,6 +17,7 @@ import type {
 } from '../../src/explore/exploreUnit.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Candidate } from '../../src/scan/candidate.js';
+import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
@@ -42,6 +44,7 @@ import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
+  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -101,13 +104,48 @@ async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Pro
     title: 'Fixture item',
     category: 'caches',
     risk: 'safe',
-    origin: 'catalog',
+    origin: { kind: 'catalog', entryId: 'test-entry' },
     explanation: 'A fixture.',
     regeneration: 'None.',
     allocatedBytes: 4096,
     entryCount: 1,
     isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
     removal: { kind: 'deletePath', identity: identity.value, ownerBundlePaths: ownerBundlePaths },
+  };
+}
+
+async function measurePathBytes(path: string): Promise<number> {
+  const measurement = await loadPathMeasurement({
+    paths: [path],
+    deadlineMs: Date.now() + 60_000,
+    entryReads: darwinPlatform.system.entryReads,
+  });
+
+  return measurement.allocatedBytes;
+}
+
+/** Scans a fixture path with its identity and its size as the scanner measures it. */
+async function scanMeasuredCandidate(path: string): Promise<Candidate> {
+  return { ...(await scanCandidate(path)), allocatedBytes: await measurePathBytes(path) };
+}
+
+/**
+ * A removal that takes `removedPath` with everything below it, or nothing for `null`, and then
+ * fails with `failure`, as a removal stopped partway by a locked entry does.
+ */
+function buildFailingRemoval(params: {
+  removedPath: string | null;
+  failure: string;
+}): DeletePlatform {
+  return {
+    removeTree: async () => {
+      if (params.removedPath !== null) {
+        await rm(params.removedPath, { recursive: true });
+      }
+
+      return { kind: 'failed', failure: params.failure };
+    },
   };
 }
 
@@ -261,12 +299,13 @@ process.exit(0);`,
     title: 'Simulator iPhone 15',
     category: 'developer',
     risk: 'review',
-    origin: 'explore',
+    origin: { kind: 'explore', probe: 'simulatorDevices' },
     explanation: 'A simulator device.',
     regeneration: 'It does not come back.',
     allocatedBytes: 8192,
     entryCount: 1,
     isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
     removal: { kind: 'runTool', unit: unit },
     evidenceLines: [],
   };
@@ -448,6 +487,81 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     expect(run.outcomes[0]).toMatchObject({ outcome: 'permissionDenied', code: 'EACCES' });
     expect(run.outcomes[1]?.outcome).toBe('removed');
     expect(await isPresent(lockedFile)).toBe(true);
+  });
+
+  test('a removal that fails partway frees the scanned size less what is left', async () => {
+    const selected = await createCacheFolder('partly');
+    const keptFile = join(selected, 'kept.bin');
+
+    await createFixtureFile({ path: keptFile, sizeBytes: 4096, modifiedMs: NOW_MS });
+
+    const candidate = await scanMeasuredCandidate(selected);
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: await createTestJournal(),
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: buildFailingRemoval({
+        removedPath: join(selected, 'nested/blob.bin'),
+        failure: 'EACCES',
+      }),
+      clock: () => NOW_MS,
+    });
+    const leftBytes = await measurePathBytes(selected);
+
+    expect(leftBytes).toBeGreaterThan(0);
+    expect(candidate.allocatedBytes - leftBytes).toBeGreaterThanOrEqual(8192);
+    expect(run.outcomes).toEqual([
+      {
+        candidate: candidate,
+        path: selected,
+        allocatedBytes: candidate.allocatedBytes,
+        freedBytes: candidate.allocatedBytes - leftBytes,
+        outcome: 'permissionDenied',
+        code: 'EACCES',
+      },
+    ]);
+    expect(await isPresent(keptFile)).toBe(true);
+  });
+
+  test('a removal that fails before removing anything frees nothing', async () => {
+    const selected = await createCacheFolder('untouched');
+    const candidate = await scanMeasuredCandidate(selected);
+
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: await createTestJournal(),
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: buildFailingRemoval({ removedPath: null, failure: 'EBUSY' }),
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'EBUSY', freedBytes: 0 });
+  });
+
+  test('a removal that fails once the path is gone frees the whole scanned size', async () => {
+    const selected = await createCacheFolder('gone-at-failure');
+    const candidate = await scanMeasuredCandidate(selected);
+
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: await createTestJournal(),
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: buildFailingRemoval({ removedPath: selected, failure: 'EIO' }),
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes[0]).toMatchObject({
+      outcome: 'failed',
+      code: 'EIO',
+      freedBytes: candidate.allocatedBytes,
+    });
+    expect(candidate.allocatedBytes).toBeGreaterThanOrEqual(8192);
   });
 
   testOnPosix('deletes nothing when the intent cannot be recorded', async () => {

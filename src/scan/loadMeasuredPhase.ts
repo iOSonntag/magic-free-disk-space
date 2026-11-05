@@ -1,7 +1,6 @@
-import type { Result } from '../result.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
-import type { FileFailure } from '../system/loadFileIdentity.js';
+import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { CandidateDecision } from './candidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
@@ -23,44 +22,45 @@ export function loadMeasuredPhase(params: {
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {
   return params.runItemMeasurement(async () => {
+    const identity = await loadFileIdentity({ path: params.path });
+
+    if (identity.kind === 'failed') {
+      return {
+        decisions: [],
+        issues: buildFailureIssues({
+          path: params.path,
+          failure: identity.failure,
+          privacyDenialCode: params.privacyDenialCode,
+        }),
+      };
+    }
+
     const measured = await loadPathMeasurement({
-      path: params.path,
+      paths: [params.path],
       deadlineMs: Date.now() + params.measureTimeoutMs,
       entryReads: params.entryReads,
     });
 
-    return buildMeasuredPhase({
-      path: params.path,
-      measured: measured,
-      privacyDenialCode: params.privacyDenialCode,
-      decide: params.decide,
-    });
-  });
-}
+    // The root could not be read right after its identity was: it vanished or changed meanwhile.
+    if (measured.latestModifiedMs === null) {
+      return { decisions: [], issues: [] };
+    }
 
-async function buildMeasuredPhase(params: {
-  path: string;
-  measured: Result<Measurement, FileFailure>;
-  privacyDenialCode: string | null;
-  decide: (measurement: Measurement) => Promise<CandidateDecision>;
-}): Promise<ScanPhase> {
-  const measured = params.measured;
-
-  if (measured.kind === 'succeeded') {
+    const measurement: Measurement = {
+      identity: identity.value,
+      allocatedBytes: measured.allocatedBytes,
+      entryCount: measured.entryCount,
+      unreadableCount: measured.unreadableCount,
+      privateSizeFallbackCount: measured.privateSizeFallbackCount,
+      isComplete: measured.isComplete,
+      latestModifiedMs: measured.latestModifiedMs,
+      holdsOtherVolume: measured.holdsOtherVolume,
+    };
     const decision = skipOfferHoldingOtherVolume({
-      decision: await params.decide(measured.value),
-      measurement: measured.value,
+      decision: await params.decide(measurement),
+      measurement: measurement,
     });
 
     return { decisions: [decision], issues: [] };
-  }
-
-  return {
-    decisions: [],
-    issues: buildFailureIssues({
-      path: params.path,
-      failure: measured.failure,
-      privacyDenialCode: params.privacyDenialCode,
-    }),
-  };
+  });
 }

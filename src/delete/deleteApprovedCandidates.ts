@@ -26,7 +26,7 @@ export async function deleteApprovedCandidates(params: {
   environment: Environment;
   delete: DeletePlatform;
   loadRunningProcesses: RunningProcessesLoad;
-  /** For the measurements around a tool's run. */
+  /** For the measurements around a tool's run and after a removal that failed partway. */
   entryReads: EntryReads;
   probePlatform: ExploreProbePlatform;
   clock: () => number;

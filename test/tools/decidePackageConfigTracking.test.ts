@@ -11,7 +11,7 @@ import {
 function buildFileStats(ino: bigint): EntryStatsResult {
   return {
     kind: 'succeeded',
-    value: { kind: 'file', dev: 1n, ino: ino, allocatedBytes: 4096, modifiedMs: 0 },
+    value: { kind: 'file', dev: 1n, ino: ino, allocatedBytes: 4096, modifiedMs: 0, linkCount: 1 },
   };
 }
 
@@ -102,7 +102,7 @@ describe('decidePackageConfigTracking', () => {
       candidateStats: [
         {
           kind: 'succeeded',
-          value: { kind: 'file', dev: 2n, ino: 7n, allocatedBytes: 0, modifiedMs: 0 },
+          value: { kind: 'file', dev: 2n, ino: 7n, allocatedBytes: 0, modifiedMs: 0, linkCount: 1 },
         },
       ],
     });

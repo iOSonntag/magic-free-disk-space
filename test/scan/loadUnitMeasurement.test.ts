@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod } from 'node:fs/promises';
+import { chmod, link } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExploreToolUnitDartPubCache } from '../../src/explore/exploreUnit.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
@@ -40,18 +40,14 @@ function buildDartUnit(gcPaths: string[]): ExploreToolUnitDartPubCache {
   };
 }
 
-async function loadAllocatedBytesOrThrow(path: string): Promise<number> {
+async function loadAllocatedBytes(path: string): Promise<number> {
   const measured = await loadPathMeasurement({
-    path: path,
+    paths: [path],
     deadlineMs: Date.now() + 10_000,
     entryReads: darwinPlatform.system.entryReads,
   });
 
-  if (measured.kind === 'failed') {
-    throw new Error(`Measurement failed: ${measured.failure.reason}`);
-  }
-
-  return measured.value.allocatedBytes;
+  return measured.allocatedBytes;
 }
 
 describeAwaitingWin32Platform('loadUnitMeasurement', () => {
@@ -76,13 +72,39 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
 
     expect(measurement).toEqual({
       allocatedBytes:
-        (await loadAllocatedBytesOrThrow(packageFolder)) +
-        (await loadAllocatedBytesOrThrow(hashFile)),
+        (await loadAllocatedBytes(packageFolder)) + (await loadAllocatedBytes(hashFile)),
       entryCount: 3,
       privateSizeFallbackCount: 0,
       isComplete: true,
       holdsOtherVolume: false,
     });
+  });
+
+  test('counts once a hard-linked file whose links lie in two paths of the unit', async () => {
+    const firstFolder = join(fixtureRoot.homeDir, '.pub-cache/hosted/pub.dev/example_a-1.0.0');
+    const secondFolder = join(fixtureRoot.homeDir, '.pub-cache/hosted/pub.dev/example_b-1.0.0');
+    const sharedFile = join(firstFolder, 'lib.dart');
+
+    await createFixtureDirectory({ path: firstFolder });
+    await createFixtureDirectory({ path: secondFolder });
+    await createFixtureFile({ path: sharedFile, sizeBytes: 20_000, modifiedMs: MODIFIED_MS });
+    await link(sharedFile, join(secondFolder, 'lib.dart'));
+
+    const firstAlone = await loadUnitMeasurement({
+      unit: buildDartUnit([firstFolder]),
+      deadlineMs: Date.now() + 10_000,
+      entryReads: darwinPlatform.system.entryReads,
+    });
+    const both = await loadUnitMeasurement({
+      unit: buildDartUnit([firstFolder, secondFolder]),
+      deadlineMs: Date.now() + 10_000,
+      entryReads: darwinPlatform.system.entryReads,
+    });
+
+    expect(firstAlone.allocatedBytes).toBe(await loadAllocatedBytes(firstFolder));
+    expect(firstAlone.allocatedBytes).toBeLessThan(20_000);
+    expect(both.allocatedBytes).toBeGreaterThanOrEqual(20_000);
+    expect(both.entryCount).toBe(4);
   });
 
   test('holds another volume when any path does, a missing one counting false', async () => {

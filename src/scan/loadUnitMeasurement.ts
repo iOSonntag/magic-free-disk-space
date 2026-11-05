@@ -1,11 +1,11 @@
 import type { ExploreUnit } from '../explore/exploreUnit.js';
 import { listUnitPaths } from '../explore/exploreUnit.js';
-import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
 
-/** The sum over a unit's paths; a path that is gone counts 0. */
+/** One tally over a unit's paths; a path that is gone counts 0. */
 export type UnitMeasurement = {
+  /** Each block once, as `PathMeasurement` counts it: a link split across two paths counts once. */
   allocatedBytes: number;
   entryCount: number;
   /** Files whose private size could not be read, so their allocated blocks count instead. */
@@ -19,79 +19,23 @@ export type UnitMeasurement = {
   holdsOtherVolume: boolean;
 };
 
-type PathMeasurementPart = UnitMeasurement;
-
-const MISSING_PATH_PART: PathMeasurementPart = {
-  allocatedBytes: 0,
-  entryCount: 0,
-  privateSizeFallbackCount: 0,
-  isComplete: true,
-  holdsOtherVolume: false,
-};
-
-const UNREADABLE_PATH_PART: PathMeasurementPart = {
-  allocatedBytes: 0,
-  entryCount: 0,
-  privateSizeFallbackCount: 0,
-  isComplete: false,
-  holdsOtherVolume: false,
-};
-
-/** Paths measured at once; a Dart gc set holds thousands of small folders. */
-const MAX_CONCURRENT_PATHS = 8;
-
 /** Measures the paths of `listUnitPaths(unit)`, for the scan's offer and before and after a run. */
 export async function loadUnitMeasurement(params: {
   unit: ExploreUnit;
   deadlineMs: number;
   entryReads: EntryReads;
 }): Promise<UnitMeasurement> {
-  const runPathMeasurement = createConcurrencyLimit({ maxConcurrent: MAX_CONCURRENT_PATHS });
-  const parts = await Promise.all(
-    listUnitPaths(params.unit).map((path) =>
-      runPathMeasurement(() =>
-        loadPathMeasurementPart({
-          path: path,
-          deadlineMs: params.deadlineMs,
-          entryReads: params.entryReads,
-        }),
-      ),
-    ),
-  );
-
-  return {
-    allocatedBytes: parts.reduce((sum, part) => sum + part.allocatedBytes, 0),
-    entryCount: parts.reduce((sum, part) => sum + part.entryCount, 0),
-    privateSizeFallbackCount: parts.reduce((sum, part) => sum + part.privateSizeFallbackCount, 0),
-    isComplete: parts.every((part) => part.isComplete),
-    holdsOtherVolume: parts.some((part) => part.holdsOtherVolume),
-  };
-}
-
-async function loadPathMeasurementPart(params: {
-  path: string;
-  deadlineMs: number;
-  entryReads: EntryReads;
-}): Promise<PathMeasurementPart> {
   const measured = await loadPathMeasurement({
-    path: params.path,
+    paths: listUnitPaths(params.unit),
     deadlineMs: params.deadlineMs,
     entryReads: params.entryReads,
   });
 
-  if (measured.kind === 'succeeded') {
-    return {
-      allocatedBytes: measured.value.allocatedBytes,
-      entryCount: measured.value.entryCount,
-      privateSizeFallbackCount: measured.value.privateSizeFallbackCount,
-      isComplete: measured.value.isComplete,
-      holdsOtherVolume: measured.value.holdsOtherVolume,
-    };
-  }
-
-  if (measured.failure.reason === 'missing') {
-    return MISSING_PATH_PART;
-  }
-
-  return UNREADABLE_PATH_PART;
+  return {
+    allocatedBytes: measured.allocatedBytes,
+    entryCount: measured.entryCount,
+    privateSizeFallbackCount: measured.privateSizeFallbackCount,
+    isComplete: measured.isComplete,
+    holdsOtherVolume: measured.holdsOtherVolume,
+  };
 }

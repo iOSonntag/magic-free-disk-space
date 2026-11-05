@@ -8,6 +8,8 @@ import type {
   CandidateRemovalDeletePath,
   CandidateRemovalDeleteUnitFolder,
 } from '../scan/candidate.js';
+import { SCAN_LIMITS } from '../scan/limits.js';
+import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
 import type { EntryReads } from '../system/entryReads.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
@@ -35,7 +37,10 @@ export type RemovalOutcomeCoded = {
   candidate: Candidate;
   path: string;
   allocatedBytes: number;
-  /** The space the removal gave back: a deleted path's size, or a tool run's measured drop. */
+  /**
+   * The space the removal gave back: a deleted path's size, the measured drop of a path whose
+   * removal failed partway, or a tool run's measured drop.
+   */
   freedBytes: number;
   outcome: RemovalOutcomeCodedKind;
   /** The error code of the failed file call, else `null`. */
@@ -92,7 +97,7 @@ export async function deleteCandidates(params: {
   delete: DeletePlatform;
   /** What the rechecks of the units read by. */
   probePlatform: ExploreProbePlatform;
-  /** The system slice's entry reads, for the measurements around a tool's run. */
+  /** The system slice's entry reads, for measuring around a tool's run and a failed removal. */
   entryReads: EntryReads;
   loadProcessCommands: () => Promise<string[] | null>;
   clock: () => number;
@@ -183,6 +188,7 @@ async function removeCandidate(params: {
         candidate: params.candidate,
         removal: params.candidate.removal,
         delete: params.delete,
+        entryReads: params.entryReads,
         processCommands: params.processCommands,
       });
 
@@ -195,6 +201,7 @@ async function removeCandidate(params: {
         environment: params.environment,
         delete: params.delete,
         probePlatform: params.probePlatform,
+        entryReads: params.entryReads,
         loadProcessCommands: params.loadProcessCommands,
       });
 
@@ -308,6 +315,7 @@ async function deletePathCandidate(params: {
   candidate: Candidate;
   removal: CandidateRemovalDeletePath;
   delete: DeletePlatform;
+  entryReads: EntryReads;
   processCommands: string[] | null;
 }): Promise<RemovalOutcomeCoded> {
   if (
@@ -329,6 +337,7 @@ async function deletePathCandidate(params: {
     path: params.candidate.path,
     identity: params.removal.identity,
     delete: params.delete,
+    entryReads: params.entryReads,
   });
 }
 
@@ -342,6 +351,7 @@ async function deleteUnitFolderCandidate(params: {
   environment: Environment;
   delete: DeletePlatform;
   probePlatform: ExploreProbePlatform;
+  entryReads: EntryReads;
   loadProcessCommands: () => Promise<string[] | null>;
 }): Promise<RemovalOutcomeCoded> {
   const folderPath = params.removal.unit.folderPath;
@@ -380,6 +390,7 @@ async function deleteUnitFolderCandidate(params: {
         path: folderPath,
         identity: params.removal.identity,
         delete: params.delete,
+        entryReads: params.entryReads,
       });
   }
 }
@@ -401,6 +412,7 @@ async function deleteScannedPath(params: {
   path: string;
   identity: FileIdentity;
   delete: DeletePlatform;
+  entryReads: EntryReads;
 }): Promise<RemovalOutcomeCoded> {
   const currentIdentity = await loadFileIdentity({ path: params.path });
 
@@ -451,24 +463,44 @@ async function deleteScannedPath(params: {
     });
   }
 
-  if (PERMISSION_DENIED_CODES.includes(removed.failure)) {
-    return buildPathOutcome({
-      candidate: params.candidate,
-      path: params.path,
-      outcome: 'permissionDenied',
-      code: removed.failure,
-    });
-  }
-
-  return buildPathOutcome({
+  return loadFailedRemovalOutcome({
     candidate: params.candidate,
     path: params.path,
-    outcome: 'failed',
     code: removed.failure,
+    entryReads: params.entryReads,
   });
 }
 
-/** A deleted path frees its candidate's scanned size; any other outcome frees nothing. */
+/**
+ * A removal that failed partway frees what it took: the scanned size less what the path holds
+ * now, measured as the scan measured it.
+ */
+async function loadFailedRemovalOutcome(params: {
+  candidate: Candidate;
+  path: string;
+  code: string;
+  entryReads: EntryReads;
+}): Promise<RemovalOutcomeCoded> {
+  const left = await loadPathMeasurement({
+    paths: [params.path],
+    deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
+    entryReads: params.entryReads,
+  });
+
+  return {
+    candidate: params.candidate,
+    path: params.path,
+    allocatedBytes: params.candidate.allocatedBytes,
+    freedBytes: getMeasuredFreedBytes({
+      beforeBytes: params.candidate.allocatedBytes,
+      after: left,
+    }),
+    outcome: PERMISSION_DENIED_CODES.includes(params.code) ? 'permissionDenied' : 'failed',
+    code: params.code,
+  };
+}
+
+/** A deleted path frees its scanned size; any other outcome built here frees nothing. */
 function buildPathOutcome(params: {
   candidate: Candidate;
   path: string;

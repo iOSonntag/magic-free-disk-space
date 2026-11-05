@@ -1,4 +1,3 @@
-import type { VolumeSpace } from '../../system/volumeSpace.js';
 import type { Platform } from '../platform.js';
 import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
@@ -7,7 +6,9 @@ import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
 import { DARWIN_HOMEBREW_PREFIX_PATHS, loadEnvironment } from './loadEnvironment.js';
 import { DARWIN_PRIVACY_DENIAL_CODE, loadFullDiskAccess } from './loadFullDiskAccess.js';
 import { loadInstalledApps } from './loadInstalledApps.js';
+import { loadPrivateBytes } from './loadPrivateSize.js';
 import { loadProcessCommands } from './loadProcessCommands.js';
+import { loadVolumeSpace } from './loadVolumeSpace.js';
 import {
   PNPM_HOMES_PATH_NAMES,
   PNPM_STORE_ROOT_PATH_NAMES,
@@ -65,13 +66,3 @@ export const darwinPlatform: Platform = {
     loadVolumeSpace: loadVolumeSpace,
   },
 };
-
-// A stub until part 1b reads the private size by FFI from libSystem.
-function loadPrivateBytes(_path: string): number | null {
-  return null;
-}
-
-// A stub until part 1b reads the volume space by `statfs`.
-function loadVolumeSpace(_path: string): Promise<VolumeSpace | null> {
-  return Promise.resolve(null);
-}

@@ -4,6 +4,7 @@ import type { ExploreProbeFailure, ExploreToolUnit } from '../explore/exploreUni
 import { buildUnitCommand } from '../explore/exploreUnit.js';
 import { recheckExploreUnit } from '../explore/recheckExploreUnit.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
+import { getMeasuredFreedBytes } from '../scan/loadPathMeasurement.js';
 import type { UnitMeasurement } from '../scan/loadUnitMeasurement.js';
 import { loadUnitMeasurement } from '../scan/loadUnitMeasurement.js';
 import type { EntryReads } from '../system/entryReads.js';
@@ -119,11 +120,10 @@ async function runCheckedUnitCommand(params: {
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
   });
-  // An incomplete measurement after the run misses part of what is left, so its drop could
-  // count bytes that were never freed.
-  const freedBytes = after.isComplete
-    ? Math.max(0, params.before.allocatedBytes - after.allocatedBytes)
-    : 0;
+  const freedBytes = getMeasuredFreedBytes({
+    beforeBytes: params.before.allocatedBytes,
+    after: after,
+  });
 
   if (command.kind === 'failed') {
     return {

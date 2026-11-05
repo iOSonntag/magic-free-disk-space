@@ -11,6 +11,8 @@ export type EntryStats = {
   ino: bigint;
   /** Blocks on disk times 512, which is what a removal can free, unlike the apparent size. */
   allocatedBytes: number;
+  /** How many names the entry's inode has, from `nlink`; a folder's count means something else. */
+  linkCount: number;
   modifiedMs: number;
 };
 
@@ -28,6 +30,7 @@ export async function loadEntryStats(params: { path: string }): Promise<EntrySta
         dev: stats.dev,
         ino: stats.ino,
         allocatedBytes: Number(stats.blocks * 512n),
+        linkCount: Number(stats.nlink),
         modifiedMs: Number(stats.mtimeMs),
       },
     };

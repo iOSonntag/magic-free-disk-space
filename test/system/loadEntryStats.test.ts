@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { symlink } from 'node:fs/promises';
+import { link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EntryStats } from '../../src/system/loadEntryStats.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
@@ -52,6 +52,21 @@ describeAwaitingWin32Platform('loadEntryStats', () => {
     expect(stats.kind).toBe('file');
     expect(stats.allocatedBytes).toBeGreaterThanOrEqual(largeFileSizeBytes);
     expect(stats.allocatedBytes % diskBlockBytes).toBe(0);
+  });
+
+  test('reports the link count of a file, one more for each hard link', async () => {
+    const filePath = join(fixtureRoot.homeDir, 'linked.bin');
+    await createFixtureFile({ path: filePath, sizeBytes: 10, modifiedMs: oldModifiedMs });
+
+    const unlinked = await loadEntryStatsOrThrow({ path: filePath });
+
+    await link(filePath, join(fixtureRoot.homeDir, 'second-name.bin'));
+
+    const linked = await loadEntryStatsOrThrow({ path: filePath });
+
+    expect(unlinked.linkCount).toBe(1);
+    expect(linked.linkCount).toBe(2);
+    expect(linked.ino).toBe(unlinked.ino);
   });
 
   test('reports the modified time that updateModifiedMs set', async () => {
