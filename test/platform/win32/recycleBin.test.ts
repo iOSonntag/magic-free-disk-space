@@ -15,7 +15,8 @@ const HRESULT_PATTERN = /^0x[0-9A-F]{8}$/;
 
 /**
  * Set to `1` to run the probe that empties the Recycle Bin of the drive of the temporary folder,
- * every file in it, so it runs only on a throwaway machine; no workflow sets it.
+ * every file in it, so it runs only on a throwaway machine, such as the Windows runner of the
+ * tests.
  */
 const IS_RECYCLE_BIN_PROBE_OPTED_IN = process.env.MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE === '1';
 

@@ -48,7 +48,7 @@ const ECHO_LINE = 'Größe – 🧹';
 
 /**
  * Set to `1` to run the cloud placeholder probe, which registers a sync root of the Cloud Files
- * API on this machine for the time of the probe.
+ * API on this machine for the time of the probe; the Windows runners of the tests set it.
  */
 const IS_CLOUD_PROBE_OPTED_IN = process.env.MAGIC_FREE_DISK_SPACE_CLOUD_PROBE === '1';
 

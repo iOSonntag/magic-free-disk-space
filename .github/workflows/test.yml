@@ -54,6 +54,11 @@ jobs:
 
       - name: Test the command line tool and the bridge
         run: bun test
+        env:
+          # A Windows runner is a throwaway machine, so the probes that register a sync root of the
+          # Cloud Files API and empty the Recycle Bin of its temporary folder's drive run there.
+          MAGIC_FREE_DISK_SPACE_CLOUD_PROBE: ${{ runner.os == 'Windows' && '1' || '0' }}
+          MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE: ${{ runner.os == 'Windows' && '1' || '0' }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
@@ -98,3 +103,6 @@ jobs:
 
       - name: Check the Bun Windows facts
         run: bun test test/windows
+        env:
+          # The runner is a throwaway machine, so the probe that registers a sync root runs there.
+          MAGIC_FREE_DISK_SPACE_CLOUD_PROBE: '1'

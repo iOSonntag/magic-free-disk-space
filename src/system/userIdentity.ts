@@ -35,7 +35,9 @@ export function parsePosixUid(params: { value: number }): Result<PosixUid, strin
 }
 
 /** The one maker of a `WindowsSid`; fails for a text that is no SID in its string form. */
-export function parseWindowsSid(params: { text: string }): Result<WindowsSid, string> {
+export function parseWindowsSid(params: {
+  text: string;
+}): Result<WindowsSid, 'not a security identifier'> {
   if (!WINDOWS_SID_PATTERN.test(params.text)) {
     return { kind: 'failed', failure: 'not a security identifier' };
   }

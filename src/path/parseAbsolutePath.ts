@@ -11,16 +11,22 @@ export type AbsolutePath = string & { [absolutePathBrand]: true };
 const WIN32_DRIVE_ROOT_PATTERN = /^[A-Za-z]:[\\/]/;
 
 /**
- * The one maker of an `AbsolutePath`; fails for a path that is not absolute under `rules`. A POSIX
- * path is taken as it is. A Windows path must start at a drive letter, so a share (`\\server\x`),
- * a device path (`\\?\`, `\\.\`), a path relative to a drive (`C:x`), and one rooted without a
- * drive (`\x`) fail; it is normalized to `\` separators without `.` and `..`, and its drive letter
- * upper-cased.
+ * The one maker of an `AbsolutePath`; fails for a path that is not absolute under `rules`, and for
+ * one that holds a NUL character. A POSIX path is taken as it is. A Windows path must start at a
+ * drive letter, so a share (`\\server\x`), a device path (`\\?\`, `\\.\`), a path relative to a
+ * drive (`C:x`), and one rooted without a drive (`\x`) fail; it is normalized to `\` separators
+ * without `.` and `..`, and its drive letter upper-cased.
  */
 export function parseAbsolutePath(params: {
   rules: PathRules;
   text: string;
-}): Result<AbsolutePath, string> {
+}): Result<AbsolutePath, 'not an absolute path'> {
+  // A Win32 call reads a path up to its first NUL, so it would reach a shorter path than the one
+  // every check judged.
+  if (params.text.includes('\0')) {
+    return { kind: 'failed', failure: 'not an absolute path' };
+  }
+
   const pathText = parseUnderRules({ rules: params.rules, text: params.text });
 
   if (pathText === null) {

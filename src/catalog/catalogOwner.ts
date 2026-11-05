@@ -54,7 +54,9 @@ export function parseMacBundleId(params: { text: string }): MacBundleId {
 }
 
 /** The one maker of a `WindowsImageName`; fails for a text that is no Windows file name. */
-export function parseWindowsImageName(params: { text: string }): Result<WindowsImageName, string> {
+export function parseWindowsImageName(params: {
+  text: string;
+}): Result<WindowsImageName, 'not a file name'> {
   if (
     params.text === '' ||
     params.text === '.' ||

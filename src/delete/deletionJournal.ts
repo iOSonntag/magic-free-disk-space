@@ -1,3 +1,4 @@
+import type { MakeDirectoryOptions } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -208,11 +209,14 @@ async function createJournalDirectory(params: {
   path: string;
   mode: number | null;
 }): Promise<Result<null, JournalFailure>> {
+  const options: MakeDirectoryOptions & { recursive: true } = { recursive: true };
+
+  if (params.mode !== null) {
+    options.mode = params.mode;
+  }
+
   try {
-    await mkdir(params.path, {
-      recursive: true,
-      ...(params.mode === null ? {} : { mode: params.mode }),
-    });
+    await mkdir(params.path, options);
 
     return { kind: 'succeeded', value: null };
   } catch (error) {

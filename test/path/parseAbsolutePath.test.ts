@@ -55,4 +55,10 @@ describe('parseAbsolutePath', () => {
       expect(parseText({ rules: 'win32', text: text }).kind).toBe('failed');
     }
   });
+
+  test('refuses a path that holds a NUL character under either rules', () => {
+    expect(parseText({ rules: 'win32', text: 'C:\\Users\\tester\0\\AppData' }).kind).toBe('failed');
+    expect(parseText({ rules: 'win32', text: 'C:\\\0' }).kind).toBe('failed');
+    expect(parseText({ rules: 'posix', text: '/Users/tester\0/Library' }).kind).toBe('failed');
+  });
 });

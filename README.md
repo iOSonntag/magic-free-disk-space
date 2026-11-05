@@ -318,6 +318,8 @@ such as Photos, or with `-R` and an item's path to show it in Finder.
 - Deleting a file in a folder that iCloud Drive syncs deletes it on your other devices as well.
   The tool deletes nothing in iCloud Drive's own folder, but a folder such as Desktop or
   Documents may sync to it too.
+- On Windows, deleting a file in a folder that OneDrive syncs deletes it from OneDrive and your
+  other devices as well. A file OneDrive keeps only online is never read or deleted.
 - Space Docker frees lies inside its disk image, which macOS gets back within minutes, not at
   once; the result of a deletion says so. While no engine runs, the scan shows only the disk
   image's size, with advice.
