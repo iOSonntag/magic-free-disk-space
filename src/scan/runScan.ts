@@ -12,10 +12,11 @@ import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import type { EntryReads } from '../system/entryReads.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { EntryEvictionCheck, SystemPlatform } from '../system/systemPlatform.js';
+import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -81,8 +82,8 @@ type ScanContext = {
   /** `null` when `ps` failed: every item with an owner app is then withheld. */
   processCommands: string[] | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
-  /** The system slice's eviction check, asked by every walk and measurement of the scan. */
-  isEntryEvicted: EntryEvictionCheck;
+  /** The system slice's entry reads, asked by every walk and measurement of the scan. */
+  entryReads: EntryReads;
   /** The system slice's code of a privacy denial, for every issue of a failed read. */
   privacyDenialCode: string | null;
   /** Home folders searched for large files, from the scan slice. */
@@ -136,7 +137,7 @@ export async function runScan(params: {
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: SCAN_LIMITS.projectMaxDepth,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
-    isEntryEvicted: params.system.isEntryEvicted,
+    entryReads: params.system.entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const projectPins: ProjectPinsLoad = {
@@ -182,7 +183,7 @@ export async function runScan(params: {
     isInstalledAppListComplete: installed.issues.length === 0,
     processCommands: await knownProcessCommandsLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
-    isEntryEvicted: params.system.isEntryEvicted,
+    entryReads: params.system.entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
     userFileRootRelativePaths: params.scan.userFileRootRelativePaths,
   };
@@ -225,7 +226,7 @@ export async function runScan(params: {
     catalogEntries: params.catalog.entries,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.system.isEntryEvicted,
+    entryReads: params.system.entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const exploreAdvice = await loadCatalogPhase({
@@ -357,7 +358,7 @@ async function loadCatalogTargetPhase(params: {
     path: path,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const activity =
@@ -368,7 +369,7 @@ async function loadCatalogTargetPhase(params: {
               excludedNames: [],
               maxEntries: SCAN_LIMITS.probeMaxEntries,
               deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
-              isEntryEvicted: params.context.isEntryEvicted,
+              entryReads: params.context.entryReads,
             })
           : null;
 
@@ -415,7 +416,7 @@ function loadArtifactFindingPhase(params: {
     path: params.finding.artifactPath,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const activity = await loadTreeActivity({
@@ -424,7 +425,7 @@ function loadArtifactFindingPhase(params: {
         excludedNames: PROJECT_ACTIVITY_EXCLUDED_NAMES,
         maxEntries: SCAN_LIMITS.probeMaxEntries,
         deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
-        isEntryEvicted: params.context.isEntryEvicted,
+        entryReads: params.context.entryReads,
       });
 
       return decideArtifactCandidate({
@@ -454,7 +455,7 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
     path: app.bundlePath,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const lastSignOfUseMs =
@@ -494,7 +495,7 @@ async function loadUserFilePhase(params: { context: ScanContext }): Promise<Scan
     ),
     minAllocatedBytes: SCAN_LIMITS.minUserFileBytes,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
   });
   // A large file inside a dependency or git folder belongs to its project, not to the user.
@@ -549,7 +550,7 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
         path: path,
         measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
         runItemMeasurement: runItemMeasurement,
-        isEntryEvicted: params.context.isEntryEvicted,
+        entryReads: params.context.entryReads,
         privacyDenialCode: params.context.privacyDenialCode,
         decide: async (measurement) =>
           decideOrphanCandidate({

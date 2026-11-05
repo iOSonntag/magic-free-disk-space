@@ -2,7 +2,18 @@ import type { CandidateCategory, Risk } from '../catalog/catalog.js';
 import type { Candidate } from './candidate.js';
 
 /** The groups a person sees the offered candidates in, apart from Explore. */
-export type ConsumerSection = 'caches' | 'developerTools' | 'apps' | 'largeFiles' | 'trash';
+export type ConsumerSection =
+  | 'caches'
+  | 'developerTools'
+  | 'projects'
+  | 'containers'
+  | 'aiModels'
+  | 'downloads'
+  | 'icloud'
+  | 'apps'
+  | 'largeFiles'
+  | 'trash'
+  | 'ownApp';
 
 /** `safe` items show open in their section; the others wait under "Check before deleting". */
 type CandidateGroup = 'safe' | 'check';
@@ -22,9 +33,15 @@ export type CandidatePlace = CandidatePlaceExplore | CandidatePlaceSection;
 export const CONSUMER_SECTION_ORDER: ConsumerSection[] = [
   'caches',
   'developerTools',
+  'projects',
+  'containers',
+  'aiModels',
+  'downloads',
+  'icloud',
   'apps',
   'largeFiles',
   'trash',
+  'ownApp',
 ];
 
 const CANDIDATE_GROUP_ORDER: CandidateGroup[] = ['safe', 'check'];
@@ -34,13 +51,19 @@ const categorySections: Record<CandidateCategory, ConsumerSection> = {
   temporary: 'caches',
   developer: 'developerTools',
   packages: 'developerTools',
-  projects: 'developerTools',
   system: 'developerTools',
+  projects: 'projects',
+  containerEngines: 'containers',
+  aiModels: 'aiModels',
+  downloads: 'downloads',
+  installers: 'downloads',
+  cloudCopies: 'icloud',
   applications: 'apps',
-  containers: 'apps',
+  appContainers: 'apps',
   leftovers: 'apps',
   userFiles: 'largeFiles',
   trash: 'trash',
+  appManaged: 'ownApp',
 };
 
 const riskGroups: Record<Risk, CandidateGroup> = {

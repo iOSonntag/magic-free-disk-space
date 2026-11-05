@@ -1,8 +1,9 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { Result } from '../result.js';
+import type { EntryReads } from '../system/entryReads.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
-import type { EntryEvictionCheck, RunningProcessesLoad } from '../system/systemPlatform.js';
+import type { RunningProcessesLoad } from '../system/systemPlatform.js';
 import type { RemovalRun } from './deleteCandidates.js';
 import { deleteCandidates } from './deleteCandidates.js';
 import type { DeletePlatform } from './deletePlatform.js';
@@ -26,7 +27,7 @@ export async function deleteApprovedCandidates(params: {
   delete: DeletePlatform;
   loadRunningProcesses: RunningProcessesLoad;
   /** For the measurements around a tool's run. */
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   probePlatform: ExploreProbePlatform;
   clock: () => number;
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
@@ -45,7 +46,7 @@ export async function deleteApprovedCandidates(params: {
     environment: params.environment,
     delete: params.delete,
     probePlatform: params.probePlatform,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
     loadProcessCommands: () =>
       loadCurrentProcessCommands({ loadRunningProcesses: params.loadRunningProcesses }),
     clock: params.clock,

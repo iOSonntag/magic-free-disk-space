@@ -369,7 +369,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
     expect(listNumbersTopToBottom({ view: view })).toEqual([1, 2, 3, 4, 5, 6]);
     expect(view.sections.map((section) => section.titleText)).toEqual([
       'Caches',
-      'Developer tools',
+      'Projects',
       'Large files',
       'Trash',
     ]);

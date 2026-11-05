@@ -85,11 +85,11 @@ describeAwaitingWin32Platform('buildScanReport', () => {
     });
     const appSafe = buildTestCandidate({
       path: '/home/Library/Containers/gone',
-      category: 'containers',
+      category: 'appContainers',
       risk: 'safe',
       allocatedBytes: 10,
     });
-    const developerReview = buildTestCandidate({
+    const projectReview = buildTestCandidate({
       path: '/home/project/node_modules',
       category: 'projects',
       risk: 'review',
@@ -108,13 +108,13 @@ describeAwaitingWin32Platform('buildScanReport', () => {
     });
 
     const report = buildScanReport({
-      decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, developerReview, cacheSafe]),
+      decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, projectReview, cacheSafe]),
       issues: [],
     });
 
     expect(report.candidates).toEqual([
       cacheSafe,
-      developerReview,
+      projectReview,
       appSafe,
       appNever,
       trashSafe,

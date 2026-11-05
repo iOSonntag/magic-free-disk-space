@@ -460,7 +460,7 @@ async function answerDelete(params: {
     environment: params.state.environment,
     delete: params.context.delete,
     loadRunningProcesses: params.context.system.loadRunningProcesses,
-    isEntryEvicted: params.context.system.isEntryEvicted,
+    entryReads: params.context.system.entryReads,
     probePlatform: buildExploreProbePlatform({
       explore: params.context.explore,
       tools: params.context.tools,

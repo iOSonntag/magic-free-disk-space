@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { formatRemovalRun } from '../../src/report/formatRemovalRun.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestCandidate } from '../support/candidateFixtures.js';
 
 describeAwaitingWin32Platform('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
@@ -14,6 +15,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       run: {
         outcomes: [
           {
+            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 1024 }),
             path: '/fixture/a',
             allocatedBytes: 1024,
             freedBytes: 1024,
@@ -21,6 +23,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: null,
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/b', allocatedBytes: 0 }),
             path: '/fixture/b',
             allocatedBytes: 0,
             freedBytes: 0,
@@ -28,6 +31,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: null,
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/c', allocatedBytes: 0 }),
             path: '/fixture/c',
             allocatedBytes: 0,
             freedBytes: 0,
@@ -35,6 +39,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: null,
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/d', allocatedBytes: 5 * 1024 ** 2 }),
             path: '/fixture/d',
             allocatedBytes: 5 * 1024 ** 2,
             freedBytes: 0,
@@ -42,6 +47,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: 'EACCES',
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/e', allocatedBytes: 5 * 1024 ** 2 }),
             path: '/fixture/e',
             allocatedBytes: 5 * 1024 ** 2,
             freedBytes: 0,
@@ -49,6 +55,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: 'EIO',
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/f', allocatedBytes: 0 }),
             path: '/fixture/f',
             allocatedBytes: 0,
             freedBytes: 0,
@@ -79,6 +86,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       run: {
         outcomes: [
           {
+            candidate: buildTestCandidate({ path: `${extensionsPath}/example.alpha-1.0.0` }),
             path: `${extensionsPath}/example.alpha-1.0.0`,
             allocatedBytes: 4096,
             freedBytes: 4096,
@@ -86,6 +94,9 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: null,
           },
           {
+            candidate: buildTestCandidate({
+              path: `${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
+            }),
             path: `${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
             allocatedBytes: 4096,
             freedBytes: 0,
@@ -93,6 +104,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: null,
           },
           {
+            candidate: buildTestCandidate({ path: `${extensionsPath}/example.gamma-3.0.0` }),
             path: `${extensionsPath}/example.gamma-3.0.0`,
             allocatedBytes: 4096,
             freedBytes: 0,
@@ -117,6 +129,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       run: {
         outcomes: [
           {
+            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 2048 }),
             path: '/fixture/a',
             allocatedBytes: 2048,
             freedBytes: 2048,
@@ -124,6 +137,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: null,
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/b', allocatedBytes: 0 }),
             path: '/fixture/b',
             allocatedBytes: 0,
             freedBytes: 0,
@@ -147,6 +161,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       run: {
         outcomes: [
           {
+            candidate: buildTestCandidate({ path: '/fixture/tool-a' }),
             path: '/fixture/tool-a',
             allocatedBytes: 4096,
             freedBytes: 3072,
@@ -154,6 +169,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             code: null,
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/tool-b' }),
             path: '/fixture/tool-b',
             allocatedBytes: 4096,
             freedBytes: 1024,
@@ -168,6 +184,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             },
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/tool-c' }),
             path: '/fixture/tool-c',
             allocatedBytes: 4096,
             freedBytes: 0,
@@ -178,6 +195,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             },
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/tool-d' }),
             path: '/fixture/tool-d',
             allocatedBytes: 4096,
             freedBytes: 0,
@@ -185,6 +203,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             failure: { reason: 'outputUnreadable', detail: 'no device list' },
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/tool-e' }),
             path: '/fixture/tool-e',
             allocatedBytes: 4096,
             freedBytes: 0,
@@ -215,6 +234,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       run: {
         outcomes: [
           {
+            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 0 }),
             path: '/fixture/a',
             allocatedBytes: 0,
             freedBytes: 0,
@@ -225,6 +245,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             },
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/b', allocatedBytes: 0 }),
             path: '/fixture/b',
             allocatedBytes: 0,
             freedBytes: 0,
@@ -235,6 +256,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
             },
           },
           {
+            candidate: buildTestCandidate({ path: '/fixture/c', allocatedBytes: 0 }),
             path: '/fixture/c',
             allocatedBytes: 0,
             freedBytes: 0,
@@ -261,6 +283,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       run: {
         outcomes: [
           {
+            candidate: buildTestCandidate({ path: '/fixture/avd', allocatedBytes: 0 }),
             path: '/fixture/avd',
             allocatedBytes: 0,
             freedBytes: 0,

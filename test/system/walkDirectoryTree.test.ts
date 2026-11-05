@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import type { EntryEvictionCheck, EvictionCandidate } from '../../src/system/systemPlatform.js';
+import type { EntryEvictionCheck, EvictionCandidate } from '../../src/system/entryReads.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -40,7 +40,10 @@ async function collectEntries(params: {
     isStatsNeeded: params.isStatsNeeded,
     maxConcurrentDirectories: 2,
     isStopped: params.isStopped ?? (() => false),
-    isEntryEvicted: params.isEntryEvicted ?? (() => false),
+    entryReads: {
+      isEntryEvicted: params.isEntryEvicted ?? (() => false),
+      loadPrivateBytes: () => null,
+    },
     visitEntry: (entry) => {
       entries.push(entry);
 

@@ -213,7 +213,7 @@ async function runInteractiveDeletion(params: {
     environment: params.environment,
     delete: params.delete,
     loadRunningProcesses: params.system.loadRunningProcesses,
-    isEntryEvicted: params.system.isEntryEvicted,
+    entryReads: params.system.entryReads,
     probePlatform: buildExploreProbePlatform({
       explore: params.explore,
       tools: params.tools,

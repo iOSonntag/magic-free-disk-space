@@ -1,5 +1,5 @@
+import type { EntryReads } from '../system/entryReads.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type ActivityProbe = 'recent' | 'quiet' | 'unknown';
@@ -17,7 +17,7 @@ export async function loadTreeActivity(params: {
   excludedNames: string[];
   maxEntries: number;
   deadlineMs: number;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
 }): Promise<ActivityProbe> {
   const rootStats = await loadEntryStats({ path: params.path });
 
@@ -42,7 +42,7 @@ export async function loadTreeActivity(params: {
     isStatsNeeded: true,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
     visitEntry: (entry) => {
       if (entry.stats === null || params.excludedNames.includes(entry.name)) {
         return 'skip';

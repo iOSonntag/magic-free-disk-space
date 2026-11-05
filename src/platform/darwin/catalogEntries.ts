@@ -835,7 +835,7 @@ export const CATALOG_ENTRIES: CatalogEntry[] = [
   },
   {
     id: 'docker-desktop-data',
-    category: 'containers',
+    category: 'appContainers',
     title: 'Docker images and volumes',
     explanation:
       'Every Docker image, container, and volume, which you can prune with `docker system prune` or in Docker Desktop.',

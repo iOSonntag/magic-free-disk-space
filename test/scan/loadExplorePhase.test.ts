@@ -150,7 +150,7 @@ function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
     catalogEntries: [vscodeEntry],
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+    entryReads: darwinPlatform.system.entryReads,
     privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }
@@ -206,7 +206,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -271,7 +271,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -308,7 +308,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -491,7 +491,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 

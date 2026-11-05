@@ -44,7 +44,7 @@ async function loadAllocatedBytesOrThrow(path: string): Promise<number> {
   const measured = await loadPathMeasurement({
     path: path,
     deadlineMs: Date.now() + 10_000,
-    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+    entryReads: darwinPlatform.system.entryReads,
   });
 
   if (measured.kind === 'failed') {
@@ -71,7 +71,7 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
     const measurement = await loadUnitMeasurement({
       unit: buildDartUnit([packageFolder, hashFile, join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(measurement).toEqual({
@@ -79,6 +79,7 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
         (await loadAllocatedBytesOrThrow(packageFolder)) +
         (await loadAllocatedBytesOrThrow(hashFile)),
       entryCount: 3,
+      privateSizeFallbackCount: 0,
       isComplete: true,
       holdsOtherVolume: false,
     });
@@ -92,12 +93,12 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
     const plain = await loadUnitMeasurement({
       unit: buildDartUnit([hashFile, join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
     const mounted = await loadUnitMeasurement({
       unit: buildDartUnit([hashFile, '/dev', join(fixtureRoot.homeDir, 'gone')]),
       deadlineMs: Date.now() + 10_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(plain.holdsOtherVolume).toBe(false);
@@ -115,12 +116,13 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
     const measurement = await loadUnitMeasurement({
       unit: buildDartUnit([hiddenFile]),
       deadlineMs: Date.now() + 10_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(measurement).toEqual({
       allocatedBytes: 0,
       entryCount: 0,
+      privateSizeFallbackCount: 0,
       isComplete: false,
       holdsOtherVolume: false,
     });
@@ -141,7 +143,7 @@ describeAwaitingWin32Platform('loadUnitMeasurement', () => {
         installPath: buildTestAbsolutePath({ text: versionFolder }),
       },
       deadlineMs: Date.now() + 10_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(measurement.isComplete).toBe(false);

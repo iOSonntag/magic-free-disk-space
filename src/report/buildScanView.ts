@@ -116,9 +116,15 @@ function buildSectionTitleTexts(params: { texts: ReportTexts }): Record<Consumer
   return {
     caches: 'Caches',
     developerTools: 'Developer tools',
+    projects: 'Projects',
+    containers: 'Containers and VMs',
+    aiModels: 'Local AI models',
+    downloads: 'Downloads and installers',
+    icloud: 'iCloud Drive',
     apps: 'Apps',
     largeFiles: 'Large files',
     trash: params.texts.trashName,
+    ownApp: 'Handled by its own app',
   };
 }
 

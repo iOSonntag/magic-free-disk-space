@@ -64,7 +64,7 @@ const SIMULATOR_APP_COMMAND =
 const DELETION_PLATFORM = {
   delete: darwinPlatform.delete,
   probePlatform: buildTestProbePlatform(),
-  isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  entryReads: darwinPlatform.system.entryReads,
 };
 
 let fixtureRoot: FixtureRoot;
@@ -276,7 +276,7 @@ async function measureAllocatedBytes(candidate: Candidate): Promise<number> {
   const measurement = await loadUnitMeasurement({
     unit: readToolUnit(candidate),
     deadlineMs: Date.now() + 60_000,
-    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+    entryReads: darwinPlatform.system.entryReads,
   });
 
   return measurement.allocatedBytes;
@@ -299,8 +299,10 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const sibling = await createCacheFolder('sibling');
     const journal = await createTestJournal();
 
+    const selectedCandidate = await scanCandidate(selected);
+
     const run = await deleteCandidates({
-      candidates: [await scanCandidate(selected)],
+      candidates: [selectedCandidate],
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
@@ -311,7 +313,14 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     expect(run).toEqual({
       outcomes: [
-        { path: selected, allocatedBytes: 4096, freedBytes: 4096, outcome: 'removed', code: null },
+        {
+          candidate: selectedCandidate,
+          path: selected,
+          allocatedBytes: 4096,
+          freedBytes: 4096,
+          outcome: 'removed',
+          code: null,
+        },
       ],
       journalFailure: null,
     });
@@ -538,10 +547,11 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       homeDir: fixtureRoot.homeDir,
       version: '20.1.0',
     });
+    const pathCandidate = await scanCandidate(pathItem);
     const entries: JournalEntry[] = [];
 
     const run = await deleteCandidates({
-      candidates: [toolCandidate, await scanCandidate(pathItem)],
+      candidates: [toolCandidate, pathCandidate],
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -561,13 +571,21 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     ]);
     expect(run.outcomes).toEqual([
       {
+        candidate: toolCandidate,
         path: toolCandidate.path,
         allocatedBytes: toolCandidate.allocatedBytes,
         freedBytes: 0,
         outcome: 'notAttempted',
         code: null,
       },
-      { path: pathItem, allocatedBytes: 4096, freedBytes: 0, outcome: 'notAttempted', code: null },
+      {
+        candidate: pathCandidate,
+        path: pathItem,
+        allocatedBytes: 4096,
+        freedBytes: 0,
+        outcome: 'notAttempted',
+        code: null,
+      },
     ]);
     expect(await isPresent(pathItem)).toBe(true);
   });
@@ -627,6 +645,7 @@ process.exit(0);`,
     expect(run).toEqual({
       outcomes: [
         {
+          candidate: candidate,
           path: candidate.path,
           allocatedBytes: candidate.allocatedBytes,
           freedBytes: allocatedBytes,
@@ -671,6 +690,7 @@ process.exit(0);`,
     expect(run).toEqual({
       outcomes: [
         {
+          candidate: candidate,
           path: candidate.path,
           allocatedBytes: candidate.allocatedBytes,
           freedBytes: 0,
@@ -711,6 +731,7 @@ process.exit(1);`,
     expect(run).toEqual({
       outcomes: [
         {
+          candidate: candidate,
           path: candidate.path,
           allocatedBytes: candidate.allocatedBytes,
           freedBytes: 0,
@@ -745,10 +766,11 @@ process.exit(1);`,
 process.exit(0);`,
     });
     const toolAllocatedBytes = await measureAllocatedBytes(toolCandidate);
+    const pathCandidate = await scanCandidate(pathItem);
     const journal = await createTestJournal();
 
     const run = await deleteCandidates({
-      candidates: [await scanCandidate(pathItem), toolCandidate],
+      candidates: [pathCandidate, toolCandidate],
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
@@ -759,8 +781,16 @@ process.exit(0);`,
 
     expect(run).toEqual({
       outcomes: [
-        { path: pathItem, allocatedBytes: 4096, freedBytes: 4096, outcome: 'removed', code: null },
         {
+          candidate: pathCandidate,
+          path: pathItem,
+          allocatedBytes: 4096,
+          freedBytes: 4096,
+          outcome: 'removed',
+          code: null,
+        },
+        {
+          candidate: toolCandidate,
           path: toolCandidate.path,
           allocatedBytes: toolCandidate.allocatedBytes,
           freedBytes: toolAllocatedBytes,
@@ -853,6 +883,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     expect(run).toEqual({
       outcomes: [
         {
+          candidate: candidate,
           path: candidate.path,
           allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
           freedBytes: VSCODE_FOLDER_SIZE_BYTES,
@@ -1005,17 +1036,22 @@ describeAwaitingWin32Platform('isUnremovedOutcome', () => {
 
 describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
   const TOOL_PATH = '/Users/tester/.local/share/mise/installs/node/20.1.0';
+  const toolCandidate = buildTestToolCandidate({
+    homeDir: '/Users/tester',
+    version: '20.1.0',
+    allocatedBytes: 8192,
+  });
 
   test('a completed run is removed with its measured drop and the stderr tail', () => {
     expect(
       toolCandidateRunToRemoval({
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         run: { kind: 'completed', freedBytes: 6144, stderrTail: 'removed node@20.1.0' },
         atMs: NOW_MS,
       }),
     ).toEqual({
       outcome: {
+        candidate: toolCandidate,
         path: TOOL_PATH,
         allocatedBytes: 8192,
         freedBytes: 6144,
@@ -1037,13 +1073,13 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
   test('a skipped run frees nothing and records its reason', () => {
     expect(
       toolCandidateRunToRemoval({
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         run: { kind: 'skipped', reason: 'ownerRunning' },
         atMs: NOW_MS,
       }),
     ).toEqual({
       outcome: {
+        candidate: toolCandidate,
         path: TOOL_PATH,
         allocatedBytes: 8192,
         freedBytes: 0,
@@ -1062,13 +1098,13 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
 
     expect(
       toolCandidateRunToRemoval({
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         run: { kind: 'failed', freedBytes: 1024, failure: failure },
         atMs: NOW_MS,
       }),
     ).toEqual({
       outcome: {
+        candidate: toolCandidate,
         path: TOOL_PATH,
         allocatedBytes: 8192,
         freedBytes: 1024,

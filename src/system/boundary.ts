@@ -6,6 +6,7 @@ export const moduleBoundary = {
   readsTablesOf: [],
   exposes: [
     'createConcurrencyLimit.ts',
+    'entryReads.ts',
     'fullDiskAccess.ts',
     'getErrorCode.ts',
     'isAnyBundleRunning.ts',
@@ -24,6 +25,7 @@ export const moduleBoundary = {
     'runFilesystemCall.ts',
     'systemPlatform.ts',
     'userIdentity.ts',
+    'volumeSpace.ts',
     'walkDirectoryTree.ts',
   ],
 } satisfies ModuleBoundary;

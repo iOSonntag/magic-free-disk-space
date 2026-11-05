@@ -11,7 +11,7 @@ import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
-import type { EntryEvictionCheck } from '../../src/system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../../src/system/entryReads.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -51,7 +51,10 @@ function walkTestProjects(params: {
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: params.maxDepth ?? 4,
     deadlineMs: params.deadlineMs ?? NO_DEADLINE_MS,
-    isEntryEvicted: params.isEntryEvicted ?? (() => false),
+    entryReads: {
+      isEntryEvicted: params.isEntryEvicted ?? (() => false),
+      loadPrivateBytes: () => null,
+    },
     privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }

@@ -63,7 +63,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('quiet');
@@ -90,7 +90,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('recent');
@@ -117,7 +117,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: ['node_modules'],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
     const includedActivity = await loadTreeActivity({
       path: homeDir,
@@ -125,7 +125,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(excludedActivity).toBe('quiet');
@@ -153,7 +153,10 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: (entry) => entry.path === evictedDirPath,
+      entryReads: {
+        isEntryEvicted: (entry) => entry.path === evictedDirPath,
+        loadPrivateBytes: () => null,
+      },
     });
 
     expect(activity).toBe('quiet');
@@ -180,7 +183,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('recent');
@@ -202,7 +205,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('recent');
@@ -226,7 +229,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 2,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('unknown');
@@ -253,7 +256,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: 0,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('unknown');
@@ -281,7 +284,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('unknown');
@@ -308,7 +311,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('quiet');
@@ -321,7 +324,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(activity).toBe('unknown');

@@ -1,9 +1,9 @@
 import { dirname } from 'node:path';
 import type { Result } from '../result.js';
+import type { EntryReads } from '../system/entryReads.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type Measurement = {
@@ -12,6 +12,8 @@ export type Measurement = {
   /** Entries whose stats were read, the root included. A hard link counts once per path. */
   entryCount: number;
   unreadableCount: number;
+  /** Files whose private size could not be read, so their allocated blocks count instead. */
+  privateSizeFallbackCount: number;
   isComplete: boolean;
   /** The newest modification time of the entries read, the root included. */
   latestModifiedMs: number;
@@ -30,7 +32,7 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 export async function loadPathMeasurement(params: {
   path: string;
   deadlineMs: number;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
 }): Promise<Result<Measurement, FileFailure>> {
   const identityResult = await loadFileIdentity({ path: params.path });
 
@@ -54,6 +56,7 @@ export async function loadPathMeasurement(params: {
         allocatedBytes: rootStats.allocatedBytes,
         entryCount: 1,
         unreadableCount: 0,
+        privateSizeFallbackCount: 0,
         isComplete: true,
         latestModifiedMs: rootStats.modifiedMs,
         holdsOtherVolume: false,
@@ -74,7 +77,7 @@ export async function loadPathMeasurement(params: {
     isStatsNeeded: true,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
     visitEntry: (entry) => {
       if (entry.stats === null) {
         return 'skip';
@@ -112,6 +115,7 @@ export async function loadPathMeasurement(params: {
       allocatedBytes: allocatedBytes,
       entryCount: entryCount,
       unreadableCount: unreadableCount,
+      privateSizeFallbackCount: 0,
       isComplete: walkEnd === 'completed' && unreadableCount === 0,
       latestModifiedMs: latestModifiedMs,
       holdsOtherVolume: holdsOtherVolume,

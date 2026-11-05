@@ -1,3 +1,4 @@
+import type { VolumeSpace } from '../../system/volumeSpace.js';
 import type { Platform } from '../platform.js';
 import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
@@ -57,9 +58,20 @@ export const darwinPlatform: Platform = {
       'Download the new version, quit this app, and move the new one into Applications in its place.',
   },
   system: {
-    isEntryEvicted: isEntryEvicted,
+    entryReads: { isEntryEvicted: isEntryEvicted, loadPrivateBytes: loadPrivateBytes },
     privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE,
     loadFullDiskAccess: loadFullDiskAccess,
     loadRunningProcesses: loadProcessCommands,
+    loadVolumeSpace: loadVolumeSpace,
   },
 };
+
+// A stub until part 1b reads the private size by FFI from libSystem.
+function loadPrivateBytes(_path: string): number | null {
+  return null;
+}
+
+// A stub until part 1b reads the volume space by `statfs`.
+function loadVolumeSpace(_path: string): Promise<VolumeSpace | null> {
+  return Promise.resolve(null);
+}

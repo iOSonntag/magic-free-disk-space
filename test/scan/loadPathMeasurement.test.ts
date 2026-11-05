@@ -23,7 +23,7 @@ async function loadMeasurementOrThrow(params: {
   const result = await loadPathMeasurement({
     path: params.path,
     deadlineMs: params.deadlineMs,
-    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+    entryReads: darwinPlatform.system.entryReads,
   });
 
   if (result.kind === 'failed') {
@@ -212,7 +212,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
     const result = await loadPathMeasurement({
       path: join(fixtureRoot.homeDir, 'missing'),
       deadlineMs: Date.now() + 60_000,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(result).toEqual({ kind: 'failed', failure: { reason: 'missing', code: 'ENOENT' } });

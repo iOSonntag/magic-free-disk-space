@@ -1,7 +1,7 @@
 import type { Result } from '../result.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { CandidateDecision } from './candidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
@@ -18,7 +18,7 @@ export function loadMeasuredPhase(params: {
   path: string;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {
@@ -26,7 +26,7 @@ export function loadMeasuredPhase(params: {
     const measured = await loadPathMeasurement({
       path: params.path,
       deadlineMs: Date.now() + params.measureTimeoutMs,
-      isEntryEvicted: params.isEntryEvicted,
+      entryReads: params.entryReads,
     });
 
     return buildMeasuredPhase({

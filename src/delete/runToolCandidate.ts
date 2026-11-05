@@ -6,7 +6,7 @@ import { recheckExploreUnit } from '../explore/recheckExploreUnit.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import type { UnitMeasurement } from '../scan/loadUnitMeasurement.js';
 import { loadUnitMeasurement } from '../scan/loadUnitMeasurement.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
@@ -50,15 +50,15 @@ export async function runToolCandidate(params: {
   environment: Environment;
   /** What the recheck of the unit reads by. */
   probePlatform: ExploreProbePlatform;
-  /** The system slice's eviction check, for the measurements before and after the command. */
-  isEntryEvicted: EntryEvictionCheck;
+  /** The system slice's entry reads, for the measurements before and after the command. */
+  entryReads: EntryReads;
   loadProcessCommands: () => Promise<string[] | null>;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
   const before = await loadUnitMeasurement({
     unit: params.unit,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
   });
   const trustedTool = await loadTrustedTool({
     name: params.unit.tool.name,
@@ -91,7 +91,7 @@ export async function runToolCandidate(params: {
         unit: params.unit,
         tool: trustedTool.value,
         environment: params.environment,
-        isEntryEvicted: params.isEntryEvicted,
+        entryReads: params.entryReads,
         before: before,
         timeoutMs: params.timeoutMs,
       });
@@ -103,7 +103,7 @@ async function runCheckedUnitCommand(params: {
   unit: ExploreToolUnit;
   tool: LocatedTool;
   environment: Environment;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   before: UnitMeasurement;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
@@ -117,7 +117,7 @@ async function runCheckedUnitCommand(params: {
   const after = await loadUnitMeasurement({
     unit: params.unit,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
   });
   // An incomplete measurement after the run misses part of what is left, so its drop could
   // count bytes that were never freed.

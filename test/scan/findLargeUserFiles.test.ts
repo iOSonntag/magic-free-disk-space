@@ -55,7 +55,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -77,7 +77,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -121,7 +121,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -141,7 +141,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -161,7 +161,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -191,7 +191,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -215,7 +215,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -236,7 +236,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -258,7 +258,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [linkedRootDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -278,7 +278,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -307,7 +307,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -328,7 +328,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir, fixtureRoot.tempDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: 0,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -343,7 +343,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [join(fixtureRoot.homeDir, 'absent')],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 

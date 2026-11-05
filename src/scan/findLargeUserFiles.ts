@@ -1,9 +1,9 @@
 import { basename } from 'node:path';
+import type { EntryReads } from '../system/entryReads.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import type { TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -42,7 +42,7 @@ export async function findLargeUserFiles(params: {
   rootDirs: string[];
   minAllocatedBytes: number;
   deadlineMs: number;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   const largeFiles: LargeFile[] = [];
@@ -92,7 +92,7 @@ export async function findLargeUserFiles(params: {
       isStatsNeeded: true,
       maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
       isStopped: () => Date.now() >= params.deadlineMs,
-      isEntryEvicted: params.isEntryEvicted,
+      entryReads: params.entryReads,
       visitEntry: (entry): TreeEntryVisit => {
         if (
           entry.stats === null ||

@@ -8,7 +8,7 @@ import {
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { TreeEntry, TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -46,7 +46,7 @@ export async function walkProjects(params: {
   rules: ProjectArtifactRule[];
   maxDepth: number;
   deadlineMs: number;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ProjectWalk> {
   const artifactNames = new Set(params.rules.map((rule) => rule.artifactName));
@@ -106,7 +106,7 @@ export async function walkProjects(params: {
     isStatsNeeded: false,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
     visitEntry: visitProjectEntry,
     onUnreadable: (unreadable) => {
       const readIssues = buildFailureIssues({

@@ -8,11 +8,11 @@ import type {
   CandidateRemovalDeletePath,
   CandidateRemovalDeleteUnitFolder,
 } from '../scan/candidate.js';
+import type { EntryReads } from '../system/entryReads.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import type { ReadFailure } from '../system/readFailure.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import type { DeletePlatform } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
@@ -32,6 +32,7 @@ export type RemovalOutcomeKind =
 export type RemovalOutcomeCodedKind = Exclude<RemovalOutcomeKind, 'toolFailed'>;
 
 export type RemovalOutcomeCoded = {
+  candidate: Candidate;
   path: string;
   allocatedBytes: number;
   /** The space the removal gave back: a deleted path's size, or a tool run's measured drop. */
@@ -43,6 +44,7 @@ export type RemovalOutcomeCoded = {
 
 /** A tool that failed may still have removed part of its unit, which `freedBytes` holds. */
 export type RemovalOutcomeToolFailed = {
+  candidate: Candidate;
   path: string;
   allocatedBytes: number;
   freedBytes: number;
@@ -90,8 +92,8 @@ export async function deleteCandidates(params: {
   delete: DeletePlatform;
   /** What the rechecks of the units read by. */
   probePlatform: ExploreProbePlatform;
-  /** The system slice's eviction check, for the measurements around a tool's run. */
-  isEntryEvicted: EntryEvictionCheck;
+  /** The system slice's entry reads, for the measurements around a tool's run. */
+  entryReads: EntryReads;
   loadProcessCommands: () => Promise<string[] | null>;
   clock: () => number;
 }): Promise<RemovalRun> {
@@ -118,7 +120,7 @@ export async function deleteCandidates(params: {
       environment: params.environment,
       delete: params.delete,
       probePlatform: params.probePlatform,
-      isEntryEvicted: params.isEntryEvicted,
+      entryReads: params.entryReads,
       processCommands: processCommands,
       loadProcessCommands: params.loadProcessCommands,
       clock: params.clock,
@@ -169,7 +171,7 @@ async function removeCandidate(params: {
   environment: Environment;
   delete: DeletePlatform;
   probePlatform: ExploreProbePlatform;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   /** The processes read once before the run, for path items. */
   processCommands: string[] | null;
   loadProcessCommands: () => Promise<string[] | null>;
@@ -178,8 +180,7 @@ async function removeCandidate(params: {
   switch (params.candidate.removal.kind) {
     case 'deletePath': {
       const outcome = await deletePathCandidate({
-        path: params.candidate.path,
-        allocatedBytes: params.candidate.allocatedBytes,
+        candidate: params.candidate,
         removal: params.candidate.removal,
         delete: params.delete,
         processCommands: params.processCommands,
@@ -189,7 +190,7 @@ async function removeCandidate(params: {
     }
     case 'deleteUnitFolder': {
       const outcome = await deleteUnitFolderCandidate({
-        allocatedBytes: params.candidate.allocatedBytes,
+        candidate: params.candidate,
         removal: params.candidate.removal,
         environment: params.environment,
         delete: params.delete,
@@ -204,14 +205,13 @@ async function removeCandidate(params: {
         unit: params.candidate.removal.unit,
         environment: params.environment,
         probePlatform: params.probePlatform,
-        isEntryEvicted: params.isEntryEvicted,
+        entryReads: params.entryReads,
         loadProcessCommands: params.loadProcessCommands,
         timeoutMs: TOOL_RUN_TIMEOUT_MS,
       });
 
       return toolCandidateRunToRemoval({
-        path: params.candidate.path,
-        allocatedBytes: params.candidate.allocatedBytes,
+        candidate: params.candidate,
         run: run,
         atMs: params.clock(),
       });
@@ -240,8 +240,7 @@ function pathOutcomeToRemoval(params: {
 
 /** Maps the run of a tool item onto its outcome and its `toolOutcome` journal entry. */
 export function toolCandidateRunToRemoval(params: {
-  path: string;
-  allocatedBytes: number;
+  candidate: Candidate;
   run: ToolCandidateRun;
   atMs: number;
 }): RecordedRemoval {
@@ -249,8 +248,9 @@ export function toolCandidateRunToRemoval(params: {
     case 'completed':
       return {
         outcome: {
-          path: params.path,
-          allocatedBytes: params.allocatedBytes,
+          candidate: params.candidate,
+          path: params.candidate.path,
+          allocatedBytes: params.candidate.allocatedBytes,
           freedBytes: params.run.freedBytes,
           outcome: 'removed',
           code: null,
@@ -258,7 +258,7 @@ export function toolCandidateRunToRemoval(params: {
         outcomeEntry: {
           kind: 'toolOutcome',
           atMs: params.atMs,
-          path: params.path,
+          path: params.candidate.path,
           outcome: 'removed',
           exitCode: 0,
           stderrTail: params.run.stderrTail,
@@ -268,8 +268,9 @@ export function toolCandidateRunToRemoval(params: {
     case 'skipped':
       return {
         outcome: {
-          path: params.path,
-          allocatedBytes: params.allocatedBytes,
+          candidate: params.candidate,
+          path: params.candidate.path,
+          allocatedBytes: params.candidate.allocatedBytes,
           freedBytes: 0,
           outcome: params.run.reason,
           code: null,
@@ -277,15 +278,16 @@ export function toolCandidateRunToRemoval(params: {
         outcomeEntry: {
           kind: 'toolOutcome',
           atMs: params.atMs,
-          path: params.path,
+          path: params.candidate.path,
           outcome: params.run.reason,
         },
       };
     case 'failed':
       return {
         outcome: {
-          path: params.path,
-          allocatedBytes: params.allocatedBytes,
+          candidate: params.candidate,
+          path: params.candidate.path,
+          allocatedBytes: params.candidate.allocatedBytes,
           freedBytes: params.run.freedBytes,
           outcome: 'toolFailed',
           failure: params.run.failure,
@@ -293,7 +295,7 @@ export function toolCandidateRunToRemoval(params: {
         outcomeEntry: {
           kind: 'toolOutcome',
           atMs: params.atMs,
-          path: params.path,
+          path: params.candidate.path,
           outcome: 'toolFailed',
           freedBytes: params.run.freedBytes,
           failure: params.run.failure,
@@ -303,8 +305,7 @@ export function toolCandidateRunToRemoval(params: {
 }
 
 async function deletePathCandidate(params: {
-  path: string;
-  allocatedBytes: number;
+  candidate: Candidate;
   removal: CandidateRemovalDeletePath;
   delete: DeletePlatform;
   processCommands: string[] | null;
@@ -316,16 +317,16 @@ async function deletePathCandidate(params: {
     })
   ) {
     return buildPathOutcome({
-      path: params.path,
-      allocatedBytes: params.allocatedBytes,
+      candidate: params.candidate,
+      path: params.candidate.path,
       outcome: 'ownerRunning',
       code: null,
     });
   }
 
   return deleteScannedPath({
-    path: params.path,
-    allocatedBytes: params.allocatedBytes,
+    candidate: params.candidate,
+    path: params.candidate.path,
     identity: params.removal.identity,
     delete: params.delete,
   });
@@ -336,7 +337,7 @@ async function deletePathCandidate(params: {
  * still offers the unit for the same reason, and the folder's identity still matches the scan.
  */
 async function deleteUnitFolderCandidate(params: {
-  allocatedBytes: number;
+  candidate: Candidate;
   removal: CandidateRemovalDeleteUnitFolder;
   environment: Environment;
   delete: DeletePlatform;
@@ -354,29 +355,29 @@ async function deleteUnitFolderCandidate(params: {
   switch (recheck.kind) {
     case 'changed':
       return buildPathOutcome({
+        candidate: params.candidate,
         path: folderPath,
-        allocatedBytes: params.allocatedBytes,
         outcome: 'changedSinceScan',
         code: null,
       });
     case 'busy':
       return buildPathOutcome({
+        candidate: params.candidate,
         path: folderPath,
-        allocatedBytes: params.allocatedBytes,
         outcome: 'ownerRunning',
         code: null,
       });
     case 'failed':
       return buildPathOutcome({
+        candidate: params.candidate,
         path: folderPath,
-        allocatedBytes: params.allocatedBytes,
         outcome: readFailureToOutcomeKind(recheck.failure.failure),
         code: recheck.failure.failure.code,
       });
     case 'unchanged':
       return deleteScannedPath({
+        candidate: params.candidate,
         path: folderPath,
-        allocatedBytes: params.allocatedBytes,
         identity: params.removal.identity,
         delete: params.delete,
       });
@@ -396,8 +397,8 @@ function readFailureToOutcomeKind(failure: ReadFailure): RemovalOutcomeCodedKind
 
 /** Deletes the path only while its identity still matches the scan. */
 async function deleteScannedPath(params: {
+  candidate: Candidate;
   path: string;
-  allocatedBytes: number;
   identity: FileIdentity;
   delete: DeletePlatform;
 }): Promise<RemovalOutcomeCoded> {
@@ -406,8 +407,8 @@ async function deleteScannedPath(params: {
   if (currentIdentity.kind === 'failed') {
     if (currentIdentity.failure.reason === 'missing') {
       return buildPathOutcome({
+        candidate: params.candidate,
         path: params.path,
-        allocatedBytes: params.allocatedBytes,
         outcome: 'alreadyGone',
         code: null,
       });
@@ -415,16 +416,16 @@ async function deleteScannedPath(params: {
 
     if (currentIdentity.failure.reason === 'permissionDenied') {
       return buildPathOutcome({
+        candidate: params.candidate,
         path: params.path,
-        allocatedBytes: params.allocatedBytes,
         outcome: 'permissionDenied',
         code: currentIdentity.failure.code,
       });
     }
 
     return buildPathOutcome({
+      candidate: params.candidate,
       path: params.path,
-      allocatedBytes: params.allocatedBytes,
       outcome: 'failed',
       code: currentIdentity.failure.code,
     });
@@ -432,8 +433,8 @@ async function deleteScannedPath(params: {
 
   if (!isSameIdentity({ current: currentIdentity.value, scanned: params.identity })) {
     return buildPathOutcome({
+      candidate: params.candidate,
       path: params.path,
-      allocatedBytes: params.allocatedBytes,
       outcome: 'changedSinceScan',
       code: null,
     });
@@ -443,8 +444,8 @@ async function deleteScannedPath(params: {
 
   if (removed.kind === 'succeeded') {
     return buildPathOutcome({
+      candidate: params.candidate,
       path: params.path,
-      allocatedBytes: params.allocatedBytes,
       outcome: 'removed',
       code: null,
     });
@@ -452,32 +453,33 @@ async function deleteScannedPath(params: {
 
   if (PERMISSION_DENIED_CODES.includes(removed.failure)) {
     return buildPathOutcome({
+      candidate: params.candidate,
       path: params.path,
-      allocatedBytes: params.allocatedBytes,
       outcome: 'permissionDenied',
       code: removed.failure,
     });
   }
 
   return buildPathOutcome({
+    candidate: params.candidate,
     path: params.path,
-    allocatedBytes: params.allocatedBytes,
     outcome: 'failed',
     code: removed.failure,
   });
 }
 
-/** A deleted path frees its scanned size; any other outcome frees nothing. */
+/** A deleted path frees its candidate's scanned size; any other outcome frees nothing. */
 function buildPathOutcome(params: {
+  candidate: Candidate;
   path: string;
-  allocatedBytes: number;
   outcome: RemovalOutcomeCodedKind;
   code: string | null;
 }): RemovalOutcomeCoded {
   return {
+    candidate: params.candidate,
     path: params.path,
-    allocatedBytes: params.allocatedBytes,
-    freedBytes: params.outcome === 'removed' ? params.allocatedBytes : 0,
+    allocatedBytes: params.candidate.allocatedBytes,
+    freedBytes: params.outcome === 'removed' ? params.candidate.allocatedBytes : 0,
     outcome: params.outcome,
     code: params.code,
   };
@@ -515,8 +517,8 @@ function isSameIdentity(params: { current: FileIdentity; scanned: FileIdentity }
 function buildNotAttemptedOutcomes(params: { candidates: Candidate[] }): RemovalOutcome[] {
   return params.candidates.map((candidate) =>
     buildPathOutcome({
+      candidate: candidate,
       path: candidate.path,
-      allocatedBytes: candidate.allocatedBytes,
       outcome: 'notAttempted',
       code: null,
     }),

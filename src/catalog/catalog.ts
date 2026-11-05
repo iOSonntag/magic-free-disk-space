@@ -7,7 +7,17 @@ export type CandidateCategory =
   | 'developer'
   | 'packages'
   | 'caches'
-  | 'containers'
+  /** The app sandboxes in `~/Library/Containers`. */
+  | 'appContainers'
+  /** The images, containers, volumes and disks of Docker and the VM engines. */
+  | 'containerEngines'
+  | 'aiModels'
+  | 'downloads'
+  | 'installers'
+  /** The local copies of iCloud Drive files, which an evict frees. */
+  | 'cloudCopies'
+  /** What only its own app removes safely, such as iPhone backups. */
+  | 'appManaged'
   | 'system'
   | 'trash'
   | 'projects'

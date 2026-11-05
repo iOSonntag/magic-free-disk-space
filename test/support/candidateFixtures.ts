@@ -36,6 +36,7 @@ export function buildTestMeasurement(params: {
     allocatedBytes: params.allocatedBytes,
     entryCount: 3,
     unreadableCount: 0,
+    privateSizeFallbackCount: 0,
     isComplete: params.isComplete ?? true,
     latestModifiedMs: params.latestModifiedMs ?? 0,
     holdsOtherVolume: params.holdsOtherVolume ?? false,
