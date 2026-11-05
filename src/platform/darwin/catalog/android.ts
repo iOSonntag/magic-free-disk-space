@@ -1,0 +1,127 @@
+import type { CatalogEntry } from '../../../catalog/catalog.js';
+
+/** Android Studio's SDK and emulators, and Gradle, which builds Android apps. */
+export const ANDROID_ENTRIES: CatalogEntry[] = [
+  {
+    id: 'android-emulators',
+    category: 'developer',
+    title: 'Simulated Android phones',
+    explanation: 'The simulated Android phones you made, each with its own storage and data.',
+    regeneration: 'A deleted one does not come back, and a new one starts empty.',
+    risk: 'careful',
+    root: 'home',
+    path: '.android/avd',
+    scope: 'self',
+    ageRule: 'none',
+    owner: null,
+    removal: {
+      kind: 'explore',
+      probe: 'androidAvds',
+      advice:
+        "Delete simulated phones you no longer use in Android Studio's Device Manager or with `avdmanager --sdk_root=<sdk> delete avd -n <name>`.",
+    },
+  },
+  {
+    id: 'android-system-images',
+    category: 'developer',
+    title: 'Android systems for simulated phones',
+    explanation:
+      'The Android systems that simulated phones start from, one for each Android version and processor type.',
+    regeneration: 'A system comes back only when you install it again in Android Studio.',
+    risk: 'review',
+    root: 'home',
+    path: 'Library/Android/sdk/system-images',
+    scope: 'self',
+    ageRule: 'none',
+    owner: null,
+    removal: {
+      kind: 'explore',
+      probe: 'androidSystemImages',
+      advice:
+        'Remove the systems you no longer need with the SDK Manager in Android Studio or with `sdkmanager --uninstall "system-images;<api>;<variant>;<abi>"`.',
+    },
+  },
+  {
+    id: 'android-emulator-binaries',
+    category: 'developer',
+    title: 'Android phone simulator',
+    explanation:
+      'The program that runs simulated Android phones. You can remove it if you no longer use them.',
+    regeneration: 'It comes back when you install it again in Android Studio.',
+    risk: 'review',
+    root: 'home',
+    path: 'Library/Android/sdk/emulator',
+    scope: 'self',
+    ageRule: 'none',
+    owner: null,
+    removal: {
+      kind: 'explore',
+      probe: 'androidEmulator',
+      advice:
+        'If you no longer use simulated Android phones, remove the simulator with `sdkmanager --uninstall emulator`.',
+    },
+  },
+  {
+    id: 'android-platforms',
+    category: 'developer',
+    title: 'Android versions for building apps',
+    explanation: 'The Android versions that apps are built for, one folder for each version.',
+    regeneration: 'A version comes back only when you install it again in Android Studio.',
+    risk: 'review',
+    root: 'home',
+    path: 'Library/Android/sdk/platforms',
+    scope: 'self',
+    ageRule: 'none',
+    owner: null,
+    removal: {
+      kind: 'explore',
+      probe: 'androidPlatforms',
+      advice:
+        'Remove the Android versions you no longer build for with `sdkmanager --uninstall "platforms;android-<api>"`.',
+    },
+  },
+  {
+    id: 'gradle-caches',
+    category: 'developer',
+    title: 'Gradle build files',
+    explanation:
+      'Downloads and build files of Gradle, the tool that builds Android and Java apps. Stop Gradle first with `gradle --stop`.',
+    regeneration:
+      'The next build downloads and makes them again, which needs an internet connection.',
+    risk: 'review',
+    root: 'home',
+    path: '.gradle/caches',
+    scope: 'self',
+    ageRule: 'none',
+    owner: null,
+    removal: { kind: 'delete' },
+  },
+  {
+    id: 'gradle-wrapper-distributions',
+    category: 'developer',
+    title: 'Downloaded Gradle versions',
+    explanation: 'Copies of Gradle that projects downloaded, one folder for each version.',
+    regeneration: 'A project downloads its version again when it needs it.',
+    risk: 'safe',
+    root: 'home',
+    path: '.gradle/wrapper/dists',
+    scope: 'children',
+    ageRule: 'none',
+    owner: null,
+    removal: { kind: 'delete' },
+  },
+  {
+    id: 'gradle-daemon-logs',
+    category: 'developer',
+    title: 'Gradle background logs',
+    explanation: "Records of Gradle's background helpers. Stop Gradle first with `gradle --stop`.",
+    regeneration: 'Gradle writes new ones when it runs again.',
+    risk: 'review',
+    root: 'home',
+    path: '.gradle/daemon',
+    scope: 'self',
+    ageRule: 'none',
+    owner: null,
+    removal: { kind: 'delete' },
+  },
+];
