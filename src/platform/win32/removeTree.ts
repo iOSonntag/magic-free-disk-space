@@ -1,4 +1,5 @@
 import type { TreeRemoval } from '../../delete/deletePlatform.js';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import type { EntryReads } from '../../system/entryReads.js';
@@ -35,12 +36,20 @@ const WIN32_ENTRY_READS: EntryReads = {
 
 /**
  * Removes the tree at `path` entry by entry, never entering a link or a junction, clearing the
- * read-only bit of each file and folder, and leaving a file another program holds open and an
- * entry kept only online, so the removal can end partly done. Never throws.
+ * read-only bit of each file and folder, and leaving a file another program holds open or Windows
+ * refuses to delete and an entry kept only online, so the removal can end partly done. Fails with
+ * `EINVAL` for a path that is no absolute Windows path. Never throws.
  */
-export function removeTree(params: { path: string }): Promise<Result<TreeRemoval, string>> {
+export async function removeTree(params: { path: string }): Promise<Result<TreeRemoval, string>> {
+  const rootPath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.path });
+
+  if (rootPath.kind === 'failed') {
+    return { kind: 'failed', failure: 'EINVAL' };
+  }
+
   return removeTreeEntries({
-    path: params.path,
+    rootPath: rootPath.value,
+    rules: WIN32_PATH_RULES,
     attributes: WIN32_ENTRY_ATTRIBUTES,
     entryReads: WIN32_ENTRY_READS,
   });
@@ -53,34 +62,23 @@ export function formatEntryCallFailure(params: { failure: Win32CallFailure }): s
   );
 }
 
-function loadEntryAttributes(params: { path: string }): Result<number, string> {
-  const path = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.path });
-
-  if (path.kind === 'failed') {
-    return { kind: 'failed', failure: 'EINVAL' };
-  }
-
-  const attributes = loadFileAttributes({ path: path.value });
-
-  if (attributes.kind === 'failed') {
-    return { kind: 'failed', failure: formatEntryCallFailure({ failure: attributes.failure }) };
-  }
-
-  return attributes;
+function loadEntryAttributes(params: { path: AbsolutePath }): Result<number, string> {
+  return toEntryCallResult(loadFileAttributes({ path: params.path }));
 }
 
-function saveEntryAttributes(params: { path: string; attributes: number }): Result<null, string> {
-  const path = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.path });
+function saveEntryAttributes(params: {
+  path: AbsolutePath;
+  attributes: number;
+}): Result<null, string> {
+  return toEntryCallResult(setFileAttributes({ path: params.path, attributes: params.attributes }));
+}
 
-  if (path.kind === 'failed') {
-    return { kind: 'failed', failure: 'EINVAL' };
+function toEntryCallResult<TValue>(
+  result: Result<TValue, Win32CallFailure>,
+): Result<TValue, string> {
+  if (result.kind === 'failed') {
+    return { kind: 'failed', failure: formatEntryCallFailure({ failure: result.failure }) };
   }
 
-  const saved = setFileAttributes({ path: path.value, attributes: params.attributes });
-
-  if (saved.kind === 'failed') {
-    return { kind: 'failed', failure: formatEntryCallFailure({ failure: saved.failure }) };
-  }
-
-  return saved;
+  return result;
 }

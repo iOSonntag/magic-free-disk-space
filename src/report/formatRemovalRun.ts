@@ -67,7 +67,10 @@ function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
   }
 }
 
-/** How many entries stayed: files another program held open, or content kept only online. */
+/**
+ * How many entries stayed: files another program held open or Windows refused, or content kept
+ * only online.
+ */
 function formatPartlyRemovedLine(params: { outcome: RemovalOutcomePartlyRemoved }): string {
   const stayedText = formatCount({
     count: params.outcome.stayedEntryCount,
@@ -75,7 +78,7 @@ function formatPartlyRemovedLine(params: { outcome: RemovalOutcomePartlyRemoved 
     plural: 'entries',
   });
 
-  return `- ${outcomeTexts.partlyRemoved}: ${formatCandidateItemText({ candidate: params.outcome.candidate })} (${stayedText} stayed, in use by another program or kept only online; ${formatBytes(params.outcome.freedBytes)} freed)`;
+  return `- ${outcomeTexts.partlyRemoved}: ${formatCandidateItemText({ candidate: params.outcome.candidate })} (${stayedText} stayed, in use by another program, kept only online, or refused by Windows; ${formatBytes(params.outcome.freedBytes)} freed)`;
 }
 
 function formatCodedOutcomeLine(params: { outcome: RemovalOutcomeCoded }): string {

@@ -150,8 +150,8 @@ describe('formatRemovalRun', () => {
     });
 
     expect(lines).toEqual([
-      '- partly deleted: C:\\fixture\\cache (2 entries stayed, in use by another program or kept only online; 6.1 KB freed)',
-      '- partly deleted: C:\\fixture\\held (1 entry stayed, in use by another program or kept only online; 0 B freed)',
+      '- partly deleted: C:\\fixture\\cache (2 entries stayed, in use by another program, kept only online, or refused by Windows; 6.1 KB freed)',
+      '- partly deleted: C:\\fixture\\held (1 entry stayed, in use by another program, kept only online, or refused by Windows; 0 B freed)',
       'Freed about 6.1 KB in 0 items.',
       '2 items could not be deleted.',
     ]);

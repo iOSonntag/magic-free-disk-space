@@ -6,8 +6,9 @@ import type { RecycleBinLoad } from '../scan/scanPlatform.js';
 export type TreeRemovalRemoved = { kind: 'removed' };
 
 /**
- * The tree is gone but for entries that stayed where they were: files another program held open,
- * and entries whose content only a cloud store keeps, with the folders that hold them.
+ * The tree is gone but for entries that stayed where they were: files another program held open
+ * or Windows refused to delete, such as a program that runs, and entries whose content only a
+ * cloud store keeps, with the folders that hold them.
  */
 export type TreeRemovalPartlyRemoved = { kind: 'partlyRemoved'; stayedEntryCount: number };
 

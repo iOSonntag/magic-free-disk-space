@@ -1,9 +1,17 @@
 import { rmdir, unlink } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname } from 'node:path';
 import type { TreeRemoval } from '../../delete/deletePlatform.js';
+import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
+import { createConcurrencyLimit } from '../../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../../system/entryReads.js';
-import { getErrorCode } from '../../system/getErrorCode.js';
+import {
+  getErrorCode,
+  isInUseErrorCode,
+  isPermissionDeniedErrorCode,
+} from '../../system/getErrorCode.js';
 import { loadEntryStats } from '../../system/loadEntryStats.js';
 import type { TreeEntry, TreeEntryVisit } from '../../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../system/walkDirectoryTree.js';
@@ -21,16 +29,15 @@ const MAX_CONCURRENT_REMOVALS = 16;
 /** The codes of an entry that is gone already, or whose folder is. */
 const GONE_CODES = ['ENOENT', 'ENOTDIR'];
 
-/** The codes of an entry another program holds open, which stays where it is. */
-const IN_USE_CODES = ['EBUSY'];
+const runLimitedRemoval = createConcurrencyLimit({ maxConcurrent: MAX_CONCURRENT_REMOVALS });
 
 /**
  * Reads and sets the `FILE_ATTRIBUTE_*` bits of an entry, never following a link. A failure is the
  * error code of the call, `ENOENT` for an entry that is gone.
  */
 export type EntryAttributeAccess = {
-  load: (params: { path: string }) => Result<number, string>;
-  save: (params: { path: string; attributes: number }) => Result<null, string>;
+  load: (params: { path: AbsolutePath }) => Result<number, string>;
+  save: (params: { path: AbsolutePath; attributes: number }) => Result<null, string>;
 };
 
 /** How the removal of one entry ended; one that stayed or failed carries the code of its call. */
@@ -39,10 +46,13 @@ export type EntryRemovalEnd =
   | { kind: 'stayed'; code: string }
   | { kind: 'failed'; code: string };
 
-/** A file, or a link of any kind, which goes as one entry. */
-type LeafTarget = { path: string; kind: 'file' | 'link' };
+/** The kind of entry a removal call went to: a file, a link of any kind, or a folder. */
+export type RemovalEntryKind = 'file' | 'link' | 'directory';
 
-type DirectoryTarget = { path: string; depth: number };
+/** A file, or a link of any kind, which goes as one entry. */
+type LeafTarget = { path: AbsolutePath; kind: 'file' | 'link' };
+
+type DirectoryTarget = { path: AbsolutePath; depth: number };
 
 type RemovalTargets = { leaves: LeafTarget[]; directories: DirectoryTarget[] };
 
@@ -50,21 +60,21 @@ type RemovalTargets = { leaves: LeafTarget[]; directories: DirectoryTarget[] };
 type DirectoryRemovalEnd = EntryRemovalEnd | { kind: 'notEmpty' };
 
 /**
- * Removes the tree at `path` entry by entry, as Windows needs it: the walk never enters a link,
- * a junction, or any other folder with a reparse point, and each is removed itself, never its
- * target. Each file and folder loses its read-only bit right before its removal. A file another
- * program holds open stays, and so does an entry `entryReads.isEntryEvicted` finds online only,
- * which a removal would delete from its cloud store; the folders that hold them stay with them.
- * Any other failure ends the removal with its code; an unreadable folder ends it before anything
- * is removed. Never throws.
+ * Removes the tree at `rootPath` entry by entry, as Windows needs it: the walk never enters a
+ * link, a junction, or any other folder with a reparse point, and each is removed itself, never
+ * its target. Each file and folder loses its read-only bit right before its removal. A file
+ * another program holds open or Windows refuses to delete stays, and so does an entry
+ * `entryReads.isEntryEvicted` finds online only, the root included, which a removal would delete
+ * from its cloud store; the folders that hold them stay with them. Any other failure ends the
+ * removal with its code; an unreadable folder ends it before anything is removed. Never throws.
  */
 export async function removeTreeEntries(params: {
-  path: string;
+  rootPath: AbsolutePath;
+  rules: PathRules;
   attributes: EntryAttributeAccess;
   entryReads: EntryReads;
 }): Promise<Result<TreeRemoval, string>> {
-  const rootPath = resolve(params.path);
-  const rootStats = await loadEntryStats({ path: rootPath });
+  const rootStats = await loadEntryStats({ path: params.rootPath });
 
   if (rootStats.kind === 'failed') {
     return { kind: 'failed', failure: rootStats.failure.code };
@@ -73,17 +83,21 @@ export async function removeTreeEntries(params: {
   switch (rootStats.value.kind) {
     case 'file':
     case 'other':
+      if (params.entryReads.isEntryEvicted({ path: params.rootPath, kind: rootStats.value.kind })) {
+        return { kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } };
+      }
+
       return removeRootLeaf({
-        target: { path: rootPath, kind: 'file' },
+        target: { path: params.rootPath, kind: 'file' },
         attributes: params.attributes,
       });
     case 'symbolicLink':
       return removeRootLeaf({
-        target: { path: rootPath, kind: 'link' },
+        target: { path: params.rootPath, kind: 'link' },
         attributes: params.attributes,
       });
     case 'directory': {
-      const rootAttributes = params.attributes.load({ path: rootPath });
+      const rootAttributes = params.attributes.load({ path: params.rootPath });
 
       if (rootAttributes.kind === 'failed') {
         return { kind: 'failed', failure: rootAttributes.failure };
@@ -91,13 +105,14 @@ export async function removeTreeEntries(params: {
 
       if (isReparsePoint({ attributes: rootAttributes.value })) {
         return removeRootLeaf({
-          target: { path: rootPath, kind: 'link' },
+          target: { path: params.rootPath, kind: 'link' },
           attributes: params.attributes,
         });
       }
 
       return removeDirectoryTree({
-        rootPath: rootPath,
+        rootPath: params.rootPath,
+        rules: params.rules,
         attributes: params.attributes,
         entryReads: params.entryReads,
       });
@@ -105,17 +120,33 @@ export async function removeTreeEntries(params: {
   }
 }
 
-/** How a failed removal call of one entry ends: gone already, held open by another program, or failed. */
-export function classifyEntryRemovalFailure(params: { code: string }): EntryRemovalEnd {
+/**
+ * How a failed removal call of one entry ends: gone already; stayed when another program holds
+ * it open, or when Windows refuses a file, such as a program that runs; else failed.
+ */
+export function decideEntryRemovalEnd(params: {
+  code: string;
+  entryKind: RemovalEntryKind;
+}): EntryRemovalEnd {
   if (GONE_CODES.includes(params.code)) {
     return { kind: 'gone' };
   }
 
-  if (IN_USE_CODES.includes(params.code)) {
+  if (isInUseErrorCode(params.code)) {
     return { kind: 'stayed', code: params.code };
   }
 
-  return { kind: 'failed', code: params.code };
+  switch (params.entryKind) {
+    case 'file':
+      if (isPermissionDeniedErrorCode(params.code)) {
+        return { kind: 'stayed', code: params.code };
+      }
+
+      return { kind: 'failed', code: params.code };
+    case 'link':
+    case 'directory':
+      return { kind: 'failed', code: params.code };
+  }
 }
 
 /** A path that is a single entry fails with its code when it stays: nothing of it went. */
@@ -139,13 +170,15 @@ async function removeRootLeaf(params: {
  * up, the root last. A folder that still holds an entry that stayed stays without being counted.
  */
 async function removeDirectoryTree(params: {
-  rootPath: string;
+  rootPath: AbsolutePath;
+  rules: PathRules;
   attributes: EntryAttributeAccess;
   entryReads: EntryReads;
 }): Promise<Result<TreeRemoval, string>> {
   const tally = createStayedTally({ rootPath: params.rootPath });
   const listing = await listRemovalTargets({
     rootPath: params.rootPath,
+    rules: params.rules,
     attributes: params.attributes,
     entryReads: params.entryReads,
     tally: tally,
@@ -192,31 +225,60 @@ async function removeDirectoryTree(params: {
  * evicted stays; an evicted folder is listed before its read finds it so, and its removal skips it.
  */
 async function listRemovalTargets(params: {
-  rootPath: string;
+  rootPath: AbsolutePath;
+  rules: PathRules;
   attributes: EntryAttributeAccess;
   entryReads: EntryReads;
   tally: StayedTally;
 }): Promise<Result<RemovalTargets, string>> {
   const leaves: LeafTarget[] = [];
   const directories: DirectoryTarget[] = [];
+  // The folders the walk enters, by the path it names them with, so each entry's path is derived
+  // from its folder's.
+  const directoryPaths = new Map<string, AbsolutePath>([[params.rootPath, params.rootPath]]);
   let failure: string | null = null;
 
+  function getEntryPath(entry: { path: string }): AbsolutePath {
+    const directoryPath = directoryPaths.get(entry.path);
+
+    if (directoryPath !== undefined) {
+      return directoryPath;
+    }
+
+    const parentPath = directoryPaths.get(dirname(entry.path));
+
+    if (parentPath === undefined) {
+      throw new Error('The walk named an entry outside the folders it entered.');
+    }
+
+    return joinAbsolutePath({
+      rules: params.rules,
+      parentPath: parentPath,
+      names: [basename(entry.path)],
+    });
+  }
+
   function visitEntry(entry: TreeEntry): TreeEntryVisit {
+    const entryPath = getEntryPath(entry);
+
     switch (entry.kind) {
       case 'file':
       case 'other':
-        leaves.push({ path: entry.path, kind: 'file' });
+        leaves.push({ path: entryPath, kind: 'file' });
 
         return 'skip';
       case 'symbolicLink':
-        leaves.push({ path: entry.path, kind: 'link' });
+        leaves.push({ path: entryPath, kind: 'link' });
 
         return 'skip';
       case 'directory': {
-        const attributes = params.attributes.load({ path: entry.path });
+        const attributes = params.attributes.load({ path: entryPath });
 
         if (attributes.kind === 'failed') {
-          if (classifyEntryRemovalFailure({ code: attributes.failure }).kind === 'gone') {
+          if (
+            decideEntryRemovalEnd({ code: attributes.failure, entryKind: 'directory' }).kind ===
+            'gone'
+          ) {
             return 'skip';
           }
 
@@ -226,12 +288,13 @@ async function listRemovalTargets(params: {
         }
 
         if (isReparsePoint({ attributes: attributes.value })) {
-          leaves.push({ path: entry.path, kind: 'link' });
+          leaves.push({ path: entryPath, kind: 'link' });
 
           return 'skip';
         }
 
-        directories.push({ path: entry.path, depth: entry.depth });
+        directoryPaths.set(entry.path, entryPath);
+        directories.push({ path: entryPath, depth: entry.depth });
 
         return 'descend';
       }
@@ -249,7 +312,7 @@ async function listRemovalTargets(params: {
       failure ??= unreadable.failure.code;
     },
     onEvictedEntrySkipped: (entry) => {
-      params.tally.recordStayed({ path: entry.path });
+      params.tally.recordStayed({ path: getEntryPath(entry) });
     },
   });
 
@@ -260,7 +323,7 @@ async function listRemovalTargets(params: {
   return { kind: 'succeeded', value: { leaves: leaves, directories: directories } };
 }
 
-/** Removes the files and links; the first failure stops the removals not yet started. */
+/** Removes the files and links; after the first failure no further removal starts. */
 async function removeLeafTargets(params: {
   targets: LeafTarget[];
   attributes: EntryAttributeAccess;
@@ -268,33 +331,35 @@ async function removeLeafTargets(params: {
 }): Promise<string | null> {
   let failure: string | null = null;
 
-  await forEachConcurrently({
-    items: params.targets,
-    isStopped: () => failure !== null,
-    task: async (target) => {
-      const end = await removeLeafEntry({ target: target, attributes: params.attributes });
+  async function removeTarget(target: LeafTarget): Promise<void> {
+    if (failure !== null) {
+      return;
+    }
 
-      switch (end.kind) {
-        case 'gone':
-          return;
-        case 'stayed':
-          params.tally.recordStayed({ path: target.path });
+    const end = await removeLeafEntry({ target: target, attributes: params.attributes });
 
-          return;
-        case 'failed':
-          failure ??= end.code;
+    switch (end.kind) {
+      case 'gone':
+        return;
+      case 'stayed':
+        params.tally.recordStayed({ path: target.path });
 
-          return;
-      }
-    },
-  });
+        return;
+      case 'failed':
+        failure ??= end.code;
+
+        return;
+    }
+  }
+
+  await Promise.all(params.targets.map((target) => runLimitedRemoval(() => removeTarget(target))));
 
   return failure;
 }
 
 /**
  * Removes the folders from the deepest up, one depth at a time, the root last, unless it was
- * evicted; a failure stops the rest.
+ * evicted; after the first failure no further removal starts.
  */
 async function removeDirectoryTargets(params: {
   directories: DirectoryTarget[];
@@ -305,42 +370,48 @@ async function removeDirectoryTargets(params: {
   const depths = [...directoriesByDepth.keys()].sort((first, second) => second - first);
   let failure: string | null = null;
 
-  for (const depth of depths) {
-    await forEachConcurrently({
-      items: directoriesByDepth.get(depth) ?? [],
-      isStopped: () => failure !== null,
-      task: async (directory) => {
-        // An evicted folder, which its removal would delete from its cloud store.
-        if (params.tally.isStayed({ path: directory.path })) {
-          return;
-        }
+  async function removeTarget(directory: DirectoryTarget): Promise<void> {
+    if (failure !== null) {
+      return;
+    }
 
-        const end = await removeDirectoryEntry({
-          path: directory.path,
-          attributes: params.attributes,
-        });
+    // An evicted folder, which its removal would delete from its cloud store.
+    if (params.tally.isStayed({ path: directory.path })) {
+      return;
+    }
 
-        switch (end.kind) {
-          case 'gone':
-            return;
-          case 'notEmpty':
-            // A folder that holds no entry known to stay holds one the walk did not see.
-            if (!params.tally.holdsStayed({ path: directory.path })) {
-              params.tally.recordStayed({ path: directory.path });
-            }
-
-            return;
-          case 'stayed':
-            params.tally.recordStayed({ path: directory.path });
-
-            return;
-          case 'failed':
-            failure ??= end.code;
-
-            return;
-        }
-      },
+    const end = await removeDirectoryEntry({
+      path: directory.path,
+      attributes: params.attributes,
     });
+
+    switch (end.kind) {
+      case 'gone':
+        return;
+      case 'notEmpty':
+        // A folder that holds no entry known to stay holds one the walk did not see.
+        if (!params.tally.holdsStayed({ path: directory.path })) {
+          params.tally.recordStayed({ path: directory.path });
+        }
+
+        return;
+      case 'stayed':
+        params.tally.recordStayed({ path: directory.path });
+
+        return;
+      case 'failed':
+        failure ??= end.code;
+
+        return;
+    }
+  }
+
+  for (const depth of depths) {
+    const directoriesAtDepth = directoriesByDepth.get(depth) ?? [];
+
+    await Promise.all(
+      directoriesAtDepth.map((directory) => runLimitedRemoval(() => removeTarget(directory))),
+    );
 
     if (failure !== null) {
       return failure;
@@ -364,24 +435,26 @@ async function removeLeafEntry(params: {
       const cleared = clearReadOnly({ path: params.target.path, attributes: params.attributes });
 
       if (cleared.kind === 'failed') {
-        return classifyEntryRemovalFailure({ code: cleared.failure });
+        return decideEntryRemovalEnd({ code: cleared.failure, entryKind: 'file' });
       }
 
-      return toEntryRemovalEnd(await runRemovalCall({ call: () => unlink(params.target.path) }));
+      const removed = await runRemovalCall({ call: () => unlink(params.target.path) });
+
+      return toEntryRemovalEnd({ removed: removed, entryKind: 'file' });
     }
     case 'link':
       return removeLink({ path: params.target.path });
   }
 }
 
-async function removeLink(params: { path: string }): Promise<EntryRemovalEnd> {
+async function removeLink(params: { path: AbsolutePath }): Promise<EntryRemovalEnd> {
   const unlinked = await runRemovalCall({ call: () => unlink(params.path) });
 
   if (
     unlinked.kind === 'succeeded' ||
     (unlinked.failure !== 'EPERM' && unlinked.failure !== 'EISDIR')
   ) {
-    return toEntryRemovalEnd(unlinked);
+    return toEntryRemovalEnd({ removed: unlinked, entryKind: 'link' });
   }
 
   const removed = await runRemovalCall({ call: () => rmdir(params.path) });
@@ -400,17 +473,17 @@ async function removeLink(params: { path: string }): Promise<EntryRemovalEnd> {
     return { kind: 'stayed', code: removed.failure };
   }
 
-  return classifyEntryRemovalFailure({ code: removed.failure });
+  return decideEntryRemovalEnd({ code: removed.failure, entryKind: 'link' });
 }
 
 async function removeDirectoryEntry(params: {
-  path: string;
+  path: AbsolutePath;
   attributes: EntryAttributeAccess;
 }): Promise<DirectoryRemovalEnd> {
   const cleared = clearReadOnly({ path: params.path, attributes: params.attributes });
 
   if (cleared.kind === 'failed') {
-    return classifyEntryRemovalFailure({ code: cleared.failure });
+    return decideEntryRemovalEnd({ code: cleared.failure, entryKind: 'directory' });
   }
 
   const removed = await runRemovalCall({ call: () => rmdir(params.path) });
@@ -419,7 +492,7 @@ async function removeDirectoryEntry(params: {
     return { kind: 'notEmpty' };
   }
 
-  return toEntryRemovalEnd(removed);
+  return toEntryRemovalEnd({ removed: removed, entryKind: 'directory' });
 }
 
 /** Runs one removal call; a failure is its error code. */
@@ -435,17 +508,20 @@ async function runRemovalCall(params: {
   }
 }
 
-function toEntryRemovalEnd(removed: Result<null, string>): EntryRemovalEnd {
-  if (removed.kind === 'succeeded') {
+function toEntryRemovalEnd(params: {
+  removed: Result<null, string>;
+  entryKind: RemovalEntryKind;
+}): EntryRemovalEnd {
+  if (params.removed.kind === 'succeeded') {
     return { kind: 'gone' };
   }
 
-  return classifyEntryRemovalFailure({ code: removed.failure });
+  return decideEntryRemovalEnd({ code: params.removed.failure, entryKind: params.entryKind });
 }
 
 /** Clears the read-only bit of a file or a folder, never of a link, whose target it could reach. */
 function clearReadOnly(params: {
-  path: string;
+  path: AbsolutePath;
   attributes: EntryAttributeAccess;
 }): Result<null, string> {
   const attributes = params.attributes.load({ path: params.path });
@@ -470,17 +546,17 @@ function isReparsePoint(params: { attributes: number }): boolean {
 
 /** Counts the entries that stayed, and knows each folder that holds one of them. */
 type StayedTally = {
-  recordStayed: (params: { path: string }) => void;
-  isStayed: (params: { path: string }) => boolean;
-  holdsStayed: (params: { path: string }) => boolean;
+  recordStayed: (params: { path: AbsolutePath }) => void;
+  isStayed: (params: { path: AbsolutePath }) => boolean;
+  holdsStayed: (params: { path: AbsolutePath }) => boolean;
   count: () => number;
 };
 
-function createStayedTally(params: { rootPath: string }): StayedTally {
+function createStayedTally(params: { rootPath: AbsolutePath }): StayedTally {
   const stayedPaths = new Set<string>();
   const holderPaths = new Set<string>();
 
-  function recordStayed(entry: { path: string }): void {
+  function recordStayed(entry: { path: AbsolutePath }): void {
     stayedPaths.add(entry.path);
 
     if (entry.path === params.rootPath) {
@@ -508,28 +584,4 @@ function createStayedTally(params: { rootPath: string }): StayedTally {
     holdsStayed: (folder) => holderPaths.has(folder.path),
     count: () => stayedPaths.size,
   };
-}
-
-/** Runs `task` for each item, at most `MAX_CONCURRENT_REMOVALS` at once, until `isStopped`. */
-async function forEachConcurrently<TItem>(params: {
-  items: TItem[];
-  isStopped: () => boolean;
-  task: (item: TItem) => Promise<void>;
-}): Promise<void> {
-  let nextIndex = 0;
-
-  async function work(): Promise<void> {
-    while (!params.isStopped()) {
-      const item = params.items[nextIndex];
-
-      if (item === undefined) {
-        return;
-      }
-
-      nextIndex += 1;
-      await params.task(item);
-    }
-  }
-
-  await Promise.all(Array.from({ length: MAX_CONCURRENT_REMOVALS }, () => work()));
 }

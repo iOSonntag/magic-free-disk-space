@@ -2,7 +2,7 @@ import type { BigIntStats } from 'node:fs';
 import { lstat, realpath } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { Result } from '../result.js';
-import { getErrorCode } from './getErrorCode.js';
+import { getErrorCode, isInUseErrorCode, isPermissionDeniedErrorCode } from './getErrorCode.js';
 import { runFilesystemCall } from './runFilesystemCall.js';
 
 export type FileKind = 'file' | 'directory' | 'symbolicLink' | 'other';
@@ -27,10 +27,6 @@ export type FileFailure = {
 };
 
 const MISSING_CODES = ['ENOENT', 'ENOTDIR'];
-
-const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
-
-const IN_USE_CODE = 'EBUSY';
 
 export async function loadFileIdentity(params: {
   path: string;
@@ -84,11 +80,11 @@ export function getFileFailure(params: { code: string }): FileFailure {
     return { reason: 'missing', code: params.code };
   }
 
-  if (PERMISSION_DENIED_CODES.includes(params.code)) {
+  if (isPermissionDeniedErrorCode(params.code)) {
     return { reason: 'permissionDenied', code: params.code };
   }
 
-  if (params.code === IN_USE_CODE) {
+  if (isInUseErrorCode(params.code)) {
     return { reason: 'inUse', code: params.code };
   }
 
