@@ -45,7 +45,10 @@ describeAwaitingWin32Platform('decideAppCandidate', () => {
       title: 'Example',
       risk: 'review',
       category: 'applications',
-      origin: 'application',
+      origin: { kind: 'application' },
+      lastUsedAtMs: LONG_AGO_MS,
+      downloadedAtMs: null,
+      appName: 'Example',
     });
     expect(decision.kind === 'offer' && decision.candidate.explanation).toContain('2025-03-15');
   });

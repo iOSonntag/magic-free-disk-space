@@ -3,7 +3,7 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
-import { formatSamplePathLines } from '../formatHomeRelativePath.js';
+import { formatSamplePathLines } from '../formatSamplePathLines.js';
 
 const SAMPLE_PATH_MAX_COUNT = 3;
 

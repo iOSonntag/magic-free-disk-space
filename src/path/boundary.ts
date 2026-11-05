@@ -4,5 +4,11 @@ import type { ModuleBoundary } from '../moduleBoundary.js';
 export const moduleBoundary = {
   imports: [],
   readsTablesOf: [],
-  exposes: ['isSameOrInsidePath.ts', 'joinAbsolutePath.ts', 'parseAbsolutePath.ts', 'pathRules.ts'],
+  exposes: [
+    'formatHomeRelativePath.ts',
+    'isSameOrInsidePath.ts',
+    'joinAbsolutePath.ts',
+    'parseAbsolutePath.ts',
+    'pathRules.ts',
+  ],
 } satisfies ModuleBoundary;

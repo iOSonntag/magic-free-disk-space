@@ -26,13 +26,14 @@ function decide(params: {
     owner: buildTestCatalogOwner({ bundleId: params.ownerBundleId ?? null }),
     ownerBundlePaths: ['/Applications/Example.app'],
     ownerState: params.ownerState ?? 'stopped',
+    ownerAppName: 'Example',
     activity: params.activity === undefined ? null : params.activity,
     minOfferedBytes: MIB,
   });
 }
 
 describeAwaitingWin32Platform('decideCatalogCandidate', () => {
-  test('offers a large entry with its catalog texts', () => {
+  test('offers a large entry with its catalog texts, its entry id, and its owner app', () => {
     const decision = decide({});
 
     expect(decision).toEqual({
@@ -42,12 +43,16 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
         title: 'Test cache',
         category: 'caches',
         risk: 'safe',
-        origin: 'catalog',
+        origin: { kind: 'catalog', entryId: 'test-entry' },
         explanation: 'A cache for tests.',
         regeneration: 'Rebuilt by the test.',
         allocatedBytes: 5 * MIB,
         entryCount: 3,
         isComplete: true,
+        privateSizeFallbackCount: 0,
+        lastUsedAtMs: null,
+        downloadedAtMs: null,
+        appName: 'Example',
         removal: {
           kind: 'deletePath',
           identity: expect.any(Object),
@@ -77,6 +82,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
     expect(decision).toEqual({
       kind: 'advice',
       advice: {
+        origin: { kind: 'catalog', entryId: 'test-entry' },
         path: PATH,
         title: 'Test cache',
         category: 'caches',
@@ -85,6 +91,10 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
         advice: 'Run the tool.',
         allocatedBytes: 5 * MIB,
         isComplete: true,
+        privateSizeFallbackCount: 0,
+        lastUsedAtMs: null,
+        downloadedAtMs: null,
+        appName: 'Example',
       },
     });
   });

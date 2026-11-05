@@ -1,4 +1,5 @@
 import type { ScanReport } from '../scan/runScan.js';
+import type { VolumeSpace } from '../system/volumeSpace.js';
 import type {
   AdviceItemView,
   CheckGroupView,
@@ -27,11 +28,18 @@ const detailLinePrefixes: Record<ItemDetailLineKind, string> = {
  * The scan as the CLI prints it: the summary, the sections with their numbered items, Explore,
  * the skipped items, and the notices. The CLI has no button, so a notice shows its lines only.
  */
-export function formatScanReport(params: { report: ScanReport; texts: ReportTexts }): string[] {
+export function formatScanReport(params: {
+  report: ScanReport;
+  texts: ReportTexts;
+  homeDir: string;
+  disk: VolumeSpace | null;
+}): string[] {
   const view = buildScanView({
     report: params.report,
     fullDiskAccessHolder: 'terminal',
     texts: params.texts,
+    homeDir: params.homeDir,
+    disk: params.disk,
   });
 
   return [
@@ -93,7 +101,7 @@ function formatNumberedItemLines(params: { item: ItemView }): string[] {
 }
 
 /** The lead is the number of a selectable item, or `-` for an advice item. */
-function formatItemLines(params: { leadText: string; item: AdviceItemView }): string[] {
+function formatItemLines(params: { leadText: string; item: ItemView | AdviceItemView }): string[] {
   return [
     `${params.leadText} ${params.item.sizeText} [${params.item.riskText}] ${params.item.title}`,
     ...params.item.detailLines.map((line) => formatDetailLine({ line: line })),

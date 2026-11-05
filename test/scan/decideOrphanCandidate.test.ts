@@ -44,8 +44,10 @@ describeAwaitingWin32Platform('decideOrphanCandidate', () => {
       path: '/home/Library/Containers/com.example.removed',
       risk: 'careful',
       category: 'leftovers',
-      origin: 'leftover',
+      origin: { kind: 'leftover', matchedBy: 'bundleId' },
       allocatedBytes: 3 * MIB,
+      lastUsedAtMs: UNUSED_CUTOFF_MS - 1,
+      appName: null,
     });
   });
 

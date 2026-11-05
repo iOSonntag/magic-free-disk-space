@@ -17,7 +17,7 @@ import {
   formatJournalUnavailableText,
 } from '../report/formatDeletionLog.js';
 import { formatRemovalPlan } from '../report/formatRemovalPlan.js';
-import { formatRemovalRun } from '../report/formatRemovalRun.js';
+import { formatAvailableSpaceLine, formatRemovalRun } from '../report/formatRemovalRun.js';
 import { formatScanReport } from '../report/formatScanReport.js';
 import { formatUsage } from '../report/formatUsage.js';
 import type { ReportTexts } from '../report/reportTexts.js';
@@ -93,12 +93,21 @@ export async function runCli(params: {
     system: params.system,
     explore: params.explore,
     options: { staleDays: parsed.value.staleDays, unusedDays: parsed.value.unusedDays },
-    onProgress: (message) => {
-      params.io.writeError(`${message}\n`);
+    onProgress: (progress) => {
+      params.io.writeError(`${progress.message}\n`);
     },
   });
+  const disk = await params.system.loadVolumeSpace(params.environment.homeDir);
 
-  writeLines({ io: params.io, lines: formatScanReport({ report: report, texts: params.texts }) });
+  writeLines({
+    io: params.io,
+    lines: formatScanReport({
+      report: report,
+      texts: params.texts,
+      homeDir: params.environment.homeDir,
+      disk: disk,
+    }),
+  });
 
   if (mode.kind === 'list') {
     return EXIT_CODES.done;
@@ -229,12 +238,16 @@ async function runInteractiveDeletion(params: {
   }
 
   const run = removal.value.run;
+  const diskAfter = await params.system.loadVolumeSpace(params.environment.homeDir);
 
   writeLines({
     io: params.io,
     lines: [
       '',
       ...formatRemovalRun({ run: run }),
+      ...(diskAfter === null
+        ? []
+        : [formatAvailableSpaceLine({ availableBytes: diskAfter.availableBytes })]),
       formatDeletionLogLine({ logPath: removal.value.logPath }),
     ],
   });

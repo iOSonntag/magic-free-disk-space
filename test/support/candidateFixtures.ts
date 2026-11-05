@@ -1,5 +1,5 @@
 import type { CandidateCategory, CatalogEntry, Risk } from '../../src/catalog/catalog.js';
-import type { Candidate } from '../../src/scan/candidate.js';
+import type { Candidate, CandidateMatched } from '../../src/scan/candidate.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
@@ -10,6 +10,14 @@ import {
 } from './parsedValueFixtures.js';
 
 let nextTestIno = 1000n;
+
+/** The facts of an item no source read: no fallback, no use, no download, no app. */
+export const TEST_LISTING_FACTS_NONE = {
+  privateSizeFallbackCount: 0,
+  lastUsedAtMs: null,
+  downloadedAtMs: null,
+  appName: null,
+};
 
 export function buildTestIdentity(params: { realPath: string; kind?: FileKind }): FileIdentity {
   nextTestIno += 1n;
@@ -53,18 +61,27 @@ export function buildTestCandidate(params: {
   regeneration?: string;
   allocatedBytes?: number;
   isComplete?: boolean;
-}): Candidate {
+  origin?: CandidateMatched['origin'];
+  privateSizeFallbackCount?: number;
+  lastUsedAtMs?: number | null;
+  downloadedAtMs?: number | null;
+  appName?: string | null;
+}): CandidateMatched {
   return {
     path: params.path,
     title: params.title ?? `Test item ${params.path}`,
     category: params.category ?? 'caches',
     risk: params.risk ?? 'safe',
-    origin: 'catalog',
+    origin: params.origin ?? { kind: 'catalog', entryId: 'test-entry' },
     explanation: params.explanation ?? 'A test item.',
     regeneration: params.regeneration ?? 'Rebuilt by the test.',
     allocatedBytes: params.allocatedBytes ?? 4096,
     entryCount: 1,
     isComplete: params.isComplete ?? true,
+    privateSizeFallbackCount: params.privateSizeFallbackCount ?? 0,
+    lastUsedAtMs: params.lastUsedAtMs ?? null,
+    downloadedAtMs: params.downloadedAtMs ?? null,
+    appName: params.appName ?? null,
     removal: {
       kind: 'deletePath',
       identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),
@@ -89,12 +106,13 @@ export function buildTestToolCandidate(params: {
     title: `node ${params.version}`,
     category: 'developer',
     risk: params.risk ?? 'safe',
-    origin: 'explore',
+    origin: { kind: 'explore', probe: 'miseVersions' },
     explanation: 'A tool version no config file asks for.',
     regeneration: 'Installed again by mise when a project asks for it.',
     allocatedBytes: params.allocatedBytes ?? 8192,
     entryCount: 1,
     isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'runTool',
       unit: {
@@ -121,12 +139,13 @@ export function buildTestDartToolCandidate(params: { homeDir: string }): Candida
     title: 'Unused Dart and Flutter packages',
     category: 'developer',
     risk: 'review',
-    origin: 'explore',
+    origin: { kind: 'explore', probe: 'dartPubCache' },
     explanation: 'Package versions no active project uses.',
     regeneration: 'Downloaded again on `pub get`.',
     allocatedBytes: 8192,
     entryCount: 1,
     isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'runTool',
       unit: {

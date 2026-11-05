@@ -4,10 +4,12 @@ import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
 import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { TEST_LISTING_FACTS_NONE } from '../support/candidateFixtures.js';
 
 const HOME_DIR = '/Users/example';
 
 const vscodeAdvice: Advice = {
+  origin: { kind: 'catalog', entryId: 'vscode-extensions' },
   path: `${HOME_DIR}/.vscode/extensions`,
   title: 'VS Code extensions',
   category: 'developer',
@@ -16,6 +18,7 @@ const vscodeAdvice: Advice = {
   advice: 'Uninstall the extensions you no longer use in VS Code.',
   allocatedBytes: 65_536,
   isComplete: true,
+  ...TEST_LISTING_FACTS_NONE,
 };
 
 const vscodeCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR });

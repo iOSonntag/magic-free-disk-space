@@ -9,7 +9,11 @@ import type { EnvironmentPlatform } from '../environment/environmentPlatform.js'
 import type { ExplorePlatform } from '../explore/explorePlatform.js';
 import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { Preferences, PreferencesSaveFailure } from '../preferences/preferencesFile.js';
+import type { DeletedFacts } from '../report/buildDeletedFacts.js';
+import { buildDeletedFacts } from '../report/buildDeletedFacts.js';
 import { buildFullDiskAccessNotices } from '../report/buildFullDiskAccessNotices.js';
+import type { PlannedFacts } from '../report/buildPlannedFacts.js';
+import { buildPlannedFacts } from '../report/buildPlannedFacts.js';
 import type { ScanView } from '../report/buildScanView.js';
 import { buildScanView } from '../report/buildScanView.js';
 import type { UpdateNoticeView } from '../report/buildUpdateNotice.js';
@@ -30,7 +34,7 @@ import type { NoticeView } from '../report/noticeView.js';
 import type { ReportTexts } from '../report/reportTexts.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
-import type { ScanReport } from '../scan/runScan.js';
+import type { ScanProgress, ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
 import type { ScanPlatform } from '../scan/scanPlatform.js';
 import type { FullDiskAccess } from '../system/fullDiskAccess.js';
@@ -41,7 +45,7 @@ import type { ReleaseVersion } from '../update/releaseVersion.js';
 import { runUpdateCheck } from '../update/runUpdateCheck.js';
 import { parseBridgeRequest } from './parseBridgeRequest.js';
 
-type BridgeEventProgress = { kind: 'progress'; message: string };
+type BridgeEventProgress = { kind: 'progress' } & ScanProgress;
 
 type BridgeEventScanned = { kind: 'scanned' } & ScanView;
 
@@ -52,16 +56,18 @@ type BridgeEventStatus = {
   notices: NoticeView[];
 };
 
+/** The plan as lines the app shows today, with its facts beside them. */
 type BridgeEventPlanned = {
   kind: 'planned';
   planId: number;
   lines: string[];
   warningLines: string[];
-};
+} & PlannedFacts;
 
 type BridgeEventNothingApproved = { kind: 'nothingApproved'; lines: string[] };
 
-type BridgeEventDeleted = { kind: 'deleted'; lines: string[] };
+/** The run as lines the app shows today, with its facts beside them. */
+type BridgeEventDeleted = { kind: 'deleted'; lines: string[] } & DeletedFacts;
 
 type BridgeEventCancelled = { kind: 'cancelled'; message: string };
 
@@ -334,10 +340,11 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
       staleDays: SCAN_LIMITS.defaultStaleDays,
       unusedDays: SCAN_LIMITS.defaultUnusedDays,
     },
-    onProgress: (message) => {
-      params.context.io.writeEvent({ kind: 'progress', message: message });
+    onProgress: (progress) => {
+      params.context.io.writeEvent({ kind: 'progress', ...progress });
     },
   });
+  const disk = await params.context.system.loadVolumeSpace(environment.value.homeDir);
 
   return {
     answer: {
@@ -346,6 +353,8 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
         report: report,
         fullDiskAccessHolder: 'app',
         texts: params.context.texts,
+        homeDir: environment.value.homeDir,
+        disk: disk,
       }),
     },
     nextState: { kind: 'scanned', report: report, environment: environment.value },
@@ -414,6 +423,7 @@ function answerPlan(params: {
       planId: params.planId,
       lines: lines,
       warningLines: formatDeletionWarningLines({ texts: params.context.texts }),
+      ...buildPlannedFacts({ plan: planned.value, ranked: params.state.report.candidates }),
     },
     nextState: {
       kind: 'planned',
@@ -476,6 +486,8 @@ async function answerDelete(params: {
     });
   }
 
+  const diskAfter = await params.context.system.loadVolumeSpace(params.state.environment.homeDir);
+
   return {
     answer: {
       kind: 'deleted',
@@ -483,6 +495,12 @@ async function answerDelete(params: {
         ...formatRemovalRun({ run: removal.value.run }),
         formatDeletionLogLine({ logPath: removal.value.logPath }),
       ],
+      ...buildDeletedFacts({
+        run: removal.value.run,
+        ranked: params.state.report.candidates,
+        availableBytesAfter: diskAfter === null ? null : diskAfter.availableBytes,
+        logPath: removal.value.logPath,
+      }),
     },
     nextState: AWAITING_SCAN,
   };

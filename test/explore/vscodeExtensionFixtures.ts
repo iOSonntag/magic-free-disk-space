@@ -1,7 +1,7 @@
 import { posix } from 'node:path';
 import type { ExplorePathUnitVscodeExtension } from '../../src/explore/exploreUnit.js';
 import type { CandidateProbed } from '../../src/scan/candidate.js';
-import { buildTestIdentity } from '../support/candidateFixtures.js';
+import { buildTestIdentity, TEST_LISTING_FACTS_NONE } from '../support/candidateFixtures.js';
 import {
   createFixtureDirectory,
   createFixtureFile,
@@ -176,12 +176,13 @@ export function buildTestVscodeExtensionCandidate(params: { homeDir: string }): 
     title: 'VS Code extension example.alpha 1.0.0',
     category: 'developer',
     risk: 'review',
-    origin: 'explore',
+    origin: { kind: 'explore', probe: 'vscodeExtensions' },
     explanation: 'An extension folder VS Code marked for removal after an uninstall or an update.',
     regeneration: 'VS Code downloads it again only if you install this version again.',
     allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
     entryCount: 2,
     isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'deleteUnitFolder',
       identity: buildTestIdentity({ realPath: unit.folderPath }),

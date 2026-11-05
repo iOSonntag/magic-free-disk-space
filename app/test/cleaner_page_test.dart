@@ -175,7 +175,7 @@ void main() {
       await tapAndSettle(tester, find.text(explore.titleText));
 
       expect(find.text(explore.introText), findsOneWidget);
-      expect(getBuiltItemNumbers(tester), [1, 5]);
+      expect(getBuiltItemNumbers(tester), [1, 6]);
       expect(find.byType(AdviceTile), findsNothing);
 
       await tapAndSettle(tester, find.text(explore.adviceGroup!.titleText));
@@ -215,10 +215,10 @@ void main() {
       (controller.state as ScannedState).selectedNumbers,
       sampleScan.safeNumbers.toSet(),
     );
-    expect(getBuiltItemNumbers(tester), [1, 2, 5]);
+    expect(getBuiltItemNumbers(tester), [1, 2, 6]);
     expect(isItemTicked(tester, 1), isTrue);
     expect(isItemTicked(tester, 2), isFalse);
-    expect(isItemTicked(tester, 5), isFalse);
+    expect(isItemTicked(tester, 6), isFalse);
     expect(
       find.text('${sampleScan.safeNumbers.length} selected'),
       findsOneWidget,

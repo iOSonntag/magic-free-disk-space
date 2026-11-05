@@ -6,6 +6,7 @@ import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js
 import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
+  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 
 function buildCandidate(params: {
@@ -18,12 +19,13 @@ function buildCandidate(params: {
     title: 'Derived data',
     category: 'developer',
     risk: 'safe',
-    origin: 'catalog',
+    origin: { kind: 'catalog', entryId: 'test-entry' },
     explanation: 'Build products.',
     regeneration: 'Rebuilt by the next build.',
     allocatedBytes: params.allocatedBytes,
     entryCount: 1,
     isComplete: params.isComplete,
+    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'deletePath',
       identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
@@ -39,7 +41,7 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
         approved: [
           buildCandidate({
             path: '/fixture/clip\u001b[1A\u001b[2K.mov',
-            allocatedBytes: 1024,
+            allocatedBytes: 1000,
             isComplete: true,
           }),
         ],
@@ -48,8 +50,8 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'This item will be deleted permanently, 1.0 KiB in total:',
-      '- 1.0 KiB /fixture/clip\\u{1b}[1A\\u{1b}[2K.mov',
+      'This item will be deleted permanently, 1.0 kB in total:',
+      '- 1.0 kB /fixture/clip\\u{1b}[1A\\u{1b}[2K.mov',
       '',
       'Refused 1 selected item:',
       '- 2. /fixture/a\\u{d}b: a protected folder',
@@ -66,17 +68,17 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     const lines = formatRemovalPlan({
       plan: {
         approved: [
-          buildCandidate({ path: '/fixture/a', allocatedBytes: 1024, isComplete: true }),
-          buildCandidate({ path: '/fixture/b', allocatedBytes: 2048, isComplete: true }),
+          buildCandidate({ path: '/fixture/a', allocatedBytes: 1000, isComplete: true }),
+          buildCandidate({ path: '/fixture/b', allocatedBytes: 2000, isComplete: true }),
         ],
         refused: [],
       },
     });
 
     expect(lines).toEqual([
-      'These 2 items will be deleted permanently, 3.0 KiB in total:',
-      '- 1.0 KiB /fixture/a',
-      '- 2.0 KiB /fixture/b',
+      'These 2 items will be deleted permanently, 3.0 kB in total:',
+      '- 1.0 kB /fixture/a',
+      '- 2.0 kB /fixture/b',
     ]);
   });
 
@@ -84,12 +86,12 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     const toolCandidate = buildTestToolCandidate({
       homeDir: '/fixture/home',
       version: '20.1.0',
-      allocatedBytes: 2048,
+      allocatedBytes: 2000,
     });
     const lines = formatRemovalPlan({
       plan: {
         approved: [
-          buildCandidate({ path: '/fixture/a', allocatedBytes: 1024, isComplete: true }),
+          buildCandidate({ path: '/fixture/a', allocatedBytes: 1000, isComplete: true }),
           toolCandidate,
         ],
         refused: [],
@@ -97,9 +99,9 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'These 2 items will be deleted permanently, 3.0 KiB in total:',
-      '- 1.0 KiB /fixture/a',
-      '- 2.0 KiB /fixture/home/.local/share/mise/installs/node/20.1.0',
+      'These 2 items will be deleted permanently, 3.0 kB in total:',
+      '- 1.0 kB /fixture/a',
+      '- 2.0 kB /fixture/home/.local/share/mise/installs/node/20.1.0',
       '   by running: mise uninstall node@20.1.0',
     ]);
   });
@@ -121,20 +123,20 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'This item will be deleted permanently, 4.0 KiB in total:',
-      '- 4.0 KiB /Users/example/.vscode/extensions/example.alpha-1.0.0',
+      'This item will be deleted permanently, 4.1 kB in total:',
+      '- 4.1 kB /Users/example/.vscode/extensions/example.alpha-1.0.0',
     ]);
   });
 
   test('marks an incomplete approved size as at least', () => {
     const lines = formatRemovalPlan({
       plan: {
-        approved: [buildCandidate({ path: '/fixture/a', allocatedBytes: 1024, isComplete: false })],
+        approved: [buildCandidate({ path: '/fixture/a', allocatedBytes: 1000, isComplete: false })],
         refused: [],
       },
     });
 
-    expect(lines[1]).toBe('- at least 1.0 KiB /fixture/a');
+    expect(lines[1]).toBe('- at least 1.0 kB /fixture/a');
   });
 
   test('shows refused items after a blank line when nothing of the selection is approved', () => {
@@ -156,7 +158,7 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
   test('shows approved and refused items with each refusal text', () => {
     const lines = formatRemovalPlan({
       plan: {
-        approved: [buildCandidate({ path: '/fixture/ok', allocatedBytes: 1024, isComplete: true })],
+        approved: [buildCandidate({ path: '/fixture/ok', allocatedBytes: 1000, isComplete: true })],
         refused: [
           { path: '/fixture/a', number: 1, reason: 'neverRisk' },
           { path: '/fixture/b', number: 2, reason: 'protectedRoot' },
@@ -168,8 +170,8 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'This item will be deleted permanently, 1.0 KiB in total:',
-      '- 1.0 KiB /fixture/ok',
+      'This item will be deleted permanently, 1.0 kB in total:',
+      '- 1.0 kB /fixture/ok',
       '',
       'Refused 5 selected items:',
       '- 1. /fixture/a: marked never-delete',

@@ -3,7 +3,7 @@ import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js'
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { buildTestToolCandidate, TEST_LISTING_FACTS_NONE } from '../support/candidateFixtures.js';
 
 describeAwaitingWin32Platform('dedupeCandidates', () => {
   test('skips a tool item whose footprint lies inside an earlier offer', () => {
@@ -243,12 +243,13 @@ function buildOfferDecision(params: { path: string; realPath: string }): Candida
       title: 'Fixture cache',
       category: 'caches',
       risk: 'safe',
-      origin: 'catalog',
+      origin: { kind: 'catalog', entryId: 'test-entry' },
       explanation: 'Fixture explanation.',
       regeneration: 'Fixture regeneration.',
       allocatedBytes: 1024,
       entryCount: 1,
       isComplete: true,
+      ...TEST_LISTING_FACTS_NONE,
       removal: {
         kind: 'deletePath',
         identity: {
@@ -268,6 +269,7 @@ function buildAdviceDecision(params: { path: string }): CandidateDecision {
   return {
     kind: 'advice',
     advice: {
+      origin: { kind: 'catalog', entryId: 'test-entry' },
       path: params.path,
       title: 'Fixture advice',
       category: 'system',
@@ -276,6 +278,7 @@ function buildAdviceDecision(params: { path: string }): CandidateDecision {
       advice: 'Fixture advice text.',
       allocatedBytes: 1024,
       isComplete: true,
+      ...TEST_LISTING_FACTS_NONE,
     },
   };
 }

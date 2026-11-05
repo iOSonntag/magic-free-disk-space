@@ -39,7 +39,9 @@ describeAwaitingWin32Platform('decideArtifactCandidate', () => {
       title: 'Node.js dependencies of shop',
       risk: 'review',
       category: 'projects',
-      origin: 'artifact',
+      origin: { kind: 'artifact', artifactName: 'node_modules' },
+      lastUsedAtMs: null,
+      appName: null,
     });
   });
 

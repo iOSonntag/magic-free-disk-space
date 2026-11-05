@@ -6,9 +6,12 @@ export const moduleBoundary = {
   readsTablesOf: [],
   exposes: [
     'buildReadIssue.ts',
+    'buildSectionTotals.ts',
     'candidate.ts',
+    'candidateOrigin.ts',
     'issue.ts',
     'limits.ts',
+    'loadPathMeasurement.ts',
     'loadUnitMeasurement.ts',
     'placeCandidate.ts',
     'runScan.ts',

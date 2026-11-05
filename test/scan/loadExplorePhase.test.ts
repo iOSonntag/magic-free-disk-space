@@ -229,9 +229,10 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       ),
       category: 'developer',
       risk: 'review',
-      origin: 'explore',
+      origin: { kind: 'explore', probe: 'simulatorDevices' },
       entryCount: 2,
       isComplete: true,
+      lastUsedAtMs: null,
       removal: {
         kind: 'runTool',
         unit: {
@@ -370,13 +371,17 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
         title: 'VS Code extension example.alpha 1.0.0',
         category: 'developer',
         risk: 'review',
-        origin: 'explore',
+        origin: { kind: 'explore', probe: 'vscodeExtensions' },
         explanation:
           'An extension folder VS Code marked for removal after an uninstall or an update.',
         regeneration: 'VS Code downloads it again only if you install this version again.',
         allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
         entryCount: 2,
         isComplete: true,
+        privateSizeFallbackCount: 0,
+        lastUsedAtMs: null,
+        downloadedAtMs: null,
+        appName: null,
         removal: { kind: 'deleteUnitFolder', identity: identity.value, unit: unit },
         evidenceLines: [
           "Neither VS Code's default registry nor any profile's lists this folder.",

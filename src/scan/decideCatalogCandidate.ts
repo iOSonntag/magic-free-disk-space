@@ -17,6 +17,8 @@ export function decideCatalogCandidate(params: {
   owner: CatalogOwner | null;
   ownerBundlePaths: string[];
   ownerState: OwnerState;
+  /** The installed app of the owner, by its name; `null` for none. */
+  ownerAppName: string | null;
   activity: ActivityProbe | null;
   minOfferedBytes: number;
 }): CandidateDecision {
@@ -58,12 +60,16 @@ export function decideCatalogCandidate(params: {
           title: params.entry.title,
           category: params.entry.category,
           risk: params.entry.risk,
-          origin: 'catalog',
+          origin: { kind: 'catalog', entryId: params.entry.id },
           explanation: params.entry.explanation,
           regeneration: params.entry.regeneration,
           allocatedBytes: params.measurement.allocatedBytes,
           entryCount: params.measurement.entryCount,
           isComplete: params.measurement.isComplete,
+          privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
+          lastUsedAtMs: null,
+          downloadedAtMs: null,
+          appName: params.ownerAppName,
           removal: {
             kind: 'deletePath',
             identity: params.measurement.identity,
@@ -77,6 +83,7 @@ export function decideCatalogCandidate(params: {
       return {
         kind: 'advice',
         advice: {
+          origin: { kind: 'catalog', entryId: params.entry.id },
           path: params.path,
           title: params.entry.title,
           category: params.entry.category,
@@ -85,6 +92,10 @@ export function decideCatalogCandidate(params: {
           advice: params.entry.removal.advice,
           allocatedBytes: params.measurement.allocatedBytes,
           isComplete: params.measurement.isComplete,
+          privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
+          lastUsedAtMs: null,
+          downloadedAtMs: null,
+          appName: params.ownerAppName,
         },
       };
   }

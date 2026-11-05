@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestCandidate,
+  buildTestToolCandidate,
+  TEST_LISTING_FACTS_NONE,
+} from '../support/candidateFixtures.js';
 
 function buildOffers(candidates: Candidate[]): CandidateDecision[] {
   return candidates.map(
@@ -21,6 +25,7 @@ describeAwaitingWin32Platform('buildScanReport', () => {
       {
         kind: 'advice',
         advice: {
+          origin: { kind: 'catalog', entryId: 'test-entry' },
           path: '/opt/tool',
           title: 'Tool',
           category: 'packages',
@@ -29,6 +34,7 @@ describeAwaitingWin32Platform('buildScanReport', () => {
           advice: 'Run the tool cleanup.',
           allocatedBytes: 500,
           isComplete: true,
+          ...TEST_LISTING_FACTS_NONE,
         },
       },
     ];

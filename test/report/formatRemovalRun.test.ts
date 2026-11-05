@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { formatRemovalRun } from '../../src/report/formatRemovalRun.js';
+import { formatAvailableSpaceLine, formatRemovalRun } from '../../src/report/formatRemovalRun.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
 
@@ -74,7 +74,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       '- permission denied: /fixture/d (EACCES)',
       '- failed: /fixture/e (EIO)',
       '- not attempted: /fixture/f',
-      'Freed about 1.0 KiB in 1 item.',
+      'Freed about 1.0 kB in 1 item.',
       '2 items could not be deleted.',
       '1 item was not attempted.',
     ]);
@@ -120,7 +120,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       `- deleted: ${extensionsPath}/example.alpha-1.0.0`,
       `- changed since the scan, left alone: ${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
       `- its app or tool is running now, left alone: ${extensionsPath}/example.gamma-3.0.0`,
-      'Freed about 4.0 KiB in 1 item.',
+      'Freed about 4.1 kB in 1 item.',
     ]);
   });
 
@@ -152,7 +152,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     expect(lines).toEqual([
       '- deleted: /fixture/a',
       '- already gone: /fixture/b',
-      'Freed about 2.0 KiB in 1 item.',
+      'Freed about 2.0 kB in 1 item.',
     ]);
   });
 
@@ -224,7 +224,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       '   still deleting',
       '- its tool failed: /fixture/tool-d (its output could not be read: no device list)',
       '- its app or tool is running now, left alone: /fixture/tool-e',
-      'Freed about 4.0 KiB in 1 item.',
+      'Freed about 4.1 kB in 1 item.',
       '3 items could not be deleted.',
     ]);
   });
@@ -274,7 +274,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     expect(lines.slice(0, 3)).toEqual([
       '- its tool failed: /fixture/a (ended by signal SIGKILL)',
       '- its tool failed: /fixture/b (could not start: ENOENT)',
-      '- its tool failed: /fixture/c (stopped when its output passed 1.0 MiB)',
+      '- its tool failed: /fixture/c (stopped when its output passed 1.0 MB)',
     ]);
   });
 
@@ -303,6 +303,12 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       '- its tool failed: /fixture/avd (could not read /fixture/avd/config.ini: EACCES)',
     );
     expect(lines[1]).toBe('Freed about 0 B in 0 items.');
+  });
+
+  test('names the free space of the disk after a run', () => {
+    expect(formatAvailableSpaceLine({ availableBytes: 52_000_000_000 })).toBe(
+      '52 GB is free on this disk now.',
+    );
   });
 
   test('adds the deletion log failure as the last line', () => {

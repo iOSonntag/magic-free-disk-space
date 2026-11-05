@@ -1,7 +1,7 @@
+import { formatHomeRelativePath } from '../../path/formatHomeRelativePath.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
-import { formatHomeRelativePath } from '../formatHomeRelativePath.js';
 import type { MisePrunableVersion } from './parseMisePrunableVersions.js';
 
 export function buildMiseVersionFindings(params: {

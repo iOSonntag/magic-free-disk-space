@@ -1,14 +1,26 @@
 import type { Risk } from '../catalog/catalog.js';
 import { isRemovableRisk } from '../delete/validateRemoval.js';
+import { formatHomeRelativePath } from '../path/formatHomeRelativePath.js';
+import type { SectionTotal } from '../scan/buildSectionTotals.js';
+import { buildSectionTotals } from '../scan/buildSectionTotals.js';
 import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
+import { isProbedCandidate } from '../scan/candidate.js';
+import type { CandidateOrigin, ItemKey, LeftoverMatch } from '../scan/candidateOrigin.js';
+import { buildItemKey } from '../scan/candidateOrigin.js';
 import type { ScanIssue } from '../scan/issue.js';
 import type {
+  CandidateGroup,
   CandidatePlace,
   CandidatePlaceSection,
   ConsumerSection,
 } from '../scan/placeCandidate.js';
-import { CONSUMER_SECTION_ORDER, placeCandidate } from '../scan/placeCandidate.js';
+import {
+  CONSUMER_SECTION_ORDER,
+  getCategorySection,
+  placeCandidate,
+} from '../scan/placeCandidate.js';
 import type { ScanReport, SkippedItem } from '../scan/runScan.js';
+import type { VolumeSpace } from '../system/volumeSpace.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
 import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
 import { formatCandidateCommandText } from './formatCandidateCommandText.js';
@@ -31,11 +43,23 @@ export type ScanView = {
   /** `null` when nothing was skipped. */
   skipped: SkippedView | null;
   notices: NoticeView[];
+  /** What each section holds, Explore items and advice in the section of their category. */
+  sectionTotals: SectionTotal[];
 };
 
-type SummaryView = { titleText: string; lines: string[] };
+type SummaryView = {
+  titleText: string;
+  lines: string[];
+  /** The bytes of every offered item, as the title counts them. */
+  totalBytes: number;
+  /** The bytes of the items of every `safe` group. */
+  safeBytes: number;
+  /** The volume of the home folder; `null` when its space could not be read. */
+  disk: VolumeSpace | null;
+};
 
 export type SectionView = {
+  key: ConsumerSection;
   titleText: string;
   sizeText: string;
   /** Open when the section holds a safe item. */
@@ -60,24 +84,65 @@ export type ExploreView = {
 /** What the tool never removes: places the person handles with the owning tool. */
 type AdviceGroupView = { titleText: string; items: AdviceItemView[] };
 
-/** A selectable item; `number` is what the selection names. */
+/** The source of an item as a client words it; catalog items in the Trash read as `trash`. */
+type ItemOriginView =
+  | 'catalog'
+  | 'trash'
+  | 'project'
+  | 'app'
+  | 'largeFile'
+  | 'leftover'
+  | 'explore';
+
+/** How an offered item goes: deleted as its path or its unit's folder, or by its tool's command. */
+type ItemRemovalView = 'delete' | 'tool';
+
+/** A selectable item; `number` is what the selection names, `key` what a client keeps it by. */
 export type ItemView = {
   number: number;
+  key: ItemKey;
   title: string;
   /** For the colour of the item; `riskText` is what shows. */
   risk: Risk;
   riskText: string;
   sizeText: string;
   detailLines: ItemDetailLine[];
+  /** The section of the item's category, also for an Explore item. */
+  sectionKey: ConsumerSection;
+  group: CandidateGroup;
+  origin: ItemOriginView;
+  removal: ItemRemovalView;
+  allocatedBytes: number;
+  isComplete: boolean;
+  /** The path with `~` for the home folder, safe to show. */
+  displayPath: string;
+  /** The path as it is, for the client to reveal in Finder; never shown. */
+  revealPath: string;
+  /** ISO 8601; `null` when the scan judged no use. */
+  lastUsedAt: string | null;
+  /** ISO 8601; `null` when unknown. */
+  downloadedAt: string | null;
+  appName: string | null;
+  /** How a leftover was tied to its app; `null` for every other item. */
+  matchedBy: LeftoverMatch | null;
 };
 
 /** An advice item: never selectable, so it has no number. */
 export type AdviceItemView = {
+  key: ItemKey;
   title: string;
   risk: Risk;
   riskText: string;
   sizeText: string;
   detailLines: ItemDetailLine[];
+  sectionKey: ConsumerSection;
+  origin: ItemOriginView;
+  removal: 'advice';
+  allocatedBytes: number;
+  displayPath: string;
+  revealPath: string;
+  /** The app that removes it; `null` until the scan names one. */
+  opener: null;
 };
 
 export type ItemDetailLineKind =
@@ -127,6 +192,15 @@ function buildSectionTitleTexts(params: { texts: ReportTexts }): Record<Consumer
     ownApp: 'Handled by its own app',
   };
 }
+
+const originViews: Record<CandidateOrigin['kind'], ItemOriginView> = {
+  catalog: 'catalog',
+  artifact: 'project',
+  application: 'app',
+  userFile: 'largeFile',
+  leftover: 'leftover',
+  explore: 'explore',
+};
 
 const riskTexts: Record<Risk, string> = {
   safe: 'safe',
@@ -204,33 +278,72 @@ export function buildScanView(params: {
   report: ScanReport;
   fullDiskAccessHolder: FullDiskAccessHolder;
   texts: ReportTexts;
+  homeDir: string;
+  /** The space of the home folder's volume, read right before the view. */
+  disk: VolumeSpace | null;
 }): ScanView {
-  const placedItems = params.report.candidates.map(
-    (candidate, index): PlacedItem => ({
+  const placedItems = params.report.candidates.map((candidate, index): PlacedItem => {
+    const place = placeCandidate(candidate);
+
+    return {
       candidate: candidate,
-      place: placeCandidate(candidate),
-      view: buildItemView({ candidate: candidate, number: index + 1 }),
-    }),
-  );
+      place: place,
+      view: buildItemView({
+        candidate: candidate,
+        place: place,
+        number: index + 1,
+        homeDir: params.homeDir,
+      }),
+    };
+  });
 
   return {
-    summary: buildSummaryView({ placedItems: placedItems }),
+    summary: buildSummaryView({ placedItems: placedItems, disk: params.disk }),
     sections: buildSectionViews({ placedItems: placedItems, texts: params.texts }),
-    explore: buildExploreView({ placedItems: placedItems, advice: params.report.advice }),
+    explore: buildExploreView({
+      placedItems: placedItems,
+      advice: params.report.advice,
+      homeDir: params.homeDir,
+    }),
     safeNumbers: params.report.safeNumbers,
     skipped: buildSkippedView({ skipped: params.report.skipped, texts: params.texts }),
-    notices: buildIssueNotices({
-      issues: params.report.issues,
-      fullDiskAccessHolder: params.fullDiskAccessHolder,
-      texts: params.texts,
+    notices: [
+      ...buildIssueNotices({
+        issues: params.report.issues,
+        fullDiskAccessHolder: params.fullDiskAccessHolder,
+        texts: params.texts,
+      }),
+      ...buildPrivateSizeFallbackNotices({ report: params.report, texts: params.texts }),
+    ],
+    sectionTotals: buildSectionTotals({
+      candidates: params.report.candidates,
+      advice: params.report.advice,
     }),
   };
 }
 
 /** The total of every candidate, then one line per part of the summary that holds an item. */
-function buildSummaryView(params: { placedItems: PlacedItem[] }): SummaryView {
+function buildSummaryView(params: {
+  placedItems: PlacedItem[];
+  disk: VolumeSpace | null;
+}): SummaryView {
+  const totalBytes = sumAllocatedBytes({
+    items: params.placedItems.map((item) => item.candidate),
+  });
+  const safeBytes = sumAllocatedBytes({
+    items: params.placedItems.flatMap((item) =>
+      item.place.group === 'safe' ? [item.candidate] : [],
+    ),
+  });
+
   if (params.placedItems.length === 0) {
-    return { titleText: 'Nothing to delete was found.', lines: [] };
+    return {
+      titleText: 'Nothing to delete was found.',
+      lines: [],
+      totalBytes: totalBytes,
+      safeBytes: safeBytes,
+      disk: params.disk,
+    };
   }
 
   const itemCountText = formatCount({
@@ -245,7 +358,14 @@ function buildSummaryView(params: { placedItems: PlacedItem[] }): SummaryView {
   return {
     titleText: `Found ${itemCountText}, ${totalSizeText} in total`,
     lines: formatSummaryLines({ placedItems: params.placedItems }),
+    totalBytes: totalBytes,
+    safeBytes: safeBytes,
+    disk: params.disk,
   };
+}
+
+function sumAllocatedBytes(params: { items: { allocatedBytes: number }[] }): number {
+  return params.items.reduce((sum, item) => sum + item.allocatedBytes, 0);
 }
 
 function formatSummaryLines(params: { placedItems: PlacedItem[] }): string[] {
@@ -302,6 +422,7 @@ function buildSectionViews(params: {
 
     return [
       buildSectionView({
+        section: section,
         titleText: sectionTitleTexts[section],
         sectionItems: sectionItems,
       }),
@@ -309,7 +430,9 @@ function buildSectionViews(params: {
   });
 }
 
+/** The `review` and the `careful` groups wait together under "Check before deleting". */
 function buildSectionView(params: {
+  section: ConsumerSection;
   titleText: string;
   sectionItems: SectionPlacedItem[];
 }): SectionView {
@@ -317,10 +440,11 @@ function buildSectionView(params: {
     item.place.group === 'safe' ? [item.view] : [],
   );
   const checkItems = params.sectionItems.flatMap((item) =>
-    item.place.group === 'check' ? [item.view] : [],
+    item.place.group === 'safe' ? [] : [item.view],
   );
 
   return {
+    key: params.section,
     titleText: params.titleText,
     sizeText: formatTotalSizeText({ items: params.sectionItems.map((item) => item.candidate) }),
     isInitiallyExpanded: safeItems.length > 0,
@@ -334,6 +458,7 @@ function buildSectionView(params: {
 function buildExploreView(params: {
   placedItems: PlacedItem[];
   advice: Advice[];
+  homeDir: string;
 }): ExploreView | null {
   const items = params.placedItems.flatMap((item) =>
     item.place.kind === 'explore' ? [item.view] : [],
@@ -347,35 +472,90 @@ function buildExploreView(params: {
     titleText: EXPLORE_TITLE_TEXT,
     introText: EXPLORE_INTRO_TEXT,
     items: items,
-    adviceGroup: buildAdviceGroupView({ advice: params.advice }),
+    adviceGroup: buildAdviceGroupView({ advice: params.advice, homeDir: params.homeDir }),
   };
 }
 
-function buildAdviceGroupView(params: { advice: Advice[] }): AdviceGroupView | null {
+function buildAdviceGroupView(params: {
+  advice: Advice[];
+  homeDir: string;
+}): AdviceGroupView | null {
   if (params.advice.length === 0) {
     return null;
   }
 
   return {
     titleText: ADVICE_GROUP_TITLE_TEXT,
-    items: params.advice.map((item) => buildAdviceItemView({ advice: item })),
+    items: params.advice.map((item) =>
+      buildAdviceItemView({ advice: item, homeDir: params.homeDir }),
+    ),
   };
 }
 
-function buildItemView(params: { candidate: Candidate; number: number }): ItemView {
+function buildItemView(params: {
+  candidate: Candidate;
+  place: CandidatePlace;
+  number: number;
+  homeDir: string;
+}): ItemView {
   return {
     number: params.number,
+    key: buildItemKey({ item: params.candidate }),
     title: formatDisplayText({ text: params.candidate.title }),
     risk: params.candidate.risk,
     riskText: riskTexts[params.candidate.risk],
     sizeText: formatSizeText(params.candidate),
     detailLines: buildItemDetailLines({ candidate: params.candidate }),
+    sectionKey: params.place.section,
+    group: params.place.group,
+    origin: formatItemOrigin({ item: params.candidate }),
+    removal: params.candidate.removal.kind === 'runTool' ? 'tool' : 'delete',
+    allocatedBytes: params.candidate.allocatedBytes,
+    isComplete: params.candidate.isComplete,
+    displayPath: formatDisplayPath({ path: params.candidate.path, homeDir: params.homeDir }),
+    revealPath: params.candidate.path,
+    lastUsedAt: formatInstantText({ ms: params.candidate.lastUsedAtMs }),
+    downloadedAt: formatInstantText({ ms: params.candidate.downloadedAtMs }),
+    appName: formatAppName({ appName: params.candidate.appName }),
+    matchedBy:
+      params.candidate.origin.kind === 'leftover' ? params.candidate.origin.matchedBy : null,
   };
+}
+
+/** A catalog item in the Trash reads as the Trash, where the person knows it from. */
+function formatItemOrigin(params: { item: Candidate | Advice }): ItemOriginView {
+  if (params.item.origin.kind === 'catalog' && params.item.category === 'trash') {
+    return 'trash';
+  }
+
+  return originViews[params.item.origin.kind];
+}
+
+function formatDisplayPath(params: { path: string; homeDir: string }): string {
+  return formatDisplayText({
+    text: formatHomeRelativePath({ path: params.path, homeDir: params.homeDir }),
+  });
+}
+
+function formatInstantText(params: { ms: number | null }): string | null {
+  if (params.ms === null) {
+    return null;
+  }
+
+  return new Date(params.ms).toISOString();
+}
+
+function formatAppName(params: { appName: string | null }): string | null {
+  if (params.appName === null) {
+    return null;
+  }
+
+  return formatDisplayText({ text: params.appName });
 }
 
 /** The path, the explanation, the regeneration, each evidence line, and a tool item's command. */
 function buildItemDetailLines(params: { candidate: Candidate }): ItemDetailLine[] {
-  const evidenceLines = params.candidate.origin === 'explore' ? params.candidate.evidenceLines : [];
+  const evidenceLines = isProbedCandidate(params.candidate) ? params.candidate.evidenceLines : [];
   const lines = [
     buildDetailLine({ kind: 'path', text: params.candidate.path }),
     buildDetailLine({ kind: 'explanation', text: params.candidate.explanation }),
@@ -391,8 +571,9 @@ function buildItemDetailLines(params: { candidate: Candidate }): ItemDetailLine[
   return lines;
 }
 
-function buildAdviceItemView(params: { advice: Advice }): AdviceItemView {
+function buildAdviceItemView(params: { advice: Advice; homeDir: string }): AdviceItemView {
   return {
+    key: buildItemKey({ item: params.advice }),
     title: formatDisplayText({ text: params.advice.title }),
     risk: params.advice.risk,
     riskText: riskTexts[params.advice.risk],
@@ -402,6 +583,13 @@ function buildAdviceItemView(params: { advice: Advice }): AdviceItemView {
       buildDetailLine({ kind: 'explanation', text: params.advice.explanation }),
       buildDetailLine({ kind: 'advice', text: params.advice.advice }),
     ],
+    sectionKey: getCategorySection({ category: params.advice.category }),
+    origin: formatItemOrigin({ item: params.advice }),
+    removal: 'advice',
+    allocatedBytes: params.advice.allocatedBytes,
+    displayPath: formatDisplayPath({ path: params.advice.path, homeDir: params.homeDir }),
+    revealPath: params.advice.path,
+    opener: null,
   };
 }
 
@@ -496,6 +684,45 @@ function buildPlaceNotices(params: {
       settingsLink: FULL_DISK_ACCESS_SETTINGS_LINK,
     },
   ];
+}
+
+/**
+ * One notice when a size counts every block of an entry whose private size could not be read: such
+ * a size may hold space the entry shares with a copy, which deleting it does not free.
+ */
+function buildPrivateSizeFallbackNotices(params: {
+  report: ScanReport;
+  texts: ReportTexts;
+}): NoticeView[] {
+  const fallbackCount = sumPrivateSizeFallbackCounts({
+    items: [...params.report.candidates, ...params.report.advice],
+  });
+
+  if (fallbackCount === 0) {
+    return [];
+  }
+
+  const entryCountText = formatCount({
+    count: fallbackCount,
+    singular: 'entry',
+    plural: 'entries',
+  });
+
+  return [
+    {
+      titleText: 'Some sizes may be larger than the space they free',
+      lines: [
+        `${params.texts.systemName} did not give the private size of ${entryCountText}, so their full size counts, which may include space they share with a copy.`,
+      ],
+      settingsLink: null,
+    },
+  ];
+}
+
+function sumPrivateSizeFallbackCounts(params: {
+  items: { privateSizeFallbackCount: number }[];
+}): number {
+  return params.items.reduce((sum, item) => sum + item.privateSizeFallbackCount, 0);
 }
 
 function buildToolNotices(params: {

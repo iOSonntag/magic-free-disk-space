@@ -8,6 +8,7 @@ export const moduleBoundary = {
     'explorePlatform.ts',
     'exploreProbe.ts',
     'exploreUnit.ts',
+    'formatExploreUnitKey.ts',
     'projectPins/loadProjectPins.ts',
     'projectPins/projectPins.ts',
     'recheckExploreUnit.ts',

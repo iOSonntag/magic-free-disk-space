@@ -1,25 +1,27 @@
-type BinaryUnitValue = { value: number; unit: 'KiB' | 'MiB' | 'GiB' | 'TiB' };
+type DecimalUnitValue = { value: number; unit: 'kB' | 'MB' | 'GB' | 'TB' };
 
-const binaryUnitScales = [
-  { unit: 'KiB', bytesPerUnit: 1024 },
-  { unit: 'MiB', bytesPerUnit: 1024 ** 2 },
-  { unit: 'GiB', bytesPerUnit: 1024 ** 3 },
+const BYTES_PER_KILOBYTE = 1000;
+
+const decimalUnitScales = [
+  { unit: 'kB', bytesPerUnit: BYTES_PER_KILOBYTE },
+  { unit: 'MB', bytesPerUnit: BYTES_PER_KILOBYTE ** 2 },
+  { unit: 'GB', bytesPerUnit: BYTES_PER_KILOBYTE ** 3 },
 ] as const;
 
 /**
- * Formats a byte count in binary units. Throws for a negative or non-integer count,
- * which is a broken invariant of the caller.
+ * Formats a byte count in decimal units, 1 GB being 10⁹ bytes, as macOS counts disk space.
+ * Throws for a negative or non-integer count, which is a broken invariant of the caller.
  */
 export function formatBytes(bytes: number): string {
   if (!Number.isInteger(bytes) || bytes < 0) {
     throw new RangeError(`formatBytes needs a non-negative integer, got ${bytes}`);
   }
 
-  if (bytes < 1024) {
+  if (bytes < BYTES_PER_KILOBYTE) {
     return `${bytes} B`;
   }
 
-  const scale = bytesToBinaryUnitValue({ bytes: bytes });
+  const scale = bytesToDecimalUnitValue({ bytes: bytes });
   const valueText = scale.value < 10 ? scale.value.toFixed(1) : String(Math.round(scale.value));
 
   return `${valueText} ${scale.unit}`;
@@ -48,15 +50,15 @@ export function formatTotalSizeText(params: {
   });
 }
 
-function bytesToBinaryUnitValue(params: { bytes: number }): BinaryUnitValue {
-  for (const scale of binaryUnitScales) {
+function bytesToDecimalUnitValue(params: { bytes: number }): DecimalUnitValue {
+  for (const scale of decimalUnitScales) {
     const value = params.bytes / scale.bytesPerUnit;
 
-    // Compared after rounding, so 1023.6 KiB shows as 1.0 MiB rather than 1024 KiB.
-    if (Math.round(value) < 1024) {
+    // Compared after rounding, so 999.6 kB shows as 1.0 MB rather than 1000 kB.
+    if (Math.round(value) < BYTES_PER_KILOBYTE) {
       return { value: value, unit: scale.unit };
     }
   }
 
-  return { value: params.bytes / 1024 ** 4, unit: 'TiB' };
+  return { value: params.bytes / BYTES_PER_KILOBYTE ** 4, unit: 'TB' };
 }

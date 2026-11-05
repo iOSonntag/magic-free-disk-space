@@ -10,7 +10,8 @@ import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart';
 
 const String _scannedLine =
-    '{"kind":"scanned","summary":{"titleText":"%s","lines":[]},"sections":[],'
+    '{"kind":"scanned","summary":{"titleText":"%s","lines":[],"totalBytes":0,'
+    '"safeBytes":0,"disk":null},"sections":[],"sectionTotals":[],'
     '"explore":null,"safeNumbers":[],"skipped":null,"notices":[]}';
 
 void main() {
@@ -156,7 +157,7 @@ done
   test('dispose fails the pending request', () async {
     client = await createClientOverScript('''
 while read -r request; do
-  echo '{"kind":"progress","message":"Measuring apps…"}'
+  echo '{"kind":"progress","message":"Measuring apps…","phase":"apps","found":[]}'
   sleep 5
 done
 ''');
@@ -269,7 +270,7 @@ done
   test('passes the progress on and answers with the final event', () async {
     client = await createClientOverScript('''
 while read -r request; do
-  echo '{"kind":"progress","message":"Measuring apps…"}'
+  echo '{"kind":"progress","message":"Measuring apps…","phase":"apps","found":[]}'
   echo '${buildScannedLine('done')}'
 done
 ''');

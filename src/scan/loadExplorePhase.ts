@@ -1,6 +1,11 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { ExploreFinding, ExplorePathUnit, ExploreToolUnit } from '../explore/exploreUnit.js';
+import type {
+  ExploreFinding,
+  ExplorePathUnit,
+  ExploreToolUnit,
+  ExploreUnit,
+} from '../explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
@@ -55,6 +60,7 @@ export async function loadExplorePhase(params: {
         loadExploreEntryPhase({
           environment: params.environment,
           entry: entry,
+          probe: entry.removal.probe,
           outcome: params.probes[entry.removal.probe],
           measureTimeoutMs: params.measureTimeoutMs,
           runItemMeasurement: params.runItemMeasurement,
@@ -76,6 +82,7 @@ export async function loadExplorePhase(params: {
 async function loadExploreEntryPhase(params: {
   environment: Environment;
   entry: CatalogEntry;
+  probe: ExploreProbeId;
   outcome: Promise<ExploreProbeOutcome>;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
@@ -90,6 +97,7 @@ async function loadExploreEntryPhase(params: {
         outcome.findings.map((finding) =>
           loadExploreFindingPhase({
             finding: finding,
+            probe: params.probe,
             category: params.entry.category,
             measureTimeoutMs: params.measureTimeoutMs,
             runItemMeasurement: params.runItemMeasurement,
@@ -160,6 +168,7 @@ async function loadExploreEntryPhase(params: {
  */
 async function loadExploreFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
@@ -184,6 +193,7 @@ async function loadExploreFindingPhase(params: {
 
 async function loadIdleFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
@@ -218,6 +228,7 @@ async function loadIdleFindingPhase(params: {
  */
 async function loadToolFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   unit: ExploreToolUnit;
   category: CandidateCategory;
   measureTimeoutMs: number;
@@ -234,6 +245,7 @@ async function loadToolFindingPhase(params: {
   const removal: CandidateRemovalRunTool = { kind: 'runTool', unit: params.unit };
   const candidate = buildExploreCandidate({
     finding: params.finding,
+    probe: params.probe,
     path: params.finding.displayPath,
     removal: removal,
     category: params.category,
@@ -250,6 +262,7 @@ async function loadToolFindingPhase(params: {
  */
 function loadPathFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   unit: ExplorePathUnit;
   category: CandidateCategory;
   measureTimeoutMs: number;
@@ -278,6 +291,7 @@ function loadPathFindingPhase(params: {
         kind: 'offer',
         candidate: buildExploreCandidate({
           finding: params.finding,
+          probe: params.probe,
           path: params.unit.folderPath,
           removal: removal,
           category: params.category,
@@ -290,6 +304,7 @@ function loadPathFindingPhase(params: {
 
 function buildExploreCandidate(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   path: string;
   removal: CandidateRemovalRunTool | CandidateRemovalDeleteUnitFolder;
   category: CandidateCategory;
@@ -300,13 +315,39 @@ function buildExploreCandidate(params: {
     title: params.finding.title,
     category: params.category,
     risk: params.finding.risk,
-    origin: 'explore',
+    origin: { kind: 'explore', probe: params.probe },
     explanation: params.finding.explanation,
     regeneration: params.finding.regeneration,
     allocatedBytes: params.measurement.allocatedBytes,
     entryCount: params.measurement.entryCount,
     isComplete: params.measurement.isComplete,
+    privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
+    lastUsedAtMs: getUnitLastUsedAtMs({ unit: params.finding.unit }),
+    downloadedAtMs: null,
+    appName: null,
     removal: params.removal,
     evidenceLines: params.finding.evidenceLines,
   };
+}
+
+/** The last use its own tool records for a unit; `null` for a unit whose tool records none. */
+function getUnitLastUsedAtMs(params: { unit: ExploreUnit }): number | null {
+  switch (params.unit.kind) {
+    case 'simulatorRuntime':
+    case 'androidAvd':
+      return params.unit.lastUsedAtMs;
+    case 'simulatorDevice':
+    case 'dartPubCache':
+    case 'miseVersion':
+    case 'homebrewOldVersions':
+    case 'homebrewOrphans':
+    case 'asdfVersion':
+    case 'androidSystemImage':
+    case 'androidEmulator':
+    case 'vscodeExtension':
+    case 'nvmVersion':
+    case 'androidPlatform':
+    case 'pnpmStore':
+      return null;
+  }
 }

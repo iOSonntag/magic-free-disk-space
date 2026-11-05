@@ -1,6 +1,11 @@
 import type { CandidateCategory, Risk } from '../catalog/catalog.js';
 import type { ExplorePathUnit, ExploreToolUnit } from '../explore/exploreUnit.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
+import type {
+  CandidateOrigin,
+  CandidateOriginCatalog,
+  CandidateOriginExplore,
+} from './candidateOrigin.js';
 
 /** Deleted as a path, only while its identity still matches the scan. */
 export type CandidateRemovalDeletePath = {
@@ -36,17 +41,25 @@ export type CandidateListing = {
   entryCount: number;
   /** False when the size is a lower bound: unreadable entries or a deadline. */
   isComplete: boolean;
+  /** Entries whose size counts every block, because their private size could not be read. */
+  privateSizeFallbackCount: number;
+  /** The last sign of use the scan judged the item by; `null` when it judged none. */
+  lastUsedAtMs: number | null;
+  /** When the item came onto this Mac; `null` until a source reads it. */
+  downloadedAtMs: number | null;
+  /** The installed app the item belongs to, by the name the person knows it by. */
+  appName: string | null;
 };
 
 /** An item a rule matched to a path on disk, deleted as that path. */
 export type CandidateMatched = CandidateListing & {
-  origin: 'catalog' | 'artifact' | 'application' | 'userFile' | 'leftover';
+  origin: Exclude<CandidateOrigin, CandidateOriginExplore>;
   removal: CandidateRemovalDeletePath;
 };
 
 /** An item a probe of Explore found, removed by the command of its tool or as its unit's folder. */
 export type CandidateProbed = CandidateListing & {
-  origin: 'explore';
+  origin: CandidateOriginExplore;
   removal: CandidateRemovalRunTool | CandidateRemovalDeleteUnitFolder;
   /** What the probe found that makes the item safe to offer. */
   evidenceLines: string[];
@@ -55,6 +68,8 @@ export type CandidateProbed = CandidateListing & {
 export type Candidate = CandidateMatched | CandidateProbed;
 
 export type Advice = {
+  /** Advice comes only from a catalog entry, whose place the person handles with its own tool. */
+  origin: CandidateOriginCatalog;
   path: string;
   title: string;
   category: CandidateCategory;
@@ -63,6 +78,10 @@ export type Advice = {
   advice: string;
   allocatedBytes: number;
   isComplete: boolean;
+  privateSizeFallbackCount: number;
+  lastUsedAtMs: number | null;
+  downloadedAtMs: number | null;
+  appName: string | null;
 };
 
 export type SkipReason =
@@ -91,3 +110,8 @@ export type CandidateDecision =
   | CandidateDecisionOffer
   | CandidateDecisionAdvice
   | CandidateDecisionSkip;
+
+/** Narrows by the origin, which the compiler does not follow down into the candidate. */
+export function isProbedCandidate(candidate: Candidate): candidate is CandidateProbed {
+  return candidate.origin.kind === 'explore';
+}

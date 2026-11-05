@@ -32,6 +32,11 @@ export function formatRemovalRun(params: { run: RemovalRun }): string[] {
   ];
 }
 
+/** The free space of the home folder's volume after a run. */
+export function formatAvailableSpaceLine(params: { availableBytes: number }): string {
+  return `${formatBytes(params.availableBytes)} is free on this disk now.`;
+}
+
 function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
   if (params.outcome.outcome === 'toolFailed') {
     return formatToolFailedLines({ outcome: params.outcome });

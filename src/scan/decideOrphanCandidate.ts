@@ -83,7 +83,8 @@ export function decideOrphanCandidate(params: {
       category: 'leftovers',
       // Careful, not review: a container holds the documents of its app, such as virtual machines.
       risk: 'careful',
-      origin: 'leftover',
+      // The container's name is the bundle id of its app, which the name check above parsed.
+      origin: { kind: 'leftover', matchedBy: 'bundleId' },
       explanation:
         'The sandbox container of an app that is not in an Applications folder and that has not changed for the unused period. It holds the settings and the documents of that app.',
       regeneration:
@@ -91,6 +92,11 @@ export function decideOrphanCandidate(params: {
       allocatedBytes: params.measurement.allocatedBytes,
       entryCount: params.measurement.entryCount,
       isComplete: params.measurement.isComplete,
+      privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
+      // The newest change inside, the one sign of use a container of a removed app gives.
+      lastUsedAtMs: params.measurement.latestModifiedMs,
+      downloadedAtMs: null,
+      appName: null,
       removal: { kind: 'deletePath', identity: params.measurement.identity, ownerBundlePaths: [] },
     },
   };

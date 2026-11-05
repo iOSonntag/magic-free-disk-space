@@ -10,6 +10,8 @@ const String fullDiskAccessSettingsUrl =
     'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
 const String releasePageUrl =
     'https://github.com/iOSonntag/magic-free-disk-space/releases/tag/v1.3.0';
+const String deletionLogPath =
+    '/Users/me/Library/Logs/magic-free-disk-space/deletions.jsonl';
 
 List<ItemDetailLineKind> getDetailLineKinds(List<ItemDetailLine> lines) {
   return [for (final ItemDetailLine line in lines) line.kind];
@@ -57,18 +59,34 @@ void main() {
   group('the scan', () {
     final ScannedEvent scanned = events.whereType<ScannedEvent>().single;
 
-    test('parses the summary', () {
-      expect(
-        scanned.summary.titleText,
-        'Found 5 items, at least 18 MiB in total',
-      );
+    /// The item of [scanned] numbered [number].
+    ItemView getItem(int number) {
+      return [
+        for (final SectionView section in scanned.sections) ...[
+          ...section.items,
+          ...?section.checkGroup?.items,
+        ],
+        ...scanned.explore!.items,
+      ].singleWhere((ItemView item) => item.number == number);
+    }
+
+    test('parses the summary with its totals and its disk', () {
+      expect(scanned.summary.titleText, 'Found 6 items, at least 19 MB in total');
       expect(scanned.summary.lines, hasLength(3));
+      expect(scanned.summary.totalBytes, 19000000);
+      expect(scanned.summary.safeBytes, 6000000);
+      expect(scanned.summary.disk!.capacityBytes, 500000000000);
+      expect(scanned.summary.disk!.availableBytes, 52000000000);
     });
 
     test('parses the sections with their safe items and check groups', () {
       expect(
         [for (final SectionView section in scanned.sections) section.titleText],
         ['Caches', 'Apps', 'Large files'],
+      );
+      expect(
+        [for (final SectionView section in scanned.sections) section.key],
+        [SectionKey.caches, SectionKey.apps, SectionKey.largeFiles],
       );
       expect(
         [
@@ -95,33 +113,80 @@ void main() {
         ],
         [
           [2],
-          [3],
-          [4],
+          [3, 4],
+          [5],
         ],
       );
       expect(
         scanned.sections.first.checkGroup!.titleText,
         'Check before deleting',
       );
-      expect(scanned.sections.first.sizeText, 'at least 10 MiB');
+      expect(scanned.sections.first.sizeText, 'at least 10 MB');
 
       final ItemView toolCache = scanned.sections.first.items.single;
       expect(toolCache.risk, Risk.safe);
       expect(toolCache.riskText, 'safe');
-      expect(toolCache.sizeText, '6.0 MiB');
+      expect(toolCache.sizeText, '6.0 MB');
       expect(getDetailLineKinds(toolCache.detailLines), [
         ItemDetailLineKind.path,
         ItemDetailLineKind.explanation,
         ItemDetailLineKind.regeneration,
       ]);
-      expect(scanned.sections[1].checkGroup!.items.single.risk, Risk.never);
+      expect(scanned.sections[1].checkGroup!.items.first.risk, Risk.never);
+    });
+
+    test('parses the facts of an item', () {
+      final ItemView toolCache = getItem(1);
+      expect(
+        toolCache.key,
+        'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
+      );
+      expect(toolCache.sectionKey, SectionKey.caches);
+      expect(toolCache.group, ItemGroup.safe);
+      expect(toolCache.origin, ItemOrigin.catalog);
+      expect(toolCache.removal, ItemRemoval.delete);
+      expect(toolCache.allocatedBytes, 6000000);
+      expect(toolCache.isComplete, isTrue);
+      expect(toolCache.displayPath, '~/Library/Caches/ToolCache');
+      expect(toolCache.revealPath, '/Users/me/Library/Caches/ToolCache');
+      expect(toolCache.lastUsedAt, isNull);
+      expect(toolCache.downloadedAt, isNull);
+      expect(toolCache.appName, isNull);
+      expect(toolCache.matchedBy, isNull);
+
+      final ItemView appCache = getItem(2);
+      expect(appCache.group, ItemGroup.review);
+      expect(appCache.isComplete, isFalse);
+      expect(appCache.appName, 'Example');
+
+      final ItemView xcode = getItem(3);
+      expect(xcode.origin, ItemOrigin.app);
+      expect(xcode.group, ItemGroup.review);
+      expect(xcode.displayPath, '/Applications/Xcode.app');
+      expect(xcode.lastUsedAt, DateTime.utc(2025, 3, 15));
+
+      final ItemView leftover = getItem(4);
+      expect(leftover.origin, ItemOrigin.leftover);
+      expect(leftover.group, ItemGroup.careful);
+      expect(leftover.matchedBy, LeftoverMatch.bundleId);
+
+      final ItemView oldVideo = getItem(5);
+      expect(oldVideo.origin, ItemOrigin.largeFile);
+      expect(oldVideo.lastUsedAt, DateTime.utc(2025, 6, 1));
+      expect(oldVideo.downloadedAt, DateTime.utc(2024, 12, 24));
+
+      final ItemView simulator = getItem(6);
+      expect(simulator.origin, ItemOrigin.explore);
+      expect(simulator.removal, ItemRemoval.tool);
+      expect(simulator.sectionKey, SectionKey.developerTools);
+      expect(simulator.group, ItemGroup.review);
     });
 
     test('parses Explore with its items and its advice group', () {
       final ExploreView explore = scanned.explore!;
       expect(explore.titleText, 'Explore');
       expect(explore.introText, isNotEmpty);
-      expect(getItemNumbers(explore.items), [5]);
+      expect(getItemNumbers(explore.items), [6]);
       expect(getDetailLineKinds(explore.items.single.detailLines), [
         ItemDetailLineKind.path,
         ItemDetailLineKind.explanation,
@@ -147,6 +212,48 @@ void main() {
         ItemDetailLineKind.explanation,
         ItemDetailLineKind.advice,
       ]);
+      expect(toolStore.key, 'catalog:tool-store:/Users/me/Library/ToolStore');
+      expect(toolStore.sectionKey, SectionKey.developerTools);
+      expect(toolStore.origin, ItemOrigin.catalog);
+      expect(toolStore.removal, ItemRemoval.advice);
+      expect(toolStore.allocatedBytes, 6000000);
+      expect(toolStore.displayPath, '~/Library/ToolStore');
+      expect(toolStore.revealPath, '/Users/me/Library/ToolStore');
+      expect(toolStore.opener, isNull);
+    });
+
+    test('parses the totals of every section, Explore items included', () {
+      expect(
+        [
+          for (final SectionTotal total in scanned.sectionTotals)
+            (
+              total.sectionKey,
+              total.allocatedBytes,
+              total.itemCount,
+              total.safeBytes,
+              total.adviceCount,
+            ),
+        ],
+        [
+          (SectionKey.caches, 10000000, 2, 6000000, 0),
+          (SectionKey.developerTools, 3000000, 1, 0, 1),
+          (SectionKey.apps, 3000000, 2, 0, 0),
+          (SectionKey.largeFiles, 3000000, 1, 0, 0),
+        ],
+      );
+    });
+
+    test('lists the paths of the scan that Finder may show', () {
+      expect(scanned.revealPaths, {
+        '/Users/me/Library/Caches/ToolCache',
+        '/Users/me/Library/Caches/com.example.other',
+        '/Applications/Xcode.app',
+        '/Users/me/Library/Containers/com.example.removed',
+        '/Users/me/Movies/holiday.mov',
+        '/Users/me/Library/Developer/CoreSimulator/Devices/'
+            '0A1B2C3D-0000-4000-8000-000000000001',
+        '/Users/me/Library/ToolStore',
+      });
     });
 
     test('parses the safe numbers and the skipped block', () {
@@ -155,32 +262,39 @@ void main() {
       expect(scanned.skipped!.lines, hasLength(2));
     });
 
-    test('parses the notices, one with a settings link and one without', () {
+    test('parses the notices, one with a settings link and two without', () {
       expect(
         [for (final NoticeView notice in scanned.notices) notice.titleText],
-        ['Could not read 2 places', 'Could not ask 1 tool'],
+        [
+          'Could not read 2 places',
+          'Could not ask 1 tool',
+          'Some sizes may be larger than the space they free',
+        ],
       );
       final LinkView link = scanned.notices.first.settingsLink!;
       expect(link.url, isA<SystemSettingsUrl>());
       expect(link.labelText, 'Open System Settings');
       expect(link.url.text, fullDiskAccessSettingsUrl);
       expect(link.failedText, startsWith('System Settings did not open.'));
+      expect(scanned.notices[1].settingsLink, isNull);
       expect(scanned.notices.last.settingsLink, isNull);
     });
 
     test(
-      'parses a scan without Explore, skipped, a check group, or advice',
+      'parses a scan without Explore, skipped, a check group, advice, or disk',
       () {
         final Map<String, Object?> json = decodeSample('scanned')
           ..['explore'] = null
           ..['skipped'] = null;
         getMapAt(json, ['sections', 0])['checkGroup'] = null;
+        getMapAt(json, ['summary'])['disk'] = null;
 
         final ScannedEvent scan = parseBridgeEvent(json) as ScannedEvent;
 
         expect(scan.explore, isNull);
         expect(scan.skipped, isNull);
         expect(scan.sections.first.checkGroup, isNull);
+        expect(scan.summary.disk, isNull);
 
         final Map<String, Object?> withoutAdvice = decodeSample('scanned');
         getMapAt(withoutAdvice, ['explore'])['adviceGroup'] = null;
@@ -192,6 +306,112 @@ void main() {
           isNull,
         );
       },
+    );
+
+    group('parses the opener of an advice item', () {
+      /// The opener of the sample's advice item once its JSON is [opener].
+      AdviceOpener? parseOpener(Object? opener) {
+        final Map<String, Object?> json = decodeSample('scanned');
+        getMapAt(json, ['explore', 'adviceGroup', 'items', 0])['opener'] =
+            opener;
+
+        return (parseBridgeEvent(json) as ScannedEvent)
+            .explore!
+            .adviceGroup!
+            .items
+            .single
+            .opener;
+      }
+
+      test('an app or a pane of System Settings', () {
+        expect(
+          (parseOpener({'kind': 'app', 'app': 'photos'}) as AppOpener).app,
+          OpenableApp.photos,
+        );
+        expect(
+          (parseOpener({'kind': 'settings', 'pane': 'storage'})
+                  as SettingsOpener)
+              .pane,
+          SettingsPane.storage,
+        );
+      });
+
+      test('an app or a pane of a newer bridge as unknown', () {
+        expect(
+          (parseOpener({'kind': 'app', 'app': 'aperture'}) as AppOpener).app,
+          OpenableApp.unknown,
+        );
+        expect(
+          (parseOpener({'kind': 'settings', 'pane': 'battery'})
+                  as SettingsOpener)
+              .pane,
+          SettingsPane.unknown,
+        );
+      });
+
+      test('a kind of a newer bridge as no opener', () {
+        expect(parseOpener({'kind': 'shortcut', 'name': 'Clean'}), isNull);
+      });
+
+      test('throws on an app opener without its app', () {
+        expect(() => parseOpener({'kind': 'app'}), throwsFormatException);
+        expect(() => parseOpener('photos'), throwsFormatException);
+      });
+    });
+
+    test('parses every key of a newer bridge as unknown, never throwing', () {
+      final Map<String, Object?> json = decodeSample('scanned');
+      getMapAt(json, ['sections', 0])['key'] = 'pets';
+      getMapAt(json, ['sections', 0, 'items', 0])
+        ..['sectionKey'] = 'pets'
+        ..['group'] = 'later'
+        ..['origin'] = 'cloud'
+        ..['removal'] = 'shred';
+      getMapAt(json, ['sections', 1, 'checkGroup', 'items', 1])['matchedBy'] =
+          'guess';
+      getMapAt(json, ['explore', 'adviceGroup', 'items', 0])
+        ..['sectionKey'] = 'pets'
+        ..['origin'] = 'cloud'
+        ..['removal'] = 'mail';
+      getMapAt(json, ['sectionTotals', 0])['sectionKey'] = 'pets';
+
+      final ScannedEvent scan = parseBridgeEvent(json) as ScannedEvent;
+      final ItemView item = scan.sections.first.items.single;
+      final AdviceItemView advice = scan.explore!.adviceGroup!.items.single;
+
+      expect(scan.sections.first.key, SectionKey.unknown);
+      expect(item.sectionKey, SectionKey.unknown);
+      expect(item.group, ItemGroup.unknown);
+      expect(item.origin, ItemOrigin.unknown);
+      expect(item.removal, ItemRemoval.unknown);
+      expect(
+        scan.sections[1].checkGroup!.items[1].matchedBy,
+        LeftoverMatch.unknown,
+      );
+      expect(advice.sectionKey, SectionKey.unknown);
+      expect(advice.origin, ItemOrigin.unknown);
+      expect(advice.removal, ItemRemoval.unknown);
+      expect(scan.sectionTotals.first.sectionKey, SectionKey.unknown);
+    });
+  });
+
+  test('parses the progress with its phase and what it found so far', () {
+    final ProgressEvent progress = events.whereType<ProgressEvent>().single;
+
+    expect(progress.message, 'Measuring apps…');
+    expect(progress.phase, ScanPhase.apps);
+    expect(
+      [for (final SectionTotal total in progress.found) total.sectionKey],
+      [SectionKey.caches, SectionKey.developerTools],
+    );
+    expect(progress.found.first.allocatedBytes, 10000000);
+
+    final Map<String, Object?> json = decodeSample('progress')
+      ..['phase'] = 'containers';
+
+    expect(
+      (parseBridgeEvent(json) as ProgressEvent).phase,
+      ScanPhase.unknown,
     );
   });
 
@@ -238,9 +458,8 @@ void main() {
       planned.warningLines,
       contains('Type DELETE to delete them permanently.'),
     );
-    expect(events.whereType<ProgressEvent>().single.message, isNotEmpty);
     expect(events.whereType<NothingApprovedEvent>().single.lines, isNotEmpty);
-    expect(events.whereType<DeletedEvent>().single.lines, hasLength(3));
+    expect(events.whereType<DeletedEvent>().single.lines, hasLength(4));
     expect(
       events.whereType<CancelledEvent>().single.message,
       'Cancelled. Nothing was deleted.',
@@ -255,6 +474,78 @@ void main() {
         FailureEffect.bridgeStopping,
       ],
     );
+  });
+
+  test('parses the items of the plan, its total, and whether it holds careful', () {
+    final PlannedEvent planned = events.whereType<PlannedEvent>().single;
+
+    expect(
+      [
+        for (final PlannedItemView item in planned.items)
+          (item.number, item.title, item.sectionKey, item.risk),
+      ],
+      [
+        (1, 'Tool cache', SectionKey.caches, Risk.safe),
+        (2, 'App cache', SectionKey.caches, Risk.review),
+      ],
+    );
+    expect(
+      planned.items.first.key,
+      'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
+    );
+    expect(planned.items.first.allocatedBytes, 6000000);
+    expect(planned.totalBytes, 10000000);
+    expect(planned.holdsCareful, isFalse);
+  });
+
+  group('the run', () {
+    final DeletedEvent deleted = events.whereType<DeletedEvent>().single;
+
+    test('parses each outcome with its reason, and what the run freed', () {
+      expect(
+        [
+          for (final DeletedOutcomeView outcome in deleted.outcomes)
+            (outcome.number, outcome.outcome, outcome.reasonKey),
+        ],
+        [
+          (1, DeletedOutcome.removed, null),
+          (2, DeletedOutcome.kept, DeletedReason.ownerRunning),
+        ],
+      );
+      expect(
+        deleted.outcomes.first.key,
+        'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
+      );
+      expect(deleted.outcomes.first.freedBytes, 6000000);
+      expect(deleted.freedBytes, 6000000);
+      expect(deleted.returnsLaterBytes, 0);
+      expect(deleted.availableBytesAfter, 58000000000);
+      expect(deleted.logPath, deletionLogPath);
+    });
+
+    test('parses a run whose disk and log are unknown', () {
+      final Map<String, Object?> json = decodeSample('deleted')
+        ..['availableBytesAfter'] = null
+        ..['logPath'] = null;
+
+      final DeletedEvent run = parseBridgeEvent(json) as DeletedEvent;
+
+      expect(run.availableBytesAfter, isNull);
+      expect(run.logPath, isNull);
+    });
+
+    test('parses an outcome or a reason of a newer bridge as unknown', () {
+      final Map<String, Object?> json = decodeSample('deleted');
+      getMapAt(json, ['outcomes', 1])
+        ..['outcome'] = 'parked'
+        ..['reasonKey'] = 'engineBusy';
+
+      final DeletedOutcomeView outcome =
+          (parseBridgeEvent(json) as DeletedEvent).outcomes[1];
+
+      expect(outcome.outcome, DeletedOutcome.unknown);
+      expect(outcome.reasonKey, DeletedReason.unknown);
+    });
   });
 
   group('throws a FormatException', () {
@@ -278,6 +569,13 @@ void main() {
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });
 
+    test('on an unknown risk of a planned item', () {
+      final Map<String, Object?> json = decodeSample('planned');
+      getMapAt(json, ['items', 0])['risk'] = 'harmless';
+
+      expect(() => parseBridgeEvent(json), throwsFormatException);
+    });
+
     test('on an unknown effect of a failure', () {
       final Map<String, Object?> json = decodeSample('failed');
       json['effect'] = 'scanLost';
@@ -296,6 +594,14 @@ void main() {
     test('on an unknown state of Full Disk Access', () {
       final Map<String, Object?> json = decodeSample('status')
         ..['fullDiskAccess'] = 'partial';
+
+      expect(() => parseBridgeEvent(json), throwsFormatException);
+    });
+
+    test('on a last use that is not an instant', () {
+      final Map<String, Object?> json = decodeSample('scanned');
+      getMapAt(json, ['sections', 1, 'checkGroup', 'items', 0])['lastUsedAt'] =
+          'yesterday';
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });
@@ -371,20 +677,35 @@ void main() {
       getMapAt(withoutCheckGroup, ['sections', 0]).remove('checkGroup');
       final Map<String, Object?> withoutSettingsLink = decodeSample('status');
       getMapAt(withoutSettingsLink, ['notices', 0]).remove('settingsLink');
-
-      expect(() => parseBridgeEvent(withoutSafeNumbers), throwsFormatException);
-      expect(() => parseBridgeEvent(withoutCheckGroup), throwsFormatException);
-      expect(
-        () => parseBridgeEvent(withoutSettingsLink),
-        throwsFormatException,
+      final Map<String, Object?> withoutRevealPath = decodeSample('scanned');
+      getMapAt(withoutRevealPath, ['sections', 0, 'items', 0]).remove(
+        'revealPath',
       );
+      final Map<String, Object?> withoutLogPath = decodeSample('deleted')
+        ..remove('logPath');
+      final Map<String, Object?> withoutPhase = decodeSample('progress')
+        ..remove('phase');
+
+      for (final Map<String, Object?> json in [
+        withoutSafeNumbers,
+        withoutCheckGroup,
+        withoutSettingsLink,
+        withoutRevealPath,
+        withoutLogPath,
+        withoutPhase,
+      ]) {
+        expect(() => parseBridgeEvent(json), throwsFormatException);
+      }
     });
 
     test('on a value of the wrong type', () {
       final Map<String, Object?> json = decodeSample('scanned')
         ..['safeNumbers'] = ['1'];
+      final Map<String, Object?> textBytes = decodeSample('planned')
+        ..['totalBytes'] = '10 MB';
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
+      expect(() => parseBridgeEvent(textBytes), throwsFormatException);
     });
   });
 }

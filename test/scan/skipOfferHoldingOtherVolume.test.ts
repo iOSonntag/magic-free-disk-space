@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { skipOfferHoldingOtherVolume } from '../../src/scan/skipOfferHoldingOtherVolume.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate, buildTestMeasurement } from '../support/candidateFixtures.js';
+import {
+  buildTestCandidate,
+  buildTestMeasurement,
+  TEST_LISTING_FACTS_NONE,
+} from '../support/candidateFixtures.js';
 
 const PATH = '/Users/tester/Library/Caches/com.example.app';
 
@@ -37,6 +41,7 @@ describeAwaitingWin32Platform('skipOfferHoldingOtherVolume', () => {
     const advice: CandidateDecision = {
       kind: 'advice',
       advice: {
+        origin: { kind: 'catalog', entryId: 'test-entry' },
         path: PATH,
         title: 'Simulator runtimes',
         category: 'system',
@@ -45,6 +50,7 @@ describeAwaitingWin32Platform('skipOfferHoldingOtherVolume', () => {
         advice: 'Use xcrun simctl.',
         allocatedBytes: 4096,
         isComplete: true,
+        ...TEST_LISTING_FACTS_NONE,
       },
     };
     const skip: CandidateDecision = { kind: 'skip', path: PATH, reason: 'belowSizeThreshold' };

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import {
+  findOwnerAppName,
   findOwnerBundlePaths,
   isAppleBundleId,
   isBundleIdShape,
@@ -139,6 +140,50 @@ describeAwaitingWin32Platform('findOwnerBundlePaths', () => {
         installedApps: apps,
       }),
     ).toEqual([]);
+  });
+});
+
+describeAwaitingWin32Platform('findOwnerAppName', () => {
+  const host = buildTestInstalledApp({
+    bundlePath: '/Applications/Host.app',
+    displayName: 'Host',
+    bundleId: 'com.example.host',
+    nestedBundleIds: ['com.example.helper'],
+  });
+  const helper = buildTestInstalledApp({
+    bundlePath: '/Applications/Helper.app',
+    displayName: 'Helper',
+    bundleId: 'com.example.helper',
+  });
+
+  test('names the app of the id itself before an app that nests it', () => {
+    expect(
+      findOwnerAppName({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
+        installedApps: [host, helper],
+      }),
+    ).toBe('Helper');
+  });
+
+  test('names the app that nests the id when no app has it as its own', () => {
+    expect(
+      findOwnerAppName({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
+        installedApps: [host],
+      }),
+    ).toBe('Host');
+  });
+
+  test('names no app for no owner or an id no installed app carries', () => {
+    expect(
+      findOwnerAppName({ owner: buildTestCatalogOwner({ bundleId: null }), installedApps: [host] }),
+    ).toBeNull();
+    expect(
+      findOwnerAppName({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
+        installedApps: [host, helper],
+      }),
+    ).toBeNull();
   });
 });
 

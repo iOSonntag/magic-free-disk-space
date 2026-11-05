@@ -21,6 +21,8 @@ import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import { buildScanReport } from './buildScanReport.js';
+import type { SectionTotal } from './buildSectionTotals.js';
+import { buildSectionTotals } from './buildSectionTotals.js';
 import type { Advice, Candidate, SkipReason } from './candidate.js';
 import { decideAppCandidate } from './decideAppCandidate.js';
 import { decideArtifactCandidate } from './decideArtifactCandidate.js';
@@ -39,6 +41,7 @@ import { loadMeasuredPhase } from './loadMeasuredPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
   buildAppOwner,
+  findOwnerAppName,
   findOwnerBundlePaths,
   resolveOwnerState,
   resolveTargetOwner,
@@ -58,6 +61,20 @@ export type SkippedItem = {
   path: string;
   reason: SkipReason;
 };
+
+/** The part of the scan running now, as a client names it. */
+export type ScanProgressPhase =
+  | 'apps'
+  | 'catalog'
+  | 'projects'
+  | 'largeFiles'
+  | 'leftovers'
+  | 'tools';
+
+type ScanProgressStep = { message: string; phase: ScanProgressPhase };
+
+/** The step starting now, with what the steps before it found, deduped as the report will be. */
+export type ScanProgress = ScanProgressStep & { found: SectionTotal[] };
 
 export type ScanReport = {
   /**
@@ -115,9 +132,15 @@ export async function runScan(params: {
   system: SystemPlatform;
   explore: ExplorePlatform;
   options: ScanOptions;
-  onProgress: (message: string) => void;
+  onProgress: (progress: ScanProgress) => void;
 }): Promise<ScanReport> {
-  params.onProgress('Checking installed apps and running processes…');
+  params.onProgress(
+    buildScanProgress({
+      step: { message: 'Checking installed apps and running processes…', phase: 'apps' },
+      pathRules: params.environment.pathRules,
+      finishedPhases: [],
+    }),
+  );
 
   const processCommandsLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
@@ -195,31 +218,69 @@ export async function runScan(params: {
     ],
   };
 
-  params.onProgress('Measuring known storage locations…');
+  params.onProgress(
+    buildScanProgress({
+      step: { message: 'Measuring known storage locations…', phase: 'catalog' },
+      pathRules: params.environment.pathRules,
+      finishedPhases: [setup],
+    }),
+  );
   const catalog = await loadCatalogPhase({
     context: context,
     entries: params.catalog.entries.filter((entry) => entry.removal.kind !== 'explore'),
   });
 
-  params.onProgress('Searching your projects for old build folders…');
+  params.onProgress(
+    buildScanProgress({
+      step: { message: 'Searching your projects for old build folders…', phase: 'projects' },
+      pathRules: params.environment.pathRules,
+      finishedPhases: [setup, catalog],
+    }),
+  );
   const artifacts = await loadArtifactPhase({ context: context, projectWalk: projectWalk });
 
   const apps = await loadAppPhaseOfAppSection({
     apps: params.scan.apps,
     context: context,
-    onProgress: params.onProgress,
+    onStep: (step) =>
+      params.onProgress(
+        buildScanProgress({
+          step: step,
+          pathRules: params.environment.pathRules,
+          finishedPhases: [setup, catalog, artifacts],
+        }),
+      ),
   });
 
-  params.onProgress('Looking for large old files…');
+  params.onProgress(
+    buildScanProgress({
+      step: { message: 'Looking for large old files…', phase: 'largeFiles' },
+      pathRules: params.environment.pathRules,
+      finishedPhases: [setup, catalog, artifacts, apps],
+    }),
+  );
   const userFiles = await loadUserFilePhase({ context: context });
 
   const orphans = await loadOrphanPhaseOfAppSection({
     apps: params.scan.apps,
     context: context,
-    onProgress: params.onProgress,
+    onStep: (step) =>
+      params.onProgress(
+        buildScanProgress({
+          step: step,
+          pathRules: params.environment.pathRules,
+          finishedPhases: [setup, catalog, artifacts, apps, userFiles],
+        }),
+      ),
   });
 
-  params.onProgress('Asking developer tools what they can clean…');
+  params.onProgress(
+    buildScanProgress({
+      step: { message: 'Asking developer tools what they can clean…', phase: 'tools' },
+      pathRules: params.environment.pathRules,
+      finishedPhases: [setup, catalog, artifacts, apps, userFiles, orphans],
+    }),
+  );
   const explore = await loadExplorePhase({
     environment: params.environment,
     probes: probes,
@@ -273,11 +334,11 @@ function loadPlatformApps(params: {
 function loadAppPhaseOfAppSection(params: {
   apps: ScanPlatformApps;
   context: ScanContext;
-  onProgress: (message: string) => void;
+  onStep: (step: ScanProgressStep) => void;
 }): Promise<ScanPhase> {
   switch (params.apps.appSection) {
     case 'offerUnusedApps':
-      params.onProgress('Measuring apps…');
+      params.onStep({ message: 'Measuring apps…', phase: 'apps' });
 
       return loadAppPhase({ context: params.context });
   }
@@ -287,14 +348,39 @@ function loadAppPhaseOfAppSection(params: {
 function loadOrphanPhaseOfAppSection(params: {
   apps: ScanPlatformApps;
   context: ScanContext;
-  onProgress: (message: string) => void;
+  onStep: (step: ScanProgressStep) => void;
 }): Promise<ScanPhase> {
   switch (params.apps.appSection) {
     case 'offerUnusedApps':
-      params.onProgress('Looking for data of removed apps…');
+      params.onStep({ message: 'Looking for data of removed apps…', phase: 'leftovers' });
 
       return loadOrphanPhase({ context: params.context });
   }
+}
+
+/** Dedupes what the finished phases found the same way the report does, so no total shrinks. */
+function buildScanProgress(params: {
+  step: ScanProgressStep;
+  pathRules: PathRules;
+  finishedPhases: ScanPhase[];
+}): ScanProgress {
+  const decisions = dedupeCandidates({
+    pathRules: params.pathRules,
+    decisions: mergeScanPhases({ phases: params.finishedPhases }).decisions,
+  });
+
+  return {
+    message: params.step.message,
+    phase: params.step.phase,
+    found: buildSectionTotals({
+      candidates: decisions.flatMap((decision) =>
+        decision.kind === 'offer' ? [decision.candidate] : [],
+      ),
+      advice: decisions.flatMap((decision) =>
+        decision.kind === 'advice' ? [decision.advice] : [],
+      ),
+    }),
+  };
 }
 
 /**
@@ -386,6 +472,10 @@ async function loadCatalogTargetPhase(params: {
           owner: owner,
           installedApps: params.context.installedApps,
           processCommands: params.context.processCommands,
+        }),
+        ownerAppName: findOwnerAppName({
+          owner: owner,
+          installedApps: params.context.installedApps,
         }),
         activity: activity,
         minOfferedBytes: SCAN_LIMITS.minOfferedBytes,

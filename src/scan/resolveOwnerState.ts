@@ -92,6 +92,30 @@ export function findOwnerBundlePaths(params: {
 }
 
 /**
+ * The name of the installed app that carries the owner's id: the app of that id itself before an
+ * app that nests it as a helper. `null` when no installed app carries it.
+ */
+export function findOwnerAppName(params: {
+  owner: CatalogOwner | null;
+  installedApps: InstalledApp[];
+}): string | null {
+  if (params.owner === null) {
+    return null;
+  }
+
+  switch (params.owner.kind) {
+    case 'bundleId': {
+      const bundleId = params.owner.bundleId;
+      const app =
+        params.installedApps.find((installed) => installed.bundleId === bundleId) ??
+        params.installedApps.find((installed) => installed.nestedBundleIds.includes(bundleId));
+
+      return app?.displayName ?? null;
+    }
+  }
+}
+
+/**
  * Returns `stopped` for no owner, `unknown` for any owner while the process list is missing,
  * `stopped` for an owner that no installed app carries, and `running` when a process runs from
  * the owner's bundle.

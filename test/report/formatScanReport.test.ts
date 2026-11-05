@@ -2,12 +2,14 @@ import { expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice } from '../../src/scan/candidate.js';
+import type { ScanReport } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
+  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
@@ -26,6 +28,7 @@ function buildAdvice(params: {
   isComplete: boolean;
 }): Advice {
   return {
+    origin: { kind: 'catalog', entryId: 'simulator-runtimes' },
     path: params.path,
     title: params.title,
     category: 'system',
@@ -34,19 +37,27 @@ function buildAdvice(params: {
     advice: 'Remove the runtimes you no longer need with xcrun simctl runtime delete.',
     allocatedBytes: params.allocatedBytes,
     isComplete: params.isComplete,
+    ...TEST_LISTING_FACTS_NONE,
   };
+}
+
+/** The lines the CLI prints for `report`, with no disk read, as when its volume cannot be read. */
+function formatReport(params: { report: ScanReport }): string[] {
+  return formatScanReport({
+    report: params.report,
+    texts: TEXTS,
+    homeDir: '/fixture/home',
+    disk: null,
+  });
 }
 
 describeAwaitingWin32Platform('formatScanReport', () => {
   test('says that nothing was found for an empty report', () => {
-    expect(formatScanReport({ report: EMPTY_REPORT, texts: TEXTS })).toEqual([
-      'Nothing to delete was found.',
-    ]);
+    expect(formatReport({ report: EMPTY_REPORT })).toEqual(['Nothing to delete was found.']);
   });
 
   test('prints the summary, then each section with its numbered items and its check group', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         candidates: [
@@ -84,24 +95,24 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 3 items, 7.0 KiB in total:',
-      '- 1.0 KiB safe to free',
-      '- 6.0 KiB to check before deleting',
+      'Found 3 items, 7.2 kB in total:',
+      '- 1.0 kB safe to free',
+      '- 6.1 kB to check before deleting',
       '',
-      'Caches (3.0 KiB):',
-      '1. 1.0 KiB [safe] Derived data',
+      'Caches (3.1 kB):',
+      '1. 1.0 kB [safe] Derived data',
       '   /fixture/a',
       '   Cached files.',
       '   Rebuilt when needed.',
       'Check before deleting:',
-      '2. 2.0 KiB [careful] Archives',
+      '2. 2.0 kB [careful] Archives',
       '   /fixture/b',
       '   Cached files.',
       '   Rebuilt when needed.',
       '',
-      'Large files (4.0 KiB):',
+      'Large files (4.1 kB):',
       'Check before deleting:',
-      '3. 4.0 KiB [careful] Old video',
+      '3. 4.1 kB [careful] Old video',
       '   /fixture/movie.mov',
       '   Cached files.',
       '   Rebuilt when needed.',
@@ -109,8 +120,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('marks an incomplete size as at least, in the item, its section, and the summary', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         candidates: [
@@ -129,17 +139,16 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines.slice(0, 5)).toEqual([
-      'Found 1 item, at least 1.0 KiB in total:',
-      '- at least 1.0 KiB safe to free',
+      'Found 1 item, at least 1.0 kB in total:',
+      '- at least 1.0 kB safe to free',
       '',
-      'Caches (at least 1.0 KiB):',
-      '1. at least 1.0 KiB [safe] Derived data',
+      'Caches (at least 1.0 kB):',
+      '1. at least 1.0 kB [safe] Derived data',
     ]);
   });
 
   test('shows advice unnumbered under Explore, after its intro', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         advice: [
@@ -159,7 +168,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
       'Explore:',
       EXPLORE_INTRO,
       'Handle these yourself; this tool never deletes them:',
-      '- 3.0 GiB [careful] Simulator runtimes',
+      '- 3.2 GB [careful] Simulator runtimes',
       '   /fixture/runtimes',
       '   Installed simulator runtimes.',
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
@@ -167,8 +176,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('counts skipped items and names each reason that occurs', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         skipped: [
@@ -189,8 +197,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('names every skip reason in table order, one line each', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         skipped: [
@@ -234,14 +241,13 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('writes out control characters in a title and a path, so no line can be forged', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         candidates: [
           buildTestCandidate({
-            title: 'movie.mov\n2. 1.0 KiB [safe] Xcode build data',
-            path: '/fixture/Downloads/movie.mov\n2. 1.0 KiB [safe] Xcode build data',
+            title: 'movie.mov\n2. 1.0 kB [safe] Xcode build data',
+            path: '/fixture/Downloads/movie.mov\n2. 1.0 kB [safe] Xcode build data',
             risk: 'careful',
             explanation: 'Cached files.',
             regeneration: 'Rebuilt when needed.',
@@ -253,15 +259,14 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines.slice(5, 7)).toEqual([
-      '1. 1.0 KiB [careful] movie.mov\\u{a}2. 1.0 KiB [safe] Xcode build data',
-      '   /fixture/Downloads/movie.mov\\u{a}2. 1.0 KiB [safe] Xcode build data',
+      '1. 1.0 kB [careful] movie.mov\\u{a}2. 1.0 kB [safe] Xcode build data',
+      '   /fixture/Downloads/movie.mov\\u{a}2. 1.0 kB [safe] Xcode build data',
     ]);
     expect(lines.join('\n').split('\n')).toHaveLength(lines.length);
   });
 
   test('lists every issue with its reason and detail, and names Full Disk Access for no denial by permissions', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -285,8 +290,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('names Full Disk Access for the terminal after a place macOS privacy protection blocked', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -307,8 +311,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('lists the tools it could not ask apart from the places it could not read', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -352,8 +355,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('writes out control characters in the detail of an issue and in the stderr of a tool', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         issues: [
@@ -382,8 +384,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
       version: '20.1.0',
       allocatedBytes: 2048,
     });
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         candidates: [
@@ -403,19 +404,19 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 2 items, 3.0 KiB in total:',
-      '- 1.0 KiB safe to free',
-      '- 2.0 KiB in Explore',
+      'Found 2 items, 3.1 kB in total:',
+      '- 1.0 kB safe to free',
+      '- 2.0 kB in Explore',
       '',
-      'Caches (1.0 KiB):',
-      '1. 1.0 KiB [safe] Derived data',
+      'Caches (1.0 kB):',
+      '1. 1.0 kB [safe] Derived data',
       '   /fixture/a',
       '   Cached files.',
       '   Rebuilt when needed.',
       '',
       'Explore:',
       EXPLORE_INTRO,
-      '2. 2.0 KiB [safe] node 20.1.0',
+      '2. 2.0 kB [safe] node 20.1.0',
       '   /fixture/home/.local/share/mise/installs/node/20.1.0',
       `   ${toolCandidate.explanation}`,
       `   ${toolCandidate.regeneration}`,
@@ -425,8 +426,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('shows the command of a tool item with the leading arguments of its tool', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         candidates: [buildTestDartToolCandidate({ homeDir: '/fixture/home' })],
@@ -437,8 +437,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('lists a unit folder as an Explore item with its evidence and no command', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
         candidates: [buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' })],
@@ -446,12 +445,12 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 1 item, 4.0 KiB in total:',
-      '- 4.0 KiB in Explore',
+      'Found 1 item, 4.1 kB in total:',
+      '- 4.1 kB in Explore',
       '',
       'Explore:',
       EXPLORE_INTRO,
-      '1. 4.0 KiB [review] VS Code extension example.alpha 1.0.0',
+      '1. 4.1 kB [review] VS Code extension example.alpha 1.0.0',
       '   /Users/example/.vscode/extensions/example.alpha-1.0.0',
       '   An extension folder VS Code marked for removal after an uninstall or an update.',
       '   VS Code downloads it again only if you install this version again.',
@@ -461,8 +460,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
   });
 
   test('shows the summary, the sections, Explore, the skipped items, and the notices in that order', () => {
-    const lines = formatScanReport({
-      texts: TEXTS,
+    const lines = formatReport({
       report: {
         candidates: [
           buildTestCandidate({
@@ -493,11 +491,11 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 1 item, 1.0 KiB in total:',
-      '- 1.0 KiB safe to free',
+      'Found 1 item, 1.0 kB in total:',
+      '- 1.0 kB safe to free',
       '',
-      'Caches (1.0 KiB):',
-      '1. 1.0 KiB [safe] Derived data',
+      'Caches (1.0 kB):',
+      '1. 1.0 kB [safe] Derived data',
       '   /fixture/a',
       '   Cached files.',
       '   Rebuilt when needed.',
@@ -505,7 +503,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
       'Explore:',
       EXPLORE_INTRO,
       'Handle these yourself; this tool never deletes them:',
-      '- 3.0 GiB [careful] Simulator runtimes',
+      '- 3.2 GB [careful] Simulator runtimes',
       '   /fixture/runtimes',
       '   Installed simulator runtimes.',
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
@@ -518,6 +516,21 @@ describeAwaitingWin32Platform('formatScanReport', () => {
       '',
       'Could not ask 1 tool:',
       '- /fixture/bin/mise: the tool is not trusted, never run (owned by another user)',
+    ]);
+  });
+
+  test('prints the notice of the sizes that count every block after the other notices', () => {
+    const lines = formatReport({
+      report: {
+        ...EMPTY_REPORT,
+        candidates: [buildTestCandidate({ path: '/fixture/a', privateSizeFallbackCount: 1 })],
+        safeNumbers: [1],
+      },
+    });
+
+    expect(lines.slice(-2)).toEqual([
+      'Some sizes may be larger than the space they free:',
+      '- macOS did not give the private size of 1 entry, so their full size counts, which may include space they share with a copy.',
     ]);
   });
 });

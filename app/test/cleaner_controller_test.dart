@@ -9,60 +9,107 @@ import 'support/fake_cleaner_bridge.dart';
 
 const ItemView toolCacheItem = ItemView(
   number: 1,
+  key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
   title: 'Tool cache',
   risk: Risk.safe,
   riskText: 'safe',
-  sizeText: '6.0 MiB',
+  sizeText: '6.0 MB',
   detailLines: [
     ItemDetailLine(
       kind: ItemDetailLineKind.path,
       text: '/Users/me/Library/Caches/ToolCache',
     ),
   ],
+  sectionKey: SectionKey.caches,
+  group: ItemGroup.safe,
+  origin: ItemOrigin.catalog,
+  removal: ItemRemoval.delete,
+  allocatedBytes: 6000000,
+  isComplete: true,
+  displayPath: '~/Library/Caches/ToolCache',
+  revealPath: '/Users/me/Library/Caches/ToolCache',
+  lastUsedAt: null,
+  downloadedAt: null,
+  appName: null,
+  matchedBy: null,
 );
 
 const ItemView oldVideoItem = ItemView(
   number: 2,
+  key: 'userFile:/Users/me/Movies/holiday.mov',
   title: 'Old video',
   risk: Risk.careful,
   riskText: 'careful',
-  sizeText: '3.0 MiB',
+  sizeText: '3.0 MB',
   detailLines: [
     ItemDetailLine(
       kind: ItemDetailLineKind.path,
       text: '/Users/me/Movies/holiday.mov',
     ),
   ],
+  sectionKey: SectionKey.largeFiles,
+  group: ItemGroup.careful,
+  origin: ItemOrigin.largeFile,
+  removal: ItemRemoval.delete,
+  allocatedBytes: 3000000,
+  isComplete: true,
+  displayPath: '~/Movies/holiday.mov',
+  revealPath: '/Users/me/Movies/holiday.mov',
+  lastUsedAt: null,
+  downloadedAt: null,
+  appName: null,
+  matchedBy: null,
 );
 
 /// Safe by risk, yet in Explore, so "Select safe" leaves it out.
 const ItemView simulatorItem = ItemView(
   number: 3,
+  key: 'explore:simulatorDevices:simulatorDevice:0A1B2C3D',
   title: 'Simulator iPhone 15',
   risk: Risk.safe,
   riskText: 'safe',
-  sizeText: '1.0 MiB',
+  sizeText: '1.0 MB',
   detailLines: [
     ItemDetailLine(
       kind: ItemDetailLineKind.command,
       text: 'xcrun simctl delete 0A1B2C3D',
     ),
   ],
+  sectionKey: SectionKey.developerTools,
+  group: ItemGroup.review,
+  origin: ItemOrigin.explore,
+  removal: ItemRemoval.tool,
+  allocatedBytes: 1000000,
+  isComplete: true,
+  displayPath: '~/Library/Developer/CoreSimulator/Devices/0A1B2C3D',
+  revealPath: '/Users/me/Library/Developer/CoreSimulator/Devices/0A1B2C3D',
+  lastUsedAt: null,
+  downloadedAt: null,
+  appName: null,
+  matchedBy: null,
 );
 
 const ScannedEvent scannedEvent = ScannedEvent(
-  summary: SummaryView(titleText: 'Found 3 items', lines: []),
+  summary: SummaryView(
+    titleText: 'Found 3 items',
+    lines: [],
+    totalBytes: 10000000,
+    safeBytes: 6000000,
+    disk: null,
+  ),
   sections: [
     SectionView(
+      key: SectionKey.caches,
       titleText: 'Caches',
-      sizeText: '6.0 MiB',
+      sizeText: '6.0 MB',
       isInitiallyExpanded: true,
       items: [toolCacheItem],
       checkGroup: null,
     ),
     SectionView(
+      key: SectionKey.largeFiles,
       titleText: 'Large files',
-      sizeText: '3.0 MiB',
+      sizeText: '3.0 MB',
       isInitiallyExpanded: false,
       items: [],
       checkGroup: CheckGroupView(
@@ -80,12 +127,65 @@ const ScannedEvent scannedEvent = ScannedEvent(
   safeNumbers: [1],
   skipped: null,
   notices: [],
+  sectionTotals: [
+    SectionTotal(
+      sectionKey: SectionKey.caches,
+      allocatedBytes: 6000000,
+      itemCount: 1,
+      safeBytes: 6000000,
+      adviceCount: 0,
+    ),
+    SectionTotal(
+      sectionKey: SectionKey.developerTools,
+      allocatedBytes: 1000000,
+      itemCount: 1,
+      safeBytes: 0,
+      adviceCount: 0,
+    ),
+    SectionTotal(
+      sectionKey: SectionKey.largeFiles,
+      allocatedBytes: 3000000,
+      itemCount: 1,
+      safeBytes: 0,
+      adviceCount: 0,
+    ),
+  ],
 );
 
 const PlannedEvent plannedEvent = PlannedEvent(
   planId: 7,
-  lines: ['- 6.0 MiB /Users/me/Library/Caches/ToolCache'],
+  lines: ['- 6.0 MB /Users/me/Library/Caches/ToolCache'],
   warningLines: ['Type DELETE to delete them permanently.'],
+  items: [
+    PlannedItemView(
+      number: 1,
+      key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
+      title: 'Tool cache',
+      sectionKey: SectionKey.caches,
+      risk: Risk.safe,
+      allocatedBytes: 6000000,
+    ),
+  ],
+  totalBytes: 6000000,
+  holdsCareful: false,
+);
+
+/// The run of [plannedEvent], which removed its one item.
+const DeletedEvent deletedEvent = DeletedEvent(
+  lines: ['Freed 6.0 MB.'],
+  outcomes: [
+    DeletedOutcomeView(
+      number: 1,
+      key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
+      outcome: DeletedOutcome.removed,
+      reasonKey: null,
+      freedBytes: 6000000,
+    ),
+  ],
+  freedBytes: 6000000,
+  returnsLaterBytes: 0,
+  availableBytesAfter: null,
+  logPath: '/Users/me/Library/Logs/magic-free-disk-space/deletions.jsonl',
 );
 
 const StatusEvent deniedStatus = StatusEvent(
@@ -111,7 +211,7 @@ void main() {
   setUp(() {
     bridge = FakeCleanerBridge(scanAnswer: scannedEvent)
       ..planAnswer = plannedEvent
-      ..deleteAnswer = const DeletedEvent(lines: ['Freed 6.0 MiB.']);
+      ..deleteAnswer = deletedEvent;
   });
 
   group('the status at start', () {
@@ -255,7 +355,7 @@ void main() {
       await controller.confirmDeletion('DELETE');
 
       expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
-      expect((controller.state as DeletedState).lines, ['Freed 6.0 MiB.']);
+      expect((controller.state as DeletedState).lines, ['Freed 6.0 MB.']);
       expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete']);
     });
 
