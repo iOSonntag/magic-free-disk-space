@@ -17,3 +17,23 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Both fonts are variable: Inter by wght and opsz, Material Symbols Rounded
+  # by FILL, wght, GRAD and opsz. The release build's icon tree shaker
+  # subsets the symbols to the const IconData of design/app_icons.dart.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: MaterialSymbolsRounded
+      fonts:
+        - asset: assets/fonts/MaterialSymbolsRounded.ttf
+
+  shaders:
+    - shaders/backdrop.frag
+    - shaders/ring_glow.frag
+
+  # The fonts' licence texts, which the licence page loads.
+  assets:
+    - assets/fonts/OFL.txt
+    - assets/fonts/Apache-2.0.txt

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,13 +6,26 @@ import 'package:flutter/material.dart';
 import 'bridge_process/process_bridge_client.dart';
 import 'cleaner/cleaner_controller.dart';
 import 'cleaner/cleaner_page.dart';
+import 'design/font_licenses.dart';
+import 'design/motion.dart';
+import 'design/shaders/shader_library.dart';
 import 'link_process/process_url_opener.dart';
 import 'update/update_banner.dart';
 import 'update/update_check_menu.dart';
 import 'update/update_controller.dart';
 
-void main() {
-  runApp(const MagicFreeDiskSpaceApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  registerBundledFontLicenses();
+  final ShaderLibrary shaderLibrary = await ShaderLibrary.load();
+  final WindowMotionChannel windowMotion = WindowMotionChannel();
+  unawaited(windowMotion.connect());
+  runApp(
+    MotionScope(
+      windowMotion: windowMotion,
+      child: ShaderLibraryScope(library: shaderLibrary, child: const MagicFreeDiskSpaceApp()),
+    ),
+  );
 }
 
 class MagicFreeDiskSpaceApp extends StatefulWidget {
