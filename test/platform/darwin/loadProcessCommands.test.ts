@@ -10,7 +10,9 @@ describeOnPosix('loadProcessCommands', () => {
       throw new Error(`ps failed: ${result.failure.reason}`);
     }
 
-    expect(result.value.length).toBeGreaterThan(0);
-    expect(result.value.some((commandLine) => commandLine.includes('bun'))).toBe(true);
+    const commandLines = result.value.commandLines;
+
+    expect(commandLines.length).toBeGreaterThan(0);
+    expect(commandLines.some((commandLine) => commandLine.includes('bun'))).toBe(true);
   });
 });

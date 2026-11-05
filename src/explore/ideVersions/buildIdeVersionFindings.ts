@@ -1,4 +1,5 @@
 import type { Risk } from '../../catalog/catalog.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitActivityFactsAppBundles } from '../decideUnitActivity.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings, IdeVersionFolderKind } from '../exploreUnit.js';
@@ -50,14 +51,14 @@ const IDE_VERSION_FOLDER_TEXTS: Record<IdeVersionFolderKind, IdeVersionFolderTex
 export function buildIdeVersionFindings(params: {
   folders: IdeVersionFolder[];
   runningIdes: RunningIde[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   return {
     findings: decideIdeVersionOffers({ folders: params.folders }).map((offer) =>
       buildIdeVersionFinding({
         offer: offer,
         runningIdes: params.runningIdes,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     ),
     isComplete: true,
@@ -85,7 +86,7 @@ export function buildIdeVersionActivityFacts(params: {
 function buildIdeVersionFinding(params: {
   offer: IdeVersionOffer;
   runningIdes: RunningIde[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding {
   const texts = IDE_VERSION_FOLDER_TEXTS[params.offer.folderKind];
 
@@ -113,7 +114,7 @@ function buildIdeVersionFinding(params: {
         version: params.offer.version,
         runningIdes: params.runningIdes,
       }),
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
     }),
   };
 }

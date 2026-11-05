@@ -1,5 +1,5 @@
 import { basename, join } from 'node:path';
-import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import { joinAbsolutePath, listPathNames } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -374,7 +374,7 @@ export function parseAndroidImageSysdir(params: {
     case 'posix':
       return params.text;
     case 'win32': {
-      const names = params.text.split(/[\\/]/).filter((name) => name !== '');
+      const names = listPathNames({ rules: params.pathRules, path: params.text });
 
       return names.length === 0 ? null : names.join(params.pathRules.separator);
     }

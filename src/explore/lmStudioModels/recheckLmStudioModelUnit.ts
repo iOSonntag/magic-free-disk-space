@@ -1,4 +1,5 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitLmStudioModel } from '../exploreUnit.js';
@@ -10,7 +11,7 @@ export async function recheckLmStudioModelUnit(params: {
   unit: ExplorePathUnitLmStudioModel;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const folders = await loadLmStudioModelState({
     pathRules: params.environment.pathRules,
@@ -25,6 +26,6 @@ export async function recheckLmStudioModelUnit(params: {
   return compareLmStudioModelUnit({
     unit: params.unit,
     folders: folders.value,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

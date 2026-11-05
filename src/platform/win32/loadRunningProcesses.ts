@@ -1,5 +1,8 @@
 import type { Result } from '../../result.js';
-import type { RunningProcessesFailure } from '../../system/systemPlatform.js';
+import type {
+  RunningProcessesFailure,
+  RunningProcessesImagePaths,
+} from '../../system/systemPlatform.js';
 import type { ProcessEntry } from './processEntry.js';
 import { listProcesses, loadProcessImagePath } from './win32Api.js';
 
@@ -10,7 +13,7 @@ import { listProcesses, loadProcessImagePath } from './win32Api.js';
  */
 export async function loadRunningProcesses(_params: {
   commandTimeoutMs: number;
-}): Promise<Result<string[], RunningProcessesFailure>> {
+}): Promise<Result<RunningProcessesImagePaths, RunningProcessesFailure>> {
   const processes = listProcesses();
 
   if (processes.kind === 'failed') {
@@ -24,17 +27,16 @@ export async function loadRunningProcesses(_params: {
     };
   }
 
-  return {
-    kind: 'succeeded',
-    value: listProcessImagePaths({
-      processes: processes.value,
-      loadImagePath: (processId) => {
-        const imagePath = loadProcessImagePath({ processId: processId });
+  const imagePaths = listProcessImagePaths({
+    processes: processes.value,
+    loadImagePath: (processId) => {
+      const imagePath = loadProcessImagePath({ processId: processId });
 
-        return imagePath.kind === 'succeeded' ? imagePath.value : null;
-      },
-    }),
-  };
+      return imagePath.kind === 'succeeded' ? imagePath.value : null;
+    },
+  });
+
+  return { kind: 'succeeded', value: { kind: 'imagePaths', imagePaths: imagePaths } };
 }
 
 /**

@@ -133,7 +133,7 @@ async function loadSocketFindings(params: {
     },
     usage: state.value.usage,
     nowMs: params.run.environment.nowMs,
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 
   return { kind: 'succeeded', value: { findings: findings, isComplete: true } };

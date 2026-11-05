@@ -15,6 +15,7 @@ import {
   getProbeFindings,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 
 const PKGS_DIR = '/Users/example/miniconda3/pkgs';
@@ -186,7 +187,12 @@ describe('loadCondaPackageFindings and recheckCondaUnit', () => {
         expect(
           await recheckCondaUnit({
             unit: unit,
-            run: { ...run, processCommands: ['/Users/example/miniforge3/bin/mamba install x'] },
+            run: {
+              ...run,
+              runningProcesses: buildRunningCommandLines([
+                '/Users/example/miniforge3/bin/mamba install x',
+              ]),
+            },
           }),
         ).toEqual({ kind: 'busy' });
 

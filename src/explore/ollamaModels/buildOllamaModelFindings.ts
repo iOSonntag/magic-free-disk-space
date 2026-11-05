@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
 import type { OllamaModelOffer } from './decideOllamaModelOffers.js';
@@ -13,7 +14,7 @@ const OLLAMA_DEFAULT_NAMESPACE = 'library';
 /** Offers each model with the blobs only it names; nothing while a manifest cannot be read. */
 export function buildOllamaModelFindings(params: {
   state: OllamaModelState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   switch (params.state.kind) {
     case 'noModels':
@@ -27,7 +28,7 @@ export function buildOllamaModelFindings(params: {
 
       return {
         findings: offers.map((offer) =>
-          buildOllamaModelFinding({ offer: offer, processCommands: params.processCommands }),
+          buildOllamaModelFinding({ offer: offer, runningProcesses: params.runningProcesses }),
         ),
         isComplete: true,
       };
@@ -53,7 +54,7 @@ export function formatOllamaModelName(params: { name: OllamaModelName }): string
 
 function buildOllamaModelFinding(params: {
   offer: OllamaModelOffer;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding {
   const modelName = formatOllamaModelName({ name: params.offer.manifest.name });
   const sharedCount = params.offer.digestCount - params.offer.blobPaths.length;
@@ -79,7 +80,7 @@ function buildOllamaModelFinding(params: {
     displayPath: params.offer.manifest.path,
     activity: decideUnitActivity({
       facts: { kind: 'ollama' },
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
     }),
   };
 }

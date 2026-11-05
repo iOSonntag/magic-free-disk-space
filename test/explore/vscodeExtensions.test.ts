@@ -17,6 +17,7 @@ import {
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbeRun, getProbeFindings } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -52,12 +53,15 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-function buildRun(processCommands: string[] | null): ExploreProbeRun {
-  return buildTestProbeRun({ environment: environment, processCommands: processCommands });
+function buildRun(commandLines: string[] | null): ExploreProbeRun {
+  return buildTestProbeRun({
+    environment: environment,
+    runningProcesses: commandLines === null ? null : buildRunningCommandLines(commandLines),
+  });
 }
 
-async function loadFindings(processCommands: string[] | null = []): Promise<ExploreProbeFindings> {
-  return getProbeFindings(await loadVscodeExtensionFindings(buildRun(processCommands)));
+async function loadFindings(commandLines: string[] | null = []): Promise<ExploreProbeFindings> {
+  return getProbeFindings(await loadVscodeExtensionFindings(buildRun(commandLines)));
 }
 
 /**

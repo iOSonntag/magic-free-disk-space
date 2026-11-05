@@ -1,4 +1,5 @@
 import { formatHomeRelativePath } from '../../path/formatHomeRelativePath.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
@@ -8,7 +9,7 @@ export function buildMiseVersionFindings(params: {
   tool: LocatedTool;
   versions: MisePrunableVersion[];
   homeDir: string;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding[] {
   return params.versions.map((version) => {
     const versionName = `${version.miseToolName}@${version.version}`;
@@ -31,7 +32,7 @@ export function buildMiseVersionFindings(params: {
       displayPath: version.installPath,
       activity: decideUnitActivity({
         facts: { kind: 'miseVersion' },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     };
 

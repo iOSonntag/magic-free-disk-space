@@ -28,6 +28,7 @@ import {
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 
@@ -173,12 +174,12 @@ describe('compareClaudeTranscriptsUnit', () => {
   };
 
   test("is unchanged while the old sessions are exactly the unit's, whatever the processes", () => {
-    for (const processCommands of [[], null]) {
+    for (const runningProcesses of [buildRunningCommandLines([]), null]) {
       expect(
         compareClaudeTranscriptsUnit({
           unit: unit,
           project: buildValueProject(VALUE_ENTRIES),
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'unchanged' });
     }
@@ -194,7 +195,11 @@ describe('compareClaudeTranscriptsUnit', () => {
 
     for (const project of [buildValueProject(resumed), buildValueProject(grownOld), null]) {
       expect(
-        compareClaudeTranscriptsUnit({ unit: unit, project: project, processCommands: [] }),
+        compareClaudeTranscriptsUnit({
+          unit: unit,
+          project: project,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
@@ -242,7 +247,7 @@ describe('loadClaudeTranscriptFindings', () => {
 
         const probed = getProbeFindings(
           await loadClaudeTranscriptFindings(
-            buildTestProbeRun({ environment: fixture.environment, processCommands: null }),
+            buildTestProbeRun({ environment: fixture.environment, runningProcesses: null }),
           ),
         );
 
@@ -283,7 +288,7 @@ describe('recheckClaudeTranscriptsUnit', () => {
             unit: unit,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           });
         }
 

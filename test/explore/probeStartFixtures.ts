@@ -1,6 +1,7 @@
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbeStart } from '../../src/explore/startExploreProbes.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildFixtureToolLocations } from './probeFakeTools.js';
 import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
 
@@ -17,7 +18,7 @@ export function buildTestProbeStart(
   return {
     platform: buildTestProbePlatform(),
     toolInstallLocations: buildFixtureToolLocations({}),
-    processCommands: Promise.resolve([]),
+    runningProcesses: Promise.resolve(buildRunningCommandLines([])),
     activeXcodeBundlePath: Promise.resolve(null),
     projectPins: buildEmptyProjectPinsLoad(),
     timeoutMs: TEST_PROBE_TIMEOUT_MS,

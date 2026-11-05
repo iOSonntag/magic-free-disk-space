@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitPnpmStore } from '../exploreUnit.js';
@@ -15,7 +16,7 @@ export function comparePnpmStoreUnit(params: {
   storeState: PnpmStoreState;
   installState: PnpmInstallState;
   pins: PnpmPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const offers = decidePnpmStoreOffers({
     storeState: params.storeState,
@@ -30,6 +31,6 @@ export function comparePnpmStoreUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'pnpmStore' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitFvmVersion } from '../exploreUnit.js';
@@ -13,7 +14,7 @@ export function compareFvmVersionUnit(params: {
   unit: ExplorePathUnitFvmVersion;
   state: FvmState;
   toolPins: ToolPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const isStillOffered = decideFvmVersionOffers({
     state: params.state,
@@ -29,6 +30,6 @@ export function compareFvmVersionUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'versionFolder', folderPath: params.unit.folderPath },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

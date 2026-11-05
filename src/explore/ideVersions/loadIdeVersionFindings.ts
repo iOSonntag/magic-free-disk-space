@@ -19,7 +19,7 @@ export async function loadIdeVersionFindings(
   }
 
   const runningIdes = await loadRunningIdes({
-    processCommands: run.processCommands,
+    runningProcesses: run.runningProcesses,
     privacyDenialCode: run.platform.privacyDenialCode,
   });
 
@@ -28,7 +28,7 @@ export async function loadIdeVersionFindings(
     value: buildIdeVersionFindings({
       folders: folders.value,
       runningIdes: runningIdes,
-      processCommands: run.processCommands,
+      runningProcesses: run.runningProcesses,
     }),
   };
 }

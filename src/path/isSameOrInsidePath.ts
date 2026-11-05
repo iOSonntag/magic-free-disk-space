@@ -12,8 +12,8 @@ export function isSameOrInsidePath(params: {
 }): boolean {
   return isPrefixPath({
     separator: params.rules.separator,
-    path: foldUnderRules({ rules: params.rules, text: params.path }),
-    parentPath: foldUnderRules({ rules: params.rules, text: params.parentPath }),
+    path: toComparablePathText({ rules: params.rules, text: params.path }),
+    parentPath: toComparablePathText({ rules: params.rules, text: params.parentPath }),
   });
 }
 
@@ -41,12 +41,27 @@ export function isSameEntryName(params: {
   otherName: string;
 }): boolean {
   return (
-    foldUnderRules({ rules: params.rules, text: params.name }) ===
-    foldUnderRules({ rules: params.rules, text: params.otherName })
+    toComparablePathText({ rules: params.rules, text: params.name }) ===
+    toComparablePathText({ rules: params.rules, text: params.otherName })
   );
 }
 
-function foldUnderRules(params: { rules: PathRules; text: string }): string {
+/**
+ * True when two absolute, normalized paths name the same entry: exactly on POSIX, without case on
+ * Windows.
+ */
+export function isSamePath(params: { rules: PathRules; path: string; otherPath: string }): boolean {
+  return (
+    toComparablePathText({ rules: params.rules, text: params.path }) ===
+    toComparablePathText({ rules: params.rules, text: params.otherPath })
+  );
+}
+
+/**
+ * A name or a path in the form the platform compares it by: as it is on POSIX, without case on
+ * Windows. Two texts name the same entry when their forms are equal.
+ */
+export function toComparablePathText(params: { rules: PathRules; text: string }): string {
   switch (params.rules.rootForm) {
     case 'posix':
       return params.text;

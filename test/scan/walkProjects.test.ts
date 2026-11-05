@@ -9,6 +9,9 @@ import type {
   ProjectPinFileRef,
 } from '../../src/explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import type { PathRules } from '../../src/path/pathRules.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
@@ -65,6 +68,20 @@ async function createDatedRustProject(params: {
   return targetPath;
 }
 
+/**
+ * A .NET project in `Service` whose build folders and project file are spelled in upper case:
+ * `Bin`, `OBJ`, and `Foo.CSPROJ`. Returns the project's path.
+ */
+async function createUpperCaseDotnetProject(params: { fixtureRoot: FixtureRoot }): Promise<string> {
+  const projectPath = join(params.fixtureRoot.homeDir, 'Service');
+
+  await createFixtureDirectory({ path: join(projectPath, 'Bin', 'Debug') });
+  await createFixtureDirectory({ path: join(projectPath, 'OBJ') });
+  await createEmptyFile({ path: join(projectPath, 'Foo.CSPROJ') });
+
+  return projectPath;
+}
+
 function buildPinFileRef(params: { path: string; kind: ProjectPinFileKind }): ProjectPinFileRef {
   return { path: buildTestHostPath({ text: params.path }), kind: params.kind };
 }
@@ -74,6 +91,7 @@ function comparePinFilePaths(left: ProjectPinFileRef, right: ProjectPinFileRef):
 }
 
 function walkTestProjects(params: {
+  pathRules?: PathRules;
   homeDir: AbsolutePath;
   excludedTopNames?: string[];
   rules?: ProjectArtifactRule[];
@@ -82,7 +100,7 @@ function walkTestProjects(params: {
   isEntryEvicted?: EntryEvictionCheck;
 }): Promise<ProjectWalk> {
   return walkProjects({
-    pathRules: HOST_PATH_RULES,
+    pathRules: params.pathRules ?? HOST_PATH_RULES,
     homeDir: params.homeDir,
     excludedTopNames: params.excludedTopNames ?? [],
     rules: params.rules ?? PROJECT_ARTIFACT_RULES,
@@ -157,6 +175,38 @@ describe('walkProjects', () => {
       { artifactPath: join(projectPath, 'bin'), artifactName: 'bin' },
       { artifactPath: join(projectPath, 'obj'), artifactName: 'obj' },
     ]);
+  });
+
+  test('finds Bin and OBJ beside Foo.CSPROJ under the rules of Windows, which ignore case', async () => {
+    const projectPath = await createUpperCaseDotnetProject({ fixtureRoot: fixtureRoot });
+
+    const result = await walkTestProjects({
+      pathRules: WIN32_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+      rules: WIN32_CATALOG.projectArtifactRules,
+    });
+
+    expect(
+      result.artifacts.map((finding) => ({
+        artifactPath: finding.artifactPath,
+        artifactName: finding.rule.artifactName,
+      })),
+    ).toEqual([
+      { artifactPath: join(projectPath, 'Bin'), artifactName: 'bin' },
+      { artifactPath: join(projectPath, 'OBJ'), artifactName: 'obj' },
+    ]);
+  });
+
+  test('finds no Bin or OBJ beside Foo.CSPROJ under the rules of POSIX, which match names exactly', async () => {
+    await createUpperCaseDotnetProject({ fixtureRoot: fixtureRoot });
+
+    const result = await walkTestProjects({
+      pathRules: DARWIN_PATH_RULES,
+      homeDir: fixtureRoot.homeDir,
+      rules: WIN32_CATALOG.projectArtifactRules,
+    });
+
+    expect(result.artifacts).toEqual([]);
   });
 
   test('walks into a bin folder without a project file beside it, as any other folder', async () => {

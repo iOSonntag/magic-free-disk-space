@@ -33,6 +33,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildTestPinFileText,
@@ -254,7 +255,7 @@ describe('compareRustupToolchainUnit', () => {
         unit: unit,
         state: buildValueState({ unit: unit, isMarked: false }),
         toolPins: UNPINNED,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -271,7 +272,7 @@ describe('compareRustupToolchainUnit', () => {
           unit: unit,
           state: state,
           toolPins: UNPINNED,
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }
@@ -296,15 +297,15 @@ describe('compareRustupToolchainUnit', () => {
           unit: unit,
           state: buildValueState({ unit: unit, isMarked: false }),
           toolPins: toolPins,
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }
   });
 
   test('is busy while a program of its own folder runs, or the processes are unknown', () => {
-    for (const processCommands of [
-      [`${unit.toolchainPath}/libexec/rust-analyzer-proc-macro-srv`],
+    for (const runningProcesses of [
+      buildRunningCommandLines([`${unit.toolchainPath}/libexec/rust-analyzer-proc-macro-srv`]),
       null,
     ]) {
       expect(
@@ -312,7 +313,7 @@ describe('compareRustupToolchainUnit', () => {
           unit: unit,
           state: buildValueState({ unit: unit, isMarked: false }),
           toolPins: UNPINNED,
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -394,7 +395,9 @@ beta-${HOST}
             run: buildTestProbeToolRun({
               environment: home.environment,
               tool: tool,
-              processCommands: [`${nightlyPath}/libexec/rust-analyzer-proc-macro-srv`],
+              runningProcesses: buildRunningCommandLines([
+                `${nightlyPath}/libexec/rust-analyzer-proc-macro-srv`,
+              ]),
             }),
             projectPins: buildTestProjectPins({ files: [] }),
           }),
@@ -453,7 +456,10 @@ beta-${HOST}
         expect(
           await recheckRustupToolchainUnit({
             unit: unit,
-            run: { ...recheckRun, processCommands: ['/Users/example/.cargo/bin/cargo build'] },
+            run: {
+              ...recheckRun,
+              runningProcesses: buildRunningCommandLines(['/Users/example/.cargo/bin/cargo build']),
+            },
           }),
         ).toEqual({ kind: 'busy' });
 

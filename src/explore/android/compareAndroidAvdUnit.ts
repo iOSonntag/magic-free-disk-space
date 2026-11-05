@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreToolUnitAndroidAvd } from '../exploreUnit.js';
@@ -12,7 +13,7 @@ import type { AndroidSdkState } from './loadAndroidSdkState.js';
 export function compareAndroidAvdUnit(params: {
   unit: ExploreToolUnitAndroidAvd;
   state: AndroidSdkState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const isStillListed =
     params.state.sdks.some((sdk) => sdk.sdkRoot === params.unit.sdkRoot) &&
@@ -32,6 +33,6 @@ export function compareAndroidAvdUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'android' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

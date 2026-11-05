@@ -18,6 +18,6 @@ export async function loadOllamaModelFindings(
 
   return {
     kind: 'succeeded',
-    value: buildOllamaModelFindings({ state: state.value, processCommands: run.processCommands }),
+    value: buildOllamaModelFindings({ state: state.value, runningProcesses: run.runningProcesses }),
   };
 }

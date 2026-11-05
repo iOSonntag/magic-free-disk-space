@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
@@ -16,7 +17,7 @@ export function isSimulatorDeviceOffered(device: SimulatorDevice): boolean {
 export function buildSimulatorDeviceFindings(params: {
   tool: LocatedTool;
   devices: SimulatorDevice[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding[] {
   return params.devices.filter(isSimulatorDeviceOffered).map((device) => {
     const runtimeName = formatSimulatorRuntimeName({ runtimeIdentifier: device.runtimeIdentifier });
@@ -36,7 +37,7 @@ export function buildSimulatorDeviceFindings(params: {
       displayPath: dirname(device.dataPath),
       activity: decideUnitActivity({
         facts: { kind: 'simulatorDevice', state: device.state },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     };
 

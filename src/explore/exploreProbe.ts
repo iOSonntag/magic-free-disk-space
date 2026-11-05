@@ -2,7 +2,7 @@ import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
 import type { EntryReads } from '../system/entryReads.js';
-import type { SystemPlatform } from '../system/systemPlatform.js';
+import type { RunningProcesses, SystemPlatform } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolName } from '../tools/toolInstallLocations.js';
 import type { ToolProcessPlatform, ToolsPlatform } from '../tools/toolsPlatform.js';
@@ -52,7 +52,7 @@ export function buildExploreProbePlatform(params: {
 export type ExploreProbeRun = {
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   deadlineMs: number;
   unusedCutoffMs: number;
   staleCutoffMs: number;
@@ -181,5 +181,5 @@ export type ExploreToolCommandRun = {
 
 /** What the recheck of a tool unit gets: the fresh tool, and the processes read right before. */
 export type ExploreUnitRecheckRun = ExploreToolCommandRun & {
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 };

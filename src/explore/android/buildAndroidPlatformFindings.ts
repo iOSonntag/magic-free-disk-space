@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
 import type { ProjectPinFileRef, ProjectPins } from '../projectPins/projectPins.js';
@@ -15,12 +16,12 @@ export function buildAndroidPlatformFindings(params: {
   offers: AndroidPlatformOffers;
   pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   projectSearchIncompleteEvidence: string;
 }): ExploreProbeFindings {
   const activity = decideUnitActivity({
     facts: { kind: 'android' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
   const searchEvidenceLines = buildProjectSearchEvidence({
     pins: params.projectPins,

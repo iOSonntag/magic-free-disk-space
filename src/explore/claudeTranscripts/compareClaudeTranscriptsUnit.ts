@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitClaudeTranscripts } from '../exploreUnit.js';
@@ -12,7 +13,7 @@ import type { ClaudeProjectState } from './loadClaudeProjectsState.js';
 export function compareClaudeTranscriptsUnit(params: {
   unit: ExplorePathUnitClaudeTranscripts;
   project: ClaudeProjectState | null;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   if (params.project === null) {
     return { kind: 'changed' };
@@ -26,6 +27,6 @@ export function compareClaudeTranscriptsUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'untouchedFiles' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

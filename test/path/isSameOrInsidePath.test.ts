@@ -2,10 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   isSameEntryName,
   isSameOrInsidePath,
+  isSamePath,
   mayBeSameOrInsidePath,
+  toComparablePathText,
 } from '../../src/path/isSameOrInsidePath.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 
 const RULES = DARWIN_PATH_RULES;
 
@@ -49,10 +51,18 @@ describe('isSameOrInsidePath', () => {
 describe('mayBeSameOrInsidePath', () => {
   test('matches a POSIX path that differs only by case, as a refusal needs', () => {
     expect(
-      mayBeSameOrInsidePath({ rules: RULES, path: '/users/TESTER/x', parentPath: '/Users/tester' }),
+      mayBeSameOrInsidePath({
+        rules: RULES,
+        path: '/users/TESTER/x',
+        parentPath: '/Users/tester',
+      }),
     ).toBe(true);
     expect(
-      mayBeSameOrInsidePath({ rules: RULES, path: '/Users/tester2', parentPath: '/Users/tester' }),
+      mayBeSameOrInsidePath({
+        rules: RULES,
+        path: '/Users/tester2',
+        parentPath: '/Users/tester',
+      }),
     ).toBe(false);
   });
 
@@ -82,5 +92,48 @@ describe('isSameEntryName', () => {
     expect(
       isSameEntryName({ rules: WIN32_PATH_RULES, name: 'AppData', otherName: 'AppData2' }),
     ).toBe(false);
+  });
+});
+
+describe('isSamePath', () => {
+  test('compares a POSIX path exactly', () => {
+    expect(isSamePath({ rules: RULES, path: '/Users/tester', otherPath: '/Users/tester' })).toBe(
+      true,
+    );
+    expect(isSamePath({ rules: RULES, path: '/Users/tester', otherPath: '/users/Tester' })).toBe(
+      false,
+    );
+  });
+
+  test('compares a Windows path without case, and never as containment', () => {
+    expect(
+      isSamePath({
+        rules: WIN32_PATH_RULES,
+        path: 'C:\\Users\\Tester\\AppData',
+        otherPath: 'c:\\users\\tester\\APPDATA',
+      }),
+    ).toBe(true);
+    expect(
+      isSamePath({
+        rules: WIN32_PATH_RULES,
+        path: 'C:\\Users\\tester\\AppData\\Local',
+        otherPath: 'C:\\Users\\tester\\AppData',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('toComparablePathText', () => {
+  test('leaves a POSIX name as it is', () => {
+    expect(toComparablePathText({ rules: RULES, text: 'Foo.CSPROJ' })).toBe('Foo.CSPROJ');
+  });
+
+  test('folds the case of a Windows name or path', () => {
+    expect(toComparablePathText({ rules: WIN32_PATH_RULES, text: 'Foo.CSPROJ' })).toBe(
+      'foo.csproj',
+    );
+    expect(toComparablePathText({ rules: WIN32_PATH_RULES, text: 'C:\\Tools\\CODE.EXE' })).toBe(
+      'c:\\tools\\code.exe',
+    );
   });
 });

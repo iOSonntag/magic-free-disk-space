@@ -15,6 +15,7 @@ import {
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 // Whole seconds, which the fixture's times keep exactly.
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
@@ -138,7 +139,7 @@ describe('the Mail Downloads probe', () => {
           await loadMailDownloadFindings(
             buildTestProbeRun({
               environment: home.environment,
-              processCommands: [MAIL_COMMAND],
+              runningProcesses: buildRunningCommandLines([MAIL_COMMAND]),
               staleCutoffMs: STALE_CUTOFF_MS,
             }),
           ),
@@ -181,12 +182,12 @@ describe('recheckMailDownloadsUnit', () => {
           kind: 'mailDownloads',
         });
 
-        function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+        function recheck(commandLines: string[] | null): Promise<PathUnitRecheck> {
           return recheckMailDownloadsUnit({
             unit: unit,
             environment: run.environment,
             platform: run.platform,
-            processCommands: processCommands,
+            runningProcesses: commandLines === null ? null : buildRunningCommandLines(commandLines),
           });
         }
 

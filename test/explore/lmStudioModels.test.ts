@@ -20,6 +20,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 
@@ -74,7 +75,11 @@ async function createModels(home: FixtureHome): Promise<void> {
 describe('compareLmStudioModelUnit', () => {
   test('is unchanged while its folder is still a model folder and LM Studio idle', () => {
     expect(
-      compareLmStudioModelUnit({ unit: VALUE_UNIT, folders: [VALUE_FOLDER], processCommands: [] }),
+      compareLmStudioModelUnit({
+        unit: VALUE_UNIT,
+        folders: [VALUE_FOLDER],
+        runningProcesses: buildRunningCommandLines([]),
+      }),
     ).toEqual({ kind: 'unchanged' });
   });
 
@@ -90,7 +95,7 @@ describe('compareLmStudioModelUnit', () => {
             }),
           },
         ],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -100,18 +105,18 @@ describe('compareLmStudioModelUnit', () => {
       compareLmStudioModelUnit({
         unit: VALUE_UNIT,
         folders: [{ ...VALUE_FOLDER, modifiedMs: DOWNLOADED_MS + 1_000 }],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
 
   test('is busy while LM Studio runs, or the processes are unknown', () => {
-    for (const processCommands of [[LM_STUDIO_COMMAND], null]) {
+    for (const runningProcesses of [buildRunningCommandLines([LM_STUDIO_COMMAND]), null]) {
       expect(
         compareLmStudioModelUnit({
           unit: VALUE_UNIT,
           folders: [VALUE_FOLDER],
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -151,7 +156,7 @@ describe('loadLmStudioModelFindings', () => {
             await loadLmStudioModelFindings(
               buildTestProbeRun({
                 environment: home.environment,
-                processCommands: [LM_STUDIO_COMMAND],
+                runningProcesses: buildRunningCommandLines([LM_STUDIO_COMMAND]),
               }),
             ),
           );
@@ -193,7 +198,7 @@ describeOnPosix('recheckLmStudioModelUnit', () => {
             unit: unit,
             environment: home.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           });
         }
 
@@ -234,7 +239,7 @@ describeOnPosix('recheckLmStudioModelUnit', () => {
             unit: qwen,
             environment: home.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           }),
         ).toEqual({ kind: 'changed' });
       },

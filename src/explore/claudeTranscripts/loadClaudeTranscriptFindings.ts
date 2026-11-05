@@ -22,7 +22,7 @@ export async function loadClaudeTranscriptFindings(
     value: buildClaudeTranscriptFindings({
       projects: projects.value,
       cutoffMs: run.environment.nowMs - CLAUDE_TRANSCRIPT_UNTOUCHED_MS,
-      processCommands: run.processCommands,
+      runningProcesses: run.runningProcesses,
     }),
   };
 }

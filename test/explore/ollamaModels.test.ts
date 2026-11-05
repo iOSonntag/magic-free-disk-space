@@ -21,6 +21,7 @@ import { parseOllamaModelName } from '../../src/explore/ollamaModels/parseOllama
 import { recheckOllamaModelUnit } from '../../src/explore/ollamaModels/recheckOllamaModelUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DAY_MS } from '../../src/scan/limits.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import {
   createFixtureFile,
   updateModifiedMs,
@@ -34,6 +35,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 
@@ -58,7 +60,7 @@ const VALUE_MODELS_PATH = '/models';
 
 async function loadFindings(params: {
   environment: Environment;
-  processCommands?: string[] | null;
+  runningProcesses?: RunningProcesses | null;
 }): Promise<ExploreProbeFindings> {
   return getProbeFindings(await loadOllamaModelFindings(buildTestProbeRun(params)));
 }
@@ -147,13 +149,14 @@ function getModelUnit(params: {
 function recheck(params: {
   unit: ExplorePathUnitOllamaModel;
   environment: Environment;
-  processCommands: string[] | null;
+  commandLines: string[] | null;
 }): Promise<PathUnitRecheck> {
   return recheckOllamaModelUnit({
     unit: params.unit,
     environment: params.environment,
     platform: buildTestProbePlatform(),
-    processCommands: params.processCommands,
+    runningProcesses:
+      params.commandLines === null ? null : buildRunningCommandLines(params.commandLines),
   });
 }
 
@@ -270,7 +273,10 @@ describe('compareOllamaModelUnit', () => {
     manifests: [latest, small],
     blobHexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.smallConfig, DIGESTS.shared],
   });
-  const scannedFindings = buildOllamaModelFindings({ state: scanned, processCommands: [] });
+  const scannedFindings = buildOllamaModelFindings({
+    state: scanned,
+    runningProcesses: buildRunningCommandLines([]),
+  });
 
   test('is unchanged once the model it shared a blob with is gone, so the blob is its own', () => {
     const afterLatest = buildValueState({
@@ -282,7 +288,7 @@ describe('compareOllamaModelUnit', () => {
       compareOllamaModelUnit({
         unit: getModelUnit({ findings: scannedFindings, manifestPath: small.path }),
         state: afterLatest,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -303,7 +309,7 @@ describe('compareOllamaModelUnit', () => {
             DIGESTS.extra,
           ],
         }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -323,7 +329,7 @@ describe('compareOllamaModelUnit', () => {
             DIGESTS.shared,
           ],
         }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -333,7 +339,7 @@ describe('compareOllamaModelUnit', () => {
       compareOllamaModelUnit({
         unit: getModelUnit({ findings: scannedFindings, manifestPath: latest.path }),
         state: scanned,
-        processCommands: ['ollama run llama3'],
+        runningProcesses: buildRunningCommandLines(['ollama run llama3']),
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -489,7 +495,9 @@ describe('loadOllamaModelFindings', () => {
 
         const probed = await loadFindings({
           environment: environment,
-          processCommands: ['/Applications/Ollama.app/Contents/Resources/ollama serve'],
+          runningProcesses: buildRunningCommandLines([
+            '/Applications/Ollama.app/Contents/Resources/ollama serve',
+          ]),
         });
 
         expect(probed.findings.map((finding) => finding.activity)).toEqual(['busy', 'busy']);
@@ -512,11 +520,15 @@ describe('recheckOllamaModelUnit', () => {
           manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
         });
 
+        expect(await recheck({ unit: unit, environment: environment, commandLines: [] })).toEqual({
+          kind: 'unchanged',
+        });
         expect(
-          await recheck({ unit: unit, environment: environment, processCommands: [] }),
-        ).toEqual({ kind: 'unchanged' });
-        expect(
-          await recheck({ unit: unit, environment: environment, processCommands: null }),
+          await recheck({
+            unit: unit,
+            environment: environment,
+            commandLines: null,
+          }),
         ).toEqual({ kind: 'busy' });
       },
     });
@@ -543,9 +555,9 @@ describe('recheckOllamaModelUnit', () => {
           layerHexes: [DIGESTS.latestWeights],
         });
 
-        expect(
-          await recheck({ unit: unit, environment: environment, processCommands: [] }),
-        ).toEqual({ kind: 'changed' });
+        expect(await recheck({ unit: unit, environment: environment, commandLines: [] })).toEqual({
+          kind: 'changed',
+        });
       },
     });
   });

@@ -18,6 +18,7 @@ import {
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 // Whole seconds, which the fixture's times keep exactly.
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
@@ -253,7 +254,7 @@ describe('the Downloads probe', () => {
           await loadDownloadsInstallerFindings(
             buildTestProbeRun({
               environment: home.environment,
-              processCommands: [buildChromeCommand(home)],
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
               staleCutoffMs: STALE_CUTOFF_MS,
             }),
           ),
@@ -281,7 +282,7 @@ describe('the Downloads probe', () => {
           await loadDownloadsInstallerFindings(
             buildTestProbeRun({
               environment: home.environment,
-              processCommands: [buildChromeCommand(home)],
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
               staleCutoffMs: STALE_CUTOFF_MS,
             }),
           ),
@@ -353,7 +354,7 @@ describe('recheckDownloadsUnit', () => {
             unit: unit,
             environment: run.environment,
             platform: run.platform,
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           });
         }
 
@@ -400,13 +401,13 @@ describe('recheckDownloadsUnit', () => {
             unit: unit,
             environment: run.environment,
             platform: run.platform,
-            processCommands: [firefoxCommand],
+            runningProcesses: buildRunningCommandLines([firefoxCommand]),
           }),
           await recheckDownloadsUnit({
             unit: unit,
             environment: run.environment,
             platform: run.platform,
-            processCommands: [buildChromeCommand(home)],
+            runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
           }),
         ];
 

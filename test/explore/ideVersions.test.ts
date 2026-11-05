@@ -24,6 +24,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Date.now();
 
@@ -63,13 +64,14 @@ async function withIdeHome(params: { run: (fixture: IdeFixture) => Promise<void>
 
 async function loadFindings(params: {
   fixture: IdeFixture;
-  processCommands: string[] | null;
+  commandLines: string[] | null;
 }): Promise<ExploreProbeFindings> {
   return getProbeFindings(
     await loadIdeVersionFindings(
       buildTestProbeRun({
         environment: params.fixture.environment,
-        processCommands: params.processCommands,
+        runningProcesses:
+          params.commandLines === null ? null : buildRunningCommandLines(params.commandLines),
       }),
     ),
   );
@@ -264,7 +266,7 @@ describe('compareIdeVersionUnit', () => {
         unit: unit,
         folders: folders,
         runningIdes: [{ bundlePath: bundlePath, dataDirectoryName: NEW_IDEA }],
-        processCommands: [ideCommand],
+        runningProcesses: buildRunningCommandLines([ideCommand]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -275,7 +277,7 @@ describe('compareIdeVersionUnit', () => {
         unit: unit,
         folders: folders,
         runningIdes: [{ bundlePath: bundlePath, dataDirectoryName: OLD_IDEA }],
-        processCommands: [ideCommand],
+        runningProcesses: buildRunningCommandLines([ideCommand]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
@@ -283,7 +285,7 @@ describe('compareIdeVersionUnit', () => {
         unit: unit,
         folders: folders,
         runningIdes: [],
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -294,7 +296,7 @@ describe('compareIdeVersionUnit', () => {
         unit: unit,
         folders: folders.slice(0, 1),
         runningIdes: [],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
     expect(
@@ -302,7 +304,7 @@ describe('compareIdeVersionUnit', () => {
         unit: { ...unit, foundPaths: [oldCachesPath, buildValuePath('Caches', 'other')] },
         folders: folders,
         runningIdes: [],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -314,7 +316,7 @@ describe('loadIdeVersionFindings', () => {
       run: async (fixture) => {
         await createIdeFolders(fixture);
 
-        const probed = await loadFindings({ fixture: fixture, processCommands: [] });
+        const probed = await loadFindings({ fixture: fixture, commandLines: [] });
 
         expect(probed.isComplete).toBe(true);
         expect(listFolderLines({ findings: probed, field: 'risk' })).toEqual([
@@ -334,7 +336,7 @@ describe('loadIdeVersionFindings', () => {
         await createIdeFolders(fixture);
 
         const units = listUnitsOfKind({
-          findings: await loadFindings({ fixture: fixture, processCommands: [] }),
+          findings: await loadFindings({ fixture: fixture, commandLines: [] }),
           kind: 'ideVersionFolder',
         });
         const settingsPath = join(
@@ -368,7 +370,7 @@ describe('loadIdeVersionFindings', () => {
 
         const busy = await loadFindings({
           fixture: fixture,
-          processCommands: [fixture.ideCommand],
+          commandLines: [fixture.ideCommand],
         });
 
         expect(listFolderLines({ findings: busy, field: 'activity' })).toEqual([
@@ -386,7 +388,7 @@ describe('loadIdeVersionFindings', () => {
 
         const idle = await loadFindings({
           fixture: fixture,
-          processCommands: [fixture.ideCommand],
+          commandLines: [fixture.ideCommand],
         });
 
         expect(
@@ -406,7 +408,7 @@ describe('loadIdeVersionFindings', () => {
 
         const probed = await loadFindings({
           fixture: fixture,
-          processCommands: [fixture.ideCommand],
+          commandLines: [fixture.ideCommand],
         });
 
         expect(
@@ -434,7 +436,7 @@ describe('loadIdeVersionFindings', () => {
 
           const probed = await loadFindings({
             fixture: fixture,
-            processCommands: [fixture.ideCommand],
+            commandLines: [fixture.ideCommand],
           });
 
           expect(
@@ -455,9 +457,9 @@ describe('loadIdeVersionFindings', () => {
 
         const idle = await loadFindings({
           fixture: fixture,
-          processCommands: [fixture.ideCommand],
+          commandLines: [fixture.ideCommand],
         });
-        const unknown = await loadFindings({ fixture: fixture, processCommands: null });
+        const unknown = await loadFindings({ fixture: fixture, commandLines: null });
 
         expect(
           listFolderLines({ findings: idle, field: 'activity' }).every((line) =>
@@ -485,17 +487,18 @@ describe('recheckIdeVersionUnit', () => {
         });
 
         const units = listUnitsOfKind({
-          findings: await loadFindings({ fixture: fixture, processCommands: [] }),
+          findings: await loadFindings({ fixture: fixture, commandLines: [] }),
           kind: 'ideVersionFolder',
         });
 
         for (const unit of units) {
-          function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+          function recheck(commandLines: string[] | null): Promise<PathUnitRecheck> {
             return recheckIdeVersionUnit({
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              processCommands: processCommands,
+              runningProcesses:
+                commandLines === null ? null : buildRunningCommandLines(commandLines),
             });
           }
 
@@ -515,7 +518,7 @@ describe('recheckIdeVersionUnit', () => {
         await createIdeFolders(fixture);
 
         const units = listUnitsOfKind({
-          findings: await loadFindings({ fixture: fixture, processCommands: [] }),
+          findings: await loadFindings({ fixture: fixture, commandLines: [] }),
           kind: 'ideVersionFolder',
         });
         const studio = units.find((unit) => unit.product === 'AndroidStudio');
@@ -536,7 +539,7 @@ describe('recheckIdeVersionUnit', () => {
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              processCommands: [],
+              runningProcesses: buildRunningCommandLines([]),
             }),
           ).toEqual({ kind: 'changed' });
         }

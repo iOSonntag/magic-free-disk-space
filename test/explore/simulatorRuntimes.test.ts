@@ -23,6 +23,7 @@ import {
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -175,7 +176,7 @@ describe('buildSimulatorRuntimeFindings', () => {
       tool: tool,
       state: parseFixtureState(),
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(findings.map((finding) => finding.unit)).toEqual([buildOfferedUnit({ tool: tool })]);
@@ -192,7 +193,7 @@ describe('buildSimulatorRuntimeFindings', () => {
       tool: tool,
       state: { runtimes: state.runtimes, devices: devices },
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(findings.map((finding) => finding.unit)).toMatchObject([
@@ -206,7 +207,7 @@ describe('buildSimulatorRuntimeFindings', () => {
       tool: tool,
       state: parseFixtureState(),
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(finding?.title).toBe('iOS 17.0 simulator runtime');
@@ -219,12 +220,16 @@ describe('buildSimulatorRuntimeFindings', () => {
   });
 
   test('is busy while Simulator.app runs, and unknown without the processes', () => {
-    const activities = [[SIMULATOR_APP_COMMAND], [], null].map((processCommands) =>
+    const activities = [
+      buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
+      buildRunningCommandLines([]),
+      null,
+    ].map((runningProcesses) =>
       buildSimulatorRuntimeFindings({
         tool: tool,
         state: parseFixtureState(),
         unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-        processCommands: processCommands,
+        runningProcesses: runningProcesses,
       }).map((finding) => finding.activity),
     );
 
@@ -238,17 +243,21 @@ describe('compareSimulatorRuntime', () => {
   test('answers unchanged, and busy while Simulator.app runs or the processes are unknown', () => {
     const state = parseFixtureState();
 
-    expect(compareSimulatorRuntime({ unit: unit, state: state, processCommands: [] })).toEqual({
-      kind: 'unchanged',
-    });
     expect(
       compareSimulatorRuntime({
         unit: unit,
         state: state,
-        processCommands: [SIMULATOR_APP_COMMAND],
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({ kind: 'unchanged' });
+    expect(
+      compareSimulatorRuntime({
+        unit: unit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
-    expect(compareSimulatorRuntime({ unit: unit, state: state, processCommands: null })).toEqual({
+    expect(compareSimulatorRuntime({ unit: unit, state: state, runningProcesses: null })).toEqual({
       kind: 'busy',
     });
   });
@@ -273,7 +282,11 @@ describe('compareSimulatorRuntime', () => {
 
     for (const changedState of changedStates) {
       expect(
-        compareSimulatorRuntime({ unit: unit, state: changedState, processCommands: [] }),
+        compareSimulatorRuntime({
+          unit: unit,
+          state: changedState,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
@@ -290,7 +303,7 @@ describe('compareSimulatorRuntime', () => {
       compareSimulatorRuntime({
         unit: unit,
         state: { runtimes: state.runtimes, devices: devices },
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -306,7 +319,11 @@ describe('compareSimulatorRuntime', () => {
     };
 
     expect(
-      compareSimulatorRuntime({ unit: recentUnit, state: state, processCommands: [] }),
+      compareSimulatorRuntime({
+        unit: recentUnit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
     ).toEqual({ kind: 'unchanged' });
   });
 });
@@ -410,7 +427,7 @@ describeOnPosix('the simulator runtime probe with a fake xcrun', () => {
       tool: xcrun,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     };
 
@@ -419,7 +436,7 @@ describeOnPosix('the simulator runtime probe with a fake xcrun', () => {
       await recheckExploreUnit({
         ...recheck,
         unit: unit,
-        processCommands: [SIMULATOR_APP_COMMAND],
+        runningProcesses: buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
@@ -443,7 +460,7 @@ describeOnPosix('the simulator runtime probe with a fake xcrun', () => {
       tool: failing,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     });
 

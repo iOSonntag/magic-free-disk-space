@@ -3,25 +3,23 @@ import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ExploreProbeFailure } from '../explore/exploreUnit.js';
 import { buildUnitRunArguments, listEngineUnitIds } from '../explore/exploreUnit.js';
 import { recheckExplorePathUnit } from '../explore/recheckExploreUnit.js';
-import type { PathRules } from '../path/pathRules.js';
 import type {
   Candidate,
   CandidateRemovalDeletePaths,
   CandidateRemovalDeleteUnitPaths,
   CandidateRemovalEmptyRecycleBin,
-  RemovalOwner,
   RemovalTarget,
   RemovalTargets,
 } from '../scan/candidate.js';
-import { isExecutableOwnerRunning } from '../scan/isExecutableOwnerRunning.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
+import { resolveRemovalOwnerState } from '../scan/resolveOwnerState.js';
 import type { EntryReads } from '../system/entryReads.js';
-import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
 import type { ReadFailure } from '../system/readFailure.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
 import { callEngineCandidate } from './callEngineCandidate.js';
 import { decideTargetsOutcome } from './decideTargetsOutcome.js';
 import type { DeletePlatform, DeletePlatformTrash, TreeRemoval } from './deletePlatform.js';
@@ -115,11 +113,12 @@ export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
 
 /**
  * Removes each candidate permanently, in order, after recording the intent, and records the
- * outcome entries after it. A target goes only while its identity still matches the scan and no
- * owner app runs in the processes `loadProcessCommands` read once after the confirmation; `null`
- * withholds every owned item. A tool item, a unit deleted as its paths, an evict, and an engine's
- * unit are checked again first and go only while the unit is still unchanged and idle. A Recycle
- * Bin is emptied only while it holds what the scan counted. A journal failure stops the run.
+ * outcome entries after it. A target goes only while its identity still matches the scan, its
+ * content is still on this computer, and no owner runs in the processes
+ * `loadKnownRunningProcesses` read once after the confirmation; `null` withholds every owned item.
+ * A tool item, a unit deleted as its paths, an evict, and an engine's unit are checked again first
+ * and go only while the unit is still unchanged and idle. A Recycle Bin is emptied only while it
+ * holds what the scan counted. A journal failure stops the run.
  */
 export async function deleteCandidates(params: {
   candidates: Candidate[];
@@ -131,10 +130,10 @@ export async function deleteCandidates(params: {
   probePlatform: ExploreProbePlatform;
   /** The system slice's entry reads, for measuring around a tool's run and a failed removal. */
   entryReads: EntryReads;
-  loadProcessCommands: () => Promise<string[] | null>;
+  loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   clock: () => number;
 }): Promise<RemovalRun> {
-  const processCommands = await params.loadProcessCommands();
+  const runningProcesses = await params.loadKnownRunningProcesses();
   const outcomes: RemovalOutcome[] = [];
 
   for (const [index, candidate] of params.candidates.entries()) {
@@ -158,8 +157,8 @@ export async function deleteCandidates(params: {
       delete: params.delete,
       probePlatform: params.probePlatform,
       entryReads: params.entryReads,
-      processCommands: processCommands,
-      loadProcessCommands: params.loadProcessCommands,
+      runningProcesses: runningProcesses,
+      loadKnownRunningProcesses: params.loadKnownRunningProcesses,
       clock: params.clock,
     });
 
@@ -254,8 +253,8 @@ async function removeCandidate(params: {
   probePlatform: ExploreProbePlatform;
   entryReads: EntryReads;
   /** The processes read once before the run, for path items. */
-  processCommands: string[] | null;
-  loadProcessCommands: () => Promise<string[] | null>;
+  runningProcesses: RunningProcesses | null;
+  loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   clock: () => number;
 }): Promise<RecordedRemoval> {
   switch (params.candidate.removal.kind) {
@@ -266,7 +265,7 @@ async function removeCandidate(params: {
         environment: params.environment,
         delete: params.delete,
         entryReads: params.entryReads,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
         clock: params.clock,
       });
     case 'deleteUnitPaths':
@@ -277,7 +276,7 @@ async function removeCandidate(params: {
         delete: params.delete,
         probePlatform: params.probePlatform,
         entryReads: params.entryReads,
-        loadProcessCommands: params.loadProcessCommands,
+        loadKnownRunningProcesses: params.loadKnownRunningProcesses,
         clock: params.clock,
       });
     case 'evictUnitFiles':
@@ -308,7 +307,7 @@ async function removeCandidate(params: {
         environment: params.environment,
         probePlatform: params.probePlatform,
         entryReads: params.entryReads,
-        loadProcessCommands: params.loadProcessCommands,
+        loadKnownRunningProcesses: params.loadKnownRunningProcesses,
         timeoutMs: TOOL_RUN_TIMEOUT_MS,
       });
 
@@ -403,32 +402,35 @@ async function deletePathsCandidate(params: {
   environment: Environment;
   delete: DeletePlatform;
   entryReads: EntryReads;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   clock: () => number;
 }): Promise<RecordedRemoval> {
-  if (
-    isOwnerPossiblyRunning({
-      owner: params.removal.owner,
-      pathRules: params.environment.pathRules,
-      processCommands: params.processCommands,
-    })
-  ) {
-    return buildKeptRemoval({
-      candidate: params.candidate,
-      targets: params.removal.targets,
-      outcome: 'ownerRunning',
-      code: null,
-      atMs: params.clock(),
-    });
-  }
-
-  return deleteScannedTargets({
-    candidate: params.candidate,
-    targets: params.removal.targets,
-    delete: params.delete,
-    entryReads: params.entryReads,
-    clock: params.clock,
+  const ownerState = resolveRemovalOwnerState({
+    owner: params.removal.owner,
+    pathRules: params.environment.pathRules,
+    runningProcesses: params.runningProcesses,
   });
+
+  switch (ownerState) {
+    // An owner that cannot be checked withholds the item as one that runs.
+    case 'running':
+    case 'unknown':
+      return buildKeptRemoval({
+        candidate: params.candidate,
+        targets: params.removal.targets,
+        outcome: 'ownerRunning',
+        code: null,
+        atMs: params.clock(),
+      });
+    case 'stopped':
+      return deleteScannedTargets({
+        candidate: params.candidate,
+        targets: params.removal.targets,
+        delete: params.delete,
+        entryReads: params.entryReads,
+        clock: params.clock,
+      });
+  }
 }
 
 /**
@@ -515,14 +517,14 @@ async function deleteUnitPathsCandidate(params: {
   delete: DeletePlatform;
   probePlatform: ExploreProbePlatform;
   entryReads: EntryReads;
-  loadProcessCommands: () => Promise<string[] | null>;
+  loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   clock: () => number;
 }): Promise<RecordedRemoval> {
   const recheck = await recheckExplorePathUnit({
     unit: params.removal.unit,
     environment: params.environment,
     platform: params.probePlatform,
-    processCommands: await params.loadProcessCommands(),
+    runningProcesses: await params.loadKnownRunningProcesses(),
   });
 
   switch (recheck.kind) {
@@ -635,7 +637,12 @@ async function deleteScannedTargets(params: {
     entryReads: params.entryReads,
   });
   const targetOutcomes = await mapNonEmptyInTurn(params.targets, (target) =>
-    deleteScannedTarget({ target: target, delete: params.delete, clock: params.clock }),
+    deleteScannedTarget({
+      target: target,
+      delete: params.delete,
+      entryReads: params.entryReads,
+      clock: params.clock,
+    }),
   );
 
   return {
@@ -722,10 +729,15 @@ async function listPresentTargetPaths(params: { targets: RemovalTarget[] }): Pro
   return presentPaths;
 }
 
-/** Deletes the target only while its identity still matches the scan. */
+/**
+ * Deletes the target only while its identity still matches the scan and its content is still on
+ * this computer: one a cloud store took since the scan keeps only its placeholder here, and
+ * deleting that would delete the file in the cloud.
+ */
 async function deleteScannedTarget(params: {
   target: RemovalTarget;
   delete: DeletePlatform;
+  entryReads: EntryReads;
   clock: () => number;
 }): Promise<TargetOutcome> {
   const currentIdentity = await loadFileIdentity({ path: params.target.path });
@@ -743,6 +755,21 @@ async function deleteScannedTarget(params: {
   }
 
   if (!isSameIdentity({ current: currentIdentity.value, scanned: params.target.identity })) {
+    return {
+      path: params.target.path,
+      atMs: params.clock(),
+      outcome: 'changedSinceScan',
+      code: null,
+      deleteRan: false,
+    };
+  }
+
+  if (
+    params.entryReads.isEntryEvicted({
+      path: params.target.path,
+      kind: params.target.identity.kind,
+    })
+  ) {
     return {
       path: params.target.path,
       atMs: params.clock(),
@@ -872,45 +899,6 @@ function buildStayedTargetOutcome(params: {
         outcome: params.target.outcome,
         code: params.target.code,
       };
-  }
-}
-
-/**
- * An owned item is withheld while its app or its program runs, or while that cannot be checked.
- * An owner whose bundle no installed app carries owns nothing that runs.
- */
-function isOwnerPossiblyRunning(params: {
-  owner: RemovalOwner;
-  pathRules: PathRules;
-  processCommands: string[] | null;
-}): boolean {
-  switch (params.owner.kind) {
-    case 'none':
-      return false;
-    case 'bundles':
-      if (params.owner.bundlePaths.length === 0) {
-        return false;
-      }
-
-      if (params.processCommands === null) {
-        return true;
-      }
-
-      return isAnyBundleRunning({
-        bundlePaths: params.owner.bundlePaths,
-        processCommands: params.processCommands,
-      });
-    case 'executable':
-      if (params.processCommands === null) {
-        return true;
-      }
-
-      return isExecutableOwnerRunning({
-        pathRules: params.pathRules,
-        imageNames: params.owner.imageNames,
-        installFolderPath: params.owner.installFolderPath,
-        processImagePaths: params.processCommands,
-      });
   }
 }
 

@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
 import type { LmStudioModelFolder } from './loadLmStudioModelState.js';
@@ -5,11 +6,11 @@ import type { LmStudioModelFolder } from './loadLmStudioModelState.js';
 /** Offers each model folder, in use while LM Studio runs. */
 export function buildLmStudioModelFindings(params: {
   folders: LmStudioModelFolder[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   return {
     findings: params.folders.map((folder) =>
-      buildLmStudioModelFinding({ folder: folder, processCommands: params.processCommands }),
+      buildLmStudioModelFinding({ folder: folder, runningProcesses: params.runningProcesses }),
     ),
     isComplete: true,
   };
@@ -17,7 +18,7 @@ export function buildLmStudioModelFindings(params: {
 
 function buildLmStudioModelFinding(params: {
   folder: LmStudioModelFolder;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding {
   return {
     unit: {
@@ -35,7 +36,7 @@ function buildLmStudioModelFinding(params: {
     displayPath: params.folder.path,
     activity: decideUnitActivity({
       facts: { kind: 'lmStudio' },
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
     }),
   };
 }

@@ -36,6 +36,7 @@ import {
 import { buildTestAbsolutePath, buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_UNUSED_CUTOFF_MS,
@@ -290,7 +291,7 @@ describe('buildAndroidPlatformFindings', () => {
         offers: offers,
         pinFiles: [{ path: buildTestAbsolutePath({ text: EXAMPLE_GRADLE_PATH }), kind: 'gradle' }],
         projectPins: buildTestProjectPins({ files: [] }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
         projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual({
@@ -325,7 +326,7 @@ describe('buildAndroidPlatformFindings', () => {
       offers: offers,
       pinFiles: [],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
-      processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+      runningProcesses: buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
       projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
@@ -354,7 +355,7 @@ describe('compareAndroidPlatformUnit', () => {
         unit: unit,
         state: buildExampleState(),
         toolPins: buildTextPins('android { compileSdk 35 }\n'),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -365,7 +366,7 @@ describe('compareAndroidPlatformUnit', () => {
         unit: unit,
         state: buildExampleState(),
         toolPins: buildTextPins('android { compileSdk 34 }\n'),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -376,19 +377,22 @@ describe('compareAndroidPlatformUnit', () => {
         unit: unit,
         state: { sdks: [{ sdkRoot: EXAMPLE_SDK_ROOT, platforms: [] }] },
         toolPins: buildTextPins(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
 
   test('answers busy while an emulator runs or the processes are unknown', () => {
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
+      null,
+    ]) {
       expect(
         compareAndroidPlatformUnit({
           unit: unit,
           state: buildExampleState(),
           toolPins: buildTextPins(),
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -604,7 +608,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
         unit: platform.unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -618,7 +622,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
         unit: platform.unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -631,7 +635,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
         unit: platform.unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+        runningProcesses: buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -646,7 +650,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
           unit: platform.unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({
         kind: 'failed',

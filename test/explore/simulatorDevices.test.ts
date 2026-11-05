@@ -7,6 +7,7 @@ import {
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   AVAILABLE_UNDATED_DEVICE_UDID,
   BOOTED_DEVICE_UDID,
@@ -158,7 +159,7 @@ describe('buildSimulatorDeviceFindings', () => {
     const findings = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(findings.map((finding) => finding.unit)).toEqual([
@@ -185,7 +186,11 @@ describe('buildSimulatorDeviceFindings', () => {
 
     expect(undatedDevices).toMatchObject([{ isAvailable: true, state: 'Shutdown' }]);
     expect(
-      buildSimulatorDeviceFindings({ tool: tool, devices: undatedDevices, processCommands: [] }),
+      buildSimulatorDeviceFindings({
+        tool: tool,
+        devices: undatedDevices,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
     ).toEqual([]);
   });
 
@@ -193,7 +198,7 @@ describe('buildSimulatorDeviceFindings', () => {
     const [unavailable, booted] = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(unavailable?.title).toBe('Simulator iPhone 15 (iOS 17.0)');
@@ -214,7 +219,7 @@ describe('buildSimulatorDeviceFindings', () => {
     const findings = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
-      processCommands: null,
+      runningProcesses: null,
     });
 
     expect(findings.map((finding) => finding.activity)).toEqual(['unknown', 'busy']);

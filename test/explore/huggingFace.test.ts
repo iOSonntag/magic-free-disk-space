@@ -25,6 +25,7 @@ import { parseHuggingFaceRepoFolderName } from '../../src/explore/huggingFace/pa
 import { recheckHuggingFaceUnit } from '../../src/explore/huggingFace/recheckHuggingFaceUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DAY_MS } from '../../src/scan/limits.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -42,6 +43,7 @@ import {
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -93,7 +95,7 @@ async function withHubFixture(params: {
 
 async function loadFindings(params: {
   environment: Environment;
-  processCommands?: string[] | null;
+  runningProcesses?: RunningProcesses | null;
 }): Promise<ExploreProbeFindings> {
   return getProbeFindings(await loadHuggingFaceRepoFindings(buildTestProbeRun(params)));
 }
@@ -344,9 +346,13 @@ describe('compareHuggingFaceUnit', () => {
       ],
     });
 
-    expect(compareHuggingFaceUnit({ unit: unit, repo: repo, processCommands: [] })).toEqual({
-      kind: 'unchanged',
-    });
+    expect(
+      compareHuggingFaceUnit({
+        unit: unit,
+        repo: repo,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({ kind: 'unchanged' });
   });
 });
 
@@ -383,7 +389,7 @@ describe('buildHuggingFaceRepoFindings', () => {
           }),
         ],
         partialCutoffMs: NOW_MS - DAY_MS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }).findings.map((finding) => finding.evidenceLines);
     }
 
@@ -516,7 +522,9 @@ describeOnPosix('loadHuggingFaceRepoFindings', () => {
 
         const probed = await loadFindings({
           environment: fixture.environment,
-          processCommands: ['/opt/homebrew/bin/hf download example-org/example-model'],
+          runningProcesses: buildRunningCommandLines([
+            '/opt/homebrew/bin/hf download example-org/example-model',
+          ]),
         });
 
         expect(probed.findings.map((finding) => finding.activity)).toEqual([
@@ -544,12 +552,13 @@ describeOnPosix('recheckHuggingFaceUnit', () => {
         ];
 
         for (const unit of units) {
-          function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+          function recheck(commandLines: string[] | null): Promise<PathUnitRecheck> {
             return recheckHuggingFaceUnit({
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              processCommands: processCommands,
+              runningProcesses:
+                commandLines === null ? null : buildRunningCommandLines(commandLines),
             });
           }
 
@@ -582,7 +591,7 @@ describeOnPosix('recheckHuggingFaceUnit', () => {
             unit: partial,
             environment: dayLater,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           }),
         ).toEqual({ kind: 'unchanged' });
       },
@@ -611,7 +620,7 @@ describeOnPosix('recheckHuggingFaceUnit', () => {
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              processCommands: [],
+              runningProcesses: buildRunningCommandLines([]),
             }),
           ).toEqual({ kind: 'changed' });
         }
@@ -639,7 +648,7 @@ describeOnPosix('recheckHuggingFaceUnit', () => {
             unit: partial,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           }),
         ).toEqual({ kind: 'changed' });
       },

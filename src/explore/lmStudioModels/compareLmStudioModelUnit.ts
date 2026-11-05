@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitLmStudioModel } from '../exploreUnit.js';
@@ -10,7 +11,7 @@ import type { LmStudioModelFolder } from './loadLmStudioModelState.js';
 export function compareLmStudioModelUnit(params: {
   unit: ExplorePathUnitLmStudioModel;
   folders: LmStudioModelFolder[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const folder = params.folders.find((modelFolder) => modelFolder.path === params.unit.folderPath);
 
@@ -20,6 +21,6 @@ export function compareLmStudioModelUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'lmStudio' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

@@ -10,15 +10,23 @@ export type ProcessListingCallFailure = { reason: 'callFailed'; call: string; co
 /** Why the processes could not be listed: by the command that lists them, or by a system call. */
 export type RunningProcessesFailure = CommandFailure | ProcessListingCallFailure;
 
+/** The running processes of macOS, each by its command line. */
+export type RunningProcessesCommandLines = { kind: 'commandLines'; commandLines: string[] };
+
 /**
- * Each running process by what tells what is in use: its command line on macOS, and on Windows the
- * full path of its image, since Windows gives no other process's arguments to a reader. A process
- * whose image path cannot be read is its image's file name. `commandTimeoutMs` bounds a listing that
- * runs a command. Never throws.
+ * The running processes of Windows, each by the full path of its image, since Windows gives no
+ * other process's arguments to a reader; a process whose image path cannot be read is its image's
+ * file name.
  */
+export type RunningProcessesImagePaths = { kind: 'imagePaths'; imagePaths: string[] };
+
+/** The running processes, in the form the platform tells what is in use by. */
+export type RunningProcesses = RunningProcessesCommandLines | RunningProcessesImagePaths;
+
+/** Lists the running processes; `commandTimeoutMs` bounds a listing that runs a command. Never throws. */
 export type RunningProcessesLoad = (params: {
   commandTimeoutMs: number;
-}) => Promise<Result<string[], RunningProcessesFailure>>;
+}) => Promise<Result<RunningProcesses, RunningProcessesFailure>>;
 
 /** What the system mechanisms take from the operating system. */
 export type SystemPlatform = {

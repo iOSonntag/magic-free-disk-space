@@ -1,4 +1,5 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings, UnitActivity } from '../exploreUnit.js';
@@ -13,11 +14,11 @@ import type { HomebrewOrphan, HomebrewState } from './loadHomebrewState.js';
 export function buildHomebrewFindings(params: {
   tool: LocatedTool;
   state: HomebrewState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   const activity = decideUnitActivity({
     facts: { kind: 'homebrew' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
   const oldVersionFindings = params.state.oldVersions.map((oldVersions) =>
     buildHomebrewOldVersionsFinding({

@@ -33,7 +33,7 @@ export async function recheckCondaUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'conda' },
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 }
 

@@ -20,6 +20,7 @@ import {
   getProbeFindings,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 
 /** Made-up `vagrant box list --machine-readable` output; no line comes from a real machine. */
@@ -88,7 +89,7 @@ function buildOutdatedUnit(params: {
     boxes: parseBoxes(BOX_LIST_TEXT),
     pathRules: DARWIN_PATH_RULES,
     homeDir: buildTestAbsolutePath({ text: params.homeDir }),
-    processCommands: [],
+    runningProcesses: buildRunningCommandLines([]),
   }).map((finding) => finding.unit);
 
   if (unit?.kind !== 'vagrantBoxVersion') {
@@ -151,7 +152,7 @@ describe('buildVagrantBoxFindings', () => {
       boxes: parseBoxes(BOX_LIST_TEXT),
       pathRules: DARWIN_PATH_RULES,
       homeDir: HOME_DIR,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(findings).toEqual([
@@ -191,7 +192,7 @@ describe('buildVagrantBoxFindings', () => {
       boxes: parseBoxes(BOX_LIST_TEXT),
       pathRules: DARWIN_PATH_RULES,
       homeDir: HOME_DIR,
-      processCommands: VAGRANT_RUNNING,
+      runningProcesses: buildRunningCommandLines(VAGRANT_RUNNING),
     });
 
     expect(findings.map((finding) => finding.activity)).toEqual(['busy', 'busy']);
@@ -203,13 +204,13 @@ describe('compareVagrantBoxUnit', () => {
 
   test('is unchanged while a newer version still outdates it, busy while vagrant runs', () => {
     const boxes = parseBoxes(BOX_LIST_TEXT);
-    function compare(processCommands: string[]): UnitComparison {
+    function compare(commandLines: string[]): UnitComparison {
       return compareVagrantBoxUnit({
         unit: unit,
         boxes: boxes,
         pathRules: DARWIN_PATH_RULES,
         homeDir: HOME_DIR,
-        processCommands: processCommands,
+        runningProcesses: buildRunningCommandLines(commandLines),
       });
     }
 
@@ -231,7 +232,7 @@ describe('compareVagrantBoxUnit', () => {
           boxes: list,
           pathRules: DARWIN_PATH_RULES,
           homeDir: HOME_DIR,
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }
@@ -286,7 +287,7 @@ describeOnPosix('the Vagrant box probe with a fake vagrant', () => {
             tool: tool,
             environment: home.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
             timeoutMs: TIMEOUT_MS,
           }),
         ).toEqual({ kind: 'unchanged' });

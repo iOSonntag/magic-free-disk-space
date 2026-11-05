@@ -59,7 +59,7 @@ export async function loadRustupToolchainFindings(params: {
       displayPath: toolchain.toolchainPath,
       activity: decideUnitActivity({
         facts: { kind: 'rustup', toolchainPath: toolchain.toolchainPath },
-        processCommands: params.run.processCommands,
+        runningProcesses: params.run.runningProcesses,
       }),
     };
 

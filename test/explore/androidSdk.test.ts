@@ -44,6 +44,7 @@ import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parse
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun, getProbeFindings, getUnitOfKind } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -103,11 +104,11 @@ type AndroidProbeAnswers = {
 };
 
 async function loadAndroidProbeAnswers(
-  processCommands: string[] | null = [],
+  commandLines: string[] | null = [],
 ): Promise<AndroidProbeAnswers> {
   const run = buildTestProbeRun({
     environment: environment,
-    processCommands: processCommands,
+    runningProcesses: commandLines === null ? null : buildRunningCommandLines(commandLines),
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
   });
 
@@ -128,13 +129,13 @@ function listUnits(findings: ExploreProbeFindings): ExploreFinding['unit'][] {
   return findings.findings.map((finding) => finding.unit);
 }
 
-function buildRecheckRun(processCommands: string[] | null) {
+function buildRecheckRun(commandLines: string[] | null) {
   return {
     tool: tool,
     environment: environment,
     platform: buildTestProbePlatform(),
     deadlineMs: Date.now() + 10_000,
-    processCommands: processCommands,
+    runningProcesses: commandLines === null ? null : buildRunningCommandLines(commandLines),
   };
 }
 
@@ -624,7 +625,13 @@ describe('compareAndroidAvdUnit', () => {
     const unit = buildAvdUnit();
     const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+    expect(
+      compareAndroidAvdUnit({
+        unit: unit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({
       kind: 'unchanged',
     });
   });
@@ -633,9 +640,12 @@ describe('compareAndroidAvdUnit', () => {
     const unit = buildAvdUnit();
     const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
 
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
+      null,
+    ]) {
       expect(
-        compareAndroidAvdUnit({ unit: unit, state: state, processCommands: processCommands }),
+        compareAndroidAvdUnit({ unit: unit, state: state, runningProcesses: runningProcesses }),
       ).toEqual({ kind: 'busy' });
     }
   });
@@ -645,7 +655,13 @@ describe('compareAndroidAvdUnit', () => {
     const usedAgain = { ...buildListedAvd({ unit: unit }), lastUsedAtMs: ANDROID_RECENT_USE_MS };
     const state = buildAvdState({ unit: unit, avds: [usedAgain] });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+    expect(
+      compareAndroidAvdUnit({
+        unit: unit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({
       kind: 'changed',
     });
   });
@@ -656,7 +672,13 @@ describe('compareAndroidAvdUnit', () => {
     for (const avds of [[], null]) {
       const state = buildAvdState({ unit: unit, avds: avds });
 
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      expect(
+        compareAndroidAvdUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
+      ).toEqual({
         kind: 'changed',
       });
     }
@@ -675,7 +697,13 @@ describe('compareAndroidAvdUnit', () => {
     for (const avd of [missing, unlocated]) {
       const state = buildAvdState({ unit: unit, avds: [avd] });
 
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      expect(
+        compareAndroidAvdUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
+      ).toEqual({
         kind: 'changed',
       });
     }
@@ -695,7 +723,13 @@ describe('compareAndroidAvdUnit', () => {
     for (const avd of differingAvds) {
       const state = buildAvdState({ unit: unit, avds: [avd] });
 
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      expect(
+        compareAndroidAvdUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
+      ).toEqual({
         kind: 'changed',
       });
     }
@@ -708,7 +742,13 @@ describe('compareAndroidAvdUnit', () => {
       avds: [{ ...buildListedAvd({ unit: unit }), imageSysdir: null }],
     });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+    expect(
+      compareAndroidAvdUnit({
+        unit: unit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({
       kind: 'changed',
     });
   });
@@ -718,7 +758,13 @@ describe('compareAndroidAvdUnit', () => {
     const unit = { ...buildAvdUnit(), avdPath: notesPath };
     const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+    expect(
+      compareAndroidAvdUnit({
+        unit: unit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({
       kind: 'changed',
     });
   });
@@ -733,7 +779,13 @@ describe('compareAndroidAvdUnit', () => {
     ];
 
     for (const state of states) {
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      expect(
+        compareAndroidAvdUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
+      ).toEqual({
         kind: 'changed',
       });
     }
@@ -764,9 +816,9 @@ describe('recheckAndroidAvdUnit', () => {
   test('answers busy while an emulator runs, and without processes', async () => {
     const unit = await createOfferedAvd();
 
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const commandLines of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
       expect(
-        await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun(processCommands) }),
+        await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun(commandLines) }),
       ).toEqual({ kind: 'busy' });
     }
   });
@@ -807,7 +859,13 @@ describe('compareAndroidPathUnit', () => {
     const state = await loadFreshState();
 
     for (const unit of [units.image, units.emulator]) {
-      expect(compareAndroidPathUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      expect(
+        compareAndroidPathUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
+      ).toEqual({
         kind: 'unchanged',
       });
     }
@@ -817,10 +875,13 @@ describe('compareAndroidPathUnit', () => {
     const units = await createOfferedPackages();
     const state = await loadFreshState();
 
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
+      null,
+    ]) {
       for (const unit of [units.image, units.emulator]) {
         expect(
-          compareAndroidPathUnit({ unit: unit, state: state, processCommands: processCommands }),
+          compareAndroidPathUnit({ unit: unit, state: state, runningProcesses: runningProcesses }),
         ).toEqual({ kind: 'busy' });
       }
     }
@@ -837,7 +898,13 @@ describe('compareAndroidPathUnit', () => {
     const state = await loadFreshState();
 
     for (const unit of [units.image, units.emulator]) {
-      expect(compareAndroidPathUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      expect(
+        compareAndroidPathUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
+      ).toEqual({
         kind: 'changed',
       });
     }
@@ -850,7 +917,13 @@ describe('compareAndroidPathUnit', () => {
     const state = await loadFreshState();
 
     for (const unit of [units.image, units.emulator]) {
-      expect(compareAndroidPathUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
+      expect(
+        compareAndroidPathUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
+      ).toEqual({
         kind: 'changed',
       });
     }

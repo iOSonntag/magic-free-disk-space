@@ -1,5 +1,6 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreToolUnitVagrantBoxVersion } from '../exploreUnit.js';
@@ -15,7 +16,7 @@ export function compareVagrantBoxUnit(params: {
   boxes: VagrantBox[];
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const isStillOutdated = listOutdatedVagrantBoxes(params.boxes).some(
     (outdated) =>
@@ -35,6 +36,6 @@ export function compareVagrantBoxUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'vagrant' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

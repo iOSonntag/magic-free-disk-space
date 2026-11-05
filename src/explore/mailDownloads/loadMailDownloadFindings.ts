@@ -80,7 +80,7 @@ export async function loadMailDownloadFindings(
           displayPath: folderPath,
           activity: decideUnitActivity({
             facts: { kind: 'appBundles', bundlePaths: run.platform.explore.mailBundlePaths },
-            processCommands: run.processCommands,
+            runningProcesses: run.runningProcesses,
           }),
         },
       ],

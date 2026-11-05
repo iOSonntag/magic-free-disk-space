@@ -41,6 +41,7 @@ import {
 import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   APPLE_SILICON_CELLAR_PATH,
   buildHomebrewCleanupDryRunText,
@@ -406,7 +407,11 @@ describe('decideHomebrewOrphans', () => {
 
 describe('buildHomebrewFindings', () => {
   test('offers each formula with old versions and the orphans together', () => {
-    const probeFindings = buildHomebrewFindings({ tool: brew, state: state, processCommands: [] });
+    const probeFindings = buildHomebrewFindings({
+      tool: brew,
+      state: state,
+      runningProcesses: buildRunningCommandLines([]),
+    });
     const findings = probeFindings.findings;
 
     expect(probeFindings.isComplete).toBe(true);
@@ -433,7 +438,7 @@ describe('buildHomebrewFindings', () => {
     const probeFindings = buildHomebrewFindings({
       tool: brew,
       state: { ...state, orphans: [] },
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(probeFindings.findings.map((finding) => finding.unit.kind)).toEqual([
@@ -446,7 +451,7 @@ describe('buildHomebrewFindings', () => {
     const probeFindings = buildHomebrewFindings({
       tool: brew,
       state: { ...state, orphans: orphansWithTwoKegs },
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(probeFindings.findings.map((finding) => finding.unit)).toEqual([oldVersionsUnit]);
@@ -457,9 +462,9 @@ describe('buildHomebrewFindings', () => {
     const busy = buildHomebrewFindings({
       tool: brew,
       state: state,
-      processCommands: [BREW_COMMAND],
+      runningProcesses: buildRunningCommandLines([BREW_COMMAND]),
     });
-    const unknown = buildHomebrewFindings({ tool: brew, state: state, processCommands: null });
+    const unknown = buildHomebrewFindings({ tool: brew, state: state, runningProcesses: null });
 
     expect(busy.findings.map((finding) => finding.activity)).toEqual(['busy', 'busy']);
     expect(unknown.findings.map((finding) => finding.activity)).toEqual(['unknown', 'unknown']);
@@ -478,12 +483,15 @@ describe('compareHomebrewUnit', () => {
     };
 
     for (const unit of [oldVersionsUnit, orphansUnit]) {
-      expect(compareHomebrewUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'unchanged',
-      });
-      expect(compareHomebrewUnit({ unit: unit, state: oneKegLeft, processCommands: [] })).toEqual({
-        kind: 'unchanged',
-      });
+      for (const fresh of [state, oneKegLeft]) {
+        expect(
+          compareHomebrewUnit({
+            unit: unit,
+            state: fresh,
+            runningProcesses: buildRunningCommandLines([]),
+          }),
+        ).toEqual({ kind: 'unchanged' });
+      }
     }
   });
 
@@ -504,9 +512,13 @@ describe('compareHomebrewUnit', () => {
 
     for (const unit of [oldVersionsUnit, orphansUnit]) {
       for (const fresh of [grown, emptied]) {
-        expect(compareHomebrewUnit({ unit: unit, state: fresh, processCommands: [] })).toEqual({
-          kind: 'changed',
-        });
+        expect(
+          compareHomebrewUnit({
+            unit: unit,
+            state: fresh,
+            runningProcesses: buildRunningCommandLines([]),
+          }),
+        ).toEqual({ kind: 'changed' });
       }
     }
   });
@@ -516,18 +528,18 @@ describe('compareHomebrewUnit', () => {
       compareHomebrewUnit({
         unit: orphansUnit,
         state: { ...state, orphans: orphansWithTwoKegs },
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
 
   test('is busy while another brew runs or the processes are unread', () => {
-    for (const processCommands of [[BREW_COMMAND], null]) {
+    for (const runningProcesses of [buildRunningCommandLines([BREW_COMMAND]), null]) {
       expect(
         compareHomebrewUnit({
           unit: oldVersionsUnit,
           state: state,
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -705,7 +717,7 @@ describeOnPosix('with fake brews', () => {
         environment: environment,
         platform: buildTestProbePlatform(),
         deadlineMs: Date.now() + TIMEOUT_MS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       },
     });
 
@@ -723,7 +735,7 @@ describeOnPosix('with fake brews', () => {
       tool: tool,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     };
     const fixtureOldVersionsUnit = buildOldVersionsUnit({ cellarPath: appleSiliconCellarPath });
@@ -736,7 +748,7 @@ describeOnPosix('with fake brews', () => {
       await recheckExploreUnit({
         ...recheck,
         unit: { ...fixtureOrphansUnit, tool: tool },
-        processCommands: [BREW_COMMAND],
+        runningProcesses: buildRunningCommandLines([BREW_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
@@ -764,7 +776,7 @@ describeOnPosix('with fake brews', () => {
       environment: environment,
       platform: buildTestProbePlatform(),
       deadlineMs: Date.now() + TIMEOUT_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     };
 
     expect(await recheckHomebrewUnit({ unit: unit, run: run })).toEqual({ kind: 'unchanged' });

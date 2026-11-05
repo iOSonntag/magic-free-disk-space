@@ -3,6 +3,7 @@ import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
 import type { ReadFailure } from '../system/readFailure.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
 import type { LocatedTool, ToolLookupFailureUntrusted } from '../tools/findTrustedTool.js';
 import { findTrustedTool } from '../tools/findTrustedTool.js';
 import type { ToolInstallLocations } from '../tools/toolInstallLocations.js';
@@ -114,7 +115,7 @@ export type ExploreProbeStart = {
   environment: Environment;
   platform: ExploreProbePlatform;
   toolInstallLocations: ToolInstallLocations;
-  processCommands: Promise<string[] | null>;
+  runningProcesses: Promise<RunningProcesses | null>;
   activeXcodeBundlePath: Promise<string | null>;
   /** The limit of a whole probe, its lookup, commands, and reads together. */
   timeoutMs: number;
@@ -150,7 +151,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
       buildSimulatorDeviceFindings({
         tool: probed.run.tool,
         devices: probed.output,
-        processCommands: probed.run.processCommands,
+        runningProcesses: probed.run.runningProcesses,
       }),
   }),
   dartPubCache: buildCommandProbe({
@@ -160,7 +161,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
         tool: probed.run.tool,
         gcPaths: probed.output,
         homeDir: probed.run.environment.homeDir,
-        processCommands: probed.run.processCommands,
+        runningProcesses: probed.run.runningProcesses,
       }),
   }),
   miseVersions: buildCommandProbe({
@@ -170,7 +171,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
         tool: probed.run.tool,
         versions: probed.output,
         homeDir: probed.run.environment.homeDir,
-        processCommands: probed.run.processCommands,
+        runningProcesses: probed.run.runningProcesses,
       }),
   }),
   simulatorRuntimes: {
@@ -300,7 +301,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
 
 /**
  * Starts every probe at once and never rejects: each promise ends in an outcome. Each probe waits
- * for `processCommands` before it starts, so its own tool never shows as running, and the
+ * for `runningProcesses` before it starts, so its own tool never shows as running, and the
  * simulator probes for `activeXcodeBundlePath`; without an active Xcode they answer `toolMissing`
  * and run nothing. The activity of each finding comes from `decideUnitActivity`, so `null`
  * processes leave `unknown` only units whose busy rule reads processes.
@@ -379,7 +380,7 @@ export function startExploreProbeScan(start: ExploreProbeStart): ExploreProbeSca
  */
 async function loadAndroidSdkClaimRoots(scan: ExploreProbeScan): Promise<AbsolutePath[]> {
   // The limit starts where an Android probe's does, so it never passes before theirs.
-  await scan.start.processCommands;
+  await scan.start.runningProcesses;
   await scan.start.projectPins.walkEnded;
 
   return raceExploreProbeDeadline({
@@ -443,7 +444,7 @@ export async function runExploreProbe(params: {
   scan: ExploreProbeScan;
 }): Promise<ExploreProbeOutcome> {
   // The processes are read before any tool starts, or a probe's own tool would show as running.
-  const processCommands = await params.scan.start.processCommands;
+  const runningProcesses = await params.scan.start.runningProcesses;
 
   // The walk has a limit of its own, so the limit of a probe that reads what it found starts once
   // it ended.
@@ -454,7 +455,7 @@ export async function runExploreProbe(params: {
   const run: ExploreProbeRun = {
     environment: params.scan.start.environment,
     platform: params.scan.start.platform,
-    processCommands: processCommands,
+    runningProcesses: runningProcesses,
     deadlineMs: Date.now() + params.scan.start.timeoutMs,
     unusedCutoffMs: params.scan.start.unusedCutoffMs,
     staleCutoffMs: params.scan.start.staleCutoffMs,

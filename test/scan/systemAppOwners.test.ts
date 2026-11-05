@@ -8,6 +8,7 @@ import { createTestJournal } from '../support/deletionJournalFixtures.js';
 import { createFixtureFile, isPresent } from '../support/fixtureRoot.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { withFixtureHome } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
 
 const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
@@ -49,7 +50,7 @@ describeOnDarwin('the data of a system app', () => {
         const report = await runTestScan({
           environment: home.environment,
           catalogEntries: [getCatalogEntry('messages-attachment-previews')],
-          processCommands: ['/sbin/launchd', MESSAGES_COMMAND],
+          runningProcesses: buildRunningCommandLines(['/sbin/launchd', MESSAGES_COMMAND]),
         });
 
         expect(report.candidates).toEqual([]);
@@ -92,7 +93,7 @@ describeOnDarwin('the data of a system app', () => {
           delete: darwinPlatform.delete,
           probePlatform: buildTestProbePlatform(),
           entryReads: darwinPlatform.system.entryReads,
-          loadProcessCommands: async () => [MESSAGES_COMMAND],
+          loadKnownRunningProcesses: async () => buildRunningCommandLines([MESSAGES_COMMAND]),
           clock: () => NOW_MS,
         });
 

@@ -107,7 +107,7 @@ describe('buildMiseVersionFindings', () => {
         { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
       ],
       homeDir: FIXTURE_HOME_DIR,
-      processCommands: null,
+      runningProcesses: null,
     });
 
     expect(findings).toHaveLength(1);

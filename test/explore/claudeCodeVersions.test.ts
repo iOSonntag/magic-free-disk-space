@@ -22,6 +22,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Date.now();
 
@@ -127,7 +128,7 @@ describe('compareClaudeCodeVersionUnit', () => {
       compareClaudeCodeVersionUnit({
         unit: unit,
         state: buildValueState({ versions: VALUE_VERSIONS, launcherVersion: '2.0.9' }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -139,18 +140,22 @@ describe('compareClaudeCodeVersionUnit', () => {
       { kind: 'noVersions' } as const,
     ]) {
       expect(
-        compareClaudeCodeVersionUnit({ unit: unit, state: state, processCommands: [] }),
+        compareClaudeCodeVersionUnit({
+          unit: unit,
+          state: state,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
 
   test('is busy while a claude session runs, or the processes are unknown', () => {
-    for (const processCommands of [['/usr/local/bin/claude'], null]) {
+    for (const runningProcesses of [buildRunningCommandLines(['/usr/local/bin/claude']), null]) {
       expect(
         compareClaudeCodeVersionUnit({
           unit: unit,
           state: buildValueState({ versions: VALUE_VERSIONS, launcherVersion: '2.0.9' }),
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -188,7 +193,7 @@ describe('loadClaudeCodeVersionFindings', () => {
             await loadClaudeCodeVersionFindings(
               buildTestProbeRun({
                 environment: fixture.environment,
-                processCommands: ['claude --continue'],
+                runningProcesses: buildRunningCommandLines(['claude --continue']),
               }),
             ),
           );
@@ -270,7 +275,7 @@ describeOnPosix('recheckClaudeCodeVersionUnit', () => {
             unit: offeredUnit,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           });
         }
 

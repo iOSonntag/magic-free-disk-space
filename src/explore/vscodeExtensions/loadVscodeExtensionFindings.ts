@@ -20,7 +20,7 @@ export async function loadVscodeExtensionFindings(
     kind: 'succeeded',
     value: buildVscodeExtensionFindings({
       state: state.value,
-      processCommands: run.processCommands,
+      runningProcesses: run.runningProcesses,
     }),
   };
 }

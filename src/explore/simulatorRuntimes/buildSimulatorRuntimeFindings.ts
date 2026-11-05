@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
@@ -44,7 +45,7 @@ export function buildSimulatorRuntimeFindings(params: {
   tool: LocatedTool;
   state: SimulatorRuntimeState;
   unusedCutoffMs: number;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding[] {
   const findings: ExploreFinding[] = [];
 
@@ -83,7 +84,7 @@ export function buildSimulatorRuntimeFindings(params: {
       displayPath: runtime.imagePath,
       activity: decideUnitActivity({
         facts: { kind: 'simulatorRuntime' },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     });
   }

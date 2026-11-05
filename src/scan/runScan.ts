@@ -20,7 +20,11 @@ import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { mapNonEmpty } from '../system/nonEmptyList.js';
-import type { RunningProcessesFailure, SystemPlatform } from '../system/systemPlatform.js';
+import type {
+  RunningProcesses,
+  RunningProcessesFailure,
+  SystemPlatform,
+} from '../system/systemPlatform.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import { buildScanReport } from './buildScanReport.js';
@@ -62,7 +66,7 @@ import {
   findOwnerAppName,
   findRemovalOwner,
   isOwnerUninstalled,
-  resolveOwnerState,
+  resolveRemovalOwnerState,
   resolveTargetOwner,
 } from './resolveOwnerState.js';
 import { resolveUserFileRootPaths } from './resolveUserFileRootPaths.js';
@@ -153,7 +157,7 @@ type ScanContext = {
    * The running processes as the system slice lists them; `null` when the listing failed: every
    * item with an owner app is then withheld.
    */
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
   /**
    * The system slice's entry reads, asked by every walk and measurement of the scan, whose
@@ -234,10 +238,10 @@ export async function runScan(params: {
     entryReads: params.system.entryReads,
     evictedPaths: evictedEntryPaths,
   });
-  const processCommandsLoad = params.system.loadRunningProcesses({
+  const runningProcessesLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
-  const knownProcessCommandsLoad = processCommandsLoad.then((result) =>
+  const knownRunningProcessesLoad = runningProcessesLoad.then((result) =>
     result.kind === 'succeeded' ? result.value : null,
   );
   const activeXcodeBundlePathLoad = params.scan.loadActiveXcodeBundlePath({
@@ -277,7 +281,7 @@ export async function runScan(params: {
       system: params.system,
     }),
     toolInstallLocations: params.tools.installLocations,
-    processCommands: knownProcessCommandsLoad,
+    runningProcesses: knownRunningProcessesLoad,
     // A failed `xcode-select` counts as no active Xcode, so the simulator probe runs nothing.
     activeXcodeBundlePath: activeXcodeBundlePathLoad.then((result) =>
       result.kind === 'succeeded' ? result.value : null,
@@ -287,8 +291,8 @@ export async function runScan(params: {
     staleCutoffMs: staleCutoffMs,
     projectPins: projectPins,
   });
-  const [processCommands, installed, activeXcodeBundlePath, systemVersion] = await Promise.all([
-    processCommandsLoad,
+  const [runningProcesses, installed, activeXcodeBundlePath, systemVersion] = await Promise.all([
+    runningProcessesLoad,
     loadPlatformApps({ apps: params.scan.apps, appDirs: params.environment.applicationDirs }),
     activeXcodeBundlePathLoad,
     params.system.loadSystemVersion(),
@@ -302,7 +306,7 @@ export async function runScan(params: {
     installedApps: installed.installedApps,
     isInstalledAppListComplete: installed.issues.length === 0,
     systemApps: params.scan.systemApps,
-    processCommands: await knownProcessCommandsLoad,
+    runningProcesses: await knownRunningProcessesLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
     entryReads: entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
@@ -314,7 +318,7 @@ export async function runScan(params: {
   const setup: ScanPhase = {
     decisions: [],
     issues: [
-      ...buildCommandIssues({ results: [processCommands, activeXcodeBundlePath] }),
+      ...buildCommandIssues({ results: [runningProcesses, activeXcodeBundlePath] }),
       ...installed.issues,
     ],
   };
@@ -724,6 +728,12 @@ async function loadCatalogTargetPhase(params: {
     entry: entry,
     path: path,
   });
+  const removalOwner = findRemovalOwner({
+    owner: owner,
+    environment: params.context.environment,
+    installedApps: params.context.installedApps,
+    systemApps: params.context.systemApps,
+  });
 
   return loadMeasuredTargetsPhase({
     found: mapNonEmpty(params.target.targetPaths, (targetPath) => ({ path: targetPath })),
@@ -758,18 +768,11 @@ async function loadCatalogTargetPhase(params: {
         path: path,
         measurement: measurement,
         owner: owner,
-        removalOwner: findRemovalOwner({
-          owner: owner,
-          environment: params.context.environment,
-          installedApps: params.context.installedApps,
-          systemApps: params.context.systemApps,
-        }),
-        ownerState: resolveOwnerState({
-          environment: params.context.environment,
-          owner: owner,
-          installedApps: params.context.installedApps,
-          systemApps: params.context.systemApps,
-          processCommands: params.context.processCommands,
+        removalOwner: removalOwner,
+        ownerState: resolveRemovalOwnerState({
+          owner: removalOwner,
+          pathRules: params.context.environment.pathRules,
+          runningProcesses: params.context.runningProcesses,
         }),
         ownerAppName: findOwnerAppName({
           owner: owner,
@@ -885,18 +888,22 @@ function loadAppItemPhase(params: {
               bundleId: app.bundleId,
               displayName: app.displayName,
             });
+      const appOwner = findRemovalOwner({
+        owner: buildAppOwner({ app: app }),
+        environment: params.context.environment,
+        installedApps: params.context.installedApps,
+        systemApps: params.context.systemApps,
+      });
 
       return decideAppCandidate({
         app: app,
         measurement: measurement,
         lastSignOfUseMs: lastSignOfUseMs,
         unusedCutoffMs: params.context.unusedCutoffMs,
-        ownerState: resolveOwnerState({
-          environment: params.context.environment,
-          owner: buildAppOwner({ app: app }),
-          installedApps: params.context.installedApps,
-          systemApps: params.context.systemApps,
-          processCommands: params.context.processCommands,
+        ownerState: resolveRemovalOwnerState({
+          owner: appOwner,
+          pathRules: params.context.environment.pathRules,
+          runningProcesses: params.context.runningProcesses,
         }),
         isProtectedDeveloperApp: isProtectedDeveloperApp({
           app: app,

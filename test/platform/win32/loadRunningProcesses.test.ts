@@ -77,7 +77,7 @@ describe.skipIf(process.platform !== 'win32')('the processes of Windows', () => 
     expect(processes.kind).toBe('succeeded');
 
     if (processes.kind === 'succeeded') {
-      expect(processes.value.map((path) => path.toLowerCase())).toContain(
+      expect(processes.value.imagePaths.map((path) => path.toLowerCase())).toContain(
         process.execPath.toLowerCase(),
       );
     }

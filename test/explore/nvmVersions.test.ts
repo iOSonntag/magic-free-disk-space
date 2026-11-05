@@ -27,6 +27,7 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -41,6 +42,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildEmptyProjectPinsLoad,
@@ -403,13 +405,13 @@ describe('buildNvmVersionFindings', () => {
   function buildFindings(params: {
     offers: NvmVersionOffers;
     isWalkComplete: boolean;
-    processCommands: string[] | null;
+    runningProcesses: RunningProcesses | null;
   }): ExploreProbeFindings {
     return buildNvmVersionFindings({
       offers: params.offers,
       pinFiles: pinFiles,
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: params.isWalkComplete }),
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
       projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
   }
@@ -425,7 +427,7 @@ describe('buildNvmVersionFindings', () => {
         },
       },
       isWalkComplete: true,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(built).toEqual({
@@ -468,7 +470,7 @@ describe('buildNvmVersionFindings', () => {
           defaultAlias: defaultAlias,
         },
         isWalkComplete: false,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       });
 
       expect(built.findings[0]?.evidenceLines).toEqual([
@@ -490,11 +492,11 @@ describe('buildNvmVersionFindings', () => {
       buildFindings({
         offers: offers,
         isWalkComplete: true,
-        processCommands: [`${folderPath}/bin/node server.js`],
+        runningProcesses: buildRunningCommandLines([`${folderPath}/bin/node server.js`]),
       }).findings[0]?.activity,
     ).toBe('busy');
     expect(
-      buildFindings({ offers: offers, isWalkComplete: true, processCommands: null }).findings[0]
+      buildFindings({ offers: offers, isWalkComplete: true, runningProcesses: null }).findings[0]
         ?.activity,
     ).toBe('unknown');
   });
@@ -515,7 +517,7 @@ describe('compareNvmVersionUnit', () => {
         unit: unit,
         state: state,
         toolPins: buildNvmrcPins({ texts: ['22'] }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -526,7 +528,7 @@ describe('compareNvmVersionUnit', () => {
         unit: unit,
         state: state,
         toolPins: buildNvmrcPins({ texts: ['20'] }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
     expect(
@@ -534,7 +536,7 @@ describe('compareNvmVersionUnit', () => {
         unit: unit,
         state: { kind: 'noVersions' },
         toolPins: buildNvmrcPins({ texts: [] }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -545,7 +547,7 @@ describe('compareNvmVersionUnit', () => {
         unit: unit,
         state: state,
         toolPins: buildNvmrcPins({ texts: [] }),
-        processCommands: [`${unit.folderPath}/bin/node`],
+        runningProcesses: buildRunningCommandLines([`${unit.folderPath}/bin/node`]),
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -721,7 +723,7 @@ describeOnDarwin('the nvm probe and recheck against a fixture home', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'unchanged' });
     });
@@ -735,7 +737,7 @@ describeOnDarwin('the nvm probe and recheck against a fixture home', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     });
@@ -749,7 +751,7 @@ describeOnDarwin('the nvm probe and recheck against a fixture home', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     });
@@ -762,7 +764,7 @@ describeOnDarwin('the nvm probe and recheck against a fixture home', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [`${unit.folderPath}/bin/node server.js`],
+          runningProcesses: buildRunningCommandLines([`${unit.folderPath}/bin/node server.js`]),
         }),
       ).toEqual({ kind: 'busy' });
     });
@@ -777,7 +779,7 @@ describeOnDarwin('the nvm probe and recheck against a fixture home', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({
         kind: 'failed',

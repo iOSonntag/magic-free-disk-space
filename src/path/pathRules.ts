@@ -12,3 +12,6 @@ export type PathRulesWin32 = { rootForm: 'win32'; separator: '\\' };
  * helper of `src/path` takes it as a value.
  */
 export type PathRules = PathRulesPosix | PathRulesWin32;
+
+/** The rules of a Windows path, for a value that is Windows' whatever platform runs. */
+export const WIN32_PATH_RULES: PathRulesWin32 = { rootForm: 'win32', separator: '\\' };

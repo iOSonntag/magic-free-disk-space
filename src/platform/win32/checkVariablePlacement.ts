@@ -1,5 +1,5 @@
 import type { EnvironmentFailure } from '../../environment/environmentPlatform.js';
-import { isSameOrInsidePath } from '../../path/isSameOrInsidePath.js';
+import { isSamePath } from '../../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 
@@ -50,20 +50,9 @@ function isPlacedAsExpected(params: { pathRules: PathRules; check: VariableCheck
       return false;
     case 'resolved':
       return isSamePath({
-        pathRules: params.pathRules,
+        rules: params.pathRules,
         path: reading.realPath,
         otherPath: params.check.expectedRealPath,
       });
   }
-}
-
-function isSamePath(params: { pathRules: PathRules; path: string; otherPath: string }): boolean {
-  return (
-    isSameOrInsidePath({
-      rules: params.pathRules,
-      path: params.path,
-      parentPath: params.otherPath,
-    }) &&
-    isSameOrInsidePath({ rules: params.pathRules, path: params.otherPath, parentPath: params.path })
-  );
 }

@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
 import { formatCountWord } from '../formatLimitTexts.js';
@@ -13,7 +14,7 @@ import type {
 /** Offers each old version; nothing, and not complete, without the launcher's version. */
 export function buildClaudeCodeVersionFindings(params: {
   state: ClaudeCodeVersionState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   switch (params.state.kind) {
     case 'noVersions':
@@ -27,7 +28,10 @@ export function buildClaudeCodeVersionFindings(params: {
 
       return {
         findings: offers.map((entry) =>
-          buildClaudeCodeVersionFinding({ entry: entry, processCommands: params.processCommands }),
+          buildClaudeCodeVersionFinding({
+            entry: entry,
+            runningProcesses: params.runningProcesses,
+          }),
         ),
         isComplete: true,
       };
@@ -37,7 +41,7 @@ export function buildClaudeCodeVersionFindings(params: {
 
 function buildClaudeCodeVersionFinding(params: {
   entry: ClaudeCodeVersionEntry;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding {
   return {
     unit: {
@@ -55,7 +59,7 @@ function buildClaudeCodeVersionFinding(params: {
     displayPath: params.entry.path,
     activity: decideUnitActivity({
       facts: { kind: 'claudeCodeVersion', versionPath: params.entry.path },
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
     }),
   };
 }

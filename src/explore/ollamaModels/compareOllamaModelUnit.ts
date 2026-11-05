@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitOllamaModel } from '../exploreUnit.js';
@@ -13,7 +14,7 @@ import type { OllamaModelState } from './loadOllamaModelState.js';
 export function compareOllamaModelUnit(params: {
   unit: ExplorePathUnitOllamaModel;
   state: OllamaModelState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   switch (params.state.kind) {
     case 'noModels':
@@ -35,7 +36,7 @@ export function compareOllamaModelUnit(params: {
 
       return decideComparisonActivity({
         facts: { kind: 'ollama' },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     }
   }

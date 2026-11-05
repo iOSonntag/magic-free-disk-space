@@ -3,6 +3,7 @@ import { buildDartPubCacheFindings } from '../../src/explore/dartPubCache/buildD
 import { parseDartPubCacheGc } from '../../src/explore/dartPubCache/parseDartPubCacheGc.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   buildDartGcDryRunText,
   buildDartGcPaths,
@@ -58,7 +59,7 @@ describe('buildDartPubCacheFindings', () => {
       tool: tool,
       gcPaths: gcPaths,
       homeDir: FIXTURE_HOME_DIR,
-      processCommands: null,
+      runningProcesses: null,
     });
 
     expect(findings).toHaveLength(1);
@@ -81,7 +82,7 @@ describe('buildDartPubCacheFindings', () => {
         tool: tool,
         gcPaths: [],
         homeDir: FIXTURE_HOME_DIR,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual([]);
   });

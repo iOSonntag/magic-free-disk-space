@@ -24,6 +24,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   buildTestPinFileText,
   buildTestPinText,
@@ -84,7 +85,7 @@ describe('compareFvmVersionUnit', () => {
         unit: unit,
         state: buildValueState({ folderPath: unit.folderPath, globalVersion: '3.22.0' }),
         toolPins: UNPINNED,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -118,20 +119,23 @@ describe('compareFvmVersionUnit', () => {
           unit: unit,
           state: entry.state,
           toolPins: entry.toolPins,
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }
   });
 
   test('is busy while a process runs from its folder, or the processes are unknown', () => {
-    for (const processCommands of [[`${unit.folderPath}/bin/cache/dart-sdk/bin/dart run`], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([`${unit.folderPath}/bin/cache/dart-sdk/bin/dart run`]),
+      null,
+    ]) {
       expect(
         compareFvmVersionUnit({
           unit: unit,
           state: buildValueState({ folderPath: unit.folderPath, globalVersion: null }),
           toolPins: UNPINNED,
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -239,7 +243,7 @@ describe('loadFvmVersionFindings and recheckFvmVersionUnit', () => {
           unit: unit,
           environment: home.environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         };
 
         expect(await recheckFvmVersionUnit(recheck)).toEqual({ kind: 'unchanged' });

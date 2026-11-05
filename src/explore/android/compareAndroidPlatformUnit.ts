@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitAndroidPlatform } from '../exploreUnit.js';
@@ -13,7 +14,7 @@ export function compareAndroidPlatformUnit(params: {
   unit: ExplorePathUnitAndroidPlatform;
   state: AndroidPlatformState;
   toolPins: ToolPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const offers = decideAndroidPlatformOffers({ state: params.state, toolPins: params.toolPins });
   const isStillOffered = offers.offers.some(
@@ -26,6 +27,6 @@ export function compareAndroidPlatformUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'android' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

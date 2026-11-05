@@ -25,7 +25,7 @@ export async function loadCondaPackageFindings(
 
   const activity = decideUnitActivity({
     facts: { kind: 'conda' },
-    processCommands: run.processCommands,
+    runningProcesses: run.runningProcesses,
   });
   const findings: ExploreFinding[] = [];
   const firstTarballPath = plan.value.tarballPaths[0];

@@ -224,7 +224,7 @@ function buildIcloudFinding(params: {
     displayPath: params.place.folderPath,
     activity: decideUnitActivity({
       facts: { kind: 'untouchedFiles' },
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
     }),
   };
 }

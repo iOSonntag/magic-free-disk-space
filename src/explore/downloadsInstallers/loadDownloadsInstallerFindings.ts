@@ -152,7 +152,7 @@ function buildDownloadsFinding(params: {
       environment: params.run.environment,
       platform: params.run.platform,
     }),
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 
   switch (params.fileKind.kind) {

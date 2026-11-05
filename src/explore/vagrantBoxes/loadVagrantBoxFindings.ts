@@ -24,7 +24,7 @@ export async function loadVagrantBoxFindings(
     boxes: boxes.value,
     pathRules: run.environment.pathRules,
     homeDir: run.environment.homeDir,
-    processCommands: run.processCommands,
+    runningProcesses: run.runningProcesses,
   });
 
   return { kind: 'succeeded', value: { findings: findings, isComplete: true } };

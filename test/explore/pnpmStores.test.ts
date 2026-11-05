@@ -45,6 +45,7 @@ import {
 import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildFoundProjectPinsLoad,
@@ -536,7 +537,7 @@ describe('buildPnpmStoreFindings', () => {
       storeRoot: storeRoot,
       pinFiles: [{ path: pinFile.path, kind: pinFile.kind }],
       projectPins: buildTestProjectPins({ files: [pinFile], isWalkComplete: false }),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
@@ -577,7 +578,7 @@ describe('buildPnpmStoreFindings', () => {
       storeRoot: storeRoot,
       pinFiles: [],
       projectPins: buildTestProjectPins({ files: [] }),
-      processCommands: [PNPM_PROCESS_COMMAND],
+      runningProcesses: buildRunningCommandLines([PNPM_PROCESS_COMMAND]),
       projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
@@ -609,7 +610,7 @@ describe('comparePnpmStoreUnit', () => {
         storeState: buildStoreState({ folderNames: ['v3'] }),
         installState: NO_INSTALLS,
         pins: NO_PINS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -621,7 +622,7 @@ describe('comparePnpmStoreUnit', () => {
         storeState: buildStoreState({ folderNames: ['v3'] }),
         installState: { installs: [buildParsedInstall({ versionText: '9.15.9', major: 9 })] },
         pins: NO_PINS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -633,7 +634,7 @@ describe('comparePnpmStoreUnit', () => {
         storeState: buildStoreState({ folderNames: ['v3'] }),
         installState: NO_INSTALLS,
         pins: NO_PINS,
-        processCommands: [PNPM_PROCESS_COMMAND],
+        runningProcesses: buildRunningCommandLines([PNPM_PROCESS_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -1325,7 +1326,7 @@ describe('the recheck of a pnpm store unit', () => {
         unit: unit,
         environment: environment,
         platform: probePlatform,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -1338,7 +1339,7 @@ describe('the recheck of a pnpm store unit', () => {
         unit: unit,
         environment: environment,
         platform: probePlatform,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -1351,7 +1352,7 @@ describe('the recheck of a pnpm store unit', () => {
         unit: unit,
         environment: environment,
         platform: probePlatform,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -1364,7 +1365,7 @@ describe('the recheck of a pnpm store unit', () => {
         unit: unit,
         environment: environment,
         platform: probePlatform,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -1375,7 +1376,7 @@ describe('the recheck of a pnpm store unit', () => {
         unit: unit,
         environment: environment,
         platform: probePlatform,
-        processCommands: [PNPM_PROCESS_COMMAND],
+        runningProcesses: buildRunningCommandLines([PNPM_PROCESS_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -1388,7 +1389,7 @@ describe('the recheck of a pnpm store unit', () => {
         unit: unit,
         environment: environment,
         platform: probePlatform,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({
       kind: 'failed',

@@ -38,7 +38,7 @@ export async function loadAndroidPlatformFindings(params: {
       offers: decideAndroidPlatformOffers({ state: state.value, toolPins: toolPins.value }),
       pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
       projectPins: params.projectPins,
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
       projectSearchIncompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
     }),
   };

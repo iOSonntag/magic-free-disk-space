@@ -1,8 +1,8 @@
-import { basename, dirname, posix, win32 } from 'node:path';
+import { basename, dirname, posix } from 'node:path';
 import type { CatalogLocation } from '../../catalog/catalog.js';
 import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
-import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import { joinAbsolutePath, resolveAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -457,13 +457,17 @@ function parseRegistryEntryFolderPath(params: {
   const relativeLocation = params.entry.relativeLocation;
 
   if (typeof relativeLocation === 'string' && relativeLocation !== '') {
-    return parseFolderPath({
-      pathRules: params.pathRules,
-      text: resolveUnderRules({
-        pathRules: params.pathRules,
-        paths: [params.extensionsPath, relativeLocation],
-      }),
+    const folderPath = resolveAbsolutePath({
+      rules: params.pathRules,
+      basePath: params.extensionsPath,
+      text: relativeLocation,
     });
+
+    if (folderPath.kind === 'failed') {
+      return { kind: 'failed', failure: 'an entry names no folder' };
+    }
+
+    return folderPath;
   }
 
   const location = params.entry.location;
@@ -493,16 +497,6 @@ function parseLocationUriPath(params: { pathRules: PathRules; uriPath: string })
       return posix.isAbsolute(params.uriPath) ? posix.resolve(params.uriPath) : null;
     case 'win32':
       return URI_DRIVE_PATH_PATTERN.test(params.uriPath) ? params.uriPath.slice(1) : null;
-  }
-}
-
-/** Resolves `paths` as the platform's path rules resolve them, never against the host's. */
-function resolveUnderRules(params: { pathRules: PathRules; paths: string[] }): string {
-  switch (params.pathRules.rootForm) {
-    case 'posix':
-      return posix.resolve(...params.paths);
-    case 'win32':
-      return win32.resolve(...params.paths);
   }
 }
 

@@ -24,6 +24,7 @@ import type {
   RemovalTarget,
 } from '../../src/scan/candidate.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDeviceDataPath,
@@ -70,6 +71,10 @@ import {
 import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import {
+  buildRunningCommandLines,
+  buildRunningImagePaths,
+} from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
 
@@ -97,11 +102,16 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** A loader that answers `processCommands` on every read. */
-function buildProcessCommandsLoader(
-  processCommands: string[] | null,
-): () => Promise<string[] | null> {
-  return async () => processCommands;
+/**
+ * A loader that answers the processes of `commandLines`, as macOS lists them, on every read;
+ * `null` for a list that could not be read.
+ */
+function buildCommandLinesLoader(
+  commandLines: string[] | null,
+): () => Promise<RunningProcesses | null> {
+  const runningProcesses = commandLines === null ? null : buildRunningCommandLines(commandLines);
+
+  return async () => runningProcesses;
 }
 
 /** The target at `path` with the identity it has now, as the scanner reads it. */
@@ -329,7 +339,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [selectedCandidate],
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -371,7 +381,7 @@ describe('deleteCandidates', () => {
       const run = await deleteCandidates({
         candidates: [await scanCandidate(selected)],
         journal: await createFixtureRootJournal(),
-        loadProcessCommands: buildProcessCommandsLoader([]),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
         clock: () => NOW_MS,
@@ -393,13 +403,44 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [scanned],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
+    expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
+  });
+
+  test('leaves a folder alone that went online only after the scan, and never removes it', async () => {
+    const selected = await createCacheFolder('evicted');
+    const scanned = await scanCandidate(selected);
+    const removedPaths: string[] = [];
+
+    const run = await deleteCandidates({
+      candidates: [scanned],
+      journal: await createFixtureRootJournal(),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: {
+        ...DELETION_PLATFORM.delete,
+        removeTree: async (params) => {
+          removedPaths.push(params.path);
+
+          return { kind: 'failed', failure: 'The evicted folder was removed.' };
+        },
+      },
+      entryReads: {
+        ...DELETION_PLATFORM.entryReads,
+        isEntryEvicted: (candidate) => candidate.path === selected,
+      },
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
+    expect(removedPaths).toEqual([]);
     expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
   });
 
@@ -416,7 +457,7 @@ describe('deleteCandidates', () => {
       const run = await deleteCandidates({
         candidates: [scanned],
         journal: await createFixtureRootJournal(),
-        loadProcessCommands: buildProcessCommandsLoader([]),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
         clock: () => NOW_MS,
@@ -438,7 +479,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -462,7 +503,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -483,7 +524,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: buildFailingRemoval({
@@ -514,7 +555,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: buildFailingRemoval({ removedPath: null, failure: 'EBUSY' }),
@@ -531,7 +572,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: buildFailingRemoval({ removedPath: selected, failure: 'EIO' }),
@@ -557,7 +598,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -584,7 +625,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -610,7 +651,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([
+      loadKnownRunningProcesses: buildCommandLinesLoader([
         '/Applications/Example.app/Contents/MacOS/Example',
       ]),
       environment: environment,
@@ -647,10 +688,11 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([
-        join(fixtureRoot.rootDir, 'Example Editor', 'bin', 'editor.exe'),
-        'C:\\Tools\\TOOL.EXE',
-      ]),
+      loadKnownRunningProcesses: async () =>
+        buildRunningImagePaths([
+          join(fixtureRoot.rootDir, 'Example Editor', 'bin', 'editor.exe'),
+          'C:\\Tools\\tool.exe',
+        ]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -668,6 +710,7 @@ describe('deleteCandidates', () => {
   test('withholds every owned item when the process list cannot be read', async () => {
     const appCache = await createCacheFolder('app-cache');
     const programCache = await createCacheFolder('program-cache');
+    const unbundledCache = await createCacheFolder('unbundled-cache');
     const ownerless = await createCacheFolder('ownerless');
     const candidates = [
       await scanCandidate(appCache, {
@@ -679,13 +722,15 @@ describe('deleteCandidates', () => {
         imageNames: [buildTestWindowsImageName({ text: 'tool.exe' })],
         installFolderPath: null,
       }),
+      // An owner whose bundle no app carries is withheld too, as the scan decides it.
+      await scanCandidate(unbundledCache, { kind: 'bundles', bundlePaths: [] }),
       await scanCandidate(ownerless),
     ];
 
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader(null),
+      loadKnownRunningProcesses: buildCommandLinesLoader(null),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -694,10 +739,12 @@ describe('deleteCandidates', () => {
     expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual([
       'ownerRunning',
       'ownerRunning',
+      'ownerRunning',
       'removed',
     ]);
     expect(await isPresent(appCache)).toBe(true);
     expect(await isPresent(programCache)).toBe(true);
+    expect(await isPresent(unbundledCache)).toBe(true);
   });
 
   test('records the tool intent first and runs no tool when it cannot be recorded', async () => {
@@ -711,7 +758,7 @@ describe('deleteCandidates', () => {
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -750,7 +797,7 @@ describe('deleteCandidates', () => {
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -763,7 +810,7 @@ describe('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -792,7 +839,7 @@ process.exit(0);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -836,7 +883,7 @@ process.exit(0);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -875,7 +922,7 @@ process.exit(1);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -925,7 +972,7 @@ process.exit(0);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
     const journalLines = await loadJournalLines(journal);
@@ -961,7 +1008,10 @@ process.exit(0);`,
   test('reads the processes afresh for a tool item, so a simulator started meanwhile stays', async () => {
     const pathItem = await createCacheFolder('before-simulator');
     const simulatorCandidate = await createSimulatorCandidate();
-    const processReads: (string[] | null)[] = [[], [SIMULATOR_APP_COMMAND]];
+    const processReads = [
+      buildRunningCommandLines([]),
+      buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
+    ];
     let readCount = 0;
 
     const run = await deleteCandidates({
@@ -969,10 +1019,10 @@ process.exit(0);`,
       journal: await createFixtureRootJournal(),
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: async () => {
+      loadKnownRunningProcesses: async () => {
         readCount += 1;
 
-        return processReads[readCount - 1] ?? [];
+        return processReads[readCount - 1] ?? buildRunningCommandLines([]);
       },
       clock: () => NOW_MS,
     });
@@ -1004,12 +1054,12 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
   async function deleteVscodeCandidate(params: {
     candidate: Candidate;
-    loadProcessCommands: () => Promise<string[] | null>;
+    loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   }): Promise<RemovalRun> {
     return deleteCandidates({
       candidates: [params.candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: params.loadProcessCommands,
+      loadKnownRunningProcesses: params.loadKnownRunningProcesses,
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -1022,7 +1072,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -1075,7 +1125,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
@@ -1084,15 +1134,18 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
   test('reads the processes afresh, so VS Code started after the confirmation keeps it', async () => {
     const candidate = await scanVscodeCandidate();
-    const processReads: string[][] = [[], [VSCODE_HOST_PROCESS]];
+    const processReads = [
+      buildRunningCommandLines([]),
+      buildRunningCommandLines([VSCODE_HOST_PROCESS]),
+    ];
     let readCount = 0;
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: async () => {
+      loadKnownRunningProcesses: async () => {
         readCount += 1;
 
-        return processReads[readCount - 1] ?? [];
+        return processReads[readCount - 1] ?? buildRunningCommandLines([]);
       },
     });
 
@@ -1110,7 +1163,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
       const run = await deleteVscodeCandidate({
         candidate: candidate,
-        loadProcessCommands: buildProcessCommandsLoader([]),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
       });
 
       expect(run.outcomes[0]).toMatchObject({
@@ -1131,7 +1184,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'ELOOP', freedBytes: 0 });
@@ -1146,7 +1199,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
@@ -1182,7 +1235,7 @@ describe('deleteCandidates with an item of several targets', () => {
     return deleteCandidates({
       candidates: [params.candidate],
       journal: params.journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -1335,7 +1388,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
     const run = await deleteCandidates({
       candidates: [RECYCLE_BIN_CANDIDATE, await scanCandidate(next)],
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: {
@@ -1437,7 +1490,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
     const run = await deleteCandidates({
       candidates: [RECYCLE_BIN_CANDIDATE],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: { ...DELETION_PLATFORM.delete, trash: { kind: 'catalogFolder' } },
@@ -1458,7 +1511,7 @@ describe('deleteCandidates with a path left partly in place', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: {

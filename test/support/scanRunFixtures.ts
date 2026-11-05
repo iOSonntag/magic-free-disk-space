@@ -4,21 +4,23 @@ import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
 import { runScan } from '../../src/scan/runScan.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import { TOOL_INSTALL_LOCATIONS_NONE } from './candidateFixtures.js';
 import { buildTestPlatform } from './platformFixtures.js';
+import { buildRunningCommandLines } from './runningProcessesFixtures.js';
 
 /**
  * Scans the fixture home of `environment` through the macOS platform with only `catalogEntries`
- * and no tool, the processes (`processCommands`, none when left out), the active Xcode, and the
+ * and no tool, the processes (`runningProcesses`, none when left out), the active Xcode, and the
  * system version made up, so the scan starts no command.
  */
 export function runTestScan(params: {
   environment: Environment;
   catalogEntries: CatalogEntry[];
-  processCommands?: string[];
+  runningProcesses?: RunningProcesses;
   onProgress?: (progress: ScanProgress) => void;
 }): Promise<ScanReport> {
-  const processCommands = params.processCommands ?? [];
+  const runningProcesses = params.runningProcesses ?? buildRunningCommandLines([]);
 
   const platform = buildTestPlatform({
     catalogEntries: params.catalogEntries,
@@ -35,7 +37,7 @@ export function runTestScan(params: {
     },
     system: {
       ...platform.system,
-      loadRunningProcesses: async () => ({ kind: 'succeeded', value: processCommands }),
+      loadRunningProcesses: async () => ({ kind: 'succeeded', value: runningProcesses }),
       loadSystemVersion: async () => null,
     },
     explore: platform.explore,

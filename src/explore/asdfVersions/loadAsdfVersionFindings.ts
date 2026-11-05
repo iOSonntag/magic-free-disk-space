@@ -33,7 +33,7 @@ export async function loadAsdfVersionFindings(params: {
     offers: offers.offers,
     pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
     projectPins: params.projectPins,
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
     projectSearchIncompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
   });
 

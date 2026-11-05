@@ -1,3 +1,5 @@
+import { toComparablePathText } from '../../path/isSameOrInsidePath.js';
+import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { ScanIssue } from '../../scan/issue.js';
 import type { AdvisedApp } from '../../scan/scanPlatform.js';
 import type { RegistryHive, RegistryView, UninstallKeyValues } from './win32Api.js';
@@ -78,7 +80,9 @@ export function decideUninstallApps(params: { keyValues: UninstallKeyValues[] })
       continue;
     }
 
-    const identity = `${app.displayName.toLowerCase()}\n${app.installFolderPath?.toLowerCase() ?? ''}`;
+    const identity = [app.displayName, app.installFolderPath ?? '']
+      .map((text) => toComparablePathText({ rules: WIN32_PATH_RULES, text: text }))
+      .join('\n');
     const listed = appsByIdentity.get(identity);
 
     if (listed === undefined) {
@@ -116,7 +120,7 @@ function toAdvisedApp(params: { values: UninstallKeyValues }): AdvisedApp | null
 
   return {
     displayName: displayName,
-    installFolderPath: cleanInstallLocation({ text: params.values.installLocation }),
+    installFolderPath: parseInstallFolderPath({ text: params.values.installLocation }),
     estimatedBytes: toEstimatedBytes({ estimatedSize: params.values.estimatedSize }),
   };
 }
@@ -125,7 +129,7 @@ function toAdvisedApp(params: { values: UninstallKeyValues }): AdvisedApp | null
  * The install folder without the quotes or the trailing backslash installers write around it;
  * `null` for none.
  */
-function cleanInstallLocation(params: { text: string | null }): string | null {
+function parseInstallFolderPath(params: { text: string | null }): string | null {
   const unquoted = (params.text ?? '').trim().replace(/^"(.*)"$/, '$1');
   const folderPath = /^[A-Za-z]:\\$/.test(unquoted) ? unquoted : unquoted.replace(/\\+$/, '');
 

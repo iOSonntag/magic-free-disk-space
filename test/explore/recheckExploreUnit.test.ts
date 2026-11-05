@@ -28,6 +28,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import type { ProbeCommandName } from './probeFakeTools.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -105,7 +106,7 @@ describe('compareSimulatorDevice', () => {
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [unavailableDevice],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -122,7 +123,11 @@ describe('compareSimulatorDevice', () => {
       [{ ...unavailableDevice, isAvailable: true }],
     ]) {
       expect(
-        compareSimulatorDevice({ unit: deviceUnit, devices: devices, processCommands: [] }),
+        compareSimulatorDevice({
+          unit: deviceUnit,
+          devices: devices,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
@@ -132,21 +137,21 @@ describe('compareSimulatorDevice', () => {
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [{ ...unavailableDevice, state: 'Booted' }],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [unavailableDevice],
-        processCommands: [SIMULATOR_APP_COMMAND],
+        runningProcesses: buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [unavailableDevice],
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -155,17 +160,25 @@ describe('compareSimulatorDevice', () => {
 describe('compareDartPubCache', () => {
   test('is unchanged for the same set or a subset, even when ps failed', () => {
     expect(
-      compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths, processCommands: null }),
+      compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths, runningProcesses: null }),
     ).toEqual({ kind: 'unchanged' });
     expect(
-      compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths.slice(1), processCommands: [] }),
+      compareDartPubCache({
+        unit: dartUnit,
+        gcPaths: gcPaths.slice(1),
+        runningProcesses: buildRunningCommandLines([]),
+      }),
     ).toEqual({ kind: 'unchanged' });
   });
 
   test('is changed for an empty set or a path the scan did not list', () => {
-    expect(compareDartPubCache({ unit: dartUnit, gcPaths: [], processCommands: [] })).toEqual({
-      kind: 'changed',
-    });
+    expect(
+      compareDartPubCache({
+        unit: dartUnit,
+        gcPaths: [],
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({ kind: 'changed' });
     expect(
       compareDartPubCache({
         unit: dartUnit,
@@ -175,7 +188,7 @@ describe('compareDartPubCache', () => {
             text: '/Users/example/.pub-cache/hosted/pub.dev/example_d-1.0.0',
           }),
         ],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -189,7 +202,7 @@ describe('compareMiseVersion', () => {
         versions: [
           { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
         ],
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -213,7 +226,11 @@ describe('compareMiseVersion', () => {
       ],
     ]) {
       expect(
-        compareMiseVersion({ unit: miseUnit, versions: versions, processCommands: [] }),
+        compareMiseVersion({
+          unit: miseUnit,
+          versions: versions,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
@@ -278,13 +295,13 @@ describeOnPosix('recheckExploreUnit', () => {
       tool: tool,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     };
 
     expect(await recheckExploreUnit({ ...recheck, unit: unit })).toEqual({ kind: 'unchanged' });
     expect(await recheckExploreUnit({ ...recheck, unit: usedUnit })).toEqual({ kind: 'changed' });
-    expect(await recheckExploreUnit({ ...recheck, unit: unit, processCommands: null })).toEqual({
+    expect(await recheckExploreUnit({ ...recheck, unit: unit, runningProcesses: null })).toEqual({
       kind: 'busy',
     });
   });
@@ -309,7 +326,7 @@ describeOnPosix('recheckExploreUnit', () => {
         tool: dart,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: null,
+        runningProcesses: null,
         timeoutMs: TIMEOUT_MS,
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -329,7 +346,7 @@ describeOnPosix('recheckExploreUnit', () => {
         tool: mise,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: null,
+        runningProcesses: null,
         timeoutMs: TIMEOUT_MS,
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -345,7 +362,7 @@ describeOnPosix('recheckExploreUnit', () => {
         tool: failing,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
         timeoutMs: TIMEOUT_MS,
       }),
     ).toEqual({
@@ -362,7 +379,7 @@ describeOnPosix('recheckExploreUnit', () => {
       tool: garbled,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     });
 

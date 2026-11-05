@@ -1,4 +1,5 @@
 import { toNonEmpty } from '../../system/nonEmptyList.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreFoundPaths, ExploreProbeFindings } from '../exploreUnit.js';
 import { formatDaySpan } from '../formatLimitTexts.js';
@@ -12,7 +13,7 @@ import type { ClaudeProjectState } from './loadClaudeProjectsState.js';
 export function buildClaudeTranscriptFindings(params: {
   projects: ClaudeProjectState[];
   cutoffMs: number;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   const findings = params.projects.flatMap((project) => {
     const old = decideOldTranscriptPaths({ project: project, cutoffMs: params.cutoffMs });
@@ -28,7 +29,7 @@ export function buildClaudeTranscriptFindings(params: {
         cutoffMs: params.cutoffMs,
         sessionCount: old.sessionCount,
         foundPaths: foundPaths,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     ];
   });
@@ -41,7 +42,7 @@ function buildClaudeTranscriptFinding(params: {
   cutoffMs: number;
   sessionCount: number;
   foundPaths: ExploreFoundPaths;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding {
   const untouchedSpan = formatDaySpan(CLAUDE_TRANSCRIPT_UNTOUCHED_MS);
 
@@ -63,7 +64,7 @@ function buildClaudeTranscriptFinding(params: {
     displayPath: params.project.path,
     activity: decideUnitActivity({
       facts: { kind: 'untouchedFiles' },
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
     }),
   };
 }

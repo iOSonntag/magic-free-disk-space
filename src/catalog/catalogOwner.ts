@@ -1,3 +1,5 @@
+import { toComparablePathText } from '../path/isSameOrInsidePath.js';
+import { WIN32_PATH_RULES } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import type { CatalogLocation } from './catalog.js';
 
@@ -10,7 +12,7 @@ export type MacBundleId = string & { [macBundleIdBrand]: true };
 
 /**
  * The file name of a Windows program, such as `msedge.exe`, as `parseWindowsImageName` made it:
- * in lower case, since Windows compares file names without case.
+ * in the form Windows compares file names by, without case.
  */
 export type WindowsImageName = string & { [windowsImageNameBrand]: true };
 
@@ -66,6 +68,8 @@ export function parseWindowsImageName(params: {
     return { kind: 'failed', failure: 'not a file name' };
   }
 
+  const comparableName = toComparablePathText({ rules: WIN32_PATH_RULES, text: params.text });
+
   // The brand records the check above, which the compiler cannot follow.
-  return { kind: 'succeeded', value: params.text.toLowerCase() as WindowsImageName };
+  return { kind: 'succeeded', value: comparableName as WindowsImageName };
 }

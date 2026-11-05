@@ -10,6 +10,7 @@ import {
   startExploreProbeScan,
   startExploreProbes,
 } from '../../src/explore/startExploreProbes.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -20,6 +21,7 @@ import {
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -173,7 +175,7 @@ describeOnPosix('startExploreProbes', () => {
     const probes = startExploreProbes(
       buildProbeStart({
         toolInstallLocations: buildFixtureToolLocations(tools),
-        processCommands: Promise.resolve(null),
+        runningProcesses: Promise.resolve(null),
       }),
     );
 
@@ -191,12 +193,12 @@ describeOnPosix('startExploreProbes', () => {
 
   test('runs no tool before the processes are read', async () => {
     const tools = await createWorkingTools();
-    const processCommands = Promise.withResolvers<string[] | null>();
+    const runningProcesses = Promise.withResolvers<RunningProcesses | null>();
 
     const probes = startExploreProbes(
       buildProbeStart({
         toolInstallLocations: buildFixtureToolLocations(tools),
-        processCommands: processCommands.promise,
+        runningProcesses: runningProcesses.promise,
       }),
     );
 
@@ -206,7 +208,7 @@ describeOnPosix('startExploreProbes', () => {
       expect(await isPresent(buildMarkerPath({ name: name }))).toBe(false);
     }
 
-    processCommands.resolve([]);
+    runningProcesses.resolve(buildRunningCommandLines([]));
 
     expect((await probes.outcomes.simulatorDevices).kind).toBe('probed');
     expect((await probes.outcomes.dartPubCache).kind).toBe('probed');

@@ -74,7 +74,7 @@ export async function loadPnpmStoreFindings(params: {
       storeRoot: storeRoot,
       pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
       projectPins: params.projectPins,
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
       projectSearchIncompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
     }),
   };

@@ -32,6 +32,7 @@ import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import type { FakeEngine } from './engineFixtures.js';
 import {
   buildBuildRecord,
@@ -243,7 +244,7 @@ describe('buildEngineFindings', () => {
       place: buildFakeUnitPlace({ homeDir: '/Users/example' }),
       usage: parseUsage(buildMixedUsageAnswer()),
       nowMs: NOW_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(
@@ -324,7 +325,7 @@ describe('buildEngineFindings', () => {
           }),
         ),
         nowMs: NOW_MS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual([]);
   });
@@ -339,7 +340,7 @@ describe('buildEngineFindings', () => {
           }),
         ),
         nowMs: NOW_MS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual([]);
   });

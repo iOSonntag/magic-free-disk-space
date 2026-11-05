@@ -13,6 +13,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   BETA_CURRENT_FOLDER_NAME,
   buildObsoleteVscodeUnit,
@@ -54,7 +55,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'unchanged' });
     }
@@ -80,7 +81,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: buildObsoleteVscodeUnit({ home: environment }),
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -101,7 +102,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }
@@ -115,7 +116,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: buildObsoleteVscodeUnit({ home: environment }),
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -130,7 +131,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
 
@@ -141,7 +142,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -154,7 +155,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [VSCODE_HOST_PROCESS],
+        runningProcesses: buildRunningCommandLines([VSCODE_HOST_PROCESS]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
@@ -162,7 +163,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -177,7 +178,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: buildObsoleteVscodeUnit({ home: environment }),
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({
       kind: 'failed',

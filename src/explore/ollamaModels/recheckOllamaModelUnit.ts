@@ -1,4 +1,5 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitOllamaModel } from '../exploreUnit.js';
@@ -13,7 +14,7 @@ export async function recheckOllamaModelUnit(params: {
   unit: ExplorePathUnitOllamaModel;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const state = await loadOllamaModelState({
     pathRules: params.environment.pathRules,
@@ -28,6 +29,6 @@ export async function recheckOllamaModelUnit(params: {
   return compareOllamaModelUnit({
     unit: params.unit,
     state: state.value,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

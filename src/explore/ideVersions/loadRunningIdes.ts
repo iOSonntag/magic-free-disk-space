@@ -1,4 +1,5 @@
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { loadExploreFileText } from '../loadExploreRead.js';
 
 /** Where an app's executable lies inside its bundle; the bundle path ends before it. */
@@ -19,15 +20,11 @@ export type RunningIde = { bundlePath: string; dataDirectoryName: string | null 
  * IDE. Empty while the processes were not read.
  */
 export async function loadRunningIdes(params: {
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   privacyDenialCode: string | null;
 }): Promise<RunningIde[]> {
   const bundlePaths = new Set(
-    (params.processCommands ?? []).flatMap((command) => {
-      const bundlePath = findBundlePath({ command: command });
-
-      return bundlePath === null ? [] : [bundlePath];
-    }),
+    listRunningBundlePaths({ runningProcesses: params.runningProcesses }),
   );
   const runningIdes: RunningIde[] = [];
 
@@ -75,15 +72,34 @@ export function listVersionBundlePaths(params: {
     .map((runningIde) => runningIde.bundlePath);
 }
 
-/** The bundle of the command's executable, an absolute path ending in `.app`; else `null`. */
-function findBundlePath(params: { command: string }): string | null {
-  const index = params.command.indexOf(BUNDLE_EXECUTABLE_PATH_PART);
+/** The app bundles the processes run from, once per process; none while they were not read. */
+function listRunningBundlePaths(params: { runningProcesses: RunningProcesses | null }): string[] {
+  if (params.runningProcesses === null) {
+    return [];
+  }
 
-  if (index === -1 || !params.command.startsWith('/')) {
+  switch (params.runningProcesses.kind) {
+    case 'commandLines':
+      return params.runningProcesses.commandLines.flatMap((commandLine) => {
+        const bundlePath = findBundlePath({ commandLine: commandLine });
+
+        return bundlePath === null ? [] : [bundlePath];
+      });
+    // Windows explores no IDE versions, and the busy rule holds back a unit its processes meet.
+    case 'imagePaths':
+      return [];
+  }
+}
+
+/** The bundle of the command line's executable, an absolute path ending in `.app`; else `null`. */
+function findBundlePath(params: { commandLine: string }): string | null {
+  const index = params.commandLine.indexOf(BUNDLE_EXECUTABLE_PATH_PART);
+
+  if (index === -1 || !params.commandLine.startsWith('/')) {
     return null;
   }
 
-  return params.command.slice(0, index + '.app'.length);
+  return params.commandLine.slice(0, index + '.app'.length);
 }
 
 function parseDataDirectoryName(params: { text: string }): string | null {

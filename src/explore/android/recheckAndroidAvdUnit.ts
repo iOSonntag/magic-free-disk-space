@@ -22,6 +22,6 @@ export async function recheckAndroidAvdUnit(params: {
   return compareAndroidAvdUnit({
     unit: params.unit,
     state: state.value,
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 }

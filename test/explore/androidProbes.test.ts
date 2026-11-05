@@ -18,6 +18,7 @@ import {
 import { buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -156,7 +157,7 @@ describe('recheckExplorePathUnit with the Android path units', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'unchanged' });
     }
@@ -171,7 +172,7 @@ describe('recheckExplorePathUnit with the Android path units', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+          runningProcesses: buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -192,7 +193,7 @@ describe('recheckExplorePathUnit with the Android path units', () => {
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }

@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
+import {
+  joinAbsolutePath,
+  listPathNames,
+  resolveAbsolutePath,
+} from '../../src/path/joinAbsolutePath.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 import { buildTestAbsolutePath, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
 describe('joinAbsolutePath', () => {
@@ -67,5 +71,57 @@ describe('joinAbsolutePath', () => {
         joinAbsolutePath({ rules: WIN32_PATH_RULES, parentPath: parentPath, names: [name] }),
       ).toThrow();
     }
+  });
+});
+
+describe('resolveAbsolutePath', () => {
+  test('resolves a POSIX text below the base, and keeps an absolute one as it is', () => {
+    const basePath = buildTestAbsolutePath({ text: '/Users/example/.vscode/extensions' });
+
+    expect(
+      resolveAbsolutePath({ rules: DARWIN_PATH_RULES, basePath: basePath, text: '../argv.json' }),
+    ).toEqual({
+      kind: 'succeeded',
+      value: buildTestAbsolutePath({ text: '/Users/example/.vscode/argv.json' }),
+    });
+    expect(
+      resolveAbsolutePath({ rules: DARWIN_PATH_RULES, basePath: basePath, text: '/opt/ext' }),
+    ).toEqual({ kind: 'succeeded', value: buildTestAbsolutePath({ text: '/opt/ext' }) });
+  });
+
+  test('resolves a Windows text by the rules of Windows, whatever platform runs', () => {
+    const basePath = buildTestWindowsPath({ text: 'C:\\Users\\tester\\.vscode\\extensions' });
+
+    expect(
+      resolveAbsolutePath({
+        rules: WIN32_PATH_RULES,
+        basePath: basePath,
+        text: 'ms-python.python-2025.1.0/out',
+      }),
+    ).toEqual({
+      kind: 'succeeded',
+      value: buildTestWindowsPath({
+        text: 'C:\\Users\\tester\\.vscode\\extensions\\ms-python.python-2025.1.0\\out',
+      }),
+    });
+    expect(
+      resolveAbsolutePath({ rules: WIN32_PATH_RULES, basePath: basePath, text: 'D:\\ext' }),
+    ).toEqual({ kind: 'succeeded', value: buildTestWindowsPath({ text: 'D:\\ext' }) });
+  });
+});
+
+describe('listPathNames', () => {
+  test('splits a POSIX path at each slash alone, without the empty names', () => {
+    expect(listPathNames({ rules: DARWIN_PATH_RULES, path: '/Users//example/a\\b/' })).toEqual([
+      'Users',
+      'example',
+      'a\\b',
+    ]);
+  });
+
+  test('splits a Windows path at either separator, without the empty names', () => {
+    expect(
+      listPathNames({ rules: WIN32_PATH_RULES, path: 'C:\\Users\\tester/AppData\\\\Local\\' }),
+    ).toEqual(['C:', 'Users', 'tester', 'AppData', 'Local']);
   });
 });

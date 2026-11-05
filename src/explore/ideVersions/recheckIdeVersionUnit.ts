@@ -1,4 +1,5 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitIdeVersionFolder } from '../exploreUnit.js';
@@ -11,7 +12,7 @@ export async function recheckIdeVersionUnit(params: {
   unit: ExplorePathUnitIdeVersionFolder;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const folders = await loadIdeVersionState({
     pathRules: params.environment.pathRules,
@@ -25,7 +26,7 @@ export async function recheckIdeVersionUnit(params: {
   }
 
   const runningIdes = await loadRunningIdes({
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
     privacyDenialCode: params.platform.privacyDenialCode,
   });
 
@@ -33,6 +34,6 @@ export async function recheckIdeVersionUnit(params: {
     unit: params.unit,
     folders: folders.value,
     runningIdes: runningIdes,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

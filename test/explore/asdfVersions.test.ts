@@ -45,6 +45,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
@@ -312,7 +313,7 @@ describe('buildAsdfVersionFindings', () => {
       offers: [oldFolder],
       pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
@@ -339,7 +340,7 @@ describe('buildAsdfVersionFindings', () => {
       offers: [oldFolder],
       pinFiles: [pinFileRef],
       projectPins: buildTestProjectPins({ files: [] }),
-      processCommands: [`${oldFolder.folderPath}/bin/node server.js`],
+      runningProcesses: buildRunningCommandLines([`${oldFolder.folderPath}/bin/node server.js`]),
       projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
@@ -355,7 +356,7 @@ describe('compareAsdfVersionUnit', () => {
         unit: buildOldVersionUnit(),
         state: buildInstalledState({}),
         toolPins: textPins,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -372,7 +373,7 @@ describe('compareAsdfVersionUnit', () => {
         unit: unit,
         state: buildInstalledState({}),
         toolPins: nowPinned,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
     expect(
@@ -380,7 +381,7 @@ describe('compareAsdfVersionUnit', () => {
         unit: unit,
         state: buildInstalledState({ legacyVersionFile: 'on' }),
         toolPins: textPins,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -391,7 +392,7 @@ describe('compareAsdfVersionUnit', () => {
         unit: buildOldVersionUnit(),
         state: buildInstalledState({ folders: [pinnedFolder] }),
         toolPins: textPins,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -402,7 +403,7 @@ describe('compareAsdfVersionUnit', () => {
         unit: buildOldVersionUnit(),
         state: buildInstalledState({}),
         toolPins: textPins,
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -488,7 +489,7 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
 
   async function recheckUnit(params: {
     unit: ExploreToolUnitAsdfVersion;
-    processCommands: string[] | null;
+    commandLines: string[] | null;
   }) {
     return recheckAsdfVersionUnit({
       unit: params.unit,
@@ -497,7 +498,8 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
         environment: environment,
         platform: buildTestProbePlatform(),
         deadlineMs: Date.now() + TIMEOUT_MS,
-        processCommands: params.processCommands,
+        runningProcesses:
+          params.commandLines === null ? null : buildRunningCommandLines(params.commandLines),
       },
     });
   }
@@ -645,7 +647,7 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
   test('the recheck answers unchanged while nothing changed', async () => {
     const unit = await probeOfferedUnit();
 
-    expect(await recheckUnit({ unit: unit, processCommands: [] })).toEqual({ kind: 'unchanged' });
+    expect(await recheckUnit({ unit: unit, commandLines: [] })).toEqual({ kind: 'unchanged' });
   });
 
   test('the recheck answers changed when a pin file now names the version', async () => {
@@ -653,7 +655,7 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
 
     await writePinFile({ text: 'nodejs 20.11.1 18.0.0\n' });
 
-    expect(await recheckUnit({ unit: unit, processCommands: [] })).toEqual({ kind: 'changed' });
+    expect(await recheckUnit({ unit: unit, commandLines: [] })).toEqual({ kind: 'changed' });
   });
 
   test('the recheck answers changed when the folder is gone', async () => {
@@ -661,7 +663,7 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
 
     await rm(unit.installPath, { recursive: true });
 
-    expect(await recheckUnit({ unit: unit, processCommands: [] })).toEqual({ kind: 'changed' });
+    expect(await recheckUnit({ unit: unit, commandLines: [] })).toEqual({ kind: 'changed' });
   });
 
   test('the recheck answers busy while a process runs from the folder', async () => {
@@ -670,7 +672,7 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
     expect(
       await recheckUnit({
         unit: unit,
-        processCommands: [`${unit.installPath}/bin/node server.js`],
+        commandLines: [`${unit.installPath}/bin/node server.js`],
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -682,7 +684,7 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
     await chmod(pinPath, 0o000);
 
     try {
-      expect(await recheckUnit({ unit: unit, processCommands: [] })).toEqual({
+      expect(await recheckUnit({ unit: unit, commandLines: [] })).toEqual({
         kind: 'failed',
         failure: {
           reason: 'fileUnreadable',
