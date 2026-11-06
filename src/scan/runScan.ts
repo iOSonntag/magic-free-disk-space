@@ -34,10 +34,12 @@ import type { CatalogTarget } from './findCatalogTargets.js';
 import { findCatalogTargets } from './findCatalogTargets.js';
 import { findLargeUserFiles } from './findLargeUserFiles.js';
 import { findLastSignOfUse } from './findLastSignOfUse.js';
+import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 import { DAY_MS, SCAN_LIMITS } from './limits.js';
 import { loadExplorePhase } from './loadExplorePhase.js';
 import { loadMeasuredPhase } from './loadMeasuredPhase.js';
+import { buildFoundTargets, loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
   buildAppOwner,
@@ -91,6 +93,8 @@ export type ScanReport = {
 
 type ScanContext = {
   environment: Environment;
+  /** The scan's stale window, which scales each catalog entry's `unchangedDays`. */
+  staleDays: number;
   staleCutoffMs: number;
   unusedCutoffMs: number;
   installedApps: InstalledApp[];
@@ -134,10 +138,18 @@ export async function runScan(params: {
   options: ScanOptions;
   onProgress: (progress: ScanProgress) => void;
 }): Promise<ScanReport> {
+  // Known from the start, so the first `found` already leaves out what a probe reserves.
+  const reservedEntryPaths = params.catalog.entries.flatMap((entry) =>
+    entry.removal.kind === 'explore'
+      ? [getCatalogEntryPath({ environment: params.environment, entry: entry })]
+      : [],
+  );
+
   params.onProgress(
     buildScanProgress({
       step: { message: 'Checking installed apps and running processes…', phase: 'apps' },
       pathRules: params.environment.pathRules,
+      reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [],
     }),
   );
@@ -200,6 +212,7 @@ export async function runScan(params: {
   ]);
   const context: ScanContext = {
     environment: params.environment,
+    staleDays: params.options.staleDays,
     staleCutoffMs: params.environment.nowMs - params.options.staleDays * DAY_MS,
     unusedCutoffMs: unusedCutoffMs,
     installedApps: installed.apps,
@@ -222,6 +235,7 @@ export async function runScan(params: {
     buildScanProgress({
       step: { message: 'Measuring known storage locations…', phase: 'catalog' },
       pathRules: params.environment.pathRules,
+      reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup],
     }),
   );
@@ -234,6 +248,7 @@ export async function runScan(params: {
     buildScanProgress({
       step: { message: 'Searching your projects for old build folders…', phase: 'projects' },
       pathRules: params.environment.pathRules,
+      reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup, catalog],
     }),
   );
@@ -247,6 +262,7 @@ export async function runScan(params: {
         buildScanProgress({
           step: step,
           pathRules: params.environment.pathRules,
+          reservedEntryPaths: reservedEntryPaths,
           finishedPhases: [setup, catalog, artifacts],
         }),
       ),
@@ -256,6 +272,7 @@ export async function runScan(params: {
     buildScanProgress({
       step: { message: 'Looking for large old files…', phase: 'largeFiles' },
       pathRules: params.environment.pathRules,
+      reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup, catalog, artifacts, apps],
     }),
   );
@@ -269,6 +286,7 @@ export async function runScan(params: {
         buildScanProgress({
           step: step,
           pathRules: params.environment.pathRules,
+          reservedEntryPaths: reservedEntryPaths,
           finishedPhases: [setup, catalog, artifacts, apps, userFiles],
         }),
       ),
@@ -278,6 +296,7 @@ export async function runScan(params: {
     buildScanProgress({
       step: { message: 'Asking developer tools what they can clean…', phase: 'tools' },
       pathRules: params.environment.pathRules,
+      reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup, catalog, artifacts, apps, userFiles, orphans],
     }),
   );
@@ -301,6 +320,7 @@ export async function runScan(params: {
 
   return buildScanReportOfPhases({
     pathRules: params.environment.pathRules,
+    reservedEntryPaths: reservedEntryPaths,
     // Explore comes last, so an item an earlier source found wins the overlap.
     phases: [
       setup,
@@ -362,11 +382,13 @@ function loadOrphanPhaseOfAppSection(params: {
 function buildScanProgress(params: {
   step: ScanProgressStep;
   pathRules: PathRules;
+  reservedEntryPaths: string[];
   finishedPhases: ScanPhase[];
 }): ScanProgress {
   const decisions = dedupeCandidates({
     pathRules: params.pathRules,
     decisions: mergeScanPhases({ phases: params.finishedPhases }).decisions,
+    reservedEntryPaths: params.reservedEntryPaths,
   });
 
   return {
@@ -384,11 +406,13 @@ function buildScanProgress(params: {
 }
 
 /**
- * Dedupes the decisions of the phases, in their order, then adds the advice of the Explore entries
- * whose probe judged only part of their units, and builds the report.
+ * Dedupes the decisions of the phases, in their order, with the paths of the Explore entries
+ * reserved for their probes, then adds the advice of the Explore entries whose probe judged only
+ * part of their units, and builds the report.
  */
 export function buildScanReportOfPhases(params: {
   pathRules: PathRules;
+  reservedEntryPaths: string[];
   phases: ScanPhase[];
   incompleteExploreAdvice: ScanPhase;
 }): ScanReport {
@@ -396,7 +420,11 @@ export function buildScanReportOfPhases(params: {
 
   return buildScanReport({
     decisions: [
-      ...dedupeCandidates({ pathRules: params.pathRules, decisions: scan.decisions }),
+      ...dedupeCandidates({
+        pathRules: params.pathRules,
+        decisions: scan.decisions,
+        reservedEntryPaths: params.reservedEntryPaths,
+      }),
       // Added after the dedupe, so this advice holds back no offer of its own entry, whose units
       // lie inside its path. Moved before it, the advice would skip every finding of its probe.
       ...params.incompleteExploreAdvice.decisions,
@@ -440,18 +468,22 @@ async function loadCatalogTargetPhase(params: {
     return { decisions: [{ kind: 'skip', path: path, reason: 'systemOwned' }], issues: [] };
   }
 
-  return loadMeasuredPhase({
-    path: path,
+  return loadMeasuredTargetsPhase({
+    found: buildFoundTargets(params.target.targetPaths),
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const activity =
-        entry.ageRule === 'staleDays'
+        entry.ageRule.kind === 'unchangedDays'
           ? await loadTreeActivity({
               path: path,
-              cutoffMs: params.context.staleCutoffMs,
+              cutoffMs: getUnchangedCutoffMs({
+                nowMs: params.context.environment.nowMs,
+                days: entry.ageRule.days,
+                staleDays: params.context.staleDays,
+              }),
               excludedNames: [],
               maxEntries: SCAN_LIMITS.probeMaxEntries,
               deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
@@ -482,6 +514,14 @@ async function loadCatalogTargetPhase(params: {
       });
     },
   });
+}
+
+/**
+ * The cutoff of an `unchangedDays` entry: its `days` under the default stale window, scaled by the
+ * scan's own, so an entry of the default window keeps exactly the scan's stale cutoff.
+ */
+function getUnchangedCutoffMs(params: { nowMs: number; days: number; staleDays: number }): number {
+  return params.nowMs - (params.days * params.staleDays * DAY_MS) / SCAN_LIMITS.defaultStaleDays;
 }
 
 async function loadArtifactPhase(params: {

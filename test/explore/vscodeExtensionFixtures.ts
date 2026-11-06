@@ -184,8 +184,10 @@ export function buildTestVscodeExtensionCandidate(params: { homeDir: string }): 
     isComplete: true,
     ...TEST_LISTING_FACTS_NONE,
     removal: {
-      kind: 'deleteUnitFolder',
-      identity: buildTestIdentity({ realPath: unit.folderPath }),
+      kind: 'deleteUnitPaths',
+      targets: [
+        { path: unit.folderPath, identity: buildTestIdentity({ realPath: unit.folderPath }) },
+      ],
       unit: unit,
     },
     evidenceLines: [

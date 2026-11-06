@@ -42,7 +42,11 @@ export function decideUserFileCandidate(params: {
       lastUsedAtMs: params.finding.modifiedMs,
       downloadedAtMs: null,
       appName: null,
-      removal: { kind: 'deletePath', identity: params.finding.identity, ownerBundlePaths: [] },
+      removal: {
+        kind: 'deletePaths',
+        targets: [{ path: path, identity: params.finding.identity }],
+        ownerBundlePaths: [],
+      },
     },
   };
 }

@@ -23,6 +23,11 @@ const TOOL_ENVIRONMENT_ENTRIES: Record<ToolName, Record<string, string>> = {
   brewIntel: HOMEBREW_ENVIRONMENT_ENTRIES,
   avdmanager: {},
   asdf: {},
+  brctl: {},
+  vagrant: { VAGRANT_CHECKPOINT_DISABLE: '1' },
+  rustup: { RUSTUP_AUTO_INSTALL: '0' },
+  conda: { CONDA_OFFLINE: 'true' },
+  fvm: {},
 };
 
 /**

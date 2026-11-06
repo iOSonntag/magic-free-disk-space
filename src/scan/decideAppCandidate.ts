@@ -66,8 +66,8 @@ export function decideAppCandidate(params: {
       downloadedAtMs: null,
       appName: params.app.displayName,
       removal: {
-        kind: 'deletePath',
-        identity: params.measurement.identity,
+        kind: 'deletePaths',
+        targets: [{ path: path, identity: params.measurement.identity }],
         ownerBundlePaths: [path],
       },
     },

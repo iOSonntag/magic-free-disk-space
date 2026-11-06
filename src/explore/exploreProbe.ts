@@ -10,6 +10,7 @@ import type {
   ExploreFileUnreadable,
   ExploreProbeFailure,
   ExploreProbeFindings,
+  ExploreProbePlaceMissing,
 } from './exploreUnit.js';
 import type { ProjectPins } from './projectPins/projectPins.js';
 
@@ -57,8 +58,14 @@ export type ExploreProbeTool = {
   loadFindings: (run: ExploreProbeToolRun) => Promise<ExploreProbeToolResult>;
 };
 
-/** The answer of a tool probe, which may fail by its command, its output, or a file. */
-export type ExploreProbeToolResult = Result<ExploreProbeFindings, ExploreProbeFailure>;
+/**
+ * The answer of a tool probe, which may fail by its command, its output, or a file, or find no
+ * place to probe.
+ */
+export type ExploreProbeToolResult = Result<
+  ExploreProbeFindings,
+  ExploreProbeFailure | ExploreProbePlaceMissing
+>;
 
 /** A probe that only reads files, so it runs no command and has no tool failure. */
 export type ExploreProbeFiles = {
@@ -66,8 +73,11 @@ export type ExploreProbeFiles = {
   loadFindings: (run: ExploreProbeRun) => Promise<ExploreProbeFilesResult>;
 };
 
-/** The answer of a files probe, which may fail only by a file it could not read. */
-export type ExploreProbeFilesResult = Result<ExploreProbeFindings, ExploreFileUnreadable>;
+/** The answer of a files probe, which may fail only by a file it could not read, or find no place. */
+export type ExploreProbeFilesResult = Result<
+  ExploreProbeFindings,
+  ExploreFileUnreadable | ExploreProbePlaceMissing
+>;
 
 /**
  * A probe judged also by the pins of the projects: it is built from them once the project walk
@@ -78,7 +88,60 @@ export type ExploreProbePinned = {
   buildProbe: (params: { projectPins: ProjectPins }) => ExploreProbeTool | ExploreProbeFiles;
 };
 
-export type ExploreProbe = ExploreProbeTool | ExploreProbeFiles | ExploreProbePinned;
+/** The requests an engine probe sends, by the path of the engine's API. */
+export type EngineEndpoint = '/_ping' | '/version' | '/system/df';
+
+export type ExploreEngineAnswerFailureRequestFailed = {
+  kind: 'requestFailed';
+  endpoint: EngineEndpoint;
+  /** The HTTP status of an answer that was not a success; `null` when none came. */
+  status: number | null;
+  /** The error code of a request that got no answer; `null` when one came. */
+  code: string | null;
+};
+
+export type ExploreEngineAnswerFailureBadAnswer = { kind: 'badAnswer'; endpoint: EngineEndpoint };
+
+/** The engine answered, but not as asked: the only failures that raise an issue. */
+export type ExploreEngineAnswerFailure =
+  | ExploreEngineAnswerFailureRequestFailed
+  | ExploreEngineAnswerFailureBadAnswer;
+
+/** No socket exists, or the first that exists refused the connect, as a stale one does. */
+export type ExploreEngineFailureSocketMissing = { kind: 'socketMissing' };
+
+/** The first socket that exists is not a socket, or not the user's, so nothing was sent. */
+export type ExploreEngineFailureSocketUntrusted = {
+  kind: 'socketUntrusted';
+  detail: 'notSocket' | 'notOwnedByUser';
+};
+
+/** The engine behind the probed `socketPath` answered, but not as asked. */
+export type ExploreEngineFailureAnswered = {
+  kind: 'answerFailed';
+  socketPath: AbsolutePath;
+  failure: ExploreEngineAnswerFailure;
+};
+
+/** Why an engine probe found nothing; only an answer failure raises an issue. */
+export type ExploreEngineFailure =
+  | ExploreEngineFailureSocketMissing
+  | ExploreEngineFailureSocketUntrusted
+  | ExploreEngineFailureAnswered;
+
+export type ExploreProbeEngineResult = Result<ExploreProbeFindings, ExploreEngineFailure>;
+
+/** A probe that asks a running container engine over its own socket; it runs no command. */
+export type ExploreProbeEngine = {
+  kind: 'engine';
+  loadFindings: (run: ExploreProbeRun) => Promise<ExploreProbeEngineResult>;
+};
+
+export type ExploreProbe =
+  | ExploreProbeTool
+  | ExploreProbeFiles
+  | ExploreProbePinned
+  | ExploreProbeEngine;
 
 /** What the commands of a located tool need: its environment, and the time they must end by. */
 export type ExploreToolCommandRun = {

@@ -2,7 +2,7 @@ import type { RefusedRemoval, RemovalPlan } from '../delete/planRemoval.js';
 import type { RefusalReason } from '../delete/validateRemoval.js';
 import type { Candidate } from '../scan/candidate.js';
 import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
-import { formatCandidateCommandText } from './formatCandidateCommandText.js';
+import { formatToolCommandText } from './formatCandidateCommandText.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
 
@@ -36,18 +36,32 @@ function formatApprovedLines(params: { approved: Candidate[] }): string[] {
   ];
 }
 
-/** A tool item names the command that removes it below its path. */
+/** An item that goes other than as a plain delete says how below its path. */
 function formatApprovedItemLines(params: { candidate: Candidate }): string[] {
-  const lines = [
+  return [
     `- ${formatSizeText(params.candidate)} ${formatDisplayText({ text: params.candidate.path })}`,
+    ...formatRemovalWayLines({ candidate: params.candidate }),
   ];
-  const commandText = formatCandidateCommandText({ candidate: params.candidate });
+}
 
-  if (commandText !== null) {
-    lines.push(`   by running: ${commandText}`);
+/**
+ * A tool item names its command; an engine item its engine, whose disk image gives the space back
+ * only later; an evict item that iCloud Drive keeps its files.
+ */
+function formatRemovalWayLines(params: { candidate: Candidate }): string[] {
+  switch (params.candidate.removal.kind) {
+    case 'deletePaths':
+    case 'deleteUnitPaths':
+      return [];
+    case 'runTool':
+      return [`   by running: ${formatToolCommandText({ unit: params.candidate.removal.unit })}`];
+    case 'callEngine':
+      return [
+        `   by ${formatDisplayText({ text: params.candidate.removal.unit.engineName })}, whose disk image gives the space back later`,
+      ];
+    case 'evictUnitFiles':
+      return ['   evicted from this Mac; iCloud Drive keeps the files'];
   }
-
-  return lines;
 }
 
 function formatRefusedBlock(params: { refused: RefusedRemoval[] }): string[] {

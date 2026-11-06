@@ -1,4 +1,4 @@
-import type { Risk } from '../catalog/catalog.js';
+import type { EngineProbeId, Risk } from '../catalog/catalog.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { ReadFailure } from '../system/readFailure.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
@@ -6,13 +6,25 @@ import type { ToolCommandFailure } from '../tools/runToolCommand.js';
 import { buildToolArguments } from '../tools/runToolCommand.js';
 import type { AndroidAvdName } from './android/parseAndroidAvdName.js';
 import type { AsdfToolName, AsdfToolVersion } from './asdfVersions/parseAsdfInstallNames.js';
+import type {
+  EngineBuildRecordId,
+  EngineContainerId,
+  EngineImageId,
+  EngineVolumeName,
+} from './engines/engineObjectIds.js';
 import type { HomebrewFormulaName } from './homebrew/parseHomebrewFormulaName.js';
 import type { MiseToolName, MiseToolVersion } from './miseVersions/parseMisePrunableVersions.js';
 import type { NvmNodeVersion } from './nvmVersions/parseNvmNodeVersion.js';
 import type { PnpmStoreVersion } from './pnpmStores/parsePnpmStoreVersion.js';
 import type { ProjectPinFileRef } from './projectPins/projectPins.js';
+import type { RustupToolchainName } from './rustupToolchains/rustupToolchainName.js';
 import type { SimulatorDeviceUdid } from './simulatorDevices/parseSimulatorDeviceList.js';
 import type { SimulatorRuntimeId } from './simulatorRuntimes/parseSimulatorRuntimeId.js';
+import type {
+  VagrantBoxName,
+  VagrantBoxProvider,
+  VagrantBoxVersion,
+} from './vagrantBoxes/vagrantBoxNames.js';
 
 export type ExploreToolUnitSimulatorDevice = {
   kind: 'simulatorDevice';
@@ -95,6 +107,43 @@ export type ExploreToolUnitAsdfVersion = {
   pinFiles: ProjectPinFileRef[];
 };
 
+/** A version of a Vagrant box that a newer version of the same name and provider outdates. */
+export type ExploreToolUnitVagrantBoxVersion = {
+  kind: 'vagrantBoxVersion';
+  tool: LocatedTool;
+  name: VagrantBoxName;
+  provider: VagrantBoxProvider;
+  version: VagrantBoxVersion;
+  /** The version's folder, which the unit measures. */
+  versionPath: AbsolutePath;
+};
+
+/**
+ * An installed toolchain that is not the default and that no `rust-toolchain(.toml)` found pins.
+ * `pinFiles` are the pin files the scan read, which the recheck reads again.
+ */
+export type ExploreToolUnitRustupToolchain = {
+  kind: 'rustupToolchain';
+  tool: LocatedTool;
+  name: RustupToolchainName;
+  toolchainPath: AbsolutePath;
+  pinFiles: ProjectPinFileRef[];
+};
+
+/** The package tarballs that `conda clean --tarballs` would remove. */
+export type ExploreToolUnitCondaTarballs = {
+  kind: 'condaTarballs';
+  tool: LocatedTool;
+  tarballPaths: AbsolutePath[];
+};
+
+/** The unused package folders that `conda clean --packages` would remove. */
+export type ExploreToolUnitCondaPackages = {
+  kind: 'condaPackages';
+  tool: LocatedTool;
+  packagePaths: AbsolutePath[];
+};
+
 /** An item a developer tool owns and removes with its own command. */
 export type ExploreToolUnit =
   | ExploreToolUnitSimulatorDevice
@@ -103,7 +152,23 @@ export type ExploreToolUnit =
   | ExploreToolUnitSimulatorRuntime
   | ExploreToolUnitAndroidAvd
   | ExploreToolUnitHomebrew
-  | ExploreToolUnitAsdfVersion;
+  | ExploreToolUnitAsdfVersion
+  | ExploreToolUnitVagrantBoxVersion
+  | ExploreToolUnitRustupToolchain
+  | ExploreToolUnitCondaTarballs
+  | ExploreToolUnitCondaPackages;
+
+/**
+ * The paths a probe found to go, never empty. The scan makes the removal's targets from them once,
+ * each with its identity; after that, only the targets are read.
+ */
+export type ExploreFoundPaths = [AbsolutePath, ...AbsolutePath[]];
+
+/** A file a probe found to go, with the modification time its recheck compares. */
+export type ExploreFoundFile = { path: AbsolutePath; modifiedMs: number };
+
+/** The files a probe found to go, never empty; the scan makes the removal's targets from them. */
+export type ExploreFoundFiles = [ExploreFoundFile, ...ExploreFoundFile[]];
 
 /** A system image folder of the SDK that no AVD names. */
 export type ExplorePathUnitAndroidSystemImage = {
@@ -171,18 +236,188 @@ export type ExplorePathUnitPnpmStore = {
   pinFiles: ProjectPinFileRef[];
 };
 
+/** The installers in Downloads unchanged since `cutoffMs`. */
+export type ExplorePathUnitDownloadsInstallers = {
+  kind: 'downloadsInstallers';
+  folderPath: AbsolutePath;
+  cutoffMs: number;
+  foundFiles: ExploreFoundFiles;
+};
+
+/** The partial downloads in Downloads unchanged since `cutoffMs`. */
+export type ExplorePathUnitDownloadsIncomplete = {
+  kind: 'downloadsIncomplete';
+  folderPath: AbsolutePath;
+  cutoffMs: number;
+  foundFiles: ExploreFoundFiles;
+};
+
+/** The attachment copies of Mail that nobody changed since Mail saved them, older than `cutoffMs`. */
+export type ExplorePathUnitMailDownloads = {
+  kind: 'mailDownloads';
+  folderPath: AbsolutePath;
+  cutoffMs: number;
+  foundFiles: ExploreFoundFiles;
+};
+
+/** An Ollama model: its manifest and the blobs no other manifest names. */
+export type ExplorePathUnitOllamaModel = {
+  kind: 'ollamaModel';
+  modelName: string;
+  manifestPath: AbsolutePath;
+  foundPaths: ExploreFoundPaths;
+};
+
+/** What a Hugging Face repository holds for its current revisions. */
+export type ExplorePathUnitHuggingFaceRepository = {
+  kind: 'huggingFaceRepository';
+  repoPath: AbsolutePath;
+  foundPaths: ExploreFoundPaths;
+};
+
+/** The snapshots of a Hugging Face repository that no ref names, with the blobs only they link. */
+export type ExplorePathUnitHuggingFaceDetachedRevisions = {
+  kind: 'huggingFaceDetachedRevisions';
+  repoPath: AbsolutePath;
+  revisions: string[];
+  foundPaths: ExploreFoundPaths;
+};
+
+/** The unfinished blobs of a Hugging Face repository. */
+export type ExplorePathUnitHuggingFacePartialDownloads = {
+  kind: 'huggingFacePartialDownloads';
+  repoPath: AbsolutePath;
+  foundPaths: ExploreFoundPaths;
+};
+
+/** The transcripts of one Claude Code project older than `cutoffMs`. */
+export type ExplorePathUnitClaudeTranscripts = {
+  kind: 'claudeTranscripts';
+  projectFolderPath: AbsolutePath;
+  cutoffMs: number;
+  foundPaths: ExploreFoundPaths;
+};
+
+/** A Claude Code version that is neither the newest nor the one `~/.local/bin/claude` runs. */
+export type ExplorePathUnitClaudeCodeVersion = {
+  kind: 'claudeCodeVersion';
+  folderPath: AbsolutePath;
+  version: string;
+};
+
+/** Which folder of an IDE version a unit takes; `plugins` lies inside the version's settings. */
+export type IdeVersionFolderKind = 'caches' | 'logs' | 'plugins' | 'settings';
+
+/** A folder of an IDE version that a newer version of the same product outdates. */
+export type ExplorePathUnitIdeVersionFolder = {
+  kind: 'ideVersionFolder';
+  product: string;
+  version: string;
+  folderKind: IdeVersionFolderKind;
+  /** The version's folder of its kind, or its settings folder for `plugins`. */
+  folderPath: AbsolutePath;
+  foundPaths: ExploreFoundPaths;
+};
+
 /**
- * An item whose tool has no command for it, so the app deletes its one folder. `folderPath` is the
- * one home of that folder: the candidate's path and the deletion both take it from there.
+ * An FVM Flutter version that is not the global one and that no `.fvmrc` found pins. `pinFiles`
+ * are the pin files the scan read, which the recheck reads again.
+ */
+export type ExplorePathUnitFvmVersion = {
+  kind: 'fvmVersion';
+  version: string;
+  folderPath: AbsolutePath;
+  pinFiles: ProjectPinFileRef[];
+};
+
+/**
+ * An item whose tool has no command for it, so the app deletes its paths. The unit keeps what its
+ * recheck and its activity rule judge; what goes is the removal's targets, made from
+ * `listUnitPaths` once at the scan.
  */
 export type ExplorePathUnit =
   | ExplorePathUnitAndroidPackage
   | ExplorePathUnitVscodeExtension
   | ExplorePathUnitNvmVersion
   | ExplorePathUnitAndroidPlatform
-  | ExplorePathUnitPnpmStore;
+  | ExplorePathUnitPnpmStore
+  | ExplorePathUnitDownloadsInstallers
+  | ExplorePathUnitDownloadsIncomplete
+  | ExplorePathUnitMailDownloads
+  | ExplorePathUnitOllamaModel
+  | ExplorePathUnitHuggingFaceRepository
+  | ExplorePathUnitHuggingFaceDetachedRevisions
+  | ExplorePathUnitHuggingFacePartialDownloads
+  | ExplorePathUnitClaudeTranscripts
+  | ExplorePathUnitClaudeCodeVersion
+  | ExplorePathUnitIdeVersionFolder
+  | ExplorePathUnitFvmVersion;
 
-export type ExploreUnit = ExploreToolUnit | ExplorePathUnit;
+/** A downloaded iCloud file a probe found to evict, with the times its recheck compares. */
+export type ExploreFoundEvictFile = { path: AbsolutePath; modifiedMs: number; accessedMs: number };
+
+/**
+ * The files of an iCloud Drive folder downloaded and untouched since `cutoffMs`, never empty, which
+ * an evict frees while iCloud keeps them.
+ */
+export type ExploreEvictUnitIcloudFolder = {
+  kind: 'icloudFolder';
+  folderPath: AbsolutePath;
+  cutoffMs: number;
+  foundFiles: [ExploreFoundEvictFile, ...ExploreFoundEvictFile[]];
+};
+
+/** An item whose local copies the system evicts, file by file. */
+export type ExploreEvictUnit = ExploreEvictUnitIcloudFolder;
+
+/**
+ * Where an engine unit lives: the socket its probe trusted, which every recheck and call goes to
+ * alone, the disk image it takes space in, and the size the engine reports for it.
+ */
+export type ExploreEngineUnitPlace = {
+  engineProbeId: EngineProbeId;
+  engineName: string;
+  socketPath: AbsolutePath;
+  diskImagePath: AbsolutePath;
+  sizeBytes: number;
+};
+
+/** The build cache records of one engine that no build used lately and none uses now. */
+export type ExploreEngineUnitBuildCache = ExploreEngineUnitPlace & {
+  kind: 'engineBuildCache';
+  recordIds: EngineBuildRecordId[];
+};
+
+/** The untagged images of one engine that no container uses. */
+export type ExploreEngineUnitDanglingImages = ExploreEngineUnitPlace & {
+  kind: 'engineDanglingImages';
+  imageIds: EngineImageId[];
+};
+
+export type ExploreEngineUnitImage = ExploreEngineUnitPlace & {
+  kind: 'engineImage';
+  imageId: EngineImageId;
+};
+
+export type ExploreEngineUnitContainer = ExploreEngineUnitPlace & {
+  kind: 'engineContainer';
+  containerId: EngineContainerId;
+};
+
+export type ExploreEngineUnitVolume = ExploreEngineUnitPlace & {
+  kind: 'engineVolume';
+  volumeName: EngineVolumeName;
+};
+
+/** An item a container engine owns and removes through its API; it has no host path. */
+export type ExploreEngineUnit =
+  | ExploreEngineUnitBuildCache
+  | ExploreEngineUnitDanglingImages
+  | ExploreEngineUnitImage
+  | ExploreEngineUnitContainer
+  | ExploreEngineUnitVolume;
+
+export type ExploreUnit = ExploreToolUnit | ExplorePathUnit | ExploreEvictUnit | ExploreEngineUnit;
 
 /** Whether the unit's tool or app works on it now; `unknown` when the processes could not be read. */
 export type UnitActivity = 'idle' | 'busy' | 'unknown';
@@ -223,6 +458,12 @@ export type ExploreFileUnreadable = {
 /** The failure of a tool probe or a tool recheck, which may also read files. */
 export type ExploreProbeFailure = ExploreToolFailure | ExploreFileUnreadable;
 
+/**
+ * The platform has no place for the probe, such as no iCloud Drive, so it cannot run; the scan
+ * treats it as a missing tool, and the entry's advice stands quietly.
+ */
+export type ExploreProbePlaceMissing = { reason: 'placeMissing' };
+
 /** The paths the unit's removal takes away, measured before and after it; disjoint from catalog items. */
 export function listUnitPaths(unit: ExploreUnit): AbsolutePath[] {
   switch (unit.kind) {
@@ -242,13 +483,57 @@ export function listUnitPaths(unit: ExploreUnit): AbsolutePath[] {
       return unit.rackPaths;
     case 'asdfVersion':
       return [unit.installPath];
+    case 'vagrantBoxVersion':
+      return [unit.versionPath];
+    case 'rustupToolchain':
+      return [unit.toolchainPath];
+    case 'condaTarballs':
+      return unit.tarballPaths;
+    case 'condaPackages':
+      return unit.packagePaths;
     case 'androidSystemImage':
     case 'androidEmulator':
     case 'vscodeExtension':
     case 'nvmVersion':
     case 'androidPlatform':
     case 'pnpmStore':
+    case 'claudeCodeVersion':
+    case 'fvmVersion':
       return [unit.folderPath];
+    case 'downloadsInstallers':
+    case 'downloadsIncomplete':
+    case 'mailDownloads':
+    case 'icloudFolder':
+      return unit.foundFiles.map((file) => file.path);
+    case 'ollamaModel':
+    case 'huggingFaceRepository':
+    case 'huggingFaceDetachedRevisions':
+    case 'huggingFacePartialDownloads':
+    case 'claudeTranscripts':
+    case 'ideVersionFolder':
+      return unit.foundPaths;
+    case 'engineBuildCache':
+    case 'engineDanglingImages':
+    case 'engineImage':
+    case 'engineContainer':
+    case 'engineVolume':
+      return [];
+  }
+}
+
+/** The ids of what an engine unit removes, as its API names them. */
+export function listEngineUnitIds(unit: ExploreEngineUnit): string[] {
+  switch (unit.kind) {
+    case 'engineBuildCache':
+      return unit.recordIds;
+    case 'engineDanglingImages':
+      return unit.imageIds;
+    case 'engineImage':
+      return [unit.imageId];
+    case 'engineContainer':
+      return [unit.containerId];
+    case 'engineVolume':
+      return [unit.volumeName];
   }
 }
 
@@ -271,6 +556,22 @@ export function buildUnitCommand(unit: ExploreToolUnit): string[] {
       return ['autoremove'];
     case 'asdfVersion':
       return ['uninstall', unit.asdfToolName, unit.version];
+    case 'vagrantBoxVersion':
+      return [
+        'box',
+        'remove',
+        unit.name,
+        '--provider',
+        unit.provider,
+        '--box-version',
+        unit.version,
+      ];
+    case 'rustupToolchain':
+      return ['toolchain', 'uninstall', unit.name];
+    case 'condaTarballs':
+      return ['clean', '--tarballs', '--yes'];
+    case 'condaPackages':
+      return ['clean', '--packages', '--yes'];
   }
 }
 

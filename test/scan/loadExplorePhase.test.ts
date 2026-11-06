@@ -57,8 +57,8 @@ function buildExploreEntry(params: { id: string; probe: ExploreProbeId }): Catal
     risk: 'review',
     root: 'home',
     path: params.id,
-    scope: 'self',
-    ageRule: 'none',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
     owner: null,
     removal: { kind: 'explore', probe: params.probe, advice: `Advice of ${params.id}.` },
   };
@@ -96,6 +96,21 @@ function buildProbes(
     androidPlatforms: Promise.resolve(outcomes.androidPlatforms ?? toolMissing),
     pnpmStores: Promise.resolve(outcomes.pnpmStores ?? toolMissing),
     pnpmStoresXdg: Promise.resolve(outcomes.pnpmStoresXdg ?? toolMissing),
+    dockerDesktopEngine: Promise.resolve(outcomes.dockerDesktopEngine ?? toolMissing),
+    orbStackEngine: Promise.resolve(outcomes.orbStackEngine ?? toolMissing),
+    colimaEngine: Promise.resolve(outcomes.colimaEngine ?? toolMissing),
+    vagrantBoxes: Promise.resolve(outcomes.vagrantBoxes ?? toolMissing),
+    icloudDownloads: Promise.resolve(outcomes.icloudDownloads ?? toolMissing),
+    downloadsInstallers: Promise.resolve(outcomes.downloadsInstallers ?? toolMissing),
+    mailDownloads: Promise.resolve(outcomes.mailDownloads ?? toolMissing),
+    ollamaModels: Promise.resolve(outcomes.ollamaModels ?? toolMissing),
+    huggingFaceRepos: Promise.resolve(outcomes.huggingFaceRepos ?? toolMissing),
+    claudeTranscripts: Promise.resolve(outcomes.claudeTranscripts ?? toolMissing),
+    claudeCodeVersions: Promise.resolve(outcomes.claudeCodeVersions ?? toolMissing),
+    ideVersions: Promise.resolve(outcomes.ideVersions ?? toolMissing),
+    rustupToolchains: Promise.resolve(outcomes.rustupToolchains ?? toolMissing),
+    condaPackages: Promise.resolve(outcomes.condaPackages ?? toolMissing),
+    fvmVersions: Promise.resolve(outcomes.fvmVersions ?? toolMissing),
   };
 }
 
@@ -137,7 +152,7 @@ async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
   });
 
   if (findings.kind === 'failed') {
-    throw new Error(`The VS Code probe failed at ${findings.failure.path}.`);
+    throw new Error(`The VS Code probe failed: ${findings.failure.reason}.`);
   }
 
   return { kind: 'probed', findings: findings.value.findings, isComplete: true };
@@ -382,7 +397,11 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
         lastUsedAtMs: null,
         downloadedAtMs: null,
         appName: null,
-        removal: { kind: 'deleteUnitFolder', identity: identity.value, unit: unit },
+        removal: {
+          kind: 'deleteUnitPaths',
+          targets: [{ path: unit.folderPath, identity: identity.value }],
+          unit: unit,
+        },
         evidenceLines: [
           "Neither VS Code's default registry nor any profile's lists this folder.",
           "VS Code's .obsolete file marks it for removal.",
@@ -471,6 +490,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
     const mountedFinding: ExploreFinding = {
       ...finding,
       unit: { ...finding.unit, folderPath: buildTestAbsolutePath({ text: '/dev' }) },
+      displayPath: '/dev',
       activity: 'idle',
     };
     const phase = await loadVscodePhase({
@@ -507,5 +527,40 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
         failure: { reason: 'outputUnreadable', detail: 'no JSON' },
       },
     ]);
+  });
+
+  test('raises an engine that did not answer as asked at its socket and falls back to the advice', async () => {
+    const engineEntry = buildExploreEntry({ id: 'docker', probe: 'dockerDesktopEngine' });
+    const socketPath = buildTestAbsolutePath({
+      text: join(environment.homeDir, '.docker/run/docker.sock'),
+    });
+    const phase = await loadExplorePhase({
+      environment: environment,
+      probes: buildProbes({
+        dockerDesktopEngine: {
+          kind: 'engineFailed',
+          socketPath: socketPath,
+          failure: { kind: 'badAnswer', endpoint: '/system/df' },
+        },
+      }),
+      catalogEntries: [engineEntry],
+      measureTimeoutMs: MEASURE_TIMEOUT_MS,
+      runItemMeasurement: runItemMeasurement,
+      entryReads: darwinPlatform.system.entryReads,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    });
+
+    expect(phase).toEqual({
+      decisions: [],
+      issues: [
+        {
+          path: socketPath,
+          reason: 'engineFailed',
+          failure: { kind: 'badAnswer', endpoint: '/system/df' },
+        },
+      ],
+      fallbackEntries: [engineEntry],
+      incompleteEntries: [],
+    });
   });
 });

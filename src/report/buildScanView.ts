@@ -1,9 +1,10 @@
-import type { Risk } from '../catalog/catalog.js';
+import type { AdviceOpener, Risk } from '../catalog/catalog.js';
 import { isRemovableRisk } from '../delete/validateRemoval.js';
+import type { ExploreEngineAnswerFailure } from '../explore/exploreProbe.js';
 import { formatHomeRelativePath } from '../path/formatHomeRelativePath.js';
 import type { SectionTotal } from '../scan/buildSectionTotals.js';
 import { buildSectionTotals } from '../scan/buildSectionTotals.js';
-import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
+import type { Advice, Candidate, CandidateRemoval, SkipReason } from '../scan/candidate.js';
 import { isProbedCandidate } from '../scan/candidate.js';
 import type { CandidateOrigin, ItemKey, LeftoverMatch } from '../scan/candidateOrigin.js';
 import { buildItemKey } from '../scan/candidateOrigin.js';
@@ -94,8 +95,11 @@ type ItemOriginView =
   | 'leftover'
   | 'explore';
 
-/** How an offered item goes: deleted as its path or its unit's folder, or by its tool's command. */
-type ItemRemovalView = 'delete' | 'tool';
+/**
+ * How an offered item goes: deleted as its paths, by its tool's command, over its engine's API,
+ * or evicted from the Mac while iCloud keeps it.
+ */
+type ItemRemovalView = 'delete' | 'tool' | 'engine' | 'evict';
 
 /** A selectable item; `number` is what the selection names, `key` what a client keeps it by. */
 export type ItemView = {
@@ -116,8 +120,11 @@ export type ItemView = {
   isComplete: boolean;
   /** The path with `~` for the home folder, safe to show. */
   displayPath: string;
-  /** The path as it is, for the client to reveal in Finder; never shown. */
-  revealPath: string;
+  /**
+   * The path as it is, for the client to reveal in Finder; never shown. `null` for an engine's
+   * item, which lives inside the engine's disk image and has no path of its own.
+   */
+  revealPath: string | null;
   /** ISO 8601; `null` when the scan judged no use. */
   lastUsedAt: string | null;
   /** ISO 8601; `null` when unknown. */
@@ -141,8 +148,8 @@ export type AdviceItemView = {
   allocatedBytes: number;
   displayPath: string;
   revealPath: string;
-  /** The app that removes it; `null` until the scan names one. */
-  opener: null;
+  /** Where the person handles it, the app that owns its data or a pane of settings; else `null`. */
+  opener: AdviceOpener | null;
 };
 
 export type ItemDetailLineKind =
@@ -202,6 +209,14 @@ const originViews: Record<CandidateOrigin['kind'], ItemOriginView> = {
   explore: 'explore',
 };
 
+const removalViews: Record<CandidateRemoval['kind'], ItemRemovalView> = {
+  deletePaths: 'delete',
+  deleteUnitPaths: 'delete',
+  runTool: 'tool',
+  callEngine: 'engine',
+  evictUnitFiles: 'evict',
+};
+
 const riskTexts: Record<Risk, string> = {
   safe: 'safe',
   review: 'review',
@@ -231,6 +246,7 @@ function buildSkipReasonTexts(params: { texts: ReportTexts }): Record<SkipReason
     installedAppsUnknown: 'could not read every installed app',
     holdsOtherVolume: 'holds another mounted disk',
     overlapsEarlierCandidate: 'already covered by another item',
+    heldByProbe: 'left to its Explore item',
   };
 }
 
@@ -245,6 +261,7 @@ function buildIssueReasonTexts(params: {
     walkStopped: 'search stopped at its time limit',
     toolFailed: 'the tool failed',
     toolUntrusted: 'the tool is not trusted, never run',
+    engineFailed: 'the container engine did not answer as asked',
   };
 }
 
@@ -263,6 +280,7 @@ const issueNoticeKinds: Record<ScanIssue['reason'], 'place' | 'tool'> = {
   walkStopped: 'place',
   toolFailed: 'tool',
   toolUntrusted: 'tool',
+  engineFailed: 'tool',
 };
 
 const fullDiskAccessHolderTexts: Record<FullDiskAccessHolder, string> = {
@@ -509,11 +527,11 @@ function buildItemView(params: {
     sectionKey: params.place.section,
     group: params.place.group,
     origin: formatItemOrigin({ item: params.candidate }),
-    removal: params.candidate.removal.kind === 'runTool' ? 'tool' : 'delete',
+    removal: removalViews[params.candidate.removal.kind],
     allocatedBytes: params.candidate.allocatedBytes,
     isComplete: params.candidate.isComplete,
     displayPath: formatDisplayPath({ path: params.candidate.path, homeDir: params.homeDir }),
-    revealPath: params.candidate.path,
+    revealPath: params.candidate.removal.kind === 'callEngine' ? null : params.candidate.path,
     lastUsedAt: formatInstantText({ ms: params.candidate.lastUsedAtMs }),
     downloadedAt: formatInstantText({ ms: params.candidate.downloadedAtMs }),
     appName: formatAppName({ appName: params.candidate.appName }),
@@ -589,7 +607,7 @@ function buildAdviceItemView(params: { advice: Advice; homeDir: string }): Advic
     allocatedBytes: params.advice.allocatedBytes,
     displayPath: formatDisplayPath({ path: params.advice.path, homeDir: params.homeDir }),
     revealPath: params.advice.path,
-    opener: null,
+    opener: params.advice.opener,
   };
 }
 
@@ -775,5 +793,21 @@ function formatIssueDetail(params: { issue: ScanIssue }): string {
 
       return `${summary}: ${firstStderrLine}`;
     }
+    case 'engineFailed':
+      return formatEngineFailureDetail({ failure: params.issue.failure });
+  }
+}
+
+/** The endpoint asked, then the status it answered or the code of a request that got no answer. */
+function formatEngineFailureDetail(params: { failure: ExploreEngineAnswerFailure }): string {
+  switch (params.failure.kind) {
+    case 'requestFailed':
+      if (params.failure.status !== null) {
+        return `${params.failure.endpoint} answered ${params.failure.status}`;
+      }
+
+      return `${params.failure.endpoint} got no answer: ${formatDisplayText({ text: params.failure.code ?? 'unknown error' })}`;
+    case 'badAnswer':
+      return `${params.failure.endpoint} gave an answer that could not be read`;
   }
 }

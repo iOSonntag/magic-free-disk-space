@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { runCli } from '../../src/cli/runCli.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
@@ -37,13 +38,18 @@ const TEST_CATALOG: CatalogEntry[] = [
     title: 'Tool store',
     path: 'Library/ToolStore',
     risk: 'review',
-    removal: { kind: 'advice', advice: 'Run the tool prune command.' },
+    removal: {
+      kind: 'advice',
+      advice: 'Run the tool prune command.',
+      carvedPaths: [],
+      opener: null,
+    },
   }),
   buildTestCatalogEntry({
     id: 'user-caches',
     title: 'App cache',
     path: 'Library/Caches',
-    scope: 'children',
+    selection: { kind: 'children' },
     risk: 'review',
   }),
   buildTestCatalogEntry({
@@ -52,8 +58,8 @@ const TEST_CATALOG: CatalogEntry[] = [
     title: 'Temporary files',
     root: 'temp',
     path: '',
-    scope: 'children',
-    ageRule: 'staleDays',
+    selection: { kind: 'children' },
+    ageRule: { kind: 'unchangedDays', days: SCAN_LIMITS.defaultStaleDays },
     risk: 'safe',
   }),
 ];

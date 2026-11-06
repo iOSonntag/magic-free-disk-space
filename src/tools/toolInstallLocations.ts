@@ -6,7 +6,12 @@ export type ToolName =
   | 'brewAppleSilicon'
   | 'brewIntel'
   | 'avdmanager'
-  | 'asdf';
+  | 'asdf'
+  | 'brctl'
+  | 'vagrant'
+  | 'rustup'
+  | 'conda'
+  | 'fvm';
 
 /** A fixed place of the binary; `home` paths are relative to the home folder. */
 export type ToolLocationPath = { kind: 'path'; root: 'home' | 'absolute'; path: string };

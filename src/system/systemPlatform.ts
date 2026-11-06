@@ -19,4 +19,6 @@ export type SystemPlatform = {
   loadRunningProcesses: RunningProcessesLoad;
   /** The space of the volume that holds `path`; `null` when it cannot be read. Never throws. */
   loadVolumeSpace: (path: string) => Promise<VolumeSpace | null>;
+  /** The version of the operating system, such as `15.1`; `null` when it cannot be read. Never throws. */
+  loadSystemVersion: () => Promise<string | null>;
 };

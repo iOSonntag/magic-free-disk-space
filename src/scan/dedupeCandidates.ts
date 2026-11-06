@@ -1,7 +1,8 @@
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { CandidateDecision } from './candidate.js';
-import { listCandidateFootprint } from './listCandidateFootprint.js';
+import { isProbedCandidate } from './candidate.js';
+import { listCandidateFootprint, listProbedTargetPaths } from './listCandidateFootprint.js';
 
 /**
  * Turns into a skip each offer with a footprint path that would remove what the scan held back
@@ -9,16 +10,26 @@ import { listCandidateFootprint } from './listCandidateFootprint.js';
  * equal to an earlier skipped path, and one overlapping an earlier kept footprint. Paths are
  * compared as the scan produced them, never followed through links. The result keeps length and
  * order.
+ *
+ * Then a probe's places are its own: an offer that no probe made gives way as `heldByProbe` when
+ * its footprint holds or equals one of `reservedEntryPaths`, or holds, equals, or lies inside a
+ * target of a probed offer. An offer inside an entry path stays, since a probe claims only what
+ * its units name.
  */
 export function dedupeCandidates(params: {
   pathRules: PathRules;
   decisions: CandidateDecision[];
+  /** The path of every explore entry, whether its probe ran or fell back to advice. */
+  reservedEntryPaths: string[];
 }): CandidateDecision[] {
   const skippedPaths = params.decisions.flatMap((decision) =>
     decision.kind === 'skip' ? [decision.path] : [],
   );
   const advisedPaths = params.decisions.flatMap((decision) =>
     decision.kind === 'advice' ? [decision.advice.path] : [],
+  );
+  const unitTargetPaths = params.decisions.flatMap((decision) =>
+    decision.kind === 'offer' ? listProbedTargetPaths(decision.candidate) : [],
   );
   const earlierSkippedPaths: string[] = [];
   const keptOfferPaths: string[] = [];
@@ -50,10 +61,47 @@ export function dedupeCandidates(params: {
       return { kind: 'skip', path: decision.candidate.path, reason: 'overlapsEarlierCandidate' };
     }
 
+    const isHeldByProbe =
+      !isProbedCandidate(decision.candidate) &&
+      footprint.some((path) =>
+        isProbeReservedPath({
+          pathRules: params.pathRules,
+          path: path,
+          reservedEntryPaths: params.reservedEntryPaths,
+          unitTargetPaths: unitTargetPaths,
+        }),
+      );
+
+    if (isHeldByProbe) {
+      return { kind: 'skip', path: decision.candidate.path, reason: 'heldByProbe' };
+    }
+
     keptOfferPaths.push(...footprint);
 
     return decision;
   });
+}
+
+function isProbeReservedPath(params: {
+  pathRules: PathRules;
+  path: string;
+  reservedEntryPaths: string[];
+  unitTargetPaths: string[];
+}): boolean {
+  return (
+    params.reservedEntryPaths.some((entryPath) =>
+      isSameOrInsidePath({ rules: params.pathRules, path: entryPath, parentPath: params.path }),
+    ) ||
+    params.unitTargetPaths.some(
+      (targetPath) =>
+        isSameOrInsidePath({
+          rules: params.pathRules,
+          path: targetPath,
+          parentPath: params.path,
+        }) ||
+        isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: targetPath }),
+    )
+  );
 }
 
 function isOverlappingHeldPath(params: {

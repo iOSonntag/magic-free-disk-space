@@ -12,11 +12,13 @@ export const SYSTEM_ENTRIES: CatalogEntry[] = [
     risk: 'careful',
     root: 'absolute',
     path: '/Library/Updates',
-    scope: 'self',
-    ageRule: 'none',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
     owner: null,
     removal: {
       kind: 'advice',
+      carvedPaths: [],
+      opener: null,
       advice:
         'Downloaded macOS updates. Install or cancel the pending update in System Settings > General > Software Update; macOS removes the files afterwards.',
     },
@@ -31,11 +33,13 @@ export const SYSTEM_ENTRIES: CatalogEntry[] = [
     risk: 'never',
     root: 'home',
     path: 'Library/Application Support/MobileSync/Backup',
-    scope: 'self',
-    ageRule: 'none',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
     owner: null,
     removal: {
       kind: 'advice',
+      carvedPaths: [],
+      opener: null,
       advice:
         'Backups of iPhones and iPads may be the only copy of their data. Manage them in Finder: select the device, then Manage Backups.',
     },

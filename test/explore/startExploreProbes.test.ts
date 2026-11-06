@@ -14,6 +14,7 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
@@ -114,6 +115,20 @@ function buildMarkerPath(params: { name: string }): string {
 /** A probe prelude that leaves the marker file of the tool `name`. */
 function buildMarkerPrelude(params: { name: string }): string {
   return `fs.writeFileSync(${JSON.stringify(buildMarkerPath({ name: params.name }))}, '');`;
+}
+
+/** The start of a probe with no tool, no process, and nothing pinned, within `TIMEOUT_MS`. */
+function buildProbeStart(): Parameters<typeof runExploreProbe>[0]['start'] {
+  return {
+    environment: environment,
+    platform: buildTestProbePlatform(),
+    toolInstallLocations: buildFixtureToolLocations({}),
+    processCommands: Promise.resolve([]),
+    activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+    projectPins: buildEmptyProjectPinsLoad(),
+    timeoutMs: TIMEOUT_MS,
+    unusedCutoffMs: UNUSED_CUTOFF_MS,
+  };
 }
 
 describeAwaitingWin32Platform('startExploreProbes', () => {
@@ -353,6 +368,62 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
     });
 
     expect(outcome).toEqual({ kind: 'timedOut' });
+  });
+
+  test('answers engineFailed for an engine that answered, but not as asked', async () => {
+    const socketPath = buildTestAbsolutePath({ text: '/fixture/home/.docker/run/docker.sock' });
+    const failure = {
+      kind: 'requestFailed',
+      endpoint: '/system/df',
+      status: 500,
+      code: null,
+    } as const;
+
+    const outcome = await runExploreProbe({
+      probe: {
+        kind: 'engine',
+        loadFindings: () =>
+          Promise.resolve({
+            kind: 'failed',
+            failure: { kind: 'answerFailed', socketPath: socketPath, failure: failure },
+          }),
+      },
+      start: buildProbeStart(),
+    });
+
+    expect(outcome).toEqual({ kind: 'engineFailed', socketPath: socketPath, failure: failure });
+  });
+
+  test('answers toolMissing for an engine whose socket is missing or untrusted, as nothing was asked', async () => {
+    const outcomes = await Promise.all(
+      [
+        { kind: 'socketMissing' } as const,
+        { kind: 'socketUntrusted', detail: 'notOwnedByUser' } as const,
+      ].map((failure) =>
+        runExploreProbe({
+          probe: {
+            kind: 'engine',
+            loadFindings: () => Promise.resolve({ kind: 'failed', failure: failure }),
+          },
+          start: buildProbeStart(),
+        }),
+      ),
+    );
+
+    expect(outcomes).toEqual([{ kind: 'toolMissing' }, { kind: 'toolMissing' }]);
+  });
+
+  test('answers toolMissing for a files probe whose place is missing', async () => {
+    const outcome = await runExploreProbe({
+      probe: {
+        kind: 'files',
+        loadFindings: () =>
+          Promise.resolve({ kind: 'failed', failure: { reason: 'placeMissing' } }),
+      },
+      start: buildProbeStart(),
+    });
+
+    expect(outcome).toEqual({ kind: 'toolMissing' });
   });
 
   test('starts the limit of a pinned probe once the walk ended', async () => {

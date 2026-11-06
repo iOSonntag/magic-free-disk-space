@@ -1,7 +1,12 @@
 import type { FileHandle } from 'node:fs/promises';
 import { mkdir, open } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { ExploreProbeFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
+import type {
+  ExploreEngineUnit,
+  ExploreProbeFailure,
+  ExploreToolFailure,
+  ExploreToolUnit,
+} from '../explore/exploreUnit.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import type { RemovalOutcomeCodedKind } from './deleteCandidates.js';
@@ -9,19 +14,68 @@ import type { ToolCandidateSkipReason } from './runToolCandidate.js';
 
 export type JournalEntrySessionStart = { kind: 'sessionStart'; atMs: number };
 
+/** Before an item of paths is deleted: its shown place and every target that goes with it. */
 export type JournalEntryIntent = {
   kind: 'intent';
   atMs: number;
   path: string;
   allocatedBytes: number;
+  targetPaths: string[];
 };
 
+/** One per target of a deleted item, after the deletion. */
 export type JournalEntryOutcome = {
   kind: 'outcome';
   atMs: number;
   path: string;
   outcome: RemovalOutcomeCodedKind;
   code: string | null;
+};
+
+/** Before the files of a folder are evicted; their copies stay with the cloud. */
+export type JournalEntryEvictIntent = {
+  kind: 'evictIntent';
+  atMs: number;
+  folderPath: string;
+  targetPaths: string[];
+};
+
+/** One per file of an evicted item, after its evict was tried or withheld. */
+export type JournalEntryEvictionCoded = {
+  kind: 'eviction';
+  atMs: number;
+  path: string;
+  outcome: RemovalOutcomeCodedKind;
+  code: string | null;
+};
+
+/** The evict tool exited with an error for the file, which stays downloaded. */
+export type JournalEntryEvictionToolFailed = {
+  kind: 'eviction';
+  atMs: number;
+  path: string;
+  outcome: 'toolFailed';
+  failure: ExploreToolFailure;
+};
+
+/** Before an engine removes a unit: never a host path, only what the engine names it by. */
+export type JournalEntryEngineIntent = {
+  kind: 'engineIntent';
+  atMs: number;
+  engineName: string;
+  unitKind: ExploreEngineUnit['kind'];
+  unitIds: string[];
+};
+
+/** After the engine was called; `status` is its HTTP answer, `null` when none came. */
+export type JournalEntryEngineCall = {
+  kind: 'engineCall';
+  atMs: number;
+  engineName: string;
+  unitKind: ExploreEngineUnit['kind'];
+  unitIds: string[];
+  outcome: RemovalOutcomeCodedKind;
+  status: number | null;
 };
 
 /**
@@ -72,7 +126,12 @@ export type JournalEntry =
   | JournalEntryToolIntent
   | JournalEntryToolOutcomeRemoved
   | JournalEntryToolOutcomeSkipped
-  | JournalEntryToolOutcomeToolFailed;
+  | JournalEntryToolOutcomeToolFailed
+  | JournalEntryEvictIntent
+  | JournalEntryEvictionCoded
+  | JournalEntryEvictionToolFailed
+  | JournalEntryEngineIntent
+  | JournalEntryEngineCall;
 
 export type JournalFailure = {
   reason: 'directoryUnavailable' | 'cannotOpen' | 'writeFailed';

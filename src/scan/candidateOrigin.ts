@@ -66,10 +66,12 @@ function formatItemPlaceKey(params: { item: Candidate | Advice }): string {
   }
 
   switch (params.item.removal.kind) {
-    case 'deletePath':
+    case 'deletePaths':
       return params.item.path;
     case 'runTool':
-    case 'deleteUnitFolder':
+    case 'deleteUnitPaths':
+    case 'evictUnitFiles':
+    case 'callEngine':
       return formatExploreUnitKey({ unit: params.item.removal.unit });
   }
 }

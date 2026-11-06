@@ -6,10 +6,14 @@ import { loadAndroidSdkState } from './android/loadAndroidSdkState.js';
 import { recheckAndroidAvdUnit } from './android/recheckAndroidAvdUnit.js';
 import { recheckAndroidPlatformUnit } from './android/recheckAndroidPlatformUnit.js';
 import { recheckAsdfVersionUnit } from './asdfVersions/recheckAsdfVersionUnit.js';
+import { recheckClaudeCodeVersionUnit } from './claudeCodeVersions/recheckClaudeCodeVersionUnit.js';
+import { recheckClaudeTranscriptsUnit } from './claudeTranscripts/recheckClaudeTranscriptsUnit.js';
+import { recheckCondaUnit } from './condaPackages/recheckCondaUnit.js';
 import { isDartGcSetOffered } from './dartPubCache/buildDartPubCacheFindings.js';
 import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
 import type { PathUnitRecheck, UnitComparison, UnitRecheck } from './decideComparisonActivity.js';
 import { decideComparisonActivity } from './decideComparisonActivity.js';
+import { recheckDownloadsUnit } from './downloadsInstallers/recheckDownloadsUnit.js';
 import type { ExploreProbePlatform, ExploreUnitRecheckRun } from './exploreProbe.js';
 import type {
   ExplorePathUnit,
@@ -18,16 +22,23 @@ import type {
   ExploreToolUnitMiseVersion,
   ExploreToolUnitSimulatorDevice,
 } from './exploreUnit.js';
+import { recheckFvmVersionUnit } from './fvmVersions/recheckFvmVersionUnit.js';
 import { recheckHomebrewUnit } from './homebrew/recheckHomebrewUnit.js';
+import { recheckHuggingFaceUnit } from './huggingFace/recheckHuggingFaceUnit.js';
+import { recheckIdeVersionUnit } from './ideVersions/recheckIdeVersionUnit.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
+import { recheckMailDownloadsUnit } from './mailDownloads/recheckMailDownloadsUnit.js';
 import type { MisePrunableVersion } from './miseVersions/parseMisePrunableVersions.js';
 import { MISE_PRUNABLE_LIST_PROBE } from './miseVersions/parseMisePrunableVersions.js';
 import { recheckNvmVersionUnit } from './nvmVersions/recheckNvmVersionUnit.js';
+import { recheckOllamaModelUnit } from './ollamaModels/recheckOllamaModelUnit.js';
 import { recheckPnpmStoreUnit } from './pnpmStores/recheckPnpmStoreUnit.js';
+import { recheckRustupToolchainUnit } from './rustupToolchains/recheckRustupToolchainUnit.js';
 import { isSimulatorDeviceOffered } from './simulatorDevices/buildSimulatorDeviceFindings.js';
 import type { SimulatorDevice } from './simulatorDevices/parseSimulatorDeviceList.js';
 import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
 import { recheckSimulatorRuntimeUnit } from './simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
+import { recheckVagrantBoxUnit } from './vagrantBoxes/recheckVagrantBoxUnit.js';
 import { compareVscodeExtensionUnit } from './vscodeExtensions/compareVscodeExtensionUnit.js';
 import { loadVscodeExtensionState } from './vscodeExtensions/loadVscodeExtensionState.js';
 
@@ -101,6 +112,13 @@ export async function recheckExploreUnit(params: {
       return recheckHomebrewUnit({ unit: params.unit, run: run });
     case 'asdfVersion':
       return recheckAsdfVersionUnit({ unit: params.unit, run: run });
+    case 'vagrantBoxVersion':
+      return recheckVagrantBoxUnit({ unit: params.unit, run: run });
+    case 'rustupToolchain':
+      return recheckRustupToolchainUnit({ unit: params.unit, run: run });
+    case 'condaTarballs':
+    case 'condaPackages':
+      return recheckCondaUnit({ unit: params.unit, run: run });
   }
 }
 
@@ -157,6 +175,25 @@ export async function recheckExplorePathUnit(params: {
       return recheckAndroidPlatformUnit({ ...params, unit: params.unit });
     case 'pnpmStore':
       return recheckPnpmStoreUnit({ ...params, unit: params.unit });
+    case 'downloadsInstallers':
+    case 'downloadsIncomplete':
+      return recheckDownloadsUnit({ ...params, unit: params.unit });
+    case 'mailDownloads':
+      return recheckMailDownloadsUnit({ ...params, unit: params.unit });
+    case 'ollamaModel':
+      return recheckOllamaModelUnit({ ...params, unit: params.unit });
+    case 'huggingFaceRepository':
+    case 'huggingFaceDetachedRevisions':
+    case 'huggingFacePartialDownloads':
+      return recheckHuggingFaceUnit({ ...params, unit: params.unit });
+    case 'claudeTranscripts':
+      return recheckClaudeTranscriptsUnit({ ...params, unit: params.unit });
+    case 'claudeCodeVersion':
+      return recheckClaudeCodeVersionUnit({ ...params, unit: params.unit });
+    case 'ideVersionFolder':
+      return recheckIdeVersionUnit({ ...params, unit: params.unit });
+    case 'fvmVersion':
+      return recheckFvmVersionUnit({ ...params, unit: params.unit });
   }
 }
 

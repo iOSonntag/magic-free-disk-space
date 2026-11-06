@@ -60,7 +60,12 @@ const BRIDGE_CATALOG: CatalogEntry[] = [
     title: 'Tool store',
     path: 'Library/ToolStore',
     risk: 'review',
-    removal: { kind: 'advice', advice: 'Run the tool prune command.' },
+    removal: {
+      kind: 'advice',
+      advice: 'Run the tool prune command.',
+      carvedPaths: [],
+      opener: null,
+    },
   }),
   buildTestCatalogEntry({
     id: 'tiny-cache',

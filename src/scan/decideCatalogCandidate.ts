@@ -1,19 +1,22 @@
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogOwner } from '../catalog/catalogOwner.js';
 import type { CandidateDecision, SkipReason } from './candidate.js';
-import type { Measurement } from './loadPathMeasurement.js';
+import type { TargetsMeasurement } from './loadMeasuredTargetsPhase.js';
+import { hasSymbolicLinkTarget } from './loadMeasuredTargetsPhase.js';
 import type { ActivityProbe } from './loadTreeActivity.js';
 import type { OwnerState } from './resolveOwnerState.js';
 import { isAppleBundleId } from './resolveOwnerState.js';
 
 /**
- * Offers a catalog path for removal, turns an advice entry into advice, or skips the path.
- * `activity` must be probed for a `staleDays` entry and `null` otherwise; a mismatch throws.
+ * Offers a catalog item for removal as its measured targets, turns an advice entry into advice,
+ * or skips the item. `activity` must be probed for an `unchangedDays` entry and `null` otherwise;
+ * a mismatch throws.
  */
 export function decideCatalogCandidate(params: {
   entry: CatalogEntry;
+  /** The item's place, shown and judged: the entry's path, a child of it, or a profile folder. */
   path: string;
-  measurement: Measurement;
+  measurement: TargetsMeasurement;
   owner: CatalogOwner | null;
   ownerBundlePaths: string[];
   ownerState: OwnerState;
@@ -22,7 +25,7 @@ export function decideCatalogCandidate(params: {
   activity: ActivityProbe | null;
   minOfferedBytes: number;
 }): CandidateDecision {
-  if (params.measurement.identity.kind === 'symbolicLink') {
+  if (hasSymbolicLinkTarget(params.measurement)) {
     return { kind: 'skip', path: params.path, reason: 'symbolicLink' };
   }
 
@@ -71,8 +74,8 @@ export function decideCatalogCandidate(params: {
           downloadedAtMs: null,
           appName: params.ownerAppName,
           removal: {
-            kind: 'deletePath',
-            identity: params.measurement.identity,
+            kind: 'deletePaths',
+            targets: params.measurement.targets,
             ownerBundlePaths: params.ownerBundlePaths,
           },
         },
@@ -90,6 +93,7 @@ export function decideCatalogCandidate(params: {
           risk: params.entry.risk,
           explanation: params.entry.explanation,
           advice: params.entry.removal.advice,
+          opener: params.entry.removal.kind === 'advice' ? params.entry.removal.opener : null,
           allocatedBytes: params.measurement.allocatedBytes,
           isComplete: params.measurement.isComplete,
           privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
@@ -106,7 +110,7 @@ export function isSystemOwnedTarget(params: {
   entry: CatalogEntry;
   owner: CatalogOwner | null;
 }): boolean {
-  if (params.entry.scope === 'self' || params.owner === null) {
+  if (params.entry.selection.kind !== 'children' || params.owner === null) {
     return false;
   }
 
@@ -120,7 +124,7 @@ function getActivitySkipReason(params: {
   entry: CatalogEntry;
   activity: ActivityProbe | null;
 }): SkipReason | null {
-  if (params.entry.ageRule === 'none') {
+  if (params.entry.ageRule.kind === 'none') {
     if (params.activity !== null) {
       throw new Error(`Catalog entry ${params.entry.id} has no age rule but was probed`);
     }

@@ -111,6 +111,11 @@ export function buildFixtureToolLocations(
     brewIntel: buildFixtureToolLocation(paths.brewIntel),
     avdmanager: buildFixtureToolLocation(paths.avdmanager),
     asdf: buildFixtureToolLocation(paths.asdf),
+    brctl: buildFixtureToolLocation(paths.brctl),
+    vagrant: buildFixtureToolLocation(paths.vagrant),
+    rustup: buildFixtureToolLocation(paths.rustup),
+    conda: buildFixtureToolLocation(paths.conda),
+    fvm: buildFixtureToolLocation(paths.fvm),
   };
 }
 

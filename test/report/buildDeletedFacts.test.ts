@@ -7,7 +7,11 @@ import type {
 import { buildDeletedFacts } from '../../src/report/buildDeletedFacts.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestCandidate,
+  buildTestEngineCandidate,
+  buildTestToolCandidate,
+} from '../support/candidateFixtures.js';
 
 const LOG_PATH = '/fixture/Library/Logs/magic-free-disk-space/deletions.jsonl';
 
@@ -128,5 +132,36 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
     ]);
     expect(facts.freedBytes).toBe(3000);
     expect(facts.availableBytesAfter).toBeNull();
+  });
+
+  test('counts what an engine freed as space that comes back later, and keeps an item it holds', () => {
+    const pathCandidate = buildTestCandidate({ path: '/fixture/a', allocatedBytes: 1000 });
+    const cleaned = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 5000 });
+    const inUse = buildTestEngineCandidate({ homeDir: '/fixture/other', allocatedBytes: 7000 });
+    const stopped = buildTestEngineCandidate({ homeDir: '/fixture/third', allocatedBytes: 9000 });
+
+    const facts = buildDeletedFacts({
+      run: buildRun({
+        outcomes: [
+          buildCodedOutcome({ candidate: pathCandidate, outcome: 'removed', freedBytes: 1000 }),
+          buildCodedOutcome({ candidate: cleaned, outcome: 'removed', freedBytes: 5000 }),
+          buildCodedOutcome({ candidate: inUse, outcome: 'engineInUse', freedBytes: 0 }),
+          buildCodedOutcome({ candidate: stopped, outcome: 'engineNotRunning', freedBytes: 0 }),
+        ],
+      }),
+      ranked: [pathCandidate, cleaned, inUse, stopped],
+      availableBytesAfter: null,
+      logPath: LOG_PATH,
+    });
+
+    expect(
+      facts.outcomes.map((outcome) => [outcome.number, outcome.outcome, outcome.reasonKey]),
+    ).toEqual([
+      [1, 'removed', null],
+      [2, 'removed', null],
+      [3, 'kept', 'engineInUse'],
+      [4, 'kept', 'engineNotRunning'],
+    ]);
+    expect(facts).toMatchObject({ freedBytes: 1000, returnsLaterBytes: 5000 });
   });
 });

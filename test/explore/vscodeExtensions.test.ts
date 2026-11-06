@@ -65,7 +65,7 @@ async function loadFindings(processCommands: string[] | null = []): Promise<Expl
   const findings = await loadVscodeExtensionFindings(buildRun(processCommands));
 
   if (findings.kind === 'failed') {
-    throw new Error(`The probe failed at ${findings.failure.path}.`);
+    throw new Error(`The probe failed: ${findings.failure.reason}.`);
   }
 
   return findings.value;

@@ -16,7 +16,7 @@ import type {
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import type { Candidate } from '../../src/scan/candidate.js';
+import type { Candidate, RemovalTarget } from '../../src/scan/candidate.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
@@ -42,6 +42,7 @@ import {
 } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
   TEST_LISTING_FACTS_NONE,
@@ -111,7 +112,11 @@ async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Pro
     entryCount: 1,
     isComplete: true,
     ...TEST_LISTING_FACTS_NONE,
-    removal: { kind: 'deletePath', identity: identity.value, ownerBundlePaths: ownerBundlePaths },
+    removal: {
+      kind: 'deletePaths',
+      targets: [{ path: path, identity: identity.value }],
+      ownerBundlePaths: ownerBundlePaths,
+    },
   };
 }
 
@@ -961,11 +966,14 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     const removal = candidate.removal;
     const identity = await loadFileIdentity({ path: candidate.path });
 
-    if (identity.kind === 'failed' || removal.kind !== 'deleteUnitFolder') {
-      throw new Error('The obsolete folder should be scanned as a unit folder.');
+    if (identity.kind === 'failed' || removal.kind !== 'deleteUnitPaths') {
+      throw new Error('The obsolete folder should be scanned as the paths of a unit.');
     }
 
-    return { ...candidate, removal: { ...removal, identity: identity.value } };
+    return {
+      ...candidate,
+      removal: { ...removal, targets: [{ path: candidate.path, identity: identity.value }] },
+    };
   }
 
   async function deleteVscodeCandidate(params: {
@@ -1014,6 +1022,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
         atMs: NOW_MS,
         path: candidate.path,
         allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
+        targetPaths: [candidate.path],
       },
       expect.objectContaining({ kind: 'outcome', path: candidate.path, outcome: 'removed' }),
     ]);
@@ -1131,6 +1140,166 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
   });
 });
 
+describeAwaitingWin32Platform('deleteCandidates with an item of several targets', () => {
+  async function scanTarget(path: string): Promise<RemovalTarget> {
+    const identity = await loadFileIdentity({ path: path });
+
+    if (identity.kind === 'failed') {
+      throw new Error(`Cannot scan ${path}: ${identity.failure.reason}`);
+    }
+
+    return { path: path, identity: identity.value };
+  }
+
+  /** An item shown at the caches folder that goes as two of its folders, each scanned as it is. */
+  async function scanTwoTargetsCandidate(params: {
+    firstPath: string;
+    secondPath: string;
+  }): Promise<Candidate> {
+    const allocatedBytes =
+      (await measurePathBytes(params.firstPath)) + (await measurePathBytes(params.secondPath));
+
+    return {
+      ...buildTestCandidate({
+        path: join(fixtureRoot.homeDir, 'Library/Caches'),
+        allocatedBytes: allocatedBytes,
+      }),
+      removal: {
+        kind: 'deletePaths',
+        targets: [await scanTarget(params.firstPath), await scanTarget(params.secondPath)],
+        ownerBundlePaths: [],
+      },
+    };
+  }
+
+  async function deleteTargetsCandidate(params: {
+    candidate: Candidate;
+    journal: DeletionJournal;
+  }): Promise<RemovalRun> {
+    return deleteCandidates({
+      candidates: [params.candidate],
+      journal: params.journal,
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      clock: () => NOW_MS,
+    });
+  }
+
+  test('deletes every target and records the intent with its targets, then an outcome for each', async () => {
+    const firstPath = await createCacheFolder('first');
+    const secondPath = await createCacheFolder('second');
+    const sibling = await createCacheFolder('sibling');
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createTestJournal();
+
+    const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
+
+    expect(run.outcomes).toEqual([
+      {
+        candidate: candidate,
+        path: candidate.path,
+        allocatedBytes: candidate.allocatedBytes,
+        freedBytes: candidate.allocatedBytes,
+        outcome: 'removed',
+        code: null,
+      },
+    ]);
+    expect(await loadJournalLines(journal)).toEqual([
+      expect.objectContaining({ kind: 'sessionStart' }),
+      {
+        kind: 'intent',
+        atMs: NOW_MS,
+        path: candidate.path,
+        allocatedBytes: candidate.allocatedBytes,
+        targetPaths: [firstPath, secondPath],
+      },
+      { kind: 'outcome', atMs: NOW_MS, path: firstPath, outcome: 'removed', code: null },
+      { kind: 'outcome', atMs: NOW_MS, path: secondPath, outcome: 'removed', code: null },
+    ]);
+    expect(await isPresent(firstPath)).toBe(false);
+    expect(await isPresent(secondPath)).toBe(false);
+    expect(await isPresent(join(sibling, 'nested/blob.bin'))).toBe(true);
+  });
+
+  test('deletes the other targets when one changed since the scan, and counts what went', async () => {
+    const firstPath = await createCacheFolder('replaced');
+    const secondPath = await createCacheFolder('kept-identity');
+    const secondBytes = await measurePathBytes(secondPath);
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createTestJournal();
+
+    await rm(firstPath, { recursive: true });
+    await createCacheFolder('replaced');
+
+    const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
+
+    expect(run.outcomes[0]).toMatchObject({
+      path: candidate.path,
+      outcome: 'changedSinceScan',
+      freedBytes: secondBytes,
+    });
+    expect(await loadJournalLines(journal)).toMatchObject([
+      { kind: 'sessionStart' },
+      { kind: 'intent', targetPaths: [firstPath, secondPath] },
+      { kind: 'outcome', path: firstPath, outcome: 'changedSinceScan' },
+      { kind: 'outcome', path: secondPath, outcome: 'removed' },
+    ]);
+    expect(await isPresent(join(firstPath, 'nested/blob.bin'))).toBe(true);
+    expect(await isPresent(secondPath)).toBe(false);
+  });
+
+  test('is removed when a target was gone already and the other deleted', async () => {
+    const firstPath = await createCacheFolder('gone');
+    const secondPath = await createCacheFolder('deleted');
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createTestJournal();
+
+    await rm(firstPath, { recursive: true });
+
+    const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
+
+    expect(run.outcomes[0]).toMatchObject({
+      outcome: 'removed',
+      freedBytes: candidate.allocatedBytes,
+    });
+    expect(await loadJournalLines(journal)).toMatchObject([
+      { kind: 'sessionStart' },
+      { kind: 'intent' },
+      { kind: 'outcome', path: firstPath, outcome: 'alreadyGone' },
+      { kind: 'outcome', path: secondPath, outcome: 'removed' },
+    ]);
+  });
+
+  test('is already gone and frees nothing when every target is gone', async () => {
+    const firstPath = await createCacheFolder('gone-first');
+    const secondPath = await createCacheFolder('gone-second');
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+
+    await rm(firstPath, { recursive: true });
+    await rm(secondPath, { recursive: true });
+
+    const run = await deleteTargetsCandidate({
+      candidate: candidate,
+      journal: await createTestJournal(),
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'alreadyGone', freedBytes: 0 });
+  });
+});
+
 describeAwaitingWin32Platform('isUnremovedOutcome', () => {
   test('is true only for the outcomes that left their item through a failure', () => {
     const kinds: RemovalOutcomeKind[] = [
@@ -1142,6 +1311,8 @@ describeAwaitingWin32Platform('isUnremovedOutcome', () => {
       'failed',
       'notAttempted',
       'toolFailed',
+      'engineInUse',
+      'engineNotRunning',
     ];
 
     expect(kinds.filter(isUnremovedOutcome)).toEqual(['permissionDenied', 'failed', 'toolFailed']);
@@ -1172,15 +1343,17 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
         outcome: 'removed',
         code: null,
       },
-      outcomeEntry: {
-        kind: 'toolOutcome',
-        atMs: NOW_MS,
-        path: TOOL_PATH,
-        outcome: 'removed',
-        exitCode: 0,
-        stderrTail: 'removed node@20.1.0',
-        freedBytes: 6144,
-      },
+      outcomeEntries: [
+        {
+          kind: 'toolOutcome',
+          atMs: NOW_MS,
+          path: TOOL_PATH,
+          outcome: 'removed',
+          exitCode: 0,
+          stderrTail: 'removed node@20.1.0',
+          freedBytes: 6144,
+        },
+      ],
     });
   });
 
@@ -1200,7 +1373,9 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
         outcome: 'ownerRunning',
         code: null,
       },
-      outcomeEntry: { kind: 'toolOutcome', atMs: NOW_MS, path: TOOL_PATH, outcome: 'ownerRunning' },
+      outcomeEntries: [
+        { kind: 'toolOutcome', atMs: NOW_MS, path: TOOL_PATH, outcome: 'ownerRunning' },
+      ],
     });
   });
 
@@ -1225,14 +1400,16 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
         outcome: 'toolFailed',
         failure: failure,
       },
-      outcomeEntry: {
-        kind: 'toolOutcome',
-        atMs: NOW_MS,
-        path: TOOL_PATH,
-        outcome: 'toolFailed',
-        freedBytes: 1024,
-        failure: failure,
-      },
+      outcomeEntries: [
+        {
+          kind: 'toolOutcome',
+          atMs: NOW_MS,
+          path: TOOL_PATH,
+          outcome: 'toolFailed',
+          freedBytes: 1024,
+          failure: failure,
+        },
+      ],
     });
   });
 });

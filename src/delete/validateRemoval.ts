@@ -2,8 +2,9 @@ import { isAbsolute } from 'node:path';
 import type { Risk } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
-import type { Candidate } from '../scan/candidate.js';
+import type { Candidate, RemovalTarget, RemovalTargets } from '../scan/candidate.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
+import { validateEvictRemoval } from './validateEvictRemoval.js';
 
 export type RefusalReason =
   | 'neverRisk'
@@ -31,9 +32,10 @@ export function isRemovableRisk(risk: Risk): boolean {
 }
 
 /**
- * Refuses a candidate marked `never`. Approves a path item or a unit's folder only when it is a
- * plain file or folder strictly inside an allowed root, is no protected folder and holds none, and
- * lies in no sensitive folder; a tool item passes, since its own tool removes it after a recheck.
+ * Refuses a candidate marked `never`. Approves an item of paths only when each target is a plain
+ * file or folder strictly inside an allowed root, is no protected folder and holds none, and lies
+ * in no sensitive folder; an evict only as `validateEvictRemoval` allows it. A tool item and an
+ * engine item pass, since their own tool or engine removes them after a recheck.
  */
 export function validateRemoval(params: {
   candidate: Candidate;
@@ -44,24 +46,52 @@ export function validateRemoval(params: {
   }
 
   switch (params.candidate.removal.kind) {
-    case 'deletePath':
-    case 'deleteUnitFolder':
-      return validatePathRemoval({
+    case 'deletePaths':
+    case 'deleteUnitPaths':
+      return validateTargetsRemoval({
         candidate: params.candidate,
-        identity: params.candidate.removal.identity,
+        targets: params.candidate.removal.targets,
+        environment: params.environment,
+      });
+    case 'evictUnitFiles':
+      return validateEvictRemoval({
+        candidate: params.candidate,
+        removal: params.candidate.removal,
         environment: params.environment,
       });
     case 'runTool':
+    case 'callEngine':
       return { kind: 'approved', candidate: params.candidate };
   }
 }
 
-function validatePathRemoval(params: {
+/** The first target refused refuses the whole item, at that target's path. */
+function validateTargetsRemoval(params: {
   candidate: Candidate;
-  identity: FileIdentity;
+  targets: RemovalTargets<RemovalTarget>;
   environment: Environment;
 }): RemovalDecision {
-  const path = params.candidate.path;
+  for (const target of params.targets) {
+    const refusal = findTargetRefusal({
+      path: target.path,
+      identity: target.identity,
+      environment: params.environment,
+    });
+
+    if (refusal !== null) {
+      return refusal;
+    }
+  }
+
+  return { kind: 'approved', candidate: params.candidate };
+}
+
+function findTargetRefusal(params: {
+  path: string;
+  identity: FileIdentity;
+  environment: Environment;
+}): RemovalDecisionRefused | null {
+  const path = params.path;
   const realPath = params.identity.realPath;
   const kind = params.identity.kind;
 
@@ -115,5 +145,5 @@ function validatePathRemoval(params: {
     return { kind: 'refused', path: path, reason: 'outsideAllowedRoot' };
   }
 
-  return { kind: 'approved', candidate: params.candidate };
+  return null;
 }

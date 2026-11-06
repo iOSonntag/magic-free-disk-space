@@ -27,8 +27,13 @@ function buildCandidate(params: {
     isComplete: params.isComplete,
     ...TEST_LISTING_FACTS_NONE,
     removal: {
-      kind: 'deletePath',
-      identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
+      kind: 'deletePaths',
+      targets: [
+        {
+          path: params.path,
+          identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
+        },
+      ],
       ownerBundlePaths: [],
     },
   };

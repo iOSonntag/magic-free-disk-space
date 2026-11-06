@@ -13,11 +13,13 @@ export const CONTAINER_ENTRIES: CatalogEntry[] = [
     risk: 'careful',
     root: 'home',
     path: 'Library/Containers/com.docker.docker',
-    scope: 'self',
-    ageRule: 'none',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
     owner: buildBundleIdOwner({ text: 'com.docker.docker' }),
     removal: {
       kind: 'advice',
+      carvedPaths: [],
+      opener: null,
       advice:
         'Holds every Docker image, container, and volume. Run `docker system prune` (add `--volumes` to include volumes) or use Clean / Purge data under Troubleshoot in Docker Desktop.',
     },

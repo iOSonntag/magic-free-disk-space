@@ -35,14 +35,14 @@ describeAwaitingWin32Platform('createDeletionJournal', () => {
     }
 
     const appended = await journal.value.append({
-      entry: { kind: 'intent', atMs: 101, path: '/x', allocatedBytes: 4096 },
+      entry: { kind: 'intent', atMs: 101, path: '/x', allocatedBytes: 4096, targetPaths: ['/x'] },
     });
     const lines = (await readFile(logPath, 'utf8')).trimEnd().split('\n');
 
     expect(appended.kind).toBe('succeeded');
     expect(lines.map((line) => JSON.parse(line))).toEqual([
       { kind: 'sessionStart', atMs: 100 },
-      { kind: 'intent', atMs: 101, path: '/x', allocatedBytes: 4096 },
+      { kind: 'intent', atMs: 101, path: '/x', allocatedBytes: 4096, targetPaths: ['/x'] },
     ]);
   });
 

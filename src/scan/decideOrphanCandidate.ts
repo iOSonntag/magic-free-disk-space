@@ -97,7 +97,11 @@ export function decideOrphanCandidate(params: {
       lastUsedAtMs: params.measurement.latestModifiedMs,
       downloadedAtMs: null,
       appName: null,
-      removal: { kind: 'deletePath', identity: params.measurement.identity, ownerBundlePaths: [] },
+      removal: {
+        kind: 'deletePaths',
+        targets: [{ path: params.path, identity: params.measurement.identity }],
+        ownerBundlePaths: [],
+      },
     },
   };
 }

@@ -7,6 +7,9 @@ type InstalledAppOverrides = Partial<Omit<InstalledApp, 'bundleId' | 'nestedBund
   nestedBundleIds?: string[];
 };
 
+/** The facts of an app's bundle that no read gave: no version shown, no owner. */
+export const TEST_INSTALLED_APP_FACTS_NONE = { bundleShortVersion: null, ownerUid: null };
+
 export function buildTestInstalledApp(overrides: InstalledAppOverrides): InstalledApp {
   const bundleId = overrides.bundleId === undefined ? 'com.example.app' : overrides.bundleId;
 
@@ -17,5 +20,8 @@ export function buildTestInstalledApp(overrides: InstalledAppOverrides): Install
     nestedBundleIds: (overrides.nestedBundleIds ?? []).map((text) =>
       buildTestMacBundleId({ text: text }),
     ),
+    bundleShortVersion:
+      overrides.bundleShortVersion === undefined ? null : overrides.bundleShortVersion,
+    ownerUid: overrides.ownerUid === undefined ? null : overrides.ownerUid,
   };
 }

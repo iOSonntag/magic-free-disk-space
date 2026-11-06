@@ -1,6 +1,7 @@
 import { basename, join } from 'node:path';
 import type { MacBundleId } from '../../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../../catalog/catalogOwner.js';
+import { stubPartNotBuilt } from '../../notBuilt.js';
 import type { Result } from '../../result.js';
 import { buildFailureIssues } from '../../scan/buildReadIssue.js';
 import type { ScanIssue } from '../../scan/issue.js';
@@ -71,6 +72,9 @@ export async function loadInstalledApps(params: {
       displayName: basename(bundlePath).slice(0, -APP_BUNDLE_SUFFIX.length),
       bundleId: bundleIdResult.kind === 'succeeded' ? bundleIdResult.value : null,
       nestedBundleIds: nested.bundleIds,
+      // Part 3b reads both from the bundle; until then each reads as unknown.
+      bundleShortVersion: stubPartNotBuilt<string | null>(null),
+      ownerUid: stubPartNotBuilt<number | null>(null),
     });
   }
 

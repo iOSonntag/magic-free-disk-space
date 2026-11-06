@@ -32,6 +32,7 @@ describeAwaitingWin32Platform('buildScanReport', () => {
           risk: 'careful',
           explanation: 'Packages of a tool.',
           advice: 'Run the tool cleanup.',
+          opener: null,
           allocatedBytes: 500,
           isComplete: true,
           ...TEST_LISTING_FACTS_NONE,

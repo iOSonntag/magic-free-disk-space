@@ -4,22 +4,26 @@ import type { Environment } from '../environment/buildEnvironment.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
 import { buildFailureIssues } from './buildReadIssue.js';
+import { findProfileFolderTargets } from './findProfileFolderTargets.js';
 import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 
+/** One item of an entry: its place, shown and judged, and the paths that go with it. */
 export type CatalogTarget = {
   entry: CatalogEntry;
   path: string;
+  /** The item's own path for a `path` or `children` entry; the existing subpaths of a profile. */
+  targetPaths: [string, ...string[]];
 };
 
-type CatalogEntryTargets = {
+export type CatalogEntryTargets = {
   targets: CatalogTarget[];
   issues: ScanIssue[];
 };
 
 /**
- * Lists the paths each entry covers. A missing path, or a children path that is not a folder,
- * adds nothing; an unreadable path adds an issue.
+ * Lists the items each entry covers, as its selection says. A missing path, or a children path
+ * that is not a folder, adds nothing; an unreadable path adds an issue.
  */
 export async function findCatalogTargets(params: {
   environment: Environment;
@@ -32,10 +36,18 @@ export async function findCatalogTargets(params: {
     const path = getCatalogEntryPath({ environment: params.environment, entry: entry });
     const entryPath = { entry: entry, path: path, privacyDenialCode: params.privacyDenialCode };
 
-    if (entry.scope === 'self') {
-      targetsPerEntry.push(await findSelfTargets(entryPath));
-    } else {
-      targetsPerEntry.push(await findChildTargets(entryPath));
+    switch (entry.selection.kind) {
+      case 'path':
+        targetsPerEntry.push(await findSelfTargets(entryPath));
+        break;
+      case 'children':
+        targetsPerEntry.push(await findChildTargets(entryPath));
+        break;
+      case 'profileFolders':
+        targetsPerEntry.push(
+          await findProfileFolderTargets({ ...entryPath, selection: entry.selection }),
+        );
+        break;
     }
   }
 
@@ -64,7 +76,7 @@ async function findSelfTargets(params: {
   }
 
   return {
-    targets: [{ entry: params.entry, path: params.path }],
+    targets: [{ entry: params.entry, path: params.path, targetPaths: [params.path] }],
     issues: [],
   };
 }
@@ -88,10 +100,11 @@ async function findChildTargets(params: {
   }
 
   return {
-    targets: namesResult.value.map((name) => ({
-      entry: params.entry,
-      path: join(params.path, name),
-    })),
+    targets: namesResult.value.map((name) => {
+      const childPath = join(params.path, name);
+
+      return { entry: params.entry, path: childPath, targetPaths: [childPath] };
+    }),
     issues: [],
   };
 }

@@ -4,7 +4,12 @@ import { validateRemoval } from '../../src/delete/validateRemoval.js';
 import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestCandidate,
+  buildTestEngineCandidate,
+  buildTestToolCandidate,
+  buildTestUnitPathsCandidate,
+} from '../support/candidateFixtures.js';
 import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 
 const ENVIRONMENT = buildDarwinEnvironment({
@@ -145,6 +150,42 @@ describeAwaitingWin32Platform('validateRemoval', () => {
       kind: 'refused',
       path: neverCandidate.path,
       reason: 'neverRisk',
+    });
+  });
+
+  test('judges each target of a unit, and refuses the item at the first target refused', () => {
+    const allowedPath = '/Users/tester/.cache/huggingface/hub/models--example--model/blobs/a';
+    const buildUnitCandidate = (targetPaths: [string, ...string[]]) =>
+      buildTestUnitPathsCandidate({
+        probe: 'huggingFaceRepos',
+        unit: {
+          kind: 'huggingFaceRepository',
+          repoPath: buildTestAbsolutePath({ text: '/Users/tester/.cache/huggingface/hub' }),
+          foundPaths: [buildTestAbsolutePath({ text: allowedPath })],
+        },
+        path: '/Users/tester/.cache/huggingface/hub/models--example--model',
+        targetPaths: targetPaths,
+      });
+    const allowed = buildUnitCandidate([allowedPath, `${allowedPath}-other`]);
+
+    expect(validateRemoval({ candidate: allowed, environment: ENVIRONMENT })).toEqual({
+      kind: 'approved',
+      candidate: allowed,
+    });
+    expect(
+      validateRemoval({
+        candidate: buildUnitCandidate([allowedPath, '/Users/tester/.ssh', '/etc/hosts']),
+        environment: ENVIRONMENT,
+      }),
+    ).toEqual({ kind: 'refused', path: '/Users/tester/.ssh', reason: 'protectedRoot' });
+  });
+
+  test('approves an engine item, since its engine removes it after a recheck', () => {
+    const candidate = buildTestEngineCandidate({ homeDir: '/Users/tester' });
+
+    expect(validateRemoval({ candidate: candidate, environment: ENVIRONMENT })).toEqual({
+      kind: 'approved',
+      candidate: candidate,
     });
   });
 });

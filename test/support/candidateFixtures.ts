@@ -1,5 +1,18 @@
-import type { CandidateCategory, CatalogEntry, Risk } from '../../src/catalog/catalog.js';
-import type { Candidate, CandidateMatched } from '../../src/scan/candidate.js';
+import type {
+  CandidateCategory,
+  CatalogEntry,
+  ExploreProbeId,
+  Risk,
+} from '../../src/catalog/catalog.js';
+import type { ExplorePathUnit } from '../../src/explore/exploreUnit.js';
+import type {
+  Candidate,
+  CandidateMatched,
+  CandidateProbed,
+  RemovalTarget,
+  RemovalTargets,
+} from '../../src/scan/candidate.js';
+import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
@@ -51,6 +64,23 @@ export function buildTestMeasurement(params: {
   };
 }
 
+/** The measurement of the one target at `path`, as the targets phase gives it to a decide. */
+export function buildTestTargetsMeasurement(params: {
+  path: string;
+  allocatedBytes: number;
+  kind?: FileKind;
+  isComplete?: boolean;
+}): TargetsMeasurement {
+  const { identity, ...measured } = buildTestMeasurement({
+    realPath: params.path,
+    allocatedBytes: params.allocatedBytes,
+    kind: params.kind ?? 'directory',
+    isComplete: params.isComplete ?? true,
+  });
+
+  return { ...measured, targets: [{ path: params.path, identity: identity }] };
+}
+
 export function buildTestCandidate(params: {
   path: string;
   title?: string;
@@ -83,8 +113,13 @@ export function buildTestCandidate(params: {
     downloadedAtMs: params.downloadedAtMs ?? null,
     appName: params.appName ?? null,
     removal: {
-      kind: 'deletePath',
-      identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),
+      kind: 'deletePaths',
+      targets: [
+        {
+          path: params.path,
+          identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),
+        },
+      ],
       ownerBundlePaths: [],
     },
   };
@@ -158,6 +193,84 @@ export function buildTestDartToolCandidate(params: { homeDir: string }): Candida
   };
 }
 
+/**
+ * A probed item of `unit` shown at `path` and deleted as `targetPaths`, as `probe` would offer
+ * it; its identities are made up.
+ */
+export function buildTestUnitPathsCandidate(params: {
+  probe: ExploreProbeId;
+  unit: ExplorePathUnit;
+  path: string;
+  targetPaths: RemovalTargets<string>;
+}): CandidateProbed {
+  const [firstTargetPath, ...restTargetPaths] = params.targetPaths;
+
+  return {
+    path: params.path,
+    title: `Test unit ${params.path}`,
+    category: 'developer',
+    risk: 'review',
+    origin: { kind: 'explore', probe: params.probe },
+    explanation: 'A unit a test probe found.',
+    regeneration: 'Downloaded again by the test.',
+    allocatedBytes: 4096,
+    entryCount: params.targetPaths.length,
+    isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
+    removal: {
+      kind: 'deleteUnitPaths',
+      targets: [buildTestTarget(firstTargetPath), ...restTargetPaths.map(buildTestTarget)],
+      unit: params.unit,
+    },
+    evidenceLines: ['A test probe found it.'],
+  };
+}
+
+function buildTestTarget(path: string): RemovalTarget {
+  return { path: path, identity: buildTestIdentity({ realPath: path }) };
+}
+
+/**
+ * The build cache of Docker Desktop under `homeDir`, removed through its engine and shown at its
+ * disk image; its socket is made up and never answers.
+ */
+export function buildTestEngineCandidate(params: {
+  homeDir: string;
+  allocatedBytes?: number;
+}): CandidateProbed {
+  const diskImagePath = buildTestAbsolutePath({
+    text: `${params.homeDir}/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw`,
+  });
+  const allocatedBytes = params.allocatedBytes ?? 8192;
+
+  return {
+    path: diskImagePath,
+    title: 'Docker Desktop build cache',
+    category: 'developer',
+    risk: 'safe',
+    origin: { kind: 'explore', probe: 'dockerDesktopEngine' },
+    explanation: 'Build cache records no build used lately.',
+    regeneration: 'Built again by the next build that needs them.',
+    allocatedBytes: allocatedBytes,
+    entryCount: 1,
+    isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
+    removal: {
+      kind: 'callEngine',
+      unit: {
+        kind: 'engineBuildCache',
+        engineProbeId: 'dockerDesktopEngine',
+        engineName: 'Docker Desktop',
+        socketPath: buildTestAbsolutePath({ text: `${params.homeDir}/.docker/run/docker.sock` }),
+        diskImagePath: diskImagePath,
+        sizeBytes: allocatedBytes,
+        recordIds: [],
+      },
+    },
+    evidenceLines: ['Docker Desktop reports these records unused.'],
+  };
+}
+
 /** No place for any tool, so a scan in a test never runs a real tool. */
 export const TOOL_INSTALL_LOCATIONS_NONE: ToolInstallLocations = {
   xcrun: [],
@@ -167,6 +280,11 @@ export const TOOL_INSTALL_LOCATIONS_NONE: ToolInstallLocations = {
   brewIntel: [],
   avdmanager: [],
   asdf: [],
+  brctl: [],
+  vagrant: [],
+  rustup: [],
+  conda: [],
+  fvm: [],
 };
 
 export function buildTestCatalogEntry(overrides: Partial<CatalogEntry>): CatalogEntry {
@@ -179,8 +297,8 @@ export function buildTestCatalogEntry(overrides: Partial<CatalogEntry>): Catalog
     risk: 'safe',
     root: 'home',
     path: 'Library/Caches/Test',
-    scope: 'self',
-    ageRule: 'none',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
     owner: null,
     removal: { kind: 'delete' },
     ...overrides,

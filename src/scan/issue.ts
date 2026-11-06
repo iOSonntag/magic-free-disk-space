@@ -1,3 +1,4 @@
+import type { ExploreEngineAnswerFailure } from '../explore/exploreProbe.js';
 import type { ExploreToolFailure } from '../explore/exploreUnit.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
 
@@ -22,4 +23,15 @@ export type ScanIssueToolUntrusted = {
   detail: ToolDistrustDetail;
 };
 
-export type ScanIssue = ScanIssuePlace | ScanIssueToolFailed | ScanIssueToolUntrusted;
+/** The engine behind the socket at `path` answered, but not as asked, so its entry fell back to advice. */
+export type ScanIssueEngineFailed = {
+  path: string;
+  reason: 'engineFailed';
+  failure: ExploreEngineAnswerFailure;
+};
+
+export type ScanIssue =
+  | ScanIssuePlace
+  | ScanIssueToolFailed
+  | ScanIssueToolUntrusted
+  | ScanIssueEngineFailed;

@@ -1,5 +1,10 @@
-import type { CandidateCategory, Risk } from '../catalog/catalog.js';
-import type { ExplorePathUnit, ExploreToolUnit } from '../explore/exploreUnit.js';
+import type { AdviceOpener, CandidateCategory, Risk } from '../catalog/catalog.js';
+import type {
+  ExploreEngineUnit,
+  ExploreEvictUnit,
+  ExplorePathUnit,
+  ExploreToolUnit,
+} from '../explore/exploreUnit.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import type {
   CandidateOrigin,
@@ -7,10 +12,22 @@ import type {
   CandidateOriginExplore,
 } from './candidateOrigin.js';
 
-/** Deleted as a path, only while its identity still matches the scan. */
-export type CandidateRemovalDeletePath = {
-  kind: 'deletePath';
-  identity: FileIdentity;
+/**
+ * A path a removal takes away, with the identity the scan read, checked again right before. A
+ * plain string as every path of the scan's matched items is; a probe's targets are absolute paths.
+ */
+export type RemovalTarget = { path: string; identity: FileIdentity };
+
+/** What a removal takes away, never empty: the one home of its paths after the scan. */
+export type RemovalTargets<TTarget> = [TTarget, ...TTarget[]];
+
+/** An evict also needs "still downloaded and untouched": its recheck compares these with a fresh lstat. */
+export type EvictTarget = RemovalTarget & { modifiedMs: number; accessedMs: number };
+
+/** Deleted as its targets, each only while its identity still matches the scan. */
+export type CandidateRemovalDeletePaths = {
+  kind: 'deletePaths';
+  targets: RemovalTargets<RemovalTarget>;
   /** App bundles whose running process withholds the item, checked again right before deletion. */
   ownerBundlePaths: string[];
 };
@@ -19,18 +36,40 @@ export type CandidateRemovalDeletePath = {
 export type CandidateRemovalRunTool = { kind: 'runTool'; unit: ExploreToolUnit };
 
 /**
- * Deleted as the unit's one folder, after the unit is checked again and only while the folder's
+ * Deleted as its targets, after the unit is checked again and each target only while its
  * identity still matches the scan.
  */
-export type CandidateRemovalDeleteUnitFolder = {
-  kind: 'deleteUnitFolder';
-  identity: FileIdentity;
+export type CandidateRemovalDeleteUnitPaths = {
+  kind: 'deleteUnitPaths';
+  targets: RemovalTargets<RemovalTarget>;
   unit: ExplorePathUnit;
 };
 
+/** Evicted file by file, each only while it is still downloaded and untouched since the scan. */
+export type CandidateRemovalEvictUnitFiles = {
+  kind: 'evictUnitFiles';
+  targets: RemovalTargets<EvictTarget>;
+  unit: ExploreEvictUnit;
+};
+
+/** Removed through the API of the unit's engine, at the socket its probe trusted. */
+export type CandidateRemovalCallEngine = { kind: 'callEngine'; unit: ExploreEngineUnit };
+
+/** How a probed item goes. */
+export type CandidateRemovalProbed =
+  | CandidateRemovalRunTool
+  | CandidateRemovalDeleteUnitPaths
+  | CandidateRemovalEvictUnitFiles
+  | CandidateRemovalCallEngine;
+
+export type CandidateRemoval = CandidateRemovalDeletePaths | CandidateRemovalProbed;
+
 /** What an item is and what it holds, the same for every origin. */
 export type CandidateListing = {
-  /** The path shown; for a tool item, the place of its unit. */
+  /**
+   * The path shown and sorted by, never what goes: for a tool item the place of its unit, for an
+   * engine item its engine's disk image.
+   */
   path: string;
   title: string;
   category: CandidateCategory;
@@ -51,16 +90,19 @@ export type CandidateListing = {
   appName: string | null;
 };
 
-/** An item a rule matched to a path on disk, deleted as that path. */
+/** An item a rule matched to paths on disk, deleted as those paths. */
 export type CandidateMatched = CandidateListing & {
   origin: Exclude<CandidateOrigin, CandidateOriginExplore>;
-  removal: CandidateRemovalDeletePath;
+  removal: CandidateRemovalDeletePaths;
 };
 
-/** An item a probe of Explore found, removed by the command of its tool or as its unit's folder. */
+/**
+ * An item a probe of Explore found, removed by the command of its tool, as its unit's paths, by
+ * an evict, or through its engine.
+ */
 export type CandidateProbed = CandidateListing & {
   origin: CandidateOriginExplore;
-  removal: CandidateRemovalRunTool | CandidateRemovalDeleteUnitFolder;
+  removal: CandidateRemovalProbed;
   /** What the probe found that makes the item safe to offer. */
   evidenceLines: string[];
 };
@@ -76,6 +118,8 @@ export type Advice = {
   risk: Risk;
   explanation: string;
   advice: string;
+  /** The app or settings pane the person handles the place in; `null` when none opens it. */
+  opener: AdviceOpener | null;
   allocatedBytes: number;
   isComplete: boolean;
   privateSizeFallbackCount: number;
@@ -98,7 +142,9 @@ export type SkipReason =
   | 'notBundleId'
   | 'installedAppsUnknown'
   | 'holdsOtherVolume'
-  | 'overlapsEarlierCandidate';
+  | 'overlapsEarlierCandidate'
+  /** It holds the path of an explore entry, or holds or lies in what a probe's unit takes. */
+  | 'heldByProbe';
 
 export type CandidateDecisionOffer = { kind: 'offer'; candidate: Candidate };
 

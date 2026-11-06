@@ -1,13 +1,17 @@
 import type { Platform } from '../platform.js';
-import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
+import { ANDROID_SDK_PATH_NAMES, FLUTTER_SETTINGS_PATH_NAMES } from './androidSdkRoot.js';
+import { ICLOUD_DRIVE_ROOT_PATH_NAMES, MAIL_DOWNLOADS_ROOT_PATH_NAMES } from './appleDataRoots.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
+import { CONTAINER_ENGINES } from './containerEngines.js';
 import { isEntryEvicted } from './hasDatalessFlag.js';
+import { IDE_VERSION_ROOTS } from './ideVersionRoots.js';
 import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
 import { DARWIN_HOMEBREW_PREFIX_PATHS, loadEnvironment } from './loadEnvironment.js';
 import { DARWIN_PRIVACY_DENIAL_CODE, loadFullDiskAccess } from './loadFullDiskAccess.js';
 import { loadInstalledApps } from './loadInstalledApps.js';
 import { loadPrivateBytes } from './loadPrivateSize.js';
 import { loadProcessCommands } from './loadProcessCommands.js';
+import { loadSystemVersion } from './loadSystemVersion.js';
 import { loadVolumeSpace } from './loadVolumeSpace.js';
 import {
   PNPM_HOMES_PATH_NAMES,
@@ -49,7 +53,12 @@ export const darwinPlatform: Platform = {
     pnpmStoreRoot: PNPM_STORE_ROOT_PATH_NAMES,
     pnpmXdgStoreRoot: PNPM_XDG_STORE_ROOT_PATH_NAMES,
     androidSdkRoot: ANDROID_SDK_PATH_NAMES,
+    flutterSettingsPath: FLUTTER_SETTINGS_PATH_NAMES,
     projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
+    containerEngines: CONTAINER_ENGINES,
+    ideVersionRoots: IDE_VERSION_ROOTS,
+    icloudDriveRoot: ICLOUD_DRIVE_ROOT_PATH_NAMES,
+    mailDownloadsRoot: MAIL_DOWNLOADS_ROOT_PATH_NAMES,
   },
   report: {
     computerPhrase: 'this Mac',
@@ -64,5 +73,6 @@ export const darwinPlatform: Platform = {
     loadFullDiskAccess: loadFullDiskAccess,
     loadRunningProcesses: loadProcessCommands,
     loadVolumeSpace: loadVolumeSpace,
+    loadSystemVersion: loadSystemVersion,
   },
 };

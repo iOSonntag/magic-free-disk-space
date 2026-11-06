@@ -19,6 +19,7 @@ const ADVICE: Advice = {
   risk: 'review',
   explanation: 'Packages the tool keeps.',
   advice: 'Run the tool prune command.',
+  opener: null,
   allocatedBytes: 1,
   isComplete: true,
   ...TEST_LISTING_FACTS_NONE,

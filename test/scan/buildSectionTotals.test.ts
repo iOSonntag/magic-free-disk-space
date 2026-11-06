@@ -17,6 +17,7 @@ function buildAdvice(params: { path: string }): Advice {
     risk: 'review',
     explanation: 'Packages the tool keeps.',
     advice: 'Run the tool prune command.',
+    opener: null,
     allocatedBytes: 9000,
     isComplete: true,
     ...TEST_LISTING_FACTS_NONE,

@@ -8,23 +8,41 @@ const KEBAB_CASE_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 /** A version such as `17.2` or `v3`, or a path character. */
 const TITLE_VERSION_OR_PATH_PATTERN = /\d+\.\d+|\bv\d+\b|[/~]/i;
 
-/** Every probe id, kept complete by the compiler. */
-const EXPLORE_PROBE_IDS: Record<ExploreProbeId, true> = {
-  simulatorDevices: true,
-  dartPubCache: true,
-  miseVersions: true,
-  simulatorRuntimes: true,
-  androidAvds: true,
-  androidSystemImages: true,
-  androidEmulator: true,
-  homebrewAppleSilicon: true,
-  homebrewIntel: true,
-  vscodeExtensions: true,
-  asdfVersions: true,
-  nvmVersions: true,
-  androidPlatforms: true,
-  pnpmStores: true,
-  pnpmStoresXdg: true,
+/**
+ * Every probe id, kept complete by the compiler: `entry` once a catalog entry names it, `notBuilt`
+ * while the part of the mission that adds its entry is not built yet.
+ */
+const EXPLORE_PROBE_IDS: Record<ExploreProbeId, 'entry' | 'notBuilt'> = {
+  simulatorDevices: 'entry',
+  dartPubCache: 'entry',
+  miseVersions: 'entry',
+  simulatorRuntimes: 'entry',
+  androidAvds: 'entry',
+  androidSystemImages: 'entry',
+  androidEmulator: 'entry',
+  homebrewAppleSilicon: 'entry',
+  homebrewIntel: 'entry',
+  vscodeExtensions: 'entry',
+  asdfVersions: 'entry',
+  nvmVersions: 'entry',
+  androidPlatforms: 'entry',
+  pnpmStores: 'entry',
+  pnpmStoresXdg: 'entry',
+  dockerDesktopEngine: 'notBuilt',
+  orbStackEngine: 'notBuilt',
+  colimaEngine: 'notBuilt',
+  vagrantBoxes: 'notBuilt',
+  icloudDownloads: 'notBuilt',
+  downloadsInstallers: 'notBuilt',
+  mailDownloads: 'notBuilt',
+  ollamaModels: 'notBuilt',
+  huggingFaceRepos: 'notBuilt',
+  claudeTranscripts: 'notBuilt',
+  claudeCodeVersions: 'notBuilt',
+  ideVersions: 'notBuilt',
+  rustupToolchains: 'notBuilt',
+  condaPackages: 'notBuilt',
+  fvmVersions: 'notBuilt',
 };
 
 function isBlankText(text: string): boolean {
@@ -101,7 +119,11 @@ describe('CATALOG_ENTRIES', () => {
       entry.removal.kind === 'explore' ? [entry.removal.probe] : [],
     );
 
-    expect(probeIds.toSorted()).toEqual(Object.keys(EXPLORE_PROBE_IDS).toSorted());
+    const builtProbeIds = Object.entries(EXPLORE_PROBE_IDS).flatMap(([probeId, state]) =>
+      state === 'entry' ? [probeId] : [],
+    );
+
+    expect(probeIds.toSorted()).toEqual(builtProbeIds.toSorted());
   });
 
   test('home and temp paths are relative and hold no parent segment', () => {
@@ -134,23 +156,23 @@ describe('CATALOG_ENTRIES', () => {
     expect(CATALOG_ENTRIES.find((entry) => entry.id === 'trash')?.risk).toBe('careful');
   });
 
-  test('the staleDays age rule appears only with children scope', () => {
-    const misscopedIds = CATALOG_ENTRIES.filter(
-      (entry) => entry.ageRule === 'staleDays' && entry.scope !== 'children',
+  test('the unchangedDays age rule appears only with the children selection', () => {
+    const misselectedIds = CATALOG_ENTRIES.filter(
+      (entry) => entry.ageRule.kind === 'unchangedDays' && entry.selection.kind !== 'children',
     ).map((entry) => entry.id);
 
-    expect(misscopedIds).toEqual([]);
+    expect(misselectedIds).toEqual([]);
   });
 
-  test('a self entry inside a children folder comes before that folder', () => {
+  test('a path entry inside a children folder comes before that folder', () => {
     const misorderedPairs = CATALOG_ENTRIES.flatMap((folderEntry, folderIndex) => {
-      if (folderEntry.scope !== 'children') {
+      if (folderEntry.selection.kind !== 'children') {
         return [];
       }
 
       return CATALOG_ENTRIES.filter(
         (entry, entryIndex) =>
-          entry.scope === 'self' &&
+          entry.selection.kind === 'path' &&
           entry.root === folderEntry.root &&
           entryIndex > folderIndex &&
           isInsideFolder(entry.path, folderEntry.path),

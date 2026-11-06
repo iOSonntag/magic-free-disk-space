@@ -79,6 +79,11 @@ function buildToolPath(name: ToolName): string {
     case 'brewIntel':
     case 'avdmanager':
     case 'asdf':
+    case 'brctl':
+    case 'vagrant':
+    case 'rustup':
+    case 'conda':
+    case 'fvm':
       return join(fixtureRoot.rootDir, 'tools', name);
   }
 }
@@ -97,6 +102,10 @@ function getRecheckCommand(unit: ExploreToolUnit): ProbeCommandName {
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
     case 'asdfVersion':
+    case 'vagrantBoxVersion':
+    case 'rustupToolchain':
+    case 'condaTarballs':
+    case 'condaPackages':
       throw new Error(`These tests run no ${unit.kind} unit.`);
   }
 }

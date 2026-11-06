@@ -1,19 +1,24 @@
 import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
-import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
+import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCatalogEntry, buildTestMeasurement } from '../support/candidateFixtures.js';
+import {
+  buildTestCatalogEntry,
+  buildTestTargetsMeasurement,
+} from '../support/candidateFixtures.js';
 import { buildTestCatalogOwner } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 const PATH = '/home/Library/Caches/com.example.app';
 
+const UNCHANGED_30_DAYS = { kind: 'unchangedDays', days: 30 } as const;
+
 function decide(params: {
   entry?: CatalogEntry;
-  measurement?: Measurement;
+  measurement?: TargetsMeasurement;
   ownerBundleId?: string | null;
   ownerState?: OwnerState;
   activity?: ActivityProbe | null;
@@ -22,7 +27,7 @@ function decide(params: {
     entry: params.entry ?? buildTestCatalogEntry({}),
     path: PATH,
     measurement:
-      params.measurement ?? buildTestMeasurement({ realPath: PATH, allocatedBytes: 5 * MIB }),
+      params.measurement ?? buildTestTargetsMeasurement({ path: PATH, allocatedBytes: 5 * MIB }),
     owner: buildTestCatalogOwner({ bundleId: params.ownerBundleId ?? null }),
     ownerBundlePaths: ['/Applications/Example.app'],
     ownerState: params.ownerState ?? 'stopped',
@@ -54,8 +59,8 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
         downloadedAtMs: null,
         appName: 'Example',
         removal: {
-          kind: 'deletePath',
-          identity: expect.any(Object),
+          kind: 'deletePaths',
+          targets: [{ path: PATH, identity: expect.any(Object) }],
           ownerBundlePaths: ['/Applications/Example.app'],
         },
       },
@@ -64,8 +69,8 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('carries an incomplete measurement into the candidate', () => {
     const decision = decide({
-      measurement: buildTestMeasurement({
-        realPath: PATH,
+      measurement: buildTestTargetsMeasurement({
+        path: PATH,
         allocatedBytes: 5 * MIB,
         isComplete: false,
       }),
@@ -76,7 +81,9 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('turns an advice entry into advice, never an offer', () => {
     const decision = decide({
-      entry: buildTestCatalogEntry({ removal: { kind: 'advice', advice: 'Run the tool.' } }),
+      entry: buildTestCatalogEntry({
+        removal: { kind: 'advice', advice: 'Run the tool.', carvedPaths: [], opener: null },
+      }),
     });
 
     expect(decision).toEqual({
@@ -89,6 +96,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
         risk: 'safe',
         explanation: 'A cache for tests.',
         advice: 'Run the tool.',
+        opener: null,
         allocatedBytes: 5 * MIB,
         isComplete: true,
         privateSizeFallbackCount: 0,
@@ -107,12 +115,31 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
     });
 
     expect(decision.kind === 'advice' && decision.advice.advice).toBe('Run mise prune.');
+    expect(decision.kind === 'advice' && decision.advice.opener).toBeNull();
+  });
+
+  test("gives an advice entry's opener to its advice", () => {
+    const decision = decide({
+      entry: buildTestCatalogEntry({
+        removal: {
+          kind: 'advice',
+          advice: 'Remove the photos in Photos.',
+          carvedPaths: [],
+          opener: { kind: 'app', app: 'photos' },
+        },
+      }),
+    });
+
+    expect(decision.kind === 'advice' && decision.advice.opener).toEqual({
+      kind: 'app',
+      app: 'photos',
+    });
   });
 
   test('skips a symbolic link before anything else', () => {
     const decision = decide({
-      measurement: buildTestMeasurement({
-        realPath: PATH,
+      measurement: buildTestTargetsMeasurement({
+        path: PATH,
         allocatedBytes: 0,
         kind: 'symbolicLink',
       }),
@@ -124,7 +151,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('skips an Apple-owned child of a children entry', () => {
     const decision = decide({
-      entry: buildTestCatalogEntry({ scope: 'children' }),
+      entry: buildTestCatalogEntry({ selection: { kind: 'children' } }),
       ownerBundleId: 'com.apple.Safari',
     });
 
@@ -146,14 +173,17 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('skips an entry below the size threshold', () => {
     const decision = decide({
-      measurement: buildTestMeasurement({ realPath: PATH, allocatedBytes: MIB - 1 }),
+      measurement: buildTestTargetsMeasurement({ path: PATH, allocatedBytes: MIB - 1 }),
     });
 
     expect(decision).toEqual({ kind: 'skip', path: PATH, reason: 'belowSizeThreshold' });
   });
 
-  test('applies the stale rule only to staleDays entries', () => {
-    const staleEntry = buildTestCatalogEntry({ scope: 'children', ageRule: 'staleDays' });
+  test('applies the age rule only to unchangedDays entries', () => {
+    const staleEntry = buildTestCatalogEntry({
+      selection: { kind: 'children' },
+      ageRule: UNCHANGED_30_DAYS,
+    });
 
     expect(decide({ entry: staleEntry, activity: 'recent' })).toEqual({
       kind: 'skip',
@@ -170,10 +200,10 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('throws when the probe and the age rule disagree', () => {
     expect(() =>
-      decide({ entry: buildTestCatalogEntry({ ageRule: 'staleDays' }), activity: null }),
+      decide({ entry: buildTestCatalogEntry({ ageRule: UNCHANGED_30_DAYS }), activity: null }),
     ).toThrow();
     expect(() =>
-      decide({ entry: buildTestCatalogEntry({ ageRule: 'none' }), activity: 'quiet' }),
+      decide({ entry: buildTestCatalogEntry({ ageRule: { kind: 'none' } }), activity: 'quiet' }),
     ).toThrow();
   });
 });

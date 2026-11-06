@@ -10,6 +10,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../../support/fixtureRoot.js';
+import { TEST_INSTALLED_APP_FACTS_NONE } from '../../support/installedAppFixtures.js';
 import { buildTestMacBundleId } from '../../support/parsedValueFixtures.js';
 import { testOnPosix } from '../../support/posixOnly.js';
 
@@ -75,6 +76,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
         displayName: 'Pocket',
         bundleId: buildTestMacBundleId({ text: 'com.example.pocket' }),
         nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.pocket.widget' })],
+        ...TEST_INSTALLED_APP_FACTS_NONE,
       },
     ]);
   });
@@ -109,18 +111,21 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Example',
           bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
           nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.share' })],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
         {
           bundlePath: join(applicationDir, 'Loud.APP'),
           displayName: 'Loud',
           bundleId: buildTestMacBundleId({ text: 'com.example.loud' }),
           nestedBundleIds: [],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
         {
           bundlePath: join(applicationDir, 'Utilities', 'Helper.app'),
           displayName: 'Helper',
           bundleId: buildTestMacBundleId({ text: 'com.example.helper' }),
           nestedBundleIds: [],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
       ],
       issues: [],
@@ -139,7 +144,13 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
 
     expect(result).toEqual({
       apps: [
-        { bundlePath: brokenPath, displayName: 'Broken', bundleId: null, nestedBundleIds: [] },
+        {
+          bundlePath: brokenPath,
+          displayName: 'Broken',
+          bundleId: null,
+          nestedBundleIds: [],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
+        },
       ],
       issues: [{ path: brokenPath, reason: 'commandFailed', detail: 'exitedWithError' }],
     });
@@ -162,6 +173,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Foo',
           bundleId: buildTestMacBundleId({ text: '' }),
           nestedBundleIds: [],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
       ],
       issues: [],
@@ -248,6 +260,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Linked',
           bundleId: buildTestMacBundleId({ text: 'com.example.real' }),
           nestedBundleIds: [],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
       ],
       issues: [],
@@ -337,6 +350,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
             buildTestMacBundleId({ text: 'com.example.near' }),
             buildTestMacBundleId({ text: 'com.example.share' }),
           ],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
       ],
       issues: [],
@@ -372,6 +386,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Example',
           bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
           nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.share' })],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
       ],
       issues: [],

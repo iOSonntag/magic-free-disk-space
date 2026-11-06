@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { formatAvailableSpaceLine, formatRemovalRun } from '../../src/report/formatRemovalRun.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate } from '../support/candidateFixtures.js';
+import { buildTestCandidate, buildTestEngineCandidate } from '../support/candidateFixtures.js';
 
 describeAwaitingWin32Platform('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
@@ -121,6 +121,60 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       `- changed since the scan, left alone: ${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
       `- its app or tool is running now, left alone: ${extensionsPath}/example.gamma-3.0.0`,
       'Freed about 4.1 kB in 1 item.',
+    ]);
+  });
+
+  test('counts what an engine freed apart, as space its disk image gives back later', () => {
+    const cleaned = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 5000 });
+    const inUse = buildTestEngineCandidate({ homeDir: '/fixture/other', allocatedBytes: 7000 });
+    const stopped = buildTestEngineCandidate({ homeDir: '/fixture/third', allocatedBytes: 9000 });
+    const lines = formatRemovalRun({
+      run: {
+        outcomes: [
+          {
+            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 1000 }),
+            path: '/fixture/a',
+            allocatedBytes: 1000,
+            freedBytes: 1000,
+            outcome: 'removed',
+            code: null,
+          },
+          {
+            candidate: cleaned,
+            path: cleaned.path,
+            allocatedBytes: 5000,
+            freedBytes: 5000,
+            outcome: 'removed',
+            code: null,
+          },
+          {
+            candidate: inUse,
+            path: inUse.path,
+            allocatedBytes: 7000,
+            freedBytes: 0,
+            outcome: 'engineInUse',
+            code: null,
+          },
+          {
+            candidate: stopped,
+            path: stopped.path,
+            allocatedBytes: 9000,
+            freedBytes: 0,
+            outcome: 'engineNotRunning',
+            code: null,
+          },
+        ],
+        journalFailure: null,
+      },
+    });
+
+    expect(lines).toEqual([
+      '- deleted: /fixture/a',
+      `- deleted: ${cleaned.path}`,
+      `- its engine still uses it, left alone: ${inUse.path}`,
+      `- its engine is not running, left alone: ${stopped.path}`,
+      'Freed about 1.0 kB in 1 item.',
+      'About 5.0 kB more comes back once the container engines give up the space of their disk images.',
     ]);
   });
 

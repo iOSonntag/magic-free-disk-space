@@ -30,19 +30,28 @@ export function isAppleBundleId(params: { bundleId: MacBundleId }): boolean {
 }
 
 /**
- * Returns the owner of the path: the entry's owner for a `self` entry; for a `children` entry
- * the child's own name when it is a bundle id, else the installed app named like the child.
- * `null` when no app owns it.
+ * Returns the owner of the path: the entry's owner for a `path` or a `profileFolders` entry; for a
+ * `children` entry the child's own name when it is a bundle id, else the installed app named like
+ * the child. `null` when no app owns it.
  */
 export function resolveTargetOwner(params: {
   entry: CatalogEntry;
   path: string;
   installedApps: InstalledApp[];
 }): CatalogOwner | null {
-  if (params.entry.scope === 'self') {
-    return params.entry.owner;
+  switch (params.entry.selection.kind) {
+    case 'path':
+    case 'profileFolders':
+      return params.entry.owner;
+    case 'children':
+      return resolveChildOwner({ path: params.path, installedApps: params.installedApps });
   }
+}
 
+function resolveChildOwner(params: {
+  path: string;
+  installedApps: InstalledApp[];
+}): CatalogOwner | null {
   const name = basename(params.path);
   const nameBundleId = parseBundleIdShapedName({ name: name });
 

@@ -25,7 +25,7 @@ function resolveFooCacheOwnerState(params: { processCommands: string[] | null })
   });
   const owner = resolveTargetOwner({
     entry: buildTestCatalogEntry({
-      scope: 'children',
+      selection: { kind: 'children' },
       owner: buildTestCatalogOwner({ bundleId: null }),
     }),
     path: '/home/Library/Caches/foo',
@@ -66,9 +66,9 @@ describeAwaitingWin32Platform('isAppleBundleId', () => {
 });
 
 describeAwaitingWin32Platform('resolveTargetOwner', () => {
-  test('takes the owner of a self entry', () => {
+  test('takes the owner of a path entry', () => {
     const entry = buildTestCatalogEntry({
-      scope: 'self',
+      selection: { kind: 'path' },
       owner: buildTestCatalogOwner({ bundleId: 'com.example.app' }),
     });
 
@@ -79,7 +79,7 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
 
   test('takes the child name of a children entry when it is a bundle id', () => {
     const entry = buildTestCatalogEntry({
-      scope: 'children',
+      selection: { kind: 'children' },
       owner: buildTestCatalogOwner({ bundleId: null }),
     });
 
@@ -101,7 +101,7 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
 
   test('takes the installed app named like a child, ignoring case', () => {
     const entry = buildTestCatalogEntry({
-      scope: 'children',
+      selection: { kind: 'children' },
       owner: buildTestCatalogOwner({ bundleId: null }),
     });
     const slack = buildTestInstalledApp({ displayName: 'Slack', bundleId: 'com.example.slack' });

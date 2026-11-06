@@ -8,9 +8,11 @@ import type { Advice, Candidate, CandidateDecision } from '../../src/scan/candid
 import type { ScanIssue } from '../../src/scan/issue.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
 import type { VolumeSpace } from '../../src/system/volumeSpace.js';
+import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
+  buildTestEngineCandidate,
   buildTestToolCandidate,
   TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
@@ -74,6 +76,7 @@ function buildAdvice(params: {
     risk: 'review',
     explanation: 'Packages the tool keeps for its projects.',
     advice: 'Run the tool prune command.',
+    opener: null,
     allocatedBytes: params.allocatedBytes,
     isComplete: true,
     ...TEST_LISTING_FACTS_NONE,
@@ -445,6 +448,81 @@ describeAwaitingWin32Platform('buildScanView', () => {
         itemCount: 0,
         safeBytes: 0,
         adviceCount: 1,
+      },
+    ]);
+  });
+
+  test('shows an engine item with nothing to reveal and the paths of a unit as deleted', () => {
+    const engineCandidate = buildTestEngineCandidate({ homeDir: HOME_DIR, allocatedBytes: 2 * MB });
+    const unitCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR });
+    const view = buildView({
+      report: buildRankedReport({ candidates: [engineCandidate, unitCandidate] }),
+    });
+
+    expect(view.explore?.items).toEqual([
+      expect.objectContaining({
+        key: 'explore:dockerDesktopEngine:engineBuildCache:dockerDesktopEngine',
+        removal: 'engine',
+        displayPath: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
+        revealPath: null,
+      }),
+      expect.objectContaining({ removal: 'delete', revealPath: unitCandidate.path }),
+    ]);
+  });
+
+  test('gives an advice the app or the Settings pane that handles its place', () => {
+    const photosAdvice: Advice = {
+      ...buildAdvice({
+        path: `${HOME_DIR}/Pictures/Photos Library.photoslibrary`,
+        title: 'Photos',
+        allocatedBytes: MB,
+      }),
+      opener: { kind: 'app', app: 'photos' },
+    };
+    const view = buildView({ report: { ...EMPTY_REPORT, advice: [photosAdvice] } });
+
+    expect(view.explore?.adviceGroup?.items[0]?.opener).toEqual({ kind: 'app', app: 'photos' });
+  });
+
+  test('names a container engine that did not answer as asked by the request it sent', () => {
+    const socketPath = `${HOME_DIR}/.docker/run/docker.sock`;
+    const view = buildView({
+      report: {
+        ...EMPTY_REPORT,
+        issues: [
+          {
+            path: socketPath,
+            reason: 'engineFailed',
+            failure: { kind: 'requestFailed', endpoint: '/system/df', status: 500, code: null },
+          },
+          {
+            path: socketPath,
+            reason: 'engineFailed',
+            failure: {
+              kind: 'requestFailed',
+              endpoint: '/_ping',
+              status: null,
+              code: 'ECONNRESET',
+            },
+          },
+          {
+            path: socketPath,
+            reason: 'engineFailed',
+            failure: { kind: 'badAnswer', endpoint: '/version' },
+          },
+        ],
+      },
+    });
+
+    expect(view.notices).toEqual([
+      {
+        titleText: 'Could not ask 3 tools',
+        lines: [
+          `${socketPath}: the container engine did not answer as asked (/system/df answered 500)`,
+          `${socketPath}: the container engine did not answer as asked (/_ping got no answer: ECONNRESET)`,
+          `${socketPath}: the container engine did not answer as asked (/version gave an answer that could not be read)`,
+        ],
+        settingsLink: null,
       },
     ]);
   });

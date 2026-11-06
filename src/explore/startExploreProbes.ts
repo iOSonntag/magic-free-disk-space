@@ -1,5 +1,6 @@
 import type { ExploreProbeId } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { ReadFailure } from '../system/readFailure.js';
 import type { LocatedTool, ToolLookupFailureUntrusted } from '../tools/findTrustedTool.js';
 import { findTrustedTool } from '../tools/findTrustedTool.js';
@@ -11,10 +12,17 @@ import {
   loadAndroidSystemImageFindings,
 } from './android/loadAndroidProbeFindings.js';
 import { loadAsdfVersionFindings } from './asdfVersions/loadAsdfVersionFindings.js';
+import { loadClaudeCodeVersionFindings } from './claudeCodeVersions/loadClaudeCodeVersionFindings.js';
+import { loadClaudeTranscriptFindings } from './claudeTranscripts/loadClaudeTranscriptFindings.js';
+import { loadCondaPackageFindings } from './condaPackages/loadCondaPackageFindings.js';
 import { buildDartPubCacheFindings } from './dartPubCache/buildDartPubCacheFindings.js';
 import { DART_PUB_CACHE_GC_DRY_RUN_PROBE } from './dartPubCache/parseDartPubCacheGc.js';
+import { loadDownloadsInstallerFindings } from './downloadsInstallers/loadDownloadsInstallerFindings.js';
+import { buildEngineProbe } from './engines/buildEngineProbe.js';
 import type {
+  ExploreEngineAnswerFailure,
   ExploreProbe,
+  ExploreProbeEngine,
   ExploreProbeFiles,
   ExploreProbePinned,
   ExploreProbePlatform,
@@ -23,18 +31,26 @@ import type {
   ExploreProbeToolRun,
 } from './exploreProbe.js';
 import type { ExploreFinding, ExploreProbeFindings, ExploreToolFailure } from './exploreUnit.js';
+import { loadFvmVersionFindings } from './fvmVersions/loadFvmVersionFindings.js';
 import { loadHomebrewFindings } from './homebrew/loadHomebrewFindings.js';
+import { loadHuggingFaceRepoFindings } from './huggingFace/loadHuggingFaceRepoFindings.js';
+import { loadIcloudDownloadFindings } from './icloudDownloads/loadIcloudDownloadFindings.js';
+import { loadIdeVersionFindings } from './ideVersions/loadIdeVersionFindings.js';
 import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from './limits.js';
 import type { ExploreProbeDefinition } from './loadProbeOutput.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
+import { loadMailDownloadFindings } from './mailDownloads/loadMailDownloadFindings.js';
 import { buildMiseVersionFindings } from './miseVersions/buildMiseVersionFindings.js';
 import { MISE_PRUNABLE_LIST_PROBE } from './miseVersions/parseMisePrunableVersions.js';
 import { loadNvmVersionFindings } from './nvmVersions/loadNvmVersionFindings.js';
+import { loadOllamaModelFindings } from './ollamaModels/loadOllamaModelFindings.js';
 import { loadPnpmStoreFindings } from './pnpmStores/loadPnpmStoreFindings.js';
 import type { ProjectPinsLoad } from './projectPins/loadProjectPins.js';
+import { loadRustupToolchainFindings } from './rustupToolchains/loadRustupToolchainFindings.js';
 import { buildSimulatorDeviceFindings } from './simulatorDevices/buildSimulatorDeviceFindings.js';
 import { SIMULATOR_DEVICE_LIST_PROBE } from './simulatorDevices/parseSimulatorDeviceList.js';
 import { loadSimulatorRuntimeFindings } from './simulatorRuntimes/loadSimulatorRuntimeFindings.js';
+import { loadVagrantBoxFindings } from './vagrantBoxes/loadVagrantBoxFindings.js';
 import { loadVscodeExtensionFindings } from './vscodeExtensions/loadVscodeExtensionFindings.js';
 
 /** What the probe judged; `isComplete` is false when it could not judge some or all of its units. */
@@ -67,13 +83,21 @@ export type ExploreProbeOutcomeUnreadable = {
  */
 export type ExploreProbeOutcomeTimedOut = { kind: 'timedOut' };
 
+/** The engine behind `socketPath`, the socket the probe trusted, answered but not as asked. */
+export type ExploreProbeOutcomeEngineFailed = {
+  kind: 'engineFailed';
+  socketPath: AbsolutePath;
+  failure: ExploreEngineAnswerFailure;
+};
+
 export type ExploreProbeOutcome =
   | ExploreProbeOutcomeProbed
   | ExploreProbeOutcomeToolMissing
   | ExploreProbeOutcomeToolUntrusted
   | ExploreProbeOutcomeFailed
   | ExploreProbeOutcomeUnreadable
-  | ExploreProbeOutcomeTimedOut;
+  | ExploreProbeOutcomeTimedOut
+  | ExploreProbeOutcomeEngineFailed;
 
 type ExploreProbeStart = {
   environment: Environment;
@@ -189,6 +213,35 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
         }),
     }),
   },
+  dockerDesktopEngine: buildEngineProbe('dockerDesktopEngine'),
+  orbStackEngine: buildEngineProbe('orbStackEngine'),
+  colimaEngine: buildEngineProbe('colimaEngine'),
+  vagrantBoxes: { kind: 'tool', toolName: 'vagrant', loadFindings: loadVagrantBoxFindings },
+  icloudDownloads: { kind: 'files', loadFindings: loadIcloudDownloadFindings },
+  downloadsInstallers: { kind: 'files', loadFindings: loadDownloadsInstallerFindings },
+  mailDownloads: { kind: 'files', loadFindings: loadMailDownloadFindings },
+  ollamaModels: { kind: 'files', loadFindings: loadOllamaModelFindings },
+  huggingFaceRepos: { kind: 'files', loadFindings: loadHuggingFaceRepoFindings },
+  claudeTranscripts: { kind: 'files', loadFindings: loadClaudeTranscriptFindings },
+  claudeCodeVersions: { kind: 'files', loadFindings: loadClaudeCodeVersionFindings },
+  ideVersions: { kind: 'files', loadFindings: loadIdeVersionFindings },
+  rustupToolchains: {
+    kind: 'pinned',
+    buildProbe: (params) => ({
+      kind: 'tool',
+      toolName: 'rustup',
+      loadFindings: (run) =>
+        loadRustupToolchainFindings({ run: run, projectPins: params.projectPins }),
+    }),
+  },
+  condaPackages: { kind: 'tool', toolName: 'conda', loadFindings: loadCondaPackageFindings },
+  fvmVersions: {
+    kind: 'pinned',
+    buildProbe: (params) => ({
+      kind: 'files',
+      loadFindings: (run) => loadFvmVersionFindings({ run: run, projectPins: params.projectPins }),
+    }),
+  },
 };
 
 /**
@@ -223,6 +276,30 @@ export function startExploreProbes(
     androidPlatforms: runExploreProbe({ probe: EXPLORE_PROBES.androidPlatforms, start: params }),
     pnpmStores: runExploreProbe({ probe: EXPLORE_PROBES.pnpmStores, start: params }),
     pnpmStoresXdg: runExploreProbe({ probe: EXPLORE_PROBES.pnpmStoresXdg, start: params }),
+    dockerDesktopEngine: runExploreProbe({
+      probe: EXPLORE_PROBES.dockerDesktopEngine,
+      start: params,
+    }),
+    orbStackEngine: runExploreProbe({ probe: EXPLORE_PROBES.orbStackEngine, start: params }),
+    colimaEngine: runExploreProbe({ probe: EXPLORE_PROBES.colimaEngine, start: params }),
+    vagrantBoxes: runExploreProbe({ probe: EXPLORE_PROBES.vagrantBoxes, start: params }),
+    icloudDownloads: runExploreProbe({ probe: EXPLORE_PROBES.icloudDownloads, start: params }),
+    downloadsInstallers: runExploreProbe({
+      probe: EXPLORE_PROBES.downloadsInstallers,
+      start: params,
+    }),
+    mailDownloads: runExploreProbe({ probe: EXPLORE_PROBES.mailDownloads, start: params }),
+    ollamaModels: runExploreProbe({ probe: EXPLORE_PROBES.ollamaModels, start: params }),
+    huggingFaceRepos: runExploreProbe({ probe: EXPLORE_PROBES.huggingFaceRepos, start: params }),
+    claudeTranscripts: runExploreProbe({ probe: EXPLORE_PROBES.claudeTranscripts, start: params }),
+    claudeCodeVersions: runExploreProbe({
+      probe: EXPLORE_PROBES.claudeCodeVersions,
+      start: params,
+    }),
+    ideVersions: runExploreProbe({ probe: EXPLORE_PROBES.ideVersions, start: params }),
+    rustupToolchains: runExploreProbe({ probe: EXPLORE_PROBES.rustupToolchains, start: params }),
+    condaPackages: runExploreProbe({ probe: EXPLORE_PROBES.condaPackages, start: params }),
+    fvmVersions: runExploreProbe({ probe: EXPLORE_PROBES.fvmVersions, start: params }),
   };
 }
 
@@ -297,6 +374,8 @@ function runExploreProbeOfKind(params: {
       return runExploreFilesProbe({ probe: params.probe, run: params.run });
     case 'pinned':
       return runExplorePinnedProbe({ probe: params.probe, start: params.start, run: params.run });
+    case 'engine':
+      return runExploreEngineProbe({ probe: params.probe, run: params.run });
   }
 }
 
@@ -383,6 +462,8 @@ async function runExploreToolProbe(params: {
       case 'commandFailed':
       case 'outputUnreadable':
         return { kind: 'failed', tool: found.value, failure: findings.failure };
+      case 'placeMissing':
+        return { kind: 'toolMissing' };
     }
   }
 
@@ -396,7 +477,43 @@ async function runExploreFilesProbe(params: {
   const findings = await params.probe.loadFindings(params.run);
 
   if (findings.kind === 'failed') {
-    return { kind: 'unreadable', path: findings.failure.path, failure: findings.failure.failure };
+    switch (findings.failure.reason) {
+      case 'fileUnreadable':
+        return {
+          kind: 'unreadable',
+          path: findings.failure.path,
+          failure: findings.failure.failure,
+        };
+      case 'placeMissing':
+        return { kind: 'toolMissing' };
+    }
+  }
+
+  return { kind: 'probed', ...findings.value };
+}
+
+/**
+ * A socket that is missing, refuses, or is not trusted reads as a missing tool, quietly: nothing
+ * was asked. Only an engine that answered, but not as asked, fails the probe.
+ */
+async function runExploreEngineProbe(params: {
+  probe: ExploreProbeEngine;
+  run: ExploreProbeRun;
+}): Promise<ExploreProbeOutcome> {
+  const findings = await params.probe.loadFindings(params.run);
+
+  if (findings.kind === 'failed') {
+    switch (findings.failure.kind) {
+      case 'socketMissing':
+      case 'socketUntrusted':
+        return { kind: 'toolMissing' };
+      case 'answerFailed':
+        return {
+          kind: 'engineFailed',
+          socketPath: findings.failure.socketPath,
+          failure: findings.failure.failure,
+        };
+    }
   }
 
   return { kind: 'probed', ...findings.value };

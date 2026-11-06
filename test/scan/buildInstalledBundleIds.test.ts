@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { buildInstalledBundleIds } from '../../src/scan/buildInstalledBundleIds.js';
+import { TEST_INSTALLED_APP_FACTS_NONE } from '../support/installedAppFixtures.js';
 import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 describe('buildInstalledBundleIds', () => {
@@ -11,12 +12,14 @@ describe('buildInstalledBundleIds', () => {
           displayName: 'Example',
           bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
           nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.app.helper' })],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
         {
           bundlePath: '/a/Other.app',
           displayName: 'Other',
           bundleId: buildTestMacBundleId({ text: 'com.example.other' }),
           nestedBundleIds: [],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
       ],
     });
@@ -36,6 +39,7 @@ describe('buildInstalledBundleIds', () => {
           displayName: 'Broken',
           bundleId: null,
           nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.broken.share' })],
+          ...TEST_INSTALLED_APP_FACTS_NONE,
         },
       ],
     });

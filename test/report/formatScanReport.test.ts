@@ -35,6 +35,7 @@ function buildAdvice(params: {
     risk: 'careful',
     explanation: 'Installed simulator runtimes.',
     advice: 'Remove the runtimes you no longer need with xcrun simctl runtime delete.',
+    opener: null,
     allocatedBytes: params.allocatedBytes,
     isComplete: params.isComplete,
     ...TEST_LISTING_FACTS_NONE,

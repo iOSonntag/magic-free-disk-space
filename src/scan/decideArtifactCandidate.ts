@@ -46,7 +46,11 @@ export function decideArtifactCandidate(params: {
       lastUsedAtMs: null,
       downloadedAtMs: null,
       appName: null,
-      removal: { kind: 'deletePath', identity: params.measurement.identity, ownerBundlePaths: [] },
+      removal: {
+        kind: 'deletePaths',
+        targets: [{ path: path, identity: params.measurement.identity }],
+        ownerBundlePaths: [],
+      },
     },
   };
 }
