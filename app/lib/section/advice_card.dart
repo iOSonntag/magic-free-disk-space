@@ -1,0 +1,162 @@
+import 'package:flutter/material.dart';
+
+import '../bridge/bridge_event.dart';
+import '../bridge/openable_url.dart';
+import '../design/app_icons.dart';
+import '../design/format_bytes.dart';
+import '../design/glass_card.dart';
+import '../design/glyph_tile.dart';
+import '../design/tokens.dart';
+import '../design/type_ramp.dart';
+import '../link/url_opener.dart';
+import '../shell/open_url_button.dart';
+import 'item_detail_lines.dart';
+import 'reveal_in_finder_button.dart';
+
+/// The app or settings pane an advice opens: its name, its glyph and its
+/// URL.
+typedef AdviceOpenerTarget = ({String name, IconData glyph, OpenableUrl url});
+
+/// The target of [opener], or `null` when this app does not know the app or
+/// pane it names.
+AdviceOpenerTarget? findAdviceOpenerTarget(AdviceOpener opener) {
+  switch (opener) {
+    case AppOpener(:final OpenableApp app):
+      final OpenAppUrl? url = OpenAppUrl.forApp(app);
+      final ({String name, IconData glyph})? appLook = _findAppLook(app);
+      if (url == null || appLook == null) {
+        return null;
+      }
+      return (name: appLook.name, glyph: appLook.glyph, url: url);
+    case SettingsOpener(:final SettingsPane pane):
+      final SettingsPaneUrl? url = SettingsPaneUrl.forPane(pane);
+      final ({String name, IconData glyph})? paneLook = _findPaneLook(pane);
+      if (url == null || paneLook == null) {
+        return null;
+      }
+      return (name: paneLook.name, glyph: paneLook.glyph, url: url);
+  }
+}
+
+({String name, IconData glyph})? _findAppLook(OpenableApp app) {
+  return switch (app) {
+    OpenableApp.photos => (name: 'Photos', glyph: AppIcons.photos),
+    OpenableApp.messages => (name: 'Messages', glyph: AppIcons.messages),
+    OpenableApp.music => (name: 'Music', glyph: AppIcons.music),
+    OpenableApp.tv => (name: 'TV', glyph: AppIcons.tv),
+    OpenableApp.podcasts => (name: 'Podcasts', glyph: AppIcons.podcasts),
+    OpenableApp.garageBand => (name: 'GarageBand', glyph: AppIcons.garageBand),
+    OpenableApp.logicPro => (name: 'Logic Pro', glyph: AppIcons.logicPro),
+    OpenableApp.iMovie => (name: 'iMovie', glyph: AppIcons.iMovie),
+    OpenableApp.finalCutPro => (name: 'Final Cut Pro', glyph: AppIcons.finalCutPro),
+    OpenableApp.finder => (name: 'Finder', glyph: AppIcons.finder),
+    OpenableApp.unknown => null,
+  };
+}
+
+({String name, IconData glyph})? _findPaneLook(SettingsPane pane) {
+  return switch (pane) {
+    SettingsPane.storage => (name: 'Storage settings', glyph: AppIcons.storageSettings),
+    SettingsPane.icloud => (name: 'iCloud settings', glyph: AppIcons.icloudSettings),
+    SettingsPane.timeMachine => (
+      name: 'Time Machine settings',
+      glyph: AppIcons.timeMachineSettings,
+    ),
+    SettingsPane.unknown => null,
+  };
+}
+
+/// The key of the card of the advice keyed [value].
+final class AdviceCardKey extends ValueKey<String> {
+  const AdviceCardKey(super.value);
+}
+
+/// A place only the user can free: what it holds, the steps, and a button
+/// that opens its app or settings pane. It has no checkbox; nothing selects
+/// it.
+class AdviceCard extends StatelessWidget {
+  const AdviceCard({
+    super.key,
+    required this.item,
+    required this.accent,
+    required this.sectionGlyph,
+    required this.revealPaths,
+    required this.urlOpener,
+  });
+
+  final AdviceItemView item;
+  final Color accent;
+  final IconData sectionGlyph;
+  final Set<String> revealPaths;
+  final UrlOpener urlOpener;
+
+  @override
+  Widget build(BuildContext context) {
+    final AdviceOpener? opener = item.opener;
+    final AdviceOpenerTarget? target = opener == null
+        ? null
+        : findAdviceOpenerTarget(opener);
+    final String? displayPath = item.displayPath;
+    final RevealUrl? revealUrl = findRevealUrl(
+      item.revealPath,
+      allowedPaths: revealPaths,
+    );
+    return GlassCard(
+      accent: accent,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GlyphTile(glyph: target?.glyph ?? sectionGlyph, accent: accent, size: 44),
+          const SizedBox(width: StageSpacing.regular),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: Text(item.title, style: TypeRamp.title)),
+                    if (item.allocatedBytes > 0) ...[
+                      const SizedBox(width: StageSpacing.regular),
+                      Text(formatBytes(item.allocatedBytes), style: TypeRamp.figure),
+                    ],
+                  ],
+                ),
+                if (displayPath != null) ...[
+                  const SizedBox(height: StageSpacing.tight),
+                  ItemPathText(path: displayPath),
+                ],
+                const SizedBox(height: StageSpacing.medium),
+                ItemDetailLines(lines: item.detailLines, accent: accent),
+                if (target != null || revealUrl != null) ...[
+                  const SizedBox(height: StageSpacing.small),
+                  Wrap(
+                    spacing: StageSpacing.small,
+                    runSpacing: StageSpacing.small,
+                    children: [
+                      if (target != null)
+                        OpenUrlButton(
+                          labelText: 'Open ${target.name}',
+                          url: target.url,
+                          failedText: '${target.name} did not open.',
+                          urlOpener: urlOpener,
+                          icon: target.glyph,
+                          accent: accent,
+                        ),
+                      if (revealUrl != null)
+                        RevealInFinderButton(
+                          url: revealUrl,
+                          urlOpener: urlOpener,
+                          accent: accent,
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
