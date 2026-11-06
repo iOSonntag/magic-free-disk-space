@@ -49,19 +49,37 @@ final class ConfirmingState extends ListedState {
     required super.scan,
     required super.selectedNumbers,
     required this.plan,
+    this.isReplanning = false,
   });
+
+  final PlannedEvent plan;
+
+  /// Whether the selection lost an item since [plan] and its new plan is on
+  /// its way; [plan] then deletes more than the selection, so it is never
+  /// confirmed.
+  final bool isReplanning;
+}
+
+final class DeletingState extends CleanerState {
+  const DeletingState({required this.plan});
 
   final PlannedEvent plan;
 }
 
-final class DeletingState extends CleanerState {
-  const DeletingState();
-}
-
 final class DeletedState extends CleanerState {
-  const DeletedState({required this.result});
+  const DeletedState({
+    required this.result,
+    required this.scan,
+    required this.plan,
+  });
 
   final DeletedEvent result;
+
+  /// The scan the plan was made of, which describes the disk before the run.
+  final ScannedEvent scan;
+
+  /// The plan the run deleted, which names the items of its outcomes.
+  final PlannedEvent plan;
 }
 
 const String _deletionStoppedText =
@@ -142,24 +160,33 @@ class CleanerController extends ChangeNotifier {
     if (current is! ScannedState || _isRequestPending) {
       return;
     }
-    final List<int> numbers = current.selectedNumbers.toList()..sort();
-    final PlanAnswer? answer = await _request(() => _bridge.plan(numbers));
-    switch (answer) {
-      case null:
-        return;
-      case PlannedEvent():
-        _setState(
-          ConfirmingState(
-            scan: current.scan,
-            selectedNumbers: current.selectedNumbers,
-            plan: answer,
-          ),
-        );
-      case NothingApprovedEvent():
-        _showList(current, notice: answer.lines.join('\n'));
-      case FailedEvent():
-        _setFailedAnswer(answer, current);
+    await _planSelection(current);
+  }
+
+  /// Takes [number] out of the plan under review and plans what is left of
+  /// the selection again; with nothing left, shows the list.
+  Future<void> removeCandidateFromPlan(int number) async {
+    final CleanerState current = _state;
+    if (current is! ConfirmingState ||
+        current.isReplanning ||
+        _isRequestPending ||
+        !current.selectedNumbers.contains(number)) {
+      return;
     }
+    final Set<int> selectedNumbers = {...current.selectedNumbers}
+      ..remove(number);
+    if (selectedNumbers.isEmpty) {
+      _setState(ScannedState(scan: current.scan, selectedNumbers: const {}));
+      return;
+    }
+    final ConfirmingState replanning = ConfirmingState(
+      scan: current.scan,
+      selectedNumbers: selectedNumbers,
+      plan: current.plan,
+      isReplanning: true,
+    );
+    _setState(replanning);
+    await _planSelection(replanning);
   }
 
   void cancelConfirmation() {
@@ -172,10 +199,12 @@ class CleanerController extends ChangeNotifier {
 
   Future<void> confirmDeletion(String confirmation) async {
     final CleanerState current = _state;
-    if (current is! ConfirmingState || _isRequestPending) {
+    if (current is! ConfirmingState ||
+        current.isReplanning ||
+        _isRequestPending) {
       return;
     }
-    _setState(const DeletingState());
+    _setState(DeletingState(plan: current.plan));
     final DeleteAnswer? answer = await _request(
       () => _bridge.delete(
         planId: current.plan.planId,
@@ -187,11 +216,47 @@ class CleanerController extends ChangeNotifier {
       case null:
         return;
       case DeletedEvent():
-        _setState(DeletedState(result: answer));
+        _setState(
+          DeletedState(result: answer, scan: current.scan, plan: current.plan),
+        );
       case CancelledEvent():
         _showList(current, notice: answer.message);
       case FailedEvent():
         _setFailedAnswer(answer, current);
+    }
+  }
+
+  /// Leaves the Result of a run for a new scan, because the run changed the
+  /// disk its scan describes.
+  Future<void> finishDeletion() async {
+    if (_state is! DeletedState) {
+      return;
+    }
+    await scan();
+  }
+
+  /// Asks the bridge to plan the selection of [waiting], the state shown
+  /// meanwhile; an answer that comes after the user left [waiting] is
+  /// dropped.
+  Future<void> _planSelection(ListedState waiting) async {
+    final List<int> numbers = waiting.selectedNumbers.toList()..sort();
+    final PlanAnswer? answer = await _request(() => _bridge.plan(numbers));
+    if (answer == null || !identical(_state, waiting)) {
+      return;
+    }
+    switch (answer) {
+      case PlannedEvent():
+        _setState(
+          ConfirmingState(
+            scan: waiting.scan,
+            selectedNumbers: waiting.selectedNumbers,
+            plan: answer,
+          ),
+        );
+      case NothingApprovedEvent():
+        _showList(waiting, notice: answer.lines.join('\n'));
+      case FailedEvent():
+        _setFailedAnswer(answer, waiting);
     }
   }
 

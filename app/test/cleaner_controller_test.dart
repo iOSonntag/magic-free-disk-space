@@ -170,6 +170,36 @@ const PlannedEvent plannedEvent = PlannedEvent(
   holdsCareful: false,
 );
 
+/// The plan of the safe item and the careful video together.
+const PlannedEvent twoItemPlan = PlannedEvent(
+  planId: 8,
+  lines: [
+    '- 6.0 MB /Users/me/Library/Caches/ToolCache',
+    '- 3.0 MB /Users/me/Movies/holiday.mov',
+  ],
+  warningLines: ['Type DELETE to delete them permanently.'],
+  items: [
+    PlannedItemView(
+      number: 1,
+      key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
+      title: 'Tool cache',
+      sectionKey: SectionKey.caches,
+      risk: Risk.safe,
+      allocatedBytes: 6000000,
+    ),
+    PlannedItemView(
+      number: 2,
+      key: 'userFile:/Users/me/Movies/holiday.mov',
+      title: 'Old video',
+      sectionKey: SectionKey.largeFiles,
+      risk: Risk.careful,
+      allocatedBytes: 3000000,
+    ),
+  ],
+  totalBytes: 9000000,
+  holdsCareful: true,
+);
+
 /// The run of [plannedEvent], which removed its one item.
 const DeletedEvent deletedEvent = DeletedEvent(
   lines: ['Freed 6.0 MB.'],
@@ -360,6 +390,142 @@ void main() {
       expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
       expect((controller.state as DeletedState).result, same(deletedEvent));
       expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete']);
+    });
+
+    test(
+      'a deletion runs through a state that holds its plan, and its result keeps the plan and its scan',
+      () async {
+        final List<DeletingState> deletingStates = [];
+        controller.addListener(() {
+          final CleanerState state = controller.state;
+          if (state is DeletingState) {
+            deletingStates.add(state);
+          }
+        });
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+
+        await controller.confirmDeletion('DELETE');
+
+        expect(deletingStates, hasLength(1));
+        expect(deletingStates.single.plan, same(plannedEvent));
+        final DeletedState state = controller.state as DeletedState;
+        expect(state.plan, same(plannedEvent));
+        expect(state.scan, same(scannedEvent));
+      },
+    );
+
+    group('taking an item out of the plan under review', () {
+      Future<void> planSafeItemAndVideo() async {
+        await scanAndSelectSafe();
+        controller.toggleCandidate(2);
+        bridge.planAnswer = twoItemPlan;
+        await controller.requestPlan();
+        bridge.planAnswer = plannedEvent;
+      }
+
+      test(
+        'plans the rest again, and holds the old plan as replanning meanwhile',
+        () async {
+          await planSafeItemAndVideo();
+          final List<ConfirmingState> confirmingStates = [];
+          controller.addListener(() {
+            final CleanerState state = controller.state;
+            if (state is ConfirmingState) {
+              confirmingStates.add(state);
+            }
+          });
+
+          await controller.removeCandidateFromPlan(2);
+
+          expect(bridge.plannedNumbers, [1]);
+          expect(confirmingStates, hasLength(2));
+          expect(confirmingStates.first.isReplanning, isTrue);
+          expect(confirmingStates.first.plan, same(twoItemPlan));
+          expect(confirmingStates.first.selectedNumbers, {1});
+          final ConfirmingState state = controller.state as ConfirmingState;
+          expect(state.isReplanning, isFalse);
+          expect(state.plan, same(plannedEvent));
+          expect(state.selectedNumbers, {1});
+        },
+      );
+
+      test('never confirms the old plan while the new one is on its way', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        await controller.confirmDeletion('DELETE');
+        await replan;
+
+        expect(bridge.deleteRequest, isNull);
+        expect(controller.state, isA<ConfirmingState>());
+      });
+
+      test('with its last item shows the list with nothing selected and plans nothing', () async {
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+
+        await controller.removeCandidateFromPlan(1);
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, isEmpty);
+        expect(bridge.requestKinds, ['status', 'scan', 'plan']);
+      });
+
+      test('a number outside the selection changes nothing', () async {
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+        final CleanerState before = controller.state;
+
+        await controller.removeCandidateFromPlan(3);
+
+        expect(controller.state, same(before));
+        expect(bridge.requestKinds, ['status', 'scan', 'plan']);
+      });
+
+      test('cancelled while the new plan is on its way keeps the list', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        controller.cancelConfirmation();
+        await replan;
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, {1});
+      });
+
+      test('a new plan that approves nothing shows the list with its lines', () async {
+        await planSafeItemAndVideo();
+        bridge.planAnswer = const NothingApprovedEvent(
+          lines: ['Nothing of the selection can be deleted.'],
+        );
+
+        await controller.removeCandidateFromPlan(2);
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, {1});
+        expect(state.notice, 'Nothing of the selection can be deleted.');
+      });
+    });
+
+    test('done after a run scans again', () async {
+      await scanAndSelectSafe();
+      await controller.requestPlan();
+      await controller.confirmDeletion('DELETE');
+
+      await controller.finishDeletion();
+
+      expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete', 'scan']);
+      final ScannedState state = controller.state as ScannedState;
+      expect(state.selectedNumbers, isEmpty);
+    });
+
+    test('done outside a result scans nothing', () async {
+      await scanAndSelectSafe();
+
+      await controller.finishDeletion();
+
+      expect(bridge.requestKinds, ['status', 'scan']);
     });
 
     test('a tick while the plan request is pending changes nothing', () async {
