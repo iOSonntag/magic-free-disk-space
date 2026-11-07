@@ -39,5 +39,5 @@ export const moduleRegistry: Record<ModuleName, ModuleBoundary> = {
 export const boundaryConfig: BoundaryConfig<ModuleName> = {
   modules: moduleRegistry,
   compositionRootFiles: ['bridgeMain.ts', 'main.ts'],
-  sharedRootFiles: ['moduleBoundary.ts', 'notBuilt.ts', 'result.ts'],
+  sharedRootFiles: ['moduleBoundary.ts', 'result.ts'],
 };
