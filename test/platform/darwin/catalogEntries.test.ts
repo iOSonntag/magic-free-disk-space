@@ -8,42 +8,39 @@ const KEBAB_CASE_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 /** A version such as `17.2` or `v3`, or a path character. */
 const TITLE_VERSION_OR_PATH_PATTERN = /\d+\.\d+|\bv\d+\b|[/~]/i;
 
-/**
- * Every probe id, kept complete by the compiler: `entry` once a catalog entry names it, `notBuilt`
- * while the part of the mission that adds its entry is not built yet.
- */
-const EXPLORE_PROBE_IDS: Record<ExploreProbeId, 'entry' | 'notBuilt'> = {
-  simulatorDevices: 'entry',
-  dartPubCache: 'entry',
-  miseVersions: 'entry',
-  simulatorRuntimes: 'entry',
-  androidAvds: 'entry',
-  androidSystemImages: 'entry',
-  androidEmulator: 'entry',
-  homebrewAppleSilicon: 'entry',
-  homebrewIntel: 'entry',
-  vscodeExtensions: 'entry',
-  asdfVersions: 'entry',
-  nvmVersions: 'entry',
-  androidPlatforms: 'entry',
-  pnpmStores: 'entry',
-  pnpmStoresXdg: 'entry',
-  dockerDesktopEngine: 'entry',
-  orbStackEngine: 'entry',
-  colimaEngine: 'entry',
-  vagrantBoxes: 'entry',
-  icloudDownloads: 'entry',
-  downloadsInstallers: 'entry',
-  mailDownloads: 'entry',
-  ollamaModels: 'entry',
-  huggingFaceRepos: 'entry',
-  lmStudioModels: 'entry',
-  claudeTranscripts: 'entry',
-  claudeCodeVersions: 'entry',
-  ideVersions: 'entry',
-  rustupToolchains: 'entry',
-  condaPackages: 'entry',
-  fvmVersions: 'entry',
+/** Every probe id, kept complete by the compiler. */
+const EXPLORE_PROBE_IDS: Record<ExploreProbeId, true> = {
+  simulatorDevices: true,
+  dartPubCache: true,
+  miseVersions: true,
+  simulatorRuntimes: true,
+  androidAvds: true,
+  androidSystemImages: true,
+  androidEmulator: true,
+  homebrewAppleSilicon: true,
+  homebrewIntel: true,
+  vscodeExtensions: true,
+  asdfVersions: true,
+  nvmVersions: true,
+  androidPlatforms: true,
+  pnpmStores: true,
+  pnpmStoresXdg: true,
+  dockerDesktopEngine: true,
+  orbStackEngine: true,
+  colimaEngine: true,
+  vagrantBoxes: true,
+  icloudDownloads: true,
+  downloadsInstallers: true,
+  mailDownloads: true,
+  ollamaModels: true,
+  huggingFaceRepos: true,
+  lmStudioModels: true,
+  claudeTranscripts: true,
+  claudeCodeVersions: true,
+  ideVersions: true,
+  rustupToolchains: true,
+  condaPackages: true,
+  fvmVersions: true,
 };
 
 function isBlankText(text: string): boolean {
@@ -99,9 +96,10 @@ describe('CATALOG_ENTRIES', () => {
     expect(blankAdviceIds).toEqual([]);
   });
 
-  test('delete entries sit in the home or temp root', () => {
+  test('delete entries sit in the home, temp, or user cache root', () => {
     const misplacedIds = CATALOG_ENTRIES.filter(
-      (entry) => entry.removal.kind === 'delete' && entry.root !== 'home' && entry.root !== 'temp',
+      (entry) =>
+        entry.removal.kind === 'delete' && !['home', 'temp', 'userCache'].includes(entry.root),
     ).map((entry) => entry.id);
 
     expect(misplacedIds).toEqual([]);
@@ -120,11 +118,7 @@ describe('CATALOG_ENTRIES', () => {
       entry.removal.kind === 'explore' ? [entry.removal.probe] : [],
     );
 
-    const builtProbeIds = Object.entries(EXPLORE_PROBE_IDS).flatMap(([probeId, state]) =>
-      state === 'entry' ? [probeId] : [],
-    );
-
-    expect(probeIds.toSorted()).toEqual(builtProbeIds.toSorted());
+    expect(probeIds.toSorted()).toEqual(Object.keys(EXPLORE_PROBE_IDS).toSorted());
   });
 
   test('home and temp paths are relative and hold no parent segment', () => {
@@ -157,9 +151,9 @@ describe('CATALOG_ENTRIES', () => {
     expect(CATALOG_ENTRIES.find((entry) => entry.id === 'trash')?.risk).toBe('careful');
   });
 
-  test('the unchangedDays age rule appears only with the children selection', () => {
+  test('the unchangedDays age rule appears only with a children or a profile folders selection', () => {
     const misselectedIds = CATALOG_ENTRIES.filter(
-      (entry) => entry.ageRule.kind === 'unchangedDays' && entry.selection.kind !== 'children',
+      (entry) => entry.ageRule.kind === 'unchangedDays' && entry.selection.kind === 'path',
     ).map((entry) => entry.id);
 
     expect(misselectedIds).toEqual([]);

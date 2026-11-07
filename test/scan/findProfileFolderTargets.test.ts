@@ -152,6 +152,44 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
     }
   });
 
+  test('takes every folder as a profile for a null marker', async () => {
+    const fixtureRoot = await createFixtureRoot();
+
+    try {
+      const selection: CatalogSelectionProfileFolders = {
+        kind: 'profileFolders',
+        markerName: null,
+        subpaths: ['com.apple.metal', 'com.apple.metalfe'],
+        rootSubpaths: [],
+      };
+      const entry = buildTestCatalogEntry({ selection: selection });
+      const appPath = join(fixtureRoot.userCacheDir, 'com.example.app');
+      await createFixtureDirectory({ path: join(appPath, 'com.apple.metal') });
+      await createFixtureDirectory({ path: join(appPath, 'com.apple.metalfe') });
+      await createFixtureDirectory({ path: join(fixtureRoot.userCacheDir, 'com.example.other') });
+
+      const result = await findProfileFolderTargets({
+        entry: entry,
+        selection: selection,
+        path: fixtureRoot.userCacheDir,
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      });
+
+      expect(result).toEqual({
+        targets: [
+          {
+            entry: entry,
+            path: appPath,
+            targetPaths: [join(appPath, 'com.apple.metal'), join(appPath, 'com.apple.metalfe')],
+          },
+        ],
+        issues: [],
+      });
+    } finally {
+      await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
+    }
+  });
+
   test('a missing folder adds nothing', async () => {
     const fixtureRoot = await createFixtureRoot();
 

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
+import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { CATALOG_ENTRIES } from '../../src/platform/darwin/catalogEntries.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
@@ -19,6 +20,7 @@ import {
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
+  loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 
 const PREVIEWS_FILE_BYTES = 1_048_576;
@@ -27,7 +29,7 @@ const SNIPPET_FILE_BYTES = 8192;
 
 const MODIFIED_MS = Date.UTC(2026, 0, 1);
 
-type UserDataFixture = { userDataPath: string; previewsPath: string };
+type UserDataFixture = { environment: Environment; userDataPath: string; previewsPath: string };
 
 /** Builds a temporary Xcode `UserData` tree, hands it to `run`, and removes it afterwards. */
 async function withUserData(params: {
@@ -38,7 +40,11 @@ async function withUserData(params: {
   try {
     const userDataPath = join(fixtureRoot.homeDir, 'Library', 'Developer', 'Xcode', 'UserData');
 
-    await params.run({ userDataPath: userDataPath, previewsPath: join(userDataPath, 'Previews') });
+    await params.run({
+      environment: await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: MODIFIED_MS }),
+      userDataPath: userDataPath,
+      previewsPath: join(userDataPath, 'Previews'),
+    });
   } finally {
     await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   }
@@ -134,7 +140,7 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
           measurements: measurements,
         });
         const report = buildScanReportOfPhases({
-          pathRules: DARWIN_PATH_RULES,
+          environment: fixture.environment,
           reservedEntryPaths: [],
           phases: [previewsPhase, userDataPhase],
           incompleteExploreAdvice: { decisions: [], issues: [] },

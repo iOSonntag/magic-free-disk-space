@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path';
 import type { Risk } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import { isTouchingProtectedPath } from '../environment/isTouchingProtectedPath.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { Candidate, RemovalTarget, RemovalTargets } from '../scan/candidate.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
@@ -107,42 +108,15 @@ function findTargetRefusal(params: {
     return { kind: 'refused', path: path, reason: 'outsideAllowedRoot' };
   }
 
-  // Compared without case: macOS disks usually ignore it, and the looser match only refuses more.
-  const lowerCaseRealPath = realPath.toLowerCase();
-  const holdsProtectedPath = [
-    ...params.environment.protectedRealPaths,
-    ...params.environment.sensitiveRealPaths,
-  ].some((protectedPath) =>
-    isSameOrInsidePath({
-      rules: params.environment.pathRules,
-      path: protectedPath.toLowerCase(),
-      parentPath: lowerCaseRealPath,
-    }),
-  );
-  const isInsideSensitivePath = params.environment.sensitiveRealPaths.some((sensitivePath) =>
-    isSameOrInsidePath({
-      rules: params.environment.pathRules,
-      path: lowerCaseRealPath,
-      parentPath: sensitivePath.toLowerCase(),
-    }),
-  );
-  // Compared with case, unlike the refusals above: an exception lets more go, so only the exact
-  // folder on disk counts.
-  const isInsideSensitiveException = params.environment.sensitiveExceptionRealPaths.some(
-    (exceptionPath) =>
-      isSameOrInsidePath({
-        rules: params.environment.pathRules,
-        path: realPath,
-        parentPath: exceptionPath,
-      }),
-  );
-
-  if (holdsProtectedPath || (isInsideSensitivePath && !isInsideSensitiveException)) {
+  if (isTouchingProtectedPath({ environment: params.environment, realPath: realPath })) {
     return { kind: 'refused', path: path, reason: 'protectedRoot' };
   }
 
   if (
-    isTouchingEvictRoot({ lowerCaseRealPath: lowerCaseRealPath, environment: params.environment })
+    isTouchingEvictRoot({
+      lowerCaseRealPath: realPath.toLowerCase(),
+      environment: params.environment,
+    })
   ) {
     return { kind: 'refused', path: path, reason: 'protectedRoot' };
   }

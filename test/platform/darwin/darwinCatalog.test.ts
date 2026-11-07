@@ -34,6 +34,12 @@ function isResolvedUnderRoot(params: { entry: CatalogEntry; environment: Environ
         path: path,
         parentPath: params.environment.tempDir,
       });
+    case 'userCache':
+      return isSameOrInsidePath({
+        rules: params.environment.pathRules,
+        path: path,
+        parentPath: params.environment.userCacheDir,
+      });
     case 'absolute': {
       const parsed = parseAbsolutePath({ rules: params.environment.pathRules, text: path });
 

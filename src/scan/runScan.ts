@@ -9,7 +9,6 @@ import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js'
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
-import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
@@ -62,6 +61,7 @@ import {
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
 import type { InstalledApp, ScanPlatform, ScanPlatformApps } from './scanPlatform.js';
+import { skipOffersTouchingProtectedPath } from './skipOffersTouchingProtectedPath.js';
 import type { ArtifactFinding, ProjectWalk } from './walkProjects.js';
 import { walkProjects } from './walkProjects.js';
 
@@ -161,7 +161,7 @@ export async function runScan(params: {
   params.onProgress(
     buildScanProgress({
       step: { message: 'Checking installed apps and running processes…', phase: 'apps' },
-      pathRules: params.environment.pathRules,
+      environment: params.environment,
       reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [],
     }),
@@ -251,7 +251,7 @@ export async function runScan(params: {
   params.onProgress(
     buildScanProgress({
       step: { message: 'Measuring known storage locations…', phase: 'catalog' },
-      pathRules: params.environment.pathRules,
+      environment: params.environment,
       reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup],
     }),
@@ -264,7 +264,7 @@ export async function runScan(params: {
   params.onProgress(
     buildScanProgress({
       step: { message: 'Searching your projects for old build folders…', phase: 'projects' },
-      pathRules: params.environment.pathRules,
+      environment: params.environment,
       reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup, catalog],
     }),
@@ -278,7 +278,7 @@ export async function runScan(params: {
       params.onProgress(
         buildScanProgress({
           step: step,
-          pathRules: params.environment.pathRules,
+          environment: params.environment,
           reservedEntryPaths: reservedEntryPaths,
           finishedPhases: [setup, catalog, artifacts],
         }),
@@ -288,7 +288,7 @@ export async function runScan(params: {
   params.onProgress(
     buildScanProgress({
       step: { message: 'Looking for large old files…', phase: 'largeFiles' },
-      pathRules: params.environment.pathRules,
+      environment: params.environment,
       reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup, catalog, artifacts, apps],
     }),
@@ -302,7 +302,7 @@ export async function runScan(params: {
       params.onProgress(
         buildScanProgress({
           step: step,
-          pathRules: params.environment.pathRules,
+          environment: params.environment,
           reservedEntryPaths: reservedEntryPaths,
           finishedPhases: [setup, catalog, artifacts, apps, userFiles],
         }),
@@ -312,7 +312,7 @@ export async function runScan(params: {
   params.onProgress(
     buildScanProgress({
       step: { message: 'Asking developer tools what they can clean…', phase: 'tools' },
-      pathRules: params.environment.pathRules,
+      environment: params.environment,
       reservedEntryPaths: reservedEntryPaths,
       finishedPhases: [setup, catalog, artifacts, apps, userFiles, orphans],
     }),
@@ -336,7 +336,7 @@ export async function runScan(params: {
   });
 
   return buildScanReportOfPhases({
-    pathRules: params.environment.pathRules,
+    environment: params.environment,
     reservedEntryPaths: reservedEntryPaths,
     // Explore comes last, so an item an earlier source found wins the overlap.
     phases: [
@@ -398,13 +398,16 @@ function loadOrphanPhaseOfAppSection(params: {
 /** Dedupes what the finished phases found the same way the report does, so no total shrinks. */
 function buildScanProgress(params: {
   step: ScanProgressStep;
-  pathRules: PathRules;
+  environment: Environment;
   reservedEntryPaths: string[];
   finishedPhases: ScanPhase[];
 }): ScanProgress {
   const decisions = dedupeCandidates({
-    pathRules: params.pathRules,
-    decisions: mergeScanPhases({ phases: params.finishedPhases }).decisions,
+    pathRules: params.environment.pathRules,
+    decisions: skipOffersTouchingProtectedPath({
+      environment: params.environment,
+      decisions: mergeScanPhases({ phases: params.finishedPhases }).decisions,
+    }),
     reservedEntryPaths: params.reservedEntryPaths,
   });
 
@@ -423,12 +426,12 @@ function buildScanProgress(params: {
 }
 
 /**
- * Dedupes the decisions of the phases, in their order, with the paths of the Explore entries
- * reserved for their probes, then adds the advice of the Explore entries whose probe judged only
- * part of their units, and builds the report.
+ * Skips the offers that touch a protected path, dedupes the decisions of the phases, in their
+ * order, with the paths of the Explore entries reserved for their probes, then adds the advice of
+ * the Explore entries whose probe judged only part of their units, and builds the report.
  */
 export function buildScanReportOfPhases(params: {
-  pathRules: PathRules;
+  environment: Environment;
   reservedEntryPaths: string[];
   phases: ScanPhase[];
   incompleteExploreAdvice: ScanPhase;
@@ -438,8 +441,11 @@ export function buildScanReportOfPhases(params: {
   return buildScanReport({
     decisions: [
       ...dedupeCandidates({
-        pathRules: params.pathRules,
-        decisions: scan.decisions,
+        pathRules: params.environment.pathRules,
+        decisions: skipOffersTouchingProtectedPath({
+          environment: params.environment,
+          decisions: scan.decisions,
+        }),
         reservedEntryPaths: params.reservedEntryPaths,
       }),
       // Added after the dedupe, so this advice holds back no offer of its own entry, whose units

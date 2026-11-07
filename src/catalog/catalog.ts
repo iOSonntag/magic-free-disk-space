@@ -25,7 +25,8 @@ export type CandidateCategory =
   | 'leftovers'
   | 'userFiles';
 
-export type CatalogRoot = 'home' | 'temp' | 'absolute';
+/** The folder an entry's path lies below; `userCache` is the per-user folder of the system's caches. */
+export type CatalogRoot = 'home' | 'temp' | 'userCache' | 'absolute';
 
 /** The apps an advice may open, by a key only the app maps to the app itself. */
 export type OpenableApp =
@@ -108,13 +109,13 @@ export type CatalogSelectionChildren = { kind: 'children' };
 
 /**
  * One item per profile folder, a child folder or the path itself that holds `markerName`, such as
- * a browser profile's `Preferences`; its targets are the `subpaths` that exist in it. The path's
- * own item also takes the `rootSubpaths` that exist beside the profiles, such as a browser's
- * shared caches.
+ * a browser profile's `Preferences`, or each of them for a `null` marker; its targets are the
+ * `subpaths` that exist in it. The path's own item also takes the `rootSubpaths` that exist beside
+ * the profiles, such as a browser's shared caches.
  */
 export type CatalogSelectionProfileFolders = {
   kind: 'profileFolders';
-  markerName: string;
+  markerName: string | null;
   subpaths: string[];
   rootSubpaths: string[];
 };
@@ -143,7 +144,7 @@ export type CatalogEntry = {
   regeneration: string;
   risk: Risk;
   root: CatalogRoot;
-  /** Relative to the root for home and temp; the full path for absolute. */
+  /** Relative to the root for home, temp, and user cache; the full path for absolute. */
   path: string;
   selection: CatalogSelection;
   ageRule: CatalogAgeRule;

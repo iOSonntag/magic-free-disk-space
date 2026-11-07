@@ -234,6 +234,7 @@ function buildSkipReasonTexts(params: { texts: ReportTexts }): Record<SkipReason
   return {
     belowSizeThreshold: 'too small to matter',
     symbolicLink: 'symbolic link, never followed',
+    protectedPath: 'a protected folder, never deleted',
     systemOwned: `owned by ${params.texts.systemName}`,
     ownerRunning: 'its app or tool is running',
     runningUnknown: 'could not check whether its app or tool runs',

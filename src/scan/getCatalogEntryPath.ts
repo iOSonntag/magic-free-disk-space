@@ -2,17 +2,22 @@ import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 
-/** The absolute path of an entry: its path as is, or joined below the home or the temp folder. */
+/**
+ * The absolute path of an entry: its path as is, or joined below the home, the temp, or the user
+ * cache folder.
+ */
 export function getCatalogEntryPath(params: {
   environment: Environment;
   entry: CatalogEntry;
 }): string {
-  if (params.entry.root === 'absolute') {
-    return params.entry.path;
+  switch (params.entry.root) {
+    case 'home':
+      return join(params.environment.homeDir, params.entry.path);
+    case 'temp':
+      return join(params.environment.tempDir, params.entry.path);
+    case 'userCache':
+      return join(params.environment.userCacheDir, params.entry.path);
+    case 'absolute':
+      return params.entry.path;
   }
-
-  const rootDir =
-    params.entry.root === 'home' ? params.environment.homeDir : params.environment.tempDir;
-
-  return join(rootDir, params.entry.path);
 }

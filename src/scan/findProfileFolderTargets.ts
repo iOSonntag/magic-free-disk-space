@@ -7,7 +7,8 @@ import type { CatalogEntryTargets, CatalogTarget } from './findCatalogTargets.js
 import type { ScanIssue } from './issue.js';
 
 /**
- * Lists one item per profile folder of `path`, a folder that holds the selection's `markerName`:
+ * Lists one item per profile folder of `path`, a folder that holds the selection's `markerName`
+ * (any folder for a `null` marker):
  * `path` itself, for a browser that keeps its one profile there, and each child folder. An item's
  * targets are the selection's `subpaths` that exist in its folder; the item of `path` also takes
  * the `rootSubpaths` that exist in it, marker or not. A folder with no target adds no item. A
@@ -97,24 +98,29 @@ async function findFolderTargets(params: {
   return { targets: [target], issues: issues };
 }
 
-/** The existing profile subpaths of `folderPath` when it holds the marker; none otherwise. */
+/**
+ * The existing profile subpaths of `folderPath` when it holds the marker, or always for a `null`
+ * marker; none otherwise.
+ */
 async function findProfileSubpaths(params: {
   selection: CatalogSelectionProfileFolders;
   folderPath: string;
   privacyDenialCode: string | null;
 }): Promise<{ paths: string[]; issues: ScanIssue[] }> {
-  const markerPath = join(params.folderPath, params.selection.markerName);
-  const markerResult = await loadFileIdentity({ path: markerPath });
+  if (params.selection.markerName !== null) {
+    const markerPath = join(params.folderPath, params.selection.markerName);
+    const markerResult = await loadFileIdentity({ path: markerPath });
 
-  if (markerResult.kind === 'failed') {
-    return {
-      paths: [],
-      issues: buildFailureIssues({
-        path: markerPath,
-        failure: markerResult.failure,
-        privacyDenialCode: params.privacyDenialCode,
-      }),
-    };
+    if (markerResult.kind === 'failed') {
+      return {
+        paths: [],
+        issues: buildFailureIssues({
+          path: markerPath,
+          failure: markerResult.failure,
+          privacyDenialCode: params.privacyDenialCode,
+        }),
+      };
+    }
   }
 
   return findExistingSubpaths({

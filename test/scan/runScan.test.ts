@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
 import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
@@ -10,9 +9,12 @@ import {
   buildTestUnitPathsCandidate,
   TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
+import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 const HOME_DIR = '/Users/example';
+
+const ENVIRONMENT = buildTestPathEnvironment({ homeDir: HOME_DIR, nowMs: Date.UTC(2026, 0, 1) });
 
 const HUGGING_FACE_PATH = `${HOME_DIR}/.cache/huggingface`;
 
@@ -48,7 +50,7 @@ const vscodeOffer: CandidateDecision = { kind: 'offer', candidate: vscodeCandida
 describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
   test('keeps the offers of an incomplete probe and shows the advice of its entry', () => {
     const report = buildScanReportOfPhases({
-      pathRules: DARWIN_PATH_RULES,
+      environment: ENVIRONMENT,
       reservedEntryPaths: [vscodeAdvice.path],
       phases: [{ decisions: [vscodeOffer], issues: [] }],
       incompleteExploreAdvice: {
@@ -67,7 +69,7 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
 
   test('would hold back those offers if the advice took part in the dedupe', () => {
     const report = buildScanReportOfPhases({
-      pathRules: DARWIN_PATH_RULES,
+      environment: ENVIRONMENT,
       reservedEntryPaths: [vscodeAdvice.path],
       phases: [{ decisions: [vscodeOffer, { kind: 'advice', advice: vscodeAdvice }], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
@@ -216,7 +218,7 @@ function buildReportOfPhases(params: {
   phases: CandidateDecision[][];
 }): ScanReport {
   return buildScanReportOfPhases({
-    pathRules: DARWIN_PATH_RULES,
+    environment: ENVIRONMENT,
     reservedEntryPaths: params.reservedEntryPaths,
     phases: params.phases.map((decisions) => ({ decisions: decisions, issues: [] })),
     incompleteExploreAdvice: { decisions: [], issues: [] },

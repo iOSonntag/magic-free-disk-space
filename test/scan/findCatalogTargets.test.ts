@@ -137,6 +137,28 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
   });
 
+  test('a user cache entry lies below the user cache folder', async () => {
+    const metalDir = join(fixtureRoot.userCacheDir, 'com.example.app', 'com.apple.metal');
+    await createFixtureDirectory({ path: metalDir });
+    const entry = buildCatalogEntry({
+      id: 'metal-cache',
+      root: 'userCache',
+      path: 'com.example.app/com.apple.metal',
+      selection: 'path',
+    });
+
+    const result = await findCatalogTargets({
+      environment,
+      entries: [entry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [buildTarget({ entry: entry, path: metalDir })],
+      issues: [],
+    });
+  });
+
   test('an absolute entry takes its path as given', async () => {
     const systemLogsDir = join(fixtureRoot.rootDir, 'System/Logs');
     await createFixtureDirectory({ path: systemLogsDir });

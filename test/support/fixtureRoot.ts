@@ -71,6 +71,30 @@ export async function loadTestEnvironment(params: {
   });
 }
 
+/**
+ * The environment of a made-up home folder that never exists on disk, whose paths are their own
+ * real paths, for code that only compares paths.
+ */
+export function buildTestPathEnvironment(params: { homeDir: string; nowMs: number }): Environment {
+  const homeDir = buildTestAbsolutePath({ text: params.homeDir });
+  const tempDir = buildTestAbsolutePath({ text: '/private/var/folders/xx/example/T' });
+  const userCacheDir = buildTestAbsolutePath({ text: '/private/var/folders/xx/example/C' });
+  const applicationDir = buildTestAbsolutePath({ text: '/Applications' });
+
+  return buildDarwinEnvironment({
+    nowMs: params.nowMs,
+    user: buildTestUserIdentity({ uid: 501 }),
+    homeDir: homeDir,
+    homeRealPath: homeDir,
+    tempDir: tempDir,
+    tempRealPath: tempDir,
+    userCacheDir: userCacheDir,
+    userCacheRealPath: userCacheDir,
+    applicationDirs: [applicationDir],
+    applicationRealPaths: [applicationDir],
+  });
+}
+
 /** Creates a file whose allocated size is at least `sizeBytes`; the filesystem rounds up to whole blocks. */
 export async function createFixtureFile(params: {
   path: string;

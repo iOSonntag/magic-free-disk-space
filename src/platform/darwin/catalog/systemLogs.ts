@@ -48,29 +48,32 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     removal: { kind: 'delete' },
   },
   {
-    // This app's deletion log, a child of the logs folder below, is never removed; the advice
-    // holds it back from that entry.
-    id: 'own-deletion-log',
-    category: 'system',
-    title: 'Record of what this app deleted',
-    explanation: 'The list of everything Magic Free Disk Space deleted, kept so you can look back.',
-    regeneration: 'It is kept on purpose and stays.',
-    risk: 'never',
-    root: 'home',
-    path: 'Library/Logs/magic-free-disk-space',
-    selection: { kind: 'path' },
-    ageRule: { kind: 'none' },
-    owner: null,
-    removal: {
-      kind: 'advice',
-      carvedPaths: [],
-      opener: null,
-      advice: 'Magic Free Disk Space keeps this record of its deletions and never deletes it.',
+    // The GPU caches macOS keeps for each app, one folder per app in the user cache folder, as
+    // Mole cleans them (tw93/Mole `lib/clean/system.sh`, lines 9-28). Mole takes one only when
+    // nothing in it changed for a day, so a running app keeps the cache it uses (lines 30-51); the
+    // age rule here judges the whole folder of the app, which is at least as strict.
+    id: 'metal-caches',
+    category: 'caches',
+    title: 'Old graphics caches',
+    explanation:
+      'Graphics code that macOS compiled for an app, kept to start its drawing faster, untouched for a day. One item for each app.',
+    regeneration: 'macOS compiles it again the next time the app draws.',
+    risk: 'safe',
+    root: 'userCache',
+    path: '',
+    selection: {
+      kind: 'profileFolders',
+      markerName: null,
+      subpaths: ['com.apple.gpuarchiver', 'com.apple.metal', 'com.apple.metalfe'],
+      rootSubpaths: [],
     },
+    ageRule: { kind: 'unchangedDays', days: 1 },
+    owner: null,
+    removal: { kind: 'delete' },
   },
   {
     id: 'crash-reports',
-    category: 'system',
+    category: 'caches',
     title: 'Old crash reports',
     explanation: 'Reports that apps and macOS wrote when something crashed, untouched for a while.',
     regeneration: 'New reports appear only if something crashes again.',
@@ -83,8 +86,10 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     removal: { kind: 'delete' },
   },
   {
+    // This app's deletion log, a child of this folder, is never offered: the scan skips each
+    // offer that touches a protected path.
     id: 'user-logs',
-    category: 'system',
+    category: 'caches',
     title: 'Old app logs',
     explanation:
       'Notes that apps write about what they did, for finding problems, untouched for a while. One folder for each app.',

@@ -140,6 +140,8 @@ export type Advice = {
 export type SkipReason =
   | 'belowSizeThreshold'
   | 'symbolicLink'
+  /** It is, holds, or lies in a folder the removal never touches, such as Mail or the deletion log. */
+  | 'protectedPath'
   | 'systemOwned'
   | 'ownerRunning'
   | 'runningUnknown'
