@@ -4,20 +4,16 @@ import { join } from 'node:path';
 import { loadDownloadsInstallerFindings } from '../../src/explore/downloadsInstallers/loadDownloadsInstallerFindings.js';
 import { recheckDownloadsUnit } from '../../src/explore/downloadsInstallers/recheckDownloadsUnit.js';
 import type { ExploreFinding, ExploreUnit } from '../../src/explore/exploreUnit.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import {
-  createFixtureDirectory,
-  createFixtureFile,
-  updateModifiedMs,
-} from '../support/fixtureRoot.js';
+import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
-  DAY_MS,
-  findUnitOfKind,
   getProbeFindings,
+  getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
 
@@ -31,7 +27,7 @@ function getDownloadsPath(home: FixtureHome): string {
   return join(home.fixtureRoot.homeDir, 'Downloads');
 }
 
-/** Writes a file into an existing folder, last changed at `modifiedMs`, by default long ago. */
+/** Writes a file last changed at `modifiedMs`, by default long ago. */
 async function createDownloadsFile(params: { path: string; modifiedMs?: number }): Promise<void> {
   await createFixtureFile({
     path: params.path,
@@ -66,9 +62,6 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
         const safariDownload = join(downloads, 'Movie.mp4.download');
         const safariPartMs = OLD_MS + DAY_MS;
 
-        await createFixtureDirectory({ path: join(downloads, 'Nested') });
-        await createFixtureDirectory({ path: safariDownload });
-
         for (const name of ['Old.dmg', 'Tool.PKG', 'Suite.mpkg', 'Xcode.xip', 'Linux.iso']) {
           await createDownloadsFile({ path: join(downloads, name) });
         }
@@ -90,7 +83,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
             buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
           ),
         );
-        const installers = findUnitOfKind({ findings: probed, kind: 'downloadsInstallers' });
+        const installers = getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' });
 
         expect(probed.isComplete).toBe(true);
         expect(probed.findings).toHaveLength(3);
@@ -152,7 +145,6 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
       run: async (home) => {
         const safariDownload = join(getDownloadsPath(home), 'A.zip.download');
 
-        await createFixtureDirectory({ path: safariDownload });
         await createDownloadsFile({ path: join(safariDownload, 'A.zip'), modifiedMs: NOW_MS });
         await updateModifiedMs({ path: safariDownload, modifiedMs: OLD_MS });
 
@@ -172,7 +164,6 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
         const downloads = getDownloadsPath(home);
         const safariDownload = join(downloads, 'Movie.mp4.download');
 
-        await createFixtureDirectory({ path: safariDownload });
         await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
         await createDownloadsFile({ path: join(safariDownload, 'Movie.mp4') });
         await updateModifiedMs({ path: safariDownload, modifiedMs: OLD_MS });
@@ -198,7 +189,6 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
       run: async (home) => {
         const downloads = getDownloadsPath(home);
 
-        await createFixtureDirectory({ path: downloads });
         await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
         // Listing needs only the read right; reading an entry also needs the search right.
         await chmod(downloads, 0o400);
@@ -221,7 +211,6 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
       run: async (home) => {
         const downloads = getDownloadsPath(home);
 
-        await createFixtureDirectory({ path: downloads });
         await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
         await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
 
@@ -251,7 +240,6 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
       run: async (home) => {
         const downloads = getDownloadsPath(home);
 
-        await createFixtureDirectory({ path: downloads });
         await createDownloadsFile({ path: join(downloads, 'Big.iso.part') });
 
         const findings = getProbeFindings(
@@ -296,12 +284,11 @@ describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
       run: async (home) => {
         const downloads = getDownloadsPath(home);
 
-        await createFixtureDirectory({ path: downloads });
         await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
         await createDownloadsFile({ path: join(downloads, 'Other.pkg') });
 
         const run = buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS });
-        const unit = findUnitOfKind({
+        const unit = getUnitOfKind({
           findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
           kind: 'downloadsInstallers',
         });
@@ -333,11 +320,10 @@ describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
       run: async (home) => {
         const downloads = getDownloadsPath(home);
 
-        await createFixtureDirectory({ path: downloads });
         await createDownloadsFile({ path: join(downloads, 'A.part') });
 
         const run = buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS });
-        const unit = findUnitOfKind({
+        const unit = getUnitOfKind({
           findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
           kind: 'downloadsIncomplete',
         });

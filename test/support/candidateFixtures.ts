@@ -19,10 +19,11 @@ import type {
   CandidateRemovalProbed,
   RemovalTarget,
   RemovalTargets,
+  TargetsMeasurement,
 } from '../../src/scan/candidate.js';
-import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
+import { mapNonEmpty } from '../../src/system/nonEmptyList.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
 import {
   buildTestAbsolutePath,
@@ -98,6 +99,7 @@ export type TestListingParams = {
   explanation?: string;
   regeneration?: string;
   allocatedBytes?: number;
+  entryCount?: number;
   isComplete?: boolean;
   privateSizeFallbackCount?: number;
   lastUsedAtMs?: number | null;
@@ -159,7 +161,7 @@ function buildTestListing(params: TestListingParams): CandidateListing {
     explanation: params.explanation ?? 'A test item.',
     regeneration: params.regeneration ?? 'Rebuilt by the test.',
     allocatedBytes: params.allocatedBytes ?? 4096,
-    entryCount: 1,
+    entryCount: params.entryCount ?? 1,
     isComplete: params.isComplete ?? true,
     privateSizeFallbackCount: params.privateSizeFallbackCount ?? 0,
     lastUsedAtMs: params.lastUsedAtMs ?? null,
@@ -212,18 +214,15 @@ export function buildTestToolCandidate(params: {
     text: `${params.homeDir}/.local/share/mise/installs/node/${params.version}`,
   });
 
-  return {
+  return buildTestProbedCandidate({
     path: installPath,
     title: `node ${params.version}`,
     category: 'developer',
     risk: params.risk ?? 'safe',
-    origin: { kind: 'explore', probe: 'miseVersions' },
+    probe: 'miseVersions',
     explanation: 'A tool version no config file asks for.',
     regeneration: 'Installed again by mise when a project asks for it.',
     allocatedBytes: params.allocatedBytes ?? 8192,
-    entryCount: 1,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'runTool',
       unit: {
@@ -235,7 +234,7 @@ export function buildTestToolCandidate(params: {
       },
     },
     evidenceLines: [`mise prune would remove node@${params.version}`],
-  };
+  });
 }
 
 /**
@@ -245,18 +244,15 @@ export function buildTestToolCandidate(params: {
 export function buildTestDartToolCandidate(params: { homeDir: string }): Candidate {
   const cachePath = `${params.homeDir}/.pub-cache`;
 
-  return {
+  return buildTestProbedCandidate({
     path: cachePath,
     title: 'Unused Dart and Flutter packages',
     category: 'developer',
     risk: 'review',
-    origin: { kind: 'explore', probe: 'dartPubCache' },
+    probe: 'dartPubCache',
     explanation: 'Package versions no active project uses.',
     regeneration: 'Downloaded again on `pub get`.',
     allocatedBytes: 8192,
-    entryCount: 1,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'runTool',
       unit: {
@@ -266,7 +262,7 @@ export function buildTestDartToolCandidate(params: { homeDir: string }): Candida
       },
     },
     evidenceLines: ['`dart pub cache gc` would delete 1 cache entry'],
-  };
+  });
 }
 
 export type TestUnitPathsCandidateParams = {
@@ -281,27 +277,22 @@ export type TestUnitPathsCandidateParams = {
  * it; its identities are made up.
  */
 export function buildTestUnitPathsCandidate(params: TestUnitPathsCandidateParams): CandidateProbed {
-  const [firstTargetPath, ...restTargetPaths] = params.targetPaths;
-
-  return {
+  return buildTestProbedCandidate({
     path: params.path,
     title: `Test unit ${params.path}`,
     category: 'developer',
     risk: 'review',
-    origin: { kind: 'explore', probe: params.probe },
+    probe: params.probe,
     explanation: 'A unit a test probe found.',
     regeneration: 'Downloaded again by the test.',
-    allocatedBytes: 4096,
     entryCount: params.targetPaths.length,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'deleteUnitPaths',
-      targets: [buildTestTarget(firstTargetPath), ...restTargetPaths.map(buildTestTarget)],
+      targets: mapNonEmpty(params.targetPaths, buildTestTarget),
       unit: params.unit,
     },
     evidenceLines: ['A test probe found it.'],
-  };
+  });
 }
 
 function buildTestTarget(path: string): RemovalTarget {
@@ -364,18 +355,15 @@ export function buildTestEngineCandidate(params: {
   });
   const allocatedBytes = params.allocatedBytes ?? 8192;
 
-  return {
+  return buildTestProbedCandidate({
     path: diskImagePath,
     title: params.title ?? 'Docker Desktop build cache',
     category: 'developer',
     risk: 'safe',
-    origin: { kind: 'explore', probe: 'dockerDesktopEngine' },
+    probe: 'dockerDesktopEngine',
     explanation: 'Build cache records no build used lately.',
     regeneration: 'Built again by the next build that needs them.',
     allocatedBytes: allocatedBytes,
-    entryCount: 1,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'callEngine',
       unit: {
@@ -389,7 +377,7 @@ export function buildTestEngineCandidate(params: {
       },
     },
     evidenceLines: ['Docker Desktop reports these records unused.'],
-  };
+  });
 }
 
 /** No place for any tool, so a scan in a test never runs a real tool. */

@@ -4,20 +4,21 @@ import { isGoneOutcome } from '../delete/isGoneOutcome.js';
 import type { Candidate } from '../scan/candidate.js';
 import type { ItemKey } from '../scan/candidateOrigin.js';
 import { buildItemKey } from '../scan/candidateOrigin.js';
-import { findRankedNumber } from './findRankedNumber.js';
+import { getRankedNumber } from './getRankedNumber.js';
 import type { FreedSpace } from './sumFreedSpace.js';
 import { sumFreedSpace } from './sumFreedSpace.js';
 
 /** How an item ended, as a client words it; the reason key says why. */
 export type DeletedOutcomeKey = 'removed' | 'partlyRemoved' | 'kept' | 'failed';
 
-/** Why an item ended as it did; `null` for an item simply removed. */
+/** Why an item ended as it did. */
 export type DeletedReasonKey = Exclude<RemovalOutcomeKind, 'removed'>;
 
 export type DeletedOutcomeFacts = {
   number: number;
   key: ItemKey;
   outcome: DeletedOutcomeKey;
+  /** `null` for an item simply removed. */
   reasonKey: DeletedReasonKey | null;
   freedBytes: number;
 };
@@ -41,7 +42,7 @@ export function buildDeletedFacts(params: {
 
   return {
     outcomes: params.run.outcomes.map((outcome) => ({
-      number: findRankedNumber({ ranked: params.ranked, candidate: outcome.candidate }),
+      number: getRankedNumber({ ranked: params.ranked, candidate: outcome.candidate }),
       key: buildItemKey({ item: outcome.candidate }),
       outcome: decideOutcomeKey({ kind: outcome.outcome, freedBytes: outcome.freedBytes }),
       reasonKey: outcome.outcome === 'removed' ? null : outcome.outcome,

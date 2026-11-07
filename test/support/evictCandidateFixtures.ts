@@ -1,7 +1,8 @@
 import type { ExploreFoundEvictFile } from '../../src/explore/exploreUnit.js';
 import type { CandidateProbed, EvictTarget, RemovalTargets } from '../../src/scan/candidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { buildTestIdentity, TEST_LISTING_FACTS_NONE } from './candidateFixtures.js';
+import { mapNonEmpty } from '../../src/system/nonEmptyList.js';
+import { buildTestIdentity, buildTestProbedCandidate } from './candidateFixtures.js';
 import { buildTestAbsolutePath } from './parsedValueFixtures.js';
 
 /** An evict target at `path` whose identity no disk read, with times of the epoch. */
@@ -24,20 +25,16 @@ export function buildTestEvictCandidate(params: {
   toolPath?: string;
   allocatedBytes?: number;
 }): CandidateProbed {
-  const [firstTarget, ...restTargets] = params.targets;
-
-  return {
+  return buildTestProbedCandidate({
     path: params.folderPath,
     title: `Test iCloud folder ${params.folderPath}`,
     category: 'cloudCopies',
     risk: 'review',
-    origin: { kind: 'explore', probe: 'icloudDownloads' },
+    probe: 'icloudDownloads',
     explanation: 'Files iCloud Drive keeps that a test probe found downloaded.',
     regeneration: 'Downloaded again from iCloud Drive when opened.',
     allocatedBytes: params.allocatedBytes ?? 4096,
     entryCount: params.targets.length,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
     removal: {
       kind: 'evictUnitFiles',
       targets: params.targets,
@@ -46,11 +43,11 @@ export function buildTestEvictCandidate(params: {
         tool: { name: 'brctl', path: params.toolPath ?? '/usr/bin/brctl' },
         folderPath: buildTestAbsolutePath({ text: params.folderPath }),
         cutoffMs: 0,
-        foundFiles: [buildFoundEvictFile(firstTarget), ...restTargets.map(buildFoundEvictFile)],
+        foundFiles: mapNonEmpty(params.targets, buildFoundEvictFile),
       },
     },
     evidenceLines: ['A test probe found it.'],
-  };
+  });
 }
 
 function buildFoundEvictFile(target: EvictTarget): ExploreFoundEvictFile {

@@ -5,8 +5,8 @@ import type { ItemKey } from '../scan/candidateOrigin.js';
 import { buildItemKey } from '../scan/candidateOrigin.js';
 import type { CandidateGroup, ConsumerSection } from '../scan/placeCandidate.js';
 import { placeCandidate } from '../scan/placeCandidate.js';
-import { findRankedNumber } from './findRankedNumber.js';
 import { formatDisplayText } from './formatDisplayText.js';
+import { getRankedNumber } from './getRankedNumber.js';
 import type { ItemRemovalView } from './itemRemovalView.js';
 import { buildItemRemovalView } from './itemRemovalView.js';
 
@@ -57,7 +57,7 @@ function buildPlannedItemFacts(params: {
   const place = placeCandidate(params.candidate);
 
   return {
-    number: findRankedNumber({ ranked: params.ranked, candidate: params.candidate }),
+    number: getRankedNumber({ ranked: params.ranked, candidate: params.candidate }),
     key: buildItemKey({ item: params.candidate }),
     title: formatDisplayText({ text: params.candidate.title }),
     sectionKey: place.section,

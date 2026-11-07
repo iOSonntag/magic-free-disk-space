@@ -11,9 +11,6 @@ import type { FixtureRoot } from './fixtureRoot.js';
 import { loadTestEnvironment, withFixtureRoot } from './fixtureRoot.js';
 import { buildTestProbePlatform } from './probePlatformFixtures.js';
 
-/** One day in milliseconds, for the times and cutoffs of the fixtures. */
-export const DAY_MS = 86_400_000;
-
 /** How long a test probe run may take before its deadline. */
 const TEST_PROBE_RUN_DURATION_MS = 10_000;
 
@@ -101,7 +98,7 @@ export function listUnitsOfKind<TKind extends ExploreUnit['kind']>(params: {
 }
 
 /** The first unit of the findings that is of `kind`; throws when none is. */
-export function findUnitOfKind<TKind extends ExploreUnit['kind']>(params: {
+export function getUnitOfKind<TKind extends ExploreUnit['kind']>(params: {
   findings: ExploreProbeFindings;
   kind: TKind;
 }): ExploreUnitOfKind<TKind> {

@@ -33,9 +33,13 @@ export type OrphanInstalledFacts = {
   isComplete: boolean;
 };
 
-export type OrphanNameMatch =
-  | { kind: 'match'; matchedBy: LeftoverMatch }
-  | { kind: 'skip'; reason: SkipReason };
+/** A folder that may be the data of a removed app, and how its name tied it to one. */
+export type OrphanNameMatchMatch = { kind: 'match'; matchedBy: LeftoverMatch };
+
+/** A folder its name holds back before any read, and why. */
+export type OrphanNameMatchSkip = { kind: 'skip'; reason: SkipReason };
+
+export type OrphanNameMatch = OrphanNameMatchMatch | OrphanNameMatchSkip;
 
 /**
  * The facts of the installed apps: their ids, their vendors, and their names with the names of

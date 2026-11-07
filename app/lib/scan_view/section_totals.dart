@@ -39,6 +39,8 @@ List<SectionTotal> mergeSectionTotalsByKey(List<SectionTotal> totals) {
                 : '${earlier.titleText} and ${total.titleText}',
             allocatedBytes: earlier.allocatedBytes + total.allocatedBytes,
             isComplete: earlier.isComplete && total.isComplete,
+            removableBytes: earlier.removableBytes + total.removableBytes,
+            isRemovableComplete: earlier.isRemovableComplete && total.isRemovableComplete,
             itemCount: earlier.itemCount + total.itemCount,
             safeBytes: earlier.safeBytes + total.safeBytes,
             adviceCount: earlier.adviceCount + total.adviceCount,

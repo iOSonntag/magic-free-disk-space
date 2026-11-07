@@ -59,6 +59,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
     expect(result).toEqual({
       targets: [buildTarget({ entry: presentEntry, path: cacheDir })],
+      overlappingTargets: [],
       issues: [],
     });
   });
@@ -91,6 +92,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
         buildTarget({ entry: entry, path: join(derivedDataDir, 'Zeta') }),
         buildTarget({ entry: entry, path: join(derivedDataDir, 'middle.log') }),
       ],
+      overlappingTargets: [],
       issues: [],
     });
   });
@@ -120,7 +122,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
-    expect(result).toEqual({ targets: [], issues: [] });
+    expect(result).toEqual({ targets: [], overlappingTargets: [], issues: [] });
   });
 
   test('a temp entry with an empty path is the temp folder itself', async () => {
@@ -134,6 +136,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
     expect(result).toEqual({
       targets: [buildTarget({ entry: entry, path: fixtureRoot.tempDir })],
+      overlappingTargets: [],
       issues: [],
     });
   });
@@ -156,6 +159,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
     expect(result).toEqual({
       targets: [buildTarget({ entry: entry, path: metalDir })],
+      overlappingTargets: [],
       issues: [],
     });
   });
@@ -178,6 +182,102 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
     expect(result).toEqual({
       targets: [buildTarget({ entry: entry, path: systemLogsDir })],
+      overlappingTargets: [],
+      issues: [],
+    });
+  });
+
+  test('a later item that equals or holds a read earlier path is overlapping', async () => {
+    const cachesDir = join(fixtureRoot.homeDir, 'Library/Caches');
+    await createFixtureDirectory({ path: join(cachesDir, 'tool/data') });
+    await createFixtureDirectory({ path: join(cachesDir, 'other') });
+    const toolEntry = buildCatalogEntry({
+      id: 'tool-data',
+      root: 'home',
+      path: 'Library/Caches/tool/data',
+      selection: 'path',
+    });
+    const cachesEntry = buildCatalogEntry({
+      id: 'caches',
+      root: 'home',
+      path: 'Library/Caches',
+      selection: 'children',
+    });
+
+    const result = await findCatalogTargets({
+      environment: environment,
+      entries: [toolEntry, cachesEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [
+        buildTarget({ entry: toolEntry, path: join(cachesDir, 'tool/data') }),
+        buildTarget({ entry: cachesEntry, path: join(cachesDir, 'other') }),
+      ],
+      overlappingTargets: [buildTarget({ entry: cachesEntry, path: join(cachesDir, 'tool') })],
+      issues: [],
+    });
+  });
+
+  test('a later advice item that holds a read earlier path stays a target', async () => {
+    const userDataDir = join(fixtureRoot.homeDir, 'Library/Developer/Example/UserData');
+    await createFixtureDirectory({ path: join(userDataDir, 'Previews') });
+    const previewsEntry = buildCatalogEntry({
+      id: 'previews',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData/Previews',
+      selection: 'path',
+    });
+    const userDataEntry = buildTestCatalogEntry({
+      id: 'user-data',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData',
+      selection: { kind: 'path' },
+      removal: { kind: 'advice', advice: 'Tidy it.', carvedPaths: ['Previews'], opener: null },
+    });
+
+    const result = await findCatalogTargets({
+      environment: environment,
+      entries: [previewsEntry, userDataEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [
+        buildTarget({ entry: previewsEntry, path: join(userDataDir, 'Previews') }),
+        buildTarget({ entry: userDataEntry, path: userDataDir }),
+      ],
+      overlappingTargets: [],
+      issues: [],
+    });
+  });
+
+  test('a later item that holds a missing earlier path stays a target', async () => {
+    const userDataDir = join(fixtureRoot.homeDir, 'Library/Developer/Example/UserData');
+    await createFixtureDirectory({ path: userDataDir });
+    const previewsEntry = buildCatalogEntry({
+      id: 'previews',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData/Previews',
+      selection: 'path',
+    });
+    const userDataEntry = buildCatalogEntry({
+      id: 'user-data',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData',
+      selection: 'path',
+    });
+
+    const result = await findCatalogTargets({
+      environment: environment,
+      entries: [previewsEntry, userDataEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [buildTarget({ entry: userDataEntry, path: userDataDir })],
+      overlappingTargets: [],
       issues: [],
     });
   });
@@ -201,6 +301,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
     expect(result).toEqual({
       targets: [],
+      overlappingTargets: [],
       issues: [{ path: lockedDir, reason: 'permissionDenied', detail: 'EACCES' }],
     });
   });
@@ -226,6 +327,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
       expect(result).toEqual({
         targets: [],
+        overlappingTargets: [],
         issues: [{ path: join(lockedDir, 'inside'), reason: 'permissionDenied', detail: 'EACCES' }],
       });
     },
@@ -251,6 +353,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
       expect(result).toEqual({
         targets: [],
+        overlappingTargets: [],
         issues: [{ path: join(loopPath, 'inside'), reason: 'unexpected', detail: 'ELOOP' }],
       });
     },

@@ -6,7 +6,7 @@ import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreDirectoryEntries, loadExploreRealPath } from '../loadExploreRead.js';
 
 /** Where the native installer of Claude Code keeps each version it downloaded. */
-export const CLAUDE_CODE_VERSIONS_PATH_NAMES = ['.local', 'share', 'claude', 'versions'];
+const CLAUDE_CODE_VERSIONS_PATH_NAMES = ['.local', 'share', 'claude', 'versions'];
 
 /** The launcher the installer links to the version it runs. */
 const CLAUDE_CODE_LAUNCHER_PATH_NAMES = ['.local', 'bin', 'claude'];

@@ -6,6 +6,7 @@ import { compareLmStudioModelUnit } from '../../src/explore/lmStudioModels/compa
 import { loadLmStudioModelFindings } from '../../src/explore/lmStudioModels/loadLmStudioModelFindings.js';
 import type { LmStudioModelFolder } from '../../src/explore/lmStudioModels/loadLmStudioModelState.js';
 import { recheckLmStudioModelUnit } from '../../src/explore/lmStudioModels/recheckLmStudioModelUnit.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { updateModifiedMs, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
@@ -13,9 +14,8 @@ import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
-  DAY_MS,
-  findUnitOfKind,
   getProbeFindings,
+  getUnitOfKind,
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
@@ -176,7 +176,7 @@ describeAwaitingWin32Platform('recheckLmStudioModelUnit', () => {
       run: async (home) => {
         await createModels(home);
 
-        const unit = findUnitOfKind({
+        const unit = getUnitOfKind({
           findings: getProbeFindings(
             await loadLmStudioModelFindings(buildTestProbeRun({ environment: home.environment })),
           ),

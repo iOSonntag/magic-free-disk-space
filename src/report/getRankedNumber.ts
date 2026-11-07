@@ -5,7 +5,7 @@ import type { Candidate } from '../scan/candidate.js';
  * a plan approves and a run outcome carries the candidates of the ranking as they are. Throws for
  * a candidate outside the ranking, which is a broken invariant of the caller.
  */
-export function findRankedNumber(params: { ranked: Candidate[]; candidate: Candidate }): number {
+export function getRankedNumber(params: { ranked: Candidate[]; candidate: Candidate }): number {
   const index = params.ranked.indexOf(params.candidate);
 
   if (index === -1) {

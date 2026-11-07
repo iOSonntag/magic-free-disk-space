@@ -1,5 +1,5 @@
+import { toNonEmpty } from '../../system/nonEmptyList.js';
 import type { ExploreFoundPaths } from '../exploreUnit.js';
-import { toNonEmpty } from '../exploreUnit.js';
 import { DAY_MS } from '../formatLimitTexts.js';
 import type { HuggingFaceRepoState, HuggingFaceSnapshot } from './loadHuggingFaceHubState.js';
 import { HUGGING_FACE_INCOMPLETE_SUFFIX } from './loadHuggingFaceHubState.js';

@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
+import '../motion.dart';
 import '../tokens.dart';
 import 'disk_ring_arcs.dart';
 
@@ -67,7 +68,7 @@ class DiskRingPainter extends CustomPainter {
       ..setFloat(3, geometry.radius)
       ..setFloat(4, geometry.strokeWidth)
       ..setFloat(5, geometry.glowReach)
-      ..setFloat(6, isSweeping ? _findSweepHead() : -1)
+      ..setFloat(6, isSweeping ? _getSweepHead() : -1)
       ..setFloat(7, arcs.keptEnd)
       ..setFloat(8, arcs.freeableEnd)
       ..setFloat(9, accent.r)
@@ -77,9 +78,8 @@ class DiskRingPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, Paint()..shader = ringShader);
   }
 
-  double _findSweepHead() {
-    final double periodSeconds = MotionTokens.ringSweepPeriod.inMicroseconds / Duration.microsecondsPerSecond;
-    return (ambientTime.value / periodSeconds) % 1;
+  double _getSweepHead() {
+    return getAmbientLoopPhase(ambientTime.value, MotionTokens.ringSweepPeriod);
   }
 
   void _paintRingFallback(Canvas canvas, Size size, DiskRingGeometry geometry) {

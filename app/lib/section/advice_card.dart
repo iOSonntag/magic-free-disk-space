@@ -100,7 +100,9 @@ class AdviceCard extends StatelessWidget {
     return AdvicePlaceCard(
       title: item.title,
       factsText: formatAdviceFactsText(item, now: now),
-      allocatedBytes: item.allocatedBytes,
+      sizeText: item.allocatedBytes > 0
+          ? formatSizeText(allocatedBytes: item.allocatedBytes, isComplete: item.isComplete)
+          : null,
       displayPath: item.displayPath,
       details: ItemDetailLines(lines: item.detailLines, accent: look.accent),
       target: opener == null ? null : findAdviceOpenerTarget(opener),
@@ -111,16 +113,14 @@ class AdviceCard extends StatelessWidget {
   }
 }
 
-/// The card of a place only the user can free: its title, [factsText] when
-/// not empty, its size when above zero, its path, [details] on how, and a
-/// button for [target] and for [revealUrl] where they are set. The glyph is
-/// the target's, else the section's.
+/// The card of a place only the user can free, with [details] on how and a
+/// button for [target] and for [revealUrl] where they are set.
 class AdvicePlaceCard extends StatelessWidget {
   const AdvicePlaceCard({
     super.key,
     required this.title,
     required this.factsText,
-    required this.allocatedBytes,
+    required this.sizeText,
     required this.displayPath,
     required this.details,
     required this.target,
@@ -130,8 +130,12 @@ class AdvicePlaceCard extends StatelessWidget {
   });
 
   final String title;
+
+  /// Shown when not empty.
   final String factsText;
-  final int allocatedBytes;
+
+  /// `null` for a place no scan measured.
+  final String? sizeText;
   final String? displayPath;
   final Widget details;
   final AdviceOpenerTarget? target;
@@ -142,6 +146,7 @@ class AdvicePlaceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AdviceOpenerTarget? target = this.target;
+    final String? sizeText = this.sizeText;
     final String? displayPath = this.displayPath;
     final RevealUrl? revealUrl = this.revealUrl;
     final Color accent = look.accent;
@@ -160,9 +165,9 @@ class AdvicePlaceCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(child: Text(title, style: TypeRamp.title)),
-                    if (allocatedBytes > 0) ...[
+                    if (sizeText != null) ...[
                       const SizedBox(width: StageSpacing.regular),
-                      Text(formatBytes(allocatedBytes), style: TypeRamp.figure),
+                      Text(sizeText, style: TypeRamp.figure),
                     ],
                   ],
                 ),

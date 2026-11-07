@@ -24,6 +24,41 @@ export type AndroidSdkRoot = { path: AbsolutePath; isRequired: boolean };
 /** A path that may name an SDK root, required as the root it names would be. */
 type SdkRootCandidate = { text: string | null; isRequired: boolean };
 
+/** The root a candidate names, with the real path that tells two names of one SDK apart. */
+type SdkRootResolved = { sdkRoot: AndroidSdkRoot; realPath: AbsolutePath };
+
+/**
+ * What `loadRoot` gives of each root, in the roots' order, less a `null`. A failed load fails all
+ * in a required root, and leaves only its own root out in any other.
+ */
+export async function loadEachAndroidSdkRoot<
+  TRoot extends { isRequired: boolean },
+  TValue,
+>(params: {
+  roots: TRoot[];
+  loadRoot: (root: TRoot) => Promise<Result<TValue | null, ExploreFileUnreadable>>;
+}): Promise<Result<TValue[], ExploreFileUnreadable>> {
+  const values: TValue[] = [];
+
+  for (const root of params.roots) {
+    const loaded = await params.loadRoot(root);
+
+    if (loaded.kind === 'failed') {
+      if (root.isRequired) {
+        return loaded;
+      }
+
+      continue;
+    }
+
+    if (loaded.value !== null) {
+      values.push(loaded.value);
+    }
+  }
+
+  return { kind: 'succeeded', value: values };
+}
+
 /**
  * The SDK roots that exist, as named, one per real path, in order: the platform's SDK, the only
  * required one, the one Flutter's `android-sdk` setting names, then each `sdk.dir` of a
@@ -57,40 +92,26 @@ export async function loadAndroidSdkRoots(params: {
     { text: flutterSdkRoot, isRequired: false },
     ...projectSdkRoots.map((text) => ({ text: text, isRequired: false })),
   ];
-  const sdkRoots: AndroidSdkRoot[] = [];
-  const sdkRealPaths: AbsolutePath[] = [];
+  const resolvedRoots = await loadEachAndroidSdkRoot({
+    roots: candidates,
+    loadRoot: (candidate) =>
+      loadSdkRootResolved({
+        pathRules: params.pathRules,
+        candidate: candidate,
+        privacyDenialCode: params.privacyDenialCode,
+      }),
+  });
 
-  for (const candidateRoot of candidates) {
-    const candidate = parseAbsolutePath({
-      rules: params.pathRules,
-      text: candidateRoot.text ?? '',
-    });
-
-    if (candidate.kind === 'failed') {
-      continue;
-    }
-
-    const realPath = await loadExploreRealPath({
-      pathRules: params.pathRules,
-      path: candidate.value,
-      privacyDenialCode: params.privacyDenialCode,
-    });
-
-    if (realPath.kind === 'failed') {
-      if (candidateRoot.isRequired) {
-        return realPath;
-      }
-
-      continue;
-    }
-
-    if (realPath.value !== null && !sdkRealPaths.includes(realPath.value)) {
-      sdkRealPaths.push(realPath.value);
-      sdkRoots.push({ path: candidate.value, isRequired: candidateRoot.isRequired });
-    }
+  if (resolvedRoots.kind === 'failed') {
+    return resolvedRoots;
   }
 
-  return { kind: 'succeeded', value: sdkRoots };
+  const uniqueRoots = resolvedRoots.value.filter(
+    (root, index) =>
+      resolvedRoots.value.findIndex((other) => other.realPath === root.realPath) === index,
+  );
+
+  return { kind: 'succeeded', value: uniqueRoots.map((root) => root.sdkRoot) };
 }
 
 /**
@@ -112,6 +133,41 @@ export async function loadScanAndroidSdkRoots(params: {
     pinFiles: pins.kind === 'succeeded' ? pins.value.files : [],
     privacyDenialCode: params.platform.privacyDenialCode,
   });
+}
+
+/** The root the candidate names; `null` when it names no absolute path, or nothing is there. */
+async function loadSdkRootResolved(params: {
+  pathRules: PathRules;
+  candidate: SdkRootCandidate;
+  privacyDenialCode: string | null;
+}): Promise<Result<SdkRootResolved | null, ExploreFileUnreadable>> {
+  const path = parseAbsolutePath({ rules: params.pathRules, text: params.candidate.text ?? '' });
+
+  if (path.kind === 'failed') {
+    return { kind: 'succeeded', value: null };
+  }
+
+  const realPath = await loadExploreRealPath({
+    pathRules: params.pathRules,
+    path: path.value,
+    privacyDenialCode: params.privacyDenialCode,
+  });
+
+  if (realPath.kind === 'failed') {
+    return realPath;
+  }
+
+  if (realPath.value === null) {
+    return { kind: 'succeeded', value: null };
+  }
+
+  return {
+    kind: 'succeeded',
+    value: {
+      sdkRoot: { path: path.value, isRequired: params.candidate.isRequired },
+      realPath: realPath.value,
+    },
+  };
 }
 
 /**

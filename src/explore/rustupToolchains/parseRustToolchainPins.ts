@@ -67,10 +67,16 @@ export function isRustToolchainPinned(params: {
   }
 }
 
+type RustToolchainFileChannelNamed = { kind: 'channel'; channel: string };
+
+type RustToolchainFileChannelCustomPath = { kind: 'customPath' };
+
+type RustToolchainFileChannelUnclear = { kind: 'unclear' };
+
 type RustToolchainFileChannel =
-  | { kind: 'channel'; channel: string }
-  | { kind: 'customPath' }
-  | { kind: 'unclear' };
+  | RustToolchainFileChannelNamed
+  | RustToolchainFileChannelCustomPath
+  | RustToolchainFileChannelUnclear;
 
 function parseRustToolchainFileChannel(params: {
   isTomlName: boolean;

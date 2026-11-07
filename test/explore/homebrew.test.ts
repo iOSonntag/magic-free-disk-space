@@ -624,7 +624,6 @@ describeAwaitingWin32Platform('with fake brews', () => {
           brewAppleSilicon: appleSilicon.path,
           brewIntel: intel.path,
         }),
-        timeoutMs: TIMEOUT_MS,
       }),
     );
     const appleSiliconOutcome = await probes.outcomes.homebrewAppleSilicon;
@@ -665,7 +664,6 @@ describeAwaitingWin32Platform('with fake brews', () => {
       buildTestProbeStart({
         environment: environment,
         toolInstallLocations: buildFixtureToolLocations({ brewIntel: intel.path }),
-        timeoutMs: TIMEOUT_MS,
       }),
     );
     const outcome = await probes.outcomes.homebrewIntel;

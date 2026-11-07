@@ -58,9 +58,7 @@ final PlannedEvent evictOnlyPlan = buildSamplePlan(
 
 /// The item of the sample scan numbered [number], as a plan lists it.
 PlannedItemView planSampleItem(int number) {
-  return planItem(
-    loadSampleEvent<ScannedEvent>().selectableItems.singleWhere((ItemView item) => item.number == number),
-  );
+  return planItem(getSampleItem(number));
 }
 
 /// Pumps the step of the delete flow that [controller] is in, as the shell

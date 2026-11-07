@@ -3,6 +3,7 @@ import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge/openable_url.dart';
 
 import 'support/sample_events.dart';
+import 'support/test_items.dart';
 
 const String fullDiskAccessSettingsUrl =
     'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
@@ -13,10 +14,6 @@ const String deletionLogPath =
 
 List<ItemDetailLineKind> getDetailLineKinds(List<ItemDetailLine> lines) {
   return [for (final ItemDetailLine line in lines) line.kind];
-}
-
-List<int> getItemNumbers(List<ItemView> items) {
-  return [for (final ItemView item in items) item.number];
 }
 
 void main() {
@@ -31,14 +28,11 @@ void main() {
   group('the scan', () {
     final ScannedEvent scanned = loadSampleEvent<ScannedEvent>();
 
-    /// The item of [scanned] numbered [number].
-    ItemView getItem(int number) {
-      return scanned.selectableItems.singleWhere((ItemView item) => item.number == number);
-    }
-
     test('parses the summary with its totals and its disk', () {
       expect(scanned.summary.totalBytes, 26000000);
+      expect(scanned.summary.isTotalComplete, isFalse);
       expect(scanned.summary.safeBytes, 6000000);
+      expect(scanned.summary.isSafeComplete, isTrue);
       expect(scanned.summary.disk!.capacityBytes, 500000000000);
       expect(scanned.summary.disk!.availableBytes, 52000000000);
     });
@@ -82,7 +76,7 @@ void main() {
     });
 
     test('parses the facts of an item', () {
-      final ItemView toolCache = getItem(1);
+      final ItemView toolCache = getSampleItem(1);
       expect(
         toolCache.key,
         'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
@@ -100,44 +94,44 @@ void main() {
       expect(toolCache.appName, isNull);
       expect(toolCache.matchedBy, isNull);
 
-      final ItemView appCache = getItem(2);
+      final ItemView appCache = getSampleItem(2);
       expect(appCache.group, ItemGroup.review);
       expect(appCache.isComplete, isFalse);
       expect(appCache.appName, 'Example');
 
-      final ItemView xcode = getItem(3);
+      final ItemView xcode = getSampleItem(3);
       expect(xcode.origin, ItemOrigin.app);
       expect(xcode.group, ItemGroup.review);
       expect(xcode.displayPath, '/Applications/Xcode.app');
       expect(xcode.lastUsedAt, DateTime.utc(2025, 3, 15));
 
-      final ItemView leftoverByName = getItem(4);
+      final ItemView leftoverByName = getSampleItem(4);
       expect(leftoverByName.origin, ItemOrigin.leftover);
       expect(leftoverByName.group, ItemGroup.careful);
       expect(leftoverByName.matchedBy, LeftoverMatch.name);
       expect(leftoverByName.lastUsedAt, DateTime.utc(2024, 9, 1));
 
-      final ItemView leftoverByBundleId = getItem(5);
+      final ItemView leftoverByBundleId = getSampleItem(5);
       expect(leftoverByBundleId.origin, ItemOrigin.leftover);
       expect(leftoverByBundleId.matchedBy, LeftoverMatch.bundleId);
 
-      final ItemView oldVideo = getItem(6);
+      final ItemView oldVideo = getSampleItem(6);
       expect(oldVideo.origin, ItemOrigin.largeFile);
       expect(oldVideo.lastUsedAt, DateTime.utc(2025, 6, 1));
       expect(oldVideo.downloadedAt, DateTime.utc(2024, 12, 24));
 
-      final ItemView icloudFolder = getItem(7);
+      final ItemView icloudFolder = getSampleItem(7);
       expect(icloudFolder.origin, ItemOrigin.explore);
       expect(icloudFolder.removal, ItemRemoval.evict);
       expect(icloudFolder.sectionKey, SectionKey.icloud);
 
-      final ItemView simulator = getItem(8);
+      final ItemView simulator = getSampleItem(8);
       expect(simulator.origin, ItemOrigin.explore);
       expect(simulator.removal, ItemRemoval.tool);
       expect(simulator.sectionKey, SectionKey.developerTools);
       expect(simulator.group, ItemGroup.review);
 
-      final ItemView buildCache = getItem(9);
+      final ItemView buildCache = getSampleItem(9);
       expect(buildCache.removal, ItemRemoval.engine);
       expect(buildCache.risk, Risk.safe);
       expect(buildCache.group, ItemGroup.review);
@@ -147,7 +141,7 @@ void main() {
     test('parses Explore with its items and its advice group', () {
       final ExploreView explore = scanned.explore!;
       expect(getItemNumbers(explore.items), [7, 8, 9]);
-      final ItemView simulator = getItem(8);
+      final ItemView simulator = getSampleItem(8);
       expect(getDetailLineKinds(simulator.detailLines), [
         ItemDetailLineKind.path,
         ItemDetailLineKind.explanation,
@@ -182,6 +176,7 @@ void main() {
       expect(toolStore.origin, ItemOrigin.catalog);
       expect(toolStore.removal, ItemRemoval.advice);
       expect(toolStore.allocatedBytes, 6000000);
+      expect(toolStore.isComplete, isTrue);
       expect(toolStore.displayPath, '~/Library/ToolStore');
       expect(toolStore.revealPath, '/Users/me/Library/ToolStore');
       expect(toolStore.opener, isNull);
@@ -213,17 +208,19 @@ void main() {
               total.titleText,
               total.allocatedBytes,
               total.isComplete,
+              total.removableBytes,
+              total.isRemovableComplete,
               total.itemCount,
               total.safeBytes,
               total.adviceCount,
             ),
         ],
         [
-          (SectionKey.caches, 'Caches', 10000000, false, 2, 6000000, 0),
-          (SectionKey.developerTools, 'Developer tools', 5000000, true, 2, 0, 1),
-          (SectionKey.apps, 'Apps', 5000000, true, 3, 0, 0),
-          (SectionKey.largeFiles, 'Large files', 3000000, true, 1, 0, 1),
-          (SectionKey.icloud, 'iCloud Drive', 5000000, true, 1, 0, 0),
+          (SectionKey.caches, 'Caches', 10000000, false, 10000000, false, 2, 6000000, 0),
+          (SectionKey.developerTools, 'Developer tools', 5000000, true, 5000000, true, 2, 0, 1),
+          (SectionKey.apps, 'Apps', 5000000, true, 3000000, true, 3, 0, 0),
+          (SectionKey.largeFiles, 'Large files', 3000000, true, 3000000, true, 1, 0, 1),
+          (SectionKey.icloud, 'iCloud Drive', 5000000, true, 5000000, true, 1, 0, 0),
         ],
       );
     });
@@ -277,7 +274,7 @@ void main() {
         getMapAt(json, ['sections', 0])['checkGroup'] = null;
         getMapAt(json, ['summary'])['disk'] = null;
 
-        final ScannedEvent scan = parseBridgeEvent(json) as ScannedEvent;
+        final ScannedEvent scan = parseScanJson(json);
 
         expect(scan.explore, isNull);
         expect(scan.skipped, isNull);
@@ -287,12 +284,7 @@ void main() {
         final Map<String, Object?> withoutAdvice = loadSampleJson('scanned');
         getMapAt(withoutAdvice, ['explore'])['adviceGroup'] = null;
 
-        expect(
-          (parseBridgeEvent(
-            withoutAdvice,
-          ) as ScannedEvent).explore!.adviceGroup,
-          isNull,
-        );
+        expect(parseScanJson(withoutAdvice).explore!.adviceGroup, isNull);
       },
     );
 
@@ -303,12 +295,7 @@ void main() {
         getMapAt(json, ['explore', 'adviceGroup', 'items', 0])['opener'] =
             opener;
 
-        return (parseBridgeEvent(json) as ScannedEvent)
-            .explore!
-            .adviceGroup!
-            .items
-            .first
-            .opener;
+        return parseScanJson(json).explore!.adviceGroup!.items.first.opener;
       }
 
       test('an app or a pane of System Settings', () {
@@ -363,7 +350,7 @@ void main() {
         ..['removal'] = 'mail';
       getMapAt(json, ['sectionTotals', 0])['sectionKey'] = 'pets';
 
-      final ScannedEvent scan = parseBridgeEvent(json) as ScannedEvent;
+      final ScannedEvent scan = parseScanJson(json);
       final ItemView item = scan.sections.first.items.single;
       final AdviceItemView advice = scan.explore!.adviceGroup!.items.first;
 
@@ -393,6 +380,8 @@ void main() {
       [SectionKey.caches, SectionKey.developerTools],
     );
     expect(progress.found.first.allocatedBytes, 10000000);
+    expect(progress.found.first.removableBytes, 10000000);
+    expect(progress.found.first.isRemovableComplete, isFalse);
 
     final Map<String, Object?> json = loadSampleJson('progress')
       ..['phase'] = 'containers';
@@ -675,40 +664,39 @@ void main() {
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });
 
-    test('on a missing key', () {
-      final Map<String, Object?> withoutSafeNumbers = loadSampleJson('scanned')
-        ..remove('safeNumbers');
-      final Map<String, Object?> withoutCheckGroup = loadSampleJson('scanned');
-      getMapAt(withoutCheckGroup, ['sections', 0]).remove('checkGroup');
-      final Map<String, Object?> withoutSettingsLink = loadSampleJson('status');
-      getMapAt(withoutSettingsLink, ['notices', 0]).remove('settingsLink');
-      final Map<String, Object?> withoutRevealPath = loadSampleJson('scanned');
-      getMapAt(withoutRevealPath, ['sections', 0, 'items', 0]).remove(
-        'revealPath',
-      );
-      final Map<String, Object?> withoutLogPath = loadSampleJson('deleted')
-        ..remove('logPath');
-      final Map<String, Object?> withoutPhase = loadSampleJson('progress')
-        ..remove('phase');
-
-      for (final Map<String, Object?> json in [
-        withoutSafeNumbers,
-        withoutCheckGroup,
-        withoutSettingsLink,
-        withoutRevealPath,
-        withoutLogPath,
-        withoutPhase,
-      ]) {
-        expect(() => parseBridgeEvent(json), throwsFormatException);
-      }
-    });
-
     /// A fresh sample line of [kind] whose map at [path] lacks [key].
     Map<String, Object?> loadSampleJsonWithout(String kind, List<Object> path, String key) {
       final Map<String, Object?> json = loadSampleJson(kind);
       getMapAt(json, path).remove(key);
       return json;
     }
+
+    test('on a missing key', () {
+      for (final Map<String, Object?> json in [
+        loadSampleJsonWithout('scanned', [], 'safeNumbers'),
+        loadSampleJsonWithout('scanned', ['sections', 0], 'checkGroup'),
+        loadSampleJsonWithout('status', ['notices', 0], 'settingsLink'),
+        loadSampleJsonWithout('scanned', ['sections', 0, 'items', 0], 'revealPath'),
+        loadSampleJsonWithout('deleted', [], 'logPath'),
+        loadSampleJsonWithout('progress', [], 'phase'),
+      ]) {
+        expect(() => parseBridgeEvent(json), throwsFormatException);
+      }
+    });
+
+    test('on a missing removable size, or the completeness of a size the app shows', () {
+      for (final Map<String, Object?> json in [
+        loadSampleJsonWithout('scanned', ['summary'], 'isTotalComplete'),
+        loadSampleJsonWithout('scanned', ['summary'], 'isSafeComplete'),
+        loadSampleJsonWithout('scanned', ['sectionTotals', 0], 'removableBytes'),
+        loadSampleJsonWithout('scanned', ['sectionTotals', 0], 'isRemovableComplete'),
+        loadSampleJsonWithout('progress', ['found', 0], 'removableBytes'),
+        loadSampleJsonWithout('progress', ['found', 0], 'isRemovableComplete'),
+        loadSampleJsonWithout('scanned', ['explore', 'adviceGroup', 'items', 0], 'isComplete'),
+      ]) {
+        expect(() => parseBridgeEvent(json), throwsFormatException);
+      }
+    });
 
     test('on a missing key the app checks but does not read', () {
       for (final Map<String, Object?> json in [

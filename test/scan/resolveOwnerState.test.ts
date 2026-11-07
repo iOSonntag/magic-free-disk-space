@@ -6,6 +6,7 @@ import {
   findOwnerBundlePaths,
   isAppleBundleId,
   isBundleIdShape,
+  isOwnerUninstalled,
   parseBundleIdShapedName,
   resolveOwnerState,
   resolveTargetOwner,
@@ -240,6 +241,43 @@ describeAwaitingWin32Platform('findOwnerAppName', () => {
         installedApps: [host, helper],
       }),
     ).toBeNull();
+  });
+});
+
+describeAwaitingWin32Platform('isOwnerUninstalled', () => {
+  const host = buildTestInstalledApp({
+    bundlePath: '/Applications/Host.app',
+    bundleId: 'com.example.host',
+    nestedBundleIds: ['com.example.host.helper'],
+  });
+
+  test('is true for an owner no app of the complete list is, as app or as helper', () => {
+    expect(
+      ['com.example.gone', 'com.example.host', 'com.example.host.helper'].map((bundleId) =>
+        isOwnerUninstalled({
+          owner: buildTestCatalogOwner({ bundleId: bundleId }),
+          installedApps: [host],
+          isInstalledAppListComplete: true,
+        }),
+      ),
+    ).toEqual([true, false, false]);
+  });
+
+  test('is false for no owner, and while the list of installed apps is incomplete', () => {
+    expect(
+      isOwnerUninstalled({
+        owner: buildTestCatalogOwner({ bundleId: null }),
+        installedApps: [],
+        isInstalledAppListComplete: true,
+      }),
+    ).toBe(false);
+    expect(
+      isOwnerUninstalled({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
+        installedApps: [host],
+        isInstalledAppListComplete: false,
+      }),
+    ).toBe(false);
   });
 });
 

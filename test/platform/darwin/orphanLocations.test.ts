@@ -21,7 +21,7 @@ const installed = buildOrphanInstalledFacts({
   isComplete: true,
 });
 
-function findLocation(params: { lastName: string }): OrphanLocation {
+function getLocation(params: { lastName: string }): OrphanLocation {
   const location = darwinPlatform.scan.apps.orphanLocations.find(
     (candidate) => candidate.pathNames.at(-1) === params.lastName,
   );
@@ -36,7 +36,7 @@ function findLocation(params: { lastName: string }): OrphanLocation {
 function matchNameIn(params: { name: string; lastName: string }): OrphanNameMatch {
   return matchOrphanName({
     name: params.name,
-    location: findLocation({ lastName: params.lastName }),
+    location: getLocation({ lastName: params.lastName }),
     installed: installed,
   });
 }

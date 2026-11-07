@@ -25,16 +25,10 @@ export function loadMeasuredPhase(params: {
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
     privacyDenialCode: params.privacyDenialCode,
-    decide: (measurement) =>
-      params.decide({
-        identity: measurement.targets[0].identity,
-        allocatedBytes: measurement.allocatedBytes,
-        entryCount: measurement.entryCount,
-        unreadableCount: measurement.unreadableCount,
-        privateSizeFallbackCount: measurement.privateSizeFallbackCount,
-        isComplete: measurement.isComplete,
-        latestModifiedMs: measurement.latestModifiedMs,
-        holdsOtherVolume: measurement.holdsOtherVolume,
-      }),
+    decide: (measurement) => {
+      const { targets, ...tally } = measurement;
+
+      return params.decide({ ...tally, identity: targets[0].identity });
+    },
   });
 }

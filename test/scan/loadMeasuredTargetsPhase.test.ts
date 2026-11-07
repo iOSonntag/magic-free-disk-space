@@ -3,14 +3,12 @@ import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import type { CandidateDecision } from '../../src/scan/candidate.js';
-import type { TargetsCarve, TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
-import {
-  buildFoundTargets,
-  loadMeasuredTargetsPhase,
-} from '../../src/scan/loadMeasuredTargetsPhase.js';
+import type { CandidateDecision, TargetsMeasurement } from '../../src/scan/candidate.js';
+import type { TargetsCarve } from '../../src/scan/loadMeasuredTargetsPhase.js';
+import { loadMeasuredTargetsPhase } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { ScanPhase } from '../../src/scan/scanPhase.js';
 import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
+import { mapNonEmpty } from '../../src/system/nonEmptyList.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureFile, createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
@@ -48,7 +46,7 @@ async function loadPhase(params: {
 }): Promise<LoadedPhase> {
   const measurements: TargetsMeasurement[] = [];
   const phase = await loadMeasuredTargetsPhase({
-    found: buildFoundTargets(params.paths),
+    found: mapNonEmpty(params.paths, (path) => ({ path: path })),
     carve: params.carve ?? null,
     measureTimeoutMs: 10_000,
     runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),

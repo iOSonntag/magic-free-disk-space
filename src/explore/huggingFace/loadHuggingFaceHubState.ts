@@ -15,7 +15,7 @@ import type { HuggingFaceRepoName } from './parseHuggingFaceRepoFolderName.js';
 import { parseHuggingFaceRepoFolderName } from './parseHuggingFaceRepoFolderName.js';
 
 /** The hub cache of the Hugging Face libraries below the home folder, unless `HF_HOME` moves it. */
-export const HUGGING_FACE_HUB_PATH_NAMES = ['.cache', 'huggingface', 'hub'];
+const HUGGING_FACE_HUB_PATH_NAMES = ['.cache', 'huggingface', 'hub'];
 
 /** A ref's file holds the full commit hash it points at. */
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{40}$/;

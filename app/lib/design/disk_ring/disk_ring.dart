@@ -8,10 +8,9 @@ import '../tokens.dart';
 import 'disk_ring_arcs.dart';
 import 'disk_ring_painter.dart';
 
-/// The disk as a lit gauge: the used space that stays, what can be freed
-/// in [accent] light, and the available space. It fills from empty when it
-/// first shows and eases to each new reading; while motion is reduced it
-/// jumps. A scan sweep circles it while [isScanning].
+/// The disk as a lit gauge of [reading], what can be freed in [accent]
+/// light. It eases to each new reading, or jumps while motion is reduced,
+/// and a sweep circles it while [isScanning].
 class DiskRing extends StatefulWidget {
   const DiskRing({
     super.key,
@@ -73,7 +72,7 @@ class _DiskRingState extends State<DiskRing> with SingleTickerProviderStateMixin
       return;
     }
 
-    _fromArcs = _findShownArcs();
+    _fromArcs = _getShownArcs();
     _toArcs = nextArcs;
     _easeToArcs(isReduced: MotionScope.of(context).isReduced);
   }
@@ -95,7 +94,7 @@ class _DiskRingState extends State<DiskRing> with SingleTickerProviderStateMixin
     _fill.forward(from: 0);
   }
 
-  DiskRingArcs _findShownArcs() => DiskRingArcs.lerp(_fromArcs, _toArcs, _eased.value);
+  DiskRingArcs _getShownArcs() => DiskRingArcs.lerp(_fromArcs, _toArcs, _eased.value);
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +114,7 @@ class _DiskRingState extends State<DiskRing> with SingleTickerProviderStateMixin
                 builder: (BuildContext context, Widget? child) {
                   return CustomPaint(
                     painter: DiskRingPainter(
-                      arcs: _findShownArcs(),
+                      arcs: _getShownArcs(),
                       accent: widget.accent,
                       shader: _shader,
                       ambientTime: MotionScope.ambientTimeOf(context),

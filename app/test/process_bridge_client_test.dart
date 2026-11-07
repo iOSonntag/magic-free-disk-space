@@ -11,7 +11,7 @@ import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart'
 
 const String _scannedLine =
     '{"kind":"scanned","summary":{"titleText":"","lines":[],"totalBytes":%d,'
-    '"safeBytes":0,"disk":null},"sections":[],"sectionTotals":[],'
+    '"isTotalComplete":true,"safeBytes":0,"isSafeComplete":true,"disk":null},"sections":[],"sectionTotals":[],'
     '"explore":null,"safeNumbers":[],"skipped":null,"notices":[]}';
 
 // Each total marks which answer of the fake bridge a scan is.

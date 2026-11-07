@@ -1,9 +1,14 @@
-import type { CatalogEntry } from '../catalog/catalog.js';
+import type {
+  CatalogEntry,
+  CatalogRemoval,
+  CatalogRemovalAdvice,
+  CatalogRemovalExplore,
+} from '../catalog/catalog.js';
+import { isEngineProbeId } from '../catalog/catalog.js';
 import type { CatalogOwner } from '../catalog/catalogOwner.js';
 import type { PathRules } from '../path/pathRules.js';
-import type { CandidateDecision, SkipReason } from './candidate.js';
-import type { TargetsMeasurement } from './loadMeasuredTargetsPhase.js';
-import { hasSymbolicLinkTarget } from './loadMeasuredTargetsPhase.js';
+import type { CandidateDecision, SkipReason, TargetsMeasurement } from './candidate.js';
+import { hasSymbolicLinkTarget } from './candidate.js';
 import type { ActivityProbe } from './loadTreeActivity.js';
 import type { OwnerState } from './resolveOwnerState.js';
 import { isAppleBundleId } from './resolveOwnerState.js';
@@ -23,6 +28,8 @@ export function decideCatalogCandidate(params: {
   ownerState: OwnerState;
   /** The installed app of the owner, by its name; `null` for none. */
   ownerAppName: string | null;
+  /** As `isOwnerUninstalled` tells it, so an explore entry's advice speaks of a removed app. */
+  isOwnerUninstalled: boolean;
   activity: ActivityProbe | null;
   minOfferedBytes: number;
   /** The absolute paths of the entry's carved subpaths below `path`, from `buildCarvedPaths`. */
@@ -36,12 +43,13 @@ export function decideCatalogCandidate(params: {
     return { kind: 'skip', path: params.path, reason: 'systemOwned' };
   }
 
-  if (params.ownerState === 'running') {
-    return { kind: 'skip', path: params.path, reason: 'ownerRunning' };
-  }
+  const ownerSkipReason = getOwnerSkipReason({
+    removal: params.entry.removal,
+    ownerState: params.ownerState,
+  });
 
-  if (params.ownerState === 'unknown') {
-    return { kind: 'skip', path: params.path, reason: 'runningUnknown' };
+  if (ownerSkipReason !== null) {
+    return { kind: 'skip', path: params.path, reason: ownerSkipReason };
   }
 
   if (params.measurement.allocatedBytes < params.minOfferedBytes) {
@@ -95,7 +103,10 @@ export function decideCatalogCandidate(params: {
           category: params.entry.category,
           risk: params.entry.risk,
           explanation: params.entry.explanation,
-          advice: params.entry.removal.advice,
+          advice: getAdviceText({
+            removal: params.entry.removal,
+            isOwnerUninstalled: params.isOwnerUninstalled,
+          }),
           opener: params.entry.removal.kind === 'advice' ? params.entry.removal.opener : null,
           carvedPaths: params.carvedPaths,
           allocatedBytes: params.measurement.allocatedBytes,
@@ -142,6 +153,59 @@ export function isSystemOwnedTarget(params: {
     case 'bundleIdFamily':
       return false;
   }
+}
+
+/**
+ * The skip of an entry whose owner runs or cannot be checked; `null` while it is stopped, and for
+ * an entry its owner never holds back, as `isHeldByOwner` says.
+ */
+function getOwnerSkipReason(params: {
+  removal: CatalogRemoval;
+  ownerState: OwnerState;
+}): SkipReason | null {
+  if (!isHeldByOwner({ removal: params.removal })) {
+    return null;
+  }
+
+  switch (params.ownerState) {
+    case 'running':
+      return 'ownerRunning';
+    case 'unknown':
+      return 'runningUnknown';
+    case 'stopped':
+      return null;
+  }
+}
+
+/**
+ * Whether a running owner holds the entry back: an advice deletes nothing, and an engine's own
+ * running engine removes its units, but every other entry deletes what its owner may use.
+ */
+function isHeldByOwner(params: { removal: CatalogRemoval }): boolean {
+  switch (params.removal.kind) {
+    case 'delete':
+      return true;
+    case 'advice':
+      return false;
+    case 'explore':
+      return !isEngineProbeId(params.removal.probe);
+  }
+}
+
+/** An explore entry's advice for an uninstalled owner, where it words one; its advice otherwise. */
+function getAdviceText(params: {
+  removal: CatalogRemovalAdvice | CatalogRemovalExplore;
+  isOwnerUninstalled: boolean;
+}): string {
+  if (
+    params.removal.kind === 'explore' &&
+    params.isOwnerUninstalled &&
+    params.removal.uninstalledOwnerAdvice !== undefined
+  ) {
+    return params.removal.uninstalledOwnerAdvice;
+  }
+
+  return params.removal.advice;
 }
 
 function getActivitySkipReason(params: {

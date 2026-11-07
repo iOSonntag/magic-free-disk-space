@@ -32,8 +32,7 @@ export const SENSITIVE_HOME_DIR_NAMES: string[][] = [
   ['.ssh'],
   ['.gnupg'],
   ['Library', 'Keychains'],
-  // Mail, Messages, Photos and the device backups hold what may be the only copy of a person's
-  // mail, chats, photos and phones; only their own apps free space in them.
+  // These may hold the only copy of mail, chats, photos and phones; only their own apps free them.
   ['Library', 'Mail'],
   ['Library', 'Messages'],
   ['Pictures', 'Photos Library.photoslibrary'],

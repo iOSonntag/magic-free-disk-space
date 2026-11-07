@@ -4,6 +4,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner.dart';
+import 'package:magic_free_disk_space/design/design.dart';
+import 'package:magic_free_disk_space/overview/disk_panel.dart';
 import 'package:magic_free_disk_space/overview/overview.dart';
 import 'package:magic_free_disk_space/removal/removal.dart';
 import 'package:magic_free_disk_space/update/update.dart';
@@ -130,17 +132,10 @@ void main() {
   testWidgets('counts the places of a section of advice alone, which has no size', (
     WidgetTester tester,
   ) async {
-    final Map<String, Object?> json = loadSampleJson('scanned');
-    listSectionTotalJsons(json).add({
-      'sectionKey': 'ownApp',
-      'titleText': 'Handled by its own app',
-      'allocatedBytes': 0,
-      'isComplete': true,
-      'itemCount': 0,
-      'safeBytes': 0,
-      'adviceCount': 1,
-    });
-    await _pumpOverview(tester, bridge: FakeCleanerBridge(scanAnswer: parseScanJson(json)));
+    await _pumpOverview(
+      tester,
+      bridge: FakeCleanerBridge(scanAnswer: parseScanJson(loadScanJsonWithOwnAppAdvice())),
+    );
 
     final Finder ownAppCard = find.byKey(const SectionCardKey(SectionKey.ownApp));
     expect(find.descendant(of: ownAppCard, matching: find.text('1 place')), findsOneWidget);
@@ -325,5 +320,42 @@ void main() {
 
     expect(find.text('at least 26 MB can be freed'), findsOneWidget);
     expect(find.byKey(const SectionCardKey(SectionKey.apps)), findsOneWidget);
+  });
+
+  testWidgets('counts only what a plan may remove while the scan runs, so the figure does not drop once it ends', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, Object?> progressJson = loadSampleJson('progress')
+      ..['found'] = listSectionTotalJsons(loadSampleJson('scanned'));
+    final FakeCleanerBridge bridge = FakeCleanerBridge(scanAnswer: sampleScan)
+      ..scanProgress = parseBridgeEvent(progressJson) as ProgressEvent;
+    final Completer<ScanAnswer> heldScan = bridge.holdNextScan();
+    await _pumpOverview(tester, bridge: bridge);
+
+    final Finder ringFigure = find.descendant(of: find.byType(DiskPanel), matching: find.byType(CountUp));
+    expect(find.text('found so far'), findsOneWidget);
+    expect(find.byKey(const SectionCardKey(SectionKey.apps)), findsOneWidget);
+    expect(tester.widget<CountUp>(ringFigure).value, lessThanOrEqualTo(sampleScan.summary.totalBytes));
+    expect(find.descendant(of: ringFigure, matching: find.text('at least 26 MB')), findsOneWidget);
+
+    heldScan.complete(sampleScan);
+    await tester.pumpAndSettle();
+
+    expect(find.descendant(of: ringFigure, matching: find.text('at least 26 MB')), findsOneWidget);
+    expect(find.text('at least 26 MB can be freed'), findsOneWidget);
+  });
+
+  testWidgets('words what can be freed and what is safe as complete as the bridge says', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, Object?> json = loadSampleJson('scanned');
+    getMapAt(json, ['summary'])
+      ..['isTotalComplete'] = true
+      ..['isSafeComplete'] = false;
+    await _pumpOverview(tester, bridge: FakeCleanerBridge(scanAnswer: parseScanJson(json)));
+
+    expect(find.text('26 MB can be freed'), findsOneWidget);
+    expect(find.text('at least 6.0 MB of it is safe to remove at once'), findsOneWidget);
+    expect(find.text('Clean safe items · at least 6.0 MB'), findsOneWidget);
   });
 }

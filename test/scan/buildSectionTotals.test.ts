@@ -44,6 +44,8 @@ describeAwaitingWin32Platform('buildSectionTotals', () => {
         sectionKey: 'caches',
         allocatedBytes: 300,
         isComplete: true,
+        removableBytes: 300,
+        isRemovableComplete: true,
         itemCount: 2,
         safeBytes: 100,
         adviceCount: 0,
@@ -52,6 +54,8 @@ describeAwaitingWin32Platform('buildSectionTotals', () => {
         sectionKey: 'developerTools',
         allocatedBytes: 300,
         isComplete: true,
+        removableBytes: 300,
+        isRemovableComplete: true,
         itemCount: 1,
         safeBytes: 0,
         adviceCount: 1,
@@ -60,10 +64,59 @@ describeAwaitingWin32Platform('buildSectionTotals', () => {
         sectionKey: 'largeFiles',
         allocatedBytes: 400,
         isComplete: true,
+        removableBytes: 400,
+        isRemovableComplete: true,
         itemCount: 1,
         safeBytes: 0,
         adviceCount: 0,
       },
+    ]);
+  });
+
+  test('counts a never item in the section but not in what a plan may remove', () => {
+    const totals = buildSectionTotals({
+      candidates: [
+        buildTestCandidate({ path: '/fixture/a', risk: 'safe', allocatedBytes: 100 }),
+        buildTestCandidate({
+          path: '/fixture/kept',
+          risk: 'never',
+          allocatedBytes: 200,
+          isComplete: false,
+        }),
+      ],
+      advice: [],
+    });
+
+    expect(totals).toEqual([
+      {
+        sectionKey: 'caches',
+        allocatedBytes: 300,
+        isComplete: false,
+        removableBytes: 100,
+        isRemovableComplete: true,
+        itemCount: 2,
+        safeBytes: 100,
+        adviceCount: 0,
+      },
+    ]);
+  });
+
+  test('is removable complete only while every removable item was measured whole', () => {
+    const totals = buildSectionTotals({
+      candidates: [
+        buildTestCandidate({ path: '/fixture/a', risk: 'safe', allocatedBytes: 100 }),
+        buildTestCandidate({
+          path: '/fixture/b',
+          risk: 'review',
+          allocatedBytes: 200,
+          isComplete: false,
+        }),
+      ],
+      advice: [],
+    });
+
+    expect(totals.map((total) => [total.removableBytes, total.isRemovableComplete])).toEqual([
+      [300, false],
     ]);
   });
 

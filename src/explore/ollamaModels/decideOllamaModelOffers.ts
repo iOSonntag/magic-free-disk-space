@@ -1,5 +1,5 @@
+import { toNonEmpty } from '../../system/nonEmptyList.js';
 import type { ExploreFoundPaths } from '../exploreUnit.js';
-import { toNonEmpty } from '../exploreUnit.js';
 import type { OllamaManifest, OllamaModelStateInstalled } from './loadOllamaModelState.js';
 
 /** A model to offer: its manifest and the blob files that no other manifest names. */

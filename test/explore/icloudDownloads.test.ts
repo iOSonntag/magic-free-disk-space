@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { Risk } from '../../src/catalog/catalog.js';
 import type {
   ExploreProbeToolResult,
@@ -11,6 +11,7 @@ import {
   isEvictFileUnchanged,
 } from '../../src/explore/icloudDownloads/decideEvictFile.js';
 import { loadIcloudDownloadFindings } from '../../src/explore/icloudDownloads/loadIcloudDownloadFindings.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import type { EntryStats } from '../../src/system/loadEntryStats.js';
 import type { FileIdentity } from '../../src/system/loadFileIdentity.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
@@ -21,9 +22,8 @@ import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeToolRun,
-  DAY_MS,
-  findUnitOfKind,
   getProbeFindings,
+  getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
 
@@ -61,14 +61,13 @@ function getMobileDocumentsPath(params: { home: FixtureHome }): string {
   return join(params.home.environment.homeDir, 'Library', 'Mobile Documents');
 }
 
-/** Writes a file with its missing folders, changed and read at the given times, by default long ago. */
+/** Writes a file changed and read at the given times, by default long ago. */
 async function createIcloudFile(params: {
   path: string;
   sizeBytes?: number;
   modifiedMs?: number;
   accessedMs?: number;
 }): Promise<void> {
-  await createFixtureDirectory({ path: dirname(params.path) });
   await createFixtureFile({
     path: params.path,
     sizeBytes: params.sizeBytes ?? FILE_SIZE_BYTES,
@@ -253,7 +252,7 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
 
         await createIcloudFile({ path: filePath, accessedMs: accessedMs });
 
-        const unit = findUnitOfKind({
+        const unit = getUnitOfKind({
           findings: getProbeFindings(await loadIcloudDownloadFindings(buildRun({ home: home }))),
           kind: 'icloudFolder',
         });

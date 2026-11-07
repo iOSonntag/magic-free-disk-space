@@ -17,19 +17,15 @@ import type {
   ExplorePathUnitClaudeTranscripts,
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import {
-  createFixtureDirectory,
-  updateModifiedMs,
-  writeFixtureTextFile,
-} from '../support/fixtureRoot.js';
+import { updateModifiedMs, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   buildTestProbeRun,
-  DAY_MS,
-  findUnitOfKind,
   getProbeFindings,
+  getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
 
@@ -99,7 +95,6 @@ async function createProject(fixture: ProjectsFixture): Promise<void> {
     '-Users-example-recent',
   );
 
-  await createFixtureDirectory({ path: recentProjectPath });
   await writeEntry({ path: join(recentProjectPath, 'new.jsonl'), modifiedMs: RECENT_MS });
 }
 
@@ -275,7 +270,7 @@ describeAwaitingWin32Platform('recheckClaudeTranscriptsUnit', () => {
       run: async (fixture) => {
         await createProject(fixture);
 
-        const unit = findUnitOfKind({
+        const unit = getUnitOfKind({
           findings: getProbeFindings(
             await loadClaudeTranscriptFindings(
               buildTestProbeRun({ environment: fixture.environment }),

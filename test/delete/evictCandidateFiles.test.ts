@@ -38,12 +38,10 @@ async function createFakeBrctl(params: {
   const path = await createFakeTool({
     folder: join(params.fixtureRoot.rootDir, 'tools'),
     name: 'brctl',
-    body: [
-      "import { appendFileSync } from 'node:fs';",
-      'const args = process.argv.slice(2);',
-      `appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + '\\n');`,
-      `process.exit((args[1] ?? '').endsWith(${JSON.stringify(REFUSED_FILE_NAME)}) ? 1 : 0);`,
-    ].join('\n'),
+    body: `import { appendFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + '\\n');
+process.exit((args[1] ?? '').endsWith(${JSON.stringify(REFUSED_FILE_NAME)}) ? 1 : 0);`,
     mode: params.mode ?? TRUSTED_TOOL_MODE,
   });
 

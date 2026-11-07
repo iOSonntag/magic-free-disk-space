@@ -1,5 +1,7 @@
 typedef _DecimalUnitScale = ({String unit, int bytesPerUnit});
 
+// Decimal units, as macOS counts disk space; the CLI's `formatBytes` writes
+// the same, so a size reads alike in both.
 const List<_DecimalUnitScale> _decimalUnitScales = <_DecimalUnitScale>[
   // Finder writes the thousand bytes as KB.
   (unit: 'KB', bytesPerUnit: 1000),
@@ -8,12 +10,11 @@ const List<_DecimalUnitScale> _decimalUnitScales = <_DecimalUnitScale>[
 ];
 const _DecimalUnitScale _largestDecimalUnitScale = (unit: 'TB', bytesPerUnit: 1000 * 1000 * 1000 * 1000);
 
-/// Formats a byte count in decimal units, 1 GB being 10⁹ bytes, as macOS
-/// counts disk space, with one decimal below ten of a unit. The app's one
-/// size format, the same as the CLI's `formatBytes`. Throws an
-/// [ArgumentError] for a negative count, which is a broken invariant of the
-/// caller.
+/// Formats a byte count in decimal units, 1 GB being 10⁹ bytes, with one
+/// decimal below ten of a unit. Throws an [ArgumentError] for a negative
+/// count.
 String formatBytes(int bytes) {
+  // A negative count is a broken invariant of the caller.
   if (bytes < 0) {
     throw ArgumentError.value(bytes, 'bytes', 'must not be negative');
   }

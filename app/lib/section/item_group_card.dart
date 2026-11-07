@@ -8,7 +8,7 @@ import 'item_row.dart';
 
 /// Whether a group's select toggle shows all, none, or some (`null`) of
 /// [numbers] ticked in [selectedNumbers].
-bool? findGroupSelectValue(List<int> numbers, Set<int> selectedNumbers) {
+bool? getGroupSelectValue(List<int> numbers, Set<int> selectedNumbers) {
   final int selectedCount = numbers.where(selectedNumbers.contains).length;
   if (selectedCount == 0) {
     return false;
@@ -95,11 +95,7 @@ class _ItemGroupCardState extends State<ItemGroupCard> {
       for (final ItemView item in widget.items)
         if (isItemRemovable(item)) item.number,
     ];
-    final ItemSizeSum size = sumItemSizes(widget.items);
-    final String sizeText = formatSizeText(
-      allocatedBytes: size.allocatedBytes,
-      isComplete: size.isComplete,
-    );
+    final String sizeText = formatItemSizeSumText(sumItemSizes(widget.items));
     final String countText = formatItemCount(widget.items.length);
     return GlassCard(
       accent: widget.look.accent,
@@ -110,7 +106,7 @@ class _ItemGroupCardState extends State<ItemGroupCard> {
           Row(
             children: [
               StageCheckbox(
-                value: findGroupSelectValue(numbers, widget.selectedNumbers),
+                value: getGroupSelectValue(numbers, widget.selectedNumbers),
                 accent: widget.look.accent,
                 semanticsLabel: 'Select all of $title',
                 onPressed: _buildGroupToggle(numbers),

@@ -39,8 +39,7 @@ class ScanSweepPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final double periodSeconds = MotionTokens.sweepPeriod.inMicroseconds / Duration.microsecondsPerSecond;
-    final double phase = (ambientTime.value / periodSeconds) % 1;
+    final double phase = getAmbientLoopPhase(ambientTime.value, MotionTokens.sweepPeriod);
     final double bandWidth = size.width * _bandShare;
     final double bandLeft = -bandWidth + phase * (size.width + bandWidth);
     final Rect band = Rect.fromLTWH(bandLeft, 0, bandWidth, size.height);

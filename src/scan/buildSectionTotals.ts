@@ -1,3 +1,4 @@
+import { isRemovableRisk } from '../catalog/catalog.js';
 import type { Advice, Candidate } from './candidate.js';
 import type { ConsumerSection } from './placeCandidate.js';
 import { CONSUMER_SECTION_ORDER, getCategorySection, placeCandidate } from './placeCandidate.js';
@@ -11,6 +12,10 @@ export type SectionTotal = {
   allocatedBytes: number;
   /** False when the size of an item of the section is a lower bound. */
   isComplete: boolean;
+  /** The bytes of the section's items a plan may remove: every item but a `never` one. */
+  removableBytes: number;
+  /** False when the size of one of those removable items is a lower bound. */
+  isRemovableComplete: boolean;
   itemCount: number;
   /** The bytes of the section's `safe` group. */
   safeBytes: number;
@@ -37,12 +42,17 @@ export function buildSectionTotals(params: {
       return [];
     }
 
+    const removableCandidates = sectionCandidates
+      .map((placed) => placed.candidate)
+      .filter((candidate) => isRemovableRisk(candidate.risk));
     const total: SectionTotal = {
       sectionKey: section,
       allocatedBytes: sumAllocatedBytes({
         candidates: sectionCandidates.map((placed) => placed.candidate),
       }),
       isComplete: sectionCandidates.every((placed) => placed.candidate.isComplete),
+      removableBytes: sumAllocatedBytes({ candidates: removableCandidates }),
+      isRemovableComplete: removableCandidates.every((candidate) => candidate.isComplete),
       itemCount: sectionCandidates.length,
       safeBytes: sumAllocatedBytes({
         candidates: sectionCandidates

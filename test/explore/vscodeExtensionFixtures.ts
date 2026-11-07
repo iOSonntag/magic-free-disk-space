@@ -1,12 +1,8 @@
 import { posix } from 'node:path';
 import type { ExplorePathUnitVscodeExtension } from '../../src/explore/exploreUnit.js';
 import type { CandidateProbed } from '../../src/scan/candidate.js';
-import { buildTestIdentity, TEST_LISTING_FACTS_NONE } from '../support/candidateFixtures.js';
-import {
-  createFixtureDirectory,
-  createFixtureFile,
-  writeFixtureTextFile,
-} from '../support/fixtureRoot.js';
+import { buildTestIdentity, buildTestProbedCandidate } from '../support/candidateFixtures.js';
+import { createFixtureFile, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 /** A command line of VS Code's app, which keeps its extension folders busy. */
@@ -87,11 +83,8 @@ export async function createVscodeExtensionFolders(params: {
   folderNames: string[];
 }): Promise<void> {
   for (const folderName of params.folderNames) {
-    const folderPath = posix.join(buildVscodeExtensionsPath(params), folderName);
-
-    await createFixtureDirectory({ path: folderPath });
     await createFixtureFile({
-      path: posix.join(folderPath, 'package.json'),
+      path: posix.join(buildVscodeExtensionsPath(params), folderName, 'package.json'),
       sizeBytes: VSCODE_FOLDER_SIZE_BYTES,
       modifiedMs: Date.UTC(2026, 0, 1),
     });
@@ -171,18 +164,16 @@ export function buildOlderVscodeUnit(params: { homeDir: string }): ExplorePathUn
 export function buildTestVscodeExtensionCandidate(params: { homeDir: string }): CandidateProbed {
   const unit = buildObsoleteVscodeUnit(params);
 
-  return {
+  return buildTestProbedCandidate({
     path: unit.folderPath,
     title: 'VS Code extension example.alpha 1.0.0',
     category: 'developer',
     risk: 'review',
-    origin: { kind: 'explore', probe: 'vscodeExtensions' },
     explanation: 'An extension folder VS Code marked for removal after an uninstall or an update.',
     regeneration: 'VS Code downloads it again only if you install this version again.',
     allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
     entryCount: 2,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
+    probe: 'vscodeExtensions',
     removal: {
       kind: 'deleteUnitPaths',
       targets: [
@@ -194,5 +185,5 @@ export function buildTestVscodeExtensionCandidate(params: { homeDir: string }): 
       "Neither VS Code's default registry nor any profile's lists this folder.",
       "VS Code's .obsolete file marks it for removal.",
     ],
-  };
+  });
 }

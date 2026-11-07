@@ -1,4 +1,5 @@
 import '../bridge/bridge.dart';
+import '../design/design.dart';
 
 /// The group a section page shows an item under. An item of a group this app
 /// does not know shows under [review], which is never ticked for anyone.
@@ -77,6 +78,12 @@ final class ItemSizeSum {
 
   /// Whether every one of the items was measured whole.
   final bool isComplete;
+}
+
+/// The size of [size] as the app shows it, "at least" when an item was not
+/// measured whole.
+String formatItemSizeSumText(ItemSizeSum size) {
+  return formatSizeText(allocatedBytes: size.allocatedBytes, isComplete: size.isComplete);
 }
 
 ItemSizeSum sumItemSizes(Iterable<ItemView> items) {

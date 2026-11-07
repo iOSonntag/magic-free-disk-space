@@ -19,7 +19,7 @@ class StageSwitchTrack extends StatelessWidget {
   Widget build(BuildContext context) {
     final Duration duration = MotionScope.of(context).plainFadeDuration;
     return Opacity(
-      opacity: enabled ? 1 : 0.42,
+      opacity: enabled ? 1 : ControlTokens.disabledOpacity,
       child: AnimatedContainer(
         duration: duration,
         curve: Curves.easeOut,

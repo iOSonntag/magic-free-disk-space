@@ -11,8 +11,8 @@ import type {
   EngineVolumeName,
 } from '../../src/explore/engines/engineObjectIds.js';
 import type { ExploreEngineUnitPlace } from '../../src/explore/exploreUnit.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { DAY_MS } from '../support/probeRunFixtures.js';
 
 export const FAKE_API_VERSION = '1.47';
 

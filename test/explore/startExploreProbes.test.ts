@@ -463,6 +463,22 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
     expect(outcome).toEqual({ kind: 'timedOut' });
   });
 
+  test('claims no SDK root once the pins the roots wait for pass the deadline', async () => {
+    const timeoutMs = 50;
+    const startedAtMs = Date.now();
+
+    const probes = startExploreProbes(
+      buildProbeStart({
+        projectPins: { walkEnded: Promise.resolve(), pins: new Promise(() => {}) },
+        timeoutMs: timeoutMs,
+      }),
+    );
+
+    expect(await probes.claimRootsLoad).toEqual([]);
+    expect(Date.now() - startedAtMs).toBeLessThan(timeoutMs + EXPLORE_PROBE_DEADLINE_GRACE_MS * 2);
+    expect(await probes.outcomes.androidSystemImages).toEqual({ kind: 'timedOut' });
+  });
+
   test('fails a probe whose command passes its limit, naming its tool rather than timedOut', async () => {
     const mise = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'tools'),

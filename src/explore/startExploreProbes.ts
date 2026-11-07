@@ -137,7 +137,8 @@ export type ExploreProbesStarted = {
   outcomes: Record<ExploreProbeId, Promise<ExploreProbeOutcome>>;
   /**
    * The roots the probes take outside their catalog entries, for the scan to claim: the Android
-   * SDK roots that Flutter's settings and the projects name. Never rejects.
+   * SDK roots that Flutter's settings and the projects name, none once the Android probes timed
+   * out reading them. Never rejects.
    */
   claimRootsLoad: Promise<AbsolutePath[]>;
 };
@@ -356,7 +357,7 @@ export function startExploreProbes(params: ExploreProbeStart): ExploreProbesStar
       condaPackages: runExploreProbe({ probe: EXPLORE_PROBES.condaPackages, scan: scan }),
       fvmVersions: runExploreProbe({ probe: EXPLORE_PROBES.fvmVersions, scan: scan }),
     },
-    claimRootsLoad: scan.androidSdkRoots.then(listAndroidSdkClaimRoots),
+    claimRootsLoad: loadAndroidSdkClaimRoots(scan),
   };
 }
 
@@ -370,6 +371,22 @@ export function startExploreProbeScan(start: ExploreProbeStart): ExploreProbeSca
       projectPins: start.projectPins,
     }),
   };
+}
+
+/**
+ * The claim roots of the scan's SDK roots, or none once their read passes the deadline of the
+ * Android probes that share it, as every one of them timed out then.
+ */
+async function loadAndroidSdkClaimRoots(scan: ExploreProbeScan): Promise<AbsolutePath[]> {
+  // The limit starts where an Android probe's does, so it never passes before theirs.
+  await scan.start.processCommands;
+  await scan.start.projectPins.walkEnded;
+
+  return raceExploreProbeDeadline({
+    pending: scan.androidSdkRoots.then(listAndroidSdkClaimRoots),
+    deadlineMs: Date.now() + scan.start.timeoutMs,
+    timedOutValue: [],
+  });
 }
 
 /**
@@ -442,9 +459,10 @@ export async function runExploreProbe(params: {
     staleCutoffMs: params.scan.start.staleCutoffMs,
   };
 
-  return raceExploreProbeDeadline({
-    outcome: runExploreProbeOfKind({ probe: params.probe, scan: params.scan, run: run }),
+  return raceExploreProbeDeadline<ExploreProbeOutcome>({
+    pending: runExploreProbeOfKind({ probe: params.probe, scan: params.scan, run: run }),
     deadlineMs: run.deadlineMs,
+    timedOutValue: { kind: 'timedOut' },
   });
 }
 
@@ -513,24 +531,25 @@ async function runExploreAndroidSdkProbe(params: {
 }
 
 /**
- * The outcome, or `timedOut` once the grace past `deadlineMs` passes first; the timer never
- * outlives the race.
+ * What `pending` gives, or `timedOutValue` once the grace past `deadlineMs` passes first; the timer
+ * never outlives the race.
  */
-async function raceExploreProbeDeadline(params: {
-  outcome: Promise<ExploreProbeOutcome>;
+async function raceExploreProbeDeadline<T>(params: {
+  pending: Promise<T>;
   deadlineMs: number;
-}): Promise<ExploreProbeOutcome> {
+  timedOutValue: T;
+}): Promise<T> {
   const timedOutAtMs = params.deadlineMs + EXPLORE_PROBE_DEADLINE_GRACE_MS;
-  const deadline = Promise.withResolvers<ExploreProbeOutcomeTimedOut>();
+  const deadline = Promise.withResolvers<T>();
   const timer = setTimeout(
     () => {
-      deadline.resolve({ kind: 'timedOut' });
+      deadline.resolve(params.timedOutValue);
     },
     Math.max(0, timedOutAtMs - Date.now()),
   );
 
   try {
-    return await Promise.race([params.outcome, deadline.promise]);
+    return await Promise.race([params.pending, deadline.promise]);
   } finally {
     clearTimeout(timer);
   }

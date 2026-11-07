@@ -402,6 +402,8 @@ describeAwaitingWin32Platform('runBridge', () => {
         sectionKey: 'caches',
         allocatedBytes: 9 * MIB,
         isComplete: true,
+        removableBytes: 7 * MIB,
+        isRemovableComplete: true,
         itemCount: 3,
         safeBytes: 4 * MIB,
         adviceCount: 1,
@@ -417,7 +419,9 @@ describeAwaitingWin32Platform('runBridge', () => {
         lines: ['4.2 MB safe to free', '3.1 MB to check before deleting'],
         // The 2 MiB never item counts in the title alone: the plan refuses it.
         totalBytes: 7 * MIB,
+        isTotalComplete: true,
         safeBytes: 4 * MIB,
+        isSafeComplete: true,
         disk: TEST_DISK,
       },
       sections: [

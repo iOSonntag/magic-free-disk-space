@@ -286,27 +286,13 @@ function parseBuildRecord(value: unknown): EngineBuildRecord | null {
 
 /** The strings of a list, `[]` for none, less `placeholder`; `null` for anything else. */
 function parseNameList(params: { value: unknown; placeholder: string | null }): string[] | null {
-  if (params.value === undefined || params.value === null) {
-    return [];
-  }
+  const names = parseRecordList({ value: params.value, parseRecord: parseName });
 
-  if (!Array.isArray(params.value)) {
-    return null;
-  }
+  return names === null ? null : names.filter((name) => name !== params.placeholder);
+}
 
-  const names: string[] = [];
-
-  for (const name of params.value) {
-    if (typeof name !== 'string') {
-      return null;
-    }
-
-    if (name !== params.placeholder) {
-      names.push(name);
-    }
-  }
-
-  return names;
+function parseName(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
 }
 
 function parseCount(params: { value: unknown }): number | null {

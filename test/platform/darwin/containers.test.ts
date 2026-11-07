@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { CatalogEntry, EngineProbeId } from '../../../src/catalog/catalog.js';
 import { CONTAINER_ENTRIES } from '../../../src/platform/darwin/catalog/containers.js';
 import { CONTAINER_ENGINES } from '../../../src/platform/darwin/containerEngines.js';
+import { buildTestCatalogOwner } from '../../support/parsedValueFixtures.js';
 import { buildRiskAndPathById } from './catalogPins.js';
 
 /** The entry the engine's probe explores; throws when the containers hold none. */
@@ -37,8 +38,32 @@ describe('CONTAINER_ENTRIES', () => {
     });
   });
 
-  test('the Docker entry has no owner, so it is not held back while Docker runs', () => {
-    expect(getEngineEntry('dockerDesktopEngine').owner).toBeNull();
+  test('each engine entry is owned by the app it runs in, Colima by none', () => {
+    expect(getEngineEntry('dockerDesktopEngine').owner).toEqual(
+      buildTestCatalogOwner({ bundleId: 'com.docker.docker' }),
+    );
+    expect(getEngineEntry('orbStackEngine').owner).toEqual(
+      buildTestCatalogOwner({ bundleId: 'dev.kdrag0n.MacVirt' }),
+    );
+    expect(getEngineEntry('colimaEngine').owner).toBeNull();
+  });
+
+  test('an engine of a removed app advises deleting its folder, not starting it', () => {
+    const dockerRemoval = getEngineEntry('dockerDesktopEngine').removal;
+    const orbStackRemoval = getEngineEntry('orbStackEngine').removal;
+
+    expect(dockerRemoval.kind === 'explore' && dockerRemoval.uninstalledOwnerAdvice).toContain(
+      'delete the folder Library/Containers/com.docker.docker',
+    );
+    expect(orbStackRemoval.kind === 'explore' && orbStackRemoval.uninstalledOwnerAdvice).toContain(
+      'delete the folder Library/Group Containers/HUAQ24HBR6.dev.orbstack',
+    );
+
+    for (const removal of [dockerRemoval, orbStackRemoval]) {
+      expect(removal.kind === 'explore' && removal.uninstalledOwnerAdvice).not.toContain('Start');
+    }
+
+    expect(getEngineEntry('colimaEngine').removal).not.toHaveProperty('uninstalledOwnerAdvice');
   });
 
   test('each engine has its own entry on the disk image its units name', () => {
@@ -52,14 +77,13 @@ describe('CONTAINER_ENTRIES', () => {
       engineProbeIds.map((engineProbeId) => {
         const entry = getEngineEntry(engineProbeId);
 
-        return [entry.root, entry.path, entry.category, entry.owner];
+        return [entry.root, entry.path, entry.category];
       }),
     ).toEqual(
       engineProbeIds.map((engineProbeId) => [
         'home',
         CONTAINER_ENGINES[engineProbeId].diskImagePath.join('/'),
         'containerEngines',
-        null,
       ]),
     );
   });

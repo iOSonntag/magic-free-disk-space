@@ -344,7 +344,6 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
         environment: environment,
         toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun.path }),
         activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
-        timeoutMs: TIMEOUT_MS,
         unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
       }),
     );

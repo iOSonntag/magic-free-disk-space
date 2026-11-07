@@ -9,7 +9,7 @@ import 'section_contents_view.dart';
 import 'section_page_header.dart';
 import 'settings_place_cards.dart';
 
-/// The title of the page, which stands in the sidebar before any scan.
+/// The title of the page until a scan gives the bridge's.
 const String handledElsewhereTitle = 'Handled by its own app';
 
 /// The space only Apple's own apps can free: a card per place with its
@@ -31,12 +31,13 @@ class HandledElsewherePage extends StatelessWidget {
       listenable: controller,
       builder: (BuildContext context, Widget? _) {
         final CleanerState state = controller.state;
+        final SectionTotal? total = findSectionTotal(listShownSectionTotals(state), SectionKey.ownApp);
         return StagePageScroll(
           children: [
             SectionPageHeader(
               sectionKey: SectionKey.ownApp,
-              title: handledElsewhereTitle,
-              total: findSectionTotal(listShownSectionTotals(state), SectionKey.ownApp),
+              title: total?.titleText ?? handledElsewhereTitle,
+              total: total,
               isScanning: state is ScanningState,
             ),
             Padding(

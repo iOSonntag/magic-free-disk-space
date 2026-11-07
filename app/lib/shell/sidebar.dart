@@ -87,7 +87,7 @@ class Sidebar extends StatelessWidget {
               const SizedBox(height: StageSpacing.small),
               _buildEntry(
                 destination: const HandledElsewhereDestination(),
-                title: handledElsewhereTitle,
+                title: ownAppTotal?.titleText ?? handledElsewhereTitle,
                 glyph: SectionLook.ownApp.glyph,
                 accent: SectionLook.ownApp.accent,
                 figureText: ownAppTotal == null ? null : formatSectionFigureText(ownAppTotal),

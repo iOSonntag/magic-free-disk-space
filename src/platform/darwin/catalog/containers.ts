@@ -1,5 +1,10 @@
-import type { CatalogEntry, EngineProbeId } from '../../../catalog/catalog.js';
+import type {
+  CatalogEntry,
+  CatalogRemovalExplore,
+  EngineProbeId,
+} from '../../../catalog/catalog.js';
 import { CONTAINER_ENGINES } from '../containerEngines.js';
+import { buildBundleIdOwner } from './buildBundleIdOwner.js';
 
 /** What every engine's advice says of `docker system prune`, whose `--volumes` misleads. */
 const PRUNE_ADVICE =
@@ -17,6 +22,11 @@ export const CONTAINER_ENTRIES: CatalogEntry[] = [
     explanation:
       'The one file where Docker Desktop keeps its images, containers, volumes, and build cache.',
     advice: `Start Docker Desktop and scan again to see what can go, ${PRUNE_ADVICE} Never move or delete the file itself.`,
+    app: {
+      bundleId: 'com.docker.docker',
+      uninstalledAdvice:
+        'Docker Desktop is no longer installed, so nothing uses this disk image now. If you no longer need the images, containers, and volumes it holds, delete the folder Library/Containers/com.docker.docker in your home folder.',
+    },
   }),
   buildEngineEntry({
     id: 'orbstack-disk-image',
@@ -25,6 +35,11 @@ export const CONTAINER_ENTRIES: CatalogEntry[] = [
     explanation:
       'The one file where OrbStack keeps its images, containers, volumes, and Linux machines. It shrinks on its own as their data goes.',
     advice: `Start OrbStack and scan again to see what can go, ${PRUNE_ADVICE} Never move or delete the file itself.`,
+    app: {
+      bundleId: 'dev.kdrag0n.MacVirt',
+      uninstalledAdvice:
+        'OrbStack is no longer installed, so nothing uses this disk image now. If you no longer need the images, containers, volumes, and Linux machines it holds, delete the folder Library/Group Containers/HUAQ24HBR6.dev.orbstack in your home folder.',
+    },
   }),
   buildEngineEntry({
     id: 'colima-disk-image',
@@ -32,6 +47,7 @@ export const CONTAINER_ENTRIES: CatalogEntry[] = [
     title: 'Colima disk image',
     explanation: 'The disk where Colima keeps its images, containers, and volumes.',
     advice: `Start Colima and scan again to see what can go, ${PRUNE_ADVICE} Never move or delete the disk itself.`,
+    app: null,
   }),
   {
     id: 'lima-download-cache',
@@ -112,9 +128,12 @@ export const CONTAINER_ENTRIES: CatalogEntry[] = [
   },
 ];
 
+/** The app an engine runs in, with the advice for its disk image once the app is gone. */
+type EngineApp = { bundleId: string; uninstalledAdvice: string };
+
 /**
- * An engine's entry, on the disk image its units also name. It has no owner: its probe needs the
- * engine running, and it never deletes the image.
+ * An engine's entry, on the disk image its units also name, owned by the engine's app, `null`
+ * for an engine of no app. Its own running engine removes its units, so the app holds back none.
  */
 function buildEngineEntry(params: {
   id: string;
@@ -122,7 +141,18 @@ function buildEngineEntry(params: {
   title: string;
   explanation: string;
   advice: string;
+  app: EngineApp | null;
 }): CatalogEntry {
+  const removal: CatalogRemovalExplore = {
+    kind: 'explore',
+    probe: params.engineProbeId,
+    advice: params.advice,
+  };
+
+  if (params.app !== null) {
+    removal.uninstalledOwnerAdvice = params.app.uninstalledAdvice;
+  }
+
   return {
     id: params.id,
     category: 'containerEngines',
@@ -134,7 +164,7 @@ function buildEngineEntry(params: {
     path: CONTAINER_ENGINES[params.engineProbeId].diskImagePath.join('/'),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: null,
-    removal: { kind: 'explore', probe: params.engineProbeId, advice: params.advice },
+    owner: params.app === null ? null : buildBundleIdOwner({ text: params.app.bundleId }),
+    removal: removal,
   };
 }

@@ -35,6 +35,11 @@ ItemView buildTestItemView({
   );
 }
 
+/// The numbers of [items], in their order.
+List<int> getItemNumbers(List<ItemView> items) {
+  return [for (final ItemView item in items) item.number];
+}
+
 /// [item] as a plan of the bridge lists it.
 PlannedItemView planItem(ItemView item) {
   return PlannedItemView(

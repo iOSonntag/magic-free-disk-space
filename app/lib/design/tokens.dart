@@ -56,6 +56,12 @@ abstract final class GlowTokens {
   static const double breathPerSecond = 0.12;
 }
 
+/// The looks the controls of the stage share, so they change together.
+abstract final class ControlTokens {
+  /// The opacity of a disabled button, check mark or switch.
+  static const double disabledOpacity = 0.42;
+}
+
 /// The spacing steps every page lays out on.
 abstract final class StageSpacing {
   static const double tight = 4;

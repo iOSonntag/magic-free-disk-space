@@ -171,17 +171,6 @@ export type ExploreFoundFile = { path: AbsolutePath; modifiedMs: number };
 /** The files a probe found to go, never empty; the scan makes the removal's targets from them. */
 export type ExploreFoundFiles = [ExploreFoundFile, ...ExploreFoundFile[]];
 
-/** `items` as a list known to hold one at least, such as found paths; `null` when it is empty. */
-export function toNonEmpty<T>(items: T[]): [T, ...T[]] | null {
-  const [firstItem, ...restItems] = items;
-
-  if (firstItem === undefined) {
-    return null;
-  }
-
-  return [firstItem, ...restItems];
-}
-
 /** A system image folder of the SDK that no AVD names. */
 export type ExplorePathUnitAndroidSystemImage = {
   kind: 'androidSystemImage';
@@ -303,7 +292,6 @@ export type ExplorePathUnitHuggingFaceRepository = {
 export type ExplorePathUnitHuggingFaceDetachedRevisions = {
   kind: 'huggingFaceDetachedRevisions';
   repoPath: AbsolutePath;
-  revisions: string[];
   downloadedAtMs: number | null;
   foundPaths: ExploreFoundPaths;
 };

@@ -280,7 +280,6 @@ const UNIT_KEYS: { [TKind in ExploreUnit['kind']]: UnitKeyCase<TKind> } = {
     unit: {
       kind: 'huggingFaceDetachedRevisions',
       repoPath: REPO_PATH,
-      revisions: ['b'.repeat(40)],
       downloadedAtMs: 1,
       foundPaths: [buildFolder({ text: 'hub/models--example-org--example-model/snapshots/b' })],
     },

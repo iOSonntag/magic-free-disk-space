@@ -75,13 +75,9 @@ enum _AlertChoice { delete, showList, cancel }
 /// this Mac.
 String _formatHeadlineText(RemovalReach reach) {
   if (reach.finalItems.isEmpty) {
-    return 'Remove ${_formatSizeSumText(reach.evictedSize)} from this Mac?';
+    return 'Remove ${formatItemSizeSumText(reach.evictedSize)} from this Mac?';
   }
-  return 'Delete ${_formatSizeSumText(reach.finalSize)} for good?';
-}
-
-String _formatSizeSumText(ItemSizeSum size) {
-  return formatSizeText(allocatedBytes: size.allocatedBytes, isComplete: size.isComplete);
+  return 'Delete ${formatItemSizeSumText(reach.finalSize)} for good?';
 }
 
 class _DeleteConfirmAlert extends StatefulWidget {
@@ -323,5 +319,5 @@ String _formatTitleList(BiggestItems items) {
   if (items.moreCount == 0) {
     return namedText;
   }
-  return '$namedText and ${items.moreCount} more';
+  return '$namedText ${formatMoreItems(items.moreCount)}';
 }

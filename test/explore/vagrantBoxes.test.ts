@@ -22,45 +22,43 @@ import {
 import { createProbeFakeTool } from './probeFakeTools.js';
 
 /** Made-up `vagrant box list --machine-readable` output; no line comes from a real machine. */
-const BOX_LIST_TEXT = [
-  '1730000000,,ui,info,hashicorp/bionic64 (virtualbox%!(VAGRANT_COMMA) 1.0.0)',
-  '1730000000,,box-name,hashicorp/bionic64',
-  '1730000000,,box-provider,virtualbox',
-  '1730000000,,box-version,1.0.0',
-  '1730000000,,box-architecture,n/a',
-  '1730000000,,box-info,url,https://example.com/box',
-  '1730000000,,box-name,hashicorp/bionic64',
-  '1730000000,,box-provider,virtualbox',
-  '1730000000,,box-version,1.1.0',
-  '1730000000,,box-architecture,n/a',
-  '1730000000,,box-name,example/arm',
-  '1730000000,,box-provider,parallels',
-  '1730000000,,box-version,1.0',
-  '1730000000,,box-architecture,arm64',
-  '1730000000,,box-name,example/arm',
-  '1730000000,,box-provider,parallels',
-  '1730000000,,box-version,2.0',
-  '1730000000,,box-architecture,arm64',
-  '1730000000,,box-name,example/multi',
-  '1730000000,,box-provider,qemu',
-  '1730000000,,box-version,2.0',
-  '1730000000,,box-architecture,amd64',
-  '1730000000,,box-name,example/multi',
-  '1730000000,,box-provider,qemu',
-  '1730000000,,box-version,2.0',
-  '1730000000,,box-architecture,arm64',
-  '1730000000,,box-name,example/multi',
-  '1730000000,,box-provider,qemu',
-  '1730000000,,box-version,3.0',
-  '1730000000,,box-architecture,arm64',
-  '1730000000,,box-name,-evil',
-  '1730000000,,box-provider,virtualbox',
-  '1730000000,,box-version,1.0',
-  '1730000000,,box-name,-evil',
-  '1730000000,,box-provider,virtualbox',
-  '1730000000,,box-version,2.0',
-  '',
-].join('\n');
+const BOX_LIST_TEXT = `1730000000,,ui,info,hashicorp/bionic64 (virtualbox%!(VAGRANT_COMMA) 1.0.0)
+1730000000,,box-name,hashicorp/bionic64
+1730000000,,box-provider,virtualbox
+1730000000,,box-version,1.0.0
+1730000000,,box-architecture,n/a
+1730000000,,box-info,url,https://example.com/box
+1730000000,,box-name,hashicorp/bionic64
+1730000000,,box-provider,virtualbox
+1730000000,,box-version,1.1.0
+1730000000,,box-architecture,n/a
+1730000000,,box-name,example/arm
+1730000000,,box-provider,parallels
+1730000000,,box-version,1.0
+1730000000,,box-architecture,arm64
+1730000000,,box-name,example/arm
+1730000000,,box-provider,parallels
+1730000000,,box-version,2.0
+1730000000,,box-architecture,arm64
+1730000000,,box-name,example/multi
+1730000000,,box-provider,qemu
+1730000000,,box-version,2.0
+1730000000,,box-architecture,amd64
+1730000000,,box-name,example/multi
+1730000000,,box-provider,qemu
+1730000000,,box-version,2.0
+1730000000,,box-architecture,arm64
+1730000000,,box-name,example/multi
+1730000000,,box-provider,qemu
+1730000000,,box-version,3.0
+1730000000,,box-architecture,arm64
+1730000000,,box-name,-evil
+1730000000,,box-provider,virtualbox
+1730000000,,box-version,1.0
+1730000000,,box-name,-evil
+1730000000,,box-provider,virtualbox
+1730000000,,box-version,2.0
+`;
 
 const HOME_DIR = buildTestAbsolutePath({ text: '/Users/example' });
 

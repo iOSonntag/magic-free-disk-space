@@ -40,11 +40,7 @@ import {
 import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
-import {
-  buildTestProbeRun,
-  findUnitOfKind,
-  getProbeFindings,
-} from '../support/probeRunFixtures.js';
+import { buildTestProbeRun, getProbeFindings, getUnitOfKind } from '../support/probeRunFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -718,7 +714,7 @@ describeAwaitingWin32Platform('recheckAndroidAvdUnit', () => {
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
 
-    return findUnitOfKind({ findings: (await loadAndroidProbeAnswers()).avds, kind: 'androidAvd' });
+    return getUnitOfKind({ findings: (await loadAndroidProbeAnswers()).avds, kind: 'androidAvd' });
   }
 
   test('answers unchanged while the AVD is listed at the same path with the same last use', async () => {
@@ -765,8 +761,8 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     const answers = await loadAndroidProbeAnswers();
 
     return {
-      image: findUnitOfKind({ findings: answers.systemImages, kind: 'androidSystemImage' }),
-      emulator: findUnitOfKind({ findings: answers.emulator, kind: 'androidEmulator' }),
+      image: getUnitOfKind({ findings: answers.systemImages, kind: 'androidSystemImage' }),
+      emulator: getUnitOfKind({ findings: answers.emulator, kind: 'androidEmulator' }),
     };
   }
 

@@ -55,14 +55,12 @@ MotionState? parseWindowMotionState(Object? arguments) {
   return MotionState(isReduced: reducesMotion, isWindowVisible: isWindowVisible);
 }
 
-/// The macOS window's word on motion, over the channel the runner answers:
-/// it loads the state once and takes each change the runner sends. Until it
-/// answers, and where no runner answers at all, motion is allowed in a
-/// visible window.
+/// The macOS window's word on motion: it loads the state once and takes each
+/// change the runner sends; until then, motion is allowed in a visible window.
 class WindowMotionChannel implements ValueListenable<MotionState> {
-  WindowMotionChannel({this._channel = const MethodChannel(windowMotionChannelName)});
+  WindowMotionChannel();
 
-  final MethodChannel _channel;
+  final MethodChannel _channel = const MethodChannel(windowMotionChannelName);
   final ValueNotifier<MotionState> _state = ValueNotifier<MotionState>(MotionState.allowed);
   bool _hasReceivedChange = false;
 
@@ -174,6 +172,13 @@ class AmbientClock extends ChangeNotifier implements ValueListenable<double> {
     _elapsedInThisRun = elapsed;
     notifyListeners();
   }
+}
+
+/// How far [ambientSeconds] of an [AmbientClock] stand into the current turn
+/// of a loop of [period], from 0 up to but not 1.
+double getAmbientLoopPhase(double ambientSeconds, Duration period) {
+  final double periodSeconds = period.inMicroseconds / Duration.microsecondsPerSecond;
+  return (ambientSeconds / periodSeconds) % 1;
 }
 
 /// The one source of motion for everything below it. It joins the window's

@@ -37,7 +37,7 @@ export async function recheckCondaUnit(params: {
 }
 
 /** Whether the fresh clean of the unit's kind removes something, and only paths of the unit. */
-export function isCondaCleanWithinUnit(params: {
+function isCondaCleanWithinUnit(params: {
   unit: ExploreToolUnitCondaTarballs | ExploreToolUnitCondaPackages;
   plan: CondaCleanPlan;
 }): boolean {

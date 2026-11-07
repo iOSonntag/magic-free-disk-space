@@ -60,7 +60,7 @@ const NAMED_LOCATION: OrphanLocation = {
   explanation: 'The support folder of an app that is not installed.',
 };
 
-function buildInstalled(params: { isComplete?: boolean | undefined }): OrphanInstalledFacts {
+function buildInstalled(params: { isComplete: boolean }): OrphanInstalledFacts {
   return buildOrphanInstalledFacts({
     apps: [
       buildTestInstalledApp({
@@ -85,7 +85,7 @@ function buildInstalled(params: { isComplete?: boolean | undefined }): OrphanIns
       }),
     ],
     applicationDirs: ['/Applications'],
-    isComplete: params.isComplete ?? true,
+    isComplete: params.isComplete,
   });
 }
 
@@ -93,7 +93,7 @@ function match(params: { name: string; location: OrphanLocation; isComplete?: bo
   return matchOrphanName({
     name: params.name,
     location: params.location,
-    installed: buildInstalled({ isComplete: params.isComplete }),
+    installed: buildInstalled({ isComplete: params.isComplete ?? true }),
   });
 }
 

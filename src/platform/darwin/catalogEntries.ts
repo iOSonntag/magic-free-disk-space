@@ -18,8 +18,9 @@ import { SYSTEM_LOG_ENTRIES } from './catalog/systemLogs.js';
 import { XCODE_ENTRIES } from './catalog/xcode.js';
 
 /**
- * In order of precedence: where two entries overlap, the earlier one wins.
- * A `self` entry comes before the `children` entry whose folder holds it, so the catch-alls join last.
+ * In order of precedence: where two entries overlap, the earlier one wins. An entry of
+ * `selection: { kind: 'path' }` comes before the `children` entry whose folder holds it, so the
+ * catch-alls join last.
  */
 export const CATALOG_ENTRIES: CatalogEntry[] = [
   ...XCODE_ENTRIES,

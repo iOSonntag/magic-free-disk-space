@@ -13,7 +13,7 @@ import { loadExploreDirectoryEntries, loadExploreFolderNames } from '../loadExpl
 const VERSION_FOLDER_NAME_PATTERN = /^([A-Za-z]+)(\d+(?:\.\d+)+)$/;
 
 /** The folder of a version's settings that holds the plugins installed for it. */
-export const IDE_PLUGINS_FOLDER_NAME = 'plugins';
+const IDE_PLUGINS_FOLDER_NAME = 'plugins';
 
 /** A version's folder of caches or of logs. */
 export type IdeVersionFolderPlain = {

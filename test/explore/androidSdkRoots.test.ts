@@ -166,7 +166,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
 
   /** An AVD of the platform SDK on `android-35`, and its unused `android-34`; returns the latter. */
   async function writePlatformImages(): Promise<AbsolutePath> {
-    const platformSdk = buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir });
+    const platformSdk = buildPlatformRoot().path;
 
     await writeAndroidSystemImage({
       sdkRoot: platformSdk,
@@ -188,7 +188,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
   }
 
   testOnPosix('takes the platform SDK, the Flutter one, then local.properties', async () => {
-    const platformSdk = buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir });
+    const platformSdk = buildPlatformRoot().path;
     await createFixtureDirectory({ path: platformSdk });
     await createFixtureDirectory({ path: buildSdkPath('flutter-sdk') });
     await createFixtureDirectory({ path: buildSdkPath('project-sdk') });
@@ -251,7 +251,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
   });
 
   testOnPosix('adds no SDK for an sdk.dir of local.properties in a locked folder', async () => {
-    const platformSdk = buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir });
+    const platformSdk = buildPlatformRoot().path;
     const lockedFolder = buildSdkPath('locked');
 
     await createFixtureDirectory({ path: platformSdk });
@@ -265,7 +265,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
   });
 
   testOnPosix('adds no SDK for a Flutter settings file that cannot be read', async () => {
-    const platformSdk = buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir });
+    const platformSdk = buildPlatformRoot().path;
     const settingsPath = join(fixtureRoot.homeDir, '.flutter_settings');
 
     await createFixtureDirectory({ path: platformSdk });
@@ -279,7 +279,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
   });
 
   testOnPosix('offers the unused system images of a second SDK a project names', async () => {
-    const platformSdk = buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir });
+    const platformSdk = buildPlatformRoot().path;
     const projectSdk = buildSdkPath('project-sdk');
     const usedSysdir = buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' });
 

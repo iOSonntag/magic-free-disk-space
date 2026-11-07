@@ -93,7 +93,9 @@ describeAwaitingWin32Platform('buildScanView', () => {
         titleText: 'Nothing to delete was found.',
         lines: [],
         totalBytes: 0,
+        isTotalComplete: true,
         safeBytes: 0,
+        isSafeComplete: true,
         disk: PROTOCOL_FIXTURE_DISK,
       },
       sections: [],
@@ -163,7 +165,9 @@ describeAwaitingWin32Platform('buildScanView', () => {
       titleText: 'Found 1 item, 2.0 MB in total',
       lines: [],
       totalBytes: 0,
+      isTotalComplete: true,
       safeBytes: 0,
+      isSafeComplete: true,
       disk: null,
     });
     expect(view.sections.map((section) => section.titleText)).toEqual(['Apps']);
@@ -278,6 +282,8 @@ describeAwaitingWin32Platform('buildScanView', () => {
         sectionKey: 'developerTools',
         allocatedBytes: 2 * MB,
         isComplete: true,
+        removableBytes: 2 * MB,
+        isRemovableComplete: true,
         itemCount: 1,
         safeBytes: 0,
         adviceCount: 0,
@@ -324,6 +330,8 @@ describeAwaitingWin32Platform('buildScanView', () => {
           sectionKey: 'trash',
           allocatedBytes: 4096,
           isComplete: true,
+          removableBytes: 4096,
+          isRemovableComplete: true,
           itemCount: 1,
           safeBytes: 4096,
           adviceCount: 0,
@@ -351,7 +359,9 @@ describeAwaitingWin32Platform('buildScanView', () => {
       titleText: 'Nothing to delete was found.',
       lines: [],
       totalBytes: 0,
+      isTotalComplete: true,
       safeBytes: 0,
+      isSafeComplete: true,
       disk: null,
     });
     expect(view.sections).toEqual([]);
@@ -378,6 +388,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
             origin: 'catalog',
             removal: 'advice',
             allocatedBytes: MB,
+            isComplete: true,
             displayPath: '~/store',
             revealPath: `${HOME_DIR}/store`,
             opener: null,
@@ -393,6 +404,8 @@ describeAwaitingWin32Platform('buildScanView', () => {
         sectionKey: 'developerTools',
         allocatedBytes: 0,
         isComplete: true,
+        removableBytes: 0,
+        isRemovableComplete: true,
         itemCount: 0,
         safeBytes: 0,
         adviceCount: 1,
@@ -503,13 +516,65 @@ describeAwaitingWin32Platform('buildScanView', () => {
       titleText: 'Found 2 items, at least 2.0 MB in total',
       lines: ['at least 2.0 MB safe to free'],
       totalBytes: 2 * MB,
+      isTotalComplete: false,
       safeBytes: 2 * MB,
+      isSafeComplete: false,
     });
     expect(view.sections[0]?.sizeText).toBe('at least 2.0 MB');
     expect(view.sections[0]?.items.map((item) => [item.sizeText, item.isComplete])).toEqual([
       ['at least 1.0 MB', false],
       ['1.0 MB', true],
     ]);
+  });
+
+  test('marks each total of the summary a lower bound only by the items it counts', () => {
+    const view = buildView({
+      report: buildRankedReport({
+        candidates: [
+          buildTestCandidate({ path: '/fixture/safe', risk: 'safe', allocatedBytes: MB }),
+          buildTestCandidate({
+            path: '/fixture/review',
+            risk: 'review',
+            allocatedBytes: MB,
+            isComplete: false,
+          }),
+          buildTestCandidate({
+            path: '/Applications/Kept.app',
+            category: 'applications',
+            risk: 'never',
+            allocatedBytes: MB,
+            isComplete: false,
+          }),
+        ],
+      }),
+    });
+    const withoutReview = buildView({
+      report: buildRankedReport({
+        candidates: [
+          buildTestCandidate({ path: '/fixture/safe', risk: 'safe', allocatedBytes: MB }),
+          buildTestCandidate({
+            path: '/Applications/Kept.app',
+            category: 'applications',
+            risk: 'never',
+            allocatedBytes: MB,
+            isComplete: false,
+          }),
+        ],
+      }),
+    });
+
+    expect(view.summary).toMatchObject({
+      totalBytes: 2 * MB,
+      isTotalComplete: false,
+      safeBytes: MB,
+      isSafeComplete: true,
+    });
+    expect(withoutReview.summary).toMatchObject({
+      totalBytes: MB,
+      isTotalComplete: true,
+      safeBytes: MB,
+      isSafeComplete: true,
+    });
   });
 
   test('numbers ascend top to bottom across the sections and Explore', () => {

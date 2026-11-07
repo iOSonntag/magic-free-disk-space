@@ -2,6 +2,18 @@ import type { CatalogOwner } from './catalogOwner.js';
 
 export type Risk = 'safe' | 'review' | 'careful' | 'never';
 
+/** Whether the tool may ever remove an item of this risk; a `never` item it refuses. */
+export function isRemovableRisk(risk: Risk): boolean {
+  switch (risk) {
+    case 'safe':
+    case 'review':
+    case 'careful':
+      return true;
+    case 'never':
+      return false;
+  }
+}
+
 export type CandidateCategory =
   | 'temporary'
   | 'developer'
@@ -97,8 +109,53 @@ export type ExploreProbeId =
   | 'condaPackages'
   | 'fvmVersions';
 
+/** Whether the probe is a container engine's, so the running engine itself removes its units. */
+export function isEngineProbeId(probe: ExploreProbeId): probe is EngineProbeId {
+  switch (probe) {
+    case 'dockerDesktopEngine':
+    case 'orbStackEngine':
+    case 'colimaEngine':
+      return true;
+    case 'simulatorDevices':
+    case 'dartPubCache':
+    case 'miseVersions':
+    case 'simulatorRuntimes':
+    case 'androidAvds':
+    case 'androidSystemImages':
+    case 'androidEmulator':
+    case 'homebrewAppleSilicon':
+    case 'homebrewIntel':
+    case 'vscodeExtensions':
+    case 'asdfVersions':
+    case 'nvmVersions':
+    case 'androidPlatforms':
+    case 'pnpmStores':
+    case 'pnpmStoresXdg':
+    case 'vagrantBoxes':
+    case 'icloudDownloads':
+    case 'downloadsInstallers':
+    case 'mailDownloads':
+    case 'ollamaModels':
+    case 'lmStudioModels':
+    case 'huggingFaceRepos':
+    case 'claudeTranscripts':
+    case 'claudeCodeVersions':
+    case 'ideVersions':
+    case 'rustupToolchains':
+    case 'condaPackages':
+    case 'fvmVersions':
+      return false;
+  }
+}
+
 /** Offered as the units its probe finds; the advice stands when the probe cannot run. */
-export type CatalogRemovalExplore = { kind: 'explore'; probe: ExploreProbeId; advice: string };
+export type CatalogRemovalExplore = {
+  kind: 'explore';
+  probe: ExploreProbeId;
+  advice: string;
+  /** The advice in place of `advice` once no installed app is the entry's owner. */
+  uninstalledOwnerAdvice?: string;
+};
 
 export type CatalogRemoval = CatalogRemovalDelete | CatalogRemovalAdvice | CatalogRemovalExplore;
 
@@ -148,7 +205,10 @@ export type CatalogEntry = {
   path: string;
   selection: CatalogSelection;
   ageRule: CatalogAgeRule;
-  /** The app that owns the data, `null` for none; while it runs, the entry is withheld. */
+  /**
+   * The app that owns the data, or `null`. While it runs, or that cannot be checked, the entry is
+   * held back, except an `advice` entry, which deletes nothing, and an engine probe's entry.
+   */
   owner: CatalogOwner | null;
   removal: CatalogRemoval;
 };

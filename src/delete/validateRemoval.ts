@@ -1,4 +1,4 @@
-import type { Risk } from '../catalog/catalog.js';
+import { isRemovableRisk } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { TargetRefusalReason, TargetRemovalKind } from '../environment/findTargetRefusal.js';
 import { findTargetRefusal } from '../environment/findTargetRefusal.js';
@@ -11,18 +11,6 @@ export type RemovalDecisionApproved = { kind: 'approved'; candidate: Candidate }
 export type RemovalDecisionRefused = { kind: 'refused'; path: string; reason: RefusalReason };
 
 export type RemovalDecision = RemovalDecisionApproved | RemovalDecisionRefused;
-
-/** Whether the tool may ever remove an item of this risk; a `never` item it refuses. */
-export function isRemovableRisk(risk: Risk): boolean {
-  switch (risk) {
-    case 'safe':
-    case 'review':
-    case 'careful':
-      return true;
-    case 'never':
-      return false;
-  }
-}
 
 /**
  * Refuses a candidate marked `never`. Approves an item of paths or an evict only when the

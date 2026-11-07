@@ -56,10 +56,9 @@ class DiskRingArcs {
   String toString() => 'DiskRingArcs(keptEnd: $keptEnd, freeableEnd: $freeableEnd)';
 }
 
-/// The arcs of [reading]. Bytes that contradict each other are clamped:
-/// the available space to the capacity, and what can be freed to the used
-/// space. A freeable-only reading lights the whole ring once anything can
-/// be freed.
+/// The arcs of [reading], its bytes clamped where they contradict each
+/// other; a freeable-only reading lights the whole ring once anything can be
+/// freed.
 DiskRingArcs buildDiskRingArcs(DiskRingReading reading) {
   switch (reading) {
     case DiskRingVolumeReading():
@@ -67,6 +66,8 @@ DiskRingArcs buildDiskRingArcs(DiskRingReading reading) {
         return DiskRingArcs.empty;
       }
 
+      // The volume and the scan are read apart, so what can be freed may
+      // exceed the used space, and the available space the capacity.
       final int availableBytes = reading.availableBytes.clamp(0, reading.capacityBytes);
       final int usedBytes = reading.capacityBytes - availableBytes;
       final int freeableBytes = reading.freeableBytes.clamp(0, usedBytes);

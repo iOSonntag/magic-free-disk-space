@@ -12,11 +12,9 @@ import 'shell_toolbar.dart';
 import 'sidebar.dart';
 import 'window_frame.dart';
 
-/// The window: the sidebar beside the content pane, with "Scan again" above
-/// it. The pane shows the chosen destination, and the steps of the delete
-/// flow over it by the cleaner's state: Review while a plan waits for its
-/// confirmation, Deleting, then the result. The destination's pages stay
-/// built below a step, so they come back as they were.
+/// The window: the sidebar beside the pane of the chosen destination, with
+/// "Scan again" above it and the step of the delete flow the cleaner is in
+/// over it.
 class AppShell extends StatelessWidget {
   const AppShell({
     super.key,
@@ -65,6 +63,8 @@ class AppShell extends StatelessWidget {
                     Expanded(
                       child: Stack(
                         children: [
+                          // The pages stay built below a step, so they come
+                          // back as they were.
                           Positioned.fill(
                             // Offstage keeps the pages in the focus tree, so
                             // Tab would reach their controls under the step.

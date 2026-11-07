@@ -5,22 +5,22 @@ import 'package:flutter/widgets.dart';
 import 'motion.dart';
 import 'tokens.dart';
 
-/// Dissolves [child] into rising motes of [accent] once [isDissolved]
-/// turns true: a wipe crosses it from left to right and sheds the motes at
-/// its front. While motion is reduced it is a plain fade. The child keeps
-/// its space; [onDissolved] runs when it is gone.
+/// Dissolves [child] into rising motes of [accent] once [isDissolved] turns
+/// true, or fades it while motion is reduced; the child keeps its space.
 class Dissolve extends StatefulWidget {
   const Dissolve({
     super.key,
     required this.isDissolved,
     required this.accent,
     required this.child,
-    this.onDissolved,
+    required this.onDissolved,
   });
 
   final bool isDissolved;
   final Color accent;
   final Widget child;
+
+  /// Runs once the child is gone; `null` when nothing waits for it.
   final VoidCallback? onDissolved;
 
   @override

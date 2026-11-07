@@ -76,6 +76,6 @@ export function parseEngineJson<TValue>(params: {
 }
 
 /** The time left until `deadlineMs`, at least 1 ms, so a late request still fails as timed out. */
-export function readEngineTimeoutMs(params: { deadlineMs: number }): number {
+function readEngineTimeoutMs(params: { deadlineMs: number }): number {
   return Math.max(params.deadlineMs - Date.now(), 1);
 }

@@ -36,14 +36,18 @@ bool isButtonEnabled(WidgetTester tester, Finder button) {
   throw StateError('$widget is no button of the stage.');
 }
 
-/// The check mark of the row of item [number]: `true` while it is ticked.
+/// The check mark of the row of item [number].
+StageCheckMark readRowCheckMark(WidgetTester tester, int number) {
+  return tester.widget<StageCheckMark>(
+    find.descendant(
+      of: find.byKey(ItemRowKey(number)),
+      matching: find.byType(StageCheckMark),
+    ),
+  );
+}
+
+/// The value of the check mark of the row of item [number]: `true` while it
+/// is ticked.
 bool? readRowMark(WidgetTester tester, int number) {
-  return tester
-      .widget<StageCheckMark>(
-        find.descendant(
-          of: find.byKey(ItemRowKey(number)),
-          matching: find.byType(StageCheckMark),
-        ),
-      )
-      .value;
+  return readRowCheckMark(tester, number).value;
 }

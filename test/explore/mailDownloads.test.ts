@@ -1,22 +1,18 @@
 import { expect, test } from 'bun:test';
 import { utimes } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { loadMailDownloadFindings } from '../../src/explore/mailDownloads/loadMailDownloadFindings.js';
 import { recheckMailDownloadsUnit } from '../../src/explore/mailDownloads/recheckMailDownloadsUnit.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import {
-  createFixtureDirectory,
-  createFixtureFile,
-  updateModifiedMs,
-} from '../support/fixtureRoot.js';
+import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
-  DAY_MS,
-  findUnitOfKind,
   getProbeFindings,
+  getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
 
@@ -38,11 +34,10 @@ function getMailDownloadsPath(home: FixtureHome): string {
 }
 
 /**
- * A file Mail saved long ago, with its missing folders: an mtime before the birth time moves the
- * birth time back with it on macOS, so the file reads as saved then and never changed.
+ * A file Mail saved long ago: an mtime before the birth time moves the birth time back with it on
+ * macOS, so the file reads as saved then and never changed.
  */
 async function createMailFile(params: { path: string; accessedMs?: number }): Promise<void> {
-  await createFixtureDirectory({ path: dirname(params.path) });
   await createFixtureFile({
     path: params.path,
     sizeBytes: FILE_SIZE_BYTES,
@@ -151,7 +146,7 @@ describeAwaitingWin32Platform('recheckMailDownloadsUnit', () => {
         await createMailFile({ path: filePath });
 
         const run = buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS });
-        const unit = findUnitOfKind({
+        const unit = getUnitOfKind({
           findings: getProbeFindings(await loadMailDownloadFindings(run)),
           kind: 'mailDownloads',
         });

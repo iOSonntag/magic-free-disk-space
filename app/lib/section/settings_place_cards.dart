@@ -66,7 +66,7 @@ class SettingsPlaceCards extends StatelessWidget {
               key: ValueKey<SettingsPane>(place.pane),
               title: place.title,
               factsText: '',
-              allocatedBytes: 0,
+              sizeText: null,
               displayPath: null,
               details: Text(place.step, style: TypeRamp.body),
               target: findAdviceOpenerTarget(SettingsOpener(pane: place.pane)),

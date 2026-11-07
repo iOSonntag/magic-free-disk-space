@@ -20,7 +20,6 @@ class SelectionBar extends StatelessWidget {
       state.scan,
       state.selectedNumbers,
     );
-    final ItemSizeSum size = sumItemSizes(selectedItems);
     final String countText = formatItemCount(selectedItems.length);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 640),
@@ -38,13 +37,7 @@ class SelectionBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('$countText selected', style: TypeRamp.title),
-                  Text(
-                    formatSizeText(
-                      allocatedBytes: size.allocatedBytes,
-                      isComplete: size.isComplete,
-                    ),
-                    style: TypeRamp.caption,
-                  ),
+                  Text(formatItemSizeSumText(sumItemSizes(selectedItems)), style: TypeRamp.caption),
                 ],
               ),
             ),

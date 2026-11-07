@@ -1,7 +1,7 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import { toNonEmpty } from '../../system/nonEmptyList.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
-import { toNonEmpty } from '../exploreUnit.js';
 import { formatCountText, formatIsoDay } from '../formatLimitTexts.js';
 import { loadExploreEntryStats } from '../loadExploreRead.js';
 import { loadWalkedFiles } from '../loadWalkedFiles.js';
@@ -18,16 +18,14 @@ const MAIL_MAX_CONCURRENT_DIRECTORIES = 4;
 export async function loadMailDownloadFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {
-  const rootNames = run.platform.explore.mailDownloadsRoot;
-
-  if (rootNames === null) {
+  if (run.platform.explore.mailDownloadsRoot === null) {
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
   const folderPath = joinAbsolutePath({
     rules: run.environment.pathRules,
     parentPath: run.environment.homeDir,
-    names: rootNames,
+    names: run.platform.explore.mailDownloadsRoot,
   });
   const folderStats = await loadExploreEntryStats({
     path: folderPath,
@@ -38,7 +36,7 @@ export async function loadMailDownloadFindings(
     return folderStats;
   }
 
-  if (folderStats.value === null || folderStats.value.kind !== 'directory') {
+  if (folderStats.value?.kind !== 'directory') {
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 

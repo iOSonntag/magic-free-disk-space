@@ -40,7 +40,13 @@ final ItemView simulatorItem = buildTestItemView(
 );
 
 final ScannedEvent scannedEvent = ScannedEvent(
-  summary: const SummaryView(totalBytes: 10000000, safeBytes: 6000000, disk: null),
+  summary: const SummaryView(
+    totalBytes: 10000000,
+    isTotalComplete: true,
+    safeBytes: 6000000,
+    isSafeComplete: true,
+    disk: null,
+  ),
   sections: [
     SectionView(key: SectionKey.caches, items: [toolCacheItem], checkGroup: null),
     SectionView(
@@ -59,6 +65,8 @@ final ScannedEvent scannedEvent = ScannedEvent(
       titleText: 'Caches',
       allocatedBytes: 6000000,
       isComplete: true,
+      removableBytes: 6000000,
+      isRemovableComplete: true,
       itemCount: 1,
       safeBytes: 6000000,
       adviceCount: 0,
@@ -68,6 +76,8 @@ final ScannedEvent scannedEvent = ScannedEvent(
       titleText: 'Developer tools',
       allocatedBytes: 1000000,
       isComplete: true,
+      removableBytes: 1000000,
+      isRemovableComplete: true,
       itemCount: 1,
       safeBytes: 0,
       adviceCount: 0,
@@ -77,6 +87,8 @@ final ScannedEvent scannedEvent = ScannedEvent(
       titleText: 'Large files',
       allocatedBytes: 3000000,
       isComplete: true,
+      removableBytes: 3000000,
+      isRemovableComplete: true,
       itemCount: 1,
       safeBytes: 0,
       adviceCount: 0,

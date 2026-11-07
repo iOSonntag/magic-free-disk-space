@@ -16,13 +16,14 @@ import type { EntryReads } from '../system/entryReads.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
 import type { ReadFailure } from '../system/readFailure.js';
 import { callEngineCandidate } from './callEngineCandidate.js';
+import { decideTargetsOutcome } from './decideTargetsOutcome.js';
 import type { DeletePlatform } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import { evictCandidateFiles } from './evictCandidateFiles.js';
 import { fileFailureToOutcome } from './fileFailureToOutcome.js';
-import { isGoneOutcome } from './isGoneOutcome.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
 import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
 
@@ -453,15 +454,6 @@ function buildKeptRemoval(params: {
   code: string | null;
   atMs: number;
 }): RecordedRemoval {
-  const [firstTarget, ...otherTargets] = params.targets;
-  const buildEntry = (target: RemovalTarget): JournalEntry => ({
-    kind: 'outcome',
-    atMs: params.atMs,
-    path: target.path,
-    outcome: params.outcome,
-    code: params.code,
-  });
-
   return {
     outcome: {
       candidate: params.candidate,
@@ -469,7 +461,13 @@ function buildKeptRemoval(params: {
       outcome: params.outcome,
       code: params.code,
     },
-    outcomeEntries: [buildEntry(firstTarget), ...otherTargets.map(buildEntry)],
+    outcomeEntries: mapNonEmpty(params.targets, (target) => ({
+      kind: 'outcome',
+      atMs: params.atMs,
+      path: target.path,
+      outcome: params.outcome,
+      code: params.code,
+    })),
   };
 }
 
@@ -509,25 +507,9 @@ async function deleteScannedTargets(params: {
     targets: params.targets,
     entryReads: params.entryReads,
   });
-  const [firstTarget, ...otherTargets] = params.targets;
-  const targetOutcomes: [TargetOutcome, ...TargetOutcome[]] = [
-    await deleteScannedTarget({ target: firstTarget, delete: params.delete, clock: params.clock }),
-  ];
-
-  for (const target of otherTargets) {
-    targetOutcomes.push(
-      await deleteScannedTarget({ target: target, delete: params.delete, clock: params.clock }),
-    );
-  }
-
-  const [firstOutcome, ...otherOutcomes] = targetOutcomes;
-  const buildEntry = (targetOutcome: TargetOutcome): JournalEntry => ({
-    kind: 'outcome',
-    atMs: targetOutcome.atMs,
-    path: targetOutcome.path,
-    outcome: targetOutcome.outcome,
-    code: targetOutcome.code,
-  });
+  const targetOutcomes = await mapNonEmptyInTurn(params.targets, (target) =>
+    deleteScannedTarget({ target: target, delete: params.delete, clock: params.clock }),
+  );
 
   return {
     outcome: await loadTargetsOutcome({
@@ -536,7 +518,13 @@ async function deleteScannedTargets(params: {
       presentBytes: presentBytes,
       entryReads: params.entryReads,
     }),
-    outcomeEntries: [buildEntry(firstOutcome), ...otherOutcomes.map(buildEntry)],
+    outcomeEntries: mapNonEmpty(targetOutcomes, (targetOutcome) => ({
+      kind: 'outcome',
+      atMs: targetOutcome.atMs,
+      path: targetOutcome.path,
+      outcome: targetOutcome.outcome,
+      code: targetOutcome.code,
+    })),
   };
 }
 
@@ -647,23 +635,16 @@ async function loadTargetsOutcome(params: {
   presentBytes: number;
   entryReads: EntryReads;
 }): Promise<RemovalOutcomeCoded> {
-  const stayedOutcome = params.targetOutcomes.find(
-    (targetOutcome) => !isGoneOutcome(targetOutcome.outcome),
-  );
+  const decision = decideTargetsOutcome({
+    targets: params.targetOutcomes,
+    getOutcome: (targetOutcome) => targetOutcome.outcome,
+  });
 
-  if (stayedOutcome === undefined) {
-    const hasRemoved = params.targetOutcomes.some(
-      (targetOutcome) => targetOutcome.outcome === 'removed',
-    );
-
-    if (!hasRemoved) {
-      return { candidate: params.candidate, freedBytes: 0, outcome: 'alreadyGone', code: null };
-    }
-
+  if (decision.kind === 'gone') {
     return {
       candidate: params.candidate,
-      freedBytes: params.presentBytes,
-      outcome: 'removed',
+      freedBytes: decision.outcome === 'removed' ? params.presentBytes : 0,
+      outcome: decision.outcome,
       code: null,
     };
   }
@@ -672,8 +653,8 @@ async function loadTargetsOutcome(params: {
     return {
       candidate: params.candidate,
       freedBytes: 0,
-      outcome: stayedOutcome.outcome,
-      code: stayedOutcome.code,
+      outcome: decision.target.outcome,
+      code: decision.target.code,
     };
   }
 
@@ -686,8 +667,8 @@ async function loadTargetsOutcome(params: {
   return {
     candidate: params.candidate,
     freedBytes: getMeasuredFreedBytes({ beforeBytes: params.presentBytes, after: left }),
-    outcome: stayedOutcome.outcome,
-    code: stayedOutcome.code,
+    outcome: decision.target.outcome,
+    code: decision.target.code,
   };
 }
 

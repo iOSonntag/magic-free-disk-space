@@ -23,6 +23,7 @@ import { loadHuggingFaceRepoFindings } from '../../src/explore/huggingFace/loadH
 import { parseHuggingFaceRepoFolderName } from '../../src/explore/huggingFace/parseHuggingFaceRepoFolderName.js';
 import { recheckHuggingFaceUnit } from '../../src/explore/huggingFace/recheckHuggingFaceUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -36,9 +37,8 @@ import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   buildTestProbeRun,
-  DAY_MS,
-  findUnitOfKind,
   getProbeFindings,
+  getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
 
@@ -127,7 +127,6 @@ hf_token = fixture
     path: join(fixture.repoPath, '.no_exist', CURRENT_COMMIT, 'missing.json'),
     text: '',
   });
-  await createFixtureDirectory({ path: blobsPath });
 
   for (const name of ['shared', 'current', 'old']) {
     await createFixtureFile({ path: join(blobsPath, name), sizeBytes: 4096, modifiedMs: NOW_MS });
@@ -416,9 +415,9 @@ describeAwaitingWin32Platform('loadHuggingFaceRepoFindings', () => {
         const probed = await loadFindings({ environment: fixture.environment });
         const blobsPath = join(fixture.repoPath, 'blobs');
         const snapshotsPath = join(fixture.repoPath, 'snapshots');
-        const repository = findUnitOfKind({ findings: probed, kind: 'huggingFaceRepository' });
-        const detached = findUnitOfKind({ findings: probed, kind: 'huggingFaceDetachedRevisions' });
-        const partial = findUnitOfKind({ findings: probed, kind: 'huggingFacePartialDownloads' });
+        const repository = getUnitOfKind({ findings: probed, kind: 'huggingFaceRepository' });
+        const detached = getUnitOfKind({ findings: probed, kind: 'huggingFaceDetachedRevisions' });
+        const partial = getUnitOfKind({ findings: probed, kind: 'huggingFacePartialDownloads' });
 
         expect(probed.isComplete).toBe(true);
         expect(probed.findings.map((finding) => [finding.unit.kind, finding.risk])).toEqual([
@@ -448,7 +447,10 @@ describeAwaitingWin32Platform('loadHuggingFaceRepoFindings', () => {
         expect(listSortedPaths(detached)).toEqual(
           [join(snapshotsPath, OLD_COMMIT), join(blobsPath, 'old')].toSorted(),
         );
-        expect(detached.revisions).toEqual([OLD_COMMIT]);
+        expect(probed.findings[1]?.evidenceLines).toEqual([
+          'No ref names 1 of its downloaded revisions.',
+          'Files a current revision uses stay.',
+        ]);
         expect(detached.downloadedAtMs).toBe(OLD_SNAPSHOT_MODIFIED_MS);
         expect(listSortedPaths(partial)).toEqual([join(blobsPath, 'stale.incomplete')]);
         expect(partial.cutoffMs).toBe(NOW_MS - DAY_MS);
@@ -500,9 +502,9 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
 
         const probed = await loadFindings({ environment: fixture.environment });
         const units = [
-          findUnitOfKind({ findings: probed, kind: 'huggingFaceRepository' }),
-          findUnitOfKind({ findings: probed, kind: 'huggingFaceDetachedRevisions' }),
-          findUnitOfKind({ findings: probed, kind: 'huggingFacePartialDownloads' }),
+          getUnitOfKind({ findings: probed, kind: 'huggingFaceRepository' }),
+          getUnitOfKind({ findings: probed, kind: 'huggingFaceDetachedRevisions' }),
+          getUnitOfKind({ findings: probed, kind: 'huggingFacePartialDownloads' }),
         ];
 
         for (const unit of units) {
@@ -529,7 +531,7 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
       run: async (fixture) => {
         await createRepository(fixture);
 
-        const partial = findUnitOfKind({
+        const partial = getUnitOfKind({
           findings: await loadFindings({ environment: fixture.environment }),
           kind: 'huggingFacePartialDownloads',
         });
@@ -557,8 +559,8 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
 
         const probed = await loadFindings({ environment: fixture.environment });
         const units = [
-          findUnitOfKind({ findings: probed, kind: 'huggingFaceRepository' }),
-          findUnitOfKind({ findings: probed, kind: 'huggingFaceDetachedRevisions' }),
+          getUnitOfKind({ findings: probed, kind: 'huggingFaceRepository' }),
+          getUnitOfKind({ findings: probed, kind: 'huggingFaceDetachedRevisions' }),
         ];
 
         await writeFixtureTextFile({
@@ -585,7 +587,7 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
       run: async (fixture) => {
         await createRepository(fixture);
 
-        const partial = findUnitOfKind({
+        const partial = getUnitOfKind({
           findings: await loadFindings({ environment: fixture.environment }),
           kind: 'huggingFacePartialDownloads',
         });

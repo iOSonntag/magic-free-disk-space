@@ -1,7 +1,7 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { toNonEmpty } from '../../system/nonEmptyList.js';
 import { compareDottedVersions } from '../compareDottedVersions.js';
 import type { ExploreFoundPaths, IdeVersionFolderKind } from '../exploreUnit.js';
-import { toNonEmpty } from '../exploreUnit.js';
 import type { IdeVersionFolder } from './loadIdeVersionState.js';
 
 /** A folder of an old version to offer, with the newest version of its product. */

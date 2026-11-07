@@ -40,8 +40,6 @@ function findDeleteRefusal(params: {
   environment: Environment;
   identity: FileIdentity;
 }): TargetRefusalReason | null {
-  const realPath = params.identity.realPath;
-
   switch (params.identity.kind) {
     case 'symbolicLink':
       return 'symbolicLink';
@@ -52,25 +50,35 @@ function findDeleteRefusal(params: {
       break;
   }
 
-  if (!isAbsolute(realPath)) {
+  if (!isAbsolute(params.identity.realPath)) {
     return 'outsideAllowedRoot';
   }
 
-  if (isTouchingProtectedPath({ environment: params.environment, realPath: realPath })) {
+  if (
+    isTouchingProtectedPath({
+      environment: params.environment,
+      realPath: params.identity.realPath,
+    })
+  ) {
     return 'protectedRoot';
   }
 
   // A delete in a cloud folder deletes the file on every device, so only an evict goes there.
-  if (getEvictRootPlacement({ environment: params.environment, realPath: realPath }) !== 'apart') {
+  if (
+    getEvictRootPlacement({
+      environment: params.environment,
+      realPath: params.identity.realPath,
+    }) !== 'apart'
+  ) {
     return 'protectedRoot';
   }
 
   const isInsideAllowedRoot = params.environment.allowedRealRoots.some(
     (allowedRoot) =>
-      realPath !== allowedRoot &&
+      params.identity.realPath !== allowedRoot &&
       isSameOrInsidePath({
         rules: params.environment.pathRules,
-        path: realPath,
+        path: params.identity.realPath,
         parentPath: allowedRoot,
       }),
   );
@@ -86,8 +94,6 @@ function findEvictRefusal(params: {
   environment: Environment;
   identity: FileIdentity;
 }): TargetRefusalReason | null {
-  const realPath = params.identity.realPath;
-
   switch (params.identity.kind) {
     case 'symbolicLink':
       return 'symbolicLink';
@@ -99,14 +105,21 @@ function findEvictRefusal(params: {
   }
 
   if (
-    !isAbsolute(realPath) ||
-    getEvictRootPlacement({ environment: params.environment, realPath: realPath }) !==
-      'strictlyInside'
+    !isAbsolute(params.identity.realPath) ||
+    getEvictRootPlacement({
+      environment: params.environment,
+      realPath: params.identity.realPath,
+    }) !== 'strictlyInside'
   ) {
     return 'outsideAllowedRoot';
   }
 
-  if (isTouchingProtectedPath({ environment: params.environment, realPath: realPath })) {
+  if (
+    isTouchingProtectedPath({
+      environment: params.environment,
+      realPath: params.identity.realPath,
+    })
+  ) {
     return 'protectedRoot';
   }
 

@@ -59,11 +59,7 @@ String formatPlannedItemSizeText(PlannedItemView item) {
 /// "5.0 MB stays in iCloud…", for the [evictedSize] an evict frees on this
 /// Mac.
 String formatStaysInIcloudText(ItemSizeSum evictedSize) {
-  final String sizeText = formatSizeText(
-    allocatedBytes: evictedSize.allocatedBytes,
-    isComplete: evictedSize.isComplete,
-  );
-  return '$sizeText stays in iCloud and downloads again when opened.';
+  return '${formatItemSizeSumText(evictedSize)} stays in iCloud and downloads again when opened.';
 }
 
 /// Whether an item removed the way [removal] says is gone for good: every

@@ -6,6 +6,7 @@ import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import type { AndroidPackageFolder } from './loadAndroidPackageFolder.js';
 import { loadAndroidChildPaths, loadAndroidPackageFolders } from './loadAndroidPackageFolder.js';
 import type { AndroidSdkRoot } from './loadAndroidSdkRoots.js';
+import { loadEachAndroidSdkRoot } from './loadAndroidSdkRoots.js';
 
 /** The platform folders of one SDK that hold a `package.xml`; none without `platforms`. */
 export type AndroidPlatformSdk = {
@@ -26,34 +27,28 @@ export async function loadAndroidPlatformState(params: {
   sdkRoots: AndroidSdkRoot[];
   privacyDenialCode: string | null;
 }): Promise<Result<AndroidPlatformState, ExploreFileUnreadable>> {
-  const sdks: AndroidPlatformSdk[] = [];
+  const sdks = await loadEachAndroidSdkRoot({
+    roots: params.sdkRoots,
+    loadRoot: (sdkRoot) =>
+      loadAndroidPlatformSdk({
+        pathRules: params.pathRules,
+        sdkRoot: sdkRoot.path,
+        privacyDenialCode: params.privacyDenialCode,
+      }),
+  });
 
-  for (const sdkRoot of params.sdkRoots) {
-    const platforms = await loadAndroidSdkPlatforms({
-      pathRules: params.pathRules,
-      sdkRoot: sdkRoot.path,
-      privacyDenialCode: params.privacyDenialCode,
-    });
-
-    if (platforms.kind === 'failed') {
-      if (sdkRoot.isRequired) {
-        return platforms;
-      }
-
-      continue;
-    }
-
-    sdks.push({ sdkRoot: sdkRoot.path, platforms: platforms.value });
+  if (sdks.kind === 'failed') {
+    return sdks;
   }
 
-  return { kind: 'succeeded', value: { sdks: sdks } };
+  return { kind: 'succeeded', value: { sdks: sdks.value } };
 }
 
-async function loadAndroidSdkPlatforms(params: {
+async function loadAndroidPlatformSdk(params: {
   pathRules: PathRules;
   sdkRoot: AbsolutePath;
   privacyDenialCode: string | null;
-}): Promise<Result<AndroidPackageFolder[], ExploreFileUnreadable>> {
+}): Promise<Result<AndroidPlatformSdk, ExploreFileUnreadable>> {
   const folderPaths = await loadAndroidChildPaths({
     pathRules: params.pathRules,
     parentPaths: [
@@ -70,8 +65,14 @@ async function loadAndroidSdkPlatforms(params: {
     return folderPaths;
   }
 
-  return loadAndroidPackageFolders({
+  const platforms = await loadAndroidPackageFolders({
     folderPaths: folderPaths.value,
     privacyDenialCode: params.privacyDenialCode,
   });
+
+  if (platforms.kind === 'failed') {
+    return platforms;
+  }
+
+  return { kind: 'succeeded', value: { sdkRoot: params.sdkRoot, platforms: platforms.value } };
 }

@@ -1,4 +1,6 @@
 import { basename } from 'node:path';
+import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
+import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { EntryReads } from '../system/entryReads.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
@@ -39,7 +41,8 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
  * Walks each root on its own volume without following symbolic links, and without entering
- * hidden folders, package folders (any folder named with an extension), or git working trees.
+ * hidden folders, package folders (any folder named with an extension), git working trees, or a
+ * project's artifact folder beside its marker, such as `build` beside `build.gradle`.
  * Each file is its own offer, measured as `loadPathMeasurement` measures one: a file whose blocks
  * a clone shares counts less, and a file with another hard link counts nothing, since deleting
  * one link frees nothing. A passed deadline ends the walk with one walkStopped issue. Findings
@@ -47,6 +50,8 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
  */
 export async function findLargeUserFiles(params: {
   rootDirs: string[];
+  /** The artifacts whose files belong to their project, each judged by its marker. */
+  artifactRules: ProjectArtifactRule[];
   minAllocatedBytes: number;
   deadlineMs: number;
   entryReads: EntryReads;
@@ -116,7 +121,15 @@ export async function findLargeUserFiles(params: {
           return 'skip';
         }
 
-        if (entry.kind === 'directory' && isUserFolderName({ name: entry.name })) {
+        if (
+          entry.kind === 'directory' &&
+          isUserFolderName({ name: entry.name }) &&
+          findMarkedArtifactRule({
+            rules: params.artifactRules,
+            name: entry.name,
+            projectEntryNames: entry.siblingNames,
+          }) === null
+        ) {
           return 'descend';
         }
 

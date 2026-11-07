@@ -27,6 +27,13 @@ TEvent loadSampleEvent<TEvent extends BridgeEvent>() {
   return loadSampleEvents().whereType<TEvent>().single;
 }
 
+final ScannedEvent _sampleScan = loadSampleEvent<ScannedEvent>();
+
+/// The item of the sample scan numbered [number]; throws when it holds none.
+ItemView getSampleItem(int number) {
+  return _sampleScan.selectableItems.singleWhere((ItemView item) => item.number == number);
+}
+
 /// A fresh copy of the first sample line of [kind], for a test to change
 /// before it parses it.
 Map<String, Object?> loadSampleJson(String kind) {
@@ -74,6 +81,42 @@ List<Map<String, Object?>> listSectionTotalJsons(Map<String, Object?> json) {
 ScannedEvent loadScanWithReversedTotals() {
   final Map<String, Object?> json = loadSampleJson('scanned');
   json['sectionTotals'] = listSectionTotalJsons(json).reversed.toList();
+  return parseScanJson(json);
+}
+
+/// A fresh copy of the sample scan's line with its Photos library advice in
+/// the section of the apps that free their own space, counted there by a
+/// total of that section as the bridge counts advice: by number, not size.
+Map<String, Object?> loadScanJsonWithOwnAppAdvice() {
+  final Map<String, Object?> json = loadSampleJson('scanned');
+  final Map<String, Object?> photos = listScanAdviceJsons(
+    json,
+  ).singleWhere((Map<String, Object?> advice) => advice['title'] == 'Photos library');
+  final List<Map<String, Object?>> totals = listSectionTotalJsons(json);
+  final Map<String, Object?> formerTotal = totals.singleWhere(
+    (Map<String, Object?> total) => total['sectionKey'] == photos['sectionKey'],
+  );
+  formerTotal['adviceCount'] = (formerTotal['adviceCount']! as int) - 1;
+  photos['sectionKey'] = 'ownApp';
+  totals.add({
+    'sectionKey': 'ownApp',
+    'allocatedBytes': 0,
+    'isComplete': true,
+    'removableBytes': 0,
+    'isRemovableComplete': true,
+    'itemCount': 0,
+    'safeBytes': 0,
+    'adviceCount': 1,
+    'titleText': 'Handled by its own app',
+  });
+  return json;
+}
+
+/// The sample scan with Xcode (#3), which the bridge never plans, in the
+/// review group of Caches beside the App cache (#2).
+ScannedEvent loadScanWithNeverItemInCaches() {
+  final Map<String, Object?> json = loadSampleJson('scanned');
+  listScanItemJsons(json).singleWhere((Map<String, Object?> item) => item['number'] == 3)['sectionKey'] = 'caches';
   return parseScanJson(json);
 }
 

@@ -17,6 +17,7 @@ import type {
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -27,7 +28,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { buildTestProbeRun, DAY_MS } from '../support/probeRunFixtures.js';
+import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 import type { FakeEngine } from './engineFixtures.js';
 import {
   buildBuildRecord,
@@ -324,6 +325,21 @@ describe('buildEngineFindings', () => {
       }),
     ).toEqual([]);
   });
+
+  test('offers no image of two tags in one repository, which the engine removes only by force', () => {
+    expect(
+      buildEngineFindings({
+        place: buildFakeUnitPlace({ homeDir: '/Users/example' }),
+        usage: parseUsage(
+          buildDiskUsageAnswer({
+            images: [buildImageRecord({ digit: '1', tags: ['app:1', 'app:latest'] })],
+          }),
+        ),
+        nowMs: NOW_MS,
+        processCommands: [],
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe('isEngineUnitUnchanged', () => {
@@ -441,6 +457,31 @@ describe('isEngineUnitUnchanged', () => {
       isEngineUnitUnchanged({
         unit: { kind: 'engineImage', ...place, imageId: buildImageId('9') },
         usage: parseUsage(buildMixedUsageAnswer()),
+        nowMs: NOW_MS,
+      }),
+    ).toBe(false);
+  });
+
+  test('fails for an image that gained a second tag since the scan', () => {
+    const unit: ExploreEngineUnit = { kind: 'engineImage', ...place, imageId: buildImageId('1') };
+
+    expect(
+      isEngineUnitUnchanged({
+        unit: unit,
+        usage: parseUsage(
+          buildDiskUsageAnswer({ images: [buildImageRecord({ digit: '1', tags: ['app:1'] })] }),
+        ),
+        nowMs: NOW_MS,
+      }),
+    ).toBe(true);
+    expect(
+      isEngineUnitUnchanged({
+        unit: unit,
+        usage: parseUsage(
+          buildDiskUsageAnswer({
+            images: [buildImageRecord({ digit: '1', tags: ['app:1', 'app:latest'] })],
+          }),
+        ),
         nowMs: NOW_MS,
       }),
     ).toBe(false);

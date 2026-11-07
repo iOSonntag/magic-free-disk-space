@@ -88,6 +88,13 @@ void main() {
     });
   });
 
+  test('getAmbientLoopPhase gives how far the ambient time stands into the turn of a loop', () {
+    expect(getAmbientLoopPhase(0, const Duration(seconds: 1)), 0);
+    expect(getAmbientLoopPhase(1.3, const Duration(seconds: 1)), closeTo(0.3, 1e-9));
+    expect(getAmbientLoopPhase(2, const Duration(seconds: 1)), 0);
+    expect(getAmbientLoopPhase(3, const Duration(milliseconds: 2000)), closeTo(0.5, 1e-9));
+  });
+
   testWidgets('pauses every ticker below it while the window is hidden', (WidgetTester tester) async {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
 

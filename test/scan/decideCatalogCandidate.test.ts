@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
+import type { TargetsMeasurement } from '../../src/scan/candidate.js';
 import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
-import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -24,6 +24,7 @@ function decide(params: {
   measurement?: TargetsMeasurement;
   ownerBundleId?: string | null;
   ownerState?: OwnerState;
+  isOwnerUninstalled?: boolean;
   activity?: ActivityProbe | null;
   carvedPaths?: string[];
 }) {
@@ -36,6 +37,7 @@ function decide(params: {
     ownerBundlePaths: ['/Applications/Example.app'],
     ownerState: params.ownerState ?? 'stopped',
     ownerAppName: 'Example',
+    isOwnerUninstalled: params.isOwnerUninstalled ?? false,
     activity: params.activity === undefined ? null : params.activity,
     minOfferedBytes: MIB,
     carvedPaths: params.carvedPaths ?? [],
@@ -122,6 +124,78 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
     expect(decision.kind === 'advice' && decision.advice.advice).toBe('Run mise prune.');
     expect(decision.kind === 'advice' && decision.advice.opener).toBeNull();
+  });
+
+  test('gives an explore entry its uninstalled-owner advice only for an uninstalled owner', () => {
+    const entry = buildTestCatalogEntry({
+      removal: {
+        kind: 'explore',
+        probe: 'dockerDesktopEngine',
+        advice: 'Start the engine, then prune it.',
+        uninstalledOwnerAdvice: 'Delete the folder of the removed engine.',
+      },
+    });
+    const installed = decide({ entry: entry, ownerBundleId: 'com.example.engine' });
+    const uninstalled = decide({
+      entry: entry,
+      ownerBundleId: 'com.example.engine',
+      isOwnerUninstalled: true,
+    });
+
+    expect(installed.kind === 'advice' && installed.advice.advice).toBe(
+      'Start the engine, then prune it.',
+    );
+    expect(uninstalled.kind === 'advice' && uninstalled.advice.advice).toBe(
+      'Delete the folder of the removed engine.',
+    );
+  });
+
+  test('keeps the advice of an advice entry for an uninstalled owner', () => {
+    const decision = decide({
+      entry: buildTestCatalogEntry({
+        removal: { kind: 'advice', advice: 'Run the tool.', carvedPaths: [], opener: null },
+      }),
+      ownerBundleId: 'com.example.app',
+      isOwnerUninstalled: true,
+    });
+
+    expect(decision.kind === 'advice' && decision.advice.advice).toBe('Run the tool.');
+  });
+
+  test('holds back an explore entry of no engine while its owner runs or cannot be checked', () => {
+    const entry = buildTestCatalogEntry({
+      removal: { kind: 'explore', probe: 'mailDownloads', advice: 'Quit Mail, then delete them.' },
+    });
+
+    expect(
+      decide({ entry: entry, ownerBundleId: 'com.example.mail', ownerState: 'running' }),
+    ).toEqual({ kind: 'skip', path: PATH, reason: 'ownerRunning' });
+    expect(
+      decide({ entry: entry, ownerBundleId: 'com.example.mail', ownerState: 'unknown' }),
+    ).toEqual({ kind: 'skip', path: PATH, reason: 'runningUnknown' });
+  });
+
+  test('gives advice and engine entries their advice while their owner runs or is unknown', () => {
+    const entries = [
+      buildTestCatalogEntry({
+        removal: { kind: 'advice', advice: 'Run the tool.', carvedPaths: [], opener: null },
+      }),
+      buildTestCatalogEntry({
+        removal: { kind: 'explore', probe: 'dockerDesktopEngine', advice: 'Prune the engine.' },
+      }),
+    ];
+
+    for (const entry of entries) {
+      for (const ownerState of ['running', 'unknown'] as const) {
+        const decision = decide({
+          entry: entry,
+          ownerBundleId: 'com.example.app',
+          ownerState: ownerState,
+        });
+
+        expect(decision.kind).toBe('advice');
+      }
+    }
   });
 
   test('gives the advice its carved paths, joined below its path', () => {

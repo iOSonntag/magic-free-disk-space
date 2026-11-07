@@ -210,8 +210,28 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   },
 ];
 
+/**
+ * The rule a folder named `name` is the artifact of, when its project folder, by the names of
+ * its entries, holds one of the rule's markers; `null` when it is no artifact.
+ */
+export function findMarkedArtifactRule(params: {
+  rules: ProjectArtifactRule[];
+  name: string;
+  projectEntryNames: ReadonlySet<string>;
+}): ProjectArtifactRule | null {
+  const markedRule = params.rules.find(
+    (rule) =>
+      rule.artifactName === params.name &&
+      rule.markers.some((marker) =>
+        isProjectMarkerPresent({ marker: marker, entryNames: params.projectEntryNames }),
+      ),
+  );
+
+  return markedRule ?? null;
+}
+
 /** Whether the project folder, by the names of its entries, holds one the marker matches. */
-export function isProjectMarkerPresent(params: {
+function isProjectMarkerPresent(params: {
   marker: ProjectMarker;
   entryNames: ReadonlySet<string>;
 }): boolean {

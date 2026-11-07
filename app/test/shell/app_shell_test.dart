@@ -149,48 +149,6 @@ ScannedEvent _buildScanWithUnknownSections() {
   return parseScanJson(json);
 }
 
-/// The sample scan, with a Photos library that only Photos can free; the
-/// bridge measures no size of such advice.
-ScannedEvent _buildScanWithOwnAppAdvice() {
-  final Map<String, Object?> json = loadSampleJson('scanned');
-  listScanAdviceJsons(json).add({
-    'key': 'own-app:photos-library',
-    'title': 'Photos library',
-    'risk': 'review',
-    'riskText': 'review',
-    'sizeText': '0 B',
-    'detailLines': [
-      {'kind': 'explanation', 'text': 'The photos and videos of the Photos app.'},
-      {'kind': 'advice', 'text': 'Empty Recently Deleted in Photos.'},
-    ],
-    'sectionKey': 'ownApp',
-    'origin': 'catalog',
-    'removal': 'advice',
-    'allocatedBytes': 0,
-    'displayPath': null,
-    'revealPath': null,
-    'opener': {'kind': 'app', 'app': 'photos'},
-    'lastUsedAt': null,
-    'appName': 'Photos',
-    'matchedBy': null,
-  });
-  listSectionTotalJsons(json).add({
-    'sectionKey': 'ownApp',
-    'titleText': 'Handled by its own app',
-    'allocatedBytes': 0,
-    'isComplete': true,
-    'itemCount': 0,
-    'safeBytes': 0,
-    'adviceCount': 1,
-  });
-  return parseScanJson(json);
-}
-
-/// The sample item numbered [number].
-ItemView _getSampleItem(int number) {
-  return loadSampleEvent<ScannedEvent>().selectableItems.singleWhere((ItemView item) => item.number == number);
-}
-
 void main() {
   final ScannedEvent sampleScan = loadSampleEvent<ScannedEvent>();
 
@@ -334,10 +292,10 @@ void main() {
   testWidgets('a probed safe item stands in the same group on its page, on Review and in the alert', (
     WidgetTester tester,
   ) async {
-    final ItemView buildCache = _getSampleItem(9);
+    final ItemView buildCache = getSampleItem(9);
     final FakeCleanerBridge bridge = _createSampleBridge()
       ..planAnswer = buildSamplePlan(
-        [planItem(buildCache), planItem(_getSampleItem(4))],
+        [planItem(buildCache), planItem(getSampleItem(4))],
         holdsCareful: true,
       );
     await _pumpShell(tester, bridge: bridge);
@@ -367,9 +325,7 @@ void main() {
   testWidgets('Select all of a group leaves out an item the bridge never plans, and the selection does not count it', (
     WidgetTester tester,
   ) async {
-    final Map<String, Object?> json = loadSampleJson('scanned');
-    listScanItemJsons(json).singleWhere((Map<String, Object?> item) => item['number'] == 3)['sectionKey'] = 'caches';
-    await _pumpShell(tester, bridge: _createSampleBridge(scan: parseScanJson(json)));
+    await _pumpShell(tester, bridge: _createSampleBridge(scan: loadScanWithNeverItemInCaches()));
     await tapAndSettle(tester, _findSectionEntry(SectionKey.caches));
     await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
 
@@ -671,7 +627,7 @@ void main() {
   ) async {
     final _ShellParts parts = await _pumpShell(
       tester,
-      bridge: _createSampleBridge(scan: _buildScanWithOwnAppAdvice()),
+      bridge: _createSampleBridge(scan: parseScanJson(loadScanJsonWithOwnAppAdvice())),
     );
 
     expect(find.bySemanticsLabel('Handled by its own app, 1 place'), findsOneWidget);
@@ -684,9 +640,10 @@ void main() {
     expect(find.text('0 B'), findsNothing);
     expect(find.text('IN THEIR OWN APPS'), findsOneWidget);
     expect(find.text('Photos library'), findsOneWidget);
-    expect(find.text('Empty Recently Deleted in Photos.'), findsOneWidget);
+    expect(find.text('7.0 MB'), findsOneWidget);
+    expect(find.text('Remove photos in Photos, or keep the originals in iCloud.'), findsOneWidget);
     expect(find.byType(StageCheckMark), findsNothing);
-    expect(find.text('Reveal in Finder'), findsNothing);
+    expect(find.text('Reveal in Finder'), findsOneWidget);
     expectEveryTappableNodeLabelled();
 
     await tapAndSettle(tester, find.text('Open Photos'));
@@ -701,7 +658,7 @@ void main() {
   ) async {
     await _pumpShell(
       tester,
-      bridge: _createSampleBridge(scan: _buildScanWithOwnAppAdvice()),
+      bridge: _createSampleBridge(scan: parseScanJson(loadScanJsonWithOwnAppAdvice())),
       urlOpener: FakeUrlOpener(isOpening: false),
     );
     await tapAndSettle(tester, _findSidebarEntry(const HandledElsewhereDestination()));
@@ -709,6 +666,25 @@ void main() {
     await tapAndSettle(tester, find.text('Open Photos'));
 
     expect(find.text('Photos did not open.'), findsOneWidget);
+  });
+
+  testWidgets('the sidebar and the page of the apps that free their own space take the title the bridge gives', (
+    WidgetTester tester,
+  ) async {
+    const String bridgeTitle = 'Freed in their own apps';
+    expect(bridgeTitle, isNot(handledElsewhereTitle));
+    final Map<String, Object?> json = loadScanJsonWithOwnAppAdvice();
+    listSectionTotalJsons(json).singleWhere((Map<String, Object?> total) => total['sectionKey'] == 'ownApp')['titleText'] =
+        bridgeTitle;
+    await _pumpShell(tester, bridge: _createSampleBridge(scan: parseScanJson(json)));
+
+    expect(find.bySemanticsLabel('$bridgeTitle, 1 place'), findsOneWidget);
+
+    await tapAndSettle(tester, _findSidebarEntry(const HandledElsewhereDestination()));
+
+    expect(find.byType(HandledElsewherePage), findsOneWidget);
+    expect(find.text(bridgeTitle), findsNWidgets(2));
+    expect(find.text(handledElsewhereTitle), findsNothing);
   });
 
   testWidgets('Handled by its own app shows the places of System Settings, each opening its pane', (

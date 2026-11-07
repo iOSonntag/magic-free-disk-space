@@ -18,23 +18,22 @@ export function isEngineUnitUnchanged(params: {
   nowMs: number;
 }): boolean {
   switch (params.unit.kind) {
-    case 'engineBuildCache': {
-      const records = params.usage.buildRecords;
-
+    case 'engineBuildCache':
       return (
         params.unit.recordIds.length > 0 &&
         params.unit.recordIds.every((recordId) => {
-          const record = records.find((candidate) => candidate.id === recordId);
+          const record = params.usage.buildRecords.find((candidate) => candidate.id === recordId);
 
           return (
             record !== undefined &&
             isUnusedBuildRecord({ record: record, nowMs: params.nowMs }) &&
             // The prune filter matches an id as a pattern, so a record whose id holds it goes too.
-            !records.some((other) => other.id !== recordId && other.id.includes(recordId))
+            !params.usage.buildRecords.some(
+              (other) => other.id !== recordId && other.id.includes(recordId),
+            )
           );
         })
       );
-    }
     case 'engineDanglingImages':
       return (
         params.unit.imageIds.length > 0 &&

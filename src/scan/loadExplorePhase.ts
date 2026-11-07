@@ -12,6 +12,7 @@ import { listUnitPaths } from '../explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
+import { mapNonEmpty, toNonEmpty } from '../system/nonEmptyList.js';
 import { buildReadIssue } from './buildReadIssue.js';
 import type {
   CandidateDecision,
@@ -22,13 +23,10 @@ import type {
   CandidateRemovalProbed,
   CandidateRemovalRunTool,
 } from './candidate.js';
+import { hasSymbolicLinkTarget } from './candidate.js';
 import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
-import {
-  buildFoundTargets,
-  hasSymbolicLinkTarget,
-  loadMeasuredTargetsPhase,
-} from './loadMeasuredTargetsPhase.js';
+import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import type { PathMeasurement } from './loadPathMeasurement.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
 import type { ScanPhase } from './scanPhase.js';
@@ -312,15 +310,15 @@ function loadPathFindingPhase(params: {
   entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
-  const [firstPath, ...otherPaths] = listUnitPaths(params.unit);
+  const unitPaths = toNonEmpty(listUnitPaths(params.unit));
 
   // Every path unit names at least one path; one that names none has nothing to offer.
-  if (firstPath === undefined) {
+  if (unitPaths === null) {
     return Promise.resolve({ decisions: [], issues: [] });
   }
 
   return loadMeasuredTargetsPhase({
-    found: buildFoundTargets([firstPath, ...otherPaths]),
+    found: mapNonEmpty(unitPaths, (unitPath) => ({ path: unitPath })),
     carve: null,
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,

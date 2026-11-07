@@ -3,31 +3,35 @@ import type { ExploreToolFailure } from '../explore/exploreUnit.js';
 import { isEvictFileUnchanged } from '../explore/icloudDownloads/decideEvictFile.js';
 import type { Candidate, CandidateRemovalEvictUnitFiles, EvictTarget } from '../scan/candidate.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
+import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
+import { decideTargetsOutcome } from './decideTargetsOutcome.js';
 import type {
   RecordedRemoval,
   RemovalOutcome,
   RemovalOutcomeCodedKind,
+  RemovalOutcomeKind,
 } from './deleteCandidates.js';
 import type { JournalEntry } from './deletionJournal.js';
 import { fileFailureToOutcome } from './fileFailureToOutcome.js';
-import { isGoneOutcome } from './isGoneOutcome.js';
 
 /** One file's evict asks the cloud daemon to drop its copy, which returns long before this. */
 const EVICT_FILE_TIMEOUT_MS = 60_000;
 
+type EvictFileOutcomeCoded = {
+  kind: 'coded';
+  path: string;
+  outcome: RemovalOutcomeCodedKind;
+  code: string | null;
+  freedBytes: number;
+};
+
+type EvictFileOutcomeToolFailed = { kind: 'toolFailed'; path: string; failure: ExploreToolFailure };
+
 /** What became of one file, with the blocks its evict freed. */
-type EvictFileOutcome =
-  | {
-      kind: 'coded';
-      path: string;
-      outcome: RemovalOutcomeCodedKind;
-      code: string | null;
-      freedBytes: number;
-    }
-  | { kind: 'toolFailed'; path: string; failure: ExploreToolFailure };
+type EvictFileOutcome = EvictFileOutcomeCoded | EvictFileOutcomeToolFailed;
 
 /**
  * Evicts each target with `brctl evict`, only while it is still the file the scan found, still
@@ -46,7 +50,6 @@ export async function evictCandidateFiles(params: {
     path: params.removal.unit.tool.path,
     user: params.environment.user,
   });
-  const [firstTarget, ...otherTargets] = params.removal.targets;
   const evictTarget = (target: EvictTarget): Promise<EvictFileOutcome> => {
     if (trustedTool.kind === 'failed') {
       return Promise.resolve(
@@ -58,21 +61,14 @@ export async function evictCandidateFiles(params: {
   };
 
   // One after another: each file is checked right before its own evict.
-  const firstOutcome = await evictTarget(firstTarget);
-  const otherOutcomes: EvictFileOutcome[] = [];
-
-  for (const target of otherTargets) {
-    otherOutcomes.push(await evictTarget(target));
-  }
-
-  const fileOutcomes: [EvictFileOutcome, ...EvictFileOutcome[]] = [firstOutcome, ...otherOutcomes];
+  const fileOutcomes = await mapNonEmptyInTurn(params.removal.targets, evictTarget);
   const atMs = params.clock();
-  const buildEntry = (fileOutcome: EvictFileOutcome): JournalEntry =>
-    buildEvictionEntry({ fileOutcome: fileOutcome, atMs: atMs });
 
   return {
     outcome: buildEvictOutcome({ candidate: params.candidate, fileOutcomes: fileOutcomes }),
-    outcomeEntries: [buildEntry(firstOutcome), ...otherOutcomes.map(buildEntry)],
+    outcomeEntries: mapNonEmpty(fileOutcomes, (fileOutcome) =>
+      buildEvictionEntry({ fileOutcome: fileOutcome, atMs: atMs }),
+    ),
   };
 }
 
@@ -158,23 +154,37 @@ function buildEvictOutcome(params: {
     0,
   );
   const base = { candidate: params.candidate, freedBytes: freedBytes };
-  const keptOutcome = params.fileOutcomes.find(
-    (fileOutcome) => fileOutcome.kind === 'toolFailed' || !isGoneOutcome(fileOutcome.outcome),
-  );
+  const decision = decideTargetsOutcome({
+    targets: params.fileOutcomes,
+    getOutcome: getFileOutcomeKind,
+  });
 
-  if (keptOutcome === undefined) {
-    const hasEvicted = params.fileOutcomes.some(
-      (fileOutcome) => fileOutcome.kind === 'coded' && fileOutcome.outcome === 'removed',
-    );
-
-    return { ...base, outcome: hasEvicted ? 'removed' : 'alreadyGone', code: null };
+  switch (decision.kind) {
+    case 'gone':
+      return { ...base, outcome: decision.outcome, code: null };
+    case 'stayed':
+      return buildKeptFileOutcome({ base: base, keptOutcome: decision.target });
   }
+}
 
-  switch (keptOutcome.kind) {
+function buildKeptFileOutcome(params: {
+  base: { candidate: Candidate; freedBytes: number };
+  keptOutcome: EvictFileOutcome;
+}): RemovalOutcome {
+  switch (params.keptOutcome.kind) {
     case 'toolFailed':
-      return { ...base, outcome: 'toolFailed', failure: keptOutcome.failure };
+      return { ...params.base, outcome: 'toolFailed', failure: params.keptOutcome.failure };
     case 'coded':
-      return { ...base, outcome: keptOutcome.outcome, code: keptOutcome.code };
+      return { ...params.base, outcome: params.keptOutcome.outcome, code: params.keptOutcome.code };
+  }
+}
+
+function getFileOutcomeKind(fileOutcome: EvictFileOutcome): RemovalOutcomeKind {
+  switch (fileOutcome.kind) {
+    case 'toolFailed':
+      return 'toolFailed';
+    case 'coded':
+      return fileOutcome.outcome;
   }
 }
 

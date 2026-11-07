@@ -70,7 +70,7 @@ class StageButton extends StatelessWidget {
       enabled: enabled,
       label: semanticsLabel ?? label,
       child: Opacity(
-        opacity: enabled ? 1 : 0.42,
+        opacity: enabled ? 1 : ControlTokens.disabledOpacity,
         child: Material(
           type: MaterialType.transparency,
           child: Ink(

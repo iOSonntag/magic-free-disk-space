@@ -62,6 +62,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -89,6 +90,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -116,6 +118,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: ['node_modules'],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -124,6 +127,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -131,6 +135,70 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
 
     expect(excludedActivity).toBe('quiet');
     expect(includedActivity).toBe('recent');
+  });
+
+  test('skips an excluded path, while a folder of the same name elsewhere counts', async () => {
+    const homeDir = fixtureRoot.homeDir;
+    const artifactDirPath = join(homeDir, 'app', 'build');
+    const sourceBuildDirPath = join(homeDir, 'app', 'src', 'build');
+
+    for (const dirPath of [artifactDirPath, sourceBuildDirPath]) {
+      await createFixtureDirectory({ path: dirPath });
+    }
+
+    await createFixtureFile({
+      path: join(artifactDirPath, 'new.class'),
+      sizeBytes: 10,
+      modifiedMs: probeTimes.recentModifiedMs,
+    });
+    await createFixtureFile({
+      path: join(sourceBuildDirPath, 'old.ts'),
+      sizeBytes: 10,
+      modifiedMs: probeTimes.oldModifiedMs,
+    });
+    await updateModifiedMsInOrder({
+      paths: [
+        artifactDirPath,
+        sourceBuildDirPath,
+        join(homeDir, 'app', 'src'),
+        join(homeDir, 'app'),
+        homeDir,
+      ],
+      modifiedMs: probeTimes.oldModifiedMs,
+    });
+
+    const excludedActivity = await loadTreeActivity({
+      path: homeDir,
+      cutoffMs: probeTimes.cutoffMs,
+      excludedNames: [],
+      excludedPaths: new Set([artifactDirPath]),
+      maxEntries: 10_000,
+      deadlineMs: Date.now() + 60_000,
+      entryReads: darwinPlatform.system.entryReads,
+    });
+
+    await createFixtureFile({
+      path: join(sourceBuildDirPath, 'new.ts'),
+      sizeBytes: 10,
+      modifiedMs: probeTimes.recentModifiedMs,
+    });
+    await updateModifiedMsInOrder({
+      paths: [sourceBuildDirPath],
+      modifiedMs: probeTimes.oldModifiedMs,
+    });
+
+    const sameNameActivity = await loadTreeActivity({
+      path: homeDir,
+      cutoffMs: probeTimes.cutoffMs,
+      excludedNames: [],
+      excludedPaths: new Set([artifactDirPath]),
+      maxEntries: 10_000,
+      deadlineMs: Date.now() + 60_000,
+      entryReads: darwinPlatform.system.entryReads,
+    });
+
+    expect(excludedActivity).toBe('quiet');
+    expect(sameNameActivity).toBe('recent');
   });
 
   test('skips a folder the eviction predicate marks as evicted', async () => {
@@ -152,6 +220,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: buildTestEntryReads({
@@ -182,6 +251,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -204,6 +274,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -228,6 +299,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 2,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -255,6 +327,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: 0,
       entryReads: darwinPlatform.system.entryReads,
@@ -283,6 +356,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -310,6 +384,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: homeDir,
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,
@@ -323,6 +398,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       path: join(fixtureRoot.homeDir, 'missing'),
       cutoffMs: probeTimes.cutoffMs,
       excludedNames: [],
+      excludedPaths: new Set(),
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
       entryReads: darwinPlatform.system.entryReads,

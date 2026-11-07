@@ -1,5 +1,5 @@
 import type { AdviceOpener, Risk } from '../catalog/catalog.js';
-import { isRemovableRisk } from '../delete/validateRemoval.js';
+import { isRemovableRisk } from '../catalog/catalog.js';
 import type { ExploreEngineAnswerFailure } from '../explore/exploreProbe.js';
 import { formatHomeRelativePath } from '../path/formatHomeRelativePath.js';
 import type { SectionTotal } from '../scan/buildSectionTotals.js';
@@ -61,8 +61,12 @@ type SummaryView = {
   lines: string[];
   /** The bytes the plan may free: every offered item but a `never` one, which the title counts. */
   totalBytes: number;
+  /** False when the size of an item `totalBytes` counts is a lower bound. */
+  isTotalComplete: boolean;
   /** The bytes of the items of every `safe` group. */
   safeBytes: number;
+  /** False when the size of an item of a `safe` group is a lower bound. */
+  isSafeComplete: boolean;
   /** The volume of the home folder; `null` when its space could not be read. */
   disk: VolumeSpace | null;
 };
@@ -148,6 +152,8 @@ export type AdviceItemView = {
   origin: ItemOriginView;
   removal: 'advice';
   allocatedBytes: number;
+  /** False when `allocatedBytes` is a lower bound. */
+  isComplete: boolean;
   displayPath: string;
   revealPath: string;
   /** Where the person handles it, the app that owns its data or a pane of settings; else `null`. */
@@ -381,7 +387,7 @@ function buildSectionTotalViews(params: {
 
 /**
  * The title over every candidate, then one line per part of the summary that holds an item. The
- * safe bytes are those of the sections' safe groups, since every candidate lies in one section
+ * total and the safe bytes are those of the sections, since every candidate lies in one section
  * and no Explore item is safe.
  */
 function buildSummaryView(params: {
@@ -389,20 +395,21 @@ function buildSummaryView(params: {
   sectionTotals: SectionTotal[];
   disk: VolumeSpace | null;
 }): SummaryView {
-  // A `never` item stays in its section's total, but the plan refuses it, so it frees nothing.
-  const totalBytes = sumAllocatedBytes({
-    items: params.placedItems.flatMap((item) =>
-      isRemovableRisk(item.candidate.risk) ? [item.candidate] : [],
-    ),
-  });
+  const totalBytes = params.sectionTotals.reduce((sum, total) => sum + total.removableBytes, 0);
+  const isTotalComplete = params.sectionTotals.every((total) => total.isRemovableComplete);
   const safeBytes = params.sectionTotals.reduce((sum, total) => sum + total.safeBytes, 0);
+  const isSafeComplete = params.placedItems.every(
+    (item) => item.place.group !== 'safe' || item.candidate.isComplete,
+  );
 
   if (params.placedItems.length === 0) {
     return {
       titleText: 'Nothing to delete was found.',
       lines: [],
       totalBytes: totalBytes,
+      isTotalComplete: isTotalComplete,
       safeBytes: safeBytes,
+      isSafeComplete: isSafeComplete,
       disk: params.disk,
     };
   }
@@ -420,13 +427,11 @@ function buildSummaryView(params: {
     titleText: `Found ${itemCountText}, ${totalSizeText} in total`,
     lines: formatSummaryLines({ placedItems: params.placedItems }),
     totalBytes: totalBytes,
+    isTotalComplete: isTotalComplete,
     safeBytes: safeBytes,
+    isSafeComplete: isSafeComplete,
     disk: params.disk,
   };
-}
-
-function sumAllocatedBytes(params: { items: { allocatedBytes: number }[] }): number {
-  return params.items.reduce((sum, item) => sum + item.allocatedBytes, 0);
 }
 
 function formatSummaryLines(params: { placedItems: PlacedItem[] }): string[] {
@@ -569,7 +574,7 @@ function buildItemView(params: {
     detailLines: buildItemDetailLines({ candidate: params.candidate }),
     sectionKey: params.place.section,
     group: params.place.group,
-    origin: formatItemOrigin({ item: params.candidate }),
+    origin: candidateOriginToView({ item: params.candidate }),
     removal: buildItemRemovalView({ removal: params.candidate.removal }),
     allocatedBytes: params.candidate.allocatedBytes,
     isComplete: params.candidate.isComplete,
@@ -584,7 +589,7 @@ function buildItemView(params: {
 }
 
 /** A catalog item in the Trash reads as the Trash, where the person knows it from. */
-function formatItemOrigin(params: { item: Candidate | Advice }): ItemOriginView {
+function candidateOriginToView(params: { item: Candidate | Advice }): ItemOriginView {
   if (params.item.origin.kind === 'catalog' && params.item.category === 'trash') {
     return 'trash';
   }
@@ -637,9 +642,10 @@ function buildAdviceItemView(params: { advice: Advice; homeDir: string }): Advic
       buildDetailLine({ kind: 'advice', text: params.advice.advice }),
     ],
     sectionKey: getCategorySection({ category: params.advice.category }),
-    origin: formatItemOrigin({ item: params.advice }),
+    origin: candidateOriginToView({ item: params.advice }),
     removal: 'advice',
     allocatedBytes: params.advice.allocatedBytes,
+    isComplete: params.advice.isComplete,
     displayPath: formatDisplayPath({ path: params.advice.path, homeDir: params.homeDir }),
     revealPath: params.advice.path,
     opener: params.advice.opener,

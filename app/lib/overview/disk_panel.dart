@@ -35,9 +35,6 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
     case ListedState(:final ScannedEvent scan):
       final SummaryView summary = scan.summary;
       final DiskSpaceView? disk = summary.disk;
-      // The summary's total leaves out what a plan refuses, so its
-      // completeness is that of the removable items alone.
-      final bool isFreeableComplete = sumItemSizes(scan.selectableItems.where(isItemRemovable)).isComplete;
       return DiskPanelFacts(
         reading: disk == null
             ? DiskRingFreeableReading(freeableBytes: summary.totalBytes)
@@ -47,15 +44,15 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
                 freeableBytes: summary.totalBytes,
               ),
         freeableBytes: summary.totalBytes,
-        isFreeableComplete: isFreeableComplete,
+        isFreeableComplete: summary.isTotalComplete,
         ringCaption: 'can be freed',
         overline: 'This Mac',
-        headline: '${formatSizeText(allocatedBytes: summary.totalBytes, isComplete: isFreeableComplete)} can be freed',
+        headline: '${formatSizeText(allocatedBytes: summary.totalBytes, isComplete: summary.isTotalComplete)} can be freed',
         lines: [
           if (disk != null)
             '${formatBytes(disk.availableBytes)} available of ${formatBytes(disk.capacityBytes)}',
           if (summary.safeBytes > 0)
-            '${_formatSafeSizeText(scan)} of it is safe to remove at once'
+            '${_formatSafeSizeText(summary)} of it is safe to remove at once'
           else
             'Nothing is safe to remove at once; review each section.',
         ],
@@ -64,12 +61,12 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
       final List<SectionTotal> foundTotals = listShownSectionTotals(state);
       final int foundBytes = foundTotals.fold(
         0,
-        (int sum, SectionTotal total) => sum + total.allocatedBytes,
+        (int sum, SectionTotal total) => sum + total.removableBytes,
       );
       return DiskPanelFacts(
         reading: DiskRingFreeableReading(freeableBytes: foundBytes),
         freeableBytes: foundBytes,
-        isFreeableComplete: foundTotals.every((SectionTotal total) => total.isComplete),
+        isFreeableComplete: foundTotals.every((SectionTotal total) => total.isRemovableComplete),
         ringCaption: 'found so far',
         overline: 'Scanning',
         headline: '${formatScanPhaseText(state)}…',
@@ -88,11 +85,8 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
   }
 }
 
-/// The summary's safe bytes, "at least" when an item of a safe group was not
-/// measured whole.
-String _formatSafeSizeText(ScannedEvent scan) {
-  final ItemSizeSum safeSum = sumItemSizes(scan.selectableItems.where((ItemView item) => item.group == ItemGroup.safe));
-  return formatSizeText(allocatedBytes: scan.summary.safeBytes, isComplete: safeSum.isComplete);
+String _formatSafeSizeText(SummaryView summary) {
+  return formatSizeText(allocatedBytes: summary.safeBytes, isComplete: summary.isSafeComplete);
 }
 
 /// The Overview's lead: the disk ring lit by what can be freed, the words on
@@ -120,7 +114,7 @@ class DiskPanel extends StatelessWidget {
         state.scan.summary.safeBytes > 0;
     final String cleanLabel = scan == null
         ? 'Clean safe items'
-        : 'Clean safe items · ${_formatSafeSizeText(scan)}';
+        : 'Clean safe items · ${_formatSafeSizeText(scan.summary)}';
     return GlassCard(
       accent: StageColors.overviewAccent,
       padding: const EdgeInsets.all(StageSpacing.extraLarge),

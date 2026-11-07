@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import type { CatalogEntry, CatalogSelectionProfileFolders } from '../catalog/catalog.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import { toNonEmpty } from '../system/nonEmptyList.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { CatalogEntryTargets, CatalogTarget } from './findCatalogTargets.js';
 import type { ScanIssue } from './issue.js';
@@ -25,6 +26,7 @@ export async function findProfileFolderTargets(params: {
   if (namesResult.kind === 'failed') {
     return {
       targets: [],
+      isPathRead: false,
       issues: buildFailureIssues({
         path: params.path,
         failure: namesResult.failure,
@@ -33,8 +35,8 @@ export async function findProfileFolderTargets(params: {
     };
   }
 
-  const targetsPerFolder: CatalogEntryTargets[] = [
-    await findFolderTargets({
+  const targetsPerFolder: FolderTarget[] = [
+    await findFolderTarget({
       entry: params.entry,
       selection: params.selection,
       folderPath: params.path,
@@ -45,7 +47,7 @@ export async function findProfileFolderTargets(params: {
 
   for (const name of namesResult.value) {
     targetsPerFolder.push(
-      await findFolderTargets({
+      await findFolderTarget({
         entry: params.entry,
         selection: params.selection,
         folderPath: join(params.path, name),
@@ -56,22 +58,28 @@ export async function findProfileFolderTargets(params: {
   }
 
   return {
-    targets: targetsPerFolder.flatMap((folderTargets) => folderTargets.targets),
-    issues: targetsPerFolder.flatMap((folderTargets) => folderTargets.issues),
+    targets: targetsPerFolder.flatMap((folderTarget) =>
+      folderTarget.target === null ? [] : [folderTarget.target],
+    ),
+    isPathRead: true,
+    issues: targetsPerFolder.flatMap((folderTarget) => folderTarget.issues),
   };
 }
 
+/** The item of one folder, `null` when no target of it exists. */
+type FolderTarget = { target: CatalogTarget | null; issues: ScanIssue[] };
+
 /**
  * The one item of `folderPath`: its existing `rootSubpaths`, and its existing profile subpaths
- * when it holds the marker. None when no target exists.
+ * when it holds the marker.
  */
-async function findFolderTargets(params: {
+async function findFolderTarget(params: {
   entry: CatalogEntry;
   selection: CatalogSelectionProfileFolders;
   folderPath: string;
   rootSubpaths: string[];
   privacyDenialCode: string | null;
-}): Promise<CatalogEntryTargets> {
+}): Promise<FolderTarget> {
   const root = await findExistingSubpaths({
     subpaths: params.rootSubpaths,
     folderPath: params.folderPath,
@@ -83,19 +91,16 @@ async function findFolderTargets(params: {
     privacyDenialCode: params.privacyDenialCode,
   });
   const issues = [...root.issues, ...profile.issues];
-  const [firstTargetPath, ...otherTargetPaths] = [...root.paths, ...profile.paths];
+  const targetPaths = toNonEmpty([...root.paths, ...profile.paths]);
 
-  if (firstTargetPath === undefined) {
-    return { targets: [], issues: issues };
+  if (targetPaths === null) {
+    return { target: null, issues: issues };
   }
 
-  const target: CatalogTarget = {
-    entry: params.entry,
-    path: params.folderPath,
-    targetPaths: [firstTargetPath, ...otherTargetPaths],
+  return {
+    target: { entry: params.entry, path: params.folderPath, targetPaths: targetPaths },
+    issues: issues,
   };
-
-  return { targets: [target], issues: issues };
 }
 
 /**

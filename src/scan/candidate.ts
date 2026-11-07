@@ -12,6 +12,7 @@ import type {
   CandidateOriginCatalog,
   CandidateOriginExplore,
 } from './candidateOrigin.js';
+import type { Measurement } from './loadPathMeasurement.js';
 
 /**
  * A path a removal takes away, with the identity the scan read, checked again right before. A
@@ -21,6 +22,22 @@ export type RemovalTarget = { path: string; identity: FileIdentity };
 
 /** What a removal takes away, never empty: the one home of its paths after the scan. */
 export type RemovalTargets<TTarget> = [TTarget, ...TTarget[]];
+
+/** An offer of its targets as a decision reads it: each target with its identity, one tally. */
+export type TargetsMeasurement<TTarget extends RemovalTarget = RemovalTarget> = Omit<
+  Measurement,
+  'identity'
+> & {
+  targets: RemovalTargets<TTarget>;
+};
+
+/**
+ * True when a target is a symbolic link, which the scan never offers: its deletion would take the
+ * link, not the place the rule judged.
+ */
+export function hasSymbolicLinkTarget(measurement: TargetsMeasurement): boolean {
+  return measurement.targets.some((target) => target.identity.kind === 'symbolicLink');
+}
 
 /** An evict also needs "still downloaded and untouched": its recheck compares these with a fresh lstat. */
 export type EvictTarget = RemovalTarget & { modifiedMs: number; accessedMs: number };

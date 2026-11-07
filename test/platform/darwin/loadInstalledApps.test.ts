@@ -16,12 +16,9 @@ import { testOnPosix } from '../../support/posixOnly.js';
 /** The user running the test owns every fixture bundle. */
 const FIXTURE_OWNER_UID = process.getuid?.() ?? null;
 
-function buildInfoPlistText(params: {
-  bundleId: string;
-  platformVersion?: string | undefined;
-}): string {
+function buildInfoPlistText(params: { bundleId: string; platformVersion: string | null }): string {
   const platformVersionLines =
-    params.platformVersion === undefined
+    params.platformVersion === null
       ? ''
       : `<key>DTPlatformVersion</key>
 <string>${params.platformVersion}</string>
@@ -47,7 +44,10 @@ async function createFixtureBundle(params: {
   await createFixtureDirectory({ path: contentsPath });
   await writeFile(
     join(contentsPath, 'Info.plist'),
-    buildInfoPlistText({ bundleId: params.bundleId, platformVersion: params.platformVersion }),
+    buildInfoPlistText({
+      bundleId: params.bundleId,
+      platformVersion: params.platformVersion ?? null,
+    }),
   );
 }
 
@@ -69,11 +69,11 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
     await createFixtureDirectory({ path: join(innerPath, 'PlugIns', 'Widget.appex') });
     await writeFile(
       join(innerPath, 'Info.plist'),
-      buildInfoPlistText({ bundleId: 'com.example.pocket' }),
+      buildInfoPlistText({ bundleId: 'com.example.pocket', platformVersion: null }),
     );
     await writeFile(
       join(innerPath, 'PlugIns', 'Widget.appex', 'Info.plist'),
-      buildInfoPlistText({ bundleId: 'com.example.pocket.widget' }),
+      buildInfoPlistText({ bundleId: 'com.example.pocket.widget', platformVersion: null }),
     );
     await symlink('Wrapper/Pocket.app', join(wrapperPath, 'WrappedBundle'));
 

@@ -4,23 +4,15 @@ import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import { toNonEmpty } from '../system/nonEmptyList.js';
 import { buildFailureIssues } from './buildReadIssue.js';
-import type { CandidateDecision, RemovalTarget, RemovalTargets } from './candidate.js';
-import type { Measurement } from './loadPathMeasurement.js';
+import type { CandidateDecision, RemovalTarget, TargetsMeasurement } from './candidate.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
 import type { ScanPhase } from './scanPhase.js';
 import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 /** A path to go as its finder found it, with what else its recheck compares, such as its times. */
 export type FoundTarget = { path: string };
-
-/** One offer of its targets as a decision reads it: each target with its identity, and one tally. */
-export type TargetsMeasurement<TTarget extends RemovalTarget = RemovalTarget> = Omit<
-  Measurement,
-  'identity'
-> & {
-  targets: RemovalTargets<TTarget>;
-};
 
 /** The absolute paths inside the targets that other entries offer, so the tally holds none of them. */
 export type TargetsCarve = { pathRules: PathRules; carvedPaths: string[] };
@@ -62,17 +54,20 @@ export function loadMeasuredTargetsPhase<TFound extends FoundTarget>(params: {
       return { decisions: [], issues: issues };
     }
 
-    const [firstTarget, ...otherTargets] = reads.flatMap((read): (TFound & RemovalTarget)[] =>
-      read.identity.kind === 'succeeded' ? [{ ...read.found, identity: read.identity.value }] : [],
+    const targets = toNonEmpty(
+      reads.flatMap((read): (TFound & RemovalTarget)[] =>
+        read.identity.kind === 'succeeded'
+          ? [{ ...read.found, identity: read.identity.value }]
+          : [],
+      ),
     );
 
-    if (firstTarget === undefined) {
+    if (targets === null) {
       return { decisions: [], issues: [] };
     }
 
-    const targets: RemovalTargets<TFound & RemovalTarget> = [firstTarget, ...otherTargets];
     const targetPaths = targets.map((target) => target.path);
-    const measured = await loadPathMeasurement({
+    const { latestModifiedMs, ...tally } = await loadPathMeasurement({
       paths:
         params.carve === null
           ? targetPaths
@@ -83,19 +78,14 @@ export function loadMeasuredTargetsPhase<TFound extends FoundTarget>(params: {
 
     // No target could be read right after its identity was: each vanished or changed meanwhile.
     // A target that holds nothing but carved paths leaves nothing to measure either.
-    if (measured.latestModifiedMs === null) {
+    if (latestModifiedMs === null) {
       return { decisions: [], issues: [] };
     }
 
     const measurement: TargetsMeasurement<TFound & RemovalTarget> = {
+      ...tally,
+      latestModifiedMs: latestModifiedMs,
       targets: targets,
-      allocatedBytes: measured.allocatedBytes,
-      entryCount: measured.entryCount,
-      unreadableCount: measured.unreadableCount,
-      privateSizeFallbackCount: measured.privateSizeFallbackCount,
-      isComplete: measured.isComplete,
-      latestModifiedMs: measured.latestModifiedMs,
-      holdsOtherVolume: measured.holdsOtherVolume,
     };
     const decision = skipOfferHoldingOtherVolume({
       decision: await params.decide(measurement),
@@ -152,19 +142,4 @@ async function listUncarvedPaths(params: {
   }
 
   return uncarvedPaths;
-}
-
-/** The found form of plain paths, which carry nothing else to compare. */
-export function buildFoundTargets(paths: [string, ...string[]]): [FoundTarget, ...FoundTarget[]] {
-  const [firstPath, ...otherPaths] = paths;
-
-  return [{ path: firstPath }, ...otherPaths.map((path) => ({ path: path }))];
-}
-
-/**
- * True when a target is a symbolic link, which the scan never offers: its deletion would take the
- * link, not the place the rule judged.
- */
-export function hasSymbolicLinkTarget(measurement: TargetsMeasurement): boolean {
-  return measurement.targets.some((target) => target.identity.kind === 'symbolicLink');
 }

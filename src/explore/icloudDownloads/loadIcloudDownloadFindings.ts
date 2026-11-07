@@ -1,6 +1,7 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
+import { toNonEmpty } from '../../system/nonEmptyList.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeToolResult, ExploreProbeToolRun } from '../exploreProbe.js';
 import type {
@@ -8,7 +9,6 @@ import type {
   ExploreFinding,
   ExploreFoundEvictFile,
 } from '../exploreUnit.js';
-import { toNonEmpty } from '../exploreUnit.js';
 import { formatCountText, formatIsoDay } from '../formatLimitTexts.js';
 import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import { loadWalkedFiles } from '../loadWalkedFiles.js';
@@ -38,16 +38,14 @@ type IcloudPlaceFiles = { files: ExploreFoundEvictFile[]; isComplete: boolean };
 export async function loadIcloudDownloadFindings(
   run: ExploreProbeToolRun,
 ): Promise<ExploreProbeToolResult> {
-  const rootNames = run.platform.explore.icloudDriveRoot;
-
-  if (rootNames === null) {
+  if (run.platform.explore.icloudDriveRoot === null) {
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
   const rootPath = joinAbsolutePath({
     rules: run.environment.pathRules,
     parentPath: run.environment.homeDir,
-    names: rootNames,
+    names: run.platform.explore.icloudDriveRoot,
   });
   const places = await loadIcloudPlaces({ run: run, rootPath: rootPath });
 

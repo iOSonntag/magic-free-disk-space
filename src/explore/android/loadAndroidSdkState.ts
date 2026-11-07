@@ -17,6 +17,7 @@ import {
   loadAndroidPackageFolders,
 } from './loadAndroidPackageFolder.js';
 import type { AndroidSdkRoot } from './loadAndroidSdkRoots.js';
+import { loadEachAndroidSdkRoot } from './loadAndroidSdkRoots.js';
 import type { AndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidIniText } from './parseAndroidIniText.js';
@@ -94,26 +95,18 @@ export async function loadAndroidSdkState(params: {
   sdkRoots: AndroidSdkRoot[];
   privacyDenialCode: string | null;
 }): Promise<Result<AndroidSdkState, ExploreFileUnreadable>> {
-  const sdks: AndroidSdk[] = [];
+  const sdks = await loadEachAndroidSdkRoot({
+    roots: params.sdkRoots,
+    loadRoot: (sdkRoot) =>
+      loadAndroidSdk({
+        pathRules: params.pathRules,
+        sdkRoot: sdkRoot.path,
+        privacyDenialCode: params.privacyDenialCode,
+      }),
+  });
 
-  for (const sdkRoot of params.sdkRoots) {
-    const sdk = await loadAndroidSdk({
-      pathRules: params.pathRules,
-      sdkRoot: sdkRoot.path,
-      privacyDenialCode: params.privacyDenialCode,
-    });
-
-    if (sdk.kind === 'failed') {
-      if (sdkRoot.isRequired) {
-        return sdk;
-      }
-
-      continue;
-    }
-
-    if (sdk.value !== null) {
-      sdks.push(sdk.value);
-    }
+  if (sdks.kind === 'failed') {
+    return sdks;
   }
 
   const avds = await loadAndroidAvds({
@@ -130,7 +123,7 @@ export async function loadAndroidSdkState(params: {
     return avds;
   }
 
-  return { kind: 'succeeded', value: { sdks: sdks, avds: avds.value } };
+  return { kind: 'succeeded', value: { sdks: sdks.value, avds: avds.value } };
 }
 
 async function loadAndroidSdk(params: {

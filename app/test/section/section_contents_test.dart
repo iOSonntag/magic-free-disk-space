@@ -6,10 +6,7 @@ import 'package:magic_free_disk_space/section/advice_card.dart';
 import 'package:magic_free_disk_space/section/item_group_card.dart';
 
 import '../support/sample_events.dart';
-
-List<int> _listNumbers(List<ItemView> items) {
-  return [for (final ItemView item in items) item.number];
-}
+import '../support/test_items.dart';
 
 void main() {
   final ScannedEvent sampleScan = loadSampleEvent<ScannedEvent>();
@@ -21,8 +18,8 @@ void main() {
         SectionKey.caches,
       );
 
-      expect(_listNumbers(caches.getGroupItems(ShownItemGroup.safe)), [1]);
-      expect(_listNumbers(caches.getGroupItems(ShownItemGroup.review)), [2]);
+      expect(getItemNumbers(caches.getGroupItems(ShownItemGroup.safe)), [1]);
+      expect(getItemNumbers(caches.getGroupItems(ShownItemGroup.review)), [2]);
       expect(caches.getGroupItems(ShownItemGroup.careful), isEmpty);
       expect(caches.adviceItems, isEmpty);
     });
@@ -39,7 +36,7 @@ void main() {
       ];
       expect(exploreNumbers, isNotEmpty);
       expect(
-        _listNumbers(developerTools.getGroupItems(ShownItemGroup.review)),
+        getItemNumbers(developerTools.getGroupItems(ShownItemGroup.review)),
         exploreNumbers,
       );
       expect(
@@ -65,16 +62,18 @@ void main() {
     });
   });
 
-  test('listSelectedItems and sumItemSizes add up the selection', () {
+  test('listSelectedItems and sumItemSizes add up the selection, and its text says when it is a lower bound', () {
     final List<ItemView> selected = listSelectedItems(sampleScan, {1, 2});
 
-    expect(_listNumbers(selected), [1, 2]);
+    expect(getItemNumbers(selected), [1, 2]);
     final ItemSizeSum selectedSize = sumItemSizes(selected);
     expect(selectedSize.allocatedBytes, 10000000);
     expect(selectedSize.isComplete, isFalse);
+    expect(formatItemSizeSumText(selectedSize), 'at least 10 MB');
     final ItemSizeSum emptySize = sumItemSizes(const []);
     expect(emptySize.allocatedBytes, 0);
     expect(emptySize.isComplete, isTrue);
+    expect(formatItemSizeSumText(emptySize), '0 B');
   });
 
   group('section totals', () {
@@ -84,6 +83,8 @@ void main() {
         titleText: 'Future things',
         allocatedBytes: 3000000,
         isComplete: true,
+        removableBytes: 1000000,
+        isRemovableComplete: true,
         itemCount: 1,
         safeBytes: 0,
         adviceCount: 0,
@@ -93,6 +94,8 @@ void main() {
         titleText: 'Other future',
         allocatedBytes: 2000000,
         isComplete: false,
+        removableBytes: 2000000,
+        isRemovableComplete: false,
         itemCount: 2,
         safeBytes: 1000000,
         adviceCount: 1,
@@ -102,6 +105,8 @@ void main() {
         titleText: 'Caches',
         allocatedBytes: 1000000,
         isComplete: true,
+        removableBytes: 1000000,
+        isRemovableComplete: true,
         itemCount: 1,
         safeBytes: 1000000,
         adviceCount: 0,
@@ -121,6 +126,8 @@ void main() {
       expect(unknown.titleText, 'Future things and Other future');
       expect(unknown.allocatedBytes, 5000000);
       expect(unknown.isComplete, isFalse);
+      expect(unknown.removableBytes, 3000000);
+      expect(unknown.isRemovableComplete, isFalse);
       expect(unknown.itemCount, 3);
       expect(unknown.safeBytes, 1000000);
       expect(unknown.adviceCount, 1);
@@ -163,6 +170,8 @@ void main() {
         titleText: 'Handled by its own app',
         allocatedBytes: 0,
         isComplete: true,
+        removableBytes: 0,
+        isRemovableComplete: true,
         itemCount: 0,
         safeBytes: 0,
         adviceCount: 2,
@@ -219,8 +228,8 @@ void main() {
     });
 
     test('mark a leftover matched by its name, and none matched by its bundle id', () {
-      final ItemView byName = sampleScan.selectableItems.singleWhere((ItemView item) => item.number == 4);
-      final ItemView byBundleId = sampleScan.selectableItems.singleWhere((ItemView item) => item.number == 5);
+      final ItemView byName = getSampleItem(4);
+      final ItemView byBundleId = getSampleItem(5);
 
       expect(formatItemFactsText(byName, now: now), endsWith(' · Matched by name'));
       expect(formatItemFactsText(byBundleId, now: now), isNot(contains('Matched by name')));
@@ -242,9 +251,9 @@ void main() {
 
   group('the group toggle', () {
     test('shows all, none, or some of its items ticked', () {
-      expect(findGroupSelectValue([1, 2], {1, 2}), isTrue);
-      expect(findGroupSelectValue([1, 2], {}), isFalse);
-      expect(findGroupSelectValue([1, 2], {2, 7}), isNull);
+      expect(getGroupSelectValue([1, 2], {1, 2}), isTrue);
+      expect(getGroupSelectValue([1, 2], {}), isFalse);
+      expect(getGroupSelectValue([1, 2], {2, 7}), isNull);
     });
   });
 

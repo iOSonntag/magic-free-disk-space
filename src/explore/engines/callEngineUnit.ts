@@ -211,10 +211,13 @@ function readRemovalAnswer(params: {
     }
   }
 
-  const status = params.answer.value.status;
-
   if (params.request.prunedRecordId === null) {
-    return { outcome: 'removed', freedBytes: params.request.sizeBytes, status: status, code: null };
+    return {
+      outcome: 'removed',
+      freedBytes: params.request.sizeBytes,
+      status: params.answer.value.status,
+      code: null,
+    };
   }
 
   const prune = parseEngineJson({
@@ -223,15 +226,30 @@ function readRemovalAnswer(params: {
   });
 
   if (prune.kind === 'failed') {
-    return { outcome: 'failed', freedBytes: 0, status: status, code: 'badAnswer' };
+    return {
+      outcome: 'failed',
+      freedBytes: 0,
+      status: params.answer.value.status,
+      code: 'badAnswer',
+    };
   }
 
   if (!prune.value.deletedIds.includes(params.request.prunedRecordId)) {
     // The engine prunes no record a build holds, and says so only by leaving it out.
-    return { outcome: 'engineInUse', freedBytes: 0, status: status, code: null };
+    return {
+      outcome: 'engineInUse',
+      freedBytes: 0,
+      status: params.answer.value.status,
+      code: null,
+    };
   }
 
-  return { outcome: 'removed', freedBytes: prune.value.freedBytes, status: status, code: null };
+  return {
+    outcome: 'removed',
+    freedBytes: prune.value.freedBytes,
+    status: params.answer.value.status,
+    code: null,
+  };
 }
 
 function readRefusal(params: { status: number | null; code: string | null }): EngineUnitCall {

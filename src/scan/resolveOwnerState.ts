@@ -145,6 +145,24 @@ export function findOwnerBundlePaths(params: {
 }
 
 /**
+ * True when an owner is set and no app of the complete list of installed apps is it; false for no
+ * owner, and while the list is incomplete, since the owner may be an app it misses.
+ */
+export function isOwnerUninstalled(params: {
+  owner: CatalogOwner | null;
+  installedApps: InstalledApp[];
+  isInstalledAppListComplete: boolean;
+}): boolean {
+  const owner = params.owner;
+
+  if (owner === null || !params.isInstalledAppListComplete) {
+    return false;
+  }
+
+  return !params.installedApps.some((app) => isOwnerApp({ owner: owner, app: app }));
+}
+
+/**
  * The name of the installed app that is the owner: for a bundle id, the app of that id itself
  * before an app that nests it as a helper; for a family, its first installed app. `null` when no
  * installed app is the owner.

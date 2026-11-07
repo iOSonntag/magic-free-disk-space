@@ -1,6 +1,6 @@
+import { toNonEmpty } from '../../system/nonEmptyList.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreFoundPaths, ExploreProbeFindings } from '../exploreUnit.js';
-import { toNonEmpty } from '../exploreUnit.js';
 import { formatDaySpan } from '../formatLimitTexts.js';
 import {
   CLAUDE_TRANSCRIPT_UNTOUCHED_MS,

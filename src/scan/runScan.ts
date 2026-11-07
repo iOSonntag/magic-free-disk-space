@@ -1,4 +1,4 @@
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
@@ -18,6 +18,7 @@ import type { EntryReads } from '../system/entryReads.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
+import { mapNonEmpty } from '../system/nonEmptyList.js';
 import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -52,12 +53,13 @@ import { DAY_MS, SCAN_LIMITS } from './limits.js';
 import { listCandidateFootprint } from './listCandidateFootprint.js';
 import { loadExplorePhase } from './loadExplorePhase.js';
 import { loadMeasuredPhase } from './loadMeasuredPhase.js';
-import { buildFoundTargets, loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
+import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
   buildAppOwner,
   findOwnerAppName,
   findOwnerBundlePaths,
+  isOwnerUninstalled,
   resolveOwnerState,
   resolveTargetOwner,
 } from './resolveOwnerState.js';
@@ -140,10 +142,11 @@ const XCODE_BUNDLE_ID_PREFIX = 'com.apple.dt.Xcode';
  */
 const runItemMeasurement = createConcurrencyLimit({ maxConcurrent: 4 });
 
-/** Names whose changes say nothing about whether a project is in use. */
-const PROJECT_ACTIVITY_EXCLUDED_NAMES = [
-  ...new Set([...PROJECT_ARTIFACT_RULES.map((rule) => rule.artifactName), '.git']),
-];
+/**
+ * Names whose changes at any depth say nothing about whether a project is in use; its artifact
+ * folders are left out by the paths the project walk found.
+ */
+const PROJECT_ACTIVITY_EXCLUDED_NAMES = ['.git'];
 
 /**
  * Scans every source of leftovers and decides about each item. Reads only; it deletes nothing.
@@ -544,8 +547,19 @@ async function loadCatalogPhase(params: {
       loadCatalogTargetPhase({ context: params.context, target: target }),
     ),
   );
+  // After the targets, so a skip holds back no earlier entry's offer of the same path.
+  const overlapping: ScanPhase = {
+    decisions: found.overlappingTargets.map((target) => ({
+      kind: 'skip',
+      path: target.path,
+      reason: 'overlapsEarlierCandidate',
+    })),
+    issues: [],
+  };
 
-  return mergeScanPhases({ phases: [{ decisions: [], issues: found.issues }, ...targetPhases] });
+  return mergeScanPhases({
+    phases: [{ decisions: [], issues: found.issues }, ...targetPhases, overlapping],
+  });
 }
 
 async function loadCatalogTargetPhase(params: {
@@ -565,12 +579,18 @@ async function loadCatalogTargetPhase(params: {
     return { decisions: [{ kind: 'skip', path: path, reason: 'systemOwned' }], issues: [] };
   }
 
-  const pathRules = params.context.environment.pathRules;
-  const carvedPaths = buildCarvedPaths({ pathRules: pathRules, entry: entry, path: path });
+  const carvedPaths = buildCarvedPaths({
+    pathRules: params.context.environment.pathRules,
+    entry: entry,
+    path: path,
+  });
 
   return loadMeasuredTargetsPhase({
-    found: buildFoundTargets(params.target.targetPaths),
-    carve: carvedPaths.length === 0 ? null : { pathRules: pathRules, carvedPaths: carvedPaths },
+    found: mapNonEmpty(params.target.targetPaths, (targetPath) => ({ path: targetPath })),
+    carve:
+      carvedPaths.length === 0
+        ? null
+        : { pathRules: params.context.environment.pathRules, carvedPaths: carvedPaths },
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.context.entryReads,
@@ -586,6 +606,7 @@ async function loadCatalogTargetPhase(params: {
                 staleDays: params.context.staleDays,
               }),
               excludedNames: [],
+              excludedPaths: new Set(),
               maxEntries: SCAN_LIMITS.probeMaxEntries,
               deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
               entryReads: params.context.entryReads,
@@ -610,6 +631,11 @@ async function loadCatalogTargetPhase(params: {
           owner: owner,
           installedApps: params.context.installedApps,
         }),
+        isOwnerUninstalled: isOwnerUninstalled({
+          owner: owner,
+          installedApps: params.context.installedApps,
+          isInstalledAppListComplete: params.context.isInstalledAppListComplete,
+        }),
         activity: activity,
         minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
         carvedPaths: carvedPaths,
@@ -631,18 +657,25 @@ async function loadArtifactPhase(params: {
   projectWalk: Promise<ProjectWalk>;
 }): Promise<ScanPhase> {
   const found = await params.projectWalk;
+  const artifactPaths = new Set(found.artifacts.map((finding) => finding.artifactPath));
   const findingPhases = await Promise.all(
     found.artifacts.map((finding) =>
-      loadArtifactFindingPhase({ context: params.context, finding: finding }),
+      loadArtifactFindingPhase({
+        context: params.context,
+        finding: finding,
+        artifactPaths: artifactPaths,
+      }),
     ),
   );
 
   return mergeScanPhases({ phases: [{ decisions: [], issues: found.issues }, ...findingPhases] });
 }
 
+/** One artifact, judged by the activity of its project less every artifact the walk found. */
 function loadArtifactFindingPhase(params: {
   context: ScanContext;
   finding: ArtifactFinding;
+  artifactPaths: ReadonlySet<string>;
 }): Promise<ScanPhase> {
   return loadMeasuredPhase({
     path: params.finding.artifactPath,
@@ -655,6 +688,7 @@ function loadArtifactFindingPhase(params: {
         path: params.finding.projectRoot,
         cutoffMs: params.context.staleCutoffMs,
         excludedNames: PROJECT_ACTIVITY_EXCLUDED_NAMES,
+        excludedPaths: params.artifactPaths,
         maxEntries: SCAN_LIMITS.probeMaxEntries,
         deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
         entryReads: params.context.entryReads,
@@ -728,21 +762,19 @@ async function loadUserFilePhase(params: { context: ScanContext }): Promise<Scan
     rootDirs: params.context.userFileRootRelativePaths.map((relativePath) =>
       join(params.context.environment.homeDir, relativePath),
     ),
+    artifactRules: PROJECT_ARTIFACT_RULES,
     minAllocatedBytes: SCAN_LIMITS.minUserFileBytes,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
     entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
   });
-  // A large file inside a dependency or git folder belongs to its project, not to the user.
-  const decisions = found.findings
-    .filter((finding) => !isInsideProjectMachinery({ path: finding.path }))
-    .map((finding) =>
-      decideUserFileCandidate({
-        finding: finding,
-        unusedCutoffMs: params.context.unusedCutoffMs,
-        minUserFileBytes: SCAN_LIMITS.minUserFileBytes,
-      }),
-    );
+  const decisions = found.findings.map((finding) =>
+    decideUserFileCandidate({
+      finding: finding,
+      unusedCutoffMs: params.context.unusedCutoffMs,
+      minUserFileBytes: SCAN_LIMITS.minUserFileBytes,
+    }),
+  );
 
   return { decisions: decisions, issues: found.issues };
 }
@@ -849,12 +881,6 @@ function isProtectedDeveloperApp(params: {
   }
 
   return params.appRealPath === params.activeXcodeBundlePath.value;
-}
-
-function isInsideProjectMachinery(params: { path: string }): boolean {
-  const segments = params.path.split(sep);
-
-  return segments.some((segment) => PROJECT_ACTIVITY_EXCLUDED_NAMES.includes(segment));
 }
 
 function buildCommandIssues(params: { results: Result<unknown, CommandFailure>[] }): ScanIssue[] {

@@ -7,7 +7,7 @@ import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreDirectoryEntries, loadExploreEntryStats } from '../loadExploreRead.js';
 
 /** Claude Code's transcripts below the home folder, one folder per project. */
-export const CLAUDE_PROJECTS_PATH_NAMES = ['.claude', 'projects'];
+const CLAUDE_PROJECTS_PATH_NAMES = ['.claude', 'projects'];
 
 /** A file or a folder directly in a project folder; a link there is never one. */
 export type ClaudeProjectEntry = {
@@ -95,9 +95,7 @@ export async function loadClaudeProjectState(params: {
   const projectEntries: ClaudeProjectEntry[] = [];
 
   for (const entry of entries.value) {
-    const kind = entry.kind;
-
-    if (kind !== 'file' && kind !== 'directory') {
+    if (entry.kind !== 'file' && entry.kind !== 'directory') {
       continue;
     }
 
@@ -115,11 +113,11 @@ export async function loadClaudeProjectState(params: {
       return stats;
     }
 
-    if (stats.value !== null && stats.value.kind === kind) {
+    if (stats.value?.kind === entry.kind) {
       projectEntries.push({
         name: entry.name,
         path: path,
-        kind: kind,
+        kind: entry.kind,
         modifiedMs: stats.value.modifiedMs,
       });
     }

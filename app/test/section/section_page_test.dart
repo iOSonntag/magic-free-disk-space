@@ -31,14 +31,6 @@ ScannedEvent _buildScanWithEveryLineKind() {
   return parseScanJson(json);
 }
 
-/// The sample scan with Xcode (#3), which the bridge never plans, in the
-/// Review first group of Caches beside the App cache (#2).
-ScannedEvent _buildScanWithNeverItemInCaches() {
-  final Map<String, Object?> json = loadSampleJson('scanned');
-  listScanItemJsons(json).singleWhere((Map<String, Object?> item) => item['number'] == 3)['sectionKey'] = 'caches';
-  return parseScanJson(json);
-}
-
 Future<CleanerController> _pumpSectionPage(
   WidgetTester tester, {
   required SectionKey sectionKey,
@@ -127,7 +119,7 @@ void main() {
     final CleanerController controller = await _pumpSectionPage(
       tester,
       sectionKey: SectionKey.caches,
-      scan: _buildScanWithNeverItemInCaches(),
+      scan: loadScanWithNeverItemInCaches(),
     );
     await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
 
@@ -141,12 +133,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_readSelectedNumbers(controller), {2});
-    expect(
-      tester.widget<StageCheckMark>(
-        find.descendant(of: find.byKey(const ItemRowKey(3)), matching: find.byType(StageCheckMark)),
-      ).enabled,
-      isFalse,
-    );
+    expect(readRowCheckMark(tester, 3).enabled, isFalse);
     expectEveryTappableNodeLabelled();
   });
 
@@ -287,6 +274,7 @@ void main() {
     );
     expect(find.text('TO HANDLE YOURSELF'), findsOneWidget);
     expect(adviceCard, findsOneWidget);
+    expect(find.descendant(of: adviceCard, matching: find.text('6.0 MB')), findsOneWidget);
     expect(
       find.descendant(of: adviceCard, matching: find.text('Run the tool prune command.')),
       findsOneWidget,
@@ -304,6 +292,20 @@ void main() {
 
     expect(urlOpener.requestedUrls.single.text, '/Users/me/Library/ToolStore');
     expectEveryTappableNodeLabelled();
+  });
+
+  testWidgets('shows the size of advice measured in part as a lower bound', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, Object?> json = loadSampleJson('scanned');
+    listScanAdviceJsons(json).singleWhere((Map<String, Object?> advice) => advice['title'] == 'Tool store')['isComplete'] =
+        false;
+    await _pumpSectionPage(tester, sectionKey: SectionKey.developerTools, scan: parseScanJson(json));
+
+    final Finder adviceCard = find.byKey(
+      const AdviceCardKey('catalog:tool-store:/Users/me/Library/ToolStore'),
+    );
+    expect(find.descendant(of: adviceCard, matching: find.text('at least 6.0 MB')), findsOneWidget);
   });
 
   testWidgets('says that a section the scan left empty holds nothing', (

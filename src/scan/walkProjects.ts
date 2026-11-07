@@ -1,6 +1,6 @@
 import { basename, dirname } from 'node:path';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import { isProjectMarkerPresent } from '../catalog/projectArtifactRules.js';
+import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { ProjectPinFileRef } from '../explore/projectPins/projectPins.js';
 import {
   matchProjectPinFile,
@@ -79,15 +79,13 @@ export async function walkProjects(params: {
 
     // An unmarked folder of an artifact's name is no project to search either, such as `vendor`.
     if (artifactNames.has(entry.name)) {
-      const markedRule = params.rules.find(
-        (rule) =>
-          rule.artifactName === entry.name &&
-          rule.markers.some((marker) =>
-            isProjectMarkerPresent({ marker: marker, entryNames: entry.siblingNames }),
-          ),
-      );
+      const markedRule = findMarkedArtifactRule({
+        rules: params.rules,
+        name: entry.name,
+        projectEntryNames: entry.siblingNames,
+      });
 
-      if (markedRule !== undefined) {
+      if (markedRule !== null) {
         artifacts.push({
           artifactPath: entry.path,
           projectRoot: dirname(entry.path),

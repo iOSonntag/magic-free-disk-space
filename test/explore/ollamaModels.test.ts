@@ -6,7 +6,10 @@ import type {
   ExplorePathUnitOllamaModel,
   ExploreProbeFindings,
 } from '../../src/explore/exploreUnit.js';
-import { formatOllamaModelName } from '../../src/explore/ollamaModels/buildOllamaModelFindings.js';
+import {
+  buildOllamaModelFindings,
+  formatOllamaModelName,
+} from '../../src/explore/ollamaModels/buildOllamaModelFindings.js';
 import { compareOllamaModelUnit } from '../../src/explore/ollamaModels/compareOllamaModelUnit.js';
 import { decideOllamaModelOffers } from '../../src/explore/ollamaModels/decideOllamaModelOffers.js';
 import { loadOllamaModelFindings } from '../../src/explore/ollamaModels/loadOllamaModelFindings.js';
@@ -17,9 +20,9 @@ import type {
 import { parseOllamaModelName } from '../../src/explore/ollamaModels/parseOllamaModelName.js';
 import { recheckOllamaModelUnit } from '../../src/explore/ollamaModels/recheckOllamaModelUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
-  createFixtureDirectory,
   createFixtureFile,
   updateModifiedMs,
   writeFixtureTextFile,
@@ -28,7 +31,6 @@ import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   buildTestProbeRun,
-  DAY_MS,
   getProbeFindings,
   listUnitsOfKind,
   withFixtureHome,
@@ -98,8 +100,6 @@ async function writeManifest(params: {
 }
 
 async function writeBlobs(params: { environment: Environment; hexes: string[] }): Promise<void> {
-  await createFixtureDirectory({ path: join(buildModelsPath(params), 'blobs') });
-
   for (const hex of params.hexes) {
     await createFixtureFile({
       path: buildBlobPath({ environment: params.environment, hex: hex }),
@@ -129,14 +129,13 @@ async function createTwoModels(params: { environment: Environment }): Promise<vo
   });
 }
 
-function findUnit(params: {
+/** The unit of the model whose manifest lies at `manifestPath`; throws when it was not offered. */
+function getModelUnit(params: {
   findings: ExploreProbeFindings;
-  environment: Environment;
-  tag: string;
+  manifestPath: string;
 }): ExplorePathUnitOllamaModel {
-  const manifestPath = buildManifestPath(params);
   const unit = listUnitsOfKind({ findings: params.findings, kind: 'ollamaModel' }).find(
-    (candidate) => candidate.manifestPath === manifestPath,
+    (candidate) => candidate.manifestPath === params.manifestPath,
   );
 
   if (unit === undefined) {
@@ -184,28 +183,6 @@ function buildValueState(params: {
     manifests: params.manifests,
     isEveryEntryKnown: params.isEveryEntryKnown ?? true,
     blobPaths: new Map(params.blobHexes.map((hex) => [`sha256:${hex}`, buildValueBlobPath(hex)])),
-  };
-}
-
-/** The unit the probe builds for the manifest's offer in `state`. */
-function buildValueUnit(params: {
-  state: OllamaModelStateInstalled;
-  manifest: OllamaManifest;
-}): ExplorePathUnitOllamaModel {
-  const offer = decideOllamaModelOffers({ state: params.state })?.find(
-    (candidate) => candidate.manifest.path === params.manifest.path,
-  );
-
-  if (offer === undefined) {
-    throw new Error('The model was not offered.');
-  }
-
-  return {
-    kind: 'ollamaModel',
-    modelName: `${MODEL}:${params.manifest.name.tag}`,
-    manifestPath: offer.manifest.path,
-    downloadedAtMs: offer.manifest.modifiedMs,
-    foundPaths: [offer.manifest.path, ...offer.blobPaths],
   };
 }
 
@@ -294,6 +271,7 @@ describe('compareOllamaModelUnit', () => {
     manifests: [latest, small],
     blobHexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.smallConfig, DIGESTS.shared],
   });
+  const scannedFindings = buildOllamaModelFindings({ state: scanned, processCommands: [] });
 
   test('is unchanged once the model it shared a blob with is gone, so the blob is its own', () => {
     const afterLatest = buildValueState({
@@ -303,7 +281,7 @@ describe('compareOllamaModelUnit', () => {
 
     expect(
       compareOllamaModelUnit({
-        unit: buildValueUnit({ state: scanned, manifest: small }),
+        unit: getModelUnit({ findings: scannedFindings, manifestPath: small.path }),
         state: afterLatest,
         processCommands: [],
       }),
@@ -315,7 +293,7 @@ describe('compareOllamaModelUnit', () => {
 
     expect(
       compareOllamaModelUnit({
-        unit: buildValueUnit({ state: scanned, manifest: latest }),
+        unit: getModelUnit({ findings: scannedFindings, manifestPath: latest.path }),
         state: buildValueState({
           manifests: [latest, small, copy],
           blobHexes: [
@@ -336,7 +314,7 @@ describe('compareOllamaModelUnit', () => {
 
     expect(
       compareOllamaModelUnit({
-        unit: buildValueUnit({ state: scanned, manifest: latest }),
+        unit: getModelUnit({ findings: scannedFindings, manifestPath: latest.path }),
         state: buildValueState({
           manifests: [pulledAgain, small],
           blobHexes: [
@@ -354,7 +332,7 @@ describe('compareOllamaModelUnit', () => {
   test('is busy while Ollama runs', () => {
     expect(
       compareOllamaModelUnit({
-        unit: buildValueUnit({ state: scanned, manifest: latest }),
+        unit: getModelUnit({ findings: scannedFindings, manifestPath: latest.path }),
         state: scanned,
         processCommands: ['ollama run llama3'],
       }),
@@ -415,8 +393,14 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
         await createTwoModels({ environment: environment });
 
         const probed = await loadFindings({ environment: environment });
-        const latest = findUnit({ findings: probed, environment: environment, tag: 'latest' });
-        const small = findUnit({ findings: probed, environment: environment, tag: 'small' });
+        const latest = getModelUnit({
+          findings: probed,
+          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
+        });
+        const small = getModelUnit({
+          findings: probed,
+          manifestPath: buildManifestPath({ environment: environment, tag: 'small' }),
+        });
 
         expect(probed.isComplete).toBe(true);
         expect(probed.findings.map((finding) => [finding.risk, finding.activity])).toEqual([
@@ -524,10 +508,9 @@ describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
 
         await createTwoModels({ environment: environment });
 
-        const unit = findUnit({
+        const unit = getModelUnit({
           findings: await loadFindings({ environment: environment }),
-          environment: environment,
-          tag: 'latest',
+          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
         });
 
         expect(
@@ -548,10 +531,9 @@ describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
 
         await createTwoModels({ environment: environment });
 
-        const unit = findUnit({
+        const unit = getModelUnit({
           findings: await loadFindings({ environment: environment }),
-          environment: environment,
-          tag: 'latest',
+          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
         });
 
         await writeBlobs({ environment: environment, hexes: [DIGESTS.extra] });

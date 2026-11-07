@@ -21,6 +21,7 @@ import {
   buildTestPathEnvironment,
   createFixtureFile,
   loadTestEnvironment,
+  updateModifiedMs,
   withFixtureRoot,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
@@ -316,6 +317,135 @@ describeAwaitingWin32Platform('runScan', () => {
             expect(total.allocatedBytes).toBeLessThanOrEqual(finalBytes.get(total.sectionKey) ?? 0);
           }
         }
+      },
+    });
+  });
+
+  test('offers an old large file in a folder named like an artifact only while no marker is beside it', async () => {
+    await withFixtureRoot({
+      run: async (fixtureRoot) => {
+        const moviePath = join(fixtureRoot.homeDir, 'Movies/build/old.mov');
+        await createFixtureFile({
+          path: moviePath,
+          sizeBytes: SCAN_LIMITS.minUserFileBytes,
+          modifiedMs: Date.UTC(2025, 0, 1),
+        });
+        const environment = await loadTestEnvironment({
+          fixtureRoot: fixtureRoot,
+          nowMs: Date.UTC(2026, 6, 1),
+        });
+
+        const unmarkedReport = await runTestScan({ environment: environment, catalogEntries: [] });
+        await writeFixtureTextFile({
+          path: join(fixtureRoot.homeDir, 'Movies/build.gradle'),
+          text: 'plugins {}\n',
+        });
+        const markedReport = await runTestScan({ environment: environment, catalogEntries: [] });
+
+        expect(listOfferedPaths(unmarkedReport)).toEqual([moviePath]);
+        expect(listOfferedPaths(markedReport)).toEqual([]);
+      },
+    });
+  });
+
+  test('counts an edit in a folder of the project named like an artifact as its activity', async () => {
+    await withFixtureRoot({
+      run: async (fixtureRoot) => {
+        const oldMs = Date.UTC(2025, 0, 1);
+        const projectPath = join(fixtureRoot.homeDir, 'Documents/app');
+        const nodeModulesPath = join(projectPath, 'node_modules');
+        const sourceBuildPath = join(projectPath, 'src/build');
+        await createFixtureFile({
+          path: join(projectPath, 'package.json'),
+          sizeBytes: 64,
+          modifiedMs: oldMs,
+        });
+        await createFixtureFile({
+          path: join(nodeModulesPath, 'pkg/index.js'),
+          sizeBytes: 2 * SCAN_LIMITS.minOfferedBytes,
+          modifiedMs: oldMs,
+        });
+        await createFixtureFile({
+          path: join(sourceBuildPath, 'generated.ts'),
+          sizeBytes: 64,
+          modifiedMs: Date.UTC(2026, 5, 28),
+        });
+
+        for (const folderPath of [
+          join(nodeModulesPath, 'pkg'),
+          nodeModulesPath,
+          sourceBuildPath,
+          join(projectPath, 'src'),
+          projectPath,
+        ]) {
+          await updateModifiedMs({ path: folderPath, modifiedMs: oldMs });
+        }
+
+        const report = await runTestScan({
+          environment: await loadTestEnvironment({
+            fixtureRoot: fixtureRoot,
+            nowMs: Date.UTC(2026, 6, 1),
+          }),
+          catalogEntries: [],
+        });
+
+        expect(listOfferedPaths(report)).toEqual([]);
+        expect(report.skipped).toContainEqual({ path: nodeModulesPath, reason: 'recentActivity' });
+      },
+    });
+  });
+
+  test('advises deleting the folder of a removed Docker Desktop, never starting it', async () => {
+    await withFixtureRoot({
+      run: async (fixtureRoot) => {
+        const diskImagePath = join(
+          fixtureRoot.homeDir,
+          'Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
+        );
+        await createFixtureFile({
+          path: diskImagePath,
+          sizeBytes: 2 * SCAN_LIMITS.minOfferedBytes,
+          modifiedMs: Date.UTC(2026, 0, 1),
+        });
+
+        const report = await runTestScan({
+          environment: await loadTestEnvironment({
+            fixtureRoot: fixtureRoot,
+            nowMs: Date.UTC(2026, 6, 1),
+          }),
+          catalogEntries: [getCatalogEntry('docker-desktop-disk-image')],
+        });
+        const diskImageAdvice = report.advice.find((advice) => advice.path === diskImagePath);
+
+        expect(diskImageAdvice?.advice).toContain('Docker Desktop is no longer installed');
+        expect(diskImageAdvice?.advice).not.toContain('Start');
+      },
+    });
+  });
+
+  test('offers no folder of the caches whose place an earlier entry read, though it offers nothing there', async () => {
+    await withFixtureRoot({
+      run: async (fixtureRoot) => {
+        const denoPath = join(fixtureRoot.homeDir, 'Library/Caches/deno');
+        await createFixtureFile({
+          path: join(denoPath, 'location_data/hash/kv.sqlite3'),
+          sizeBytes: SCAN_LIMITS.minOfferedBytes,
+          modifiedMs: Date.UTC(2026, 0, 1),
+        });
+
+        const report = await runTestScan({
+          environment: await loadTestEnvironment({
+            fixtureRoot: fixtureRoot,
+            nowMs: Date.UTC(2026, 6, 1),
+          }),
+          catalogEntries: [getCatalogEntry('deno-cache'), getCatalogEntry('user-caches')],
+        });
+
+        expect(listOfferedPaths(report)).toEqual([]);
+        expect(report.skipped).toContainEqual({
+          path: denoPath,
+          reason: 'overlapsEarlierCandidate',
+        });
       },
     });
   });

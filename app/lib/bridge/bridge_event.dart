@@ -172,6 +172,7 @@ final class AdviceItemView {
     required this.origin,
     required this.removal,
     required this.allocatedBytes,
+    required this.isComplete,
     required this.displayPath,
     required this.revealPath,
     required this.opener,
@@ -190,6 +191,9 @@ final class AdviceItemView {
   /// [ItemRemoval.advice], from this bridge.
   final ItemRemoval removal;
   final int allocatedBytes;
+
+  /// False when [allocatedBytes] is a lower bound.
+  final bool isComplete;
   final String? displayPath;
   final String? revealPath;
 
@@ -216,15 +220,23 @@ final class DiskSpaceView {
 final class SummaryView {
   const SummaryView({
     required this.totalBytes,
+    required this.isTotalComplete,
     required this.safeBytes,
+    required this.isSafeComplete,
     required this.disk,
   });
 
   /// The bytes of every item but a [Risk.never] one, which a plan refuses.
   final int totalBytes;
 
+  /// False when an item counted in [totalBytes] is a lower bound.
+  final bool isTotalComplete;
+
   /// The bytes of the safe groups, which "Clean safe items" frees.
   final int safeBytes;
+
+  /// False when an item of a safe group is a lower bound.
+  final bool isSafeComplete;
 
   /// `null` when the bridge could not read the volume.
   final DiskSpaceView? disk;
@@ -238,6 +250,8 @@ final class SectionTotal {
     required this.titleText,
     required this.allocatedBytes,
     required this.isComplete,
+    required this.removableBytes,
+    required this.isRemovableComplete,
     required this.itemCount,
     required this.safeBytes,
     required this.adviceCount,
@@ -251,6 +265,13 @@ final class SectionTotal {
 
   /// False when [allocatedBytes] is a lower bound.
   final bool isComplete;
+
+  /// The bytes of the items a plan may remove: every item but a [Risk.never]
+  /// one.
+  final int removableBytes;
+
+  /// False when [removableBytes] is a lower bound.
+  final bool isRemovableComplete;
   final int itemCount;
   final int safeBytes;
   final int adviceCount;
@@ -696,12 +717,16 @@ SummaryView _parseSummary(Object? json) {
       'titleText': String(),
       'lines': final List<Object?> lines,
       'totalBytes': final int totalBytes,
+      'isTotalComplete': final bool isTotalComplete,
       'safeBytes': final int safeBytes,
+      'isSafeComplete': final bool isSafeComplete,
       'disk': final Object? disk,
     } when _isLineList(lines) =>
       SummaryView(
         totalBytes: totalBytes,
+        isTotalComplete: isTotalComplete,
         safeBytes: safeBytes,
+        isSafeComplete: isSafeComplete,
         disk: disk == null ? null : _parseDiskSpace(disk),
       ),
     _ => throw const FormatException('Unknown shape of the summary.'),
@@ -729,6 +754,8 @@ SectionTotal _parseSectionTotal(Object? json) {
       'titleText': final String titleText,
       'allocatedBytes': final int allocatedBytes,
       'isComplete': final bool isComplete,
+      'removableBytes': final int removableBytes,
+      'isRemovableComplete': final bool isRemovableComplete,
       'itemCount': final int itemCount,
       'safeBytes': final int safeBytes,
       'adviceCount': final int adviceCount,
@@ -738,6 +765,8 @@ SectionTotal _parseSectionTotal(Object? json) {
         titleText: titleText,
         allocatedBytes: allocatedBytes,
         isComplete: isComplete,
+        removableBytes: removableBytes,
+        isRemovableComplete: isRemovableComplete,
         itemCount: itemCount,
         safeBytes: safeBytes,
         adviceCount: adviceCount,
@@ -862,6 +891,7 @@ AdviceItemView _parseAdviceItem(Object? json) {
       'origin': final String origin,
       'removal': final String removal,
       'allocatedBytes': final int allocatedBytes,
+      'isComplete': final bool isComplete,
       'displayPath': final String? displayPath,
       'revealPath': final String? revealPath,
       'opener': final Object? opener,
@@ -882,6 +912,7 @@ AdviceItemView _parseAdviceItem(Object? json) {
           ItemRemoval.unknown,
         ),
         allocatedBytes: allocatedBytes,
+        isComplete: isComplete,
         displayPath: displayPath,
         revealPath: revealPath,
         opener: _parseOpener(opener),

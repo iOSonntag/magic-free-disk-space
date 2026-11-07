@@ -32,15 +32,15 @@ export function isUnusedTaggedImage(image: EngineImageRecord): boolean {
 }
 
 /**
- * No container of any state uses it, and its names lie in one repository at most: the engine
- * refuses, without `force`, to remove by its id an image named in several repositories.
+ * No container of any state uses it, it has one tag at most, and its names lie in one repository
+ * at most: the engine refuses, without `force`, to remove by its id an image of several tags.
  */
 export function isUnusedImage(image: EngineImageRecord): boolean {
   const repositories = new Set(
     [...image.tags, ...image.digests].map((reference) => readReferenceRepository(reference)),
   );
 
-  return image.containerCount === 0 && repositories.size <= 1;
+  return image.containerCount === 0 && image.tags.length <= 1 && repositories.size <= 1;
 }
 
 export function isStoppedContainer(container: EngineContainerRecord): boolean {

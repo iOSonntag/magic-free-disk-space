@@ -68,6 +68,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
             },
             { entry: ENTRY, path: secondPath, targetPaths: [join(secondPath, 'Code Cache')] },
           ],
+          isPathRead: true,
           issues: [],
         });
       },
@@ -97,6 +98,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
             { entry: ENTRY, path: userDataPath, targetPaths: [join(userDataPath, 'ShaderCache')] },
             { entry: ENTRY, path: defaultPath, targetPaths: [join(defaultPath, 'GPUCache')] },
           ],
+          isPathRead: true,
           issues: [],
         });
       },
@@ -120,6 +122,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
           targets: [
             { entry: ENTRY, path: profilePath, targetPaths: [join(profilePath, 'GPUCache')] },
           ],
+          isPathRead: true,
           issues: [],
         });
       },
@@ -141,7 +144,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
 
-        expect(result).toEqual({ targets: [], issues: [] });
+        expect(result).toEqual({ targets: [], isPathRead: true, issues: [] });
       },
     });
   });
@@ -178,6 +181,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
               targetPaths: [join(appPath, 'com.apple.metal'), join(appPath, 'com.apple.metalfe')],
             },
           ],
+          isPathRead: true,
           issues: [],
         });
       },
@@ -194,7 +198,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
 
-        expect(result).toEqual({ targets: [], issues: [] });
+        expect(result).toEqual({ targets: [], isPathRead: false, issues: [] });
       },
     });
   });
@@ -215,6 +219,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
 
         expect(result).toEqual({
           targets: [],
+          isPathRead: false,
           issues: [{ path: lockedPath, reason: 'permissionDenied', detail: 'EACCES' }],
         });
       },
@@ -240,6 +245,7 @@ describeAwaitingWin32Platform('findProfileFolderTargets', () => {
 
         expect(result).toEqual({
           targets: [{ entry: ENTRY, path: openPath, targetPaths: [join(openPath, 'GPUCache')] }],
+          isPathRead: true,
           issues: [
             {
               path: join(lockedPath, 'Preferences'),

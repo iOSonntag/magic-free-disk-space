@@ -18,7 +18,7 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
-import { buildEmptyProjectPinsLoad } from '../explore/projectPinsFixtures.js';
+import { buildTestProbeStart } from '../explore/probeStartFixtures.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -42,7 +42,6 @@ import {
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
@@ -197,17 +196,13 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
         },
       ],
     });
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: 10_000,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
+        activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
+      }),
+    );
 
     const phase = await loadExplorePhase({
       environment: environment,

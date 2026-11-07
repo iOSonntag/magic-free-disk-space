@@ -176,11 +176,11 @@ class _ReviewHero extends StatelessWidget {
 /// that stay in iCloud.
 String _formatReachText(RemovalReach reach) {
   final int finalCount = reach.finalItems.length;
+  final String finalFateText = finalCount == 1
+      ? 'goes for good. It skips the Trash, so it cannot come back.'
+      : 'go for good. They skip the Trash, so they cannot come back.';
   final List<String> sentences = [
-    if (finalCount == 1)
-      '1 item goes for good. It skips the Trash, so it cannot come back.'
-    else if (finalCount > 1)
-      '$finalCount items go for good. They skip the Trash, so they cannot come back.',
+    if (finalCount > 0) '${formatItemCount(finalCount)} $finalFateText',
     if (reach.evictedItems.isNotEmpty) formatStaysInIcloudText(reach.evictedSize),
   ];
   return sentences.join(' ');
@@ -226,7 +226,6 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final SectionLook look = sectionKeyToLook(group.sectionKey);
-    final ItemSizeSum sectionSize = sumPlannedItemSizes(group.items);
     final String? title = group.title;
     return GlassCard(
       accent: look.accent,
@@ -241,13 +240,7 @@ class _SectionCard extends StatelessWidget {
                 Expanded(
                   child: title == null ? const SizedBox.shrink() : Text(title, style: TypeRamp.title),
                 ),
-                Text(
-                  formatSizeText(
-                    allocatedBytes: sectionSize.allocatedBytes,
-                    isComplete: sectionSize.isComplete,
-                  ),
-                  style: TypeRamp.figure,
-                ),
+                Text(formatItemSizeSumText(sumPlannedItemSizes(group.items)), style: TypeRamp.figure),
               ],
             ),
             const SizedBox(height: StageSpacing.small),

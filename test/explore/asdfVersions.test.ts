@@ -458,7 +458,6 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
           params.asdfPath === null ? {} : { asdf: params.asdfPath },
         ),
         projectPins: buildFoundProjectPinsLoad({ files: params.files }),
-        timeoutMs: TIMEOUT_MS,
       }),
     );
 

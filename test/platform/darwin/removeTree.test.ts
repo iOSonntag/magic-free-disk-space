@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, mkdir, stat, symlink } from 'node:fs/promises';
+import { chmod, stat, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { TreeRemovalUser } from '../../../src/platform/darwin/removeTree.js';
 import {
@@ -115,7 +115,7 @@ describeOnPosix('removeTreeAsUser', () => {
     const outsidePath = join(fixtureRoot.rootDir, 'outside', 'ro');
     const outsideChildPath = join(outsidePath, 'inner');
     await writeFixtureTextFile({ path: join(outsideChildPath, 'keep.txt'), text: 'keep\n' });
-    await mkdir(parentPath, { recursive: true });
+    await createFixtureDirectory({ path: parentPath });
     await symlink(outsidePath, join(parentPath, 'item'));
 
     for (const readOnlyPath of [outsideChildPath, outsidePath, parentPath]) {

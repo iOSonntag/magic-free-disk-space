@@ -8,7 +8,7 @@ import {
   formatIsoDay,
 } from '../../src/explore/formatLimitTexts.js';
 import { HUGGING_FACE_PARTIAL_UNTOUCHED_MS } from '../../src/explore/huggingFace/decideHuggingFaceRepoOffers.js';
-import { DAY_MS } from '../support/probeRunFixtures.js';
+import { DAY_MS } from '../../src/scan/limits.js';
 
 describe('formatDaySpan', () => {
   test('names a span by its days, one as a day', () => {

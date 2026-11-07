@@ -10,7 +10,7 @@ import { loadExploreEntryStats, loadExploreFolderNames } from '../loadExploreRea
  * `~/.lmstudio-home-pointer`, the older `~/.cache/lm-studio`, or a `downloadsFolder` of its
  * settings is not read.
  */
-export const LM_STUDIO_MODELS_PATH_NAMES = ['.lmstudio', 'models'];
+const LM_STUDIO_MODELS_PATH_NAMES = ['.lmstudio', 'models'];
 
 /** One `<publisher>/<model>` folder of the models folder. */
 export type LmStudioModelFolder = {

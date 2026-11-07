@@ -142,7 +142,6 @@ function buildRepoUnit(params: {
       return {
         kind: 'huggingFaceDetachedRevisions',
         repoPath: params.repo.repoPath,
-        revisions: params.offer.revisions,
         downloadedAtMs: params.offer.downloadedAtMs,
         foundPaths: params.offer.paths,
       };

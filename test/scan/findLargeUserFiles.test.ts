@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -54,6 +55,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -76,6 +78,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -120,6 +123,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -127,6 +131,37 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([loosePath]);
+  });
+
+  test('an artifact folder is skipped beside its marker and searched without it', async () => {
+    const markedPath = join(fixtureRoot.homeDir, 'Documents/app/build/outputs/app.apk');
+    const unmarkedPath = join(fixtureRoot.homeDir, 'Documents/clips/build/final.mov');
+
+    for (const path of [markedPath, unmarkedPath]) {
+      await createFixtureDirectory({ path: join(path, '..') });
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    await createFixtureFile({
+      path: join(fixtureRoot.homeDir, 'Documents/app/build.gradle'),
+      sizeBytes: SMALL_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+
+    const result = await findLargeUserFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      artifactRules: PROJECT_ARTIFACT_RULES,
+      minAllocatedBytes: MIN_ALLOCATED_BYTES,
+      deadlineMs: FAR_FUTURE_DEADLINE_MS,
+      entryReads: darwinPlatform.system.entryReads,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    });
+
+    expect(result.findings.map((finding) => finding.path)).toEqual([unmarkedPath]);
   });
 
   test('a file inside a package folder is not found', async () => {
@@ -140,6 +175,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -160,6 +196,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -190,6 +227,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -214,6 +252,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -235,6 +274,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -257,6 +297,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [linkedRootDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -277,6 +318,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -295,6 +337,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: buildTestEntryReads({ privateBytes: SMALL_FILE_BYTES }),
@@ -314,6 +357,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const read = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: buildTestEntryReads({ privateBytes: MIN_ALLOCATED_BYTES + 4096 }),
@@ -321,6 +365,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     });
     const unread = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: buildTestEntryReads({ privateBytes: null }),
@@ -359,6 +404,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
@@ -380,6 +426,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir, fixtureRoot.tempDir],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: 0,
       entryReads: darwinPlatform.system.entryReads,
@@ -395,6 +442,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
   test('a missing root adds nothing', async () => {
     const result = await findLargeUserFiles({
       rootDirs: [join(fixtureRoot.homeDir, 'absent')],
+      artifactRules: PROJECT_ARTIFACT_RULES,
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
       entryReads: darwinPlatform.system.entryReads,
