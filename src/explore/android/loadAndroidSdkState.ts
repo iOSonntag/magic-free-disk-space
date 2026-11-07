@@ -16,6 +16,7 @@ import {
   loadAndroidPackageFolder,
   loadAndroidPackageFolders,
 } from './loadAndroidPackageFolder.js';
+import type { AndroidSdkRoot } from './loadAndroidSdkRoots.js';
 import type { AndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidAvdName } from './parseAndroidAvdName.js';
 import { parseAndroidIniText } from './parseAndroidIniText.js';
@@ -84,12 +85,13 @@ const SYSTEM_IMAGE_FOLDER_DEPTH = 3;
 
 /**
  * Reads the SDKs at `sdkRoots` and the AVDs, for the three Android probes and the rechecks of
- * their units. A read that is absent or unfit is a fact of the state; only a failed read fails.
+ * their units. A read that is absent or unfit is a fact of the state; a failed read fails, but in
+ * a root that is not required it leaves only that root's SDK out.
  */
 export async function loadAndroidSdkState(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  sdkRoots: AbsolutePath[];
+  sdkRoots: AndroidSdkRoot[];
   privacyDenialCode: string | null;
 }): Promise<Result<AndroidSdkState, ExploreFileUnreadable>> {
   const sdks: AndroidSdk[] = [];
@@ -97,12 +99,16 @@ export async function loadAndroidSdkState(params: {
   for (const sdkRoot of params.sdkRoots) {
     const sdk = await loadAndroidSdk({
       pathRules: params.pathRules,
-      sdkRoot: sdkRoot,
+      sdkRoot: sdkRoot.path,
       privacyDenialCode: params.privacyDenialCode,
     });
 
     if (sdk.kind === 'failed') {
-      return sdk;
+      if (sdkRoot.isRequired) {
+        return sdk;
+      }
+
+      continue;
     }
 
     if (sdk.value !== null) {

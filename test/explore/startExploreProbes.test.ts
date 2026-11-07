@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from '../../src/explore/limits.js';
 import type { ProjectPins } from '../../src/explore/projectPins/projectPins.js';
-import { runExploreProbe, startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import type { ExploreProbeScan, ExploreProbeStart } from '../../src/explore/startExploreProbes.js';
+import {
+  runExploreProbe,
+  startExploreProbeScan,
+  startExploreProbes,
+} from '../../src/explore/startExploreProbes.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -16,7 +21,6 @@ import {
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -24,17 +28,12 @@ import {
   buildMisePrunableJson,
   buildSimulatorDeviceListJson,
 } from './probeOutputFixtures.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
-  buildEmptyProjectPinsLoad,
   buildSettledProjectPinsLoad,
   buildTestPinFileText,
   buildTestProjectPins,
 } from './projectPinsFixtures.js';
-
-const TIMEOUT_MS = 10_000;
-
-/** No probe these tests check judges its units by their last use. */
-const UNUSED_CUTOFF_MS = 0;
 
 /** Long enough for a probe that does not wait to have run its tool. */
 const HELD_WAIT_MS = 300;
@@ -117,25 +116,21 @@ function buildMarkerPrelude(params: { name: string }): string {
   return `fs.writeFileSync(${JSON.stringify(buildMarkerPath({ name: params.name }))}, '');`;
 }
 
-type ProbeStart = Parameters<typeof runExploreProbe>[0]['start'];
-
 /**
- * The start of the probes over the fixture home with an active Xcode, within `TIMEOUT_MS`, and
- * unless `params` says otherwise, with no tool, no process, and nothing pinned.
+ * The start of the probes over the fixture home with an active Xcode, and unless `params` says
+ * otherwise, with no tool, no process, and nothing pinned.
  */
-function buildProbeStart(params: Partial<ProbeStart>): ProbeStart {
-  return {
+function buildProbeStart(params: Partial<ExploreProbeStart>): ExploreProbeStart {
+  return buildTestProbeStart({
     environment: environment,
-    platform: buildTestProbePlatform(),
-    toolInstallLocations: buildFixtureToolLocations({}),
-    processCommands: Promise.resolve([]),
     activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-    projectPins: buildEmptyProjectPinsLoad(),
-    timeoutMs: TIMEOUT_MS,
-    unusedCutoffMs: UNUSED_CUTOFF_MS,
-    staleCutoffMs: 0,
     ...params,
-  };
+  });
+}
+
+/** The scan of `buildProbeStart`, which one probe runs in. */
+function buildProbeScan(params: Partial<ExploreProbeStart>): ExploreProbeScan {
+  return startExploreProbeScan(buildProbeStart(params));
 }
 
 describeAwaitingWin32Platform('startExploreProbes', () => {
@@ -146,9 +141,9 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       buildProbeStart({ toolInstallLocations: buildFixtureToolLocations(tools) }),
     );
 
-    const simulatorDevices = await probes.simulatorDevices;
-    const dartPubCache = await probes.dartPubCache;
-    const miseVersions = await probes.miseVersions;
+    const simulatorDevices = await probes.outcomes.simulatorDevices;
+    const dartPubCache = await probes.outcomes.dartPubCache;
+    const miseVersions = await probes.outcomes.miseVersions;
 
     if (
       simulatorDevices.kind !== 'probed' ||
@@ -183,9 +178,9 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
     );
 
     const outcomes = [
-      await probes.simulatorDevices,
-      await probes.dartPubCache,
-      await probes.miseVersions,
+      await probes.outcomes.simulatorDevices,
+      await probes.outcomes.dartPubCache,
+      await probes.outcomes.miseVersions,
     ];
     const activities = outcomes.map((outcome) =>
       outcome.kind === 'probed' ? outcome.findings.map((finding) => finding.activity) : null,
@@ -213,9 +208,9 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
     processCommands.resolve([]);
 
-    expect((await probes.simulatorDevices).kind).toBe('probed');
-    expect((await probes.dartPubCache).kind).toBe('probed');
-    expect((await probes.miseVersions).kind).toBe('probed');
+    expect((await probes.outcomes.simulatorDevices).kind).toBe('probed');
+    expect((await probes.outcomes.dartPubCache).kind).toBe('probed');
+    expect((await probes.outcomes.miseVersions).kind).toBe('probed');
     expect(await isPresent(buildMarkerPath({ name: 'xcrun' }))).toBe(true);
   });
 
@@ -229,10 +224,10 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       }),
     );
 
-    expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
-    expect(await probes.simulatorRuntimes).toEqual({ kind: 'toolMissing' });
-    expect((await probes.dartPubCache).kind).toBe('probed');
-    expect((await probes.miseVersions).kind).toBe('probed');
+    expect(await probes.outcomes.simulatorDevices).toEqual({ kind: 'toolMissing' });
+    expect(await probes.outcomes.simulatorRuntimes).toEqual({ kind: 'toolMissing' });
+    expect((await probes.outcomes.dartPubCache).kind).toBe('probed');
+    expect((await probes.outcomes.miseVersions).kind).toBe('probed');
     expect(await isPresent(buildMarkerPath({ name: 'xcrun' }))).toBe(false);
   });
 
@@ -253,7 +248,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       buildProbeStart({ toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }) }),
     );
 
-    expect(await probes.simulatorDevices).toEqual({
+    expect(await probes.outcomes.simulatorDevices).toEqual({
       kind: 'failed',
       tool: { name: 'xcrun', path: await realpath(xcrun) },
       failure: {
@@ -274,7 +269,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       buildProbeStart({ toolInstallLocations: buildFixtureToolLocations({ mise: mise }) }),
     );
 
-    const outcome = await probes.miseVersions;
+    const outcome = await probes.outcomes.miseVersions;
 
     expect(outcome.kind === 'failed' && outcome.failure.reason).toBe('outputUnreadable');
   });
@@ -291,7 +286,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       buildProbeStart({ toolInstallLocations: buildFixtureToolLocations({ dart: dart }) }),
     );
 
-    expect(await probes.dartPubCache).toEqual({
+    expect(await probes.outcomes.dartPubCache).toEqual({
       kind: 'toolUntrusted',
       failure: { reason: 'untrusted', path: await realpath(dart), detail: 'writableByOthers' },
     });
@@ -306,18 +301,18 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       }),
     );
 
-    expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
-    expect(await probes.dartPubCache).toEqual({ kind: 'toolMissing' });
-    expect(await probes.miseVersions).toEqual({ kind: 'toolMissing' });
-    expect(await probes.androidAvds).toEqual({ kind: 'toolMissing' });
-    expect(await probes.homebrewAppleSilicon).toEqual({ kind: 'toolMissing' });
-    expect(await probes.homebrewIntel).toEqual({ kind: 'toolMissing' });
+    expect(await probes.outcomes.simulatorDevices).toEqual({ kind: 'toolMissing' });
+    expect(await probes.outcomes.dartPubCache).toEqual({ kind: 'toolMissing' });
+    expect(await probes.outcomes.miseVersions).toEqual({ kind: 'toolMissing' });
+    expect(await probes.outcomes.androidAvds).toEqual({ kind: 'toolMissing' });
+    expect(await probes.outcomes.homebrewAppleSilicon).toEqual({ kind: 'toolMissing' });
+    expect(await probes.outcomes.homebrewIntel).toEqual({ kind: 'toolMissing' });
   });
 
   test('answers timedOut for a files probe still reading at its deadline', async () => {
     const outcome = await runExploreProbe({
       probe: { kind: 'files', loadFindings: () => new Promise(() => {}) },
-      start: buildProbeStart({ timeoutMs: 50 }),
+      scan: buildProbeScan({ timeoutMs: 50 }),
     });
 
     expect(outcome).toEqual({ kind: 'timedOut' });
@@ -341,7 +336,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
             failure: { kind: 'answerFailed', socketPath: socketPath, failure: failure },
           }),
       },
-      start: buildProbeStart({}),
+      scan: buildProbeScan({}),
     });
 
     expect(outcome).toEqual({ kind: 'engineFailed', socketPath: socketPath, failure: failure });
@@ -358,7 +353,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
             kind: 'engine',
             loadFindings: () => Promise.resolve({ kind: 'failed', failure: failure }),
           },
-          start: buildProbeStart({}),
+          scan: buildProbeScan({}),
         }),
       ),
     );
@@ -373,7 +368,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
         loadFindings: () =>
           Promise.resolve({ kind: 'failed', failure: { reason: 'placeMissing' } }),
       },
-      start: buildProbeStart({}),
+      scan: buildProbeScan({}),
     });
 
     expect(outcome).toEqual({ kind: 'toolMissing' });
@@ -402,7 +397,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
           };
         },
       },
-      start: buildProbeStart({
+      scan: buildProbeScan({
         projectPins: {
           walkEnded: walkEnded,
           pins: walkEnded.then(() => ({ kind: 'succeeded', value: pinnedProjectPins })),
@@ -427,7 +422,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
           return { kind: 'files', loadFindings: () => new Promise(() => {}) };
         },
       },
-      start: buildProbeStart({
+      scan: buildProbeScan({
         projectPins: buildSettledProjectPinsLoad({
           pins: {
             kind: 'failed',
@@ -459,7 +454,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
             Promise.resolve({ kind: 'succeeded', value: { findings: [], isComplete: true } }),
         }),
       },
-      start: buildProbeStart({
+      scan: buildProbeScan({
         projectPins: { walkEnded: Promise.resolve(), pins: new Promise(() => {}) },
         timeoutMs: 50,
       }),
@@ -483,7 +478,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       }),
     );
 
-    expect(await probes.miseVersions).toEqual({
+    expect(await probes.outcomes.miseVersions).toEqual({
       kind: 'failed',
       tool: { name: 'mise', path: await realpath(mise) },
       failure: {

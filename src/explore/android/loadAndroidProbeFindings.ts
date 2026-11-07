@@ -6,7 +6,6 @@ import type {
   ExploreProbeToolRun,
 } from '../exploreProbe.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
-import type { ProjectPins } from '../projectPins/projectPins.js';
 import {
   buildAndroidAvdFindings,
   buildAndroidEmulatorFindings,
@@ -16,14 +15,14 @@ import {
   decideAndroidEmulatorOffers,
   decideAndroidSystemImageOffers,
 } from './decideAndroidPackageOffers.js';
-import { loadAndroidProbeSdkRoots } from './loadAndroidSdkRoots.js';
+import type { AndroidSdkRoot } from './loadAndroidSdkRoots.js';
 import type { AndroidSdkState } from './loadAndroidSdkState.js';
 import { loadAndroidSdkState } from './loadAndroidSdkState.js';
 
 /** The AVDs not used since the cutoff, each removed by the located `avdmanager`. */
 export async function loadAndroidAvdFindings(params: {
   run: ExploreProbeToolRun;
-  projectPins: ProjectPins;
+  sdkRoots: AndroidSdkRoot[];
 }): Promise<ExploreProbeToolResult> {
   const state = await loadAndroidProbeSdkState(params);
 
@@ -45,7 +44,7 @@ export async function loadAndroidAvdFindings(params: {
 /** The system image folders of each SDK that no AVD names. */
 export async function loadAndroidSystemImageFindings(params: {
   run: ExploreProbeRun;
-  projectPins: ProjectPins;
+  sdkRoots: AndroidSdkRoot[];
 }): Promise<ExploreProbeFilesResult> {
   const state = await loadAndroidProbeSdkState(params);
 
@@ -65,7 +64,7 @@ export async function loadAndroidSystemImageFindings(params: {
 /** The emulator package of each SDK while no AVD exists. */
 export async function loadAndroidEmulatorFindings(params: {
   run: ExploreProbeRun;
-  projectPins: ProjectPins;
+  sdkRoots: AndroidSdkRoot[];
 }): Promise<ExploreProbeFilesResult> {
   const state = await loadAndroidProbeSdkState(params);
 
@@ -82,21 +81,15 @@ export async function loadAndroidEmulatorFindings(params: {
   };
 }
 
-/** The state of every SDK root the probe finds, and of the AVDs. */
-async function loadAndroidProbeSdkState(params: {
+/** The state of the scan's SDK roots, and of the AVDs. */
+function loadAndroidProbeSdkState(params: {
   run: ExploreProbeRun;
-  projectPins: ProjectPins;
+  sdkRoots: AndroidSdkRoot[];
 }): Promise<Result<AndroidSdkState, ExploreFileUnreadable>> {
-  const sdkRoots = await loadAndroidProbeSdkRoots(params);
-
-  if (sdkRoots.kind === 'failed') {
-    return sdkRoots;
-  }
-
   return loadAndroidSdkState({
     pathRules: params.run.environment.pathRules,
     homeDir: params.run.environment.homeDir,
-    sdkRoots: sdkRoots.value,
+    sdkRoots: params.sdkRoots,
     privacyDenialCode: params.run.platform.privacyDenialCode,
   });
 }

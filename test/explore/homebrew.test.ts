@@ -41,6 +41,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
 import {
   APPLE_SILICON_CELLAR_PATH,
   buildHomebrewCleanupDryRunText,
@@ -52,7 +53,7 @@ import {
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import { FIXTURE_HOME_DIR } from './probeOutputFixtures.js';
-import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -585,15 +586,9 @@ describeAwaitingWin32Platform('with fake brews', () => {
   }
 
   async function loadFindings(params: { tool: LocatedTool }): Promise<ExploreProbeToolResult> {
-    return loadHomebrewFindings({
-      tool: params.tool,
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      deadlineMs: Date.now() + TIMEOUT_MS,
-      processCommands: [],
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-    });
+    return loadHomebrewFindings(
+      buildTestProbeToolRun({ environment: environment, tool: params.tool }),
+    );
   }
 
   async function createBrew(params: {
@@ -622,22 +617,18 @@ describeAwaitingWin32Platform('with fake brews', () => {
       answers: buildWorkingAnswers({ cellarPath: intelCellarPath }),
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({
-        brewAppleSilicon: appleSilicon.path,
-        brewIntel: intel.path,
+    const probes = startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({
+          brewAppleSilicon: appleSilicon.path,
+          brewIntel: intel.path,
+        }),
+        timeoutMs: TIMEOUT_MS,
       }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(null),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-    });
-    const appleSiliconOutcome = await probes.homebrewAppleSilicon;
-    const intelOutcome = await probes.homebrewIntel;
+    );
+    const appleSiliconOutcome = await probes.outcomes.homebrewAppleSilicon;
+    const intelOutcome = await probes.outcomes.homebrewIntel;
 
     if (appleSiliconOutcome.kind !== 'probed' || intelOutcome.kind !== 'probed') {
       throw new Error('Both Homebrew probes should have run.');
@@ -670,18 +661,14 @@ describeAwaitingWin32Platform('with fake brews', () => {
       answers: [{ command: 'homebrewCellar', stdoutText: '', exitCode: 1 }],
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ brewIntel: intel.path }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(null),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-    });
-    const outcome = await probes.homebrewIntel;
+    const probes = startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({ brewIntel: intel.path }),
+        timeoutMs: TIMEOUT_MS,
+      }),
+    );
+    const outcome = await probes.outcomes.homebrewIntel;
 
     expect(outcome.kind === 'failed' && outcome.failure).toEqual({
       reason: 'commandFailed',

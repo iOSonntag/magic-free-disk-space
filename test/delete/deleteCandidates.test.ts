@@ -18,7 +18,6 @@ import type {
 import { listUnitPaths } from '../../src/explore/exploreUnit.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Candidate, RemovalTarget } from '../../src/scan/candidate.js';
-import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
@@ -121,7 +120,7 @@ async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Pro
 async function scanMeasuredCandidate(path: string): Promise<Candidate> {
   return {
     ...(await scanCandidate(path)),
-    allocatedBytes: await loadMeasuredAllocatedBytes({ path: path }),
+    allocatedBytes: await loadMeasuredAllocatedBytes({ paths: [path] }),
   };
 }
 
@@ -298,16 +297,6 @@ process.exit(0);`,
     probe: 'simulatorDevices',
     removal: { kind: 'runTool', unit: unit },
   });
-}
-
-async function measureAllocatedBytes(candidate: Candidate): Promise<number> {
-  const measurement = await loadPathMeasurement({
-    paths: listUnitPaths(readToolUnit(candidate)),
-    deadlineMs: Date.now() + 60_000,
-    entryReads: darwinPlatform.system.entryReads,
-  });
-
-  return measurement.allocatedBytes;
 }
 
 function buildExpectedToolIntent(params: { candidate: Candidate; version: string }): unknown {
@@ -495,7 +484,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       }),
       clock: () => NOW_MS,
     });
-    const leftBytes = await loadMeasuredAllocatedBytes({ path: selected });
+    const leftBytes = await loadMeasuredAllocatedBytes({ paths: [selected] });
 
     expect(leftBytes).toBeGreaterThan(0);
     expect(candidate.allocatedBytes - leftBytes).toBeGreaterThanOrEqual(8192);
@@ -724,7 +713,9 @@ describeAwaitingWin32Platform('deleteCandidates with a tool item', () => {
 fs.writeSync(2, 'uninstalled node@20.1.0\\n');
 process.exit(0);`,
     });
-    const allocatedBytes = await measureAllocatedBytes(candidate);
+    const allocatedBytes = await loadMeasuredAllocatedBytes({
+      paths: listUnitPaths(readToolUnit(candidate)),
+    });
     const journal = await createTestJournal();
 
     const run = await deleteCandidates({
@@ -854,7 +845,9 @@ process.exit(1);`,
       buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
 process.exit(0);`,
     });
-    const toolAllocatedBytes = await measureAllocatedBytes(toolCandidate);
+    const toolAllocatedBytes = await loadMeasuredAllocatedBytes({
+      paths: listUnitPaths(readToolUnit(toolCandidate)),
+    });
     const pathCandidate = await scanCandidate(pathItem);
     const journal = await createTestJournal();
 
@@ -929,16 +922,14 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     await createVscodeInstallation({ homeDir: environment.homeDir });
 
     const candidate = buildTestVscodeExtensionCandidate({ homeDir: environment.homeDir });
-    const removal = candidate.removal;
-    const identity = await loadFileIdentity({ path: candidate.path });
 
-    if (identity.kind === 'failed' || removal.kind !== 'deleteUnitPaths') {
+    if (candidate.removal.kind !== 'deleteUnitPaths') {
       throw new Error('The obsolete folder should be scanned as the paths of a unit.');
     }
 
     return {
       ...candidate,
-      removal: { ...removal, targets: [{ path: candidate.path, identity: identity.value }] },
+      removal: { ...candidate.removal, targets: [await scanTarget(candidate.path)] },
     };
   }
 
@@ -1111,8 +1102,8 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
     secondPath: string;
   }): Promise<Candidate> {
     const allocatedBytes =
-      (await loadMeasuredAllocatedBytes({ path: params.firstPath })) +
-      (await loadMeasuredAllocatedBytes({ path: params.secondPath }));
+      (await loadMeasuredAllocatedBytes({ paths: [params.firstPath] })) +
+      (await loadMeasuredAllocatedBytes({ paths: [params.secondPath] }));
 
     return buildTestCandidate({
       path: join(fixtureRoot.homeDir, 'Library/Caches'),
@@ -1179,7 +1170,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
   test('deletes the other targets when one changed since the scan, and counts what went', async () => {
     const firstPath = await createCacheFolder('replaced');
     const secondPath = await createCacheFolder('kept-identity');
-    const secondBytes = await loadMeasuredAllocatedBytes({ path: secondPath });
+    const secondBytes = await loadMeasuredAllocatedBytes({ paths: [secondPath] });
     const candidate = await scanTwoTargetsCandidate({
       firstPath: firstPath,
       secondPath: secondPath,
@@ -1208,7 +1199,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
   test('is removed when a target was gone already and the other deleted, counting only what this run deleted', async () => {
     const firstPath = await createCacheFolder('gone');
     const secondPath = await createCacheFolder('deleted');
-    const secondBytes = await loadMeasuredAllocatedBytes({ path: secondPath });
+    const secondBytes = await loadMeasuredAllocatedBytes({ paths: [secondPath] });
     const candidate = await scanTwoTargetsCandidate({
       firstPath: firstPath,
       secondPath: secondPath,

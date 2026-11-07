@@ -7,14 +7,14 @@ import {
   PACKAGE_CONFIG_CANDIDATES_MAX_COUNT,
 } from '../../src/tools/decidePackageConfigTracking.js';
 
-/** The stats of a plain file `ino` on device 1. */
-function buildFileStats(ino: bigint): EntryStatsResult {
+/** The stats of a plain file `ino` on device `dev`, by default device 1. */
+function buildFileStats(params: { dev?: bigint; ino: bigint }): EntryStatsResult {
   return {
     kind: 'succeeded',
     value: {
       kind: 'file',
-      dev: 1n,
-      ino: ino,
+      dev: params.dev ?? 1n,
+      ino: params.ino,
       allocatedBytes: 4096,
       modifiedMs: 0,
       accessedMs: 0,
@@ -85,11 +85,11 @@ describe('findPackageConfigCandidatePaths', () => {
 describe('decidePackageConfigTracking', () => {
   test('returns tracked for a candidate that is the same file as the config', () => {
     const tracking = decidePackageConfigTracking({
-      packageConfigStats: buildFileStats(7n),
+      packageConfigStats: buildFileStats({ ino: 7n }),
       candidateStats: [
-        buildFileStats(8n),
+        buildFileStats({ ino: 8n }),
         buildFailedStats('permissionDenied'),
-        buildFileStats(7n),
+        buildFileStats({ ino: 7n }),
       ],
     });
 
@@ -98,8 +98,8 @@ describe('decidePackageConfigTracking', () => {
 
   test('returns untracked for candidates that are other files or missing', () => {
     const tracking = decidePackageConfigTracking({
-      packageConfigStats: buildFileStats(7n),
-      candidateStats: [buildFileStats(8n), buildFailedStats('missing')],
+      packageConfigStats: buildFileStats({ ino: 7n }),
+      candidateStats: [buildFileStats({ ino: 8n }), buildFailedStats('missing')],
     });
 
     expect(tracking).toBe('untracked');
@@ -107,22 +107,8 @@ describe('decidePackageConfigTracking', () => {
 
   test('returns untracked for the same inode on another device', () => {
     const tracking = decidePackageConfigTracking({
-      packageConfigStats: buildFileStats(7n),
-      candidateStats: [
-        {
-          kind: 'succeeded',
-          value: {
-            kind: 'file',
-            dev: 2n,
-            ino: 7n,
-            allocatedBytes: 0,
-            modifiedMs: 0,
-            accessedMs: 0,
-            bornMs: 0,
-            linkCount: 1,
-          },
-        },
-      ],
+      packageConfigStats: buildFileStats({ ino: 7n }),
+      candidateStats: [buildFileStats({ dev: 2n, ino: 7n })],
     });
 
     expect(tracking).toBe('untracked');
@@ -130,7 +116,7 @@ describe('decidePackageConfigTracking', () => {
 
   test('returns untracked for no candidate', () => {
     const tracking = decidePackageConfigTracking({
-      packageConfigStats: buildFileStats(7n),
+      packageConfigStats: buildFileStats({ ino: 7n }),
       candidateStats: [],
     });
 
@@ -140,8 +126,8 @@ describe('decidePackageConfigTracking', () => {
   test('returns unknown for a candidate whose stats fail other than missing', () => {
     for (const reason of ['permissionDenied', 'unexpected'] as const) {
       const tracking = decidePackageConfigTracking({
-        packageConfigStats: buildFileStats(7n),
-        candidateStats: [buildFileStats(8n), buildFailedStats(reason)],
+        packageConfigStats: buildFileStats({ ino: 7n }),
+        candidateStats: [buildFileStats({ ino: 8n }), buildFailedStats(reason)],
       });
 
       expect(tracking).toBe('unknown');
@@ -151,7 +137,7 @@ describe('decidePackageConfigTracking', () => {
   test('returns unknown when the stats of the config fail', () => {
     const tracking = decidePackageConfigTracking({
       packageConfigStats: buildFailedStats('missing'),
-      candidateStats: [buildFileStats(7n)],
+      candidateStats: [buildFileStats({ ino: 7n })],
     });
 
     expect(tracking).toBe('unknown');

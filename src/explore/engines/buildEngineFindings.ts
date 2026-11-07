@@ -1,6 +1,6 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreEngineUnitPlace, ExploreFinding, UnitActivity } from '../exploreUnit.js';
-import { formatDaySpan } from '../formatLimitTexts.js';
+import { formatCountText, formatDaySpan } from '../formatLimitTexts.js';
 import {
   BUILD_RECORD_UNUSED_MS,
   isDanglingImage,
@@ -91,7 +91,7 @@ function buildBuildCacheFindings(
       regeneration: 'The next build that needs a step runs it again.',
       risk: 'safe',
       evidenceLines: [
-        `${countText({ count: records.length, noun: 'cache record' })} no build used for ${unusedSpan}, none of them shared with an image.`,
+        `${formatCountText({ count: records.length, noun: 'cache record' })} no build used for ${unusedSpan}, none of them shared with an image.`,
       ],
       displayPath: params.place.diskImagePath,
       activity: params.activity,
@@ -120,7 +120,7 @@ function buildDanglingImageFindings(
       regeneration: 'Nothing needs them; a build or a pull makes again what it needs.',
       risk: 'safe',
       evidenceLines: [
-        `${countText({ count: params.images.length, noun: 'image' })} without a tag, none of them used by a container.`,
+        `${formatCountText({ count: params.images.length, noun: 'image' })} without a tag, none of them used by a container.`,
       ],
       displayPath: params.place.diskImagePath,
       activity: params.activity,
@@ -211,8 +211,4 @@ function buildVolumeFinding(
 
 function sumBytes(sizes: number[]): number {
   return sizes.reduce((total, size) => total + size, 0);
-}
-
-function countText(params: { count: number; noun: string }): string {
-  return params.count === 1 ? `1 ${params.noun}` : `${params.count} ${params.noun}s`;
 }

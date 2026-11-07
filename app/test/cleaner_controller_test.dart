@@ -6,145 +6,77 @@ import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart'
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
 
 import 'support/fake_cleaner_bridge.dart';
+import 'support/test_items.dart';
 
-const ItemView toolCacheItem = ItemView(
+final ItemView toolCacheItem = buildTestItemView(
   number: 1,
-  key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
   title: 'Tool cache',
   risk: Risk.safe,
-  riskText: 'safe',
-  sizeText: '6.0 MB',
-  detailLines: [
-    ItemDetailLine(
-      kind: ItemDetailLineKind.path,
-      text: '/Users/me/Library/Caches/ToolCache',
-    ),
-  ],
-  sectionKey: SectionKey.caches,
   group: ItemGroup.safe,
-  origin: ItemOrigin.catalog,
-  removal: ItemRemoval.delete,
+  sectionKey: SectionKey.caches,
   allocatedBytes: 6000000,
-  isComplete: true,
-  displayPath: '~/Library/Caches/ToolCache',
-  revealPath: '/Users/me/Library/Caches/ToolCache',
-  lastUsedAt: null,
-  downloadedAt: null,
-  appName: null,
-  matchedBy: null,
 );
 
-const ItemView oldVideoItem = ItemView(
+final ItemView oldVideoItem = buildTestItemView(
   number: 2,
-  key: 'userFile:/Users/me/Movies/holiday.mov',
   title: 'Old video',
   risk: Risk.careful,
-  riskText: 'careful',
-  sizeText: '3.0 MB',
-  detailLines: [
-    ItemDetailLine(
-      kind: ItemDetailLineKind.path,
-      text: '/Users/me/Movies/holiday.mov',
-    ),
-  ],
-  sectionKey: SectionKey.largeFiles,
   group: ItemGroup.careful,
+  sectionKey: SectionKey.largeFiles,
   origin: ItemOrigin.largeFile,
-  removal: ItemRemoval.delete,
   allocatedBytes: 3000000,
-  isComplete: true,
-  displayPath: '~/Movies/holiday.mov',
-  revealPath: '/Users/me/Movies/holiday.mov',
-  lastUsedAt: null,
-  downloadedAt: null,
-  appName: null,
-  matchedBy: null,
 );
 
 /// Safe by risk, yet in Explore, so "Select safe" leaves it out.
-const ItemView simulatorItem = ItemView(
+final ItemView simulatorItem = buildTestItemView(
   number: 3,
-  key: 'explore:simulatorDevices:simulatorDevice:0A1B2C3D',
   title: 'Simulator iPhone 15',
   risk: Risk.safe,
-  riskText: 'safe',
-  sizeText: '1.0 MB',
-  detailLines: [
-    ItemDetailLine(
-      kind: ItemDetailLineKind.command,
-      text: 'xcrun simctl delete 0A1B2C3D',
-    ),
-  ],
-  sectionKey: SectionKey.developerTools,
   group: ItemGroup.review,
+  sectionKey: SectionKey.developerTools,
   origin: ItemOrigin.explore,
   removal: ItemRemoval.tool,
   allocatedBytes: 1000000,
-  isComplete: true,
-  displayPath: '~/Library/Developer/CoreSimulator/Devices/0A1B2C3D',
-  revealPath: '/Users/me/Library/Developer/CoreSimulator/Devices/0A1B2C3D',
-  lastUsedAt: null,
-  downloadedAt: null,
-  appName: null,
-  matchedBy: null,
 );
 
-const ScannedEvent scannedEvent = ScannedEvent(
-  summary: SummaryView(
-    titleText: 'Found 3 items',
-    lines: [],
-    totalBytes: 10000000,
-    safeBytes: 6000000,
-    disk: null,
-  ),
+final ScannedEvent scannedEvent = ScannedEvent(
+  summary: const SummaryView(totalBytes: 10000000, safeBytes: 6000000, disk: null),
   sections: [
-    SectionView(
-      key: SectionKey.caches,
-      titleText: 'Caches',
-      sizeText: '6.0 MB',
-      isInitiallyExpanded: true,
-      items: [toolCacheItem],
-      checkGroup: null,
-    ),
+    SectionView(key: SectionKey.caches, items: [toolCacheItem], checkGroup: null),
     SectionView(
       key: SectionKey.largeFiles,
-      titleText: 'Large files',
-      sizeText: '3.0 MB',
-      isInitiallyExpanded: false,
-      items: [],
-      checkGroup: CheckGroupView(
-        titleText: 'Check before deleting',
-        items: [oldVideoItem],
-      ),
+      items: const [],
+      checkGroup: CheckGroupView(items: [oldVideoItem]),
     ),
   ],
-  explore: ExploreView(
-    titleText: 'Explore',
-    introText: 'They are never selected for you.',
-    items: [simulatorItem],
-    adviceGroup: null,
-  ),
-  safeNumbers: [1],
+  explore: ExploreView(items: [simulatorItem], adviceGroup: null),
+  safeNumbers: const [1],
   skipped: null,
-  notices: [],
-  sectionTotals: [
+  notices: const [],
+  sectionTotals: const [
     SectionTotal(
       sectionKey: SectionKey.caches,
+      titleText: 'Caches',
       allocatedBytes: 6000000,
+      isComplete: true,
       itemCount: 1,
       safeBytes: 6000000,
       adviceCount: 0,
     ),
     SectionTotal(
       sectionKey: SectionKey.developerTools,
+      titleText: 'Developer tools',
       allocatedBytes: 1000000,
+      isComplete: true,
       itemCount: 1,
       safeBytes: 0,
       adviceCount: 0,
     ),
     SectionTotal(
       sectionKey: SectionKey.largeFiles,
+      titleText: 'Large files',
       allocatedBytes: 3000000,
+      isComplete: true,
       itemCount: 1,
       safeBytes: 0,
       adviceCount: 0,
@@ -152,64 +84,28 @@ const ScannedEvent scannedEvent = ScannedEvent(
   ],
 );
 
-const PlannedEvent plannedEvent = PlannedEvent(
+final PlannedItemView plannedToolCache = planItem(toolCacheItem);
+
+final PlannedEvent plannedEvent = buildSamplePlan(
+  [plannedToolCache],
   planId: 7,
-  lines: ['- 6.0 MB /Users/me/Library/Caches/ToolCache'],
-  warningLines: ['Type DELETE to delete them permanently.'],
-  items: [
-    PlannedItemView(
-      number: 1,
-      key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
-      title: 'Tool cache',
-      sectionKey: SectionKey.caches,
-      risk: Risk.safe,
-      removal: ItemRemoval.delete,
-      allocatedBytes: 6000000,
-    ),
-  ],
-  totalBytes: 6000000,
   holdsCareful: false,
 );
 
 /// The plan of the safe item and the careful video together.
-const PlannedEvent twoItemPlan = PlannedEvent(
+final PlannedEvent twoItemPlan = buildSamplePlan(
+  [plannedToolCache, planItem(oldVideoItem)],
   planId: 8,
-  lines: [
-    '- 6.0 MB /Users/me/Library/Caches/ToolCache',
-    '- 3.0 MB /Users/me/Movies/holiday.mov',
-  ],
-  warningLines: ['Type DELETE to delete them permanently.'],
-  items: [
-    PlannedItemView(
-      number: 1,
-      key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
-      title: 'Tool cache',
-      sectionKey: SectionKey.caches,
-      risk: Risk.safe,
-      removal: ItemRemoval.delete,
-      allocatedBytes: 6000000,
-    ),
-    PlannedItemView(
-      number: 2,
-      key: 'userFile:/Users/me/Movies/holiday.mov',
-      title: 'Old video',
-      sectionKey: SectionKey.largeFiles,
-      risk: Risk.careful,
-      removal: ItemRemoval.delete,
-      allocatedBytes: 3000000,
-    ),
-  ],
-  totalBytes: 9000000,
   holdsCareful: true,
 );
 
 /// The run of [plannedEvent], which removed its one item.
-const DeletedEvent deletedEvent = DeletedEvent(
-  lines: ['Freed 6.0 MB.'],
+final DeletedEvent deletedEvent = DeletedEvent(
+  lines: const ['Freed 6.0 MB.'],
   outcomes: [
     DeletedOutcomeView(
       number: 1,
-      key: 'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
+      key: toolCacheItem.key,
       outcome: DeletedOutcome.removed,
       reasonKey: null,
       freedBytes: 6000000,

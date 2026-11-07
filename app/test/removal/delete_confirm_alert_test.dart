@@ -56,7 +56,7 @@ void main() {
         origin: DeleteAlertOrigin.cleanSafeItems,
       );
 
-      expect(find.text('Delete 10 MB for good?'), findsOneWidget);
+      expect(find.text('Delete at least 10 MB for good?'), findsOneWidget);
       expect(
         find.descendant(of: find.byType(Dialog), matching: find.text('Tool cache')),
         findsOneWidget,
@@ -160,7 +160,7 @@ void main() {
 
     final Finder alert = find.byType(Dialog);
     expect(
-      find.descendant(of: alert, matching: find.text('Delete 10 MB for good?')),
+      find.descendant(of: alert, matching: find.text('Delete at least 10 MB for good?')),
       findsOneWidget,
     );
     expect(

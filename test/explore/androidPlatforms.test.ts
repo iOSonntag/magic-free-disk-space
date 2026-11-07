@@ -46,7 +46,7 @@ import {
   writeAndroidPlatform,
   writeAndroidSystemImage,
 } from './androidFixtures.js';
-import { buildFixtureToolLocations } from './probeFakeTools.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildFoundProjectPinsLoad,
   buildTestPinFileText,
@@ -423,22 +423,18 @@ type AndroidProbeOutcomes = {
 async function loadAndroidProbeOutcomes(params: {
   pinFiles: ProjectPinFile[];
 }): Promise<AndroidProbeOutcomes> {
-  const probes = startExploreProbes({
-    environment: environment,
-    platform: buildTestProbePlatform(),
-    toolInstallLocations: buildFixtureToolLocations({}),
-    processCommands: Promise.resolve([]),
-    activeXcodeBundlePath: Promise.resolve(null),
-    projectPins: buildFoundProjectPinsLoad({ files: params.pinFiles }),
-    timeoutMs: 10_000,
-    unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
-    staleCutoffMs: 0,
-  });
+  const probes = startExploreProbes(
+    buildTestProbeStart({
+      environment: environment,
+      projectPins: buildFoundProjectPinsLoad({ files: params.pinFiles }),
+      unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+    }),
+  );
 
   return {
-    platforms: await probes.androidPlatforms,
-    systemImages: await probes.androidSystemImages,
-    emulator: await probes.androidEmulator,
+    platforms: await probes.outcomes.androidPlatforms,
+    systemImages: await probes.outcomes.androidSystemImages,
+    emulator: await probes.outcomes.androidEmulator,
   };
 }
 

@@ -51,6 +51,9 @@ class _DeletedPageState extends State<DeletedPage> {
         if (outcome.outcome != DeletedOutcome.removed) outcome,
     ];
     final int removedCount = result.outcomes.length - stayedOutcomes.length;
+    final int partlyRemovedCount = stayedOutcomes
+        .where((DeletedOutcomeView outcome) => outcome.outcome == DeletedOutcome.partlyRemoved)
+        .length;
     final String? logPath = result.logPath;
     final RevealUrl? logUrl = RevealUrl.tryParse(logPath, allowedPaths: {?logPath});
     return Material(
@@ -70,7 +73,11 @@ class _DeletedPageState extends State<DeletedPage> {
                       plannedBytes: widget.state.plan.totalBytes,
                     ),
                     const SizedBox(height: StageSpacing.large),
-                    _RunFacts(result: result, removedCount: removedCount),
+                    _RunFacts(
+                      result: result,
+                      removedCount: removedCount,
+                      partlyRemovedCount: partlyRemovedCount,
+                    ),
                     if (stayedOutcomes.isNotEmpty) ...[
                       const SizedBox(height: StageSpacing.large),
                       _StayedCard(
@@ -253,23 +260,30 @@ class _BeforeAfterRingState extends State<_BeforeAfterRing>
 }
 
 class _RunFacts extends StatelessWidget {
-  const _RunFacts({required this.result, required this.removedCount});
+  const _RunFacts({
+    required this.result,
+    required this.removedCount,
+    required this.partlyRemovedCount,
+  });
 
   final DeletedEvent result;
   final int removedCount;
+  final int partlyRemovedCount;
 
   @override
   Widget build(BuildContext context) {
     final int? availableBytesAfter = result.availableBytesAfter;
+    final List<String> removedParts = [
+      if (removedCount > 0) '${formatItemCount(removedCount)} removed',
+      if (partlyRemovedCount > 0) '${formatItemCount(partlyRemovedCount)} partly removed',
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _FactLine(
           glyph: AppIcons.removed,
           accent: StageColors.safe,
-          text: removedCount == 0
-              ? 'Nothing was removed.'
-              : '${formatItemCount(removedCount)} removed.',
+          text: removedParts.isEmpty ? 'Nothing was removed.' : '${removedParts.join(', ')}.',
         ),
         if (result.returnsLaterBytes > 0)
           _FactLine(

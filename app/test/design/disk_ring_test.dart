@@ -27,7 +27,7 @@ Widget buildRing(ValueNotifier<MotionState> windowMotion, DiskRingReading readin
   );
 }
 
-DiskRingPainter findRingPainter(WidgetTester tester) {
+DiskRingPainter readRingPainter(WidgetTester tester) {
   return tester.widget<CustomPaint>(findRingPaint()).painter! as DiskRingPainter;
 }
 
@@ -68,8 +68,8 @@ void main() {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.reduced);
     await tester.pumpWidget(buildRing(windowMotion, volume, isScanning: true));
 
-    expect(findRingPainter(tester).arcs, volumeArcs);
-    expect(findRingPainter(tester).isSweeping, isFalse);
+    expect(readRingPainter(tester).arcs, volumeArcs);
+    expect(readRingPainter(tester).isSweeping, isFalse);
     expect(tester.hasRunningAnimations, isFalse);
   });
 
@@ -78,27 +78,27 @@ void main() {
     await tester.pumpWidget(buildRing(windowMotion, volume));
     await tester.pump(MotionTokens.ringFill ~/ 2);
 
-    final DiskRingArcs midway = findRingPainter(tester).arcs;
+    final DiskRingArcs midway = readRingPainter(tester).arcs;
     expect(midway.freeableEnd, inExclusiveRange(0, volumeArcs.freeableEnd));
 
     await tester.pumpAndSettle();
-    expect(findRingPainter(tester).arcs, volumeArcs);
+    expect(readRingPainter(tester).arcs, volumeArcs);
 
     const DiskRingReading afterDelete = DiskRingVolumeReading(capacityBytes: 1000, availableBytes: 600, freeableBytes: 0);
     await tester.pumpWidget(buildRing(windowMotion, afterDelete));
     await tester.pump(MotionTokens.ringFill ~/ 2);
 
-    expect(findRingPainter(tester).arcs.freeableEnd, inExclusiveRange(0.4, 0.6));
+    expect(readRingPainter(tester).arcs.freeableEnd, inExclusiveRange(0.4, 0.6));
 
     await tester.pumpAndSettle();
-    expect(findRingPainter(tester).arcs, const DiskRingArcs(keptEnd: 0.4, freeableEnd: 0.4));
+    expect(readRingPainter(tester).arcs, const DiskRingArcs(keptEnd: 0.4, freeableEnd: 0.4));
   });
 
   testWidgets('sweeps while a scan runs and motion is allowed', (WidgetTester tester) async {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
     await tester.pumpWidget(buildRing(windowMotion, volume, isScanning: true));
 
-    expect(findRingPainter(tester).isSweeping, isTrue);
+    expect(readRingPainter(tester).isSweeping, isTrue);
 
     await tester.pumpAndSettle();
   });

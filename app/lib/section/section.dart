@@ -3,4 +3,5 @@
 library;
 
 export 'handled_elsewhere_page.dart';
+export 'item_row.dart' show ItemRowKey;
 export 'section_page.dart';

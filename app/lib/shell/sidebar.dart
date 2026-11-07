@@ -1,13 +1,18 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../bridge/bridge.dart';
 import '../cleaner/cleaner.dart';
 import '../design/design.dart';
 import '../scan_view/scan_view.dart';
+import '../section/section.dart';
 import 'app_destination.dart';
 import 'window_frame.dart';
 
 const double sidebarWidth = 252;
+
+const double _glyphSize = 28;
 
 /// The key of the sidebar's entry for the destination [value].
 final class SidebarEntryKey extends ValueKey<AppDestination> {
@@ -33,7 +38,6 @@ class Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ScannedEvent? scan = findListedScan(state);
     final List<SectionTotal> totals = listShownSectionTotals(state);
     final SectionTotal? ownAppTotal = findSectionTotal(totals, SectionKey.ownApp);
     return SizedBox(
@@ -56,7 +60,7 @@ class Sidebar extends StatelessWidget {
                 title: 'Overview',
                 glyph: AppIcons.overview,
                 accent: StageColors.overviewAccent,
-                allocatedBytes: null,
+                figureText: null,
               ),
               if (totals.any((SectionTotal total) => total.sectionKey != SectionKey.ownApp))
                 Padding(
@@ -69,7 +73,7 @@ class Sidebar extends StatelessWidget {
                   children: [
                     for (final SectionTotal total in totals)
                       if (total.sectionKey != SectionKey.ownApp)
-                        _buildSectionEntry(total, scan),
+                        _buildSectionEntry(total),
                   ],
                 ),
               ),
@@ -83,17 +87,17 @@ class Sidebar extends StatelessWidget {
               const SizedBox(height: StageSpacing.small),
               _buildEntry(
                 destination: const HandledElsewhereDestination(),
-                title: SectionLook.ownApp.title,
+                title: handledElsewhereTitle,
                 glyph: SectionLook.ownApp.glyph,
                 accent: SectionLook.ownApp.accent,
-                allocatedBytes: ownAppTotal?.allocatedBytes,
+                figureText: ownAppTotal == null ? null : formatSectionFigureText(ownAppTotal),
               ),
               _buildEntry(
                 destination: const SettingsDestination(),
                 title: 'Settings',
                 glyph: AppIcons.settings,
                 accent: StageColors.textSecondary,
-                allocatedBytes: null,
+                figureText: null,
               ),
               const SizedBox(height: StageSpacing.small),
             ],
@@ -103,14 +107,14 @@ class Sidebar extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionEntry(SectionTotal total, ScannedEvent? scan) {
+  Widget _buildSectionEntry(SectionTotal total) {
     final SectionLook look = sectionKeyToLook(total.sectionKey);
     return _buildEntry(
       destination: buildSectionDestination(total.sectionKey),
-      title: formatScanSectionTitle(total.sectionKey, scan: scan),
+      title: total.titleText,
       glyph: look.glyph,
       accent: look.accent,
-      allocatedBytes: total.allocatedBytes,
+      figureText: formatSectionFigureText(total),
     );
   }
 
@@ -119,7 +123,7 @@ class Sidebar extends StatelessWidget {
     required String title,
     required IconData glyph,
     required Color accent,
-    required int? allocatedBytes,
+    required String? figureText,
   }) {
     final ValueChanged<AppDestination>? onDestinationSelected =
         this.onDestinationSelected;
@@ -128,7 +132,7 @@ class Sidebar extends StatelessWidget {
       title: title,
       glyph: glyph,
       accent: accent,
-      sizeText: allocatedBytes == null ? null : formatBytes(allocatedBytes),
+      figureText: figureText,
       isSelected: destination == this.destination,
       onPressed: onDestinationSelected == null
           ? null
@@ -143,7 +147,7 @@ class _SidebarEntry extends StatelessWidget {
     required this.title,
     required this.glyph,
     required this.accent,
-    required this.sizeText,
+    required this.figureText,
     required this.isSelected,
     required this.onPressed,
   });
@@ -151,13 +155,15 @@ class _SidebarEntry extends StatelessWidget {
   final String title;
   final IconData glyph;
   final Color accent;
-  final String? sizeText;
+
+  /// The section's size, or the count of its places for advice alone.
+  final String? figureText;
   final bool isSelected;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final String? sizeText = this.sizeText;
+    final String? figureText = this.figureText;
     final BorderRadius radius = BorderRadius.circular(12);
     final Duration duration = MotionScope.of(context).plainFadeDuration;
     return Semantics(
@@ -165,7 +171,7 @@ class _SidebarEntry extends StatelessWidget {
       button: true,
       selected: isSelected,
       enabled: onPressed != null,
-      label: sizeText == null ? title : '$title, $sizeText',
+      label: figureText == null ? title : '$title, $figureText',
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
         child: Material(
@@ -199,27 +205,47 @@ class _SidebarEntry extends StatelessWidget {
                         ]
                       : null,
                 ),
-                child: Row(
-                  children: [
-                    GlyphTile(glyph: glyph, accent: accent, size: 28),
-                    const SizedBox(width: StageSpacing.medium),
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TypeRamp.label.copyWith(
-                          color: isSelected
-                              ? StageColors.textPrimary
-                              : StageColors.textSecondary,
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    return Row(
+                      children: [
+                        GlyphTile(glyph: glyph, accent: accent, size: _glyphSize),
+                        const SizedBox(width: StageSpacing.medium),
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TypeRamp.label.copyWith(
+                              color: isSelected
+                                  ? StageColors.textPrimary
+                                  : StageColors.textSecondary,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    if (sizeText != null) ...[
-                      const SizedBox(width: StageSpacing.small),
-                      Text(sizeText, style: TypeRamp.caption),
-                    ],
-                  ],
+                        if (figureText != null) ...[
+                          const SizedBox(width: StageSpacing.small),
+                          // The title gives way first; the figure takes at
+                          // most the whole room beside the tile.
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: math.max(
+                                0,
+                                constraints.maxWidth - _glyphSize - StageSpacing.medium - StageSpacing.small,
+                              ),
+                            ),
+                            child: Text(
+                              figureText,
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                              style: TypeRamp.caption,
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ),
             ),

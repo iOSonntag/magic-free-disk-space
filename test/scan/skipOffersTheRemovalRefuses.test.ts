@@ -15,7 +15,7 @@ const ENVIRONMENT = buildTestPathEnvironment({ homeDir: HOME_DIR, nowMs: Date.UT
 const CLOUD_DOCS = `${HOME_DIR}/Library/Mobile Documents/com~apple~CloudDocs`;
 
 /** For each candidate, the reason the scan skips its offer for, `null` when it stays offered. */
-function findSkipReasons(params: { candidates: Candidate[] }): (SkipReason | null)[] {
+function listSkipReasons(params: { candidates: Candidate[] }): (SkipReason | null)[] {
   const decisions = skipOffersTheRemovalRefuses({
     environment: ENVIRONMENT,
     decisions: params.candidates.map((candidate) => ({ kind: 'offer', candidate: candidate })),
@@ -25,17 +25,17 @@ function findSkipReasons(params: { candidates: Candidate[] }): (SkipReason | nul
 }
 
 /** For each path, whether the scan skips its offer as protected. */
-function findSkippedPaths(params: { paths: string[] }): boolean[] {
-  return findSkipReasons({
+function listProtectedSkipFlags(params: { paths: string[] }): boolean[] {
+  return listSkipReasons({
     candidates: params.paths.map((path) => buildTestCandidate({ path: path })),
   }).map((reason) => reason === 'protectedPath');
 }
 
 describe('skipOffersTheRemovalRefuses', () => {
   test('skips an offer inside Messages outside its exceptions', () => {
-    expect(findSkippedPaths({ paths: [`${HOME_DIR}/Library/Messages/Attachments/ab`] })).toEqual([
-      true,
-    ]);
+    expect(
+      listProtectedSkipFlags({ paths: [`${HOME_DIR}/Library/Messages/Attachments/ab`] }),
+    ).toEqual([true]);
   });
 
   test('keeps the offers of the preview caches of Messages', () => {
@@ -45,28 +45,30 @@ describe('skipOffersTheRemovalRefuses', () => {
       `${HOME_DIR}/Library/Messages/StickerCache`,
     ];
 
-    expect(findSkippedPaths({ paths: paths })).toEqual([false, false, false]);
+    expect(listProtectedSkipFlags({ paths: paths })).toEqual([false, false, false]);
   });
 
   test('skips an offer of the deletion log and one that holds it', () => {
     const paths = [`${HOME_DIR}/Library/Logs/magic-free-disk-space`, `${HOME_DIR}/Library/Logs`];
 
-    expect(findSkippedPaths({ paths: paths })).toEqual([true, true]);
+    expect(listProtectedSkipFlags({ paths: paths })).toEqual([true, true]);
   });
 
   test('skips an offer of a protected folder whole, and keeps one of its children', () => {
     const paths = [`${HOME_DIR}/Library`, `${HOME_DIR}/Library/Caches/com.example.app`];
 
-    expect(findSkippedPaths({ paths: paths })).toEqual([true, false]);
+    expect(listProtectedSkipFlags({ paths: paths })).toEqual([true, false]);
   });
 
   test('compares without case, as the plan does', () => {
-    expect(findSkippedPaths({ paths: [`${HOME_DIR}/library/MESSAGES/chat.db`] })).toEqual([true]);
+    expect(listProtectedSkipFlags({ paths: [`${HOME_DIR}/library/MESSAGES/chat.db`] })).toEqual([
+      true,
+    ]);
   });
 
   test('skips a delete whose target lies in iCloud Drive by its real path, wherever its path lies', () => {
     expect(
-      findSkipReasons({
+      listSkipReasons({
         candidates: [
           buildTestCandidate({
             path: `${HOME_DIR}/Downloads/video.mov`,
@@ -80,7 +82,7 @@ describe('skipOffersTheRemovalRefuses', () => {
 
   test('skips a delete outside the allowed folders, of a symbolic link, and of a device', () => {
     expect(
-      findSkipReasons({
+      listSkipReasons({
         candidates: [
           buildTestCandidate({ path: '/etc/hosts', kind: 'file' }),
           buildTestCandidate({ path: `${HOME_DIR}/Library/Caches/link`, kind: 'symbolicLink' }),
@@ -94,7 +96,7 @@ describe('skipOffersTheRemovalRefuses', () => {
     const folderPath = `${CLOUD_DOCS}/Projects`;
 
     expect(
-      findSkipReasons({
+      listSkipReasons({
         candidates: [
           buildTestEvictCandidate({
             folderPath: folderPath,
@@ -118,7 +120,7 @@ describe('skipOffersTheRemovalRefuses', () => {
 
   test('keeps a tool item, whose tool removes what it owns', () => {
     expect(
-      findSkipReasons({
+      listSkipReasons({
         candidates: [buildTestToolCandidate({ homeDir: HOME_DIR, version: '20.1.0' })],
       }),
     ).toEqual([null]);

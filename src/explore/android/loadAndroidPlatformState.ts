@@ -5,6 +5,7 @@ import type { Result } from '../../result.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import type { AndroidPackageFolder } from './loadAndroidPackageFolder.js';
 import { loadAndroidChildPaths, loadAndroidPackageFolders } from './loadAndroidPackageFolder.js';
+import type { AndroidSdkRoot } from './loadAndroidSdkRoots.js';
 
 /** The platform folders of one SDK that hold a `package.xml`; none without `platforms`. */
 export type AndroidPlatformSdk = {
@@ -17,39 +18,60 @@ export type AndroidPlatformState = { sdks: AndroidPlatformSdk[] };
 
 /**
  * Reads `<sdk>/platforms/*` of each root, for the platform probe and the recheck of its units
- * alone, so a failed read fails neither the AVD, system image, nor emulator probe.
+ * alone, so a failed read fails neither the AVD, system image, nor emulator probe. A failed read
+ * in a root that is not required leaves only that root's SDK out.
  */
 export async function loadAndroidPlatformState(params: {
   pathRules: PathRules;
-  sdkRoots: AbsolutePath[];
+  sdkRoots: AndroidSdkRoot[];
   privacyDenialCode: string | null;
 }): Promise<Result<AndroidPlatformState, ExploreFileUnreadable>> {
   const sdks: AndroidPlatformSdk[] = [];
 
   for (const sdkRoot of params.sdkRoots) {
-    const folderPaths = await loadAndroidChildPaths({
+    const platforms = await loadAndroidSdkPlatforms({
       pathRules: params.pathRules,
-      parentPaths: [
-        joinAbsolutePath({ rules: params.pathRules, parentPath: sdkRoot, names: ['platforms'] }),
-      ],
-      privacyDenialCode: params.privacyDenialCode,
-    });
-
-    if (folderPaths.kind === 'failed') {
-      return folderPaths;
-    }
-
-    const platforms = await loadAndroidPackageFolders({
-      folderPaths: folderPaths.value,
+      sdkRoot: sdkRoot.path,
       privacyDenialCode: params.privacyDenialCode,
     });
 
     if (platforms.kind === 'failed') {
-      return platforms;
+      if (sdkRoot.isRequired) {
+        return platforms;
+      }
+
+      continue;
     }
 
-    sdks.push({ sdkRoot: sdkRoot, platforms: platforms.value });
+    sdks.push({ sdkRoot: sdkRoot.path, platforms: platforms.value });
   }
 
   return { kind: 'succeeded', value: { sdks: sdks } };
+}
+
+async function loadAndroidSdkPlatforms(params: {
+  pathRules: PathRules;
+  sdkRoot: AbsolutePath;
+  privacyDenialCode: string | null;
+}): Promise<Result<AndroidPackageFolder[], ExploreFileUnreadable>> {
+  const folderPaths = await loadAndroidChildPaths({
+    pathRules: params.pathRules,
+    parentPaths: [
+      joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: params.sdkRoot,
+        names: ['platforms'],
+      }),
+    ],
+    privacyDenialCode: params.privacyDenialCode,
+  });
+
+  if (folderPaths.kind === 'failed') {
+    return folderPaths;
+  }
+
+  return loadAndroidPackageFolders({
+    folderPaths: folderPaths.value,
+    privacyDenialCode: params.privacyDenialCode,
+  });
 }

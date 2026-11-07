@@ -1,5 +1,6 @@
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
 import { runScan } from '../../src/scan/runScan.js';
@@ -41,4 +42,15 @@ export function runTestScan(params: {
     },
     onProgress: params.onProgress ?? (() => undefined),
   });
+}
+
+/** The entry `id` of the macOS catalog, for `runTestScan`; throws when the catalog holds none. */
+export function getCatalogEntry(id: string): CatalogEntry {
+  const entry = darwinPlatform.catalog.entries.find((candidate) => candidate.id === id);
+
+  if (entry === undefined) {
+    throw new Error(`The catalog holds no entry ${id}.`);
+  }
+
+  return entry;
 }

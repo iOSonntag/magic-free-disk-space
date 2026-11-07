@@ -15,7 +15,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildTestProbeRun, getProbeFindings } from '../support/probeRunFixtures.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -52,24 +52,11 @@ afterEach(async () => {
 });
 
 function buildRun(processCommands: string[] | null): ExploreProbeRun {
-  return {
-    environment: environment,
-    platform: buildTestProbePlatform(),
-    processCommands: processCommands,
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: 0,
-    staleCutoffMs: 0,
-  };
+  return buildTestProbeRun({ environment: environment, processCommands: processCommands });
 }
 
 async function loadFindings(processCommands: string[] | null = []): Promise<ExploreProbeFindings> {
-  const findings = await loadVscodeExtensionFindings(buildRun(processCommands));
-
-  if (findings.kind === 'failed') {
-    throw new Error(`The probe failed: ${findings.failure.reason}.`);
-  }
-
-  return findings.value;
+  return getProbeFindings(await loadVscodeExtensionFindings(buildRun(processCommands)));
 }
 
 /**

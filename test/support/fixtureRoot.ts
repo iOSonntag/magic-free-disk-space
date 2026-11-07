@@ -130,7 +130,10 @@ export function buildTestMacEnvironment(): Environment {
   });
 }
 
-/** Creates a file whose allocated size is at least `sizeBytes`; the filesystem rounds up to whole blocks. */
+/**
+ * Creates a file whose allocated size is at least `sizeBytes`, creating its missing parent
+ * folders; the filesystem rounds up to whole blocks.
+ */
 export async function createFixtureFile(params: {
   path: string;
   sizeBytes: number;
@@ -140,6 +143,7 @@ export async function createFixtureFile(params: {
 }): Promise<void> {
   const accessedMs = params.accessedMs ?? params.modifiedMs;
 
+  await mkdir(dirname(params.path), { recursive: true });
   await writeFile(params.path, Buffer.alloc(params.sizeBytes));
   await utimes(params.path, accessedMs / 1000, params.modifiedMs / 1000);
 }

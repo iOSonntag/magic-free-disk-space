@@ -127,7 +127,7 @@ async function loadSocketFindings(params: {
       diskImagePath: params.socket.diskImagePath,
     },
     usage: state.value.usage,
-    nowMs: Date.now(),
+    nowMs: params.run.environment.nowMs,
     processCommands: params.run.processCommands,
   });
 

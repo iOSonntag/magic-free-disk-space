@@ -3,13 +3,18 @@ import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitLmStudioModel } from '../exploreUnit.js';
 import type { LmStudioModelFolder } from './loadLmStudioModelState.js';
 
-/** Unchanged while the unit's folder is still one of the fresh model folders, and LM Studio idle. */
+/**
+ * Unchanged while the unit's folder is still a model folder with the change time the scan saw, so
+ * no file came or went since, and LM Studio idle.
+ */
 export function compareLmStudioModelUnit(params: {
   unit: ExplorePathUnitLmStudioModel;
   folders: LmStudioModelFolder[];
   processCommands: string[] | null;
 }): UnitComparison {
-  if (!params.folders.some((folder) => folder.path === params.unit.folderPath)) {
+  const folder = params.folders.find((modelFolder) => modelFolder.path === params.unit.folderPath);
+
+  if (folder === undefined || folder.modifiedMs !== params.unit.downloadedAtMs) {
     return { kind: 'changed' };
   }
 

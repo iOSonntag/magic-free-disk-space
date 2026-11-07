@@ -25,7 +25,7 @@ class SectionContents {
   }
 }
 
-ShownItemGroup getShownItemGroup(ItemGroup group) {
+ShownItemGroup itemGroupToShownItemGroup(ItemGroup group) {
   return switch (group) {
     ItemGroup.safe => ShownItemGroup.safe,
     ItemGroup.careful => ShownItemGroup.careful,
@@ -33,14 +33,11 @@ ShownItemGroup getShownItemGroup(ItemGroup group) {
   };
 }
 
-/// The group whose words name an item of [risk] in the delete flow.
-ShownItemGroup riskToShownItemGroup(Risk risk) {
-  return switch (risk) {
-    Risk.safe => ShownItemGroup.safe,
-    Risk.review => ShownItemGroup.review,
-    // The bridge never plans an item of the risk never; were it to, it
-    // reads as the strictest group.
-    Risk.careful || Risk.never => ShownItemGroup.careful,
+/// False for an item of [Risk.never], which the bridge refuses to plan.
+bool isItemRemovable(ItemView item) {
+  return switch (item.risk) {
+    Risk.safe || Risk.review || Risk.careful => true,
+    Risk.never => false,
   };
 }
 
@@ -53,7 +50,7 @@ SectionContents buildSectionContents(ScannedEvent scan, SectionKey sectionKey) {
     for (final ShownItemGroup group in ShownItemGroup.values)
       group: [
         for (final ItemView item in sectionItems)
-          if (getShownItemGroup(item.group) == group) item,
+          if (itemGroupToShownItemGroup(item.group) == group) item,
       ],
   };
   final List<AdviceItemView> adviceItems = [
@@ -82,7 +79,7 @@ final class ItemSizeSum {
   final bool isComplete;
 }
 
-ItemSizeSum sumItemSizes(List<ItemView> items) {
+ItemSizeSum sumItemSizes(Iterable<ItemView> items) {
   int allocatedBytes = 0;
   bool isComplete = true;
   for (final ItemView item in items) {

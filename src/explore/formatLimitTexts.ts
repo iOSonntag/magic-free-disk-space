@@ -1,4 +1,5 @@
-const DAY_MS = 86_400_000;
+/** One day in milliseconds, the unit of the probes' limits of time. */
+export const DAY_MS = 86_400_000;
 
 /** The words of the counts a sentence spells out; a larger count keeps its digits. */
 const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -16,4 +17,14 @@ export function formatDaySpan(durationMs: number): string {
 /** A count as a sentence writes it: its word below ten, such as `two`, its digits from ten on. */
 export function formatCountWord(count: number): string {
   return COUNT_WORDS[count] ?? count.toLocaleString('en-US');
+}
+
+/** A count in digits with its noun, `1 file` or `3 files`: every count but one takes the plural. */
+export function formatCountText(params: { count: number; noun: string }): string {
+  return params.count === 1 ? `1 ${params.noun}` : `${params.count} ${params.noun}s`;
+}
+
+/** The day of a time in UTC, as `2026-11-07`. */
+export function formatIsoDay(timeMs: number): string {
+  return new Date(timeMs).toISOString().slice(0, 10);
 }

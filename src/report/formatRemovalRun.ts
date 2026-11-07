@@ -8,8 +8,8 @@ import type {
 import { isUnremovedOutcome } from '../delete/deleteCandidates.js';
 import type { JournalFailure } from '../delete/deletionJournal.js';
 import { formatBytes } from './formatBytes.js';
+import { formatCandidateItemText } from './formatCandidateItemText.js';
 import { formatCount } from './formatCount.js';
-import { formatDisplayText } from './formatDisplayText.js';
 import { formatToolFailureStderrLines, formatToolFailureSummary } from './formatToolFailure.js';
 import { isEngineOutcome, sumFreedSpace } from './sumFreedSpace.js';
 
@@ -57,7 +57,7 @@ function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
 function formatCodedOutcomeLine(params: { outcome: RemovalOutcomeCoded }): string {
   const codeText = params.outcome.code === null ? '' : ` (${params.outcome.code})`;
 
-  return `- ${outcomeTexts[params.outcome.outcome]}: ${formatOutcomeItemText({ outcome: params.outcome })}${codeText}`;
+  return `- ${outcomeTexts[params.outcome.outcome]}: ${formatCandidateItemText({ candidate: params.outcome.candidate })}${codeText}`;
 }
 
 /** The failure in short, then the end of what the tool wrote to stderr when it wrote any. */
@@ -66,25 +66,9 @@ function formatToolFailedLines(params: { outcome: RemovalOutcomeToolFailed }): s
   const stderrLines = formatToolFailureStderrLines({ failure: params.outcome.failure });
 
   return [
-    `- ${outcomeTexts.toolFailed}: ${formatOutcomeItemText({ outcome: params.outcome })} (${failureText})`,
+    `- ${outcomeTexts.toolFailed}: ${formatCandidateItemText({ candidate: params.outcome.candidate })} (${failureText})`,
     ...stderrLines.map((line) => `   ${line}`),
   ];
-}
-
-/**
- * The item an outcome is about: its path, or for an engine's unit its title and its engine, since
- * the path shown for it is the engine's disk image, which the engine keeps.
- */
-function formatOutcomeItemText(params: { outcome: RemovalOutcome }): string {
-  const candidate = params.outcome.candidate;
-
-  if (candidate.removal.kind === 'callEngine') {
-    return formatDisplayText({
-      text: `${candidate.title}, in ${candidate.removal.unit.engineName}`,
-    });
-  }
-
-  return formatDisplayText({ text: candidate.path });
 }
 
 /**

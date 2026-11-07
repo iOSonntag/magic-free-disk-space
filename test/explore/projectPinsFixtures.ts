@@ -3,6 +3,7 @@ import type { ProjectPinsLoad } from '../../src/explore/projectPins/loadProjectP
 import type {
   ProjectPinFile,
   ProjectPinFileKind,
+  ProjectPinFileText,
   ProjectPins,
 } from '../../src/explore/projectPins/projectPins.js';
 import type { Result } from '../../src/result.js';
@@ -18,6 +19,19 @@ export function buildTestPinFileText(params: {
     path: buildTestAbsolutePath({ text: params.path }),
     kind: params.kind,
     content: { kind: 'text', text: params.text },
+  };
+}
+
+/** The text of a pin file as a tool's pins hold it. */
+export function buildTestPinText(params: {
+  path: string;
+  kind: ProjectPinFileKind;
+  text: string;
+}): ProjectPinFileText {
+  return {
+    path: buildTestAbsolutePath({ text: params.path }),
+    kind: params.kind,
+    text: params.text,
   };
 }
 

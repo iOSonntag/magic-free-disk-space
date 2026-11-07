@@ -3,49 +3,66 @@ import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { Result } from '../../result.js';
 import { walkDirectoryTree } from '../../system/walkDirectoryTree.js';
 import type { UnitActivityFacts } from '../decideUnitActivity.js';
+import type { BrowserFamily, BrowserFamilyBundles } from '../explorePlatform.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreEntryStats } from '../loadExploreRead.js';
 
-/** What a file in Downloads is, by its name; `null` for every other file. */
-export type DownloadsFileKind = 'installer' | 'incomplete';
+/** An installer, done once its app or update is installed. */
+export type DownloadsFileKindInstaller = { kind: 'installer' };
+
+/** A partial download, which only a browser of `browserFamily` writes. */
+export type DownloadsFileKindIncomplete = { kind: 'incomplete'; browserFamily: BrowserFamily };
+
+/** What a file in Downloads is, by its name. */
+export type DownloadsFileKind = DownloadsFileKindInstaller | DownloadsFileKindIncomplete;
+
+/** The browser families in the order of their findings. */
+export const BROWSER_FAMILIES: BrowserFamily[] = ['chromium', 'firefox', 'safari'];
 
 /** Disk images, packages, and archives of an app or a system that install it and are done then. */
 const INSTALLER_EXTENSIONS = ['.dmg', '.pkg', '.mpkg', '.xip', '.iso'];
 
-/** Safari's `.download` folder, Chrome's and its kin's `.crdownload`, Firefox's `.part`. */
-const INCOMPLETE_EXTENSIONS = ['.download', '.crdownload', '.part'];
+/** The ending of each family's partial download; Safari's `.download` is a folder. */
+const INCOMPLETE_EXTENSIONS: Record<BrowserFamily, string> = {
+  chromium: '.crdownload',
+  firefox: '.part',
+  safari: '.download',
+};
 
 /** Folders read at once while a folder's newest change is looked for. */
 const DOWNLOADS_MAX_CONCURRENT_DIRECTORIES = 4;
 
+/** The kind of the file `name` by its ending, in any case; `null` for every other file. */
 export function getDownloadsFileKind(params: { name: string }): DownloadsFileKind | null {
   const lowerCaseName = params.name.toLowerCase();
 
   if (INSTALLER_EXTENSIONS.some((extension) => lowerCaseName.endsWith(extension))) {
-    return 'installer';
+    return { kind: 'installer' };
   }
 
-  if (INCOMPLETE_EXTENSIONS.some((extension) => lowerCaseName.endsWith(extension))) {
-    return 'incomplete';
+  const browserFamily = BROWSER_FAMILIES.find((family) =>
+    lowerCaseName.endsWith(INCOMPLETE_EXTENSIONS[family]),
+  );
+
+  if (browserFamily !== undefined) {
+    return { kind: 'incomplete', browserFamily: browserFamily };
   }
 
   return null;
 }
 
 /**
- * The bundles of the browsers that write a partial download: each browser in each app folder, and
- * the browsers the system keeps itself.
+ * The bundles of the browsers of a family: each browser in each app folder, and those the system
+ * keeps itself.
  */
-export function listBrowserBundlePaths(params: {
+function listBrowserBundlePaths(params: {
   environment: Environment;
-  platform: ExploreProbePlatform;
+  bundles: BrowserFamilyBundles;
 }): string[] {
-  const browsers = params.platform.explore.browserBundles;
-
   return [
     ...params.environment.applicationDirs.flatMap((applicationDir) =>
-      browsers.appBundleNames.map((bundleName) =>
+      params.bundles.appBundleNames.map((bundleName) =>
         joinAbsolutePath({
           rules: params.environment.pathRules,
           parentPath: applicationDir,
@@ -53,21 +70,30 @@ export function listBrowserBundlePaths(params: {
         }),
       ),
     ),
-    ...browsers.systemBundlePaths,
+    ...params.bundles.systemBundlePaths,
   ];
 }
 
-/** An installer is judged by its times alone; a partial download while no browser writes it. */
+/**
+ * An installer is judged by its times alone; a partial download while no browser of its family
+ * runs, since no other browser writes it.
+ */
 export function buildDownloadsActivityFacts(params: {
-  kind: DownloadsFileKind;
+  fileKind: DownloadsFileKind;
   environment: Environment;
   platform: ExploreProbePlatform;
 }): UnitActivityFacts {
-  switch (params.kind) {
+  switch (params.fileKind.kind) {
     case 'installer':
       return { kind: 'untouchedFiles' };
     case 'incomplete':
-      return { kind: 'appBundles', bundlePaths: listBrowserBundlePaths(params) };
+      return {
+        kind: 'appBundles',
+        bundlePaths: listBrowserBundlePaths({
+          environment: params.environment,
+          bundles: params.platform.explore.browserBundles[params.fileKind.browserFamily],
+        }),
+      };
   }
 }
 
@@ -106,7 +132,6 @@ export async function loadLatestModified(params: {
     return { kind: 'succeeded', value: { kind: 'known', modifiedMs: stats.value.modifiedMs } };
   }
 
-  const deadlineMs = params.deadlineMs;
   let latestModifiedMs = stats.value.modifiedMs;
   let isEveryPartRead = true;
 
@@ -114,7 +139,7 @@ export async function loadLatestModified(params: {
     rootPath: params.path,
     isStatsNeeded: true,
     maxConcurrentDirectories: DOWNLOADS_MAX_CONCURRENT_DIRECTORIES,
-    isStopped: () => deadlineMs !== null && Date.now() >= deadlineMs,
+    isStopped: () => params.deadlineMs !== null && Date.now() >= params.deadlineMs,
     entryReads: params.platform.entryReads,
     visitEntry: (entry) => {
       if (entry.stats !== null) {

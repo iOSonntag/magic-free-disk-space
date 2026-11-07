@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdir, symlink } from 'node:fs/promises';
+import { symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExplorePathUnitFvmVersion } from '../../src/explore/exploreUnit.js';
 import { compareFvmVersionUnit } from '../../src/explore/fvmVersions/compareFvmVersionUnit.js';
@@ -14,7 +14,7 @@ import type {
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { writeFixtureTextFile } from '../support/fixtureRoot.js';
+import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
@@ -25,18 +25,18 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
-import { buildTestPinFileText, buildTestProjectPins } from './projectPinsFixtures.js';
+import {
+  buildTestPinFileText,
+  buildTestPinText,
+  buildTestProjectPins,
+} from './projectPinsFixtures.js';
 
 const VALUE_VERSIONS_PATH = '/Users/example/fvm/versions';
 
 const UNPINNED: ToolPins = { kind: 'texts', files: [] };
 
 function buildFvmrcText(params: { text: string }): ProjectPinFileText {
-  return {
-    path: buildTestAbsolutePath({ text: '/Users/example/app/.fvmrc' }),
-    kind: 'fvmrc',
-    text: params.text,
-  };
+  return buildTestPinText({ path: '/Users/example/app/.fvmrc', kind: 'fvmrc', text: params.text });
 }
 
 describeAwaitingWin32Platform('parseFvmrcPins', () => {
@@ -166,6 +166,7 @@ describeAwaitingWin32Platform('loadFvmVersionFindings and recheckFvmVersionUnit'
         for (const version of ['3.10.0', '3.19.6', '3.22.0']) {
           await writeFvmVersion({ home: home, version: version });
         }
+
         await symlink(
           join(buildVersionsPath(home), '3.22.0'),
           join(home.fixtureRoot.homeDir, 'fvm', 'default'),
@@ -206,7 +207,7 @@ describeAwaitingWin32Platform('loadFvmVersionFindings and recheckFvmVersionUnit'
       nowMs: Date.now(),
       run: async (home) => {
         await writeFvmVersion({ home: home, version: '3.10.0' });
-        await mkdir(join(buildVersionsPath(home), 'my-fork'), { recursive: true });
+        await createFixtureDirectory({ path: join(buildVersionsPath(home), 'my-fork') });
 
         expect(
           await loadFvmVersionFindings({

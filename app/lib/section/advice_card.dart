@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../bridge/bridge.dart';
 import '../design/design.dart';
 import '../link/link.dart';
+import '../scan_view/scan_view.dart';
 import 'item_detail_lines.dart';
 import 'reveal_in_finder_button.dart';
 
@@ -81,61 +82,61 @@ class AdviceCard extends StatelessWidget {
   const AdviceCard({
     super.key,
     required this.item,
-    required this.accent,
-    required this.sectionGlyph,
+    required this.look,
     required this.revealPaths,
     required this.urlOpener,
+    required this.now,
   });
 
   final AdviceItemView item;
-  final Color accent;
-  final IconData sectionGlyph;
+  final SectionLook look;
   final Set<String> revealPaths;
   final UrlOpener urlOpener;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
     final AdviceOpener? opener = item.opener;
     return AdvicePlaceCard(
       title: item.title,
+      factsText: formatAdviceFactsText(item, now: now),
       allocatedBytes: item.allocatedBytes,
       displayPath: item.displayPath,
-      details: ItemDetailLines(lines: item.detailLines, accent: accent),
+      details: ItemDetailLines(lines: item.detailLines, accent: look.accent),
       target: opener == null ? null : findAdviceOpenerTarget(opener),
       revealUrl: RevealUrl.tryParse(item.revealPath, allowedPaths: revealPaths),
-      accent: accent,
-      fallbackGlyph: sectionGlyph,
+      look: look,
       urlOpener: urlOpener,
     );
   }
 }
 
-/// The card of a place only the user can free: its title, its size when
-/// above zero, its path, [details] on how, and a button for [target] and for
-/// [revealUrl] where they are set. The glyph is the target's, else
-/// [fallbackGlyph].
+/// The card of a place only the user can free: its title, [factsText] when
+/// not empty, its size when above zero, its path, [details] on how, and a
+/// button for [target] and for [revealUrl] where they are set. The glyph is
+/// the target's, else the section's.
 class AdvicePlaceCard extends StatelessWidget {
   const AdvicePlaceCard({
     super.key,
     required this.title,
+    required this.factsText,
     required this.allocatedBytes,
     required this.displayPath,
     required this.details,
     required this.target,
     required this.revealUrl,
-    required this.accent,
-    required this.fallbackGlyph,
+    required this.look,
     required this.urlOpener,
   });
 
   final String title;
+  final String factsText;
   final int allocatedBytes;
   final String? displayPath;
   final Widget details;
   final AdviceOpenerTarget? target;
   final RevealUrl? revealUrl;
-  final Color accent;
-  final IconData fallbackGlyph;
+  final SectionLook look;
   final UrlOpener urlOpener;
 
   @override
@@ -143,12 +144,13 @@ class AdvicePlaceCard extends StatelessWidget {
     final AdviceOpenerTarget? target = this.target;
     final String? displayPath = this.displayPath;
     final RevealUrl? revealUrl = this.revealUrl;
+    final Color accent = look.accent;
     return GlassCard(
       accent: accent,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GlyphTile(glyph: target?.glyph ?? fallbackGlyph, accent: accent, size: 44),
+          GlyphTile(glyph: target?.glyph ?? look.glyph, accent: accent),
           const SizedBox(width: StageSpacing.regular),
           Expanded(
             child: Column(
@@ -164,6 +166,10 @@ class AdvicePlaceCard extends StatelessWidget {
                     ],
                   ],
                 ),
+                if (factsText.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(factsText, style: TypeRamp.caption),
+                ],
                 if (displayPath != null) ...[
                   const SizedBox(height: StageSpacing.tight),
                   ItemPathText(path: displayPath),

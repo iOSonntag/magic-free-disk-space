@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/design/design.dart';
-import 'package:magic_free_disk_space/section/item_row.dart';
+import 'package:magic_free_disk_space/section/section.dart';
 
 Future<void> tapAndSettle(WidgetTester tester, Finder finder) async {
   await tester.tap(finder);

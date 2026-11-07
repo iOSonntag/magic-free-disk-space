@@ -18,9 +18,8 @@ export async function callEngineCandidate(params: {
   user: UserIdentity;
   clock: () => number;
 }): Promise<RecordedRemoval> {
-  const unit = params.removal.unit;
   const call = await callEngineUnit({
-    unit: unit,
+    unit: params.removal.unit,
     user: params.user,
     timeoutMs: ENGINE_CALL_TIMEOUT_MS,
   });
@@ -36,9 +35,9 @@ export async function callEngineCandidate(params: {
       {
         kind: 'engineCall',
         atMs: params.clock(),
-        engineName: unit.engineName,
-        unitKind: unit.kind,
-        unitIds: listEngineUnitIds(unit),
+        engineName: params.removal.unit.engineName,
+        unitKind: params.removal.unit.kind,
+        unitIds: listEngineUnitIds(params.removal.unit),
         outcome: call.outcome,
         status: call.status,
       },

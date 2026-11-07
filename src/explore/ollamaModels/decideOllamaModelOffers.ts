@@ -1,11 +1,12 @@
-import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { ExploreFoundPaths } from '../exploreUnit.js';
+import { toNonEmpty } from '../exploreUnit.js';
 import type { OllamaManifest, OllamaModelStateInstalled } from './loadOllamaModelState.js';
 
 /** A model to offer: its manifest and the blob files that no other manifest names. */
 export type OllamaModelOffer = {
   manifest: OllamaManifest;
   digestCount: number;
-  blobPaths: [AbsolutePath, ...AbsolutePath[]];
+  blobPaths: ExploreFoundPaths;
 };
 
 /**
@@ -40,14 +41,15 @@ export function decideOllamaModelOffers(params: {
   }
 
   return readManifests.flatMap((readManifest) => {
-    const blobPaths = [...readManifest.digests].flatMap((digest) => {
-      const blobPath = params.state.blobPaths.get(digest);
+    const blobPaths = toNonEmpty(
+      [...readManifest.digests].flatMap((digest) => {
+        const blobPath = params.state.blobPaths.get(digest);
 
-      return manifestCountByDigest.get(digest) === 1 && blobPath !== undefined ? [blobPath] : [];
-    });
-    const [firstBlobPath, ...otherBlobPaths] = blobPaths;
+        return manifestCountByDigest.get(digest) === 1 && blobPath !== undefined ? [blobPath] : [];
+      }),
+    );
 
-    if (firstBlobPath === undefined) {
+    if (blobPaths === null) {
       return [];
     }
 
@@ -55,7 +57,7 @@ export function decideOllamaModelOffers(params: {
       {
         manifest: readManifest.manifest,
         digestCount: readManifest.digests.size,
-        blobPaths: [firstBlobPath, ...otherBlobPaths],
+        blobPaths: blobPaths,
       },
     ];
   });

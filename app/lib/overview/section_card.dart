@@ -11,28 +11,26 @@ final class SectionCardKey extends ValueKey<SectionKey> {
   const SectionCardKey(super.value);
 }
 
-/// A section on the Overview: its glyph tile, title, size and count. It
+/// A section on the Overview: its glyph tile, title, figure and count. It
 /// lands with a rise and a fade when a scan first finds it, and sweeps while
 /// [isScanning].
 class SectionCard extends StatelessWidget {
   const SectionCard({
     super.key,
     required this.total,
-    required this.title,
     required this.isScanning,
     required this.onPressed,
   });
 
   final SectionTotal total;
-  final String title;
   final bool isScanning;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final SectionLook look = sectionKeyToLook(total.sectionKey);
-    final String sizeText = formatBytes(total.allocatedBytes);
     final String countText = formatSectionCountText(total);
+    final TextStyle figureStyle = TypeRamp.figure.copyWith(fontSize: 22, color: look.accent);
     final bool isReduced = MotionScope.of(context).isReduced;
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
@@ -51,7 +49,7 @@ class SectionCard extends StatelessWidget {
         width: sectionCardWidth,
         child: GlassCardButton(
           accent: look.accent,
-          semanticsLabel: '$title, $sizeText, $countText',
+          semanticsLabel: '${total.titleText}, ${formatSectionFigureText(total)}, $countText',
           onPressed: onPressed,
           child: ScanSweep(
             isSweeping: isScanning,
@@ -73,17 +71,23 @@ class SectionCard extends StatelessWidget {
                 ),
                 const SizedBox(height: StageSpacing.regular),
                 Text(
-                  title,
+                  total.titleText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TypeRamp.title,
                 ),
                 const SizedBox(height: StageSpacing.tight),
-                CountUp(
-                  value: total.allocatedBytes,
-                  format: formatBytes,
-                  style: TypeRamp.figure.copyWith(fontSize: 22, color: look.accent),
-                ),
+                if (total.itemCount > 0)
+                  CountUp(
+                    value: total.allocatedBytes,
+                    format: (int allocatedBytes) => formatSizeText(
+                      allocatedBytes: allocatedBytes,
+                      isComplete: total.isComplete,
+                    ),
+                    style: figureStyle,
+                  )
+                else
+                  Text(formatSectionFigureText(total), style: figureStyle),
                 const SizedBox(height: 2),
                 Text(
                   countText,

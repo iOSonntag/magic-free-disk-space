@@ -1,21 +1,32 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
+import type { BrowserFamily } from '../explorePlatform.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
-import type { ExploreFinding, ExploreFoundFile, ExploreFoundFiles } from '../exploreUnit.js';
+import type { ExploreFinding, ExploreFoundFile } from '../exploreUnit.js';
+import { toNonEmpty } from '../exploreUnit.js';
+import { formatCountText, formatIsoDay } from '../formatLimitTexts.js';
 import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import type { DownloadsFileKind } from './downloadsFiles.js';
 import {
+  BROWSER_FAMILIES,
   buildDownloadsActivityFacts,
   getDownloadsFileKind,
   loadLatestModified,
 } from './downloadsFiles.js';
 
+const INCOMPLETE_DOWNLOADS_TITLES: Record<BrowserFamily, string> = {
+  chromium: 'Unfinished downloads of Chrome and other Chromium browsers',
+  firefox: 'Unfinished downloads of Firefox',
+  safari: 'Unfinished downloads of Safari',
+};
+
 /**
  * Finds the installers and the partial downloads at the top of Downloads that nothing changed
- * since the stale cutoff, one unit for each kind. A hidden entry and a symbolic link are left
- * alone; so is an entry whose newest change is not known by the deadline, which leaves the
- * findings incomplete. Fails on an entry it cannot read; `placeMissing` without a Downloads folder.
+ * since the stale cutoff: one unit of the installers, and one of each browser family's partial
+ * downloads. A hidden entry and a symbolic link are left alone; so is an entry whose newest change
+ * is not known by the deadline, which leaves the findings incomplete. Fails on an entry it cannot
+ * read; `placeMissing` without a Downloads folder.
  */
 export async function loadDownloadsInstallerFindings(
   run: ExploreProbeRun,
@@ -39,7 +50,11 @@ export async function loadDownloadsInstallerFindings(
   }
 
   const installers: ExploreFoundFile[] = [];
-  const incomplete: ExploreFoundFile[] = [];
+  const incomplete: Record<BrowserFamily, ExploreFoundFile[]> = {
+    chromium: [],
+    firefox: [],
+    safari: [],
+  };
   let isComplete = true;
 
   for (const entry of entries.value) {
@@ -84,12 +99,12 @@ export async function loadDownloadsInstallerFindings(
 
     const found = { path: path, modifiedMs: latest.value.modifiedMs };
 
-    switch (fileKind) {
+    switch (fileKind.kind) {
       case 'installer':
         installers.push(found);
         break;
       case 'incomplete':
-        incomplete.push(found);
+        incomplete[fileKind.browserFamily].push(found);
         break;
     }
   }
@@ -97,16 +112,18 @@ export async function loadDownloadsInstallerFindings(
   const findings = [
     buildDownloadsFinding({
       run: run,
-      kind: 'installer',
+      fileKind: { kind: 'installer' },
       folderPath: folderPath,
       found: installers,
     }),
-    buildDownloadsFinding({
-      run: run,
-      kind: 'incomplete',
-      folderPath: folderPath,
-      found: incomplete,
-    }),
+    ...BROWSER_FAMILIES.map((browserFamily) =>
+      buildDownloadsFinding({
+        run: run,
+        fileKind: { kind: 'incomplete', browserFamily: browserFamily },
+        folderPath: folderPath,
+        found: incomplete[browserFamily],
+      }),
+    ),
   ].filter((finding) => finding !== null);
 
   return { kind: 'succeeded', value: { findings: findings, isComplete: isComplete } };
@@ -114,29 +131,27 @@ export async function loadDownloadsInstallerFindings(
 
 function buildDownloadsFinding(params: {
   run: ExploreProbeRun;
-  kind: DownloadsFileKind;
+  fileKind: DownloadsFileKind;
   folderPath: AbsolutePath;
   found: ExploreFoundFile[];
 }): ExploreFinding | null {
-  const [firstFile, ...restFiles] = params.found;
+  const foundFiles = toNonEmpty(params.found);
 
-  if (firstFile === undefined) {
+  if (foundFiles === null) {
     return null;
   }
 
-  const foundFiles: ExploreFoundFiles = [firstFile, ...restFiles];
-  const staleDate = new Date(params.run.staleCutoffMs).toISOString().slice(0, 10);
-  const countText = foundFiles.length === 1 ? '1 file' : `${foundFiles.length} files`;
+  const evidenceLine = `${formatCountText({ count: foundFiles.length, noun: 'file' })} unchanged since before ${formatIsoDay(params.run.staleCutoffMs)}.`;
   const activity = decideUnitActivity({
     facts: buildDownloadsActivityFacts({
-      kind: params.kind,
+      fileKind: params.fileKind,
       environment: params.run.environment,
       platform: params.run.platform,
     }),
     processCommands: params.run.processCommands,
   });
 
-  switch (params.kind) {
+  switch (params.fileKind.kind) {
     case 'installer':
       return {
         unit: {
@@ -150,7 +165,7 @@ function buildDownloadsFinding(params: {
           'Disk images and installer packages in Downloads that nothing changed for the stale period. Once their app or update is installed, they are no longer needed.',
         regeneration: 'Download it again from its maker if you need it.',
         risk: 'careful',
-        evidenceLines: [`${countText} unchanged since before ${staleDate}.`],
+        evidenceLines: [evidenceLine],
         displayPath: params.folderPath,
         activity: activity,
       };
@@ -159,15 +174,16 @@ function buildDownloadsFinding(params: {
         unit: {
           kind: 'downloadsIncomplete',
           folderPath: params.folderPath,
+          browserFamily: params.fileKind.browserFamily,
           cutoffMs: params.run.staleCutoffMs,
           foundFiles: foundFiles,
         },
-        title: 'Unfinished downloads in Downloads',
+        title: INCOMPLETE_DOWNLOADS_TITLES[params.fileKind.browserFamily],
         explanation:
-          'Partial downloads a browser left behind that nothing wrote to for the stale period, so no browser resumes them.',
+          'Partial downloads the browser left in Downloads and nothing wrote to for the stale period, so it does not resume them.',
         regeneration: 'Start the download again in the browser.',
         risk: 'safe',
-        evidenceLines: [`${countText} unchanged since before ${staleDate}.`],
+        evidenceLines: [evidenceLine],
         displayPath: params.folderPath,
         activity: activity,
       };

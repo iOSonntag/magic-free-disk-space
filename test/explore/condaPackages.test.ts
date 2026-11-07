@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { loadCondaPackageFindings } from '../../src/explore/condaPackages/loadCondaPackageFindings.js';
 import { parseCondaCleanDryRun } from '../../src/explore/condaPackages/parseCondaCleanDryRun.js';
 import { recheckCondaUnit } from '../../src/explore/condaPackages/recheckCondaUnit.js';
-import type { ExploreProbeToolRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreToolUnitCondaPackages } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
@@ -13,7 +12,7 @@ import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
-  buildTestProbeRun,
+  buildTestProbeToolRun,
   getProbeFindings,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
@@ -62,7 +61,11 @@ describeAwaitingWin32Platform('parseCondaCleanDryRun', () => {
   });
 
   test('reads the plan when a second JSON object follows it', () => {
-    const stdoutText = `${buildDryRunText({ tarballs: [], packages: ['a-1-0'] })}\n{\n  "message": "Dry run. Exiting."\n}\n`;
+    const stdoutText = `${buildDryRunText({ tarballs: [], packages: ['a-1-0'] })}
+{
+  "message": "Dry run. Exiting."
+}
+`;
 
     expect(parseCondaCleanDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: stdoutText })).toEqual(
       {
@@ -111,10 +114,6 @@ describeAwaitingWin32Platform('loadCondaPackageFindings and recheckCondaUnit', (
     return { name: 'conda', path: path };
   }
 
-  function buildRun(params: { home: FixtureHome; tool: LocatedTool }): ExploreProbeToolRun {
-    return { ...buildTestProbeRun({ environment: params.home.environment }), tool: params.tool };
-  }
-
   testOnPosix('offers the tarballs as safe and the packages as review', async () => {
     await withFixtureHome({
       nowMs: Date.now(),
@@ -126,7 +125,9 @@ describeAwaitingWin32Platform('loadCondaPackageFindings and recheckCondaUnit', (
         });
 
         const findings = getProbeFindings(
-          await loadCondaPackageFindings(buildRun({ home: home, tool: tool })),
+          await loadCondaPackageFindings(
+            buildTestProbeToolRun({ environment: home.environment, tool: tool }),
+          ),
         );
 
         expect(
@@ -161,10 +162,11 @@ describeAwaitingWin32Platform('loadCondaPackageFindings and recheckCondaUnit', (
       run: async (home) => {
         const tool = await createFakeConda({ home: home, tarballs: [], packages: [] });
 
-        expect(await loadCondaPackageFindings(buildRun({ home: home, tool: tool }))).toEqual({
-          kind: 'succeeded',
-          value: { findings: [], isComplete: true },
-        });
+        expect(
+          await loadCondaPackageFindings(
+            buildTestProbeToolRun({ environment: home.environment, tool: tool }),
+          ),
+        ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
       },
     });
   });
@@ -179,7 +181,7 @@ describeAwaitingWin32Platform('loadCondaPackageFindings and recheckCondaUnit', (
           tool: tool,
           packagePaths: [buildPkgsPath('c-3-0'), buildPkgsPath('d-4-0')],
         };
-        const run = buildRun({ home: home, tool: tool });
+        const run = buildTestProbeToolRun({ environment: home.environment, tool: tool });
 
         expect(await recheckCondaUnit({ unit: unit, run: run })).toEqual({ kind: 'unchanged' });
         expect(

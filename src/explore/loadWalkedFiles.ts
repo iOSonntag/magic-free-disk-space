@@ -25,7 +25,6 @@ export async function loadWalkedFiles(params: {
   maxConcurrentDirectories: number;
   isKept: (stats: EntryStats) => boolean;
 }): Promise<WalkedFiles> {
-  const maxFiles = params.maxFiles;
   const filePaths: string[] = [];
   let isComplete = true;
   const walkEnd = await walkDirectoryTree({
@@ -47,7 +46,7 @@ export async function loadWalkedFiles(params: {
         return 'skip';
       }
 
-      if (maxFiles !== null && filePaths.length >= maxFiles) {
+      if (params.maxFiles !== null && filePaths.length >= params.maxFiles) {
         return 'stop';
       }
 

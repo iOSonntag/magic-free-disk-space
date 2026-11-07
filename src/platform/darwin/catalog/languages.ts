@@ -268,8 +268,7 @@ export const LANGUAGE_ENTRIES: CatalogEntry[] = [
     regeneration: 'Deno downloads them again the next time a script needs them.',
     risk: 'safe',
     root: 'home',
-    // `Library/Caches/deno` is Deno's own folder on macOS; its `location_data` holds what scripts
-    // stored, so only the caches `libs/resolver/cache/deno_dir.rs` names go.
+    // Its `location_data` holds what scripts stored, so only Deno's own caches go.
     path: 'Library/Caches/deno',
     selection: {
       kind: 'profileFolders',

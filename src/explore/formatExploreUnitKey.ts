@@ -26,13 +26,14 @@ export function formatExploreUnitKey(params: { unit: ExploreUnit }): string {
     case 'androidPlatform':
     case 'pnpmStore':
     case 'downloadsInstallers':
-    case 'downloadsIncomplete':
     case 'mailDownloads':
     case 'claudeCodeVersion':
     case 'lmStudioModel':
     case 'fvmVersion':
     case 'icloudFolder':
       return `${params.unit.kind}:${params.unit.folderPath}`;
+    case 'downloadsIncomplete':
+      return `downloadsIncomplete:${params.unit.browserFamily}:${params.unit.folderPath}`;
     case 'vagrantBoxVersion':
       return `vagrantBoxVersion:${params.unit.name}/${params.unit.provider}@${params.unit.version}`;
     case 'rustupToolchain':

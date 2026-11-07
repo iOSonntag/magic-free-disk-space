@@ -2,7 +2,10 @@ import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.j
 import { buildClaudeCodeVersionFindings } from './buildClaudeCodeVersionFindings.js';
 import { loadClaudeCodeVersionState } from './loadClaudeCodeVersionState.js';
 
-/** The versions of Claude Code past the two newest that the `claude` launcher does not run. */
+/**
+ * The versions of Claude Code past the `KEPT_NEWEST_COUNT` newest that the `claude` launcher does
+ * not run.
+ */
 export async function loadClaudeCodeVersionFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {

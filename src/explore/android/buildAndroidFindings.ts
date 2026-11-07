@@ -6,6 +6,7 @@ import type {
   ExplorePathUnitAndroidPackage,
   ExploreProbeFindings,
 } from '../exploreUnit.js';
+import { formatIsoDay } from '../formatLimitTexts.js';
 import type { AndroidPackageOffer, AndroidPackageOffers } from './decideAndroidPackageOffers.js';
 import type { AndroidAvdPresent, AndroidSdkState } from './loadAndroidSdkState.js';
 
@@ -163,10 +164,10 @@ function buildAndroidAvdEvidenceLines(params: {
   imageSysdir: string;
   lastUsedAtMs: number;
 }): string[] {
-  const lastUsedDate = new Date(params.lastUsedAtMs).toISOString().slice(0, 10);
-  const lastUseLine = `Last used on ${lastUsedDate}, by the dates of its emulator files.`;
-
-  return [lastUseLine, `It runs the system image ${params.imageSysdir}.`];
+  return [
+    `Last used on ${formatIsoDay(params.lastUsedAtMs)}, by the dates of its emulator files.`,
+    `It runs the system image ${params.imageSysdir}.`,
+  ];
 }
 
 function buildAndroidPackageRegeneration(params: { offer: AndroidPackageOffer }): string {

@@ -1,5 +1,6 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreFoundPaths, ExploreProbeFindings } from '../exploreUnit.js';
+import { toNonEmpty } from '../exploreUnit.js';
 import { formatDaySpan } from '../formatLimitTexts.js';
 import {
   CLAUDE_TRANSCRIPT_UNTOUCHED_MS,
@@ -15,9 +16,9 @@ export function buildClaudeTranscriptFindings(params: {
 }): ExploreProbeFindings {
   const findings = params.projects.flatMap((project) => {
     const old = decideOldTranscriptPaths({ project: project, cutoffMs: params.cutoffMs });
-    const [firstPath, ...otherPaths] = old.paths;
+    const foundPaths = toNonEmpty(old.paths);
 
-    if (firstPath === undefined) {
+    if (foundPaths === null) {
       return [];
     }
 
@@ -26,7 +27,7 @@ export function buildClaudeTranscriptFindings(params: {
         project: project,
         cutoffMs: params.cutoffMs,
         sessionCount: old.sessionCount,
-        foundPaths: [firstPath, ...otherPaths],
+        foundPaths: foundPaths,
         processCommands: params.processCommands,
       }),
     ];

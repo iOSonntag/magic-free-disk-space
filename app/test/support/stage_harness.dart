@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/design/design.dart';
 
-import '../design/support/design_harness.dart';
+import 'window_motion.dart';
 
 /// A window tall enough that every page builds all of its cards.
 const Size stageWindowSize = Size(1440, 2800);
@@ -35,7 +35,7 @@ Widget buildStageScopes(
 /// [buildStageScopes] over [windowMotion].
 Widget buildStagePage(
   Widget page, {
-  ValueListenable<MotionState>? windowMotion,
+  required ValueListenable<MotionState> windowMotion,
 }) {
   final Widget app = MaterialApp(
     theme: buildStageTheme(),

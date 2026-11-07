@@ -8,11 +8,9 @@ import 'package:magic_free_disk_space/bridge/bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner.dart';
 import 'package:magic_free_disk_space/design/design.dart';
 import 'package:magic_free_disk_space/overview/overview.dart';
-import 'package:magic_free_disk_space/overview/section_card.dart';
 import 'package:magic_free_disk_space/removal/deleted_page.dart';
 import 'package:magic_free_disk_space/removal/deleting_view.dart';
 import 'package:magic_free_disk_space/removal/review_page.dart';
-import 'package:magic_free_disk_space/section/item_row.dart';
 import 'package:magic_free_disk_space/section/section.dart';
 import 'package:magic_free_disk_space/settings/settings.dart';
 import 'package:magic_free_disk_space/shell/app_destination.dart';
@@ -28,6 +26,7 @@ import '../support/sample_events.dart';
 import '../support/semantics_labels.dart';
 import '../support/stage_controls.dart';
 import '../support/stage_harness.dart';
+import '../support/test_items.dart';
 
 typedef _ShellParts = ({
   CleanerController controller,
@@ -54,9 +53,7 @@ Future<_ShellParts> _pumpShell(
     },
     home: AppShell(
       cleanerController: controller,
-      updateController: createUpdateController(
-        FakeUpdateBridge(answerCheck: () async => quietUpdateCheck),
-      ),
+      updateController: createUpdateController(FakeUpdateBridge()),
       navigation: navigation,
       urlOpener: shownUrlOpener,
     ),
@@ -110,7 +107,7 @@ bool _isAbovePage(WidgetTester tester, Finder notice, Finder page) {
 
 /// The rect of [node] in the window, through the transforms of its
 /// ancestors.
-Rect _findWindowRect(SemanticsNode node) {
+Rect _readWindowRect(SemanticsNode node) {
   Rect rect = node.rect;
   for (SemanticsNode? current = node; current != null; current = current.parent) {
     final Matrix4? transform = current.transform;
@@ -122,7 +119,7 @@ Rect _findWindowRect(SemanticsNode node) {
 }
 
 /// The sample scan, with the sections of Apps and Large files under two keys
-/// this app does not know.
+/// this app does not know, each with its own bridge title.
 ScannedEvent _buildScanWithUnknownSections() {
   final Map<String, Object?> json = loadSampleJson('scanned');
   const Map<String, String> unknownKeys = {
@@ -133,36 +130,27 @@ ScannedEvent _buildScanWithUnknownSections() {
     'otherFuture': 'Other future',
     'futureThings': 'Future things',
   };
-  final List<Map<String, Object?>> sections = (json['sections']! as List<Object?>)
-      .cast<Map<String, Object?>>();
-  for (final Map<String, Object?> section in sections) {
-    final String? unknownKey = unknownKeys[section['key']];
-    if (unknownKey != null) {
-      section['key'] = unknownKey;
-      section['titleText'] = unknownTitles[unknownKey];
-    }
+  for (final Map<String, Object?> section in listSectionJsons(json)) {
+    section['key'] = unknownKeys[section['key']] ?? section['key'];
   }
-  // The bridge lists Large files after Apps; put its section first, so its
-  // title is the one the shell shows.
-  sections.sort((Map<String, Object?> first, Map<String, Object?> second) {
-    return (first['key'] == 'futureThings' ? 0 : 1) -
-        (second['key'] == 'futureThings' ? 0 : 1);
-  });
   for (final Map<String, Object?> item in [
     ...listScanItemJsons(json),
     ...listScanAdviceJsons(json),
   ]) {
     item['sectionKey'] = unknownKeys[item['sectionKey']] ?? item['sectionKey'];
   }
-  for (final Object? total in json['sectionTotals']! as List<Object?>) {
-    final Map<String, Object?> totalJson = total! as Map<String, Object?>;
-    totalJson['sectionKey'] =
-        unknownKeys[totalJson['sectionKey']] ?? totalJson['sectionKey'];
+  for (final Map<String, Object?> total in listSectionTotalJsons(json)) {
+    final String? unknownKey = unknownKeys[total['sectionKey']];
+    if (unknownKey != null) {
+      total['sectionKey'] = unknownKey;
+      total['titleText'] = unknownTitles[unknownKey];
+    }
   }
   return parseScanJson(json);
 }
 
-/// The sample scan, with a Photos library that only Photos can free.
+/// The sample scan, with a Photos library that only Photos can free; the
+/// bridge measures no size of such advice.
 ScannedEvent _buildScanWithOwnAppAdvice() {
   final Map<String, Object?> json = loadSampleJson('scanned');
   listScanAdviceJsons(json).add({
@@ -170,7 +158,7 @@ ScannedEvent _buildScanWithOwnAppAdvice() {
     'title': 'Photos library',
     'risk': 'review',
     'riskText': 'review',
-    'sizeText': '4.0 MB',
+    'sizeText': '0 B',
     'detailLines': [
       {'kind': 'explanation', 'text': 'The photos and videos of the Photos app.'},
       {'kind': 'advice', 'text': 'Empty Recently Deleted in Photos.'},
@@ -178,14 +166,19 @@ ScannedEvent _buildScanWithOwnAppAdvice() {
     'sectionKey': 'ownApp',
     'origin': 'catalog',
     'removal': 'advice',
-    'allocatedBytes': 4000000,
+    'allocatedBytes': 0,
     'displayPath': null,
     'revealPath': null,
     'opener': {'kind': 'app', 'app': 'photos'},
+    'lastUsedAt': null,
+    'appName': 'Photos',
+    'matchedBy': null,
   });
-  (json['sectionTotals']! as List<Object?>).add({
+  listSectionTotalJsons(json).add({
     'sectionKey': 'ownApp',
-    'allocatedBytes': 4000000,
+    'titleText': 'Handled by its own app',
+    'allocatedBytes': 0,
+    'isComplete': true,
     'itemCount': 0,
     'safeBytes': 0,
     'adviceCount': 1,
@@ -193,16 +186,24 @@ ScannedEvent _buildScanWithOwnAppAdvice() {
   return parseScanJson(json);
 }
 
+/// The sample item numbered [number].
+ItemView _getSampleItem(int number) {
+  return loadSampleEvent<ScannedEvent>().selectableItems.singleWhere((ItemView item) => item.number == number);
+}
+
 void main() {
   final ScannedEvent sampleScan = loadSampleEvent<ScannedEvent>();
 
-  testWidgets('the sidebar leads to every destination', (WidgetTester tester) async {
-    final _ShellParts parts = await _pumpShell(tester, bridge: _createSampleBridge());
+  testWidgets('the sidebar lists the sections in the order the bridge sends, not the order of the keys', (
+    WidgetTester tester,
+  ) async {
+    final ScannedEvent scan = loadScanWithReversedTotals();
+    await _pumpShell(tester, bridge: _createSampleBridge(scan: scan));
 
-    expect(find.byType(OverviewPage), findsOneWidget);
     final List<SectionKey> bridgeOrder = [
-      for (final SectionTotal total in sampleScan.sectionTotals) total.sectionKey,
+      for (final SectionTotal total in scan.sectionTotals) total.sectionKey,
     ];
+    expect(bridgeOrder.first, SectionKey.icloud);
     for (final SectionKey sectionKey in bridgeOrder) {
       expect(_findSectionEntry(sectionKey), findsOneWidget);
     }
@@ -214,11 +215,16 @@ void main() {
             .compareTo(tester.getTopLeft(_findSectionEntry(lower)).dy),
       ),
       bridgeOrder,
-      reason: 'the sidebar lists the sections in the order the bridge sends',
     );
+  });
+
+  testWidgets('the sidebar leads to every destination', (WidgetTester tester) async {
+    final _ShellParts parts = await _pumpShell(tester, bridge: _createSampleBridge());
+
+    expect(find.byType(OverviewPage), findsOneWidget);
     // The barriers of the pages' routes must not hide the sidebar and the
     // toolbar from VoiceOver.
-    expect(find.bySemanticsLabel('Caches, 10 MB'), findsOneWidget);
+    expect(find.bySemanticsLabel('Caches, at least 10 MB'), findsOneWidget);
     expect(find.bySemanticsLabel('Scan again'), findsOneWidget);
     expect(_findSidebarEntry(const HandledElsewhereDestination()), findsOneWidget);
     expect(_findSidebarEntry(const SettingsDestination()), findsOneWidget);
@@ -274,15 +280,12 @@ void main() {
   ) async {
     await _pumpShell(tester, bridge: _createSampleBridge());
 
-    final List<SemanticsNode> tappableNodes = find.semantics
-        .byAction(SemanticsAction.tap)
-        .evaluate()
-        .toList();
+    final List<SemanticsNode> tappableNodes = findTappableNodes().toList();
 
     expect(tappableNodes, isNotEmpty);
     for (final SemanticsNode node in tappableNodes) {
       expect(
-        _findWindowRect(node).top,
+        _readWindowRect(node).top,
         greaterThanOrEqualTo(titleBarHeight),
         reason: '${node.label} lies under the title bar.',
       );
@@ -306,7 +309,7 @@ void main() {
     await tapAndSettle(tester, find.text('Scan again'));
 
     expect(bridge.requestKinds, ['status', 'scan', 'scan']);
-    expect(find.text('26 MB can be freed'), findsOneWidget);
+    expect(find.text('at least 26 MB can be freed'), findsOneWidget);
   });
 
   testWidgets('one selection holds items of two sections, and Review plans them together', (
@@ -326,6 +329,55 @@ void main() {
 
     expect(bridge.plannedNumbers, [1, 4]);
     expect(find.byType(ReviewPage), findsOneWidget);
+  });
+
+  testWidgets('a probed safe item stands in the same group on its page, on Review and in the alert', (
+    WidgetTester tester,
+  ) async {
+    final ItemView buildCache = _getSampleItem(9);
+    final FakeCleanerBridge bridge = _createSampleBridge()
+      ..planAnswer = buildSamplePlan(
+        [planItem(buildCache), planItem(_getSampleItem(4))],
+        holdsCareful: true,
+      );
+    await _pumpShell(tester, bridge: bridge);
+    await tapAndSettle(tester, _findSectionEntry(SectionKey.developerTools));
+
+    // Review first stands closed, so the row shows only once it opens.
+    expect(find.byKey(const ItemRowKey(9)), findsNothing);
+    await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
+    expect(find.byKey(const ItemRowKey(9)), findsOneWidget);
+
+    await tapAndSettle(tester, find.byKey(const ItemRowKey(9)));
+    await _tickRemovedAppData(tester);
+    await tapAndSettle(tester, find.bySemanticsLabel('Review the 2 items selected'));
+
+    expect(bridge.plannedNumbers, [4, 9]);
+    expect(find.bySemanticsLabel('${buildCache.title}, 2.0 MB, Review first'), findsOneWidget);
+    expect(find.bySemanticsLabel('${buildCache.title}, 2.0 MB, Safe to remove'), findsNothing);
+
+    await tapAndSettle(tester, findButtonLabelled('Delete 4.0 MB'));
+
+    expect(
+      find.text("Can't be undone or downloaded again: Data of an app that is no longer installed (Example Removed)."),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Select all of a group leaves out an item the bridge never plans, and the selection does not count it', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, Object?> json = loadSampleJson('scanned');
+    listScanItemJsons(json).singleWhere((Map<String, Object?> item) => item['number'] == 3)['sectionKey'] = 'caches';
+    await _pumpShell(tester, bridge: _createSampleBridge(scan: parseScanJson(json)));
+    await tapAndSettle(tester, _findSectionEntry(SectionKey.caches));
+    await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
+
+    await tapAndSettle(tester, find.bySemanticsLabel('Select all of Review first'));
+
+    expect(readRowMark(tester, 2), isTrue);
+    expect(readRowMark(tester, 3), isFalse);
+    expect(find.text('1 item selected'), findsOneWidget);
   });
 
   testWidgets('Review lies over the pages, and leaves the section as it was', (
@@ -410,7 +462,7 @@ void main() {
     await tapAndSettle(tester, _findSectionEntry(SectionKey.caches));
     await tapAndSettle(tester, find.byKey(const ItemRowKey(1)));
     await tapAndSettle(tester, find.bySemanticsLabel('Review the 1 item selected'));
-    await tapAndSettle(tester, findButtonLabelled('Delete 15 MB'));
+    await tapAndSettle(tester, findButtonLabelled('Delete at least 15 MB'));
 
     await tapAndSettle(tester, findButtonLabelled('Delete'));
 
@@ -495,20 +547,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ReviewPage), findsOneWidget);
     expect(
-      find.byType(SectionCard, skipOffstage: false),
+      find.byWidgetPredicate((Widget widget) => widget.key is SectionCardKey, skipOffstage: false),
       findsWidgets,
       reason: 'the Overview stays built below Review',
     );
 
-    final List<Key?> focusedCardKeys = [];
+    final List<SectionCardKey> focusedCardKeys = [];
     for (int i = 0; i < 40; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
-      final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
-      final SectionCard? card = focused?.findAncestorWidgetOfExactType<SectionCard>();
-      if (card != null) {
-        focusedCardKeys.add(card.key);
-      }
+      FocusManager.instance.primaryFocus?.context?.visitAncestorElements((Element element) {
+        final Key? key = element.widget.key;
+        if (key is SectionCardKey) {
+          focusedCardKeys.add(key);
+          return false;
+        }
+        return true;
+      });
     }
 
     expect(focusedCardKeys, isEmpty);
@@ -577,7 +632,7 @@ void main() {
     await _showAndTap(tester, findButtonLabelled('Show list'));
     expect(find.byType(ReviewPage), findsOneWidget);
     expectNoLayoutError('Review');
-    await _showAndTap(tester, findButtonLabelled('Delete 15 MB'));
+    await _showAndTap(tester, findButtonLabelled('Delete at least 15 MB'));
     expectNoLayoutError('the alert over Review');
 
     final Completer<DeleteAnswer> heldDelete = bridge.holdNextDelete();
@@ -590,7 +645,7 @@ void main() {
     expectNoLayoutError('the result');
   });
 
-  testWidgets('shows a section of a key this app does not know by the bridge title', (
+  testWidgets('shows the sections of keys this app does not know as one, by their bridge titles', (
     WidgetTester tester,
   ) async {
     await _pumpShell(
@@ -598,14 +653,14 @@ void main() {
       bridge: _createSampleBridge(scan: _buildScanWithUnknownSections()),
     );
 
-    expect(find.bySemanticsLabel('Future things, 8.0 MB'), findsOneWidget);
+    expect(find.bySemanticsLabel('Other future and Future things, 8.0 MB'), findsOneWidget);
     expect(find.byKey(const SectionCardKey(SectionKey.unknown)), findsOneWidget);
     expectEveryTappableNodeLabelled();
 
     await tapAndSettle(tester, find.byKey(const SectionCardKey(SectionKey.unknown)));
 
     expect(find.byType(SectionPage), findsOneWidget);
-    expect(find.text('Future things'), findsNWidgets(2));
+    expect(find.text('Other future and Future things'), findsNWidgets(2));
     expect(find.text('Review first'), findsOneWidget);
     expect(find.text("Can't be undone"), findsOneWidget);
     expectEveryTappableNodeLabelled();
@@ -619,11 +674,14 @@ void main() {
       bridge: _createSampleBridge(scan: _buildScanWithOwnAppAdvice()),
     );
 
-    expect(find.bySemanticsLabel('Handled by its own app, 4.0 MB'), findsOneWidget);
+    expect(find.bySemanticsLabel('Handled by its own app, 1 place'), findsOneWidget);
+    expect(find.text('0 B'), findsNothing);
 
     await tapAndSettle(tester, _findSidebarEntry(const HandledElsewhereDestination()));
 
     expect(find.byType(HandledElsewherePage), findsOneWidget);
+    expect(find.text('1 to handle yourself'), findsOneWidget);
+    expect(find.text('0 B'), findsNothing);
     expect(find.text('IN THEIR OWN APPS'), findsOneWidget);
     expect(find.text('Photos library'), findsOneWidget);
     expect(find.text('Empty Recently Deleted in Photos.'), findsOneWidget);
@@ -666,9 +724,7 @@ void main() {
     expect(find.text('Time Machine snapshots'), findsOneWidget);
     expectEveryTappableNodeLabelled();
 
-    final Finder openTimeMachine = find.text('Open Time Machine settings');
-    await tester.ensureVisible(openTimeMachine);
-    await tapAndSettle(tester, openTimeMachine);
+    await _showAndTap(tester, find.text('Open Time Machine settings'));
 
     final OpenableUrl url = parts.urlOpener.requestedUrls.single;
     expect(url, isA<SettingsPaneUrl>());

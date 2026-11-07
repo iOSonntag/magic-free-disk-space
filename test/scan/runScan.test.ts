@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
-import { dirname, join } from 'node:path';
-import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import { CATALOG_ENTRIES } from '../../src/platform/darwin/catalogEntries.js';
+import { join } from 'node:path';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
+import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
 import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
+import { createAndroidAvdHome, writeAndroidSystemImage } from '../explore/androidFixtures.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { TestUnitPathsCandidateParams } from '../support/candidateFixtures.js';
@@ -19,13 +19,13 @@ import {
 } from '../support/candidateFixtures.js';
 import {
   buildTestPathEnvironment,
-  createFixtureDirectory,
   createFixtureFile,
   loadTestEnvironment,
   withFixtureRoot,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { runTestScan } from '../support/scanRunFixtures.js';
+import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
 
 const HOME_DIR = '/Users/example';
 
@@ -240,7 +240,6 @@ describeAwaitingWin32Platform('runScan', () => {
         ];
 
         for (const file of files) {
-          await createFixtureDirectory({ path: dirname(file.path) });
           await createFixtureFile({
             path: file.path,
             sizeBytes: file.sizeBytes,
@@ -255,8 +254,8 @@ describeAwaitingWin32Platform('runScan', () => {
             nowMs: Date.UTC(2026, 6, 1),
           }),
           catalogEntries: [
-            findCatalogEntry('user-caches'),
-            findCatalogEntry('jetbrains-ide-versions'),
+            getCatalogEntry('user-caches'),
+            getCatalogEntry('jetbrains-ide-versions'),
           ],
           onProgress: (step) => progress.push(step),
         });
@@ -265,6 +264,52 @@ describeAwaitingWin32Platform('runScan', () => {
         expect(listOfferedPaths(report)).toContain(outdatedCachePath);
         expect(report.skipped).toContainEqual({ path: jetBrainsCachesPath, reason: 'heldByProbe' });
         expect(progress.length).toBeGreaterThan(0);
+
+        for (const step of progress) {
+          for (const total of step.found) {
+            expect(total.allocatedBytes).toBeLessThanOrEqual(finalBytes.get(total.sectionKey) ?? 0);
+          }
+        }
+      },
+    });
+  });
+
+  test('never counts a large file in a project SDK while it scans, which the report holds back for the probe', async () => {
+    await withFixtureRoot({
+      run: async (fixtureRoot) => {
+        const documentsPath = join(fixtureRoot.homeDir, 'Documents');
+        const sdkRoot = join(documentsPath, 'AndroidSdk');
+        const imageFolderPath = await writeAndroidSystemImage({
+          sdkRoot: sdkRoot,
+          platform: 'android-34',
+          abi: 'arm64-v8a',
+        });
+        const imagePath = join(imageFolderPath, 'system.img');
+        await createAndroidAvdHome({ homeDir: fixtureRoot.homeDir });
+        await createFixtureFile({
+          path: imagePath,
+          sizeBytes: SCAN_LIMITS.minUserFileBytes,
+          modifiedMs: Date.UTC(2025, 0, 1),
+        });
+        await writeFixtureTextFile({
+          path: join(documentsPath, 'android-app/local.properties'),
+          text: `sdk.dir=${sdkRoot}\n`,
+        });
+
+        const progress: ScanProgress[] = [];
+        const report = await runTestScan({
+          environment: await loadTestEnvironment({
+            fixtureRoot: fixtureRoot,
+            nowMs: Date.UTC(2026, 6, 1),
+          }),
+          catalogEntries: [getCatalogEntry('android-system-images')],
+          onProgress: (step) => progress.push(step),
+        });
+        const finalBytes = buildFinalSectionBytes(report);
+
+        expect(listOfferedPaths(report)).toContain(imageFolderPath);
+        expect(report.skipped).toContainEqual({ path: imagePath, reason: 'heldByProbe' });
+        expect(progress.map((step) => step.phase)).toContain('largeFiles');
 
         for (const step of progress) {
           for (const total of step.found) {
@@ -329,16 +374,6 @@ function buildIdeVersionOffer(params: { product: string; folderPath: string }): 
       folderPath: params.folderPath,
     }),
   };
-}
-
-function findCatalogEntry(id: string): CatalogEntry {
-  const entry = CATALOG_ENTRIES.find((candidate) => candidate.id === id);
-
-  if (entry === undefined) {
-    throw new Error(`The catalog holds no entry ${id}.`);
-  }
-
-  return entry;
 }
 
 /** The total of each section in the report, the way the scan view sums it. */

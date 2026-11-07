@@ -19,20 +19,6 @@ List<int> getItemNumbers(List<ItemView> items) {
   return [for (final ItemView item in items) item.number];
 }
 
-/// The map at [path] in [json], each step a key of a map or an index of a
-/// list.
-Map<String, Object?> getMapAt(Object? json, List<Object> path) {
-  Object? node = json;
-  for (final Object step in path) {
-    node = switch (step) {
-      final int index => (node as List<Object?>)[index],
-      final String key => (node as Map<String, Object?>)[key],
-      _ => throw ArgumentError.value(step, 'path'),
-    };
-  }
-  return node as Map<String, Object?>;
-}
-
 void main() {
   final List<String> sampleLines = loadSampleLines();
   final List<BridgeEvent> events = loadSampleEvents();
@@ -47,18 +33,10 @@ void main() {
 
     /// The item of [scanned] numbered [number].
     ItemView getItem(int number) {
-      return [
-        for (final SectionView section in scanned.sections) ...[
-          ...section.items,
-          ...?section.checkGroup?.items,
-        ],
-        ...scanned.explore!.items,
-      ].singleWhere((ItemView item) => item.number == number);
+      return scanned.selectableItems.singleWhere((ItemView item) => item.number == number);
     }
 
     test('parses the summary with its totals and its disk', () {
-      expect(scanned.summary.titleText, 'Found 9 items, at least 28 MB in total');
-      expect(scanned.summary.lines, hasLength(3));
       expect(scanned.summary.totalBytes, 26000000);
       expect(scanned.summary.safeBytes, 6000000);
       expect(scanned.summary.disk!.capacityBytes, 500000000000);
@@ -67,19 +45,8 @@ void main() {
 
     test('parses the sections with their safe items and check groups', () {
       expect(
-        [for (final SectionView section in scanned.sections) section.titleText],
-        ['Caches', 'Apps', 'Large files'],
-      );
-      expect(
         [for (final SectionView section in scanned.sections) section.key],
         [SectionKey.caches, SectionKey.apps, SectionKey.largeFiles],
-      );
-      expect(
-        [
-          for (final SectionView section in scanned.sections)
-            section.isInitiallyExpanded,
-        ],
-        [true, false, false],
       );
       expect(
         [
@@ -103,16 +70,9 @@ void main() {
           [6],
         ],
       );
-      expect(
-        scanned.sections.first.checkGroup!.titleText,
-        'Check before deleting',
-      );
-      expect(scanned.sections.first.sizeText, 'at least 10 MB');
 
       final ItemView toolCache = scanned.sections.first.items.single;
       expect(toolCache.risk, Risk.safe);
-      expect(toolCache.riskText, 'safe');
-      expect(toolCache.sizeText, '6.0 MB');
       expect(getDetailLineKinds(toolCache.detailLines), [
         ItemDetailLineKind.path,
         ItemDetailLineKind.explanation,
@@ -186,8 +146,6 @@ void main() {
 
     test('parses Explore with its items and its advice group', () {
       final ExploreView explore = scanned.explore!;
-      expect(explore.titleText, 'Explore');
-      expect(explore.introText, isNotEmpty);
       expect(getItemNumbers(explore.items), [7, 8, 9]);
       final ItemView simulator = getItem(8);
       expect(getDetailLineKinds(simulator.detailLines), [
@@ -204,10 +162,6 @@ void main() {
 
       final AdviceGroupView adviceGroup = explore.adviceGroup!;
       expect(
-        adviceGroup.titleText,
-        'Handle these yourself; this tool never deletes them',
-      );
-      expect(
         [for (final AdviceItemView item in adviceGroup.items) item.title],
         ['Photos library', 'Tool store'],
       );
@@ -217,7 +171,7 @@ void main() {
 
       final AdviceItemView toolStore = adviceGroup.items.last;
       expect(toolStore.title, 'Tool store');
-      expect(toolStore.riskText, 'review');
+      expect(toolStore.risk, Risk.review);
       expect(getDetailLineKinds(toolStore.detailLines), [
         ItemDetailLineKind.path,
         ItemDetailLineKind.explanation,
@@ -231,26 +185,45 @@ void main() {
       expect(toolStore.displayPath, '~/Library/ToolStore');
       expect(toolStore.revealPath, '/Users/me/Library/ToolStore');
       expect(toolStore.opener, isNull);
+      expect(toolStore.lastUsedAt, isNull);
+      expect(toolStore.appName, isNull);
+      expect(toolStore.matchedBy, isNull);
     });
 
-    test('parses the totals of every section, Explore items included', () {
+    test('parses the facts of an advice item, a leftover match of a newer bridge as unknown', () {
+      final Map<String, Object?> json = loadSampleJson('scanned');
+      getMapAt(json, ['explore', 'adviceGroup', 'items', 0])
+        ..['lastUsedAt'] = DateTime.utc(2025, 3, 15).millisecondsSinceEpoch
+        ..['appName'] = 'Photos'
+        ..['matchedBy'] = 'guess';
+
+      final AdviceItemView photos = parseScanJson(json).explore!.adviceGroup!.items.first;
+
+      expect(photos.lastUsedAt, DateTime.utc(2025, 3, 15));
+      expect(photos.appName, 'Photos');
+      expect(photos.matchedBy, LeftoverMatch.unknown);
+    });
+
+    test('parses the totals of every section in the bridge order, Explore items included', () {
       expect(
         [
           for (final SectionTotal total in scanned.sectionTotals)
             (
               total.sectionKey,
+              total.titleText,
               total.allocatedBytes,
+              total.isComplete,
               total.itemCount,
               total.safeBytes,
               total.adviceCount,
             ),
         ],
         [
-          (SectionKey.caches, 10000000, 2, 6000000, 0),
-          (SectionKey.developerTools, 5000000, 2, 0, 1),
-          (SectionKey.apps, 5000000, 3, 0, 0),
-          (SectionKey.largeFiles, 3000000, 1, 0, 1),
-          (SectionKey.icloud, 5000000, 1, 0, 0),
+          (SectionKey.caches, 'Caches', 10000000, false, 2, 6000000, 0),
+          (SectionKey.developerTools, 'Developer tools', 5000000, true, 2, 0, 1),
+          (SectionKey.apps, 'Apps', 5000000, true, 3, 0, 0),
+          (SectionKey.largeFiles, 'Large files', 3000000, true, 1, 0, 1),
+          (SectionKey.icloud, 'iCloud Drive', 5000000, true, 1, 0, 0),
         ],
       );
     });
@@ -467,10 +440,7 @@ void main() {
   test('parses the plan, the answers, and the three failures', () {
     final PlannedEvent planned = loadSampleEvent<PlannedEvent>();
     expect(planned.planId, 1);
-    expect(
-      planned.warningLines,
-      contains('Type DELETE to delete them permanently.'),
-    );
+    expect(planned.lines, isNotEmpty);
     expect(loadSampleEvent<NothingApprovedEvent>().lines, isNotEmpty);
     expect(loadSampleEvent<DeletedEvent>().lines, hasLength(9));
     expect(
@@ -495,17 +465,19 @@ void main() {
     expect(
       [
         for (final PlannedItemView item in planned.items)
-          (item.number, item.title, item.sectionKey, item.risk, item.removal),
+          (item.number, item.title, item.sectionKey, item.risk, item.group, item.removal, item.isComplete),
       ],
       [
-        (1, 'Tool cache', SectionKey.caches, Risk.safe, ItemRemoval.delete),
-        (2, 'App cache', SectionKey.caches, Risk.review, ItemRemoval.delete),
+        (1, 'Tool cache', SectionKey.caches, Risk.safe, ItemGroup.safe, ItemRemoval.delete, true),
+        (2, 'App cache', SectionKey.caches, Risk.review, ItemGroup.review, ItemRemoval.delete, false),
         (
           7,
           'Test iCloud folder /Users/me/Library/Mobile Documents/com~apple~CloudDocs/Projects',
           SectionKey.icloud,
           Risk.review,
+          ItemGroup.review,
           ItemRemoval.evict,
+          true,
         ),
       ],
     );
@@ -516,6 +488,13 @@ void main() {
     expect(planned.items.first.allocatedBytes, 6000000);
     expect(planned.totalBytes, 15000000);
     expect(planned.holdsCareful, isFalse);
+  });
+
+  test('parses a group of a planned item of a newer bridge as unknown', () {
+    final Map<String, Object?> json = loadSampleJson('planned');
+    getMapAt(json, ['items', 0])['group'] = 'later';
+
+    expect((parseBridgeEvent(json) as PlannedEvent).items.first.group, ItemGroup.unknown);
   });
 
   group('the run', () {
@@ -724,14 +703,64 @@ void main() {
       }
     });
 
+    /// A fresh sample line of [kind] whose map at [path] lacks [key].
+    Map<String, Object?> loadSampleJsonWithout(String kind, List<Object> path, String key) {
+      final Map<String, Object?> json = loadSampleJson(kind);
+      getMapAt(json, path).remove(key);
+      return json;
+    }
+
+    test('on a missing key the app checks but does not read', () {
+      for (final Map<String, Object?> json in [
+        loadSampleJsonWithout('scanned', ['summary'], 'titleText'),
+        loadSampleJsonWithout('scanned', ['summary'], 'lines'),
+        loadSampleJsonWithout('scanned', ['sections', 0], 'titleText'),
+        loadSampleJsonWithout('scanned', ['sections', 0], 'sizeText'),
+        loadSampleJsonWithout('scanned', ['sections', 0], 'isInitiallyExpanded'),
+        loadSampleJsonWithout('scanned', ['sections', 0, 'checkGroup'], 'titleText'),
+        loadSampleJsonWithout('scanned', ['sections', 0, 'items', 0], 'riskText'),
+        loadSampleJsonWithout('scanned', ['sections', 0, 'items', 0], 'sizeText'),
+        loadSampleJsonWithout('scanned', ['explore'], 'titleText'),
+        loadSampleJsonWithout('scanned', ['explore'], 'introText'),
+        loadSampleJsonWithout('scanned', ['explore', 'adviceGroup'], 'titleText'),
+        loadSampleJsonWithout('scanned', ['explore', 'adviceGroup', 'items', 0], 'riskText'),
+        loadSampleJsonWithout('scanned', ['explore', 'adviceGroup', 'items', 0], 'sizeText'),
+        loadSampleJsonWithout('planned', [], 'warningLines'),
+      ]) {
+        expect(() => parseBridgeEvent(json), throwsFormatException);
+      }
+    });
+
+    test('on a missing title, completeness, advice fact or plan group', () {
+      for (final Map<String, Object?> json in [
+        loadSampleJsonWithout('scanned', ['sectionTotals', 0], 'titleText'),
+        loadSampleJsonWithout('scanned', ['sectionTotals', 0], 'isComplete'),
+        loadSampleJsonWithout('progress', ['found', 0], 'isComplete'),
+        loadSampleJsonWithout('scanned', ['explore', 'adviceGroup', 'items', 0], 'lastUsedAt'),
+        loadSampleJsonWithout('scanned', ['explore', 'adviceGroup', 'items', 0], 'appName'),
+        loadSampleJsonWithout('scanned', ['explore', 'adviceGroup', 'items', 0], 'matchedBy'),
+        loadSampleJsonWithout('planned', ['items', 0], 'group'),
+        loadSampleJsonWithout('planned', ['items', 0], 'isComplete'),
+      ]) {
+        expect(() => parseBridgeEvent(json), throwsFormatException);
+      }
+    });
+
     test('on a value of the wrong type', () {
       final Map<String, Object?> json = loadSampleJson('scanned')
         ..['safeNumbers'] = ['1'];
       final Map<String, Object?> textBytes = loadSampleJson('planned')
         ..['totalBytes'] = '10 MB';
+      final Map<String, Object?> numberLine = loadSampleJson('scanned');
+      getMapAt(numberLine, ['summary'])['lines'] = [1];
+      final Map<String, Object?> numberWarning = loadSampleJson('planned')
+        ..['warningLines'] = [1];
+      final Map<String, Object?> textExpanded = loadSampleJson('scanned');
+      getMapAt(textExpanded, ['sections', 0])['isInitiallyExpanded'] = 'yes';
 
-      expect(() => parseBridgeEvent(json), throwsFormatException);
-      expect(() => parseBridgeEvent(textBytes), throwsFormatException);
+      for (final Map<String, Object?> wrong in [json, textBytes, numberLine, numberWarning, textExpanded]) {
+        expect(() => parseBridgeEvent(wrong), throwsFormatException);
+      }
     });
   });
 }

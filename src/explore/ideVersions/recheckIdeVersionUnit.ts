@@ -1,18 +1,12 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
-import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitIdeVersionFolder } from '../exploreUnit.js';
-import { hasSamePaths } from '../hasSamePaths.js';
-import { buildIdeVersionActivityFacts } from './buildIdeVersionFindings.js';
-import { decideIdeVersionOffers } from './decideIdeVersionOffers.js';
+import { compareIdeVersionUnit } from './compareIdeVersionUnit.js';
 import { loadIdeVersionState } from './loadIdeVersionState.js';
 import { loadRunningIdes } from './loadRunningIdes.js';
 
-/**
- * Reads the product's version folders again and compares them with the unit: still an old one with
- * the same paths, while no IDE of its version runs. An unknown activity counts as busy.
- */
+/** Reads the product's version folders and the running IDEs again and compares them with the unit. */
 export async function recheckIdeVersionUnit(params: {
   unit: ExplorePathUnitIdeVersionFolder;
   environment: Environment;
@@ -30,30 +24,15 @@ export async function recheckIdeVersionUnit(params: {
     return folders;
   }
 
-  const offer = decideIdeVersionOffers({ folders: folders.value }).find(
-    (candidate) =>
-      candidate.folderKind === params.unit.folderKind &&
-      candidate.folderPath === params.unit.folderPath,
-  );
-
-  if (
-    offer === undefined ||
-    !hasSamePaths({ left: offer.foundPaths, right: params.unit.foundPaths })
-  ) {
-    return { kind: 'changed' };
-  }
-
   const runningIdes = await loadRunningIdes({
     processCommands: params.processCommands,
     privacyDenialCode: params.platform.privacyDenialCode,
   });
 
-  return decideComparisonActivity({
-    facts: buildIdeVersionActivityFacts({
-      product: params.unit.product,
-      version: params.unit.version,
-      runningIdes: runningIdes,
-    }),
+  return compareIdeVersionUnit({
+    unit: params.unit,
+    folders: folders.value,
+    runningIdes: runningIdes,
     processCommands: params.processCommands,
   });
 }

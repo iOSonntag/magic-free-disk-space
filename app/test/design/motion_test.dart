@@ -2,8 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/design/count_up.dart';
-import 'package:magic_free_disk_space/design/format_bytes.dart';
 import 'package:magic_free_disk_space/design/motion.dart';
 import 'package:magic_free_disk_space/design/section_glow.dart';
 
@@ -28,55 +26,57 @@ void mockRunnerWithoutChannel(WidgetTester tester) {
   mockRunnerChannel(tester, (MethodCall call) async => throw MissingPluginException());
 }
 
-ValueListenable<double> findAmbientTime(WidgetTester tester) {
+ValueListenable<double> readAmbientTime(WidgetTester tester) {
   return MotionScope.ambientTimeOf(tester.element(find.byType(SectionGlow)));
 }
 
 void main() {
   group('the ambient ticker', () {
-    testWidgets('stops when Reduce Motion turns on, and its time stands still', (WidgetTester tester) async {
-      final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
-      await tester.pumpWidget(
-        buildDesignHarness(
-          windowMotion: windowMotion,
-          child: const SectionGlow(accent: Color(0xFF38E1FF), child: SizedBox.square(dimension: 48)),
+    /// A glow, which listens to the ambient time, over [windowMotion].
+    Widget buildGlow(ValueListenable<MotionState> windowMotion) {
+      return buildDesignHarness(
+        windowMotion: windowMotion,
+        child: const SectionGlow(
+          accent: Color(0xFF38E1FF),
+          intensity: 1,
+          child: SizedBox.square(dimension: 48),
         ),
       );
+    }
+
+    testWidgets('stops when Reduce Motion turns on, and its time stands still', (WidgetTester tester) async {
+      final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
+      await tester.pumpWidget(buildGlow(windowMotion));
       await tester.pump(const Duration(milliseconds: 500));
       expect(tester.hasRunningAnimations, isTrue);
-      expect(findAmbientTime(tester).value, greaterThan(0));
+      expect(readAmbientTime(tester).value, greaterThan(0));
 
       windowMotion.value = MotionState.reduced;
       await tester.pump();
-      final double frozenSeconds = findAmbientTime(tester).value;
+      final double frozenSeconds = readAmbientTime(tester).value;
       await tester.pump(const Duration(seconds: 2));
 
       expect(tester.hasRunningAnimations, isFalse);
-      expect(findAmbientTime(tester).value, frozenSeconds);
+      expect(readAmbientTime(tester).value, frozenSeconds);
     });
 
     testWidgets('stops when the window hides, and resumes where it stood', (WidgetTester tester) async {
       final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
-      await tester.pumpWidget(
-        buildDesignHarness(
-          windowMotion: windowMotion,
-          child: const SectionGlow(accent: Color(0xFF38E1FF), child: SizedBox.square(dimension: 48)),
-        ),
-      );
+      await tester.pumpWidget(buildGlow(windowMotion));
       await tester.pump(const Duration(milliseconds: 500));
 
       windowMotion.value = hiddenWindowMotion;
       await tester.pump();
-      final double frozenSeconds = findAmbientTime(tester).value;
+      final double frozenSeconds = readAmbientTime(tester).value;
       await tester.pump(const Duration(seconds: 5));
       expect(tester.hasRunningAnimations, isFalse);
-      expect(findAmbientTime(tester).value, frozenSeconds);
+      expect(readAmbientTime(tester).value, frozenSeconds);
 
       windowMotion.value = MotionState.allowed;
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.hasRunningAnimations, isTrue);
-      expect(findAmbientTime(tester).value, closeTo(frozenSeconds + 0.1, 0.02));
+      expect(readAmbientTime(tester).value, closeTo(frozenSeconds + 0.1, 0.02));
     });
 
     testWidgets('runs only while something listens', (WidgetTester tester) async {
@@ -90,15 +90,9 @@ void main() {
 
   testWidgets('pauses every ticker below it while the window is hidden', (WidgetTester tester) async {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
-    Widget buildCount(int value) {
-      return buildDesignHarness(
-        windowMotion: windowMotion,
-        child: CountUp(value: value, format: formatBytes),
-      );
-    }
 
-    await tester.pumpWidget(buildCount(0));
-    await tester.pumpWidget(buildCount(4000000000));
+    await tester.pumpWidget(buildCountUp(windowMotion, 0));
+    await tester.pumpWidget(buildCountUp(windowMotion, 4000000000));
     await tester.pump(const Duration(milliseconds: 100));
     expect(tester.hasRunningAnimations, isTrue);
 

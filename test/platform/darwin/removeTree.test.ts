@@ -4,10 +4,12 @@ import { join } from 'node:path';
 import type { TreeRemovalUser } from '../../../src/platform/darwin/removeTree.js';
 import {
   decideFolderWriteChange,
+  loadChildFolderNames,
   removeTreeAsUser,
 } from '../../../src/platform/darwin/removeTree.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import {
+  createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
   isPresent,
@@ -16,8 +18,6 @@ import {
 import { describeOnPosix } from '../../support/posixOnly.js';
 
 const READ_ONLY_FOLDER_MODE = 0o555;
-
-const WRITABLE_FOLDER_MODE = 0o755;
 
 const processUser: TreeRemovalUser = {
   id: process.getuid?.() ?? 0,
@@ -44,15 +44,6 @@ async function createReadOnlyTree(params: { rootPath: string }): Promise<string>
   return folderPath;
 }
 
-/** Gives each folder owner write again, so the fixture cleanup can delete what is left. */
-async function restoreWritableFolders(params: { folderPaths: string[] }): Promise<void> {
-  for (const folderPath of params.folderPaths) {
-    if (await isPresent(folderPath)) {
-      await chmod(folderPath, WRITABLE_FOLDER_MODE);
-    }
-  }
-}
-
 async function loadPermissionMode(path: string): Promise<number> {
   return (await stat(path)).mode & 0o777;
 }
@@ -60,17 +51,14 @@ async function loadPermissionMode(path: string): Promise<number> {
 describeOnPosix('removeTreeAsUser', () => {
   test('adds owner write to a read-only folder the user owns and removes it', async () => {
     const rootPath = join(fixtureRoot.homeDir, 'go', 'pkg', 'mod');
-    const folderPath = await createReadOnlyTree({ rootPath: rootPath });
 
-    try {
-      expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
-        kind: 'succeeded',
-        value: null,
-      });
-      expect(await isPresent(rootPath)).toBe(false);
-    } finally {
-      await restoreWritableFolders({ folderPaths: [folderPath] });
-    }
+    await createReadOnlyTree({ rootPath: rootPath });
+
+    expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
+      kind: 'succeeded',
+      value: null,
+    });
+    expect(await isPresent(rootPath)).toBe(false);
   });
 
   test('removes a tree with more read-only folders than are visited at once', async () => {
@@ -84,15 +72,11 @@ describeOnPosix('removeTreeAsUser', () => {
       await chmod(folderPath, READ_ONLY_FOLDER_MODE);
     }
 
-    try {
-      expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
-        kind: 'succeeded',
-        value: null,
-      });
-      expect(await isPresent(rootPath)).toBe(false);
-    } finally {
-      await restoreWritableFolders({ folderPaths: folderPaths });
-    }
+    expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
+      kind: 'succeeded',
+      value: null,
+    });
+    expect(await isPresent(rootPath)).toBe(false);
   });
 
   test('leaves a read-only folder of another owner, failing with EACCES', async () => {
@@ -100,37 +84,30 @@ describeOnPosix('removeTreeAsUser', () => {
     const folderPath = await createReadOnlyTree({ rootPath: rootPath });
     const otherUser: TreeRemovalUser = { id: processUser.id + 1, groupIds: [] };
 
-    try {
-      expect(await removeTreeAsUser({ path: rootPath, user: otherUser })).toEqual({
-        kind: 'failed',
-        failure: 'EACCES',
-      });
-      expect(await isPresent(join(folderPath, 'go.mod'))).toBe(true);
-      expect(await loadPermissionMode(folderPath)).toBe(READ_ONLY_FOLDER_MODE);
-    } finally {
-      await restoreWritableFolders({ folderPaths: [folderPath] });
-    }
+    expect(await removeTreeAsUser({ path: rootPath, user: otherUser })).toEqual({
+      kind: 'failed',
+      failure: 'EACCES',
+    });
+    expect(await isPresent(join(folderPath, 'go.mod'))).toBe(true);
+    expect(await loadPermissionMode(folderPath)).toBe(READ_ONLY_FOLDER_MODE);
   });
 
   test('removes a link to a read-only folder outside and leaves its target', async () => {
     const rootPath = join(fixtureRoot.homeDir, 'go', 'pkg', 'mod');
-    const folderPath = await createReadOnlyTree({ rootPath: rootPath });
     const outsidePath = join(fixtureRoot.rootDir, 'outside');
+
+    await createReadOnlyTree({ rootPath: rootPath });
     await writeFixtureTextFile({ path: join(outsidePath, 'keep.txt'), text: 'keep\n' });
     await chmod(outsidePath, READ_ONLY_FOLDER_MODE);
     await symlink(outsidePath, join(rootPath, 'linked'));
 
-    try {
-      expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
-        kind: 'succeeded',
-        value: null,
-      });
-      expect(await isPresent(rootPath)).toBe(false);
-      expect(await isPresent(join(outsidePath, 'keep.txt'))).toBe(true);
-      expect(await loadPermissionMode(outsidePath)).toBe(READ_ONLY_FOLDER_MODE);
-    } finally {
-      await restoreWritableFolders({ folderPaths: [folderPath, outsidePath] });
-    }
+    expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
+      kind: 'succeeded',
+      value: null,
+    });
+    expect(await isPresent(rootPath)).toBe(false);
+    expect(await isPresent(join(outsidePath, 'keep.txt'))).toBe(true);
+    expect(await loadPermissionMode(outsidePath)).toBe(READ_ONLY_FOLDER_MODE);
   });
 
   test('never lists a link that is the item itself, so its read-only target keeps its mode', async () => {
@@ -140,35 +117,62 @@ describeOnPosix('removeTreeAsUser', () => {
     await writeFixtureTextFile({ path: join(outsideChildPath, 'keep.txt'), text: 'keep\n' });
     await mkdir(parentPath, { recursive: true });
     await symlink(outsidePath, join(parentPath, 'item'));
-    const readOnlyPaths = [outsideChildPath, outsidePath, parentPath];
 
-    for (const readOnlyPath of readOnlyPaths) {
+    for (const readOnlyPath of [outsideChildPath, outsidePath, parentPath]) {
       await chmod(readOnlyPath, READ_ONLY_FOLDER_MODE);
     }
 
-    try {
-      expect(await removeTreeAsUser({ path: join(parentPath, 'item'), user: processUser })).toEqual(
-        { kind: 'failed', failure: 'EACCES' },
-      );
-      expect(await loadPermissionMode(outsidePath)).toBe(READ_ONLY_FOLDER_MODE);
-      expect(await loadPermissionMode(outsideChildPath)).toBe(READ_ONLY_FOLDER_MODE);
-    } finally {
-      await restoreWritableFolders({ folderPaths: readOnlyPaths });
-    }
+    expect(await removeTreeAsUser({ path: join(parentPath, 'item'), user: processUser })).toEqual({
+      kind: 'failed',
+      failure: 'EACCES',
+    });
+    expect(await loadPermissionMode(outsidePath)).toBe(READ_ONLY_FOLDER_MODE);
+    expect(await loadPermissionMode(outsideChildPath)).toBe(READ_ONLY_FOLDER_MODE);
   });
 
   test('changes no mode for a platform without user ids', async () => {
     const rootPath = join(fixtureRoot.homeDir, 'go', 'pkg', 'mod');
     const folderPath = await createReadOnlyTree({ rootPath: rootPath });
 
-    try {
-      expect(await removeTreeAsUser({ path: rootPath, user: null })).toMatchObject({
+    expect(await removeTreeAsUser({ path: rootPath, user: null })).toMatchObject({
+      kind: 'failed',
+    });
+    expect(await loadPermissionMode(folderPath)).toBe(READ_ONLY_FOLDER_MODE);
+  });
+});
+
+describeOnPosix('loadChildFolderNames', () => {
+  test('lists the folders directly inside, never a file', async () => {
+    const folderPath = join(fixtureRoot.homeDir, 'parent');
+
+    await createFixtureDirectory({ path: join(folderPath, 'child', 'grandchild') });
+    await writeFixtureTextFile({ path: join(folderPath, 'file.txt'), text: 'file\n' });
+
+    expect(await loadChildFolderNames({ folderPath: folderPath })).toEqual({
+      kind: 'succeeded',
+      value: ['child'],
+    });
+  });
+
+  test.skipIf(processUser.id === 0)(
+    'fails as unopened for a folder it cannot list, as a failed open does',
+    async () => {
+      const folderPath = join(fixtureRoot.homeDir, 'unlistable');
+
+      await createFixtureDirectory({ path: join(folderPath, 'child') });
+      await chmod(folderPath, 0o000);
+
+      expect(await loadChildFolderNames({ folderPath: folderPath })).toEqual({
         kind: 'failed',
+        failure: 'unopened',
       });
-      expect(await loadPermissionMode(folderPath)).toBe(READ_ONLY_FOLDER_MODE);
-    } finally {
-      await restoreWritableFolders({ folderPaths: [folderPath] });
-    }
+    },
+  );
+
+  test('fails as noFolder for a folder that is gone', async () => {
+    expect(await loadChildFolderNames({ folderPath: join(fixtureRoot.homeDir, 'absent') })).toEqual(
+      { kind: 'failed', failure: 'noFolder' },
+    );
   });
 });
 

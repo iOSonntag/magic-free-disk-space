@@ -2,24 +2,11 @@ import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { CATALOG_ENTRIES } from '../../src/platform/darwin/catalogEntries.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
+import type { Advice } from '../../src/scan/candidate.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
-import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
-import {
-  buildFoundTargets,
-  loadMeasuredTargetsPhase,
-} from '../../src/scan/loadMeasuredTargetsPhase.js';
-import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import {
-  createFixtureDirectory,
-  createFixtureFile,
-  loadTestEnvironment,
-  withFixtureRoot,
-} from '../support/fixtureRoot.js';
-import { runTestScan } from '../support/scanRunFixtures.js';
+import { createFixtureFile, loadTestEnvironment, withFixtureRoot } from '../support/fixtureRoot.js';
+import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
 
 // Both are large enough to offer, and the snippet is smaller than the previews.
 const PREVIEWS_FILE_BYTES = 4 * SCAN_LIMITS.minOfferedBytes;
@@ -49,75 +36,45 @@ async function withUserData(params: {
 
 /** A large preview build inside `Previews`, and a snippet beside it. */
 async function createUserData(fixture: UserDataFixture): Promise<void> {
-  const buildPath = join(fixture.previewsPath, 'Simulator Devices', 'build');
-  const snippetsPath = join(fixture.userDataPath, 'CodeSnippets');
-
-  await createFixtureDirectory({ path: buildPath });
-  await createFixtureDirectory({ path: snippetsPath });
   await createFixtureFile({
-    path: join(buildPath, 'App.app.bin'),
+    path: join(fixture.previewsPath, 'Simulator Devices', 'build', 'App.app.bin'),
     sizeBytes: PREVIEWS_FILE_BYTES,
     modifiedMs: MODIFIED_MS,
   });
   await createFixtureFile({
-    path: join(snippetsPath, 'snippet.codesnippet'),
+    path: join(fixture.userDataPath, 'CodeSnippets', 'snippet.codesnippet'),
     sizeBytes: SNIPPET_FILE_BYTES,
     modifiedMs: MODIFIED_MS,
   });
 }
 
-function findEntry(id: string): CatalogEntry {
-  const entry = CATALOG_ENTRIES.find((candidate) => candidate.id === id);
+/** The user data entry with nothing carved out, so its advice holds the previews as well. */
+function buildUncarvedUserDataEntry(): CatalogEntry {
+  const entry = getCatalogEntry('xcode-user-data');
 
-  if (entry === undefined) {
-    throw new Error(`The catalog holds no entry ${id}.`);
+  if (entry.removal.kind !== 'advice') {
+    throw new Error('The user data entry advises no longer.');
   }
 
-  return entry;
+  return { ...entry, removal: { ...entry.removal, carvedPaths: [] } };
 }
 
-/**
- * Measures the user data entry at its path as the scan's target phase does, carved or whole, and
- * returns the measurement its decide got.
- */
-async function loadUserDataMeasurement(params: {
+/** The one advice of a scan with only `entry`; throws when the scan gives none or more. */
+async function loadOnlyAdvice(params: {
   fixture: UserDataFixture;
-  isCarved: boolean;
-}): Promise<TargetsMeasurement | undefined> {
-  const entry = findEntry('xcode-user-data');
-  const pathRules = params.fixture.environment.pathRules;
-  const path = params.fixture.userDataPath;
-  const carvedPaths = params.isCarved
-    ? buildCarvedPaths({ pathRules: pathRules, entry: entry, path: path })
-    : [];
-  const measurements: TargetsMeasurement[] = [];
-
-  await loadMeasuredTargetsPhase({
-    found: buildFoundTargets([path]),
-    carve: carvedPaths.length === 0 ? null : { pathRules: pathRules, carvedPaths: carvedPaths },
-    measureTimeoutMs: 10_000,
-    runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
-    entryReads: darwinPlatform.system.entryReads,
-    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    decide: async (measurement) => {
-      measurements.push(measurement);
-
-      return decideCatalogCandidate({
-        entry: entry,
-        path: path,
-        measurement: measurement,
-        owner: entry.owner,
-        ownerBundlePaths: [],
-        ownerState: 'stopped',
-        ownerAppName: 'Xcode',
-        activity: null,
-        minOfferedBytes: 1,
-        carvedPaths: carvedPaths,
-      });
-    },
+  entry: CatalogEntry;
+}): Promise<Advice> {
+  const report = await runTestScan({
+    environment: params.fixture.environment,
+    catalogEntries: [params.entry],
   });
+  const [advice, ...otherAdvice] = report.advice;
 
-  return measurements[0];
+  if (advice === undefined || otherAdvice.length > 0) {
+    throw new Error(`The scan gave ${report.advice.length} advice, not one.`);
+  }
+
+  return advice;
 }
 
 describeAwaitingWin32Platform('the carve of the Xcode previews out of the user data advice', () => {
@@ -128,7 +85,7 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
 
         const report = await runTestScan({
           environment: fixture.environment,
-          catalogEntries: [findEntry('xcode-previews'), findEntry('xcode-user-data')],
+          catalogEntries: [getCatalogEntry('xcode-previews'), getCatalogEntry('xcode-user-data')],
         });
         const [previews] = report.candidates;
         const [userData] = report.advice;
@@ -147,21 +104,26 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
     });
   });
 
-  test('keeps the identity of the user data folder itself, whose whole tally holds the previews', async () => {
+  test('advises the user data folder itself, whose whole tally holds the previews', async () => {
     await withUserData({
       run: async (fixture) => {
         await createUserData(fixture);
 
-        const carved = await loadUserDataMeasurement({ fixture: fixture, isCarved: true });
-        const whole = await loadUserDataMeasurement({ fixture: fixture, isCarved: false });
+        const carved = await loadOnlyAdvice({
+          fixture: fixture,
+          entry: getCatalogEntry('xcode-user-data'),
+        });
+        const whole = await loadOnlyAdvice({
+          fixture: fixture,
+          entry: buildUncarvedUserDataEntry(),
+        });
 
-        expect(carved?.targets.map((target) => [target.path, target.identity.kind])).toEqual([
-          [fixture.userDataPath, 'directory'],
-        ]);
-        expect(whole?.allocatedBytes).toBeGreaterThanOrEqual(
+        expect(carved.path).toBe(fixture.userDataPath);
+        expect(whole.path).toBe(fixture.userDataPath);
+        expect(whole.allocatedBytes).toBeGreaterThanOrEqual(
           PREVIEWS_FILE_BYTES + SNIPPET_FILE_BYTES,
         );
-        expect(carved?.allocatedBytes).toBeLessThan(PREVIEWS_FILE_BYTES);
+        expect(carved.allocatedBytes).toBeLessThan(PREVIEWS_FILE_BYTES);
       },
     });
   });
@@ -169,7 +131,6 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
   test('gives no advice for a user data folder that holds only the previews', async () => {
     await withUserData({
       run: async (fixture) => {
-        await createFixtureDirectory({ path: join(fixture.previewsPath, 'build') });
         await createFixtureFile({
           path: join(fixture.previewsPath, 'build', 'App.app.bin'),
           sizeBytes: PREVIEWS_FILE_BYTES,
@@ -178,7 +139,7 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
 
         const report = await runTestScan({
           environment: fixture.environment,
-          catalogEntries: [findEntry('xcode-user-data')],
+          catalogEntries: [getCatalogEntry('xcode-user-data')],
         });
 
         expect(report.candidates).toEqual([]);

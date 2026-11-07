@@ -22,6 +22,7 @@ import type { DeletePlatform } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import { evictCandidateFiles } from './evictCandidateFiles.js';
 import { fileFailureToOutcome } from './fileFailureToOutcome.js';
+import { isGoneOutcome } from './isGoneOutcome.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
 import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
 
@@ -589,14 +590,13 @@ async function deleteScannedTarget(params: {
   delete: DeletePlatform;
   clock: () => number;
 }): Promise<TargetOutcome> {
-  const path = params.target.path;
-  const currentIdentity = await loadFileIdentity({ path: path });
+  const currentIdentity = await loadFileIdentity({ path: params.target.path });
 
   if (currentIdentity.kind === 'failed') {
     const failedOutcome = fileFailureToOutcome(currentIdentity.failure);
 
     return {
-      path: path,
+      path: params.target.path,
       atMs: params.clock(),
       outcome: failedOutcome.outcome,
       code: failedOutcome.code,
@@ -606,7 +606,7 @@ async function deleteScannedTarget(params: {
 
   if (!isSameIdentity({ current: currentIdentity.value, scanned: params.target.identity })) {
     return {
-      path: path,
+      path: params.target.path,
       atMs: params.clock(),
       outcome: 'changedSinceScan',
       code: null,
@@ -614,14 +614,20 @@ async function deleteScannedTarget(params: {
     };
   }
 
-  const removed = await params.delete.removeTree({ path: path });
+  const removed = await params.delete.removeTree({ path: params.target.path });
 
   if (removed.kind === 'succeeded') {
-    return { path: path, atMs: params.clock(), outcome: 'removed', code: null, deleteRan: true };
+    return {
+      path: params.target.path,
+      atMs: params.clock(),
+      outcome: 'removed',
+      code: null,
+      deleteRan: true,
+    };
   }
 
   return {
-    path: path,
+    path: params.target.path,
     atMs: params.clock(),
     outcome: PERMISSION_DENIED_CODES.includes(removed.failure) ? 'permissionDenied' : 'failed',
     code: removed.failure,
@@ -641,9 +647,9 @@ async function loadTargetsOutcome(params: {
   presentBytes: number;
   entryReads: EntryReads;
 }): Promise<RemovalOutcomeCoded> {
-  const isGone = (targetOutcome: TargetOutcome): boolean =>
-    targetOutcome.outcome === 'removed' || targetOutcome.outcome === 'alreadyGone';
-  const stayedOutcome = params.targetOutcomes.find((targetOutcome) => !isGone(targetOutcome));
+  const stayedOutcome = params.targetOutcomes.find(
+    (targetOutcome) => !isGoneOutcome(targetOutcome.outcome),
+  );
 
   if (stayedOutcome === undefined) {
     const hasRemoved = params.targetOutcomes.some(

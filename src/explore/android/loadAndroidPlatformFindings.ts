@@ -4,13 +4,14 @@ import { listToolPinFileRefs, selectToolPins } from '../projectPins/selectToolPi
 import { buildAndroidPlatformFindings } from './buildAndroidPlatformFindings.js';
 import { decideAndroidPlatformOffers } from './decideAndroidPlatformOffers.js';
 import { loadAndroidPlatformState } from './loadAndroidPlatformState.js';
-import { loadAndroidProbeSdkRoots } from './loadAndroidSdkRoots.js';
+import type { AndroidSdkRoot } from './loadAndroidSdkRoots.js';
 import { ANDROID_PIN_FILE_KINDS } from './parseAndroidCompileSdkPins.js';
 
 /** The platform folders of each SDK that no Gradle file found compiles against. */
 export async function loadAndroidPlatformFindings(params: {
   run: ExploreProbeRun;
   projectPins: ProjectPins;
+  sdkRoots: AndroidSdkRoot[];
 }): Promise<ExploreProbeFilesResult> {
   const toolPins = selectToolPins({
     pins: params.projectPins.files,
@@ -21,15 +22,9 @@ export async function loadAndroidPlatformFindings(params: {
     return toolPins;
   }
 
-  const sdkRoots = await loadAndroidProbeSdkRoots(params);
-
-  if (sdkRoots.kind === 'failed') {
-    return sdkRoots;
-  }
-
   const state = await loadAndroidPlatformState({
     pathRules: params.run.environment.pathRules,
-    sdkRoots: sdkRoots.value,
+    sdkRoots: params.sdkRoots,
     privacyDenialCode: params.run.platform.privacyDenialCode,
   });
 

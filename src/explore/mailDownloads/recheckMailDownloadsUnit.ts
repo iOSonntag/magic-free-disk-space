@@ -17,19 +17,19 @@ export async function recheckMailDownloadsUnit(params: {
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
   for (const foundFile of params.unit.foundFiles) {
-    const times = await loadExploreEntryStats({
+    const stats = await loadExploreEntryStats({
       path: foundFile.path,
       privacyDenialCode: params.platform.privacyDenialCode,
     });
 
-    if (times.kind === 'failed') {
-      return times;
+    if (stats.kind === 'failed') {
+      return stats;
     }
 
     if (
-      times.value === null ||
-      times.value.modifiedMs !== foundFile.modifiedMs ||
-      !isUntouchedMailDownload({ times: times.value, cutoffMs: params.unit.cutoffMs })
+      stats.value === null ||
+      stats.value.modifiedMs !== foundFile.modifiedMs ||
+      !isUntouchedMailDownload({ stats: stats.value, cutoffMs: params.unit.cutoffMs })
     ) {
       return { kind: 'changed' };
     }

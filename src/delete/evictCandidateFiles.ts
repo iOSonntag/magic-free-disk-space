@@ -13,6 +13,7 @@ import type {
 } from './deleteCandidates.js';
 import type { JournalEntry } from './deletionJournal.js';
 import { fileFailureToOutcome } from './fileFailureToOutcome.js';
+import { isGoneOutcome } from './isGoneOutcome.js';
 
 /** One file's evict asks the cloud daemon to drop its copy, which returns long before this. */
 const EVICT_FILE_TIMEOUT_MS = 60_000;
@@ -95,7 +96,7 @@ async function evictFile(params: {
   // Changed, read, replaced, or already evicted since the scan: kept, as the person may use it.
   if (
     !isEvictFileUnchanged({
-      times: stats.value,
+      stats: stats.value,
       identity: params.target.identity,
       modifiedMs: params.target.modifiedMs,
       accessedMs: params.target.accessedMs,
@@ -158,9 +159,7 @@ function buildEvictOutcome(params: {
   );
   const base = { candidate: params.candidate, freedBytes: freedBytes };
   const keptOutcome = params.fileOutcomes.find(
-    (fileOutcome) =>
-      fileOutcome.kind === 'toolFailed' ||
-      (fileOutcome.outcome !== 'removed' && fileOutcome.outcome !== 'alreadyGone'),
+    (fileOutcome) => fileOutcome.kind === 'toolFailed' || !isGoneOutcome(fileOutcome.outcome),
   );
 
   if (keptOutcome === undefined) {

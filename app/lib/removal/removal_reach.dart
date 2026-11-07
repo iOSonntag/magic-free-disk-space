@@ -1,5 +1,6 @@
 import '../bridge/bridge.dart';
 import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 
 /// Planned items split by what their removal leaves behind: gone for good,
 /// or still in iCloud, from where they download again.
@@ -26,15 +27,43 @@ final class RemovalReach {
   /// The items that leave this Mac only and stay in iCloud.
   final List<PlannedItemView> evictedItems;
 
-  int get finalBytes => _sumAllocatedBytes(finalItems);
+  ItemSizeSum get finalSize => sumPlannedItemSizes(finalItems);
 
-  int get evictedBytes => _sumAllocatedBytes(evictedItems);
+  ItemSizeSum get evictedSize => sumPlannedItemSizes(evictedItems);
 }
 
-/// "5.0 MB stays in iCloud…", for the [evictedBytes] an evict frees on this
+/// The size of some planned items together, as [sumItemSizes] sums a scan's.
+ItemSizeSum sumPlannedItemSizes(Iterable<PlannedItemView> items) {
+  int allocatedBytes = 0;
+  bool isComplete = true;
+  for (final PlannedItemView item in items) {
+    allocatedBytes += item.allocatedBytes;
+    isComplete = isComplete && item.isComplete;
+  }
+  return ItemSizeSum(allocatedBytes: allocatedBytes, isComplete: isComplete);
+}
+
+/// The plan's total, "at least" when an item of it was not measured whole.
+String formatPlanTotalText(PlannedEvent plan) {
+  return formatSizeText(
+    allocatedBytes: plan.totalBytes,
+    isComplete: sumPlannedItemSizes(plan.items).isComplete,
+  );
+}
+
+/// The size of one planned item as the delete flow lists it.
+String formatPlannedItemSizeText(PlannedItemView item) {
+  return formatSizeText(allocatedBytes: item.allocatedBytes, isComplete: item.isComplete);
+}
+
+/// "5.0 MB stays in iCloud…", for the [evictedSize] an evict frees on this
 /// Mac.
-String formatStaysInIcloudText(int evictedBytes) {
-  return '${formatBytes(evictedBytes)} stays in iCloud and downloads again when opened.';
+String formatStaysInIcloudText(ItemSizeSum evictedSize) {
+  final String sizeText = formatSizeText(
+    allocatedBytes: evictedSize.allocatedBytes,
+    isComplete: evictedSize.isComplete,
+  );
+  return '$sizeText stays in iCloud and downloads again when opened.';
 }
 
 /// Whether an item removed the way [removal] says is gone for good: every
@@ -48,8 +77,4 @@ bool _isRemovalFinal(ItemRemoval removal) {
     ItemRemoval.advice ||
     ItemRemoval.unknown => true,
   };
-}
-
-int _sumAllocatedBytes(List<PlannedItemView> items) {
-  return items.fold(0, (int sum, PlannedItemView item) => sum + item.allocatedBytes);
 }

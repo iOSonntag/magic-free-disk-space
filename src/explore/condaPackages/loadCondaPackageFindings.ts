@@ -3,6 +3,7 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeToolResult, ExploreProbeToolRun } from '../exploreProbe.js';
 import type { ExploreFinding, UnitActivity } from '../exploreUnit.js';
+import { formatCountText } from '../formatLimitTexts.js';
 import { loadProbeOutput } from '../loadProbeOutput.js';
 import { CONDA_CLEAN_DRY_RUN_PROBE } from './parseCondaCleanDryRun.js';
 
@@ -80,5 +81,5 @@ function buildCondaPackagesFinding(params: {
 }
 
 function buildCondaEvidenceLines(params: { count: number; noun: 'file' | 'folder' }): string[] {
-  return [`conda's own dry run lists ${params.count} ${params.noun}s to remove.`];
+  return [`conda's own dry run lists ${formatCountText(params)} to remove.`];
 }

@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import type { ExploreToolUnitVagrantBoxVersion } from '../../src/explore/exploreUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import { buildVagrantBoxFindings } from '../../src/explore/vagrantBoxes/buildVagrantBoxFindings.js';
+import { compareVagrantBoxUnit } from '../../src/explore/vagrantBoxes/compareVagrantBoxUnit.js';
 import { loadVagrantBoxFindings } from '../../src/explore/vagrantBoxes/loadVagrantBoxFindings.js';
 import type { VagrantBox } from '../../src/explore/vagrantBoxes/parseVagrantBoxList.js';
 import { parseVagrantBoxList } from '../../src/explore/vagrantBoxes/parseVagrantBoxList.js';
-import { compareVagrantBoxVersion } from '../../src/explore/vagrantBoxes/recheckVagrantBoxUnit.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -15,7 +15,7 @@ import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
-  buildTestProbeRun,
+  buildTestProbeToolRun,
   getProbeFindings,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
@@ -122,9 +122,10 @@ describe('parseVagrantBoxList', () => {
   test('reads a list without boxes, or without architectures, as Vagrant before 2.4 gives it', () => {
     expect(parseBoxes('1730000000,,ui,warn,There are no installed boxes!\n')).toEqual([]);
     expect<unknown>(
-      parseBoxes(
-        '1730000000,,box-name,example/old\n1730000000,,box-provider,virtualbox\n1730000000,,box-version,1.0\n',
-      ),
+      parseBoxes(`1730000000,,box-name,example/old
+1730000000,,box-provider,virtualbox
+1730000000,,box-version,1.0
+`),
     ).toEqual([
       { name: 'example/old', provider: 'virtualbox', version: '1.0', architecture: null },
     ]);
@@ -136,7 +137,9 @@ describe('parseVagrantBoxList', () => {
     );
     expect(
       parseVagrantBoxList({
-        stdoutText: '1730000000,,box-name,example/old\n1730000000,,box-provider,virtualbox\n',
+        stdoutText: `1730000000,,box-name,example/old
+1730000000,,box-provider,virtualbox
+`,
       }).kind,
     ).toBe('failed');
   });
@@ -196,13 +199,13 @@ describe('buildVagrantBoxFindings', () => {
   });
 });
 
-describe('compareVagrantBoxVersion', () => {
+describe('compareVagrantBoxUnit', () => {
   const unit = buildOutdatedUnit({ tool: FAKE_TOOL, homeDir: HOME_DIR });
 
   test('is unchanged while a newer version still outdates it, busy while vagrant runs', () => {
     const boxes = parseBoxes(BOX_LIST_TEXT);
     const compare = (processCommands: string[]) =>
-      compareVagrantBoxVersion({
+      compareVagrantBoxUnit({
         unit: unit,
         boxes: boxes,
         pathRules: DARWIN_PATH_RULES,
@@ -223,7 +226,7 @@ describe('compareVagrantBoxVersion', () => {
 
     for (const list of lists) {
       expect(
-        compareVagrantBoxVersion({
+        compareVagrantBoxUnit({
           unit: unit,
           boxes: list,
           pathRules: DARWIN_PATH_RULES,
@@ -257,10 +260,9 @@ describeAwaitingWin32Platform('the Vagrant box probe with a fake vagrant', () =>
       run: async (home) => {
         const tool = await createFakeVagrant({ home: home, exitCode: 0 });
         const findings = getProbeFindings(
-          await loadVagrantBoxFindings({
-            ...buildTestProbeRun({ environment: home.environment }),
-            tool: tool,
-          }),
+          await loadVagrantBoxFindings(
+            buildTestProbeToolRun({ environment: home.environment, tool: tool }),
+          ),
         );
 
         expect(findings.findings.map((finding) => finding.unit)).toEqual([
@@ -296,10 +298,9 @@ describeAwaitingWin32Platform('the Vagrant box probe with a fake vagrant', () =>
       nowMs: Date.now(),
       run: async (home) => {
         const tool = await createFakeVagrant({ home: home, exitCode: 1 });
-        const findings = await loadVagrantBoxFindings({
-          ...buildTestProbeRun({ environment: home.environment }),
-          tool: tool,
-        });
+        const findings = await loadVagrantBoxFindings(
+          buildTestProbeToolRun({ environment: home.environment, tool: tool }),
+        );
 
         expect(findings).toEqual({
           kind: 'failed',

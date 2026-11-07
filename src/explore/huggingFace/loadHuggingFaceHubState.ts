@@ -54,12 +54,7 @@ export type HuggingFaceRepoState = {
   currentCommits: ReadonlySet<string> | null;
   snapshots: HuggingFaceSnapshot[];
   blobs: HuggingFaceBlob[];
-  /**
-   * The entries of its `blobs` that are links, which no offer takes, nor what they reach. `hf_xet`
-   * stores a file once at the hub cache's own `blobs/<prefix>/<xet_hash>`, which other repositories
-   * may link too, and links the repository's `blobs/<etag>` to it (huggingface_hub, guide "Manage
-   * the cache", section "Shared blobs across repos").
-   */
+  /** The entries of its `blobs` that are links; no offer takes them, nor what they reach. */
   linkedBlobCount: number;
   /** Its `refs`, `.no_exist`, and `trees`, those present. */
   metadataPaths: AbsolutePath[];
@@ -123,9 +118,9 @@ export async function loadHuggingFaceRepoState(params: {
   repoPath: AbsolutePath;
   privacyDenialCode: string | null;
 }): Promise<Result<HuggingFaceRepoState | null, ExploreFileUnreadable>> {
-  const name = parseHuggingFaceRepoFolderName(basename(params.repoPath));
+  const repoName = parseHuggingFaceRepoFolderName(basename(params.repoPath));
 
-  if (name === null) {
+  if (repoName === null) {
     return { kind: 'succeeded', value: null };
   }
 
@@ -197,7 +192,7 @@ export async function loadHuggingFaceRepoState(params: {
     kind: 'succeeded',
     value: {
       repoPath: params.repoPath,
-      name: name,
+      name: repoName,
       currentCommits: isJudged ? new Set(refCommits.value) : null,
       snapshots: snapshots.value.snapshots,
       blobs: blobs.value.blobs,

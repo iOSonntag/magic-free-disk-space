@@ -34,6 +34,9 @@ export const TOOL_INSTALL_LOCATIONS: ToolInstallLocations = {
   rustup: [
     { kind: 'path', root: 'home', path: '.cargo/bin/rustup' },
     { kind: 'path', root: 'absolute', path: '/opt/homebrew/bin/rustup' },
+    // Homebrew's rustup is keg-only, so it links nothing into `bin`.
+    { kind: 'path', root: 'absolute', path: '/opt/homebrew/opt/rustup/bin/rustup' },
+    { kind: 'path', root: 'absolute', path: '/usr/local/opt/rustup/bin/rustup' },
   ],
   conda: [
     { kind: 'path', root: 'absolute', path: '/opt/homebrew/bin/conda' },

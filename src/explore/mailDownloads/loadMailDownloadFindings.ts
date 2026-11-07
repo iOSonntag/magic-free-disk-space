@@ -1,7 +1,8 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
-import type { ExploreFoundFile } from '../exploreUnit.js';
+import { toNonEmpty } from '../exploreUnit.js';
+import { formatCountText, formatIsoDay } from '../formatLimitTexts.js';
 import { loadExploreEntryStats } from '../loadExploreRead.js';
 import { loadWalkedFiles } from '../loadWalkedFiles.js';
 import { isUntouchedMailDownload } from './mailDownloadFiles.js';
@@ -47,21 +48,17 @@ export async function loadMailDownloadFindings(
     isDescending: true,
     maxFiles: null,
     maxConcurrentDirectories: MAIL_MAX_CONCURRENT_DIRECTORIES,
-    isKept: (stats) => isUntouchedMailDownload({ times: stats, cutoffMs: run.staleCutoffMs }),
+    isKept: (stats) => isUntouchedMailDownload({ stats: stats, cutoffMs: run.staleCutoffMs }),
   });
-  const isComplete = walked.isComplete;
-  const foundFiles: ExploreFoundFile[] = walked.files.map((file) => ({
-    path: file.path,
-    modifiedMs: file.stats.modifiedMs,
-  }));
-  const [firstFile, ...restFiles] = foundFiles;
+  const foundFiles = toNonEmpty(
+    walked.files.map((file) => ({ path: file.path, modifiedMs: file.stats.modifiedMs })),
+  );
 
-  if (firstFile === undefined) {
-    return { kind: 'succeeded', value: { findings: [], isComplete: isComplete } };
+  if (foundFiles === null) {
+    return { kind: 'succeeded', value: { findings: [], isComplete: walked.isComplete } };
   }
 
-  const staleDate = new Date(run.staleCutoffMs).toISOString().slice(0, 10);
-  const countText = foundFiles.length === 1 ? '1 attachment' : `${foundFiles.length} attachments`;
+  const countText = formatCountText({ count: foundFiles.length, noun: 'attachment' });
 
   return {
     kind: 'succeeded',
@@ -72,14 +69,16 @@ export async function loadMailDownloadFindings(
             kind: 'mailDownloads',
             folderPath: folderPath,
             cutoffMs: run.staleCutoffMs,
-            foundFiles: [firstFile, ...restFiles],
+            foundFiles: foundFiles,
           },
           title: 'Attachments Mail opened',
           explanation:
             'Copies of attachments Mail saved when you opened them, unchanged since and not opened for the stale period. The messages keep their attachments.',
           regeneration: 'Mail saves a copy again when you open the attachment.',
           risk: 'review',
-          evidenceLines: [`${countText} saved and last read before ${staleDate}, never changed.`],
+          evidenceLines: [
+            `${countText} saved and last read before ${formatIsoDay(run.staleCutoffMs)}, never changed.`,
+          ],
           displayPath: folderPath,
           activity: decideUnitActivity({
             facts: { kind: 'appBundles', bundlePaths: run.platform.explore.mailBundlePaths },
@@ -87,7 +86,7 @@ export async function loadMailDownloadFindings(
           }),
         },
       ],
-      isComplete: isComplete,
+      isComplete: walked.isComplete,
     },
   };
 }

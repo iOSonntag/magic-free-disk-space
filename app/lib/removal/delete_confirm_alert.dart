@@ -12,6 +12,10 @@ import 'removal_reach.dart';
 /// alert's Delete, and a plan with a careful item asks the user to type it.
 const String deleteConfirmationWord = 'DELETE';
 
+/// The warning of a plan with a careful item, wherever the delete flow
+/// gives it without naming the items.
+const String carefulItemsWarningText = "Some of these can't be undone or downloaded again.";
+
 /// How many of the biggest items the alert names before "and N more".
 const int _namedItemCount = 4;
 
@@ -71,9 +75,13 @@ enum _AlertChoice { delete, showList, cancel }
 /// this Mac.
 String _formatHeadlineText(RemovalReach reach) {
   if (reach.finalItems.isEmpty) {
-    return 'Remove ${formatBytes(reach.evictedBytes)} from this Mac?';
+    return 'Remove ${_formatSizeSumText(reach.evictedSize)} from this Mac?';
   }
-  return 'Delete ${formatBytes(reach.finalBytes)} for good?';
+  return 'Delete ${_formatSizeSumText(reach.finalSize)} for good?';
+}
+
+String _formatSizeSumText(ItemSizeSum size) {
+  return formatSizeText(allocatedBytes: size.allocatedBytes, isComplete: size.isComplete);
 }
 
 class _DeleteConfirmAlert extends StatefulWidget {
@@ -171,7 +179,7 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
                 if (reach.evictedItems.isNotEmpty) ...[
                   const SizedBox(height: StageSpacing.large),
                   Text(
-                    formatStaysInIcloudText(reach.evictedBytes),
+                    formatStaysInIcloudText(reach.evictedSize),
                     style: TypeRamp.body,
                   ),
                 ],
@@ -181,7 +189,7 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
                     carefulItems: buildBiggestItems(
                       [
                         for (final PlannedItemView item in plan.items)
-                          if (item.risk == Risk.careful) item,
+                          if (item.group == ItemGroup.careful) item,
                       ],
                       shownCount: _namedCarefulCount,
                     ),
@@ -248,7 +256,7 @@ class _NamedItemLine extends StatelessWidget {
           ),
           const SizedBox(width: StageSpacing.medium),
           Text(
-            formatBytes(item.allocatedBytes),
+            formatPlannedItemSizeText(item),
             style: TypeRamp.caption.copyWith(color: StageColors.textSecondary),
           ),
         ],
@@ -284,7 +292,7 @@ class _CarefulConfirmation extends StatelessWidget {
           ),
           child: Text(
             carefulItems.shownItems.isEmpty
-                ? "Some of these can't be undone or downloaded again."
+                ? carefulItemsWarningText
                 : "Can't be undone or downloaded again: ${_formatTitleList(carefulItems)}.",
             style: TypeRamp.body.copyWith(color: StageColors.textPrimary),
           ),

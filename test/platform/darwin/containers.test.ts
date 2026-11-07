@@ -4,10 +4,17 @@ import { CONTAINER_ENTRIES } from '../../../src/platform/darwin/catalog/containe
 import { CONTAINER_ENGINES } from '../../../src/platform/darwin/containerEngines.js';
 import { buildRiskAndPathById } from './catalogPins.js';
 
-function findEngineEntry(engineProbeId: EngineProbeId): CatalogEntry | undefined {
-  return CONTAINER_ENTRIES.find(
+/** The entry the engine's probe explores; throws when the containers hold none. */
+function getEngineEntry(engineProbeId: EngineProbeId): CatalogEntry {
+  const engineEntry = CONTAINER_ENTRIES.find(
     (entry) => entry.removal.kind === 'explore' && entry.removal.probe === engineProbeId,
   );
+
+  if (engineEntry === undefined) {
+    throw new Error(`No container entry explores ${engineProbeId}.`);
+  }
+
+  return engineEntry;
 }
 
 describe('CONTAINER_ENTRIES', () => {
@@ -31,7 +38,7 @@ describe('CONTAINER_ENTRIES', () => {
   });
 
   test('the Docker entry has no owner, so it is not held back while Docker runs', () => {
-    expect(findEngineEntry('dockerDesktopEngine')?.owner).toBeNull();
+    expect(getEngineEntry('dockerDesktopEngine').owner).toBeNull();
   });
 
   test('each engine has its own entry on the disk image its units name', () => {
@@ -43,9 +50,9 @@ describe('CONTAINER_ENTRIES', () => {
 
     expect(
       engineProbeIds.map((engineProbeId) => {
-        const entry = findEngineEntry(engineProbeId);
+        const entry = getEngineEntry(engineProbeId);
 
-        return [entry?.root, entry?.path, entry?.category, entry?.owner];
+        return [entry.root, entry.path, entry.category, entry.owner];
       }),
     ).toEqual(
       engineProbeIds.map((engineProbeId) => [

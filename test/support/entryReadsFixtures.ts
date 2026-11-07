@@ -28,10 +28,13 @@ export async function loadEntryAllocatedBytes(params: { path: string }): Promise
   return stats.value.allocatedBytes;
 }
 
-/** What the scan measures at `path`, each entry inside it counted, by the platform's entry reads. */
-export async function loadMeasuredAllocatedBytes(params: { path: string }): Promise<number> {
+/**
+ * What the scan measures at `paths` as one tally, each entry inside them counted, by the
+ * platform's entry reads.
+ */
+export async function loadMeasuredAllocatedBytes(params: { paths: string[] }): Promise<number> {
   const measurement = await loadPathMeasurement({
-    paths: [params.path],
+    paths: params.paths,
     deadlineMs: Date.now() + 60_000,
     entryReads: darwinPlatform.system.entryReads,
   });

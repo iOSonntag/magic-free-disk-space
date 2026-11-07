@@ -8,7 +8,7 @@ import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js';
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
-import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isOverlappingPath } from '../path/isOverlappingPath.js';
 import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -166,7 +166,7 @@ export async function runScan(params: {
       : [],
   );
   // The probe of the IDE versions takes folders outside its entry, in the roots of every version.
-  const probeClaimPaths = [
+  const knownClaimPaths = [
     ...reservedEntryPaths,
     ...listIdeVersionRootPaths({
       environment: params.environment,
@@ -174,13 +174,17 @@ export async function runScan(params: {
     }),
   ];
 
-  function reportProgress(progress: { step: ScanProgressStep; finishedPhases: ScanPhase[] }): void {
+  function reportProgress(progress: {
+    step: ScanProgressStep;
+    finishedPhases: ScanPhase[];
+    probeClaimPaths: string[];
+  }): void {
     params.onProgress(
       buildScanProgress({
         step: progress.step,
         environment: params.environment,
         reservedEntryPaths: reservedEntryPaths,
-        probeClaimPaths: probeClaimPaths,
+        probeClaimPaths: progress.probeClaimPaths,
         finishedPhases: progress.finishedPhases,
       }),
     );
@@ -189,6 +193,7 @@ export async function runScan(params: {
   reportProgress({
     step: { message: 'Checking installed apps and running processes…', phase: 'apps' },
     finishedPhases: [],
+    probeClaimPaths: knownClaimPaths,
   });
 
   const processCommandsLoad = params.system.loadRunningProcesses({
@@ -275,6 +280,7 @@ export async function runScan(params: {
   reportProgress({
     step: { message: 'Measuring known storage locations…', phase: 'catalog' },
     finishedPhases: [setup],
+    probeClaimPaths: knownClaimPaths,
   });
   const catalog = await loadCatalogPhase({
     context: context,
@@ -284,18 +290,31 @@ export async function runScan(params: {
   reportProgress({
     step: { message: 'Searching your projects for old build folders…', phase: 'projects' },
     finishedPhases: [setup, catalog],
+    probeClaimPaths: knownClaimPaths,
   });
-  const artifacts = await loadArtifactPhase({ context: context, projectWalk: projectWalk });
+  // The roots the probes name, such as a project's `sdk.dir`, are known once the project walk
+  // ends; they claim before the large files, which may lie in one, can count.
+  const [artifacts, exploreClaimRoots] = await Promise.all([
+    loadArtifactPhase({ context: context, projectWalk: projectWalk }),
+    probes.claimRootsLoad,
+  ]);
+  const probeClaimPaths = [...knownClaimPaths, ...exploreClaimRoots];
 
   const apps = await loadAppPhaseOfAppSection({
     apps: params.scan.apps,
     context: context,
-    onStep: (step) => reportProgress({ step: step, finishedPhases: [setup, catalog, artifacts] }),
+    onStep: (step) =>
+      reportProgress({
+        step: step,
+        finishedPhases: [setup, catalog, artifacts],
+        probeClaimPaths: probeClaimPaths,
+      }),
   });
 
   reportProgress({
     step: { message: 'Looking for large old files…', phase: 'largeFiles' },
     finishedPhases: [setup, catalog, artifacts, apps],
+    probeClaimPaths: probeClaimPaths,
   });
   const userFiles = await loadUserFilePhase({ context: context });
 
@@ -303,16 +322,21 @@ export async function runScan(params: {
     apps: params.scan.apps,
     context: context,
     onStep: (step) =>
-      reportProgress({ step: step, finishedPhases: [setup, catalog, artifacts, apps, userFiles] }),
+      reportProgress({
+        step: step,
+        finishedPhases: [setup, catalog, artifacts, apps, userFiles],
+        probeClaimPaths: probeClaimPaths,
+      }),
   });
 
   reportProgress({
     step: { message: 'Asking developer tools what they can clean…', phase: 'tools' },
     finishedPhases: [setup, catalog, artifacts, apps, userFiles, orphans],
+    probeClaimPaths: probeClaimPaths,
   });
   const explore = await loadExplorePhase({
     environment: params.environment,
-    probes: probes,
+    probes: probes.outcomes,
     catalogEntries: params.catalog.entries,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
@@ -500,10 +524,8 @@ function isInProbeClaim(params: {
   }
 
   return listCandidateFootprint(params.candidate).some((path) =>
-    params.probeClaimPaths.some(
-      (claimPath) =>
-        isSameOrInsidePath({ rules: params.pathRules, path: path, parentPath: claimPath }) ||
-        isSameOrInsidePath({ rules: params.pathRules, path: claimPath, parentPath: path }),
+    params.probeClaimPaths.some((claimPath) =>
+      isOverlappingPath({ rules: params.pathRules, path: path, otherPath: claimPath }),
     ),
   );
 }

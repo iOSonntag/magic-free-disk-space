@@ -7,6 +7,7 @@ import '../cleaner/cleaner.dart';
 import '../design/design.dart';
 import '../scan_view/scan_view.dart';
 import 'biggest_items.dart';
+import 'removal_reach.dart';
 import 'size_ease.dart';
 
 /// How many of the biggest items the view shows; the rest dissolve as one
@@ -113,7 +114,7 @@ class _DeletingViewState extends State<DeletingView>
 
   @override
   Widget build(BuildContext context) {
-    final String totalText = formatBytes(widget.state.plan.totalBytes);
+    final String totalText = formatPlanTotalText(widget.state.plan);
     return Material(
       type: MaterialType.transparency,
       child: Center(
@@ -209,7 +210,7 @@ class _DeletingRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: StageSpacing.medium),
-          Text(formatBytes(item.allocatedBytes), style: TypeRamp.figure),
+          Text(formatPlannedItemSizeText(item), style: TypeRamp.figure),
         ],
       ),
     );

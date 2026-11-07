@@ -88,9 +88,9 @@ Pixel readPixel(ByteData pixels, {required int width, required int x, required i
   );
 }
 
-RenderObject findBackdropRender(WidgetTester tester) => tester.renderObject(find.byType(CinematicBackdrop));
+RenderObject readBackdropRender(WidgetTester tester) => tester.renderObject(find.byType(CinematicBackdrop));
 
-RenderObject findRingRender(WidgetTester tester) => tester.renderObject(findRingPaint());
+RenderObject readRingRender(WidgetTester tester) => tester.renderObject(findRingPaint());
 
 void main() {
   testWidgets('loads both fragment programs from the bundled assets and paints them through Paint.shader', (
@@ -104,8 +104,8 @@ void main() {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.reduced);
     await tester.pumpWidget(buildStageAndRing(windowMotion: windowMotion, library: library!));
 
-    expect(findBackdropRender(tester), paints..something(isDrawWithFragmentShader));
-    expect(findRingRender(tester), paints..something(isDrawWithFragmentShader));
+    expect(readBackdropRender(tester), paints..something(isDrawWithFragmentShader));
+    expect(readRingRender(tester), paints..something(isDrawWithFragmentShader));
 
     final ValueNotifier<double> stillTime = ValueNotifier<double>(0);
     addTearDown(stillTime.dispose);
@@ -144,13 +144,13 @@ void main() {
       await tester.pumpWidget(buildStageAndRing(windowMotion: windowMotion, library: ShaderLibrary.empty));
 
       expect(
-        findBackdropRender(tester),
+        readBackdropRender(tester),
         paints
           ..rect(rect: const Rect.fromLTWH(0, 0, 600, 400))
           ..rect(rect: const Rect.fromLTWH(0, 0, 600, 400))
           ..rect(rect: const Rect.fromLTWH(0, 0, 600, 400)),
       );
-      expect(findBackdropRender(tester), paints..everything(hasNoShaderNorGlow));
+      expect(readBackdropRender(tester), paints..everything(hasNoShaderNorGlow));
     });
 
     testWidgets('the ring paints plain arcs with no glow', (WidgetTester tester) async {
@@ -158,13 +158,13 @@ void main() {
       await tester.pumpWidget(buildStageAndRing(windowMotion: windowMotion, library: ShaderLibrary.empty));
 
       expect(
-        findRingRender(tester),
+        readRingRender(tester),
         paints
           ..arc(color: StageColors.diskAvailable)
           ..arc(color: StageColors.diskUsed)
           ..arc(color: accent),
       );
-      expect(findRingRender(tester), paints..everything(hasNoShaderNorGlow));
+      expect(readRingRender(tester), paints..everything(hasNoShaderNorGlow));
     });
 
     testWidgets('nothing ticks, whatever motion allows', (WidgetTester tester) async {

@@ -54,7 +54,14 @@ void main() {
     });
 
     test('shows an item of a group this app does not know for review', () {
-      expect(getShownItemGroup(ItemGroup.unknown), ShownItemGroup.review);
+      expect(itemGroupToShownItemGroup(ItemGroup.unknown), ShownItemGroup.review);
+    });
+
+    test('offers every item for removal but one the bridge never plans', () {
+      expect(
+        [for (final ItemView item in sampleScan.selectableItems) if (!isItemRemovable(item)) item.title],
+        ['Xcode'],
+      );
     });
   });
 
@@ -71,24 +78,30 @@ void main() {
   });
 
   group('section totals', () {
-    test('merge the totals of keys this app does not know, in key order', () {
+    test('merge the totals of keys this app does not know where the first of them stood', () {
       const SectionTotal futureThings = SectionTotal(
         sectionKey: SectionKey.unknown,
+        titleText: 'Future things',
         allocatedBytes: 3000000,
+        isComplete: true,
         itemCount: 1,
         safeBytes: 0,
         adviceCount: 0,
       );
       const SectionTotal otherFuture = SectionTotal(
         sectionKey: SectionKey.unknown,
+        titleText: 'Other future',
         allocatedBytes: 2000000,
+        isComplete: false,
         itemCount: 2,
         safeBytes: 1000000,
         adviceCount: 1,
       );
       const SectionTotal caches = SectionTotal(
         sectionKey: SectionKey.caches,
+        titleText: 'Caches',
         allocatedBytes: 1000000,
+        isComplete: true,
         itemCount: 1,
         safeBytes: 1000000,
         adviceCount: 0,
@@ -101,14 +114,17 @@ void main() {
       ]);
 
       expect([for (final SectionTotal total in merged) total.sectionKey], [
-        SectionKey.caches,
         SectionKey.unknown,
+        SectionKey.caches,
       ]);
-      final SectionTotal unknown = merged.last;
+      final SectionTotal unknown = merged.first;
+      expect(unknown.titleText, 'Future things and Other future');
       expect(unknown.allocatedBytes, 5000000);
+      expect(unknown.isComplete, isFalse);
       expect(unknown.itemCount, 3);
       expect(unknown.safeBytes, 1000000);
       expect(unknown.adviceCount, 1);
+      expect(merged.last, same(caches));
     });
 
     test('say how many items a section holds', () {
@@ -129,62 +145,49 @@ void main() {
       expect(findSectionTotal(totals, SectionKey.trash), isNull);
     });
 
-    test('keep the order the bridge sends them in', () {
-      final List<SectionTotal> totals = sampleScan.sectionTotals;
+    test('keep the order the bridge sends them in, not the order of the keys', () {
+      final List<SectionTotal> totals = loadScanWithReversedTotals().sectionTotals;
 
-      expect(
-        [for (final SectionTotal total in mergeSectionTotalsByKey(totals)) total.sectionKey],
-        [for (final SectionTotal total in totals) total.sectionKey],
-      );
+      expect([for (final SectionTotal total in mergeSectionTotalsByKey(totals)) total.sectionKey], [
+        SectionKey.icloud,
+        SectionKey.largeFiles,
+        SectionKey.apps,
+        SectionKey.developerTools,
+        SectionKey.caches,
+      ]);
     });
 
-    test('stand in the order of the sections, whatever order the scan finds them in', () {
-      const List<SectionKey> sectionOrder = [
-        SectionKey.caches,
-        SectionKey.developerTools,
-        SectionKey.projects,
-        SectionKey.containers,
-        SectionKey.aiModels,
-        SectionKey.apps,
-        SectionKey.downloads,
-        SectionKey.largeFiles,
-        SectionKey.icloud,
-        SectionKey.trash,
-        SectionKey.ownApp,
-      ];
+    test('show the size of a section, or the count of places of one of advice alone', () {
+      const SectionTotal adviceOnly = SectionTotal(
+        sectionKey: SectionKey.ownApp,
+        titleText: 'Handled by its own app',
+        allocatedBytes: 0,
+        isComplete: true,
+        itemCount: 0,
+        safeBytes: 0,
+        adviceCount: 2,
+      );
+      final List<SectionTotal> totals = sampleScan.sectionTotals;
 
-      final List<SectionTotal> merged = mergeSectionTotalsByKey([
-        for (final SectionKey sectionKey in [SectionKey.unknown, ...sectionOrder.reversed])
-          SectionTotal(
-            sectionKey: sectionKey,
-            allocatedBytes: 1000000,
-            itemCount: 1,
-            safeBytes: 0,
-            adviceCount: 0,
-          ),
-      ]);
-
-      expect([for (final SectionTotal total in merged) total.sectionKey], [
-        ...sectionOrder,
-        SectionKey.unknown,
-      ]);
+      expect(formatSectionFigureText(findSectionTotal(totals, SectionKey.caches)!), 'at least 10 MB');
+      expect(formatSectionFigureText(findSectionTotal(totals, SectionKey.apps)!), '5.0 MB');
+      expect(formatSectionFigureText(adviceOnly), '2 places');
+      expect(formatPlaceCount(1), '1 place');
     });
   });
 
   group('section titles', () {
-    test('take the bridge title of a key this app does not know', () {
+    test('take the title the bridge gives, a key this app does not know included', () {
       final Map<String, Object?> json = loadSampleJson('scanned');
-      final Map<String, Object?> largeFiles = (json['sections']! as List<Object?>)
-          .cast<Map<String, Object?>>()
-          .singleWhere((Map<String, Object?> section) => section['key'] == 'largeFiles');
-      largeFiles['key'] = 'futureThings';
+      final Map<String, Object?> largeFiles = listSectionTotalJsons(json).singleWhere(
+        (Map<String, Object?> total) => total['sectionKey'] == 'largeFiles',
+      );
+      largeFiles['sectionKey'] = 'futureThings';
       largeFiles['titleText'] = 'Future things';
-      final ScannedEvent scan = parseScanJson(json);
+      final List<SectionTotal> totals = parseScanJson(json).sectionTotals;
 
-      expect(formatScanSectionTitle(SectionKey.unknown, scan: scan), 'Future things');
-      expect(formatScanSectionTitle(SectionKey.unknown, scan: sampleScan), 'Other items');
-      expect(formatScanSectionTitle(SectionKey.unknown, scan: null), 'Other items');
-      expect(formatScanSectionTitle(SectionKey.caches, scan: scan), 'Caches');
+      expect(findSectionTotal(totals, SectionKey.unknown)!.titleText, 'Future things');
+      expect(findSectionTotal(totals, SectionKey.icloud)!.titleText, 'iCloud Drive');
     });
   });
 
@@ -213,6 +216,27 @@ void main() {
 
       expect(formatItemFactsText(xcode, now: now), 'Xcode · Last used 5 months ago');
       expect(formatItemFactsText(oldVideo, now: now), 'Last used 3 months ago');
+    });
+
+    test('mark a leftover matched by its name, and none matched by its bundle id', () {
+      final ItemView byName = sampleScan.selectableItems.singleWhere((ItemView item) => item.number == 4);
+      final ItemView byBundleId = sampleScan.selectableItems.singleWhere((ItemView item) => item.number == 5);
+
+      expect(formatItemFactsText(byName, now: now), endsWith(' · Matched by name'));
+      expect(formatItemFactsText(byBundleId, now: now), isNot(contains('Matched by name')));
+    });
+
+    test('join the facts of an advice item, its leftover match included', () {
+      final Map<String, Object?> json = loadSampleJson('scanned');
+      listScanAdviceJsons(json).first
+        ..['lastUsedAt'] = DateTime.utc(2025, 8, 31).millisecondsSinceEpoch
+        ..['appName'] = 'Photos'
+        ..['matchedBy'] = 'name';
+      final AdviceItemView photos = parseScanJson(json).explore!.adviceGroup!.items.first;
+      final AdviceItemView toolStore = sampleScan.explore!.adviceGroup!.items.last;
+
+      expect(formatAdviceFactsText(photos, now: now), 'Photos · Last used yesterday · Matched by name');
+      expect(formatAdviceFactsText(toolStore, now: now), '');
     });
   });
 

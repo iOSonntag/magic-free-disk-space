@@ -110,7 +110,9 @@ async function createRepository(fixture: HubFixture): Promise<void> {
   await writeFixtureTextFile({ path: join(fixture.huggingFacePath, 'token'), text: 'fixture' });
   await writeFixtureTextFile({
     path: join(fixture.huggingFacePath, 'stored_tokens'),
-    text: '[fixture]\nhf_token = fixture\n',
+    text: `[fixture]
+hf_token = fixture
+`,
   });
   await writeFixtureTextFile({
     path: join(fixture.huggingFacePath, 'hub', '.locks', REPO_FOLDER_NAME, 'weights.lock'),

@@ -17,7 +17,7 @@ export async function recheckAndroidPlatformUnit(params: {
 }): Promise<PathUnitRecheck> {
   const state = await loadAndroidPlatformState({
     pathRules: params.environment.pathRules,
-    sdkRoots: [params.unit.sdkRoot],
+    sdkRoots: [{ path: params.unit.sdkRoot, isRequired: true }],
     privacyDenialCode: params.platform.privacyDenialCode,
   });
 

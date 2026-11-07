@@ -9,6 +9,7 @@ import {
   loadAndroidEmulatorFindings,
   loadAndroidSystemImageFindings,
 } from '../../src/explore/android/loadAndroidProbeFindings.js';
+import type { AndroidSdkRoot } from '../../src/explore/android/loadAndroidSdkRoots.js';
 import type {
   AndroidAvd,
   AndroidAvdPresent,
@@ -40,6 +41,11 @@ import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parse
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
+  buildTestProbeRun,
+  findUnitOfKind,
+  getProbeFindings,
+} from '../support/probeRunFixtures.js';
+import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
   ANDROID_RECENT_USE_MS,
@@ -53,7 +59,6 @@ import {
   writeAndroidEmulator,
   writeAndroidSystemImage,
 } from './androidFixtures.js';
-import { buildTestProjectPins } from './projectPinsFixtures.js';
 
 const tool: LocatedTool = { name: 'avdmanager', path: '/opt/example/cmdline-tools/bin/avdmanager' };
 
@@ -64,11 +69,13 @@ const NOT_JUDGED: ExploreProbeFindings = { findings: [], isComplete: false };
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
 let homeDir: AbsolutePath;
+let sdkRoot: AbsolutePath;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
   homeDir = environment.homeDir;
+  sdkRoot = buildAndroidSdkRoot({ homeDir: homeDir });
 });
 
 afterEach(async () => {
@@ -82,12 +89,15 @@ function buildStateLoad(): Parameters<typeof loadAndroidSdkState>[0] {
   return {
     pathRules: DARWIN_PATH_RULES,
     homeDir: homeDir,
-    sdkRoots: [buildAndroidSdkRoot({ homeDir: homeDir })],
+    sdkRoots: buildSdkRoots(),
     privacyDenialCode: platform.privacyDenialCode,
   };
 }
 
-const NO_PROJECT_PINS = buildTestProjectPins({ files: [] });
+/** The one SDK root of the fixture home, the platform's. */
+function buildSdkRoots(): AndroidSdkRoot[] {
+  return [{ path: sdkRoot, isRequired: true }];
+}
 
 type AndroidProbeAnswers = {
   avds: ExploreProbeFindings;
@@ -98,29 +108,23 @@ type AndroidProbeAnswers = {
 async function loadAndroidProbeAnswers(
   processCommands: string[] | null = [],
 ): Promise<AndroidProbeAnswers> {
-  const run = {
+  const run = buildTestProbeRun({
     environment: environment,
-    platform: buildTestProbePlatform(),
     processCommands: processCommands,
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
-    staleCutoffMs: 0,
+    cutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+  });
+
+  return {
+    avds: getProbeFindings(
+      await loadAndroidAvdFindings({ run: { ...run, tool: tool }, sdkRoots: buildSdkRoots() }),
+    ),
+    systemImages: getProbeFindings(
+      await loadAndroidSystemImageFindings({ run: run, sdkRoots: buildSdkRoots() }),
+    ),
+    emulator: getProbeFindings(
+      await loadAndroidEmulatorFindings({ run: run, sdkRoots: buildSdkRoots() }),
+    ),
   };
-  const avds = await loadAndroidAvdFindings({
-    run: { ...run, tool: tool },
-    projectPins: NO_PROJECT_PINS,
-  });
-  const systemImages = await loadAndroidSystemImageFindings({
-    run: run,
-    projectPins: NO_PROJECT_PINS,
-  });
-  const emulator = await loadAndroidEmulatorFindings({ run: run, projectPins: NO_PROJECT_PINS });
-
-  if (avds.kind === 'failed' || systemImages.kind === 'failed' || emulator.kind === 'failed') {
-    throw new Error('An Android probe failed.');
-  }
-
-  return { avds: avds.value, systemImages: systemImages.value, emulator: emulator.value };
 }
 
 function listUnits(findings: ExploreProbeFindings): ExploreFinding['unit'][] {
@@ -135,21 +139,6 @@ function buildRecheckRun(processCommands: string[] | null) {
     deadlineMs: Date.now() + 10_000,
     processCommands: processCommands,
   };
-}
-
-/** The first unit of the findings, which the test expects to be of the given kind. */
-function takeFirstUnit<TUnit extends ExploreFinding['unit']>(
-  findings: ExploreProbeFindings,
-  kind: TUnit['kind'],
-): TUnit {
-  const unit = findings.findings[0]?.unit;
-
-  if (unit?.kind !== kind) {
-    throw new Error(`Expected a ${kind} unit.`);
-  }
-
-  // The kind check above narrows the unit; the compiler cannot follow it through the generic.
-  return unit as TUnit;
 }
 
 async function loadFreshState() {
@@ -211,7 +200,7 @@ describeAwaitingWin32Platform('the Android probes without an SDK', () => {
 describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   test('without ~/.android/avd judge the AVDs empty and hold back images and the emulator', async () => {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -226,7 +215,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('with an empty ~/.android/avd offer every image and the emulator, named by package', async () => {
     const imagePath = await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -234,7 +223,6 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     await createAndroidAvdHome({ homeDir: homeDir });
 
     const answers = await loadAndroidProbeAnswers();
-    const sdkRoot = buildAndroidSdkRoot({ homeDir: homeDir });
 
     expect(answers.avds).toEqual(JUDGED_EMPTY);
     expect(answers.systemImages.isComplete).toBe(true);
@@ -276,12 +264,12 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('offer an AVD unused since the cutoff with the images no AVD names, not the emulator', async () => {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
     const unusedImagePath = await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
@@ -305,7 +293,6 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     });
 
     const answers = await loadAndroidProbeAnswers();
-    const sdkRoot = buildAndroidSdkRoot({ homeDir: homeDir });
 
     expect(answers.avds.isComplete).toBe(true);
     expect(listUnits(answers.avds)).toEqual([
@@ -335,7 +322,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('mark each finding busy while an emulator runs, and unknown without processes', async () => {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -356,11 +343,10 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('leave an image folder with an unparsable package.xml not judged, and skip one without', async () => {
     const imagePath = await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    const sdkRoot = buildAndroidSdkRoot({ homeDir: homeDir });
     const unparsablePath = join(sdkRoot, 'system-images', 'x', 'y', 'z');
     await mkdir(unparsablePath, { recursive: true });
     await writeFile(join(unparsablePath, 'package.xml'), '<repository/>');
@@ -376,7 +362,6 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('read an image folder whose package.xml is no file as not judged', async () => {
-    const sdkRoot = buildAndroidSdkRoot({ homeDir: homeDir });
     const folderPath = join(sdkRoot, 'system-images', 'x', 'y', 'z');
     await mkdir(join(folderPath, 'package.xml'), { recursive: true });
     await createAndroidAvdHome({ homeDir: homeDir });
@@ -398,7 +383,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('leave an AVD whose ini names no path not judged, and the images with it', async () => {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -429,7 +414,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('build no unit of an AVD whose folder is gone, and hold back the images', async () => {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -450,7 +435,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('hold back the images while an AVD config.ini names no image, and judge no AVD', async () => {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -469,7 +454,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('hold back the images while an AVD has no config.ini', async () => {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -561,15 +546,8 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     });
     expect(
       await loadAndroidSystemImageFindings({
-        run: {
-          environment: environment,
-          platform: buildTestProbePlatform(),
-          processCommands: [],
-          deadlineMs: Date.now() + 10_000,
-          unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
-          staleCutoffMs: 0,
-        },
-        projectPins: NO_PROJECT_PINS,
+        run: buildTestProbeRun({ environment: environment, cutoffMs: ANDROID_UNUSED_CUTOFF_MS }),
+        sdkRoots: buildSdkRoots(),
       }),
     ).toMatchObject({ kind: 'failed', failure: { reason: 'fileUnreadable', path: avd.iniPath } });
   });
@@ -740,7 +718,7 @@ describeAwaitingWin32Platform('recheckAndroidAvdUnit', () => {
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
 
-    return takeFirstUnit((await loadAndroidProbeAnswers()).avds, 'androidAvd');
+    return findUnitOfKind({ findings: (await loadAndroidProbeAnswers()).avds, kind: 'androidAvd' });
   }
 
   test('answers unchanged while the AVD is listed at the same path with the same last use', async () => {
@@ -778,7 +756,7 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     emulator: ExplorePathUnitAndroidEmulator;
   }> {
     await writeAndroidSystemImage({
-      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -787,8 +765,8 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     const answers = await loadAndroidProbeAnswers();
 
     return {
-      image: takeFirstUnit(answers.systemImages, 'androidSystemImage'),
-      emulator: takeFirstUnit(answers.emulator, 'androidEmulator'),
+      image: findUnitOfKind({ findings: answers.systemImages, kind: 'androidSystemImage' }),
+      emulator: findUnitOfKind({ findings: answers.emulator, kind: 'androidEmulator' }),
     };
   }
 

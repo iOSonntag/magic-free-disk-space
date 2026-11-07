@@ -1,9 +1,14 @@
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { ExploreProbePlatform, ExploreProbeRun } from '../../src/explore/exploreProbe.js';
+import type {
+  ExploreProbePlatform,
+  ExploreProbeRun,
+  ExploreProbeToolRun,
+} from '../../src/explore/exploreProbe.js';
 import type { ExploreProbeFindings, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import type { Result } from '../../src/result.js';
+import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { FixtureRoot } from './fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot, loadTestEnvironment } from './fixtureRoot.js';
+import { loadTestEnvironment, withFixtureRoot } from './fixtureRoot.js';
 import { buildTestProbePlatform } from './probePlatformFixtures.js';
 
 /** One day in milliseconds, for the times and cutoffs of the fixtures. */
@@ -14,6 +19,15 @@ const TEST_PROBE_RUN_DURATION_MS = 10_000;
 
 /** A temporary home of a test, with the environment over it. */
 export type FixtureHome = { fixtureRoot: FixtureRoot; environment: Environment };
+
+/** What a test probe run is built from; each value left out takes its default. */
+type TestProbeRunParams = {
+  environment: Environment;
+  /** `null` for processes that could not be read; no process runs when it is left out. */
+  processCommands?: string[] | null;
+  platform?: ExploreProbePlatform;
+  cutoffMs?: number;
+};
 
 /** A unit of the kind `TKind`. */
 export type ExploreUnitOfKind<TKind extends ExploreUnit['kind']> = Extract<
@@ -29,30 +43,23 @@ export async function withFixtureHome(params: {
   nowMs: number;
   run: (home: FixtureHome) => Promise<void>;
 }): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
+  await withFixtureRoot({
+    run: async (fixtureRoot) => {
+      const environment = await loadTestEnvironment({
+        fixtureRoot: fixtureRoot,
+        nowMs: params.nowMs,
+      });
 
-  try {
-    const environment = await loadTestEnvironment({
-      fixtureRoot: fixtureRoot,
-      nowMs: params.nowMs,
-    });
-
-    await params.run({ fixtureRoot: fixtureRoot, environment: environment });
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
+      await params.run({ fixtureRoot: fixtureRoot, environment: environment });
+    },
+  });
 }
 
 /**
  * A probe run over `environment` with the test platform, due ten seconds from now. No process
  * runs unless `processCommands` names one, and both cutoffs are `cutoffMs`, 0 when it is left out.
  */
-export function buildTestProbeRun(params: {
-  environment: Environment;
-  processCommands?: string[] | null;
-  platform?: ExploreProbePlatform;
-  cutoffMs?: number;
-}): ExploreProbeRun {
+export function buildTestProbeRun(params: TestProbeRunParams): ExploreProbeRun {
   const cutoffMs = params.cutoffMs ?? 0;
 
   return {
@@ -63,6 +70,13 @@ export function buildTestProbeRun(params: {
     unusedCutoffMs: cutoffMs,
     staleCutoffMs: cutoffMs,
   };
+}
+
+/** The probe run of `buildTestProbeRun` with the located `tool` the probe calls. */
+export function buildTestProbeToolRun(
+  params: TestProbeRunParams & { tool: LocatedTool },
+): ExploreProbeToolRun {
+  return { ...buildTestProbeRun(params), tool: params.tool };
 }
 
 /** The findings of a probe's answer; throws with the reason when the probe failed. */

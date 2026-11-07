@@ -43,11 +43,44 @@ ScannedEvent parseScanJson(Map<String, Object?> json) {
   return parseBridgeEvent(json) as ScannedEvent;
 }
 
+/// The map at [path] in [json], each step a key of a map or an index of a
+/// list.
+Map<String, Object?> getMapAt(Object? json, List<Object> path) {
+  Object? node = json;
+  for (final Object step in path) {
+    node = switch (step) {
+      final int index => (node as List<Object?>)[index],
+      final String key => (node as Map<String, Object?>)[key],
+      _ => throw ArgumentError.value(step, 'path'),
+    };
+  }
+  return node as Map<String, Object?>;
+}
+
+/// The JSON maps of the sections of a scan's [json], in its order; a test
+/// may reorder the list in place.
+List<Map<String, Object?>> listSectionJsons(Map<String, Object?> json) {
+  return (json['sections']! as List<Object?>).cast();
+}
+
+/// The JSON maps of the section totals of a scan's [json], in its order; a
+/// test may reorder or extend the list in place.
+List<Map<String, Object?>> listSectionTotalJsons(Map<String, Object?> json) {
+  return (json['sectionTotals']! as List<Object?>).cast();
+}
+
+/// The sample scan with its section totals reversed, so that the bridge's
+/// order differs from the order of [SectionKey].
+ScannedEvent loadScanWithReversedTotals() {
+  final Map<String, Object?> json = loadSampleJson('scanned');
+  json['sectionTotals'] = listSectionTotalJsons(json).reversed.toList();
+  return parseScanJson(json);
+}
+
 /// The JSON maps of every selectable item of a scan's [json].
 List<Map<String, Object?>> listScanItemJsons(Map<String, Object?> json) {
   final List<Map<String, Object?>> items = [];
-  for (final Object? section in json['sections']! as List<Object?>) {
-    final Map<String, Object?> sectionJson = section! as Map<String, Object?>;
+  for (final Map<String, Object?> sectionJson in listSectionJsons(json)) {
     items.addAll((sectionJson['items']! as List<Object?>).cast());
     final Object? checkGroup = sectionJson['checkGroup'];
     if (checkGroup is Map<String, Object?>) {

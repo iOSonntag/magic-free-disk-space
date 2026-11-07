@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import type { ExploreProbeToolRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreToolUnitRustupToolchain } from '../../src/explore/exploreUnit.js';
 import type { ProjectPinFile } from '../../src/explore/projectPins/projectPins.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import { compareRustupToolchainUnit } from '../../src/explore/rustupToolchains/compareRustupToolchainUnit.js';
 import type { RustupState } from '../../src/explore/rustupToolchains/loadRustupState.js';
 import { loadRustupToolchainFindings } from '../../src/explore/rustupToolchains/loadRustupToolchainFindings.js';
+import type { RustToolchainPins } from '../../src/explore/rustupToolchains/parseRustToolchainPins.js';
 import {
   isRustToolchainPinned,
   parseRustToolchainPins,
@@ -16,22 +16,29 @@ import {
   parseRustupToolchainList,
 } from '../../src/explore/rustupToolchains/parseRustupLists.js';
 import { recheckRustupToolchainUnit } from '../../src/explore/rustupToolchains/recheckRustupToolchainUnit.js';
-import type { RustupToolchainName } from '../../src/explore/rustupToolchains/rustupToolchainName.js';
 import { parseRustupToolchainName } from '../../src/explore/rustupToolchains/rustupToolchainName.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import {
+  buildTestAbsolutePath,
+  buildTestRustupToolchainName,
+} from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
-  buildTestProbeRun,
+  buildTestProbeToolRun,
   getProbeFindings,
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
-import { buildTestPinFileText, buildTestProjectPins } from './projectPinsFixtures.js';
+import {
+  buildTestPinFileText,
+  buildTestPinText,
+  buildTestProjectPins,
+} from './projectPinsFixtures.js';
 
 const HOST = 'aarch64-apple-darwin';
 
@@ -41,23 +48,11 @@ const VALUE_TOOL: LocatedTool = { name: 'rustup', path: '/Users/example/.cargo/b
 
 const VALUE_TOOLCHAINS_PATH = '/Users/example/.rustup/toolchains';
 
-function buildToolchainName(text: string): RustupToolchainName {
-  const name = parseRustupToolchainName({ text: text });
-
-  if (name.kind === 'failed') {
-    throw new Error(`The toolchain name ${text} did not parse.`);
-  }
-
-  return name.value;
-}
-
-function parsePinTexts(...files: { path: string; text: string }[]) {
+function parsePinTexts(...files: { path: string; text: string }[]): RustToolchainPins {
   return parseRustToolchainPins({
-    files: files.map((file) => ({
-      path: buildTestAbsolutePath({ text: file.path }),
-      kind: 'rustToolchain',
-      text: file.text,
-    })),
+    files: files.map((file) =>
+      buildTestPinText({ path: file.path, kind: 'rustToolchain', text: file.text }),
+    ),
   });
 }
 
@@ -69,7 +64,7 @@ function buildValueUnit(params: {
   return {
     kind: 'rustupToolchain',
     tool: VALUE_TOOL,
-    name: buildToolchainName(params.name),
+    name: buildTestRustupToolchainName({ text: params.name }),
     toolchainPath: buildTestAbsolutePath({ text: join(params.toolchainsPath, params.name) }),
     pinFiles: [],
   };
@@ -110,22 +105,21 @@ async function createFakeRustup(params: {
   return { name: 'rustup', path: path };
 }
 
-function buildToolchainPath(params: { home: FixtureHome; name: string }) {
+function buildToolchainPath(params: { home: FixtureHome; name: string }): AbsolutePath {
   return buildTestAbsolutePath({
     text: join(params.home.fixtureRoot.homeDir, '.rustup', 'toolchains', params.name),
   });
 }
 
-async function createToolchainFolders(params: { home: FixtureHome; names: string[] }) {
+async function createToolchainFolders(params: {
+  home: FixtureHome;
+  names: string[];
+}): Promise<void> {
   for (const name of params.names) {
     await createFixtureDirectory({
       path: join(buildToolchainPath({ home: params.home, name: name }), 'bin'),
     });
   }
-}
-
-function buildRun(params: { home: FixtureHome; tool: LocatedTool }): ExploreProbeToolRun {
-  return { ...buildTestProbeRun({ environment: params.home.environment }), tool: params.tool };
 }
 
 describeAwaitingWin32Platform('parseRustupToolchainList', () => {
@@ -139,10 +133,13 @@ beta-${HOST} (default)
     expect(parseRustupToolchainList({ stdoutText: stdoutText })).toEqual({
       kind: 'succeeded',
       value: [
-        { name: buildToolchainName(`stable-${HOST}`), isMarked: true },
-        { name: buildToolchainName(`nightly-2024-01-01-${HOST}`), isMarked: false },
-        { name: buildToolchainName(`1.75.0-${HOST}`), isMarked: true },
-        { name: buildToolchainName(`beta-${HOST}`), isMarked: true },
+        { name: buildTestRustupToolchainName({ text: `stable-${HOST}` }), isMarked: true },
+        {
+          name: buildTestRustupToolchainName({ text: `nightly-2024-01-01-${HOST}` }),
+          isMarked: false,
+        },
+        { name: buildTestRustupToolchainName({ text: `1.75.0-${HOST}` }), isMarked: true },
+        { name: buildTestRustupToolchainName({ text: `beta-${HOST}` }), isMarked: true },
       ],
     });
   });
@@ -167,8 +164,18 @@ describeAwaitingWin32Platform('parseRustupOverrideList', () => {
       parseRustupOverrideList({
         stdoutText: `/Users/example/code/app                 \tnightly-${HOST}\n`,
       }),
-    ).toEqual({ kind: 'succeeded', value: [`nightly-${HOST}`] });
+    ).toEqual({
+      kind: 'succeeded',
+      value: [buildTestRustupToolchainName({ text: `nightly-${HOST}` })],
+    });
     expect(parseRustupOverrideList({ stdoutText: 'no overrides\n' })).toEqual({
+      kind: 'succeeded',
+      value: [],
+    });
+  });
+
+  test('leaves out a word that is no toolchain name', () => {
+    expect(parseRustupOverrideList({ stdoutText: '/Users/example/code/app\t--help\n' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -187,9 +194,19 @@ describeAwaitingWin32Platform('parseRustToolchainPins', () => {
   test('reads the channel of rust-toolchain.toml and of the legacy file', () => {
     expect(
       parsePinTexts(
-        { path: '/code/a/rust-toolchain.toml', text: '[toolchain]\nchannel = "1.75.0"\n' },
+        {
+          path: '/code/a/rust-toolchain.toml',
+          text: `[toolchain]
+channel = "1.75.0"
+`,
+        },
         { path: '/code/b/rust-toolchain', text: 'nightly-2024-01-01\n' },
-        { path: '/code/c/rust-toolchain', text: "[toolchain]\nchannel = 'beta'\n" },
+        {
+          path: '/code/c/rust-toolchain',
+          text: `[toolchain]
+channel = 'beta'
+`,
+        },
       ),
     ).toEqual({ kind: 'channels', channels: ['1.75.0', 'nightly-2024-01-01', 'beta'] });
   });
@@ -198,14 +215,18 @@ describeAwaitingWin32Platform('parseRustToolchainPins', () => {
     expect(
       parsePinTexts({
         path: '/code/a/rust-toolchain.toml',
-        text: '[toolchain]\npath = "/opt/rust"\n',
+        text: `[toolchain]
+path = "/opt/rust"
+`,
       }),
     ).toEqual({ kind: 'channels', channels: [] });
   });
 
   test('pins every toolchain for a file whose channel is unclear', () => {
     for (const text of [
-      '[toolchain]\ncomponents = ["clippy"]\n',
+      `[toolchain]
+components = ["clippy"]
+`,
       'stable nightly\n',
       '-stable\n',
       'stable/x\n',
@@ -261,11 +282,11 @@ describeAwaitingWin32Platform('compareRustupToolchainUnit', () => {
       {
         kind: 'texts',
         files: [
-          {
-            path: buildTestAbsolutePath({ text: '/code/a/rust-toolchain' }),
+          buildTestPinText({
+            path: '/code/a/rust-toolchain',
             kind: 'rustToolchain',
             text: '1.70.0\n',
-          },
+          }),
         ],
       },
       { kind: 'everyVersionPinned' },
@@ -313,18 +334,25 @@ describeAwaitingWin32Platform('loadRustupToolchainFindings and recheckRustupTool
         await createToolchainFolders({ home: home, names: names });
         const tool = await createFakeRustup({
           home: home,
-          toolchainList: `stable-${HOST} (active, default)\nnightly-${HOST}\n1.75.0-${HOST}\n1.70.0-${HOST}\nbeta-${HOST}\n`,
+          toolchainList: `stable-${HOST} (active, default)
+nightly-${HOST}
+1.75.0-${HOST}
+1.70.0-${HOST}
+beta-${HOST}
+`,
           overrideList: `/Users/example/code/app\tnightly-${HOST}\n`,
         });
         const pinFile: ProjectPinFile = buildTestPinFileText({
           path: join(home.fixtureRoot.homeDir, 'code', 'rust-toolchain.toml'),
           kind: 'rustToolchain',
-          text: '[toolchain]\nchannel = "1.75.0"\n',
+          text: `[toolchain]
+channel = "1.75.0"
+`,
         });
 
         const findings = getProbeFindings(
           await loadRustupToolchainFindings({
-            run: buildRun({ home: home, tool: tool }),
+            run: buildTestProbeToolRun({ environment: home.environment, tool: tool }),
             projectPins: buildTestProjectPins({ files: [pinFile] }),
           }),
         );
@@ -334,7 +362,7 @@ describeAwaitingWin32Platform('loadRustupToolchainFindings and recheckRustupTool
           [`1.70.0-${HOST}`, `beta-${HOST}`].map((name) => ({
             kind: 'rustupToolchain',
             tool: tool,
-            name: buildToolchainName(name),
+            name: buildTestRustupToolchainName({ text: name }),
             toolchainPath: buildToolchainPath({ home: home, name: name }),
             pinFiles: [{ path: pinFile.path, kind: 'rustToolchain' }],
           })),
@@ -352,17 +380,20 @@ describeAwaitingWin32Platform('loadRustupToolchainFindings and recheckRustupTool
         await createToolchainFolders({ home: home, names: names });
         const tool = await createFakeRustup({
           home: home,
-          toolchainList: `nightly-${HOST}\nbeta-${HOST}\n`,
+          toolchainList: `nightly-${HOST}
+beta-${HOST}
+`,
           overrideList: 'no overrides\n',
         });
         const nightlyPath = buildToolchainPath({ home: home, name: `nightly-${HOST}` });
 
         const findings = getProbeFindings(
           await loadRustupToolchainFindings({
-            run: {
-              ...buildRun({ home: home, tool: tool }),
+            run: buildTestProbeToolRun({
+              environment: home.environment,
+              tool: tool,
               processCommands: [`${nightlyPath}/libexec/rust-analyzer-proc-macro-srv`],
-            },
+            }),
             projectPins: buildTestProjectPins({ files: [] }),
           }),
         );
@@ -383,7 +414,7 @@ describeAwaitingWin32Platform('loadRustupToolchainFindings and recheckRustupTool
         });
 
         const result = await loadRustupToolchainFindings({
-          run: buildRun({ home: home, tool: tool }),
+          run: buildTestProbeToolRun({ environment: home.environment, tool: tool }),
           projectPins: buildTestProjectPins({ files: [] }),
         });
 
@@ -408,11 +439,11 @@ describeAwaitingWin32Platform('loadRustupToolchainFindings and recheckRustupTool
         const unit: ExploreToolUnitRustupToolchain = {
           kind: 'rustupToolchain',
           tool: tool,
-          name: buildToolchainName(name),
+          name: buildTestRustupToolchainName({ text: name }),
           toolchainPath: buildToolchainPath({ home: home, name: name }),
           pinFiles: [{ path: buildTestAbsolutePath({ text: pinPath }), kind: 'rustToolchain' }],
         };
-        const recheckRun = buildRun({ home: home, tool: tool });
+        const recheckRun = buildTestProbeToolRun({ environment: home.environment, tool: tool });
 
         expect(await recheckRustupToolchainUnit({ unit: unit, run: recheckRun })).toEqual({
           kind: 'unchanged',

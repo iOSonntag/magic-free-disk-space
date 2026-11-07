@@ -28,17 +28,24 @@ class SectionPage extends StatelessWidget {
       listenable: controller,
       builder: (BuildContext context, Widget? _) {
         final CleanerState state = controller.state;
-        final ScannedEvent? scan = findListedScan(state);
+        final SectionTotal? total = findSectionTotal(listShownSectionTotals(state), sectionKey);
         return StagePageScroll(
           children: [
             SectionPageHeader(
               sectionKey: sectionKey,
-              title: formatScanSectionTitle(sectionKey, scan: scan),
-              total: findSectionTotal(listShownSectionTotals(state), sectionKey),
+              title: total?.titleText,
+              total: total,
               isScanning: state is ScanningState,
             ),
             if (state is ListedState)
-              _buildListedContents(state)
+              ListedSectionContents(
+                state: state,
+                sectionKey: sectionKey,
+                controller: controller,
+                urlOpener: urlOpener,
+                emptyText: 'Nothing is left in this section.',
+                adviceTitle: 'To handle yourself',
+              )
             else
               Text(
                 state is ScanningState
@@ -49,23 +56,6 @@ class SectionPage extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildListedContents(ListedState state) {
-    final SectionContents contents = buildSectionContents(state.scan, sectionKey);
-    if (contents.isEmpty) {
-      return Text('Nothing is left in this section.', style: TypeRamp.body);
-    }
-    return SectionContentsView(
-      contents: contents,
-      look: sectionKeyToLook(sectionKey),
-      selectedNumbers: state.selectedNumbers,
-      onToggle: state is ScannedState ? controller.toggleCandidate : null,
-      onToggleGroup: state is ScannedState ? controller.toggleCandidateGroup : null,
-      revealPaths: state.scan.revealPaths,
-      urlOpener: urlOpener,
-      adviceTitle: 'To handle yourself',
     );
   }
 }

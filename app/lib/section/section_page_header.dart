@@ -16,12 +16,15 @@ class SectionPageHeader extends StatelessWidget {
   });
 
   final SectionKey sectionKey;
-  final String title;
+
+  /// `null` while no scan names the section, which then reads as found empty.
+  final String? title;
   final SectionTotal? total;
   final bool isScanning;
 
   @override
   Widget build(BuildContext context) {
+    final String? title = this.title;
     final SectionTotal? total = this.total;
     final SectionLook look = sectionKeyToLook(sectionKey);
     return Padding(
@@ -37,14 +40,14 @@ class SectionPageHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TypeRamp.headline),
-                  const SizedBox(height: StageSpacing.tight),
-                  Text(
-                    total == null
-                        ? 'Nothing found here yet'
-                        : '${formatBytes(total.allocatedBytes)} · ${formatSectionCountText(total)}',
-                    style: TypeRamp.body,
-                  ),
+                  Text(title ?? 'Nothing found here yet', style: TypeRamp.headline),
+                  if (title != null) ...[
+                    const SizedBox(height: StageSpacing.tight),
+                    Text(
+                      total == null ? 'Nothing found here yet' : _formatHoldingsText(total),
+                      style: TypeRamp.body,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -53,4 +56,12 @@ class SectionPageHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "at least 1.2 GB · 3 items", without a size for a section of advice alone.
+String _formatHoldingsText(SectionTotal total) {
+  return [
+    if (total.itemCount > 0) formatSizeText(allocatedBytes: total.allocatedBytes, isComplete: total.isComplete),
+    formatSectionCountText(total),
+  ].join(' · ');
 }

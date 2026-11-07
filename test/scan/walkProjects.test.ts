@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, symlink, utimes, writeFile } from 'node:fs/promises';
+import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
@@ -23,6 +23,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  updateModifiedMs,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -47,7 +48,7 @@ async function createDatedRustProject(params: {
 }): Promise<string> {
   const projectPath = join(params.fixtureRoot.homeDir, params.folder);
   const targetPath = join(projectPath, 'target');
-  await createFixtureDirectory({ path: targetPath });
+
   await createFixtureFile({
     path: join(targetPath, 'app.rlib'),
     sizeBytes: SCAN_LIMITS.minOfferedBytes,
@@ -59,7 +60,7 @@ async function createDatedRustProject(params: {
     modifiedMs: params.modifiedMs,
   });
   // Creating its entries changed the folder itself, which the probe reads as well.
-  await utimes(projectPath, params.modifiedMs / 1000, params.modifiedMs / 1000);
+  await updateModifiedMs({ path: projectPath, modifiedMs: params.modifiedMs });
 
   return targetPath;
 }

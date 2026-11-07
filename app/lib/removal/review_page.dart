@@ -26,7 +26,7 @@ class ReviewPage extends StatelessWidget {
         if (state.selectedNumbers.contains(item.number)) item,
     ];
     final bool isReplanning = state.isReplanning;
-    final String totalText = formatBytes(state.plan.totalBytes);
+    final String totalText = formatPlanTotalText(state.plan);
     return Material(
       type: MaterialType.transparency,
       child: Column(
@@ -45,7 +45,7 @@ class ReviewPage extends StatelessWidget {
                   ),
                   children: [
                     _ReviewHero(
-                      totalBytes: state.plan.totalBytes,
+                      plan: state.plan,
                       reach: RemovalReach.split(items),
                       isReplanning: isReplanning,
                     ),
@@ -53,7 +53,10 @@ class ReviewPage extends StatelessWidget {
                       const SizedBox(height: StageSpacing.large),
                       const _CarefulNote(),
                     ],
-                    for (final _SectionGroup group in _groupBySection(items)) ...[
+                    for (final _SectionGroup group in _groupBySection(
+                      items,
+                      mergeSectionTotalsByKey(state.scan.sectionTotals),
+                    )) ...[
                       const SizedBox(height: StageSpacing.large),
                       _SectionCard(
                         group: group,
@@ -86,21 +89,24 @@ class ReviewPage extends StatelessWidget {
   }
 }
 
-/// The items of one section of the plan, in the plan's order.
-typedef _SectionGroup = ({SectionKey sectionKey, List<PlannedItemView> items});
+/// The items of one section of the plan, in the plan's order; [title] is
+/// `null` for a section the scan's totals do not name.
+typedef _SectionGroup = ({SectionKey sectionKey, String? title, List<PlannedItemView> items});
 
-/// Groups [items] by section, in the order of the sections.
-List<_SectionGroup> _groupBySection(List<PlannedItemView> items) {
+/// Groups [items] by section in the order and with the titles of [totals],
+/// one per key; the items of a key [totals] lacks follow, never dropped.
+List<_SectionGroup> _groupBySection(List<PlannedItemView> items, List<SectionTotal> totals) {
+  final Map<SectionKey, List<PlannedItemView>> itemsByKey = {};
+  for (final PlannedItemView item in items) {
+    (itemsByKey[item.sectionKey] ??= []).add(item);
+  }
+  final Set<SectionKey> totalKeys = {for (final SectionTotal total in totals) total.sectionKey};
   return [
-    for (final SectionKey sectionKey in SectionKey.values)
-      if (items.any((PlannedItemView item) => item.sectionKey == sectionKey))
-        (
-          sectionKey: sectionKey,
-          items: [
-            for (final PlannedItemView item in items)
-              if (item.sectionKey == sectionKey) item,
-          ],
-        ),
+    for (final SectionTotal total in totals)
+      if (itemsByKey[total.sectionKey] case final List<PlannedItemView> sectionItems)
+        (sectionKey: total.sectionKey, title: total.titleText, items: sectionItems),
+    for (final MapEntry<SectionKey, List<PlannedItemView>> entry in itemsByKey.entries)
+      if (!totalKeys.contains(entry.key)) (sectionKey: entry.key, title: null, items: entry.value),
   ];
 }
 
@@ -130,17 +136,18 @@ class _ReviewHeader extends StatelessWidget {
 
 class _ReviewHero extends StatelessWidget {
   const _ReviewHero({
-    required this.totalBytes,
+    required this.plan,
     required this.reach,
     required this.isReplanning,
   });
 
-  final int totalBytes;
+  final PlannedEvent plan;
   final RemovalReach reach;
   final bool isReplanning;
 
   @override
   Widget build(BuildContext context) {
+    final bool isComplete = sumPlannedItemSizes(plan.items).isComplete;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -150,8 +157,11 @@ class _ReviewHero extends StatelessWidget {
           opacity: isReplanning ? 0.45 : 1,
           duration: MotionScope.of(context).plainFadeDuration,
           child: CountUp(
-            value: totalBytes,
-            format: formatBytes,
+            value: plan.totalBytes,
+            format: (int allocatedBytes) => formatSizeText(
+              allocatedBytes: allocatedBytes,
+              isComplete: isComplete,
+            ),
             style: TypeRamp.display,
           ),
         ),
@@ -171,7 +181,7 @@ String _formatReachText(RemovalReach reach) {
       '1 item goes for good. It skips the Trash, so it cannot come back.'
     else if (finalCount > 1)
       '$finalCount items go for good. They skip the Trash, so they cannot come back.',
-    if (reach.evictedItems.isNotEmpty) formatStaysInIcloudText(reach.evictedBytes),
+    if (reach.evictedItems.isNotEmpty) formatStaysInIcloudText(reach.evictedSize),
   ];
   return sentences.join(' ');
 }
@@ -194,8 +204,7 @@ class _CarefulNote extends StatelessWidget {
           const SizedBox(width: StageSpacing.medium),
           Expanded(
             child: Text(
-              'Some of these can\'t be undone or downloaded again. '
-              'The next step asks you to type $deleteConfirmationWord.',
+              '$carefulItemsWarningText The next step asks you to type $deleteConfirmationWord.',
               style: TypeRamp.body.copyWith(color: StageColors.textPrimary),
             ),
           ),
@@ -217,10 +226,8 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final SectionLook look = sectionKeyToLook(group.sectionKey);
-    final int sectionBytes = group.items.fold(
-      0,
-      (int sum, PlannedItemView item) => sum + item.allocatedBytes,
-    );
+    final ItemSizeSum sectionSize = sumPlannedItemSizes(group.items);
+    final String? title = group.title;
     return GlassCard(
       accent: look.accent,
       child: SizeEase(
@@ -232,9 +239,15 @@ class _SectionCard extends StatelessWidget {
                 GlyphTile(glyph: look.glyph, accent: look.accent, size: 40),
                 const SizedBox(width: StageSpacing.medium),
                 Expanded(
-                  child: Text(look.title, style: TypeRamp.title),
+                  child: title == null ? const SizedBox.shrink() : Text(title, style: TypeRamp.title),
                 ),
-                Text(formatBytes(sectionBytes), style: TypeRamp.figure),
+                Text(
+                  formatSizeText(
+                    allocatedBytes: sectionSize.allocatedBytes,
+                    isComplete: sectionSize.isComplete,
+                  ),
+                  style: TypeRamp.figure,
+                ),
               ],
             ),
             const SizedBox(height: StageSpacing.small),
@@ -259,8 +272,8 @@ class _ReviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String sizeText = formatBytes(item.allocatedBytes);
-    final ShownItemGroup group = riskToShownItemGroup(item.risk);
+    final String sizeText = formatPlannedItemSizeText(item);
+    final ShownItemGroup group = itemGroupToShownItemGroup(item.group);
     final String groupTitle = formatGroupTitle(group);
     final Color tone = getGroupTone(group);
     final void Function(int number)? remove = onRemove;

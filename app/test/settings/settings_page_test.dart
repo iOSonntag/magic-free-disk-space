@@ -40,9 +40,7 @@ void main() {
   testWidgets('shows the stored switch on, and a tap saves it off', (
     WidgetTester tester,
   ) async {
-    final FakeUpdateBridge bridge = FakeUpdateBridge(
-      answerCheck: () async => quietUpdateCheck,
-    );
+    final FakeUpdateBridge bridge = FakeUpdateBridge();
     final UpdateController controller = await _pumpSettings(tester, bridge);
 
     expect(find.text('Settings'), findsOneWidget);
@@ -59,9 +57,7 @@ void main() {
 
   testWidgets('is disabled while the save runs', (WidgetTester tester) async {
     final Completer<UpdateCheckSetAnswer> save = Completer<UpdateCheckSetAnswer>();
-    final FakeUpdateBridge bridge = FakeUpdateBridge(
-      answerCheck: () async => quietUpdateCheck,
-    )..answerSet = (bool isEnabled) => save.future;
+    final FakeUpdateBridge bridge = FakeUpdateBridge()..answerSet = (bool isEnabled) => save.future;
     await _pumpSettings(tester, bridge);
 
     await tapAndSettle(tester, _findSwitchRow());
@@ -100,9 +96,7 @@ void main() {
   testWidgets('says why a change was not saved and keeps the stored value', (
     WidgetTester tester,
   ) async {
-    final FakeUpdateBridge bridge = FakeUpdateBridge(
-      answerCheck: () async => quietUpdateCheck,
-    )..answerSet = (bool isEnabled) async => const FailedEvent(
+    final FakeUpdateBridge bridge = FakeUpdateBridge()..answerSet = (bool isEnabled) async => const FailedEvent(
         message: 'The setting could not be saved.',
         effect: FailureEffect.scanKept,
       );
@@ -116,7 +110,7 @@ void main() {
   });
 
   testWidgets('opens the licences', (WidgetTester tester) async {
-    await _pumpSettings(tester, FakeUpdateBridge(answerCheck: () async => quietUpdateCheck));
+    await _pumpSettings(tester, FakeUpdateBridge());
 
     await tapAndSettle(tester, find.text('Licences'));
 

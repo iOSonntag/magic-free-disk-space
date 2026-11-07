@@ -15,7 +15,7 @@ export async function recheckAndroidPackageUnit(params: {
   const state = await loadAndroidSdkState({
     pathRules: params.environment.pathRules,
     homeDir: params.environment.homeDir,
-    sdkRoots: [params.unit.sdkRoot],
+    sdkRoots: [{ path: params.unit.sdkRoot, isRequired: true }],
     privacyDenialCode: params.platform.privacyDenialCode,
   });
 

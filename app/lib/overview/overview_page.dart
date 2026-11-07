@@ -84,7 +84,6 @@ class OverviewPage extends StatelessWidget {
                     SectionCard(
                       key: SectionCardKey(total.sectionKey),
                       total: total,
-                      title: formatScanSectionTitle(total.sectionKey, scan: scan),
                       isScanning: state is ScanningState,
                       onPressed: () => onSectionSelected(total.sectionKey),
                     ),

@@ -203,7 +203,7 @@ async function visitFolder(params: {
 }
 
 /** `noFolder` for a link, a file, or a vanished entry; `unopened` for any other failure. */
-type FolderOpenFailure = 'noFolder' | 'unopened';
+export type FolderOpenFailure = 'noFolder' | 'unopened';
 
 async function openFolderHandle(params: {
   path: string;
@@ -211,10 +211,12 @@ async function openFolderHandle(params: {
   try {
     return { kind: 'succeeded', value: await open(params.path, FOLDER_OPEN_FLAGS) };
   } catch (error) {
-    const failure = noFolderErrorCodes.has(getErrorCode(error)) ? 'noFolder' : 'unopened';
-
-    return { kind: 'failed', failure: failure };
+    return { kind: 'failed', failure: errorToFolderOpenFailure(error) };
   }
+}
+
+function errorToFolderOpenFailure(error: unknown): FolderOpenFailure {
+  return noFolderErrorCodes.has(getErrorCode(error)) ? 'noFolder' : 'unopened';
 }
 
 async function visitOpenFolder(params: {
@@ -252,13 +254,24 @@ async function visitOpenFolder(params: {
   };
   const childFolderNames = await loadChildFolderNames({ folderPath: params.folder.path });
 
+  if (childFolderNames.kind === 'failed') {
+    return {
+      tally: childFolderNames.failure === 'noFolder' ? tally : addDeniedFolder(tally),
+      childFolders: [],
+    };
+  }
+
   return {
     tally: tally,
-    childFolders: childFolderNames.map((name) => ({
+    childFolders: childFolderNames.value.map((name) => ({
       path: join(params.folder.path, name),
       parent: visited,
     })),
   };
+}
+
+function addDeniedFolder(tally: OwnerWriteTally): OwnerWriteTally {
+  return { changedCount: tally.changedCount, deniedCount: tally.deniedCount + 1 };
 }
 
 async function loadHandleStats(params: { handle: FileHandle }): Promise<Stats | null> {
@@ -305,13 +318,21 @@ async function applyFolderWriteChange(params: {
   }
 }
 
-/** The names of the real folders directly inside; none when it cannot be listed. */
-async function loadChildFolderNames(params: { folderPath: string }): Promise<string[]> {
+/**
+ * The names of the real folders directly inside. Fails as `noFolder` when the path no longer names
+ * a folder, and as `unopened` when it cannot be listed, as the open of a folder does.
+ */
+export async function loadChildFolderNames(params: {
+  folderPath: string;
+}): Promise<Result<string[], FolderOpenFailure>> {
   try {
     const entries = await readdir(params.folderPath, { withFileTypes: true });
 
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-  } catch {
-    return [];
+    return {
+      kind: 'succeeded',
+      value: entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
+    };
+  } catch (error) {
+    return { kind: 'failed', failure: errorToFolderOpenFailure(error) };
   }
 }

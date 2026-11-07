@@ -12,6 +12,7 @@ import type {
   EngineImageId,
   EngineVolumeName,
 } from './engines/engineObjectIds.js';
+import type { BrowserFamily } from './explorePlatform.js';
 import type { HomebrewFormulaName } from './homebrew/parseHomebrewFormulaName.js';
 import type { MiseToolName, MiseToolVersion } from './miseVersions/parseMisePrunableVersions.js';
 import type { NvmNodeVersion } from './nvmVersions/parseNvmNodeVersion.js';
@@ -170,6 +171,17 @@ export type ExploreFoundFile = { path: AbsolutePath; modifiedMs: number };
 /** The files a probe found to go, never empty; the scan makes the removal's targets from them. */
 export type ExploreFoundFiles = [ExploreFoundFile, ...ExploreFoundFile[]];
 
+/** `items` as a list known to hold one at least, such as found paths; `null` when it is empty. */
+export function toNonEmpty<T>(items: T[]): [T, ...T[]] | null {
+  const [firstItem, ...restItems] = items;
+
+  if (firstItem === undefined) {
+    return null;
+  }
+
+  return [firstItem, ...restItems];
+}
+
 /** A system image folder of the SDK that no AVD names. */
 export type ExplorePathUnitAndroidSystemImage = {
   kind: 'androidSystemImage';
@@ -244,10 +256,11 @@ export type ExplorePathUnitDownloadsInstallers = {
   foundFiles: ExploreFoundFiles;
 };
 
-/** The partial downloads in Downloads unchanged since `cutoffMs`. */
+/** The partial downloads of one browser family in Downloads unchanged since `cutoffMs`. */
 export type ExplorePathUnitDownloadsIncomplete = {
   kind: 'downloadsIncomplete';
   folderPath: AbsolutePath;
+  browserFamily: BrowserFamily;
   cutoffMs: number;
   foundFiles: ExploreFoundFiles;
 };
@@ -312,8 +325,9 @@ export type ExplorePathUnitClaudeTranscripts = {
 };
 
 /**
- * A Claude Code version that is neither one of the two newest nor the one `~/.local/bin/claude`
- * runs. `folderPath` is the version's entry in the versions folder, a file or a folder.
+ * A Claude Code version that is neither one of the `KEPT_NEWEST_COUNT` newest nor the one
+ * `~/.local/bin/claude` runs. `folderPath` is the version's entry in the versions folder, a file or
+ * a folder.
  */
 export type ExplorePathUnitClaudeCodeVersion = {
   kind: 'claudeCodeVersion';

@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
-import { buildScanView } from '../../src/report/buildScanView.js';
+import { buildScanProgressView, buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
+import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
@@ -276,11 +277,60 @@ describeAwaitingWin32Platform('buildScanView', () => {
       {
         sectionKey: 'developerTools',
         allocatedBytes: 2 * MB,
+        isComplete: true,
         itemCount: 1,
         safeBytes: 0,
         adviceCount: 0,
+        titleText: 'Developer tools',
       },
     ]);
+  });
+
+  test('titles each section total as its section, the Trash by the name of the platform', () => {
+    const view = buildView({
+      report: buildRankedReport({
+        candidates: [
+          buildTestCandidate({ path: '/fixture/.Trash/old', category: 'trash' }),
+          buildTestCandidate({ path: '/fixture/model', category: 'aiModels' }),
+        ],
+      }),
+    });
+
+    expect(view.sectionTotals.map((total) => [total.sectionKey, total.titleText])).toEqual([
+      ['aiModels', 'Local AI models'],
+      ['trash', 'Trash'],
+    ]);
+    expect(view.sections.map((section) => section.titleText)).toEqual(['Local AI models', 'Trash']);
+  });
+
+  test('titles the sections a running scan found so far, as the scan view does', () => {
+    expect(
+      buildScanProgressView({
+        progress: {
+          message: 'Measuring apps…',
+          phase: 'apps',
+          found: buildSectionTotals({
+            candidates: [buildTestCandidate({ path: '/fixture/.Trash/old', category: 'trash' })],
+            advice: [],
+          }),
+        },
+        texts: TEXTS,
+      }),
+    ).toEqual({
+      message: 'Measuring apps…',
+      phase: 'apps',
+      found: [
+        {
+          sectionKey: 'trash',
+          allocatedBytes: 4096,
+          isComplete: true,
+          itemCount: 1,
+          safeBytes: 4096,
+          adviceCount: 0,
+          titleText: 'Trash',
+        },
+      ],
+    });
   });
 
   test('shows Explore with advice only when the scan offered no Explore item', () => {
@@ -288,7 +338,11 @@ describeAwaitingWin32Platform('buildScanView', () => {
       report: {
         ...EMPTY_REPORT,
         advice: [
-          buildAdvice({ path: `${HOME_DIR}/store`, title: 'Tool store', allocatedBytes: MB }),
+          {
+            ...buildAdvice({ path: `${HOME_DIR}/store`, title: 'Tool store', allocatedBytes: MB }),
+            lastUsedAtMs: 1_725_148_800_000,
+            appName: 'Tool\nApp',
+          },
         ],
       },
     });
@@ -327,6 +381,9 @@ describeAwaitingWin32Platform('buildScanView', () => {
             displayPath: '~/store',
             revealPath: `${HOME_DIR}/store`,
             opener: null,
+            lastUsedAt: 1_725_148_800_000,
+            appName: 'Tool\\u{a}App',
+            matchedBy: null,
           },
         ],
       },
@@ -335,9 +392,11 @@ describeAwaitingWin32Platform('buildScanView', () => {
       {
         sectionKey: 'developerTools',
         allocatedBytes: 0,
+        isComplete: true,
         itemCount: 0,
         safeBytes: 0,
         adviceCount: 1,
+        titleText: 'Developer tools',
       },
     ]);
   });

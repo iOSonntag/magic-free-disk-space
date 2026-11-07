@@ -1,10 +1,11 @@
-import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { ExploreFoundPaths } from '../exploreUnit.js';
+import { toNonEmpty } from '../exploreUnit.js';
+import { DAY_MS } from '../formatLimitTexts.js';
 import type { HuggingFaceRepoState, HuggingFaceSnapshot } from './loadHuggingFaceHubState.js';
 import { HUGGING_FACE_INCOMPLETE_SUFFIX } from './loadHuggingFaceHubState.js';
 
 /** How long an unfinished blob stays untouched before it counts as left behind: a day. */
-export const HUGGING_FACE_PARTIAL_UNTOUCHED_MS = 24 * 60 * 60 * 1000;
+export const HUGGING_FACE_PARTIAL_UNTOUCHED_MS = DAY_MS;
 
 /** The current revisions: the metadata, their snapshots, their blobs, and the blobs no link reaches. */
 export type HuggingFaceRepoOfferRepository = {
@@ -62,7 +63,7 @@ export function decideHuggingFacePartialOffer(params: {
   repo: HuggingFaceRepoState;
   partialCutoffMs: number;
 }): HuggingFaceRepoOfferPartial | null {
-  const paths = toFoundPaths(
+  const paths = toNonEmpty(
     params.repo.blobs
       .filter(
         (blob) =>
@@ -107,7 +108,7 @@ export function decideHuggingFaceRevisionOffers(params: {
     .filter((blob) => detachedLinked.has(blob.name) && !currentLinked.has(blob.name))
     .map((blob) => blob.path);
   const offers: HuggingFaceRepoOfferRevisions[] = [];
-  const repositoryPaths = toFoundPaths([
+  const repositoryPaths = toNonEmpty([
     ...params.repo.metadataPaths,
     ...currentSnapshots.map((snapshot) => snapshot.path),
     ...currentBlobPaths,
@@ -122,7 +123,7 @@ export function decideHuggingFaceRevisionOffers(params: {
     });
   }
 
-  const detachedPaths = toFoundPaths([
+  const detachedPaths = toNonEmpty([
     ...detachedSnapshots.map((snapshot) => snapshot.path),
     ...detachedBlobPaths,
   ]);
@@ -149,10 +150,4 @@ function findNewestModifiedMs(params: { snapshots: HuggingFaceSnapshot[] }): num
   }
 
   return Math.max(...params.snapshots.map((snapshot) => snapshot.modifiedMs));
-}
-
-function toFoundPaths(paths: AbsolutePath[]): ExploreFoundPaths | null {
-  const [firstPath, ...otherPaths] = paths;
-
-  return firstPath === undefined ? null : [firstPath, ...otherPaths];
 }

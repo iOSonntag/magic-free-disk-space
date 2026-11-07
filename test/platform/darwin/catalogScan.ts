@@ -1,28 +1,16 @@
 import { dirname, join, relative } from 'node:path';
-import type { Environment } from '../../../src/environment/buildEnvironment.js';
-import { CATALOG_ENTRIES } from '../../../src/platform/darwin/catalogEntries.js';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
-import { decideCatalogCandidate } from '../../../src/scan/decideCatalogCandidate.js';
-import type { CatalogTarget } from '../../../src/scan/findCatalogTargets.js';
-import { findCatalogTargets } from '../../../src/scan/findCatalogTargets.js';
-import {
-  buildFoundTargets,
-  loadMeasuredTargetsPhase,
-} from '../../../src/scan/loadMeasuredTargetsPhase.js';
 import type { ScanReport } from '../../../src/scan/runScan.js';
-import { buildScanReportOfPhases } from '../../../src/scan/runScan.js';
-import type { ScanPhase } from '../../../src/scan/scanPhase.js';
-import { createConcurrencyLimit } from '../../../src/system/createConcurrencyLimit.js';
 import {
-  createFixtureDirectory,
   createFixtureFile,
-  createFixtureRoot,
-  deleteFixtureRoot,
   loadTestEnvironment,
+  updateModifiedMs,
+  withFixtureRoot,
 } from '../../support/fixtureRoot.js';
+import { runTestScan } from '../../support/scanRunFixtures.js';
 
-/** When every file of a scanned home was last changed, long before the scan. */
-const FIXTURE_FILE_MODIFIED_MS = Date.UTC(2026, 0, 1);
+/** When every file and folder of a scanned home was last changed, long before the scan. */
+const FIXTURE_MODIFIED_MS = Date.UTC(2026, 0, 1);
 
 const SCAN_NOW_MS = Date.UTC(2026, 6, 1);
 
@@ -30,49 +18,44 @@ const SCAN_NOW_MS = Date.UTC(2026, 6, 1);
 export type HomeFixtureFile = { path: string; sizeBytes: number };
 
 /**
- * Builds a fixture home of old files, scans the given catalog entries as the scan does, in the
- * catalog's order, and removes the home after `run`. Each owner counts as stopped and each tree
- * as untouched, so only the selection, the size floor, and the giving way decide an offer.
+ * Builds a fixture home of old files and folders, scans it with only the given entries of the
+ * macOS catalog, in the catalog's order, and removes the home after `run`.
  */
 export async function withScannedCatalogHome(params: {
   entryIds: string[];
   files: HomeFixtureFile[];
-  minOfferedBytes: number;
   run: (scan: { homeDir: string; report: ScanReport }) => void;
 }): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
+  await withFixtureRoot({
+    run: async (fixtureRoot) => {
+      for (const file of params.files) {
+        await createFixtureFile({
+          path: join(fixtureRoot.homeDir, file.path),
+          sizeBytes: file.sizeBytes,
+          modifiedMs: FIXTURE_MODIFIED_MS,
+        });
+      }
 
-  try {
-    for (const file of params.files) {
-      const path = join(fixtureRoot.homeDir, file.path);
+      // Each file just changed the folders it was created in, which an age rule reads as well.
+      for (const file of params.files) {
+        for (const folderPath of listFolderPathsBelowHome(file.path)) {
+          await updateModifiedMs({
+            path: join(fixtureRoot.homeDir, folderPath),
+            modifiedMs: FIXTURE_MODIFIED_MS,
+          });
+        }
+      }
 
-      await createFixtureDirectory({ path: dirname(path) });
-      await createFixtureFile({
-        path: path,
-        sizeBytes: file.sizeBytes,
-        modifiedMs: FIXTURE_FILE_MODIFIED_MS,
+      const report = await runTestScan({
+        environment: await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: SCAN_NOW_MS }),
+        catalogEntries: darwinPlatform.catalog.entries.filter((entry) =>
+          params.entryIds.includes(entry.id),
+        ),
       });
-    }
 
-    const environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: SCAN_NOW_MS });
-    const found = await findCatalogTargets({
-      environment: environment,
-      entries: CATALOG_ENTRIES.filter((entry) => params.entryIds.includes(entry.id)),
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
-    const phases = await Promise.all(
-      found.targets.map((target) =>
-        loadTargetPhase({ target: target, minOfferedBytes: params.minOfferedBytes }),
-      ),
-    );
-
-    params.run({
-      homeDir: fixtureRoot.homeDir,
-      report: buildReport({ environment: environment, phases: phases }),
-    });
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
+      params.run({ homeDir: fixtureRoot.homeDir, report: report });
+    },
+  });
 }
 
 /** One offer of a scan: its catalog entry, and its path and the paths it deletes, below the home. */
@@ -90,40 +73,13 @@ export function listCatalogOffers(params: { report: ScanReport; homeDir: string 
   }));
 }
 
-function loadTargetPhase(params: {
-  target: CatalogTarget;
-  minOfferedBytes: number;
-}): Promise<ScanPhase> {
-  const entry = params.target.entry;
+/** The folders that hold the file at `path`, relative to the home, the home itself left out. */
+function listFolderPathsBelowHome(path: string): string[] {
+  const folderPath = dirname(path);
 
-  return loadMeasuredTargetsPhase({
-    found: buildFoundTargets(params.target.targetPaths),
-    carve: null,
-    measureTimeoutMs: 10_000,
-    runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
-    entryReads: darwinPlatform.system.entryReads,
-    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    decide: async (measurement) =>
-      decideCatalogCandidate({
-        entry: entry,
-        path: params.target.path,
-        measurement: measurement,
-        owner: entry.owner,
-        ownerBundlePaths: [],
-        ownerState: 'stopped',
-        ownerAppName: null,
-        activity: entry.ageRule.kind === 'none' ? null : 'quiet',
-        minOfferedBytes: params.minOfferedBytes,
-        carvedPaths: [],
-      }),
-  });
-}
+  if (folderPath === '.') {
+    return [];
+  }
 
-function buildReport(params: { environment: Environment; phases: ScanPhase[] }): ScanReport {
-  return buildScanReportOfPhases({
-    environment: params.environment,
-    reservedEntryPaths: [],
-    phases: params.phases,
-    incompleteExploreAdvice: { decisions: [], issues: [] },
-  });
+  return [folderPath, ...listFolderPathsBelowHome(folderPath)];
 }

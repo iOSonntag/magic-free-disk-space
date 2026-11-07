@@ -69,9 +69,10 @@ class _ItemGroupCardState extends State<ItemGroupCard> {
     });
   }
 
+  /// `null` too when no item of the group can be ticked.
   VoidCallback? _buildGroupToggle(List<int> numbers) {
     final void Function(List<int> numbers)? onToggleGroup = widget.onToggleGroup;
-    if (onToggleGroup == null) {
+    if (onToggleGroup == null || numbers.isEmpty) {
       return null;
     }
     return () => onToggleGroup(numbers);
@@ -89,15 +90,17 @@ class _ItemGroupCardState extends State<ItemGroupCard> {
   Widget build(BuildContext context) {
     final String title = formatGroupTitle(widget.group);
     final Color tone = getGroupTone(widget.group);
+    // The toggle leaves out a never item, whose row offers no tick.
     final List<int> numbers = [
-      for (final ItemView item in widget.items) item.number,
+      for (final ItemView item in widget.items)
+        if (isItemRemovable(item)) item.number,
     ];
     final ItemSizeSum size = sumItemSizes(widget.items);
     final String sizeText = formatSizeText(
       allocatedBytes: size.allocatedBytes,
       isComplete: size.isComplete,
     );
-    final String countText = formatItemCount(numbers.length);
+    final String countText = formatItemCount(widget.items.length);
     return GlassCard(
       accent: widget.look.accent,
       padding: const EdgeInsets.all(StageSpacing.medium),

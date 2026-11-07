@@ -117,3 +117,15 @@ String formatItemFactsText(ItemView item, {required DateTime now}) {
   ];
   return facts.join(' · ');
 }
+
+/// The facts an advice card shows under its title, as a row does: its app,
+/// its last use and a name match; empty when it has none.
+String formatAdviceFactsText(AdviceItemView item, {required DateTime now}) {
+  final DateTime? lastUsedAt = item.lastUsedAt;
+  final List<String> facts = [
+    ?item.appName,
+    if (lastUsedAt != null) formatLastUsedText(lastUsedAt, now: now),
+    if (item.matchedBy == LeftoverMatch.name) 'Matched by name',
+  ];
+  return facts.join(' · ');
+}

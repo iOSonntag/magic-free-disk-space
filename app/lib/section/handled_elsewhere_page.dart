@@ -9,6 +9,9 @@ import 'section_contents_view.dart';
 import 'section_page_header.dart';
 import 'settings_place_cards.dart';
 
+/// The title of the page, which stands in the sidebar before any scan.
+const String handledElsewhereTitle = 'Handled by its own app';
+
 /// The space only Apple's own apps can free: a card per place with its
 /// size, the app's own step, and a button that opens the app or its pane;
 /// the places of System Settings show in every state.
@@ -32,7 +35,7 @@ class HandledElsewherePage extends StatelessWidget {
           children: [
             SectionPageHeader(
               sectionKey: SectionKey.ownApp,
-              title: SectionLook.ownApp.title,
+              title: handledElsewhereTitle,
               total: findSectionTotal(listShownSectionTotals(state), SectionKey.ownApp),
               isScanning: state is ScanningState,
             ),
@@ -44,7 +47,14 @@ class HandledElsewherePage extends StatelessWidget {
               ),
             ),
             if (state is ListedState)
-              _buildListedContents(state)
+              ListedSectionContents(
+                state: state,
+                sectionKey: SectionKey.ownApp,
+                controller: controller,
+                urlOpener: urlOpener,
+                emptyText: 'No app holds space here that only it can free.',
+                adviceTitle: 'In their own apps',
+              )
             else
               Text(
                 state is ScanningState
@@ -52,36 +62,10 @@ class HandledElsewherePage extends StatelessWidget {
                     : 'Scan to see what only their own apps can free.',
                 style: TypeRamp.body,
               ),
-            SettingsPlaceCards(
-              look: sectionKeyToLook(SectionKey.ownApp),
-              urlOpener: urlOpener,
-            ),
+            SettingsPlaceCards(look: SectionLook.ownApp, urlOpener: urlOpener),
           ],
         );
       },
-    );
-  }
-
-  Widget _buildListedContents(ListedState state) {
-    final SectionContents contents = buildSectionContents(
-      state.scan,
-      SectionKey.ownApp,
-    );
-    if (contents.isEmpty) {
-      return Text(
-        'No app holds space here that only it can free.',
-        style: TypeRamp.body,
-      );
-    }
-    return SectionContentsView(
-      contents: contents,
-      look: sectionKeyToLook(SectionKey.ownApp),
-      selectedNumbers: state.selectedNumbers,
-      onToggle: state is ScannedState ? controller.toggleCandidate : null,
-      onToggleGroup: state is ScannedState ? controller.toggleCandidateGroup : null,
-      revealPaths: state.scan.revealPaths,
-      urlOpener: urlOpener,
-      adviceTitle: 'In their own apps',
     );
   }
 }

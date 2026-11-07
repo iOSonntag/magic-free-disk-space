@@ -8,6 +8,8 @@ import type {
   ExploreFinding,
   ExploreFoundEvictFile,
 } from '../exploreUnit.js';
+import { toNonEmpty } from '../exploreUnit.js';
+import { formatCountText, formatIsoDay } from '../formatLimitTexts.js';
 import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import { loadWalkedFiles } from '../loadWalkedFiles.js';
 import { isEvictableFile } from './decideEvictFile.js';
@@ -67,19 +69,13 @@ export async function loadIcloudDownloadFindings(
     fileBudget -= placeFiles.files.length;
     isComplete = isComplete && placeFiles.isComplete;
 
-    const [firstFile, ...restFiles] = placeFiles.files;
+    const foundFiles = toNonEmpty(placeFiles.files);
 
-    if (firstFile === undefined) {
+    if (foundFiles === null) {
       continue;
     }
 
-    findings.push(
-      buildIcloudFinding({
-        run: run,
-        place: place,
-        foundFiles: [firstFile, ...restFiles],
-      }),
-    );
+    findings.push(buildIcloudFinding({ run: run, place: place, foundFiles: foundFiles }));
   }
 
   return { kind: 'succeeded', value: { findings: findings, isComplete: isComplete } };
@@ -186,7 +182,7 @@ async function loadPlaceFiles(params: {
     isDescending: params.place.isWalked,
     maxFiles: params.maxFiles,
     maxConcurrentDirectories: ICLOUD_MAX_CONCURRENT_DIRECTORIES,
-    isKept: (stats) => isEvictableFile({ times: stats, cutoffMs: params.run.unusedCutoffMs }),
+    isKept: (stats) => isEvictableFile({ stats: stats, cutoffMs: params.run.unusedCutoffMs }),
   });
 
   return {
@@ -204,11 +200,9 @@ function buildIcloudFinding(params: {
   place: IcloudPlace;
   foundFiles: [ExploreFoundEvictFile, ...ExploreFoundEvictFile[]];
 }): ExploreFinding {
-  const fileCount = params.foundFiles.length;
   const lastTouchedMs = Math.max(
     ...params.foundFiles.map((file) => Math.max(file.modifiedMs, file.accessedMs)),
   );
-  const lastTouchedDate = new Date(lastTouchedMs).toISOString().slice(0, 10);
 
   return {
     unit: {
@@ -224,7 +218,7 @@ function buildIcloudFinding(params: {
     regeneration: 'Downloaded again from iCloud Drive when a file is opened.',
     risk: 'review',
     evidenceLines: [
-      `${fileCount === 1 ? '1 file' : `${fileCount} files`} downloaded and untouched, the newest last touched on ${lastTouchedDate}.`,
+      `${formatCountText({ count: params.foundFiles.length, noun: 'file' })} downloaded and untouched, the newest last touched on ${formatIsoDay(lastTouchedMs)}.`,
     ],
     displayPath: params.place.folderPath,
     activity: decideUnitActivity({

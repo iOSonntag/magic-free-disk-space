@@ -87,7 +87,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(bridge.requestedKinds, ['status', 'scan', 'checkUpdate']);
-      expect(find.text('26 MB can be freed'), findsOneWidget);
+      expect(find.text('at least 26 MB can be freed'), findsOneWidget);
       expect(find.text(sampleCheck.notice!.titleText), findsOneWidget);
       expect(find.byType(MaterialApp), findsOneWidget);
     },

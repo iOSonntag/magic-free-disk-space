@@ -69,9 +69,7 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     removal: { kind: 'delete' },
   },
   {
-    // This app's deletion log, a child of this folder, is never offered: the scan skips each
-    // offer that touches a protected path. The crash reports in `DiagnosticReports` are one child,
-    // as each report alone lies below the smallest size offered.
+    // Crash reports go as one child, each too small alone; the deletion log stays protected.
     id: 'user-logs',
     category: 'caches',
     title: 'Old app logs',

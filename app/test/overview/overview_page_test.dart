@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner.dart';
 import 'package:magic_free_disk_space/overview/overview.dart';
-import 'package:magic_free_disk_space/overview/section_card.dart';
 import 'package:magic_free_disk_space/removal/removal.dart';
 import 'package:magic_free_disk_space/update/update.dart';
 
@@ -50,13 +49,13 @@ Future<_OverviewParts> _pumpOverview(
 
 /// [sectionKeys] in the order their cards stand on the page, row by row.
 List<SectionKey> _sortByCardPlace(WidgetTester tester, List<SectionKey> sectionKeys) {
-  Offset findCardPlace(SectionKey sectionKey) {
+  Offset readCardPlace(SectionKey sectionKey) {
     return tester.getTopLeft(find.byKey(SectionCardKey(sectionKey)));
   }
 
   return [...sectionKeys]..sort((SectionKey left, SectionKey right) {
-    final Offset leftPlace = findCardPlace(left);
-    final Offset rightPlace = findCardPlace(right);
+    final Offset leftPlace = readCardPlace(left);
+    final Offset rightPlace = readCardPlace(right);
     final int byRow = leftPlace.dy.compareTo(rightPlace.dy);
     return byRow != 0 ? byRow : leftPlace.dx.compareTo(rightPlace.dx);
   });
@@ -83,17 +82,17 @@ void main() {
     );
 
     expect(find.text('Overview'), findsOneWidget);
-    expect(find.text('26 MB can be freed'), findsOneWidget);
+    expect(find.text('at least 26 MB can be freed'), findsOneWidget);
     expect(find.text('52 GB available of 500 GB'), findsOneWidget);
     expect(find.text('6.0 MB of it is safe to remove at once'), findsOneWidget);
     expect(find.text('WHERE THE SPACE IS'), findsOneWidget);
-    final List<SectionKey> bridgeOrder = [
-      for (final SectionTotal total in sampleScan.sectionTotals) total.sectionKey,
-    ];
-    for (final SectionKey sectionKey in bridgeOrder) {
-      expect(find.byKey(SectionCardKey(sectionKey)), findsOneWidget);
-    }
-    expect(_sortByCardPlace(tester, bridgeOrder), bridgeOrder);
+    expect(
+      find.descendant(
+        of: find.byKey(const SectionCardKey(SectionKey.caches)),
+        matching: find.text('at least 10 MB'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.descendant(
         of: find.byKey(const SectionCardKey(SectionKey.developerTools)),
@@ -107,6 +106,46 @@ void main() {
     await tapAndSettle(tester, find.byKey(const SectionCardKey(SectionKey.caches)));
 
     expect(parts.selectedSections, [SectionKey.caches]);
+  });
+
+  testWidgets('stands the cards in the order the bridge sends, not the order of the keys', (
+    WidgetTester tester,
+  ) async {
+    final ScannedEvent scan = loadScanWithReversedTotals();
+    await _pumpOverview(tester, bridge: FakeCleanerBridge(scanAnswer: scan));
+
+    final List<SectionKey> bridgeOrder = [
+      for (final SectionTotal total in scan.sectionTotals) total.sectionKey,
+    ];
+    expect(bridgeOrder, [
+      SectionKey.icloud,
+      SectionKey.largeFiles,
+      SectionKey.apps,
+      SectionKey.developerTools,
+      SectionKey.caches,
+    ]);
+    expect(_sortByCardPlace(tester, bridgeOrder), bridgeOrder);
+  });
+
+  testWidgets('counts the places of a section of advice alone, which has no size', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, Object?> json = loadSampleJson('scanned');
+    listSectionTotalJsons(json).add({
+      'sectionKey': 'ownApp',
+      'titleText': 'Handled by its own app',
+      'allocatedBytes': 0,
+      'isComplete': true,
+      'itemCount': 0,
+      'safeBytes': 0,
+      'adviceCount': 1,
+    });
+    await _pumpOverview(tester, bridge: FakeCleanerBridge(scanAnswer: parseScanJson(json)));
+
+    final Finder ownAppCard = find.byKey(const SectionCardKey(SectionKey.ownApp));
+    expect(find.descendant(of: ownAppCard, matching: find.text('1 place')), findsOneWidget);
+    expect(find.descendant(of: ownAppCard, matching: find.text('0 B')), findsNothing);
+    expect(find.bySemanticsLabel(RegExp(r'^Handled by its own app, 1 place, ')), findsOneWidget);
   });
 
   testWidgets('Clean safe items plans the safe items and opens the alert on them', (
@@ -129,7 +168,7 @@ void main() {
   ) async {
     final Map<String, Object?> json = loadSampleJson('scanned');
     json['safeNumbers'] = <Object?>[];
-    (json['summary']! as Map<String, Object?>)['safeBytes'] = 0;
+    getMapAt(json, ['summary'])['safeBytes'] = 0;
     await _pumpOverview(
       tester,
       bridge: FakeCleanerBridge(scanAnswer: parseScanJson(json)),
@@ -284,7 +323,7 @@ void main() {
     heldScan.complete(sampleScan);
     await tester.pumpAndSettle();
 
-    expect(find.text('26 MB can be freed'), findsOneWidget);
+    expect(find.text('at least 26 MB can be freed'), findsOneWidget);
     expect(find.byKey(const SectionCardKey(SectionKey.apps)), findsOneWidget);
   });
 }

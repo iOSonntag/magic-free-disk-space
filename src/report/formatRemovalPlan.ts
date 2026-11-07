@@ -3,6 +3,7 @@ import type { RefusalReason } from '../delete/validateRemoval.js';
 import type { Candidate } from '../scan/candidate.js';
 import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
 import { formatToolCommandText } from './formatCandidateCommandText.js';
+import { formatCandidateItemText } from './formatCandidateItemText.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
 
@@ -62,10 +63,10 @@ function formatApprovedHeader(params: {
   return `${params.subjectText} will be removed from this Mac, ${params.totalSizeText} in total; iCloud Drive keeps the evicted files, and the rest is deleted permanently:`;
 }
 
-/** An item that goes other than as a plain delete says how below its path. */
+/** An item that goes other than as a plain delete says how below its line. */
 function formatApprovedItemLines(params: { candidate: Candidate }): string[] {
   return [
-    `- ${formatSizeText(params.candidate)} ${formatDisplayText({ text: params.candidate.path })}`,
+    `- ${formatSizeText(params.candidate)} ${formatCandidateItemText({ candidate: params.candidate })}`,
     ...formatRemovalWayLines({ candidate: params.candidate }),
   ];
 }

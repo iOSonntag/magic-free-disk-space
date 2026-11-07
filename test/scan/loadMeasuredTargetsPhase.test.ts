@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, mkdir } from 'node:fs/promises';
+import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
-import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
+import type { TargetsCarve, TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import {
   buildFoundTargets,
   loadMeasuredTargetsPhase,
 } from '../../src/scan/loadMeasuredTargetsPhase.js';
+import type { ScanPhase } from '../../src/scan/scanPhase.js';
 import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -28,21 +30,26 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
+/** A phase of the test with each measurement its decide was given. */
+type LoadedPhase = { phase: ScanPhase; measurements: TargetsMeasurement[] };
+
 async function createTargetFile(name: string): Promise<string> {
   const path = join(fixtureRoot.homeDir, 'Downloads', name);
 
-  await mkdir(join(fixtureRoot.homeDir, 'Downloads'), { recursive: true });
   await createFixtureFile({ path: path, sizeBytes: FILE_SIZE_BYTES, modifiedMs: MODIFIED_MS });
 
   return path;
 }
 
-/** Loads the phase of `paths` and keeps each measurement its decide was given. */
-async function loadPhase(paths: [string, ...string[]]) {
+/** Loads the phase of `paths`, without a carve unless one is given. */
+async function loadPhase(params: {
+  paths: [string, ...string[]];
+  carve?: TargetsCarve;
+}): Promise<LoadedPhase> {
   const measurements: TargetsMeasurement[] = [];
   const phase = await loadMeasuredTargetsPhase({
-    found: buildFoundTargets(paths),
-    carve: null,
+    found: buildFoundTargets(params.paths),
+    carve: params.carve ?? null,
     measureTimeoutMs: 10_000,
     runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
     entryReads: darwinPlatform.system.entryReads,
@@ -50,7 +57,7 @@ async function loadPhase(paths: [string, ...string[]]) {
     decide: async (measurement): Promise<CandidateDecision> => {
       measurements.push(measurement);
 
-      return { kind: 'skip', path: paths[0], reason: 'belowSizeThreshold' };
+      return { kind: 'skip', path: params.paths[0], reason: 'belowSizeThreshold' };
     },
   });
 
@@ -62,7 +69,7 @@ describeAwaitingWin32Platform('loadMeasuredTargetsPhase', () => {
     const firstPath = await createTargetFile('first.dmg');
     const secondPath = await createTargetFile('second.pkg');
 
-    const { phase, measurements } = await loadPhase([firstPath, secondPath]);
+    const { phase, measurements } = await loadPhase({ paths: [firstPath, secondPath] });
 
     expect(phase).toEqual({
       decisions: [{ kind: 'skip', path: firstPath, reason: 'belowSizeThreshold' }],
@@ -81,15 +88,42 @@ describeAwaitingWin32Platform('loadMeasuredTargetsPhase', () => {
     const firstPath = await createTargetFile('kept.dmg');
     const vanishedPath = join(fixtureRoot.homeDir, 'Downloads', 'vanished.dmg');
 
-    const { measurements } = await loadPhase([vanishedPath, firstPath]);
+    const { measurements } = await loadPhase({ paths: [vanishedPath, firstPath] });
 
     expect(measurements[0]?.targets.map((target) => target.path)).toEqual([firstPath]);
   });
 
-  test('adds nothing when every found path vanished', async () => {
-    const { phase, measurements } = await loadPhase([
-      join(fixtureRoot.homeDir, 'Downloads', 'gone.dmg'),
+  test('keeps the identity of a carved target while its tally leaves the carved tree out', async () => {
+    const userDataPath = join(fixtureRoot.homeDir, 'Library', 'Application Support', 'Example');
+    const carvedPath = join(userDataPath, 'Previews');
+
+    await createFixtureFile({
+      path: join(carvedPath, 'preview.bin'),
+      sizeBytes: 64 * FILE_SIZE_BYTES,
+      modifiedMs: MODIFIED_MS,
+    });
+    await createFixtureFile({
+      path: join(userDataPath, 'settings.json'),
+      sizeBytes: FILE_SIZE_BYTES,
+      modifiedMs: MODIFIED_MS,
+    });
+
+    const { measurements } = await loadPhase({
+      paths: [userDataPath],
+      carve: { pathRules: DARWIN_PATH_RULES, carvedPaths: [carvedPath] },
+    });
+
+    expect(measurements[0]?.targets.map((target) => [target.path, target.identity.kind])).toEqual([
+      [userDataPath, 'directory'],
     ]);
+    expect(measurements[0]?.allocatedBytes).toBeGreaterThanOrEqual(FILE_SIZE_BYTES);
+    expect(measurements[0]?.allocatedBytes).toBeLessThan(64 * FILE_SIZE_BYTES);
+  });
+
+  test('adds nothing when every found path vanished', async () => {
+    const { phase, measurements } = await loadPhase({
+      paths: [join(fixtureRoot.homeDir, 'Downloads', 'gone.dmg')],
+    });
 
     expect(phase).toEqual({ decisions: [], issues: [] });
     expect(measurements).toEqual([]);
@@ -100,11 +134,10 @@ describeAwaitingWin32Platform('loadMeasuredTargetsPhase', () => {
     const lockedFolder = join(fixtureRoot.homeDir, 'Downloads', 'locked');
     const lockedPath = join(lockedFolder, 'inside.pkg');
 
-    await mkdir(lockedFolder);
     await createFixtureFile({ path: lockedPath, sizeBytes: 16, modifiedMs: MODIFIED_MS });
     await chmod(lockedFolder, 0o000);
 
-    const { phase, measurements } = await loadPhase([firstPath, lockedPath]);
+    const { phase, measurements } = await loadPhase({ paths: [firstPath, lockedPath] });
 
     expect(phase.decisions).toEqual([]);
     expect(phase.issues).toEqual([

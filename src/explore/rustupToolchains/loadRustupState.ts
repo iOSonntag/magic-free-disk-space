@@ -7,6 +7,7 @@ import { loadExploreEntryStats } from '../loadExploreRead.js';
 import { loadProbeOutput } from '../loadProbeOutput.js';
 import type { RustupListedToolchain } from './parseRustupLists.js';
 import { RUSTUP_OVERRIDE_LIST_PROBE, RUSTUP_TOOLCHAIN_LIST_PROBE } from './parseRustupLists.js';
+import type { RustupToolchainName } from './rustupToolchainName.js';
 
 /** rustup's toolchains below the home folder, the same on every platform. */
 const RUSTUP_TOOLCHAINS_PATH_NAMES = ['.rustup', 'toolchains'];
@@ -17,7 +18,7 @@ export type RustupInstalledToolchain = RustupListedToolchain & { toolchainPath: 
 /** What rustup lists, and the toolchains its folder overrides name. */
 export type RustupState = {
   toolchains: RustupInstalledToolchain[];
-  overrideNames: string[];
+  overrideNames: RustupToolchainName[];
 };
 
 /** Runs `rustup toolchain list` and `rustup override list`, and finds each toolchain's folder. */

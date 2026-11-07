@@ -60,9 +60,9 @@ MotionState? parseWindowMotionState(Object? arguments) {
 /// answers, and where no runner answers at all, motion is allowed in a
 /// visible window.
 class WindowMotionChannel implements ValueListenable<MotionState> {
-  WindowMotionChannel({this.channel = const MethodChannel(windowMotionChannelName)});
+  WindowMotionChannel({this._channel = const MethodChannel(windowMotionChannelName)});
 
-  final MethodChannel channel;
+  final MethodChannel _channel;
   final ValueNotifier<MotionState> _state = ValueNotifier<MotionState>(MotionState.allowed);
   bool _hasReceivedChange = false;
 
@@ -78,10 +78,10 @@ class WindowMotionChannel implements ValueListenable<MotionState> {
   /// Starts listening and loads the current state. Never throws: a missing
   /// runner channel keeps motion allowed.
   Future<void> connect() async {
-    channel.setMethodCallHandler(_receiveMotionStateChange);
+    _channel.setMethodCallHandler(_receiveMotionStateChange);
     final Object? answer;
     try {
-      answer = await channel.invokeMethod<Object?>('loadMotionState');
+      answer = await _channel.invokeMethod<Object?>('loadMotionState');
     } on MissingPluginException {
       return;
     }
@@ -94,7 +94,7 @@ class WindowMotionChannel implements ValueListenable<MotionState> {
   }
 
   void dispose() {
-    channel.setMethodCallHandler(null);
+    _channel.setMethodCallHandler(null);
     _state.dispose();
   }
 

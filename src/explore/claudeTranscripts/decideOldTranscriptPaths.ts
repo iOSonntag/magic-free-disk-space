@@ -1,8 +1,9 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { DAY_MS } from '../formatLimitTexts.js';
 import type { ClaudeProjectEntry, ClaudeProjectState } from './loadClaudeProjectsState.js';
 
 /** How long Claude Code itself keeps a transcript by default, its `cleanupPeriodDays`: 30 days. */
-export const CLAUDE_TRANSCRIPT_UNTOUCHED_MS = 30 * 24 * 60 * 60 * 1000;
+export const CLAUDE_TRANSCRIPT_UNTOUCHED_MS = 30 * DAY_MS;
 
 /**
  * A session's files in its project folder: `<session>.jsonl`, and the copies Claude Code sets

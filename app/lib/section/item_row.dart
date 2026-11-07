@@ -58,6 +58,8 @@ class _ItemRowState extends State<ItemRow> {
     );
     final String factsText = formatItemFactsText(item, now: widget.now);
     final Color accent = widget.look.accent;
+    // The bridge refuses to plan a never item, so its row offers no tick.
+    final VoidCallback? onToggle = isItemRemovable(item) ? widget.onToggle : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -67,12 +69,12 @@ class _ItemRowState extends State<ItemRow> {
               child: Semantics(
                 container: true,
                 checked: widget.isSelected,
-                enabled: widget.onToggle != null,
+                enabled: onToggle != null,
                 label: '${item.title}, $sizeText',
                 child: Material(
                   type: MaterialType.transparency,
                   child: InkWell(
-                    onTap: widget.onToggle,
+                    onTap: onToggle,
                     borderRadius: BorderRadius.circular(GlassTokens.tileRadius),
                     hoverColor: accent.withValues(alpha: 0.05),
                     child: ExcludeSemantics(
@@ -86,7 +88,7 @@ class _ItemRowState extends State<ItemRow> {
                             StageCheckMark(
                               value: widget.isSelected,
                               accent: accent,
-                              enabled: widget.onToggle != null,
+                              enabled: onToggle != null,
                             ),
                             const SizedBox(width: StageSpacing.regular),
                             Icon(

@@ -1,18 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/design/count_up.dart';
-import 'package:magic_free_disk_space/design/format_bytes.dart';
 import 'package:magic_free_disk_space/design/motion.dart';
 import 'package:magic_free_disk_space/design/tokens.dart';
 
 import 'support/design_harness.dart';
-
-Widget buildCountUp(ValueNotifier<MotionState> windowMotion, int value) {
-  return buildDesignHarness(
-    windowMotion: windowMotion,
-    child: CountUp(value: value, format: formatBytes),
-  );
-}
 
 String readShownText(WidgetTester tester) => tester.widget<Text>(find.byType(Text)).data!;
 

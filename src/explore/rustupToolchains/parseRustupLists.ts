@@ -15,7 +15,7 @@ export const RUSTUP_TOOLCHAIN_LIST_PROBE: ExploreProbeDefinition<RustupListedToo
   parse: (params) => parseRustupToolchainList({ stdoutText: params.stdoutText }),
 };
 
-export const RUSTUP_OVERRIDE_LIST_PROBE: ExploreProbeDefinition<string[]> = {
+export const RUSTUP_OVERRIDE_LIST_PROBE: ExploreProbeDefinition<RustupToolchainName[]> = {
   toolName: 'rustup',
   args: ['override', 'list'],
   parse: (params) => parseRustupOverrideList({ stdoutText: params.stdoutText }),
@@ -54,12 +54,18 @@ export function parseRustupToolchainList(params: {
 
 /**
  * The toolchain of each folder override, the last word of each line after its padded path; none
- * for rustup's line for none. Never fails, since a word that names no toolchain keeps nothing.
+ * for rustup's line for none. Never fails: a word that is no toolchain name keeps no toolchain.
  */
-export function parseRustupOverrideList(params: { stdoutText: string }): Result<string[], string> {
+export function parseRustupOverrideList(params: {
+  stdoutText: string;
+}): Result<RustupToolchainName[], string> {
   const toolchainNames = listContentLines({ text: params.stdoutText })
     .filter((line) => line !== NO_OVERRIDES_LINE)
-    .flatMap((line) => line.split(/\s+/).slice(-1));
+    .flatMap((line) => {
+      const name = parseRustupToolchainName({ text: line.split(/\s+/).at(-1) ?? '' });
+
+      return name.kind === 'succeeded' ? [name.value] : [];
+    });
 
   return { kind: 'succeeded', value: toolchainNames };
 }

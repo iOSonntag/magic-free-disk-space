@@ -26,6 +26,7 @@ import {
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -190,16 +191,6 @@ function buildRemoveCommands(paths: AbsolutePath[]): string {
   return paths.map((path) => buildRemoveFolderBody(path)).join('\n');
 }
 
-async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
-  const measurement = await loadPathMeasurement({
-    paths: listUnitPaths(unit),
-    deadlineMs: Date.now() + 60_000,
-    entryReads: darwinPlatform.system.entryReads,
-  });
-
-  return measurement.allocatedBytes;
-}
-
 async function loadNoProcessCommands(): Promise<string[] | null> {
   return [];
 }
@@ -216,7 +207,7 @@ fs.writeSync(2, 'uninstalled node@20.1.0\\n');
 process.exit(0);`,
     });
 
-    const allocatedBytes = await measureAllocatedBytes(unit);
+    const allocatedBytes = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
@@ -249,7 +240,7 @@ process.exit(0);`,
 process.exit(0);`,
     });
 
-    const allocatedBytes = await measureAllocatedBytes(unit);
+    const allocatedBytes = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
@@ -287,7 +278,7 @@ process.exit(0);`,
 process.exit(0);`,
     });
 
-    const allocatedBytesBefore = await measureAllocatedBytes(unit);
+    const allocatedBytesBefore = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
@@ -497,7 +488,7 @@ fs.writeSync(2, 'cannot remove bin\\n');
 process.exit(3);`,
     });
 
-    const allocatedBytesBefore = await measureAllocatedBytes(unit);
+    const allocatedBytesBefore = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
@@ -507,7 +498,7 @@ process.exit(3);`,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
-    const allocatedBytesAfter = await measureAllocatedBytes(unit);
+    const allocatedBytesAfter = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     expect(allocatedBytesAfter).toBeGreaterThan(0);
     expect(allocatedBytesAfter).toBeLessThan(allocatedBytesBefore);

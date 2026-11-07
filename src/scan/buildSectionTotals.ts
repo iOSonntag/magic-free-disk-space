@@ -9,6 +9,8 @@ import { CONSUMER_SECTION_ORDER, getCategorySection, placeCandidate } from './pl
 export type SectionTotal = {
   sectionKey: ConsumerSection;
   allocatedBytes: number;
+  /** False when the size of an item of the section is a lower bound. */
+  isComplete: boolean;
   itemCount: number;
   /** The bytes of the section's `safe` group. */
   safeBytes: number;
@@ -40,6 +42,7 @@ export function buildSectionTotals(params: {
       allocatedBytes: sumAllocatedBytes({
         candidates: sectionCandidates.map((placed) => placed.candidate),
       }),
+      isComplete: sectionCandidates.every((placed) => placed.candidate.isComplete),
       itemCount: sectionCandidates.length,
       safeBytes: sumAllocatedBytes({
         candidates: sectionCandidates

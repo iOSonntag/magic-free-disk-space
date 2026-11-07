@@ -10,7 +10,11 @@ import type { EngineDiskUsage } from '../../src/explore/engines/parseEngineDiskU
 import { parseEngineDiskUsage } from '../../src/explore/engines/parseEngineDiskUsage.js';
 import type { ContainerEngineFixed } from '../../src/explore/explorePlatform.js';
 import type { ExploreProbeEngineResult, ExploreProbeRun } from '../../src/explore/exploreProbe.js';
-import type { ExploreEngineUnit, ExploreEngineUnitPlace } from '../../src/explore/exploreUnit.js';
+import type {
+  ExploreEngineUnit,
+  ExploreEngineUnitPlace,
+  ExploreProbeFindings,
+} from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -421,6 +425,27 @@ describe('isEngineUnitUnchanged', () => {
     ).toBe(false);
   });
 
+  test('fails for untagged images one of which is tagged now, and an image whose id is gone', () => {
+    expect(
+      isEngineUnitUnchanged({
+        unit: { kind: 'engineDanglingImages', ...place, imageIds: [buildImageId('1')] },
+        usage: parseUsage(
+          buildDiskUsageAnswer({
+            images: [buildImageRecord({ digit: '1', tags: ['example/app:1'] })],
+          }),
+        ),
+        nowMs: NOW_MS,
+      }),
+    ).toBe(false);
+    expect(
+      isEngineUnitUnchanged({
+        unit: { kind: 'engineImage', ...place, imageId: buildImageId('9') },
+        usage: parseUsage(buildMixedUsageAnswer()),
+        nowMs: NOW_MS,
+      }),
+    ).toBe(false);
+  });
+
   test('fails for a volume a container mounts now', () => {
     expect(
       isEngineUnitUnchanged({
@@ -620,6 +645,28 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
     }
   });
 
+  test("judges the use of a build record by the scan's time, not the clock's", async () => {
+    const scanEnvironment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: NOW_MS });
+    const engine = startFakeEngine({
+      socketPath: socketPath,
+      usage: buildDiskUsageAnswer({
+        buildRecords: [buildBuildRecord({ digit: '2', lastUsedAtMs: NOW_MS - 2 * DAY_MS })],
+      }),
+    });
+
+    try {
+      expect(
+        await loadEngineFindings({
+          run: buildTestProbeRun({ environment: scanEnvironment }),
+          engineProbeId: 'dockerDesktopEngine',
+          engine: TEST_ENGINE,
+        }),
+      ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
+    } finally {
+      engine.stop();
+    }
+  });
+
   describe("Colima's profiles", () => {
     const colima = CONTAINER_ENGINES.colimaEngine;
 
@@ -644,13 +691,18 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
       });
     }
 
-    /** Each volume unit's name, socket and disk image, in the order of the findings. */
-    function listVolumePlaces(findings: ExploreProbeEngineResult): string[][] {
-      if (findings.kind === 'failed') {
-        throw new Error(`The probe failed: ${findings.failure.kind}.`);
+    /** The findings of an engine probe's answer; throws with its kind when the probe failed. */
+    function getEngineFindings(result: ExploreProbeEngineResult): ExploreProbeFindings {
+      if (result.kind === 'failed') {
+        throw new Error(`The probe failed: ${result.failure.kind}.`);
       }
 
-      return findings.value.findings.map((finding) =>
+      return result.value;
+    }
+
+    /** Each volume unit's name, socket and disk image, in the order of the findings. */
+    function listVolumePlaces(findings: ExploreProbeFindings): string[][] {
+      return findings.findings.map((finding) =>
         finding.unit.kind === 'engineVolume'
           ? [finding.unit.volumeName, finding.unit.socketPath, finding.unit.diskImagePath]
           : [],
@@ -668,11 +720,13 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
         await createFixtureDirectory({ path: buildColimaPath(['stopped']) });
         await writeFixtureTextFile({ path: buildColimaPath(['ssh_config']), text: '' });
 
-        const findings = await loadEngineFindings({
-          run: buildRun(),
-          engineProbeId: 'colimaEngine',
-          engine: colima,
-        });
+        const findings = getEngineFindings(
+          await loadEngineFindings({
+            run: buildRun(),
+            engineProbeId: 'colimaEngine',
+            engine: colima,
+          }),
+        );
 
         expect(listVolumePlaces(findings)).toEqual([
           [
@@ -686,7 +740,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
             buildColimaPath(['_lima', '_disks', 'colima-work', 'datadisk']),
           ],
         ]);
-        expect(findings.kind === 'succeeded' && findings.value.isComplete).toBe(true);
+        expect(findings.isComplete).toBe(true);
         expect(engines[2]?.requests).toEqual([]);
       } finally {
         for (const engine of engines) {
@@ -702,14 +756,16 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
       ];
 
       try {
-        const findings = await loadEngineFindings({
-          run: buildRun(),
-          engineProbeId: 'colimaEngine',
-          engine: colima,
-        });
+        const findings = getEngineFindings(
+          await loadEngineFindings({
+            run: buildRun(),
+            engineProbeId: 'colimaEngine',
+            engine: colima,
+          }),
+        );
 
         expect(listVolumePlaces(findings).map(([volumeName]) => volumeName)).toEqual(['work-data']);
-        expect(findings.kind === 'succeeded' && findings.value.isComplete).toBe(false);
+        expect(findings.isComplete).toBe(false);
       } finally {
         for (const engine of engines) {
           engine.stop();
@@ -781,6 +837,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
             timeoutMs: TIMEOUT_MS,
           }),
         ).toEqual({ outcome: answer.outcome, freedBytes: 0, status: answer.status, code: null });
+        expect(engine.requests.slice(3)).toEqual([`DELETE /v${FAKE_API_VERSION}/volumes/db`]);
       } finally {
         engine.stop();
       }

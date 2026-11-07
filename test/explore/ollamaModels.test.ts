@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type {
   ExplorePathUnitOllamaModel,
   ExploreProbeFindings,
@@ -149,7 +150,7 @@ function recheck(params: {
   unit: ExplorePathUnitOllamaModel;
   environment: Environment;
   processCommands: string[] | null;
-}) {
+}): Promise<PathUnitRecheck> {
   return recheckOllamaModelUnit({
     unit: params.unit,
     environment: params.environment,

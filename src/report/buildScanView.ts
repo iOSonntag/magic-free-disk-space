@@ -20,7 +20,7 @@ import {
   getCategorySection,
   placeCandidate,
 } from '../scan/placeCandidate.js';
-import type { ScanReport, SkippedItem } from '../scan/runScan.js';
+import type { ScanProgress, ScanReport, SkippedItem } from '../scan/runScan.js';
 import type { VolumeSpace } from '../system/volumeSpace.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
 import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
@@ -47,8 +47,14 @@ export type ScanView = {
   skipped: SkippedView | null;
   notices: NoticeView[];
   /** What each section holds, Explore items and advice in the section of their category. */
-  sectionTotals: SectionTotal[];
+  sectionTotals: SectionTotalView[];
 };
+
+/** A section's total with the title a client shows the section by. */
+export type SectionTotalView = SectionTotal & { titleText: string };
+
+/** A step of a running scan as a client shows it, its sections found so far titled. */
+export type ScanProgressView = Omit<ScanProgress, 'found'> & { found: SectionTotalView[] };
 
 type SummaryView = {
   titleText: string;
@@ -146,6 +152,11 @@ export type AdviceItemView = {
   revealPath: string;
   /** Where the person handles it, the app that owns its data or a pane of settings; else `null`. */
   opener: AdviceOpener | null;
+  /** In ms since the epoch; `null` when the scan judged no use. */
+  lastUsedAt: number | null;
+  appName: string | null;
+  /** Advice is never a leftover, so nothing ties it to an app by a match. */
+  matchedBy: null;
 };
 
 export type ItemDetailLineKind =
@@ -313,6 +324,10 @@ export function buildScanView(params: {
     candidates: params.report.candidates,
     advice: params.report.advice,
   });
+  const sectionTotalViews = buildSectionTotalViews({
+    totals: sectionTotals,
+    texts: params.texts,
+  });
 
   return {
     summary: buildSummaryView({
@@ -336,8 +351,32 @@ export function buildScanView(params: {
       }),
       ...buildPrivateSizeFallbackNotices({ report: params.report, texts: params.texts }),
     ],
-    sectionTotals: sectionTotals,
+    sectionTotals: sectionTotalViews,
   };
+}
+
+export function buildScanProgressView(params: {
+  progress: ScanProgress;
+  texts: ReportTexts;
+}): ScanProgressView {
+  return {
+    message: params.progress.message,
+    phase: params.progress.phase,
+    found: buildSectionTotalViews({ totals: params.progress.found, texts: params.texts }),
+  };
+}
+
+/** Titles each total as its section reads, so a client takes the order and the words from here. */
+function buildSectionTotalViews(params: {
+  totals: SectionTotal[];
+  texts: ReportTexts;
+}): SectionTotalView[] {
+  const sectionTitleTexts = buildSectionTitleTexts({ texts: params.texts });
+
+  return params.totals.map((total) => ({
+    ...total,
+    titleText: sectionTitleTexts[total.sectionKey],
+  }));
 }
 
 /**
@@ -604,6 +643,9 @@ function buildAdviceItemView(params: { advice: Advice; homeDir: string }): Advic
     displayPath: formatDisplayPath({ path: params.advice.path, homeDir: params.homeDir }),
     revealPath: params.advice.path,
     opener: params.advice.opener,
+    lastUsedAt: params.advice.lastUsedAtMs,
+    appName: formatAppName({ appName: params.advice.appName }),
+    matchedBy: null,
   };
 }
 

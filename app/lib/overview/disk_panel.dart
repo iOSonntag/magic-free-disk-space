@@ -12,6 +12,7 @@ final class DiskPanelFacts {
   const DiskPanelFacts({
     required this.reading,
     required this.freeableBytes,
+    required this.isFreeableComplete,
     required this.ringCaption,
     required this.overline,
     required this.headline,
@@ -20,6 +21,9 @@ final class DiskPanelFacts {
 
   final DiskRingReading reading;
   final int freeableBytes;
+
+  /// False when [freeableBytes] is a lower bound.
+  final bool isFreeableComplete;
   final String ringCaption;
   final String overline;
   final String headline;
@@ -31,6 +35,9 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
     case ListedState(:final ScannedEvent scan):
       final SummaryView summary = scan.summary;
       final DiskSpaceView? disk = summary.disk;
+      // The summary's total leaves out what a plan refuses, so its
+      // completeness is that of the removable items alone.
+      final bool isFreeableComplete = sumItemSizes(scan.selectableItems.where(isItemRemovable)).isComplete;
       return DiskPanelFacts(
         reading: disk == null
             ? DiskRingFreeableReading(freeableBytes: summary.totalBytes)
@@ -40,26 +47,29 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
                 freeableBytes: summary.totalBytes,
               ),
         freeableBytes: summary.totalBytes,
+        isFreeableComplete: isFreeableComplete,
         ringCaption: 'can be freed',
         overline: 'This Mac',
-        headline: '${formatBytes(summary.totalBytes)} can be freed',
+        headline: '${formatSizeText(allocatedBytes: summary.totalBytes, isComplete: isFreeableComplete)} can be freed',
         lines: [
           if (disk != null)
             '${formatBytes(disk.availableBytes)} available of ${formatBytes(disk.capacityBytes)}',
           if (summary.safeBytes > 0)
-            '${formatBytes(summary.safeBytes)} of it is safe to remove at once'
+            '${_formatSafeSizeText(scan)} of it is safe to remove at once'
           else
             'Nothing is safe to remove at once; review each section.',
         ],
       );
     case ScanningState():
-      final int foundBytes = listShownSectionTotals(state).fold(
+      final List<SectionTotal> foundTotals = listShownSectionTotals(state);
+      final int foundBytes = foundTotals.fold(
         0,
         (int sum, SectionTotal total) => sum + total.allocatedBytes,
       );
       return DiskPanelFacts(
         reading: DiskRingFreeableReading(freeableBytes: foundBytes),
         freeableBytes: foundBytes,
+        isFreeableComplete: foundTotals.every((SectionTotal total) => total.isComplete),
         ringCaption: 'found so far',
         overline: 'Scanning',
         headline: '${formatScanPhaseText(state)}…',
@@ -69,12 +79,20 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
       return const DiskPanelFacts(
         reading: DiskRingFreeableReading(freeableBytes: 0),
         freeableBytes: 0,
+        isFreeableComplete: true,
         ringCaption: 'nothing scanned',
         overline: 'This Mac',
         headline: 'Not scanned yet',
         lines: ['Scan again to find what takes space.'],
       );
   }
+}
+
+/// The summary's safe bytes, "at least" when an item of a safe group was not
+/// measured whole.
+String _formatSafeSizeText(ScannedEvent scan) {
+  final ItemSizeSum safeSum = sumItemSizes(scan.selectableItems.where((ItemView item) => item.group == ItemGroup.safe));
+  return formatSizeText(allocatedBytes: scan.summary.safeBytes, isComplete: safeSum.isComplete);
 }
 
 /// The Overview's lead: the disk ring lit by what can be freed, the words on
@@ -102,7 +120,7 @@ class DiskPanel extends StatelessWidget {
         state.scan.summary.safeBytes > 0;
     final String cleanLabel = scan == null
         ? 'Clean safe items'
-        : 'Clean safe items · ${formatBytes(scan.summary.safeBytes)}';
+        : 'Clean safe items · ${_formatSafeSizeText(scan)}';
     return GlassCard(
       accent: StageColors.overviewAccent,
       padding: const EdgeInsets.all(StageSpacing.extraLarge),
@@ -120,7 +138,10 @@ class DiskPanel extends StatelessWidget {
                 children: [
                   CountUp(
                     value: facts.freeableBytes,
-                    format: formatBytes,
+                    format: (int allocatedBytes) => formatSizeText(
+                      allocatedBytes: allocatedBytes,
+                      isComplete: facts.isFreeableComplete,
+                    ),
                     style: TypeRamp.display.copyWith(fontSize: 40),
                   ),
                   Text(facts.ringCaption, style: TypeRamp.caption),

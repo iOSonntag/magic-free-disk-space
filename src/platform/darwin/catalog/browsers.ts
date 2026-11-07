@@ -216,8 +216,7 @@ export const BROWSER_ENTRIES: CatalogEntry[] = [
     regeneration: 'Firefox fills it again while you browse.',
     risk: 'safe',
     root: 'home',
-    // On macOS Firefox keeps each profile's `cache2` in its local folder here, never beside the
-    // profile in `Application Support`.
+    // On macOS Firefox keeps each profile's `cache2` here, never beside the profile itself.
     path: 'Library/Caches/Firefox/Profiles',
     selection: {
       kind: 'profileFolders',

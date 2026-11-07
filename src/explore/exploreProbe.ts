@@ -6,6 +6,7 @@ import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolName } from '../tools/toolInstallLocations.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
+import type { AndroidSdkRoot } from './android/loadAndroidSdkRoots.js';
 import type { ExplorePlatform } from './explorePlatform.js';
 import type {
   ExploreFileUnreadable,
@@ -91,7 +92,18 @@ export type ExploreProbeFilesResult = Result<
  */
 export type ExploreProbePinned = {
   kind: 'pinned';
-  buildProbe: (params: { projectPins: ProjectPins }) => ExploreProbeTool | ExploreProbeFiles;
+  buildProbe: (params: {
+    projectPins: ProjectPins;
+  }) => ExploreProbeTool | ExploreProbeFiles | ExploreProbeAndroidSdk;
+};
+
+/**
+ * A probe of the Android SDKs: it is built from the SDK roots, resolved once per scan after the
+ * project walk ended, and then runs as the probe it builds.
+ */
+export type ExploreProbeAndroidSdk = {
+  kind: 'androidSdk';
+  buildProbe: (params: { sdkRoots: AndroidSdkRoot[] }) => ExploreProbeTool | ExploreProbeFiles;
 };
 
 /** The requests an engine probe sends, by the path of the engine's API. */
@@ -147,6 +159,7 @@ export type ExploreProbe =
   | ExploreProbeTool
   | ExploreProbeFiles
   | ExploreProbePinned
+  | ExploreProbeAndroidSdk
   | ExploreProbeEngine;
 
 /** What the commands of a located tool need: its environment, and the time they must end by. */

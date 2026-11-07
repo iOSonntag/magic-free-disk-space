@@ -1,5 +1,6 @@
 import type { RemovalOutcomeKind, RemovalRun } from '../delete/deleteCandidates.js';
 import { isUnremovedOutcome } from '../delete/deleteCandidates.js';
+import { isGoneOutcome } from '../delete/isGoneOutcome.js';
 import type { Candidate } from '../scan/candidate.js';
 import type { ItemKey } from '../scan/candidateOrigin.js';
 import { buildItemKey } from '../scan/candidateOrigin.js';
@@ -62,7 +63,7 @@ function decideOutcomeKey(params: {
   kind: RemovalOutcomeKind;
   freedBytes: number;
 }): DeletedOutcomeKey {
-  if (params.kind === 'removed' || params.kind === 'alreadyGone') {
+  if (isGoneOutcome(params.kind)) {
     return 'removed';
   }
 

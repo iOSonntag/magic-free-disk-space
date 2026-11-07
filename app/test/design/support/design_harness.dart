@@ -3,11 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/design/design.dart';
 
-/// The motion of a window hidden behind others, while motion is allowed.
-const MotionState hiddenWindowMotion = MotionState(
-  isReduced: false,
-  isWindowVisible: false,
-);
+export '../../support/window_motion.dart';
 
 /// Wraps [child] in what every design widget reads: a [MotionScope] over
 /// [windowMotion], a [ShaderLibraryScope] and a text direction.
@@ -28,11 +24,12 @@ Widget buildDesignHarness({
   );
 }
 
-/// A window motion source that a test turns by hand, disposed at tear-down.
-ValueNotifier<MotionState> createWindowMotion(MotionState initial) {
-  final ValueNotifier<MotionState> windowMotion = ValueNotifier<MotionState>(initial);
-  addTearDown(windowMotion.dispose);
-  return windowMotion;
+/// A [CountUp] of bytes at [value] in the design harness over [windowMotion].
+Widget buildCountUp(ValueListenable<MotionState> windowMotion, int value) {
+  return buildDesignHarness(
+    windowMotion: windowMotion,
+    child: CountUp(value: value, format: formatBytes),
+  );
 }
 
 /// Each [CustomPaint] that paints a [TPainter] over its child.

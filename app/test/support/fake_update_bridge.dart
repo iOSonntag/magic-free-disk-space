@@ -8,10 +8,12 @@ const UpdateCheckedEvent quietUpdateCheck = UpdateCheckedEvent(
   notice: null,
 );
 
-/// A bridge that answers with what the test set on it and records each value
-/// it was asked to save.
+Future<UpdateCheckAnswer> _answerQuietly() async => quietUpdateCheck;
+
+/// A bridge that answers with what the test set on it, a [quietUpdateCheck]
+/// unless told otherwise, and records each value it was asked to save.
 final class FakeUpdateBridge implements UpdateBridge {
-  FakeUpdateBridge({required this.answerCheck});
+  FakeUpdateBridge({this.answerCheck = _answerQuietly});
 
   Future<UpdateCheckAnswer> Function() answerCheck;
   Future<UpdateCheckSetAnswer> Function(bool isEnabled) answerSet = (

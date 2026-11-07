@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatBytes, formatSizeText, formatTotalSizeText } from '../../src/report/formatBytes.js';
+import { isJsonObject } from '../../src/system/parseJsonValue.js';
 
 /** One count and its text, shared with the app's tests so both word a size alike. */
 type FormatBytesCase = { bytes: number; text: string };
@@ -16,14 +17,7 @@ function parseFormatBytesCases(value: unknown): FormatBytesCase[] {
   }
 
   return value.map((item: unknown) => {
-    if (
-      typeof item !== 'object' ||
-      item === null ||
-      !('bytes' in item) ||
-      !('text' in item) ||
-      typeof item.bytes !== 'number' ||
-      typeof item.text !== 'string'
-    ) {
+    if (!isJsonObject(item) || typeof item.bytes !== 'number' || typeof item.text !== 'string') {
       throw new Error(
         `A case of formatBytesCases.json is not { bytes, text }: ${JSON.stringify(item)}`,
       );

@@ -14,8 +14,8 @@ import { buildDeletedFacts } from '../report/buildDeletedFacts.js';
 import { buildFullDiskAccessNotices } from '../report/buildFullDiskAccessNotices.js';
 import type { PlannedFacts } from '../report/buildPlannedFacts.js';
 import { buildPlannedFacts } from '../report/buildPlannedFacts.js';
-import type { ScanView } from '../report/buildScanView.js';
-import { buildScanView } from '../report/buildScanView.js';
+import type { ScanProgressView, ScanView } from '../report/buildScanView.js';
+import { buildScanProgressView, buildScanView } from '../report/buildScanView.js';
 import type { UpdateNoticeView } from '../report/buildUpdateNotice.js';
 import { buildUpdateNotice } from '../report/buildUpdateNotice.js';
 import {
@@ -34,7 +34,7 @@ import type { NoticeView } from '../report/noticeView.js';
 import type { ReportTexts } from '../report/reportTexts.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
-import type { ScanProgress, ScanReport } from '../scan/runScan.js';
+import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
 import type { ScanPlatform } from '../scan/scanPlatform.js';
 import type { FullDiskAccess } from '../system/fullDiskAccess.js';
@@ -45,7 +45,7 @@ import type { ReleaseVersion } from '../update/releaseVersion.js';
 import { runUpdateCheck } from '../update/runUpdateCheck.js';
 import { parseBridgeRequest } from './parseBridgeRequest.js';
 
-type BridgeEventProgress = { kind: 'progress' } & ScanProgress;
+type BridgeEventProgress = { kind: 'progress' } & ScanProgressView;
 
 type BridgeEventScanned = { kind: 'scanned' } & ScanView;
 
@@ -341,7 +341,10 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
       unusedDays: SCAN_LIMITS.defaultUnusedDays,
     },
     onProgress: (progress) => {
-      params.context.io.writeEvent({ kind: 'progress', ...progress });
+      params.context.io.writeEvent({
+        kind: 'progress',
+        ...buildScanProgressView({ progress: progress, texts: params.context.texts }),
+      });
     },
   });
   const disk = await params.context.system.loadVolumeSpace(environment.value.homeDir);

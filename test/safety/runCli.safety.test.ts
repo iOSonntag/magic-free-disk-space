@@ -19,6 +19,7 @@ import {
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
 import { buildTestPlatform } from '../support/platformFixtures.js';
+import { PROTOCOL_FIXTURE_DISK } from '../support/protocolFixtureScan.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 
 const MIB = 1_048_576;
@@ -136,10 +137,7 @@ async function runWithInput(params: {
     // A fixed disk, so no test reads the volume it runs on.
     system: {
       ...platform.system,
-      loadVolumeSpace: async () => ({
-        capacityBytes: 500_000_000_000,
-        availableBytes: 52_000_000_000,
-      }),
+      loadVolumeSpace: async () => PROTOCOL_FIXTURE_DISK,
     },
     delete: platform.delete,
     explore: platform.explore,

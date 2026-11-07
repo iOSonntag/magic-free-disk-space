@@ -66,9 +66,14 @@ export type ExplorePlatform = {
   mailBundlePaths: string[];
   /** The person's folder of downloads, the browsers' default target. */
   downloadsRoot: HomeRelativePathNames;
-  /** The browsers that write a partial download, which must not run while one goes. */
+  /** The browsers that write a partial download, which must not run while one of theirs goes. */
   browserBundles: BrowserBundles;
 };
 
-/** The browsers by the bundle names in the app folders, and the bundles the system keeps itself. */
-export type BrowserBundles = { appBundleNames: string[]; systemBundlePaths: string[] };
+/** The browsers of one engine, which name their partial downloads alike. */
+export type BrowserFamily = 'chromium' | 'firefox' | 'safari';
+
+/** The browsers of a family by the bundle names in the app folders, and those the system keeps. */
+export type BrowserFamilyBundles = { appBundleNames: string[]; systemBundlePaths: string[] };
+
+export type BrowserBundles = Record<BrowserFamily, BrowserFamilyBundles>;

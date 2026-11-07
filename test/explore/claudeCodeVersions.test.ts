@@ -2,16 +2,14 @@ import { expect, test } from 'bun:test';
 import { rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { compareClaudeCodeVersionUnit } from '../../src/explore/claudeCodeVersions/compareClaudeCodeVersionUnit.js';
 import { decideClaudeCodeVersionOffers } from '../../src/explore/claudeCodeVersions/decideClaudeCodeVersionOffers.js';
 import { loadClaudeCodeVersionFindings } from '../../src/explore/claudeCodeVersions/loadClaudeCodeVersionFindings.js';
 import type {
   ClaudeCodeVersionEntry,
   ClaudeCodeVersionStateInstalled,
 } from '../../src/explore/claudeCodeVersions/loadClaudeCodeVersionState.js';
-import {
-  compareClaudeCodeVersionUnit,
-  recheckClaudeCodeVersionUnit,
-} from '../../src/explore/claudeCodeVersions/recheckClaudeCodeVersionUnit.js';
+import { recheckClaudeCodeVersionUnit } from '../../src/explore/claudeCodeVersions/recheckClaudeCodeVersionUnit.js';
 import type { ExplorePathUnitClaudeCodeVersion } from '../../src/explore/exploreUnit.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';

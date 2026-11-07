@@ -2,9 +2,15 @@ import { expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { ExploreFoundPaths, ExploreProbeFindings } from '../../src/explore/exploreUnit.js';
+import type {
+  ExploreFoundPaths,
+  ExplorePathUnitIdeVersionFolder,
+  ExploreProbeFindings,
+} from '../../src/explore/exploreUnit.js';
+import { compareIdeVersionUnit } from '../../src/explore/ideVersions/compareIdeVersionUnit.js';
 import { decideIdeVersionOffers } from '../../src/explore/ideVersions/decideIdeVersionOffers.js';
 import { loadIdeVersionFindings } from '../../src/explore/ideVersions/loadIdeVersionFindings.js';
+import type { IdeVersionFolder } from '../../src/explore/ideVersions/loadIdeVersionState.js';
 import { recheckIdeVersionUnit } from '../../src/explore/ideVersions/recheckIdeVersionUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -227,6 +233,78 @@ describeAwaitingWin32Platform('decideIdeVersionOffers', () => {
         ],
       }),
     ).toEqual([]);
+  });
+});
+
+describeAwaitingWin32Platform('compareIdeVersionUnit', () => {
+  const oldCachesPath = buildValuePath('Caches', 'JetBrains', OLD_IDEA);
+  const unit: ExplorePathUnitIdeVersionFolder = {
+    kind: 'ideVersionFolder',
+    product: 'IntelliJIdea',
+    version: '2023.3',
+    folderKind: 'caches',
+    folderPath: oldCachesPath,
+    foundPaths: [oldCachesPath],
+  };
+  const folders: IdeVersionFolder[] = [
+    { kind: 'caches', product: 'IntelliJIdea', version: '2023.3', path: oldCachesPath },
+    {
+      kind: 'caches',
+      product: 'IntelliJIdea',
+      version: '2024.1',
+      path: buildValuePath('Caches', 'JetBrains', NEW_IDEA),
+    },
+  ];
+  const bundlePath = '/Applications/IntelliJ IDEA.app';
+  const ideCommand = `${bundlePath}/Contents/MacOS/idea`;
+
+  test('is unchanged while a newer version still outdates the folder and no IDE of it runs', () => {
+    expect(
+      compareIdeVersionUnit({
+        unit: unit,
+        folders: folders,
+        runningIdes: [{ bundlePath: bundlePath, dataDirectoryName: NEW_IDEA }],
+        processCommands: [ideCommand],
+      }),
+    ).toEqual({ kind: 'unchanged' });
+  });
+
+  test('is busy while an IDE of its version runs, or the processes are unknown', () => {
+    expect(
+      compareIdeVersionUnit({
+        unit: unit,
+        folders: folders,
+        runningIdes: [{ bundlePath: bundlePath, dataDirectoryName: OLD_IDEA }],
+        processCommands: [ideCommand],
+      }),
+    ).toEqual({ kind: 'busy' });
+    expect(
+      compareIdeVersionUnit({
+        unit: unit,
+        folders: folders,
+        runningIdes: [],
+        processCommands: null,
+      }),
+    ).toEqual({ kind: 'busy' });
+  });
+
+  test('is changed once no newer version outdates it, or its paths differ', () => {
+    expect(
+      compareIdeVersionUnit({
+        unit: unit,
+        folders: folders.slice(0, 1),
+        runningIdes: [],
+        processCommands: [],
+      }),
+    ).toEqual({ kind: 'changed' });
+    expect(
+      compareIdeVersionUnit({
+        unit: { ...unit, foundPaths: [oldCachesPath, buildValuePath('Caches', 'other')] },
+        folders: folders,
+        runningIdes: [],
+        processCommands: [],
+      }),
+    ).toEqual({ kind: 'changed' });
   });
 });
 

@@ -99,10 +99,18 @@ export function decideAndroidEmulatorOffers(state: AndroidSdkState): AndroidPack
   return { offers: offers, isComplete: isComplete };
 }
 
+/** The SDK holds no emulator. */
+type AndroidSdkEmulatorOfferNone = { kind: 'none' };
+
+/** The emulator's package could not be read, so it cannot be judged. */
+type AndroidSdkEmulatorOfferNotJudged = { kind: 'notJudged' };
+
+type AndroidSdkEmulatorOfferOffered = { kind: 'offered'; offer: AndroidPackageOffer };
+
 type AndroidSdkEmulatorOffer =
-  | { kind: 'none' }
-  | { kind: 'notJudged' }
-  | { kind: 'offered'; offer: AndroidPackageOffer };
+  | AndroidSdkEmulatorOfferNone
+  | AndroidSdkEmulatorOfferNotJudged
+  | AndroidSdkEmulatorOfferOffered;
 
 function decideAndroidSdkEmulatorOffer(params: { sdk: AndroidSdk }): AndroidSdkEmulatorOffer {
   if (params.sdk.emulator === null) {

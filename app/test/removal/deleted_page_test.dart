@@ -74,7 +74,7 @@ void main() {
 
     expect(find.text('FREED'), findsOneWidget);
     expect(find.text('9.0 MB'), findsOneWidget);
-    expect(find.text('2 items removed.'), findsOneWidget);
+    expect(find.text('2 items removed, 1 item partly removed.'), findsOneWidget);
     expect(find.text('58 GB free on the disk now.'), findsOneWidget);
     expect(find.text('What stayed'), findsOneWidget);
     expect(find.text('App cache'), findsOneWidget);
@@ -105,7 +105,8 @@ void main() {
   ) async {
     await pumpResult(tester, run: mixedRun);
 
-    expect(find.text('Nothing was removed.'), findsOneWidget);
+    expect(find.text('1 item partly removed.'), findsOneWidget);
+    expect(find.text('Nothing was removed.'), findsNothing);
     expect(
       find.text('Partly removed, 2.0 MB freed. macOS did not allow it to be removed.'),
       findsOneWidget,
@@ -226,20 +227,20 @@ void main() {
     await pumpResult(tester, run: sampleDeleted, motion: MotionState.allowed);
     await tester.pump();
 
-    DiskRingVolumeReading findShownReading() {
+    DiskRingVolumeReading readShownReading() {
       return tester.widget<DiskRing>(find.byType(DiskRing)).reading as DiskRingVolumeReading;
     }
 
-    expect(findShownReading().availableBytes, 52000000000);
-    expect(findShownReading().freeableBytes, samplePlan.totalBytes);
+    expect(readShownReading().availableBytes, 52000000000);
+    expect(readShownReading().freeableBytes, samplePlan.totalBytes);
 
     await tester.pump(MotionTokens.ringFill - const Duration(milliseconds: 100));
-    expect(findShownReading().availableBytes, 52000000000);
+    expect(readShownReading().availableBytes, 52000000000);
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pump();
 
-    expect(findShownReading().availableBytes, 58000000000);
-    expect(findShownReading().freeableBytes, 0);
+    expect(readShownReading().availableBytes, 58000000000);
+    expect(readShownReading().freeableBytes, 0);
     expectEveryTappableNodeLabelled();
   });
 }

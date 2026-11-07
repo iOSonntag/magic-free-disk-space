@@ -10,6 +10,7 @@ import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js
 const DEV = 16_777_232n;
 
 function buildFileEntry(params: {
+  dev?: bigint;
   ino: bigint;
   linkCount: number;
   allocatedBytes: number;
@@ -17,7 +18,7 @@ function buildFileEntry(params: {
 }): MeasuredEntry {
   return {
     kind: 'file',
-    dev: DEV,
+    dev: params.dev ?? DEV,
     ino: params.ino,
     allocatedBytes: params.allocatedBytes,
     linkCount: params.linkCount,
@@ -81,25 +82,20 @@ describeAwaitingWin32Platform('tallyMeasuredEntry', () => {
   });
 
   test('keeps inodes of the same number on two devices apart', () => {
-    const tally = createEntryTally();
+    const totals = tallyOfferPaths([
+      [
+        buildFileEntry({ ino: 7n, linkCount: 2, allocatedBytes: 4096, privateBytes: 4096 }),
+        buildFileEntry({
+          dev: DEV + 1n,
+          ino: 7n,
+          linkCount: 2,
+          allocatedBytes: 4096,
+          privateBytes: 4096,
+        }),
+      ],
+    ]);
 
-    tallyMeasuredEntry({
-      tally: tally,
-      entry: buildFileEntry({ ino: 7n, linkCount: 2, allocatedBytes: 4096, privateBytes: 4096 }),
-    });
-    tallyMeasuredEntry({
-      tally: tally,
-      entry: {
-        kind: 'file',
-        dev: DEV + 1n,
-        ino: 7n,
-        allocatedBytes: 4096,
-        linkCount: 2,
-        privateBytes: 4096,
-      },
-    });
-
-    expect(getEntryTallyTotals(tally)).toEqual({ countedBytes: 0, privateSizeFallbackCount: 0 });
+    expect(totals).toEqual({ countedBytes: 0, privateSizeFallbackCount: 0 });
   });
 
   test('counts the fallback of a linked inode once, and only when the inode counts', () => {

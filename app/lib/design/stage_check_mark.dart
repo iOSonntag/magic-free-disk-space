@@ -24,7 +24,6 @@ class StageCheckMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool lit = value ?? true;
-    final bool isMixed = value == null;
     final Duration duration = MotionScope.of(context).plainFadeDuration;
     return Opacity(
       opacity: enabled ? 1 : 0.42,
@@ -50,9 +49,9 @@ class StageCheckMark extends StatelessWidget {
                 ]
               : null,
         ),
-        child: switch ((lit, isMixed)) {
-          (false, _) => null,
-          (true, true) => Center(
+        child: switch (value) {
+          false => null,
+          null => Center(
             child: Container(
               width: 10,
               height: 2.4,
@@ -62,7 +61,7 @@ class StageCheckMark extends StatelessWidget {
               ),
             ),
           ),
-          (true, false) => const Icon(
+          true => const Icon(
             AppIcons.check,
             size: 18,
             weight: 700,

@@ -43,6 +43,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
 
@@ -139,14 +140,9 @@ let environment: Environment;
 async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
   await createVscodeInstallation({ homeDir: environment.homeDir });
 
-  const findings = await loadVscodeExtensionFindings({
-    environment: environment,
-    platform: buildTestProbePlatform(),
-    processCommands: [],
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: 0,
-    staleCutoffMs: 0,
-  });
+  const findings = await loadVscodeExtensionFindings(
+    buildTestProbeRun({ environment: environment }),
+  );
 
   if (findings.kind === 'failed') {
     throw new Error(`The VS Code probe failed: ${findings.failure.reason}.`);
@@ -215,7 +211,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
 
     const phase = await loadExplorePhase({
       environment: environment,
-      probes: probes,
+      probes: probes.outcomes,
       catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,

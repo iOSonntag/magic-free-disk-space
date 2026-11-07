@@ -24,6 +24,7 @@ const OLD_VIDEO = buildTestCandidate({
   category: 'userFiles',
   risk: 'careful',
   allocatedBytes: 3000,
+  isComplete: false,
 });
 
 const TOOL_VERSION = buildTestToolCandidate({
@@ -48,7 +49,7 @@ describeAwaitingWin32Platform('buildPlannedFacts', () => {
     }).toEqual(await loadProtocolFixtureEventOfKind('planned'));
   });
 
-  test('numbers each approved item by its scan, with its key, section, risk, removal, and size', () => {
+  test('numbers each approved item by its scan, with its key, section, group, risk, removal, and size', () => {
     expect<unknown>(
       buildPlannedFacts({
         plan: { approved: [OLD_VIDEO, SAFE_CACHE, TOOL_VERSION], refused: [] },
@@ -61,27 +62,33 @@ describeAwaitingWin32Platform('buildPlannedFacts', () => {
           key: 'catalog:test-entry:/fixture/movie.mov',
           title: 'movie\\u{a}.mov',
           sectionKey: 'largeFiles',
+          group: 'careful',
           risk: 'careful',
           removal: 'delete',
           allocatedBytes: 3000,
+          isComplete: false,
         },
         {
           number: 1,
           key: 'catalog:test-entry:/fixture/cache',
           title: 'Tool cache',
           sectionKey: 'caches',
+          group: 'safe',
           risk: 'safe',
           removal: 'delete',
           allocatedBytes: 1000,
+          isComplete: true,
         },
         {
           number: 3,
           key: 'explore:miseVersions:miseVersion:node@20.1.0',
           title: TOOL_VERSION.title,
           sectionKey: 'developerTools',
+          group: 'careful',
           risk: 'careful',
           removal: 'tool',
           allocatedBytes: 2000,
+          isComplete: true,
         },
       ],
       totalBytes: 6000,
@@ -96,6 +103,22 @@ describeAwaitingWin32Platform('buildPlannedFacts', () => {
     expect(
       buildPlannedFacts({ plan: { approved: [SAFE_CACHE], refused: [] }, ranked: RANKED }),
     ).toMatchObject({ holdsCareful: false, totalBytes: 1000 });
+  });
+
+  test('gives a safe item a probe found the review group its scan shows it in', () => {
+    const probedSafeVersion = buildTestToolCandidate({
+      homeDir: '/fixture',
+      version: '18.0.0',
+      risk: 'safe',
+    });
+
+    const facts = buildPlannedFacts({
+      plan: { approved: [probedSafeVersion], refused: [] },
+      ranked: [probedSafeVersion],
+    });
+
+    expect(facts.items.map((item) => [item.risk, item.group])).toEqual([['safe', 'review']]);
+    expect(facts.holdsCareful).toBe(false);
   });
 
   test('throws for an approved item outside the ranking of its scan', () => {

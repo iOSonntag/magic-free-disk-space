@@ -15,19 +15,12 @@ function buildColimaDiskImagePath(profileName: string): HomeRelativePathNames {
   return ['.colima', '_lima', '_disks', instanceName, 'datadisk'];
 }
 
-/**
- * The container engines on macOS, each with the sockets its probe asks and its disk image:
- * - Docker Desktop's socket, which `/var/run/docker.sock` links to, and its `Docker.raw`, from
- *   docs.docker.com (the Mac permission requirements, and the Mac FAQ);
- * - OrbStack's socket and its `data.img` in its group container, from docs.orbstack.dev (the FAQ);
- * - Colima's profiles, each with the socket its Lima host agent binds in the profile's folder and
- *   the data disk Lima keeps for it (Colima's `config/profile.go` and `config/files.go`, and
- *   Lima's `pkg/store`). Colima's own folders there start with `_`, such as `_lima`.
- */
+/** The container engines on macOS, each with the sockets its probe asks and its disk image. */
 export const CONTAINER_ENGINES: Record<EngineProbeId, ContainerEngine> = {
   dockerDesktopEngine: {
     kind: 'fixed',
     engineName: 'Docker Desktop',
+    // `/var/run/docker.sock` links to this socket, as docs.docker.com says.
     socketPaths: [['.docker', 'run', 'docker.sock']],
     diskImagePath: [
       'Library',
@@ -50,6 +43,7 @@ export const CONTAINER_ENGINES: Record<EngineProbeId, ContainerEngine> = {
     kind: 'profiles',
     engineName: 'Colima',
     profilesRoot: ['.colima'],
+    // Lima's host agent binds it in each profile's folder; Colima's own folders start with `_`.
     socketName: 'docker.sock',
     defaultProfileName: COLIMA_DEFAULT_PROFILE_NAME,
     buildDiskImagePath: buildColimaDiskImagePath,

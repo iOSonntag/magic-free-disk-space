@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { LANGUAGE_ENTRIES } from '../../../src/platform/darwin/catalog/languages.js';
+import { SCAN_LIMITS } from '../../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import { buildRiskAndPathById } from './catalogPins.js';
 import { listCatalogOffers, withScannedCatalogHome } from './catalogScan.js';
 
-const FILE_BYTES = 65_536;
+const FILE_BYTES = SCAN_LIMITS.minOfferedBytes;
 
 describe('LANGUAGE_ENTRIES', () => {
   test('pins the risk and the path of every entry', () => {
@@ -46,7 +47,6 @@ describeAwaitingWin32Platform('the scan of the language entries', () => {
         { path: 'Library/Caches/deno/npm/registry.npmjs.org/package.tgz', sizeBytes: FILE_BYTES },
         { path: 'Library/Caches/deno/location_data/hash/kv.sqlite3', sizeBytes: FILE_BYTES },
       ],
-      minOfferedBytes: 1,
       run: ({ homeDir, report }) => {
         expect(listCatalogOffers({ report: report, homeDir: homeDir })).toEqual([
           {
@@ -67,7 +67,6 @@ describeAwaitingWin32Platform('the scan of the language entries', () => {
         { path: 'Library/Application Support/sst/plugins/aws/provider', sizeBytes: FILE_BYTES },
         { path: 'Library/Application Support/sst/state/app/dev.json', sizeBytes: FILE_BYTES },
       ],
-      minOfferedBytes: 1,
       run: ({ homeDir, report }) => {
         expect(listCatalogOffers({ report: report, homeDir: homeDir })).toEqual([
           {

@@ -5,9 +5,10 @@ import 'package:magic_free_disk_space/cleaner/cleaner.dart';
 import 'package:magic_free_disk_space/design/design.dart';
 import 'package:magic_free_disk_space/removal/deleting_view.dart';
 
-import '../design/support/design_harness.dart';
 import '../support/semantics_labels.dart';
 import '../support/stage_harness.dart';
+import '../support/test_items.dart';
+import '../support/window_motion.dart';
 import 'support/removal_harness.dart';
 
 void main() {
@@ -40,10 +41,11 @@ void main() {
   ) async {
     await pumpDeleting(tester, plan: samplePlan, motion: MotionState.reduced);
 
-    expect(find.text('Deleting 15 MB'), findsOneWidget);
+    expect(find.text('Deleting at least 15 MB'), findsOneWidget);
     for (final PlannedItemView item in samplePlan.items) {
       expect(find.text(item.title), findsOneWidget);
     }
+    expect(find.text('at least 4.0 MB'), findsOneWidget);
     expect(countDissolvedRows(tester), 0);
     await tester.pump();
     expect(countDissolvedRows(tester), samplePlan.items.length);
@@ -100,23 +102,21 @@ void main() {
   testWidgets('a long plan shows its six biggest items and the count of the rest', (
     WidgetTester tester,
   ) async {
-    final PlannedEvent longPlan = PlannedEvent(
-      planId: 4,
-      lines: const [],
-      warningLines: const [],
-      items: [
+    final PlannedEvent longPlan = buildSamplePlan(
+      [
         for (int number = 1; number <= 8; number++)
-          PlannedItemView(
-            number: number,
-            key: 'catalog:cache-$number',
-            title: 'Cache $number',
-            sectionKey: SectionKey.caches,
-            risk: Risk.safe,
-            removal: ItemRemoval.delete,
-            allocatedBytes: number * 1000000,
+          planItem(
+            buildTestItemView(
+              number: number,
+              title: 'Cache $number',
+              risk: Risk.safe,
+              group: ItemGroup.safe,
+              sectionKey: SectionKey.caches,
+              allocatedBytes: number * 1000000,
+            ),
           ),
       ],
-      totalBytes: 36000000,
+      planId: 4,
       holdsCareful: false,
     );
 

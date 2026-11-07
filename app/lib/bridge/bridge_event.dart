@@ -1,6 +1,7 @@
 import 'openable_url.dart';
 
-/// Picks the colour of an item; its `riskText` is what shows.
+/// How much an item's removal costs; the bridge refuses to plan a [never]
+/// item.
 enum Risk { safe, review, careful, never }
 
 enum ItemDetailLineKind {
@@ -16,11 +17,9 @@ enum ItemDetailLineKind {
 /// guards.
 enum FullDiskAccess { granted, denied, unknown }
 
-/// The section an item belongs to, Explore's items included; [unknown] stands
-/// for a section of a newer bridge, shown by the bridge's title.
-///
-/// The members stand in the order the app shows the sections in, the order
-/// the bridge sends them in, with [unknown] last.
+/// The section an item belongs to, Explore's items included, which picks the
+/// section's look; [unknown] stands for a section of a newer bridge. The
+/// bridge's section totals give the order and the titles.
 enum SectionKey {
   caches,
   developerTools,
@@ -103,8 +102,6 @@ final class ItemView {
     required this.key,
     required this.title,
     required this.risk,
-    required this.riskText,
-    required this.sizeText,
     required this.detailLines,
     required this.sectionKey,
     required this.group,
@@ -124,8 +121,6 @@ final class ItemView {
   final String key;
   final String title;
   final Risk risk;
-  final String riskText;
-  final String sizeText;
   final List<ItemDetailLine> detailLines;
   final SectionKey sectionKey;
   final ItemGroup group;
@@ -172,8 +167,6 @@ final class AdviceItemView {
     required this.key,
     required this.title,
     required this.risk,
-    required this.riskText,
-    required this.sizeText,
     required this.detailLines,
     required this.sectionKey,
     required this.origin,
@@ -182,13 +175,14 @@ final class AdviceItemView {
     required this.displayPath,
     required this.revealPath,
     required this.opener,
+    required this.lastUsedAt,
+    required this.appName,
+    required this.matchedBy,
   });
 
   final String key;
   final String title;
   final Risk risk;
-  final String riskText;
-  final String sizeText;
   final List<ItemDetailLine> detailLines;
   final SectionKey sectionKey;
   final ItemOrigin origin;
@@ -201,6 +195,11 @@ final class AdviceItemView {
 
   /// `null` when nothing opens its place, or its opener is of a newer bridge.
   final AdviceOpener? opener;
+  final DateTime? lastUsedAt;
+  final String? appName;
+
+  /// `null` from this bridge, whose advice is never a leftover.
+  final LeftoverMatch? matchedBy;
 }
 
 /// The volume of the home folder.
@@ -216,15 +215,12 @@ final class DiskSpaceView {
 
 final class SummaryView {
   const SummaryView({
-    required this.titleText,
-    required this.lines,
     required this.totalBytes,
     required this.safeBytes,
     required this.disk,
   });
 
-  final String titleText;
-  final List<String> lines;
+  /// The bytes of every item but a [Risk.never] one, which a plan refuses.
   final int totalBytes;
 
   /// The bytes of the safe groups, which "Clean safe items" frees.
@@ -239,14 +235,22 @@ final class SummaryView {
 final class SectionTotal {
   const SectionTotal({
     required this.sectionKey,
+    required this.titleText,
     required this.allocatedBytes,
+    required this.isComplete,
     required this.itemCount,
     required this.safeBytes,
     required this.adviceCount,
   });
 
   final SectionKey sectionKey;
+
+  /// The bridge's title of the section, which every place shows it by.
+  final String titleText;
   final int allocatedBytes;
+
+  /// False when [allocatedBytes] is a lower bound.
+  final bool isComplete;
   final int itemCount;
   final int safeBytes;
   final int adviceCount;
@@ -255,17 +259,11 @@ final class SectionTotal {
 final class SectionView {
   const SectionView({
     required this.key,
-    required this.titleText,
-    required this.sizeText,
-    required this.isInitiallyExpanded,
     required this.items,
     required this.checkGroup,
   });
 
   final SectionKey key;
-  final String titleText;
-  final String sizeText;
-  final bool isInitiallyExpanded;
 
   /// The safe items, shown open.
   final List<ItemView> items;
@@ -274,30 +272,21 @@ final class SectionView {
 
 /// The items of a section that are not safe, shown collapsed.
 final class CheckGroupView {
-  const CheckGroupView({required this.titleText, required this.items});
+  const CheckGroupView({required this.items});
 
-  final String titleText;
   final List<ItemView> items;
 }
 
 final class ExploreView {
-  const ExploreView({
-    required this.titleText,
-    required this.introText,
-    required this.items,
-    required this.adviceGroup,
-  });
+  const ExploreView({required this.items, required this.adviceGroup});
 
-  final String titleText;
-  final String introText;
   final List<ItemView> items;
   final AdviceGroupView? adviceGroup;
 }
 
 final class AdviceGroupView {
-  const AdviceGroupView({required this.titleText, required this.items});
+  const AdviceGroupView({required this.items});
 
-  final String titleText;
   final List<AdviceItemView> items;
 }
 
@@ -357,20 +346,29 @@ final class PlannedItemView {
     required this.key,
     required this.title,
     required this.sectionKey,
+    required this.group,
     required this.risk,
     required this.removal,
     required this.allocatedBytes,
+    required this.isComplete,
   });
 
   final int number;
   final String key;
   final String title;
   final SectionKey sectionKey;
+
+  /// The group the scan shows the item in, which every step of the delete
+  /// flow names it by.
+  final ItemGroup group;
   final Risk risk;
 
   /// How the run removes it, as the scan's item says.
   final ItemRemoval removal;
   final int allocatedBytes;
+
+  /// False when [allocatedBytes] is a lower bound.
+  final bool isComplete;
 }
 
 /// How one item of a run ended.
@@ -488,7 +486,6 @@ final class PlannedEvent extends BridgeEvent implements PlanAnswer {
   const PlannedEvent({
     required this.planId,
     required this.lines,
-    required this.warningLines,
     required this.items,
     required this.totalBytes,
     required this.holdsCareful,
@@ -496,11 +493,11 @@ final class PlannedEvent extends BridgeEvent implements PlanAnswer {
 
   final int planId;
   final List<String> lines;
-  final List<String> warningLines;
   final List<PlannedItemView> items;
   final int totalBytes;
 
-  /// True when an item of the plan is careful: nothing brings it back.
+  /// True when an item of the plan is in the careful group: nothing brings
+  /// it back.
   final bool holdsCareful;
 }
 
@@ -633,11 +630,10 @@ BridgeEvent parseBridgeEvent(Object? json) {
       'items': final List<Object?> items,
       'totalBytes': final int totalBytes,
       'holdsCareful': final bool holdsCareful,
-    } =>
+    } when _isLineList(warningLines) =>
       PlannedEvent(
         planId: planId,
         lines: _parseLines(lines),
-        warningLines: _parseLines(warningLines),
         items: items.map(_parsePlannedItem).toList(),
         totalBytes: totalBytes,
         holdsCareful: holdsCareful,
@@ -697,15 +693,13 @@ BridgeEvent parseBridgeEvent(Object? json) {
 SummaryView _parseSummary(Object? json) {
   return switch (json) {
     {
-      'titleText': final String titleText,
+      'titleText': String(),
       'lines': final List<Object?> lines,
       'totalBytes': final int totalBytes,
       'safeBytes': final int safeBytes,
       'disk': final Object? disk,
-    } =>
+    } when _isLineList(lines) =>
       SummaryView(
-        titleText: titleText,
-        lines: _parseLines(lines),
         totalBytes: totalBytes,
         safeBytes: safeBytes,
         disk: disk == null ? null : _parseDiskSpace(disk),
@@ -732,14 +726,18 @@ SectionTotal _parseSectionTotal(Object? json) {
   return switch (json) {
     {
       'sectionKey': final String sectionKey,
+      'titleText': final String titleText,
       'allocatedBytes': final int allocatedBytes,
+      'isComplete': final bool isComplete,
       'itemCount': final int itemCount,
       'safeBytes': final int safeBytes,
       'adviceCount': final int adviceCount,
     } =>
       SectionTotal(
         sectionKey: _parseSectionKey(sectionKey),
+        titleText: titleText,
         allocatedBytes: allocatedBytes,
+        isComplete: isComplete,
         itemCount: itemCount,
         safeBytes: safeBytes,
         adviceCount: adviceCount,
@@ -752,17 +750,14 @@ SectionView _parseSection(Object? json) {
   return switch (json) {
     {
       'key': final String key,
-      'titleText': final String titleText,
-      'sizeText': final String sizeText,
-      'isInitiallyExpanded': final bool isInitiallyExpanded,
+      'titleText': String(),
+      'sizeText': String(),
+      'isInitiallyExpanded': bool(),
       'items': final List<Object?> items,
       'checkGroup': final Object? checkGroup,
     } =>
       SectionView(
         key: _parseSectionKey(key),
-        titleText: titleText,
-        sizeText: sizeText,
-        isInitiallyExpanded: isInitiallyExpanded,
         items: items.map(_parseItem).toList(),
         checkGroup: checkGroup == null ? null : _parseCheckGroup(checkGroup),
       ),
@@ -772,11 +767,8 @@ SectionView _parseSection(Object? json) {
 
 CheckGroupView _parseCheckGroup(Object? json) {
   return switch (json) {
-    {'titleText': final String titleText, 'items': final List<Object?> items} =>
-      CheckGroupView(
-        titleText: titleText,
-        items: items.map(_parseItem).toList(),
-      ),
+    {'titleText': String(), 'items': final List<Object?> items} =>
+      CheckGroupView(items: items.map(_parseItem).toList()),
     _ => throw const FormatException('Unknown shape of a check group.'),
   };
 }
@@ -784,14 +776,12 @@ CheckGroupView _parseCheckGroup(Object? json) {
 ExploreView _parseExplore(Object? json) {
   return switch (json) {
     {
-      'titleText': final String titleText,
-      'introText': final String introText,
+      'titleText': String(),
+      'introText': String(),
       'items': final List<Object?> items,
       'adviceGroup': final Object? adviceGroup,
     } =>
       ExploreView(
-        titleText: titleText,
-        introText: introText,
         items: items.map(_parseItem).toList(),
         adviceGroup: adviceGroup == null
             ? null
@@ -803,11 +793,8 @@ ExploreView _parseExplore(Object? json) {
 
 AdviceGroupView _parseAdviceGroup(Object? json) {
   return switch (json) {
-    {'titleText': final String titleText, 'items': final List<Object?> items} =>
-      AdviceGroupView(
-        titleText: titleText,
-        items: items.map(_parseAdviceItem).toList(),
-      ),
+    {'titleText': String(), 'items': final List<Object?> items} =>
+      AdviceGroupView(items: items.map(_parseAdviceItem).toList()),
     _ => throw const FormatException('Unknown shape of the advice group.'),
   };
 }
@@ -819,8 +806,8 @@ ItemView _parseItem(Object? json) {
       'key': final String key,
       'title': final String title,
       'risk': final String risk,
-      'riskText': final String riskText,
-      'sizeText': final String sizeText,
+      'riskText': String(),
+      'sizeText': String(),
       'detailLines': final List<Object?> detailLines,
       'sectionKey': final String sectionKey,
       'group': final String group,
@@ -840,8 +827,6 @@ ItemView _parseItem(Object? json) {
         key: key,
         title: title,
         risk: _parseEnumName(Risk.values, risk),
-        riskText: riskText,
-        sizeText: sizeText,
         detailLines: detailLines.map(_parseDetailLine).toList(),
         sectionKey: _parseSectionKey(sectionKey),
         group: _parseKeyName(ItemGroup.values, group, ItemGroup.unknown),
@@ -858,13 +843,7 @@ ItemView _parseItem(Object? json) {
         lastUsedAt: _parseInstant(lastUsedAt),
         downloadedAt: _parseInstant(downloadedAt),
         appName: appName,
-        matchedBy: matchedBy == null
-            ? null
-            : _parseKeyName(
-                LeftoverMatch.values,
-                matchedBy,
-                LeftoverMatch.unknown,
-              ),
+        matchedBy: _parseLeftoverMatch(matchedBy),
       ),
     _ => throw const FormatException('Unknown shape of an item.'),
   };
@@ -876,8 +855,8 @@ AdviceItemView _parseAdviceItem(Object? json) {
       'key': final String key,
       'title': final String title,
       'risk': final String risk,
-      'riskText': final String riskText,
-      'sizeText': final String sizeText,
+      'riskText': String(),
+      'sizeText': String(),
       'detailLines': final List<Object?> detailLines,
       'sectionKey': final String sectionKey,
       'origin': final String origin,
@@ -886,13 +865,14 @@ AdviceItemView _parseAdviceItem(Object? json) {
       'displayPath': final String? displayPath,
       'revealPath': final String? revealPath,
       'opener': final Object? opener,
+      'lastUsedAt': final int? lastUsedAt,
+      'appName': final String? appName,
+      'matchedBy': final String? matchedBy,
     } =>
       AdviceItemView(
         key: key,
         title: title,
         risk: _parseEnumName(Risk.values, risk),
-        riskText: riskText,
-        sizeText: sizeText,
         detailLines: detailLines.map(_parseDetailLine).toList(),
         sectionKey: _parseSectionKey(sectionKey),
         origin: _parseKeyName(ItemOrigin.values, origin, ItemOrigin.unknown),
@@ -905,9 +885,18 @@ AdviceItemView _parseAdviceItem(Object? json) {
         displayPath: displayPath,
         revealPath: revealPath,
         opener: _parseOpener(opener),
+        lastUsedAt: _parseInstant(lastUsedAt),
+        appName: appName,
+        matchedBy: _parseLeftoverMatch(matchedBy),
       ),
     _ => throw const FormatException('Unknown shape of an advice item.'),
   };
+}
+
+LeftoverMatch? _parseLeftoverMatch(String? name) {
+  return name == null
+      ? null
+      : _parseKeyName(LeftoverMatch.values, name, LeftoverMatch.unknown);
 }
 
 /// `null` for no opener and for an opener of a kind a newer bridge added.
@@ -935,15 +924,18 @@ PlannedItemView _parsePlannedItem(Object? json) {
       'key': final String key,
       'title': final String title,
       'sectionKey': final String sectionKey,
+      'group': final String group,
       'risk': final String risk,
       'removal': final String removal,
       'allocatedBytes': final int allocatedBytes,
+      'isComplete': final bool isComplete,
     } =>
       PlannedItemView(
         number: number,
         key: key,
         title: title,
         sectionKey: _parseSectionKey(sectionKey),
+        group: _parseKeyName(ItemGroup.values, group, ItemGroup.unknown),
         risk: _parseEnumName(Risk.values, risk),
         removal: _parseKeyName(
           ItemRemoval.values,
@@ -951,6 +943,7 @@ PlannedItemView _parsePlannedItem(Object? json) {
           ItemRemoval.unknown,
         ),
         allocatedBytes: allocatedBytes,
+        isComplete: isComplete,
       ),
     _ => throw const FormatException('Unknown shape of a planned item.'),
   };
@@ -1083,6 +1076,11 @@ TValue _parseKeyName<TValue extends Enum>(
   TValue unknown,
 ) {
   return values.asNameMap()[name] ?? unknown;
+}
+
+/// For a list of lines the app does not show, which must still be text.
+bool _isLineList(List<Object?> lines) {
+  return lines.every((line) => line is String);
 }
 
 List<String> _parseLines(List<Object?> lines) {

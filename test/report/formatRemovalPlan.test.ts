@@ -6,6 +6,7 @@ import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js
 import {
   buildTestCandidate,
   buildTestDartToolCandidate,
+  buildTestEngineCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
 import {
@@ -98,6 +99,25 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
       '- 1.0 KB /fixture/a',
       '- 2.0 KB /fixture/home/.local/share/mise/installs/node/20.1.0',
       '   by running: mise uninstall node@20.1.0',
+    ]);
+  });
+
+  test('names each engine item by its unit and its engine, never by the disk image its engine keeps', () => {
+    const buildCache = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 1000 });
+    const images = buildTestEngineCandidate({
+      homeDir: '/fixture',
+      allocatedBytes: 2000,
+      title: 'Docker Desktop images',
+    });
+    const lines = formatRemovalPlan({ plan: { approved: [buildCache, images], refused: [] } });
+
+    expect(lines.some((line) => line.includes(buildCache.path))).toBe(false);
+    expect(lines).toEqual([
+      'These 2 items will be deleted permanently, 3.0 KB in total:',
+      '- 1.0 KB Docker Desktop build cache, in Docker Desktop',
+      '   by Docker Desktop, whose disk image gives the space back later',
+      '- 2.0 KB Docker Desktop images, in Docker Desktop',
+      '   by Docker Desktop, whose disk image gives the space back later',
     ]);
   });
 

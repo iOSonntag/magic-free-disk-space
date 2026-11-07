@@ -27,32 +27,30 @@ export function decideInstallerCandidate(params: {
   nowMs: number;
   user: UserIdentity;
 }): CandidateDecision {
-  const path = params.app.bundlePath;
-
   if (params.ownerState === 'running') {
-    return { kind: 'skip', path: path, reason: 'ownerRunning' };
+    return { kind: 'skip', path: params.app.bundlePath, reason: 'ownerRunning' };
   }
 
   if (params.ownerState === 'unknown') {
-    return { kind: 'skip', path: path, reason: 'runningUnknown' };
+    return { kind: 'skip', path: params.app.bundlePath, reason: 'runningUnknown' };
   }
 
   const installerRelease = parseSystemRelease({ version: params.installer.builtForSystemVersion });
   const runningRelease = parseSystemRelease({ version: params.systemVersion });
 
   if (installerRelease === null || runningRelease === null) {
-    return { kind: 'skip', path: path, reason: 'systemVersionUnknown' };
+    return { kind: 'skip', path: params.app.bundlePath, reason: 'systemVersionUnknown' };
   }
 
   if (installerRelease === runningRelease) {
-    return { kind: 'skip', path: path, reason: 'installsRunningSystem' };
+    return { kind: 'skip', path: params.app.bundlePath, reason: 'installsRunningSystem' };
   }
 
   // The birth of the bundle on this disk: what an installer holds keeps the times of its build.
   const arrivedAtMs = Number(params.measurement.identity.birthtimeNs / NANOSECONDS_PER_MILLISECOND);
 
   if (params.nowMs - arrivedAtMs < INSTALLER_MIN_AGE_DAYS * DAY_MS) {
-    return { kind: 'skip', path: path, reason: 'recentActivity' };
+    return { kind: 'skip', path: params.app.bundlePath, reason: 'recentActivity' };
   }
 
   const explanation = `An installer of macOS ${installerRelease}, while this Mac runs macOS ${runningRelease}.`;
@@ -62,7 +60,7 @@ export function decideInstallerCandidate(params: {
       kind: 'advice',
       advice: {
         origin: { kind: 'application', bundleId: params.bundleId },
-        path: path,
+        path: params.app.bundlePath,
         title: params.app.displayName,
         category: 'installers',
         risk: 'review',
@@ -83,7 +81,7 @@ export function decideInstallerCandidate(params: {
   return {
     kind: 'offer',
     candidate: {
-      path: path,
+      path: params.app.bundlePath,
       title: params.app.displayName,
       category: 'installers',
       risk: 'review',
@@ -99,16 +97,16 @@ export function decideInstallerCandidate(params: {
       appName: params.app.displayName,
       removal: {
         kind: 'deletePaths',
-        targets: [{ path: path, identity: params.measurement.identity }],
-        ownerBundlePaths: [path],
+        targets: [{ path: params.app.bundlePath, identity: params.measurement.identity }],
+        ownerBundlePaths: [params.app.bundlePath],
       },
     },
   };
 }
 
 /**
- * The release of a macOS version, its first number, as Mole compares it (`${version%%.*}`): an
- * installer of the same release as the running one is never offered. `null` for no version.
+ * The release of a macOS version, its first number: an installer of the same release as the
+ * running one is never offered. `null` for no version.
  */
 function parseSystemRelease(params: { version: string | null }): string | null {
   if (params.version === null) {

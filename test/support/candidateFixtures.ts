@@ -356,6 +356,8 @@ export function buildTestInstallersCandidate(params: {
 export function buildTestEngineCandidate(params: {
   homeDir: string;
   allocatedBytes?: number;
+  /** `Docker Desktop build cache` when left out. */
+  title?: string;
 }): CandidateProbed {
   const diskImagePath = buildTestAbsolutePath({
     text: `${params.homeDir}/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw`,
@@ -364,7 +366,7 @@ export function buildTestEngineCandidate(params: {
 
   return {
     path: diskImagePath,
-    title: 'Docker Desktop build cache',
+    title: params.title ?? 'Docker Desktop build cache',
     category: 'developer',
     risk: 'safe',
     origin: { kind: 'explore', probe: 'dockerDesktopEngine' },

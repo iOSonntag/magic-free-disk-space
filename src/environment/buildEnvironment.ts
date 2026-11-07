@@ -71,6 +71,14 @@ export function buildEnvironment(params: {
   /** The folder of the bridge's preference file below the home folder, one name per level. */
   preferencesHomeDirNames: string[];
 }): Environment {
+  function joinHomeRealPath(names: string[]): string {
+    return joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.homeRealPath,
+      names: names,
+    });
+  }
+
   return {
     nowMs: params.nowMs,
     user: params.user,
@@ -87,50 +95,18 @@ export function buildEnvironment(params: {
       ...params.applicationRealPaths,
     ],
     protectedRealPaths: [
-      ...params.protectedHomeDirNames.map((names) =>
-        joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: params.homeRealPath,
-          names: names,
-        }),
-      ),
+      ...params.protectedHomeDirNames.map(joinHomeRealPath),
       params.tempRealPath,
       params.userCacheRealPath,
       ...params.protectedRootPaths,
     ],
     sensitiveRealPaths: [
-      ...params.sensitiveHomeDirNames.map((names) =>
-        joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: params.homeRealPath,
-          names: names,
-        }),
-      ),
-      joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeRealPath,
-        names: params.deletionLogHomeDirNames,
-      }),
-      joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeRealPath,
-        names: params.preferencesHomeDirNames,
-      }),
+      ...params.sensitiveHomeDirNames.map(joinHomeRealPath),
+      joinHomeRealPath(params.deletionLogHomeDirNames),
+      joinHomeRealPath(params.preferencesHomeDirNames),
     ],
-    sensitiveExceptionRealPaths: params.sensitiveExceptionHomeDirNames.map((names) =>
-      joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeRealPath,
-        names: names,
-      }),
-    ),
-    evictRealRoots: params.evictHomeDirNames.map((names) =>
-      joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeRealPath,
-        names: names,
-      }),
-    ),
+    sensitiveExceptionRealPaths: params.sensitiveExceptionHomeDirNames.map(joinHomeRealPath),
+    evictRealRoots: params.evictHomeDirNames.map(joinHomeRealPath),
     deletionLogPath: joinAbsolutePath({
       rules: params.pathRules,
       parentPath: params.homeDir,

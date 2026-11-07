@@ -11,6 +11,7 @@ import { loadDirectoryNames } from '../../system/loadDirectoryNames.js';
 import { loadEntryStats } from '../../system/loadEntryStats.js';
 import { DARWIN_PRIVACY_DENIAL_CODE } from './loadFullDiskAccess.js';
 import { loadPlistValue } from './loadPlistValue.js';
+import { loadPlistVersion } from './loadSystemVersion.js';
 
 type AppBundleSearch = {
   bundlePaths: string[];
@@ -37,7 +38,7 @@ const NESTED_BUNDLE_MAX_DEPTH = 6;
 
 /**
  * The bundle id every "Install macOS" app carries, whose name changes with each release; the one
- * sign an app is an installer, as Mole's `lib/clean/system.sh` matches it.
+ * sign an app is an installer.
  */
 const MACOS_INSTALLER_BUNDLE_ID_TEXT = 'com.apple.InstallAssistant';
 
@@ -174,21 +175,19 @@ function isAppBundleName(params: { name: string }): boolean {
 
 /**
  * A macOS installer, with the macOS it installs from the SDK platform version its Info.plist
- * names: Apple documents no key for it, and Mole's `lib/clean/system.sh` reads this one
- * (`PlistBuddy -c "Print :DTPlatformVersion"`) to tell an installer of the running release.
+ * names; `null` when it names none.
  */
 async function loadSystemInstaller(params: {
   bundlePath: string;
   commandTimeoutMs: number;
 }): Promise<SystemInstaller> {
-  const version = await loadPlistValue({
-    plistPath: join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
-    key: 'DTPlatformVersion',
-    timeoutMs: params.commandTimeoutMs,
-  });
-
   return {
-    builtForSystemVersion: version.kind === 'failed' || version.value === '' ? null : version.value,
+    builtForSystemVersion: await loadPlistVersion({
+      plistPath: join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
+      // Apple documents no key for it; Mole's `lib/clean/system.sh` reads this one too.
+      key: 'DTPlatformVersion',
+      timeoutMs: params.commandTimeoutMs,
+    }),
   };
 }
 

@@ -17,9 +17,6 @@ import { parseOllamaManifestDigests } from './parseOllamaManifestDigests.js';
 import type { OllamaModelName } from './parseOllamaModelName.js';
 import { parseOllamaModelName } from './parseOllamaModelName.js';
 
-/** A manifest's path below its manifests folder: `<host>/<namespace>/<model>/<tag>`. */
-const MANIFEST_PATH_NAME_COUNT = 4;
-
 /** A blob file as Ollama names it, the digest with `-` in place of `:`. */
 const BLOB_FILE_NAME_PATTERN = /^sha256-[0-9a-f]{64}$/;
 
@@ -134,8 +131,9 @@ export async function loadOllamaModelState(params: {
 }
 
 /**
- * The manifest files below `folderPath`, which lies `pathNames` deep in a manifests folder; `null`
- * when the folder is absent.
+ * The manifest files below `folderPath`, which lies `pathNames` deep in a manifests folder: each
+ * entry whose path names a model's tag is a manifest file, each one above it a folder. `null` when
+ * the folder is absent.
  */
 async function loadManifestFiles(params: {
   pathRules: PathRules;
@@ -156,7 +154,6 @@ async function loadManifestFiles(params: {
     return { kind: 'succeeded', value: null };
   }
 
-  const isTagLevel = params.pathNames.length === MANIFEST_PATH_NAME_COUNT - 1;
   const files: ManifestFile[] = [];
   let isEveryEntryKnown = true;
 
@@ -171,11 +168,10 @@ async function loadManifestFiles(params: {
       parentPath: params.folderPath,
       names: [entry.name],
     });
+    const name = parseOllamaModelName({ pathNames: pathNames });
 
-    if (isTagLevel) {
-      const name = parseOllamaModelName({ pathNames: pathNames });
-
-      if (entry.kind === 'file' && name !== null) {
+    if (name !== null) {
+      if (entry.kind === 'file') {
         files.push({ name: name, path: path });
       } else {
         isEveryEntryKnown = false;

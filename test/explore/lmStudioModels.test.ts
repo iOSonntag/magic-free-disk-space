@@ -94,6 +94,16 @@ describeAwaitingWin32Platform('compareLmStudioModelUnit', () => {
     ).toEqual({ kind: 'changed' });
   });
 
+  test('is changed once its folder changed after the scan', () => {
+    expect(
+      compareLmStudioModelUnit({
+        unit: VALUE_UNIT,
+        folders: [{ ...VALUE_FOLDER, modifiedMs: DOWNLOADED_MS + 1_000 }],
+        processCommands: [],
+      }),
+    ).toEqual({ kind: 'changed' });
+  });
+
   test('is busy while LM Studio runs, or the processes are unknown', () => {
     for (const processCommands of [[LM_STUDIO_COMMAND], null]) {
       expect(
@@ -185,6 +195,41 @@ describeAwaitingWin32Platform('recheckLmStudioModelUnit', () => {
         await rm(unit.folderPath, { recursive: true });
 
         expect(await recheck()).toEqual({ kind: 'changed' });
+      },
+    });
+  });
+
+  test('is changed once a file came into the folder after the scan', async () => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        await createModels(home);
+
+        const units = listUnitsOfKind({
+          findings: getProbeFindings(
+            await loadLmStudioModelFindings(buildTestProbeRun({ environment: home.environment })),
+          ),
+          kind: 'lmStudioModel',
+        });
+        const qwen = units.find((unit) => unit.modelName === 'Qwen3-8B-GGUF');
+
+        if (qwen === undefined) {
+          throw new Error('The Qwen model should be offered.');
+        }
+
+        await writeFixtureTextFile({
+          path: join(qwen.folderPath, 'Qwen3-8B-Q8_0.gguf'),
+          text: 'more weights',
+        });
+
+        expect(
+          await recheckLmStudioModelUnit({
+            unit: qwen,
+            environment: home.environment,
+            platform: buildTestProbePlatform(),
+            processCommands: [],
+          }),
+        ).toEqual({ kind: 'changed' });
       },
     });
   });

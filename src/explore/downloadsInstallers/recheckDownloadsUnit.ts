@@ -6,11 +6,12 @@ import type {
   ExplorePathUnitDownloadsIncomplete,
   ExplorePathUnitDownloadsInstallers,
 } from '../exploreUnit.js';
+import type { DownloadsFileKind } from './downloadsFiles.js';
 import { buildDownloadsActivityFacts, loadLatestModified } from './downloadsFiles.js';
 
 /**
  * Reads the unit's files again and compares them with the unit: each still there with the newest
- * change the scan read, and for partial downloads no browser that writes one running.
+ * change the scan read, and for partial downloads no browser of their family running.
  */
 export async function recheckDownloadsUnit(params: {
   unit: ExplorePathUnitDownloadsInstallers | ExplorePathUnitDownloadsIncomplete;
@@ -36,10 +37,21 @@ export async function recheckDownloadsUnit(params: {
 
   return decideComparisonActivity({
     facts: buildDownloadsActivityFacts({
-      kind: params.unit.kind === 'downloadsInstallers' ? 'installer' : 'incomplete',
+      fileKind: getDownloadsUnitFileKind({ unit: params.unit }),
       environment: params.environment,
       platform: params.platform,
     }),
     processCommands: params.processCommands,
   });
+}
+
+function getDownloadsUnitFileKind(params: {
+  unit: ExplorePathUnitDownloadsInstallers | ExplorePathUnitDownloadsIncomplete;
+}): DownloadsFileKind {
+  switch (params.unit.kind) {
+    case 'downloadsInstallers':
+      return { kind: 'installer' };
+    case 'downloadsIncomplete':
+      return { kind: 'incomplete', browserFamily: params.unit.browserFamily };
+  }
 }

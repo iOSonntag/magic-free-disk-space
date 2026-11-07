@@ -1,6 +1,6 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings, ExploreUnit } from '../exploreUnit.js';
-import { formatDaySpan } from '../formatLimitTexts.js';
+import { formatCountText, formatDaySpan } from '../formatLimitTexts.js';
 import type { HuggingFaceRepoOffer } from './decideHuggingFaceRepoOffers.js';
 import {
   decideHuggingFaceRepoOffers,
@@ -51,6 +51,11 @@ function buildHuggingFaceRepoFinding(params: {
   processCommands: string[] | null;
 }): ExploreFinding {
   const repoName = formatHuggingFaceRepoName({ name: params.repo.name });
+  const unit = buildRepoUnit({
+    repo: params.repo,
+    offer: params.offer,
+    partialCutoffMs: params.partialCutoffMs,
+  });
   const activity = decideUnitActivity({
     facts: { kind: 'huggingFace' },
     processCommands: params.processCommands,
@@ -59,18 +64,14 @@ function buildHuggingFaceRepoFinding(params: {
   switch (params.offer.kind) {
     case 'huggingFaceRepository':
       return {
-        unit: buildRepoUnit({
-          repo: params.repo,
-          offer: params.offer,
-          partialCutoffMs: params.partialCutoffMs,
-        }),
+        unit: unit,
         title: `Hugging Face ${repoName}`,
         explanation:
           'A repository the Hugging Face libraries downloaded for a program, with the files of its current revisions.',
         regeneration: 'The Hugging Face libraries download it again when a program loads it.',
         risk: 'review',
         evidenceLines: [
-          `Its refs name ${params.offer.revisionCount === 1 ? '1 downloaded revision' : `${params.offer.revisionCount} downloaded revisions`}.`,
+          `Its refs name ${formatCountText({ count: params.offer.revisionCount, noun: 'downloaded revision' })}.`,
           ...formatLinkedBlobLines({ linkedBlobCount: params.repo.linkedBlobCount }),
         ],
         displayPath: params.repo.repoPath,
@@ -78,11 +79,7 @@ function buildHuggingFaceRepoFinding(params: {
       };
     case 'huggingFaceDetachedRevisions':
       return {
-        unit: buildRepoUnit({
-          repo: params.repo,
-          offer: params.offer,
-          partialCutoffMs: params.partialCutoffMs,
-        }),
+        unit: unit,
         title: `Old revisions of Hugging Face ${repoName}`,
         explanation:
           'Revisions no branch or tag of the repository names any longer, with the files only they use.',
@@ -99,17 +96,13 @@ function buildHuggingFaceRepoFinding(params: {
       const untouchedSpan = formatDaySpan(HUGGING_FACE_PARTIAL_UNTOUCHED_MS);
 
       return {
-        unit: buildRepoUnit({
-          repo: params.repo,
-          offer: params.offer,
-          partialCutoffMs: params.partialCutoffMs,
-        }),
+        unit: unit,
         title: `Unfinished downloads of Hugging Face ${repoName}`,
         explanation: `Files a download started and left unfinished, untouched for ${untouchedSpan}.`,
         regeneration: 'A new download of the file starts it again.',
         risk: 'safe',
         evidenceLines: [
-          `${params.offer.paths.length} unfinished files, untouched for ${untouchedSpan}.`,
+          `${formatCountText({ count: params.offer.paths.length, noun: 'unfinished file' })}, untouched for ${untouchedSpan}.`,
         ],
         displayPath: params.repo.repoPath,
         activity: activity,

@@ -10,9 +10,14 @@ import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart';
 
 const String _scannedLine =
-    '{"kind":"scanned","summary":{"titleText":"%s","lines":[],"totalBytes":0,'
+    '{"kind":"scanned","summary":{"titleText":"","lines":[],"totalBytes":%d,'
     '"safeBytes":0,"disk":null},"sections":[],"sectionTotals":[],'
     '"explore":null,"safeNumbers":[],"skipped":null,"notices":[]}';
+
+// Each total marks which answer of the fake bridge a scan is.
+const int staleTotalBytes = 1;
+const int freshTotalBytes = 2;
+const int doneTotalBytes = 3;
 
 void ignoreProgress(ProgressEvent _) {}
 
@@ -43,8 +48,8 @@ $body
     return ProcessBridgeClient(executablePath: script.path);
   }
 
-  String buildScannedLine(String summaryTitleText) {
-    return _scannedLine.replaceFirst('%s', summaryTitleText);
+  String buildScannedLine(int totalBytes) {
+    return _scannedLine.replaceFirst('%d', '$totalBytes');
   }
 
   test('a line that is no event fails the request, and its bridge answers no later one', () async {
@@ -53,9 +58,9 @@ while read -r request; do
   if [ "\$start" = 1 ]; then
     echo 'not json'
     sleep 0.3
-    echo '${buildScannedLine('stale')}'
+    echo '${buildScannedLine(staleTotalBytes)}'
   else
-    echo '${buildScannedLine('fresh')}'
+    echo '${buildScannedLine(freshTotalBytes)}'
   fi
 done
 ''');
@@ -68,7 +73,7 @@ done
       onProgress: ignoreProgress,
     );
 
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 
   test('a bridge that exits fails the request with its stderr, and the next request starts it again', () async {
@@ -146,7 +151,7 @@ while read -r request; do
   if [ "\$start" = 1 ]; then
     echo '{"kind":"cancelled","message":"Cancelled. Nothing was deleted."}'
   else
-    echo '${buildScannedLine('fresh')}'
+    echo '${buildScannedLine(freshTotalBytes)}'
   fi
 done
 ''');
@@ -159,7 +164,7 @@ done
       onProgress: ignoreProgress,
     );
 
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 
   test('dispose fails the pending request', () async {
@@ -283,7 +288,7 @@ done
     client = await createClientOverScript('''
 while read -r request; do
   echo '{"kind":"progress","message":"Measuring apps…","phase":"apps","found":[]}'
-  echo '${buildScannedLine('done')}'
+  echo '${buildScannedLine(doneTotalBytes)}'
 done
 ''');
     final List<ProgressEvent> progress = [];
@@ -294,7 +299,7 @@ done
       'Measuring apps…',
     ]);
     expect(progress.single.phase, ScanPhase.apps);
-    expect((answer as ScannedEvent).summary.titleText, 'done');
+    expect((answer as ScannedEvent).summary.totalBytes, doneTotalBytes);
   });
 
   test('sends the status request and answers with the status event', () async {
@@ -325,7 +330,7 @@ if [ "\$start" = 1 ]; then
   exit 2
 fi
 while read -r request; do
-  echo '${buildScannedLine('fresh')}'
+  echo '${buildScannedLine(freshTotalBytes)}'
 done
 ''';
 
@@ -345,7 +350,7 @@ done
         FailureEffect.bridgeStopping,
       ),
     );
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 
   test('a failed scan whose bridge stops leads the next request to a new bridge that answers', () async {
@@ -359,6 +364,6 @@ done
     );
 
     expect(failed, isA<FailedEvent>());
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 }

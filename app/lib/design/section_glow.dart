@@ -10,7 +10,7 @@ import 'tokens.dart';
 /// breathes on the ambient time, so it stands still while motion is
 /// reduced or the window is hidden.
 class SectionGlow extends StatelessWidget {
-  const SectionGlow({super.key, required this.accent, required this.child, this.intensity = 1});
+  const SectionGlow({super.key, required this.accent, required this.child, required this.intensity});
 
   final Color accent;
   final Widget child;

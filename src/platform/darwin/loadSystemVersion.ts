@@ -6,17 +6,23 @@ const SYSTEM_VERSION_PLIST_PATH = '/System/Library/CoreServices/SystemVersion.pl
 
 /** The version of macOS, such as `15.1`; `null` when it cannot be read. Never throws. */
 export function loadSystemVersion(): Promise<string | null> {
-  return loadPlistProductVersion({ plistPath: SYSTEM_VERSION_PLIST_PATH });
+  return loadPlistVersion({
+    plistPath: SYSTEM_VERSION_PLIST_PATH,
+    key: 'ProductVersion',
+    timeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
+  });
 }
 
-/** The `ProductVersion` of the plist at `plistPath`; `null` when it has none or cannot be read. */
-export async function loadPlistProductVersion(params: {
+/** The version under `key` in the plist at `plistPath`; `null` when it is empty, missing or unread. */
+export async function loadPlistVersion(params: {
   plistPath: string;
+  key: string;
+  timeoutMs: number;
 }): Promise<string | null> {
   const version = await loadPlistValue({
     plistPath: params.plistPath,
-    key: 'ProductVersion',
-    timeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
+    key: params.key,
+    timeoutMs: params.timeoutMs,
   });
 
   return version.kind === 'failed' || version.value === '' ? null : version.value;

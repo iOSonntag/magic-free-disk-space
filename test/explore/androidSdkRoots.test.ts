@@ -2,19 +2,24 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import { loadAndroidSystemImageFindings } from '../../src/explore/android/loadAndroidProbeFindings.js';
+import type { AndroidSdkRoot } from '../../src/explore/android/loadAndroidSdkRoots.js';
 import { loadAndroidSdkRoots } from '../../src/explore/android/loadAndroidSdkRoots.js';
 import {
   parseAndroidLocalPropertiesSdkDir,
   parseFlutterSettingsAndroidSdk,
 } from '../../src/explore/android/parseAndroidSdkRootTexts.js';
+import type { ExploreFileUnreadable } from '../../src/explore/exploreUnit.js';
+import type { ProjectPinsLoad } from '../../src/explore/projectPins/loadProjectPins.js';
 import type { ProjectPinFile } from '../../src/explore/projectPins/projectPins.js';
+import type { ExploreProbesStarted } from '../../src/explore/startExploreProbes.js';
+import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import {
   ANDROID_SDK_PATH_NAMES,
   FLUTTER_SETTINGS_PATHS,
 } from '../../src/platform/darwin/androidSdkRoot.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import type { Result } from '../../src/result.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -26,7 +31,6 @@ import {
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
-import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 import {
   ANDROID_RECENT_USE_MS,
   ANDROID_UNUSED_CUTOFF_MS,
@@ -35,17 +39,30 @@ import {
   writeAndroidAvd,
   writeAndroidSystemImage,
 } from './androidFixtures.js';
-import { buildTestPinFileText, buildTestProjectPins } from './projectPinsFixtures.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
+import {
+  buildFoundProjectPinsLoad,
+  buildSettledProjectPinsLoad,
+  buildTestPinFileText,
+} from './projectPinsFixtures.js';
 
 describeAwaitingWin32Platform('parseAndroidLocalPropertiesSdkDir', () => {
   test('reads the last sdk.dir with its escapes undone and skips comments', () => {
     expect(
       parseAndroidLocalPropertiesSdkDir({
-        text: '# sdk.dir=/commented\nsdk.dir=/first\nflutter.sdk=/opt/flutter\nsdk.dir = /Users/example/Android\\ SDK\n',
+        text: `# sdk.dir=/commented
+sdk.dir=/first
+flutter.sdk=/opt/flutter
+sdk.dir = /Users/example/Android\\ SDK
+`,
       }),
     ).toBe('/Users/example/Android SDK');
     expect(
-      parseAndroidLocalPropertiesSdkDir({ text: 'sdk.dir\\:x=/no\nndk.dir=/ndk\n' }),
+      parseAndroidLocalPropertiesSdkDir({
+        text: `sdk.dir\\:x=/no
+ndk.dir=/ndk
+`,
+      }),
     ).toBeNull();
   });
 
@@ -64,8 +81,14 @@ describeAwaitingWin32Platform('parseAndroidLocalPropertiesSdkDir', () => {
 describeAwaitingWin32Platform('parseFlutterSettingsAndroidSdk', () => {
   test('reads the android-sdk string of the JSON settings', () => {
     expect(
-      parseFlutterSettingsAndroidSdk({ text: '{\n  "android-sdk": "/opt/android-sdk"\n}\n' }),
+      parseFlutterSettingsAndroidSdk({
+        text: `{
+  "android-sdk": "/opt/android-sdk"
+}
+`,
+      }),
     ).toBe('/opt/android-sdk');
+
     for (const text of ['{"android-sdk": 3}', '{}', '[]', 'not json']) {
       expect(parseFlutterSettingsAndroidSdk({ text: text })).toBeNull();
     }
@@ -89,7 +112,10 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
     return buildTestAbsolutePath({ text: join(fixtureRoot.rootDir, name) });
   }
 
-  async function writeFlutterSettings(params: { pathNames: string[]; text: string }) {
+  async function writeFlutterSettings(params: {
+    pathNames: string[];
+    text: string;
+  }): Promise<void> {
     await writeFixtureTextFile({
       path: join(fixtureRoot.homeDir, ...params.pathNames),
       text: params.text,
@@ -104,14 +130,60 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
     });
   }
 
-  function loadRoots(files: ProjectPinFile[]) {
+  function loadRoots(
+    files: ProjectPinFile[],
+  ): Promise<Result<AndroidSdkRoot[], ExploreFileUnreadable>> {
     return loadAndroidSdkRoots({
       pathRules: DARWIN_PATH_RULES,
       homeDir: environment.homeDir,
       androidSdkRoot: ANDROID_SDK_PATH_NAMES,
       flutterSettingsPaths: FLUTTER_SETTINGS_PATHS,
-      projectPins: buildTestProjectPins({ files: files }),
+      pinFiles: files,
       privacyDenialCode: null,
+    });
+  }
+
+  /** A root other than the platform SDK's, whose failed read leaves it out. */
+  function buildOptionalRoot(path: AbsolutePath): AndroidSdkRoot {
+    return { path: path, isRequired: false };
+  }
+
+  /** The platform SDK's root, the one whose failed read fails the probes. */
+  function buildPlatformRoot(): AndroidSdkRoot {
+    return { path: buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir }), isRequired: true };
+  }
+
+  /** The probes over the fixture home with `projectPins`, judging use by the Android cutoff. */
+  function startAndroidProbes(projectPins: ProjectPinsLoad): ExploreProbesStarted {
+    return startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        projectPins: projectPins,
+        unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+      }),
+    );
+  }
+
+  /** An AVD of the platform SDK on `android-35`, and its unused `android-34`; returns the latter. */
+  async function writePlatformImages(): Promise<AbsolutePath> {
+    const platformSdk = buildAndroidSdkRoot({ homeDir: fixtureRoot.homeDir });
+
+    await writeAndroidSystemImage({
+      sdkRoot: platformSdk,
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
+    await writeAndroidAvd({
+      homeDir: fixtureRoot.homeDir,
+      name: 'Pixel',
+      imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
+      lastUsedAtMs: ANDROID_RECENT_USE_MS,
+    });
+
+    return writeAndroidSystemImage({
+      sdkRoot: platformSdk,
+      platform: 'android-34',
+      abi: 'arm64-v8a',
     });
   }
 
@@ -134,7 +206,11 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
       ]),
     ).toEqual({
       kind: 'succeeded',
-      value: [platformSdk, buildSdkPath('flutter-sdk'), buildSdkPath('project-sdk')],
+      value: [
+        buildPlatformRoot(),
+        buildOptionalRoot(buildSdkPath('flutter-sdk')),
+        buildOptionalRoot(buildSdkPath('project-sdk')),
+      ],
     });
   });
 
@@ -152,14 +228,14 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
 
     expect(await loadRoots([])).toEqual({
       kind: 'succeeded',
-      value: [buildSdkPath('legacy-sdk')],
+      value: [buildOptionalRoot(buildSdkPath('legacy-sdk'))],
     });
 
     await rm(join(fixtureRoot.homeDir, '.flutter_settings'));
 
     expect(await loadRoots([])).toEqual({
       kind: 'succeeded',
-      value: [buildSdkPath('config-sdk')],
+      value: [buildOptionalRoot(buildSdkPath('config-sdk'))],
     });
   });
 
@@ -184,7 +260,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
 
     expect(await loadRoots([buildLocalProperties(join(lockedFolder, 'sdk'))])).toEqual({
       kind: 'succeeded',
-      value: [platformSdk],
+      value: [buildPlatformRoot()],
     });
   });
 
@@ -199,7 +275,7 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
     });
     await chmod(settingsPath, 0o000);
 
-    expect(await loadRoots([])).toEqual({ kind: 'succeeded', value: [platformSdk] });
+    expect(await loadRoots([])).toEqual({ kind: 'succeeded', value: [buildPlatformRoot()] });
   });
 
   testOnPosix('offers the unused system images of a second SDK a project names', async () => {
@@ -223,17 +299,99 @@ describeAwaitingWin32Platform('loadAndroidSdkRoots', () => {
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
     });
 
-    const result = await loadAndroidSystemImageFindings({
-      run: buildTestProbeRun({ environment: environment, cutoffMs: ANDROID_UNUSED_CUTOFF_MS }),
-      projectPins: buildTestProjectPins({ files: [buildLocalProperties(projectSdk)] }),
-    });
+    const probes = startAndroidProbes(
+      buildFoundProjectPinsLoad({ files: [buildLocalProperties(projectSdk)] }),
+    );
 
-    if (result.kind === 'failed') {
-      throw new Error('The system image probe failed.');
+    expect(await probes.outcomes.androidSystemImages).toEqual({
+      kind: 'probed',
+      findings: [
+        expect.objectContaining({
+          unit: { kind: 'androidSystemImage', sdkRoot: projectSdk, folderPath: unusedFolder },
+        }),
+      ],
+      isComplete: true,
+    });
+  });
+
+  testOnPosix('reads the SDKs of the platform and of Flutter while the pins failed', async () => {
+    const unusedFolder = await writePlatformImages();
+    const probes = startAndroidProbes(
+      buildSettledProjectPinsLoad({
+        pins: {
+          kind: 'failed',
+          failure: {
+            reason: 'fileUnreadable',
+            path: '/tracked-configs/link',
+            failure: { reason: 'permissionDenied', code: 'EACCES' },
+          },
+        },
+      }),
+    );
+
+    expect(await probes.outcomes.androidSystemImages).toEqual({
+      kind: 'probed',
+      findings: [
+        expect.objectContaining({
+          unit: {
+            kind: 'androidSystemImage',
+            sdkRoot: buildPlatformRoot().path,
+            folderPath: unusedFolder,
+          },
+        }),
+      ],
+      isComplete: true,
+    });
+    expect((await probes.outcomes.androidEmulator).kind).toBe('probed');
+    expect((await probes.outcomes.androidPlatforms).kind).toBe('unreadable');
+  });
+
+  testOnPosix("leaves out a project SDK it cannot read, and offers the platform's", async () => {
+    const unusedFolder = await writePlatformImages();
+    const projectSdk = buildSdkPath('project-sdk');
+
+    for (const folderName of ['system-images', 'platforms']) {
+      await createFixtureDirectory({ path: join(projectSdk, folderName) });
+      await chmod(join(projectSdk, folderName), 0o000);
     }
 
-    expect(result.value.findings.map((finding) => finding.unit)).toEqual([
-      { kind: 'androidSystemImage', sdkRoot: projectSdk, folderPath: unusedFolder },
+    const probes = startAndroidProbes(
+      buildFoundProjectPinsLoad({ files: [buildLocalProperties(projectSdk)] }),
+    );
+
+    expect(await probes.outcomes.androidSystemImages).toEqual({
+      kind: 'probed',
+      findings: [
+        expect.objectContaining({
+          unit: {
+            kind: 'androidSystemImage',
+            sdkRoot: buildPlatformRoot().path,
+            folderPath: unusedFolder,
+          },
+        }),
+      ],
+      isComplete: true,
+    });
+    expect((await probes.outcomes.androidEmulator).kind).toBe('probed');
+    expect((await probes.outcomes.androidPlatforms).kind).toBe('probed');
+  });
+
+  testOnPosix('claims the roots of Flutter and of the projects, not the platform SDK', async () => {
+    await createFixtureDirectory({ path: buildPlatformRoot().path });
+    await createFixtureDirectory({ path: buildSdkPath('flutter-sdk') });
+    await createFixtureDirectory({ path: buildSdkPath('project-sdk') });
+    await writeFlutterSettings({
+      pathNames: ['.config', 'flutter', 'settings'],
+      text: JSON.stringify({ 'android-sdk': buildSdkPath('flutter-sdk') }),
+    });
+
+    const probes = startAndroidProbes(
+      buildFoundProjectPinsLoad({ files: [buildLocalProperties(buildSdkPath('project-sdk'))] }),
+    );
+
+    expect(await probes.claimRootsLoad).toEqual([
+      buildSdkPath('flutter-sdk'),
+      buildSdkPath('project-sdk'),
     ]);
   });
 });

@@ -1,3 +1,4 @@
+import { DAY_MS } from '../formatLimitTexts.js';
 import type {
   EngineBuildRecord,
   EngineContainerRecord,
@@ -6,7 +7,7 @@ import type {
 } from './parseEngineDiskUsage.js';
 
 /** A build cache record counts as unused once no build used it for this long. */
-export const BUILD_RECORD_UNUSED_MS = 10 * 24 * 60 * 60 * 1000;
+export const BUILD_RECORD_UNUSED_MS = 10 * DAY_MS;
 
 /** The states of a container that holds no process. */
 const STOPPED_STATES = ['created', 'exited', 'dead'];

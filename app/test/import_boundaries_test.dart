@@ -50,7 +50,7 @@ final RegExp _directivePattern = RegExp(
 
 /// The module a path under `lib/` belongs to: its first folder, or the file
 /// itself when it lies in `lib/`.
-String findModule(String libPath) {
+String readModule(String libPath) {
   final int slashIndex = libPath.indexOf('/');
   return slashIndex == -1 ? libPath : libPath.substring(0, slashIndex);
 }
@@ -119,7 +119,7 @@ List<String> findDirectiveViolations(
   required String libPath,
   required Map<String, Set<String>> edges,
 }) {
-  final String module = findModule(libPath);
+  final String module = readModule(libPath);
   final Set<String> allowedTargets = edges[module] ?? const <String>{};
   final List<String> violations = [];
   for (final RegExpMatch match in _directivePattern.allMatches(source)) {
@@ -128,7 +128,7 @@ List<String> findDirectiveViolations(
     if (targetPath == null) {
       continue;
     }
-    final String targetModule = findModule(targetPath);
+    final String targetModule = readModule(targetPath);
     if (targetModule == module) {
       continue;
     }
@@ -150,7 +150,7 @@ void main() {
   });
 
   test('the table names every module of lib/, and no other', () {
-    final Set<String> modules = {for (final String libPath in listLibPaths()) findModule(libPath)};
+    final Set<String> modules = {for (final String libPath in listLibPaths()) readModule(libPath)};
     expect(
       modules.difference(_moduleEdges.keys.toSet()),
       isEmpty,

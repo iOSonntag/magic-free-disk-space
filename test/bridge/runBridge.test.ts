@@ -401,9 +401,11 @@ describeAwaitingWin32Platform('runBridge', () => {
       {
         sectionKey: 'caches',
         allocatedBytes: 9 * MIB,
+        isComplete: true,
         itemCount: 3,
         safeBytes: 4 * MIB,
         adviceCount: 1,
+        titleText: 'Caches',
       },
     ]);
     expect(progressEvents.at(-1)?.phase).toBe('tools');

@@ -1,20 +1,17 @@
 import { expect } from 'bun:test';
 import { readFile, realpath, rm, truncate, utimes } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import type { RecordedRemoval } from '../../src/delete/deleteCandidates.js';
 import { evictCandidateFiles } from '../../src/delete/evictCandidateFiles.js';
 import type { EvictTarget } from '../../src/scan/candidate.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
+import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestIdentity } from '../support/candidateFixtures.js';
+import { loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import { buildTestEvictCandidate } from '../support/evictCandidateFixtures.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import {
-  createFixtureDirectory,
-  createFixtureFile,
-  loadTestEnvironment,
-  withFixtureRoot,
-} from '../support/fixtureRoot.js';
+import { createFixtureFile, loadTestEnvironment, withFixtureRoot } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
@@ -68,33 +65,29 @@ async function loadToolCalls(params: { fixtureRoot: FixtureRoot }): Promise<stri
 
 /** A downloaded file iCloud Drive keeps, untouched since `OLD_MS`, as the scan found it. */
 async function createScannedFile(params: { path: string }): Promise<EvictTarget> {
-  await createFixtureDirectory({ path: dirname(params.path) });
   await createFixtureFile({ path: params.path, sizeBytes: 8192, modifiedMs: OLD_MS });
 
+  const identity = await loadFileIdentity({ path: params.path });
   const stats = await loadEntryStats({ path: params.path });
 
-  if (stats.kind === 'failed') {
+  if (identity.kind === 'failed' || stats.kind === 'failed') {
     throw new Error(`The fixture file ${params.path} cannot be read.`);
   }
 
   return {
     path: params.path,
-    identity: {
-      ...buildTestIdentity({ realPath: params.path, kind: 'file' }),
-      dev: stats.value.dev,
-      ino: stats.value.ino,
-      birthtimeNs: BigInt(stats.value.bornMs) * 1_000_000n,
-    },
+    identity: identity.value,
     modifiedMs: stats.value.modifiedMs,
     accessedMs: stats.value.accessedMs,
   };
 }
 
-async function evict(params: {
+/** Evicts the targets as one evict item of the fixture's iCloud Drive with the tool at `toolPath`. */
+async function evictTestCandidateFiles(params: {
   fixtureRoot: FixtureRoot;
   toolPath: string;
   targets: [EvictTarget, ...EvictTarget[]];
-}) {
+}): Promise<RecordedRemoval> {
   const candidate = buildTestEvictCandidate({
     folderPath: getCloudDocsPath({ fixtureRoot: params.fixtureRoot }),
     targets: params.targets,
@@ -121,13 +114,11 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         const first = await createScannedFile({ path: join(cloudDocs, 'Docs', 'a.txt') });
         const second = await createScannedFile({ path: join(cloudDocs, 'Docs', 'b.txt') });
         const toolPath = await createFakeBrctl({ fixtureRoot: fixtureRoot });
-        const firstStats = await loadEntryStats({ path: first.path });
-        const secondStats = await loadEntryStats({ path: second.path });
         const blocks =
-          (firstStats.kind === 'succeeded' ? firstStats.value.allocatedBytes : 0) +
-          (secondStats.kind === 'succeeded' ? secondStats.value.allocatedBytes : 0);
+          (await loadEntryAllocatedBytes({ path: first.path })) +
+          (await loadEntryAllocatedBytes({ path: second.path }));
 
-        const recorded = await evict({
+        const recorded = await evictTestCandidateFiles({
           fixtureRoot: fixtureRoot,
           toolPath: toolPath,
           targets: [first, second],
@@ -168,7 +159,7 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         await utimes(emptied.path, new Date(OLD_MS), new Date(OLD_MS));
         await rm(gone.path);
 
-        const recorded = await evict({
+        const recorded = await evictTestCandidateFiles({
           fixtureRoot: fixtureRoot,
           toolPath: toolPath,
           targets: [changed, read, emptied, gone],
@@ -190,9 +181,9 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         const refused = await createScannedFile({ path: join(cloudDocs, REFUSED_FILE_NAME) });
         const evicted = await createScannedFile({ path: join(cloudDocs, 'evicted.txt') });
         const toolPath = await createFakeBrctl({ fixtureRoot: fixtureRoot });
-        const evictedStats = await loadEntryStats({ path: evicted.path });
+        const evictedBytes = await loadEntryAllocatedBytes({ path: evicted.path });
 
-        const recorded = await evict({
+        const recorded = await evictTestCandidateFiles({
           fixtureRoot: fixtureRoot,
           toolPath: toolPath,
           targets: [refused, evicted],
@@ -209,7 +200,7 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         expect(recorded.outcome).toMatchObject({
           outcome: 'toolFailed',
           failure: toolFailure,
-          freedBytes: evictedStats.kind === 'succeeded' ? evictedStats.value.allocatedBytes : -1,
+          freedBytes: evictedBytes,
         });
         expect(recorded.outcomeEntries).toMatchObject([
           { kind: 'eviction', path: refused.path, outcome: 'toolFailed', failure: toolFailure },
@@ -228,7 +219,7 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         // Anyone may write it now, so whatever it runs is no longer known.
         const toolPath = await createFakeBrctl({ fixtureRoot: fixtureRoot, mode: 0o777 });
 
-        const recorded = await evict({
+        const recorded = await evictTestCandidateFiles({
           fixtureRoot: fixtureRoot,
           toolPath: toolPath,
           targets: [target],

@@ -6,6 +6,7 @@ export const moduleBoundary = {
   readsTablesOf: [],
   exposes: [
     'formatHomeRelativePath.ts',
+    'isOverlappingPath.ts',
     'isSameOrInsidePath.ts',
     'joinAbsolutePath.ts',
     'parseAbsolutePath.ts',

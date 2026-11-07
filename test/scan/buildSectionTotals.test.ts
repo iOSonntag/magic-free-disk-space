@@ -40,15 +40,46 @@ describeAwaitingWin32Platform('buildSectionTotals', () => {
     });
 
     expect(totals).toEqual([
-      { sectionKey: 'caches', allocatedBytes: 300, itemCount: 2, safeBytes: 100, adviceCount: 0 },
+      {
+        sectionKey: 'caches',
+        allocatedBytes: 300,
+        isComplete: true,
+        itemCount: 2,
+        safeBytes: 100,
+        adviceCount: 0,
+      },
       {
         sectionKey: 'developerTools',
         allocatedBytes: 300,
+        isComplete: true,
         itemCount: 1,
         safeBytes: 0,
         adviceCount: 1,
       },
-      { sectionKey: 'largeFiles', allocatedBytes: 400, itemCount: 1, safeBytes: 0, adviceCount: 0 },
+      {
+        sectionKey: 'largeFiles',
+        allocatedBytes: 400,
+        isComplete: true,
+        itemCount: 1,
+        safeBytes: 0,
+        adviceCount: 0,
+      },
+    ]);
+  });
+
+  test('is complete only while every item of the section was measured whole', () => {
+    const totals = buildSectionTotals({
+      candidates: [
+        buildTestCandidate({ path: '/fixture/a', allocatedBytes: 100 }),
+        buildTestCandidate({ path: '/fixture/b', allocatedBytes: 200, isComplete: false }),
+        buildTestCandidate({ path: '/fixture/movie.mov', category: 'userFiles' }),
+      ],
+      advice: [],
+    });
+
+    expect(totals.map((total) => [total.sectionKey, total.isComplete])).toEqual([
+      ['caches', false],
+      ['largeFiles', true],
     ]);
   });
 });

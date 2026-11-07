@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner.dart';
@@ -5,7 +6,6 @@ import 'package:magic_free_disk_space/design/design.dart';
 import 'package:magic_free_disk_space/scan_view/scan_view.dart';
 import 'package:magic_free_disk_space/section/advice_card.dart';
 import 'package:magic_free_disk_space/section/item_group_card.dart';
-import 'package:magic_free_disk_space/section/item_row.dart';
 import 'package:magic_free_disk_space/section/section.dart';
 
 import '../support/fake_cleaner_bridge.dart';
@@ -28,6 +28,14 @@ ScannedEvent _buildScanWithEveryLineKind() {
     {'kind': 'command', 'text': 'tool cache clean'},
     {'kind': 'advice', 'text': 'Quit the app first.'},
   ];
+  return parseScanJson(json);
+}
+
+/// The sample scan with Xcode (#3), which the bridge never plans, in the
+/// Review first group of Caches beside the App cache (#2).
+ScannedEvent _buildScanWithNeverItemInCaches() {
+  final Map<String, Object?> json = loadSampleJson('scanned');
+  listScanItemJsons(json).singleWhere((Map<String, Object?> item) => item['number'] == 3)['sectionKey'] = 'caches';
   return parseScanJson(json);
 }
 
@@ -111,6 +119,73 @@ void main() {
     await tapAndSettle(tester, find.bySemanticsLabel('Select all of Review first'));
 
     expect(_readSelectedNumbers(controller), isEmpty);
+  });
+
+  testWidgets('an item the bridge never plans offers no tick, and the group toggle leaves it out', (
+    WidgetTester tester,
+  ) async {
+    final CleanerController controller = await _pumpSectionPage(
+      tester,
+      sectionKey: SectionKey.caches,
+      scan: _buildScanWithNeverItemInCaches(),
+    );
+    await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
+
+    await tapAndSettle(tester, find.bySemanticsLabel('Select all of Review first'));
+
+    expect(_readSelectedNumbers(controller), {2});
+    expect(readRowMark(tester, 2), isTrue);
+    expect(readRowMark(tester, 3), isFalse);
+
+    await tester.tap(find.byKey(const ItemRowKey(3)), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(_readSelectedNumbers(controller), {2});
+    expect(
+      tester.widget<StageCheckMark>(
+        find.descendant(of: find.byKey(const ItemRowKey(3)), matching: find.byType(StageCheckMark)),
+      ).enabled,
+      isFalse,
+    );
+    expectEveryTappableNodeLabelled();
+  });
+
+  testWidgets('the group toggle of items the bridge never plans is off', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSectionPage(tester, sectionKey: SectionKey.apps);
+
+    final StageCheckbox toggle = tester.widget<StageCheckbox>(
+      find.byWidgetPredicate(
+        (Widget widget) => widget is StageCheckbox && widget.semanticsLabel == 'Select all of Review first',
+      ),
+    );
+    expect(toggle.onPressed, isNull);
+    expect(toggle.value, isFalse);
+  });
+
+  testWidgets('marks a leftover matched by its name in its row and its details', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSectionPage(tester, sectionKey: SectionKey.apps);
+    await tapAndSettle(tester, find.bySemanticsLabel("Show Can't be undone"));
+
+    final Finder byNameRow = find.byKey(const ItemRowKey(4));
+    expect(
+      find.descendant(of: byNameRow, matching: find.textContaining(RegExp(r' · Matched by name$'))),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byKey(const ItemRowKey(5)), matching: find.textContaining('Matched by name')),
+      findsNothing,
+    );
+
+    await tapAndSettle(
+      tester,
+      find.bySemanticsLabel('Details of Data of an app that is no longer installed (Example Removed)'),
+    );
+
+    expect(find.textContaining('Matched by its name, not by the app\'s bundle id.'), findsOneWidget);
   });
 
   testWidgets('a row ticks and unticks its item', (WidgetTester tester) async {
@@ -236,7 +311,19 @@ void main() {
   ) async {
     await _pumpSectionPage(tester, sectionKey: SectionKey.trash);
 
-    expect(find.text('Trash'), findsOneWidget);
+    expect(find.text('Nothing found here yet'), findsOneWidget);
     expect(find.text('Nothing is left in this section.'), findsOneWidget);
+  });
+
+  testWidgets('heads a section with the title and the figure the bridge gives', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, Object?> json = loadSampleJson('scanned');
+    listSectionTotalJsons(json).singleWhere((Map<String, Object?> total) => total['sectionKey'] == 'caches')['titleText'] =
+        'Caches of apps and tools';
+    await _pumpSectionPage(tester, sectionKey: SectionKey.caches, scan: parseScanJson(json));
+
+    expect(find.text('Caches of apps and tools'), findsOneWidget);
+    expect(find.text('at least 10 MB · 2 items'), findsOneWidget);
   });
 }

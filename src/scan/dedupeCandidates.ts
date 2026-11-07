@@ -1,3 +1,4 @@
+import { isOverlappingPath } from '../path/isOverlappingPath.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { CandidateDecision, CandidateDecisionSkip, SkipReason } from './candidate.js';
@@ -139,14 +140,8 @@ function isProbeReservedPath(params: {
     params.reservedEntryPaths.some((entryPath) =>
       isSameOrInsidePath({ rules: params.pathRules, path: entryPath, parentPath: params.path }),
     ) ||
-    params.unitTargetPaths.some(
-      (targetPath) =>
-        isSameOrInsidePath({
-          rules: params.pathRules,
-          path: targetPath,
-          parentPath: params.path,
-        }) ||
-        isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: targetPath }),
+    params.unitTargetPaths.some((targetPath) =>
+      isOverlappingPath({ rules: params.pathRules, path: params.path, otherPath: targetPath }),
     )
   );
 }
@@ -174,10 +169,8 @@ function isOverlappingHeldPath(params: {
       isHeldByAdvice({ pathRules: params.pathRules, path: params.path, place: place }),
     ) ||
     params.earlierSkippedPaths.includes(params.path) ||
-    params.keptOfferPaths.some(
-      (keptPath) =>
-        isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: keptPath }) ||
-        isSameOrInsidePath({ rules: params.pathRules, path: keptPath, parentPath: params.path }),
+    params.keptOfferPaths.some((keptPath) =>
+      isOverlappingPath({ rules: params.pathRules, path: params.path, otherPath: keptPath }),
     )
   );
 }

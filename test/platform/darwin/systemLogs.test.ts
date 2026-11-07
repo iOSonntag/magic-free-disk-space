@@ -11,7 +11,7 @@ const CRASH_REPORT_BYTES = 102_400;
 
 const CRASH_REPORT_COUNT = 30;
 
-const LOG_BYTES = 65_536;
+const LOG_BYTES = SCAN_LIMITS.minOfferedBytes;
 
 function findCatalogIndex(id: string): number {
   return CATALOG_ENTRIES.findIndex((entry) => entry.id === id);
@@ -63,7 +63,6 @@ describeAwaitingWin32Platform('the scan of the log entries', () => {
         path: `Library/Logs/DiagnosticReports/App-2026-01-01-${index}.ips`,
         sizeBytes: CRASH_REPORT_BYTES,
       })),
-      minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
       run: ({ homeDir, report }) => {
         expect(listCatalogOffers({ report: report, homeDir: homeDir })).toEqual([
           {
@@ -84,7 +83,6 @@ describeAwaitingWin32Platform('the scan of the log entries', () => {
         { path: 'Library/Logs/CoreSimulator/device/system.log', sizeBytes: LOG_BYTES },
         { path: 'Library/Logs/com.example.app/app.log', sizeBytes: LOG_BYTES },
       ],
-      minOfferedBytes: 1,
       run: ({ homeDir, report }) => {
         const offers = listCatalogOffers({ report: report, homeDir: homeDir }).map(
           (offer) => `${offer.entryId}: ${offer.path}`,

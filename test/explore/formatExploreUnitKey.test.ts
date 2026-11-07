@@ -1,10 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { ExploreEngineUnitPlace, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import { formatExploreUnitKey } from '../../src/explore/formatExploreUnitKey.js';
-import type { RustupToolchainName } from '../../src/explore/rustupToolchains/rustupToolchainName.js';
-import { parseRustupToolchainName } from '../../src/explore/rustupToolchains/rustupToolchainName.js';
-import type { VagrantBox } from '../../src/explore/vagrantBoxes/parseVagrantBoxList.js';
-import { parseVagrantBoxList } from '../../src/explore/vagrantBoxes/parseVagrantBoxList.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
@@ -17,8 +14,12 @@ import {
   buildTestMiseToolVersion,
   buildTestNvmNodeVersion,
   buildTestPnpmStoreVersion,
+  buildTestRustupToolchainName,
   buildTestSimulatorRuntimeId,
   buildTestUdid,
+  buildTestVagrantBoxName,
+  buildTestVagrantBoxProvider,
+  buildTestVagrantBoxVersion,
 } from '../support/parsedValueFixtures.js';
 import type { ExploreUnitOfKind } from '../support/probeRunFixtures.js';
 import {
@@ -44,48 +45,14 @@ const ENGINE_PLACE: ExploreEngineUnitPlace = {
   sizeBytes: 4096,
 };
 
-function buildFolder(params: { text: string }) {
+function buildFolder(params: { text: string }): AbsolutePath {
   return buildTestAbsolutePath({ text: `/fixture/${params.text}` });
-}
-
-function buildRustupName(params: { text: string }): RustupToolchainName {
-  const name = parseRustupToolchainName({ text: params.text });
-
-  if (name.kind === 'failed') {
-    throw new Error(`The toolchain name ${params.text} did not parse.`);
-  }
-
-  return name.value;
-}
-
-/** A box as `vagrant box list --machine-readable` lists it. */
-function buildVagrantBox(params: { name: string; provider: string; version: string }): VagrantBox {
-  const boxes = parseVagrantBoxList({
-    stdoutText: [
-      `1730000000,,box-name,${params.name}`,
-      `1730000000,,box-provider,${params.provider}`,
-      `1730000000,,box-version,${params.version}`,
-    ].join('\n'),
-  });
-  const box = boxes.kind === 'succeeded' ? boxes.value[0] : undefined;
-
-  if (box === undefined) {
-    throw new Error(`The box ${params.name} did not parse.`);
-  }
-
-  return box;
 }
 
 type UnitKeyCase<TKind extends ExploreUnit['kind']> = {
   unit: ExploreUnitOfKind<TKind>;
   key: string;
 };
-
-const VAGRANT_BOX = buildVagrantBox({
-  name: 'hashicorp/bionic64',
-  provider: 'virtualbox',
-  version: '1.0.0',
-});
 
 /**
  * One unit of every kind, with the key it must keep from scan to scan; a kind left out fails the
@@ -174,9 +141,9 @@ const UNIT_KEYS: { [TKind in ExploreUnit['kind']]: UnitKeyCase<TKind> } = {
     unit: {
       kind: 'vagrantBoxVersion',
       tool: TOOL,
-      name: VAGRANT_BOX.name,
-      provider: VAGRANT_BOX.provider,
-      version: VAGRANT_BOX.version,
+      name: buildTestVagrantBoxName({ text: 'hashicorp/bionic64' }),
+      provider: buildTestVagrantBoxProvider({ text: 'virtualbox' }),
+      version: buildTestVagrantBoxVersion({ text: '1.0.0' }),
       versionPath: buildFolder({ text: 'vagrant.d/boxes/hashicorp-VAGRANTSLASH-bionic64/1.0.0' }),
     },
     key: 'vagrantBoxVersion:hashicorp/bionic64/virtualbox@1.0.0',
@@ -185,7 +152,7 @@ const UNIT_KEYS: { [TKind in ExploreUnit['kind']]: UnitKeyCase<TKind> } = {
     unit: {
       kind: 'rustupToolchain',
       tool: TOOL,
-      name: buildRustupName({ text: 'nightly-aarch64-apple-darwin' }),
+      name: buildTestRustupToolchainName({ text: 'nightly-aarch64-apple-darwin' }),
       toolchainPath: buildFolder({ text: 'rustup/toolchains/nightly-aarch64-apple-darwin' }),
       pinFiles: [],
     },
@@ -275,10 +242,11 @@ const UNIT_KEYS: { [TKind in ExploreUnit['kind']]: UnitKeyCase<TKind> } = {
     unit: {
       kind: 'downloadsIncomplete',
       folderPath: buildFolder({ text: 'Downloads' }),
+      browserFamily: 'firefox',
       cutoffMs: 1,
       foundFiles: [{ path: buildFolder({ text: 'Downloads/Big.iso.part' }), modifiedMs: 1 }],
     },
-    key: 'downloadsIncomplete:/fixture/Downloads',
+    key: 'downloadsIncomplete:firefox:/fixture/Downloads',
   },
   mailDownloads: {
     unit: {
