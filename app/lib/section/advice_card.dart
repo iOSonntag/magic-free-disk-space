@@ -93,20 +93,59 @@ class AdviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AdviceOpener? opener = item.opener;
-    final AdviceOpenerTarget? target = opener == null
-        ? null
-        : findAdviceOpenerTarget(opener);
-    final String? displayPath = item.displayPath;
-    final RevealUrl? revealUrl = findRevealUrl(
-      item.revealPath,
-      allowedPaths: revealPaths,
+    return AdvicePlaceCard(
+      title: item.title,
+      allocatedBytes: item.allocatedBytes,
+      displayPath: item.displayPath,
+      details: ItemDetailLines(lines: item.detailLines, accent: accent),
+      target: opener == null ? null : findAdviceOpenerTarget(opener),
+      revealUrl: findRevealUrl(item.revealPath, allowedPaths: revealPaths),
+      accent: accent,
+      fallbackGlyph: sectionGlyph,
+      urlOpener: urlOpener,
     );
+  }
+}
+
+/// The card of a place only the user can free: its title, its size when
+/// above zero, its path, [details] on how, and a button for [target] and for
+/// [revealUrl] where they are set. The glyph is the target's, else
+/// [fallbackGlyph].
+class AdvicePlaceCard extends StatelessWidget {
+  const AdvicePlaceCard({
+    super.key,
+    required this.title,
+    required this.allocatedBytes,
+    required this.displayPath,
+    required this.details,
+    required this.target,
+    required this.revealUrl,
+    required this.accent,
+    required this.fallbackGlyph,
+    required this.urlOpener,
+  });
+
+  final String title;
+  final int allocatedBytes;
+  final String? displayPath;
+  final Widget details;
+  final AdviceOpenerTarget? target;
+  final RevealUrl? revealUrl;
+  final Color accent;
+  final IconData fallbackGlyph;
+  final UrlOpener urlOpener;
+
+  @override
+  Widget build(BuildContext context) {
+    final AdviceOpenerTarget? target = this.target;
+    final String? displayPath = this.displayPath;
+    final RevealUrl? revealUrl = this.revealUrl;
     return GlassCard(
       accent: accent,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GlyphTile(glyph: target?.glyph ?? sectionGlyph, accent: accent, size: 44),
+          GlyphTile(glyph: target?.glyph ?? fallbackGlyph, accent: accent, size: 44),
           const SizedBox(width: StageSpacing.regular),
           Expanded(
             child: Column(
@@ -115,10 +154,10 @@ class AdviceCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: Text(item.title, style: TypeRamp.title)),
-                    if (item.allocatedBytes > 0) ...[
+                    Expanded(child: Text(title, style: TypeRamp.title)),
+                    if (allocatedBytes > 0) ...[
                       const SizedBox(width: StageSpacing.regular),
-                      Text(formatBytes(item.allocatedBytes), style: TypeRamp.figure),
+                      Text(formatBytes(allocatedBytes), style: TypeRamp.figure),
                     ],
                   ],
                 ),
@@ -127,7 +166,7 @@ class AdviceCard extends StatelessWidget {
                   ItemPathText(path: displayPath),
                 ],
                 const SizedBox(height: StageSpacing.medium),
-                ItemDetailLines(lines: item.detailLines, accent: accent),
+                details,
                 if (target != null || revealUrl != null) ...[
                   const SizedBox(height: StageSpacing.small),
                   Wrap(

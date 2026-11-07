@@ -428,4 +428,26 @@ void main() {
 
     expect(find.text('Photos did not open.'), findsOneWidget);
   });
+
+  testWidgets('Handled by its own app shows the places of System Settings, each opening its pane', (
+    WidgetTester tester,
+  ) async {
+    final _ShellParts parts = await _pumpShell(tester, bridge: _createSampleBridge());
+    await tapAndSettle(tester, _findSidebarEntry(const HandledElsewhereDestination()));
+
+    expect(find.text('No app holds space here that only it can free.'), findsOneWidget);
+    expect(find.text('IN SYSTEM SETTINGS'), findsOneWidget);
+    expect(find.text('Everything on this Mac, by kind'), findsOneWidget);
+    expect(find.text('Keep only recent files on this Mac'), findsOneWidget);
+    expect(find.text('Time Machine snapshots'), findsOneWidget);
+    expectEveryTappableNodeLabelled();
+
+    final Finder openTimeMachine = find.text('Open Time Machine settings');
+    await tester.ensureVisible(openTimeMachine);
+    await tapAndSettle(tester, openTimeMachine);
+
+    final OpenableUrl url = parts.urlOpener.requestedUrls.single;
+    expect(url, isA<SettingsPaneUrl>());
+    expect(url.text, SettingsPaneUrl.forPane(SettingsPane.timeMachine)!.text);
+  });
 }

@@ -11,9 +11,11 @@ import '../section/section_labels.dart';
 import '../section/section_page_header.dart';
 import '../section/section_totals.dart';
 import '../shell/stage_page_scroll.dart';
+import 'settings_place_cards.dart';
 
 /// The space only Apple's own apps can free: a card per place with its
-/// size, the app's own step, and a button that opens the app or its pane.
+/// size, the app's own step, and a button that opens the app or its pane;
+/// the places of System Settings show in every state.
 class HandledElsewherePage extends StatelessWidget {
   const HandledElsewherePage({
     super.key,
@@ -54,6 +56,10 @@ class HandledElsewherePage extends StatelessWidget {
                     : 'Scan to see what only their own apps can free.',
                 style: TypeRamp.body,
               ),
+            SettingsPlaceCards(
+              look: sectionKeyToLook(SectionKey.ownApp),
+              urlOpener: urlOpener,
+            ),
           ],
         );
       },
