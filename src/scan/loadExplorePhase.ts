@@ -316,13 +316,19 @@ function loadPathFindingPhase(params: {
   }
 
   return loadTargetsFindingPhase({
-    ...params,
+    finding: params.finding,
+    probe: params.probe,
     found: mapNonEmpty(unitPaths, (unitPath) => ({ path: unitPath })),
     buildRemoval: (targets): CandidateRemovalDeleteUnitPaths => ({
       kind: 'deleteUnitPaths',
       targets: targets,
       unit: params.unit,
     }),
+    category: params.category,
+    measureTimeoutMs: params.measureTimeoutMs,
+    runItemMeasurement: params.runItemMeasurement,
+    entryReads: params.entryReads,
+    privacyDenialCode: params.privacyDenialCode,
   });
 }
 
@@ -341,13 +347,19 @@ function loadEvictFindingPhase(params: {
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   return loadTargetsFindingPhase({
-    ...params,
+    finding: params.finding,
+    probe: params.probe,
     found: params.unit.foundFiles,
     buildRemoval: (targets): CandidateRemovalEvictUnitFiles => ({
       kind: 'evictUnitFiles',
       targets: targets,
       unit: params.unit,
     }),
+    category: params.category,
+    measureTimeoutMs: params.measureTimeoutMs,
+    runItemMeasurement: params.runItemMeasurement,
+    entryReads: params.entryReads,
+    privacyDenialCode: params.privacyDenialCode,
   });
 }
 

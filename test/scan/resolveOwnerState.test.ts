@@ -239,29 +239,6 @@ describeAwaitingWin32Platform('findOwnerAppName', () => {
     ).toBe('Host');
   });
 
-  test('names the system app that is the owner after the installed apps', () => {
-    const notes: SystemApp = {
-      bundlePath: '/fixture/System/Applications/Notes.app',
-      displayName: 'Notes',
-      bundleId: buildTestMacBundleId({ text: 'com.example.helper' }),
-    };
-
-    expect(
-      findOwnerAppName({
-        owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
-        installedApps: [],
-        systemApps: [notes],
-      }),
-    ).toBe('Notes');
-    expect(
-      findOwnerAppName({
-        owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
-        installedApps: [host],
-        systemApps: [notes],
-      }),
-    ).toBe('Host');
-  });
-
   test('names no app for no owner or an id no app carries', () => {
     expect(
       findOwnerAppName({
@@ -475,6 +452,21 @@ describeAwaitingWin32Platform('a system app owner', () => {
         isInstalledAppListComplete: true,
       }),
     ).toBe(false);
+  });
+
+  test('names the system app that is the owner after the installed apps', () => {
+    const notesCopy = buildTestInstalledApp({
+      bundlePath: '/Applications/Notes Copy.app',
+      displayName: 'Notes Copy',
+      bundleId: 'com.example.notes',
+    });
+
+    expect(findOwnerAppName({ owner: notesOwner, installedApps: [], systemApps: [notes] })).toBe(
+      'Notes',
+    );
+    expect(
+      findOwnerAppName({ owner: notesOwner, installedApps: [notesCopy], systemApps: [notes] }),
+    ).toBe('Notes Copy');
   });
 
   test('holds the Messages caches and the Mail downloads of macOS while their app runs', () => {
