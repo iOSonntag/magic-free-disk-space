@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import type { ExploreToolUnitRustupToolchain } from '../../src/explore/exploreUnit.js';
 import type { ProjectPinFile } from '../../src/explore/projectPins/projectPins.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
@@ -65,7 +65,7 @@ function buildValueUnit(params: {
     kind: 'rustupToolchain',
     tool: VALUE_TOOL,
     name: buildTestRustupToolchainName({ text: params.name }),
-    toolchainPath: buildTestAbsolutePath({ text: join(params.toolchainsPath, params.name) }),
+    toolchainPath: buildTestAbsolutePath({ text: posix.join(params.toolchainsPath, params.name) }),
     pinFiles: [],
   };
 }

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type {
@@ -81,7 +81,7 @@ async function writeFile(params: { path: string }): Promise<void> {
 }
 
 function buildValuePath(...names: string[]): AbsolutePath {
-  return buildTestAbsolutePath({ text: join(VALUE_LIBRARY_PATH, ...names) });
+  return buildTestAbsolutePath({ text: posix.join(VALUE_LIBRARY_PATH, ...names) });
 }
 
 /**

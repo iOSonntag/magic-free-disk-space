@@ -24,16 +24,6 @@ const processUser: TreeRemovalUser = {
   groupIds: process.getgroups?.() ?? [],
 };
 
-let fixtureRoot: FixtureRoot;
-
-beforeEach(async () => {
-  fixtureRoot = await createFixtureRoot();
-});
-
-afterEach(async () => {
-  await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-});
-
 /** A tree like Go's module cache: a read-only folder holding a file, inside `rootPath`. */
 async function createReadOnlyTree(params: { rootPath: string }): Promise<string> {
   const folderPath = join(params.rootPath, 'example.com', 'module@v1.0.0');
@@ -49,6 +39,16 @@ async function loadPermissionMode(path: string): Promise<number> {
 }
 
 describeOnPosix('removeTreeAsUser', () => {
+  let fixtureRoot: FixtureRoot;
+
+  beforeEach(async () => {
+    fixtureRoot = await createFixtureRoot();
+  });
+
+  afterEach(async () => {
+    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
+  });
+
   test('adds owner write to a read-only folder the user owns and removes it', async () => {
     const rootPath = join(fixtureRoot.homeDir, 'go', 'pkg', 'mod');
 
@@ -142,6 +142,16 @@ describeOnPosix('removeTreeAsUser', () => {
 });
 
 describeOnPosix('loadChildFolderNames', () => {
+  let fixtureRoot: FixtureRoot;
+
+  beforeEach(async () => {
+    fixtureRoot = await createFixtureRoot();
+  });
+
+  afterEach(async () => {
+    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
+  });
+
   test('lists the folders directly inside, never a file', async () => {
     const folderPath = join(fixtureRoot.homeDir, 'parent');
 

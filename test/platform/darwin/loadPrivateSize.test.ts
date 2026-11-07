@@ -136,17 +136,17 @@ async function copyCompressedFile(params: {
   expect(await copy.exited).toBe(0);
 }
 
-let fixtureRoot: FixtureRoot;
-
-beforeEach(async () => {
-  fixtureRoot = await createFixtureRoot();
-});
-
-afterEach(async () => {
-  await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-});
-
 describeOnPosix('loadPrivateBytes', () => {
+  let fixtureRoot: FixtureRoot;
+
+  beforeEach(async () => {
+    fixtureRoot = await createFixtureRoot();
+  });
+
+  afterEach(async () => {
+    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
+  });
+
   testOnApfs('reads a file no clone shares as its allocated blocks', async () => {
     const filePath = join(fixtureRoot.homeDir, 'plain.bin');
 
