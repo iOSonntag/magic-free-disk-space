@@ -67,13 +67,19 @@ String? resolveLibPath(String uri, {required String libPath}) {
   return Uri(path: libPath).resolve(uri).path;
 }
 
+/// The path under `lib/` of the file at [fileUri], a uri relative to the app,
+/// joined with `/` on every platform.
+String toLibPath(Uri fileUri) {
+  // The segments of a file uri hold no separator of the platform, such as the `\` of Windows.
+  return fileUri.pathSegments.skip(1).join('/');
+}
+
 /// The paths under `lib/` of every Dart file there.
 List<String> listLibPaths() {
   final Directory libDirectory = Directory('lib');
   return [
     for (final FileSystemEntity entity in libDirectory.listSync(recursive: true))
-      if (entity is File && entity.path.endsWith('.dart'))
-        entity.path.substring('${libDirectory.path}/'.length),
+      if (entity is File && entity.path.endsWith('.dart')) toLibPath(entity.uri),
   ]..sort();
 }
 
@@ -225,6 +231,17 @@ void main() {
           edges: edges,
         ),
         [contains('bridge -> cleaner is no edge')],
+      );
+    });
+
+    test('reads a path under lib/ with `/`, from a uri of Windows too', () {
+      expect(
+        toLibPath(Uri.file(r'lib\design\disk_ring\disk_ring.dart', windows: true)),
+        'design/disk_ring/disk_ring.dart',
+      );
+      expect(
+        toLibPath(Uri.file('lib/design/disk_ring/disk_ring.dart', windows: false)),
+        'design/disk_ring/disk_ring.dart',
       );
     });
 
