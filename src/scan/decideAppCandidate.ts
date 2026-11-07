@@ -1,11 +1,14 @@
+import type { UserIdentity } from '../system/userIdentity.js';
 import type { CandidateDecision } from './candidate.js';
+import { decideInstallerCandidate, isMacosInstallerBundleId } from './decideInstallerCandidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import type { OwnerState } from './resolveOwnerState.js';
 import type { InstalledApp } from './scanPlatform.js';
 
 /**
- * Offers an app unused since `unusedCutoffMs`. An app without a bundle id is skipped, because
- * whether it runs cannot be checked; a protected developer app is offered as `never`.
+ * Offers an app unused since `unusedCutoffMs`, and a macOS installer as
+ * `decideInstallerCandidate` judges it. An app without a bundle id is skipped, because whether it
+ * runs cannot be checked; a protected developer app is offered as `never`.
  */
 export function decideAppCandidate(params: {
   app: InstalledApp;
@@ -15,6 +18,10 @@ export function decideAppCandidate(params: {
   ownerState: OwnerState;
   isProtectedDeveloperApp: boolean;
   minAppBytes: number;
+  /** The running system's version; `null` when it could not be read. */
+  systemVersion: string | null;
+  nowMs: number;
+  user: UserIdentity;
 }): CandidateDecision {
   const path = params.app.bundlePath;
 
@@ -24,6 +31,18 @@ export function decideAppCandidate(params: {
 
   if (params.app.bundleId === null) {
     return { kind: 'skip', path: path, reason: 'notBundleId' };
+  }
+
+  if (isMacosInstallerBundleId(params.app.bundleId)) {
+    return decideInstallerCandidate({
+      app: params.app,
+      bundleId: params.app.bundleId,
+      measurement: params.measurement,
+      ownerState: params.ownerState,
+      systemVersion: params.systemVersion,
+      nowMs: params.nowMs,
+      user: params.user,
+    });
   }
 
   if (params.ownerState === 'running') {

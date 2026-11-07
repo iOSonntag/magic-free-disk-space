@@ -29,11 +29,37 @@ function formatApprovedLines(params: { approved: Candidate[] }): string[] {
   const totalSizeText = formatTotalSizeText({ items: params.approved });
   const subjectText =
     params.approved.length === 1 ? 'This item' : `These ${params.approved.length} items`;
+  const evictCount = params.approved.filter(
+    (candidate) => candidate.removal.kind === 'evictUnitFiles',
+  ).length;
 
   return [
-    `${subjectText} will be deleted permanently, ${totalSizeText} in total:`,
+    formatApprovedHeader({
+      subjectText: subjectText,
+      totalSizeText: totalSizeText,
+      evictCount: evictCount,
+      approvedCount: params.approved.length,
+    }),
     ...params.approved.flatMap((candidate) => formatApprovedItemLines({ candidate: candidate })),
   ];
+}
+
+/** An evicted file leaves only this Mac, so a plan that evicts never calls it deleted. */
+function formatApprovedHeader(params: {
+  subjectText: string;
+  totalSizeText: string;
+  evictCount: number;
+  approvedCount: number;
+}): string {
+  if (params.evictCount === 0) {
+    return `${params.subjectText} will be deleted permanently, ${params.totalSizeText} in total:`;
+  }
+
+  if (params.evictCount === params.approvedCount) {
+    return `${params.subjectText} will be removed from this Mac, ${params.totalSizeText} in total; iCloud Drive keeps the files:`;
+  }
+
+  return `${params.subjectText} will be removed from this Mac, ${params.totalSizeText} in total; iCloud Drive keeps the evicted files, and the rest is deleted permanently:`;
 }
 
 /** An item that goes other than as a plain delete says how below its path. */

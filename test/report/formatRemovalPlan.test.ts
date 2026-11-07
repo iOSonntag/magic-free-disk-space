@@ -8,6 +8,10 @@ import {
   buildTestToolCandidate,
   TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
+import {
+  buildTestEvictCandidate,
+  buildTestEvictTarget,
+} from '../support/evictCandidateFixtures.js';
 
 function buildCandidate(params: {
   path: string;
@@ -131,6 +135,49 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
       'This item will be deleted permanently, 4.1 kB in total:',
       '- 4.1 kB /Users/example/.vscode/extensions/example.alpha-1.0.0',
     ]);
+  });
+
+  test('says an evict takes the files off this Mac alone, never that it deletes them', () => {
+    const folderPath = '/Users/example/Library/Mobile Documents/com~apple~CloudDocs/Projects';
+    const lines = formatRemovalPlan({
+      plan: {
+        approved: [
+          buildTestEvictCandidate({
+            folderPath: folderPath,
+            targets: [buildTestEvictTarget({ path: `${folderPath}/video.mov` })],
+            allocatedBytes: 1000,
+          }),
+        ],
+        refused: [],
+      },
+    });
+
+    expect(lines).toEqual([
+      'This item will be removed from this Mac, 1.0 kB in total; iCloud Drive keeps the files:',
+      `- 1.0 kB ${folderPath}`,
+      '   evicted from this Mac; iCloud Drive keeps the files',
+    ]);
+  });
+
+  test('says which items of a mixed plan iCloud Drive keeps and which are deleted', () => {
+    const folderPath = '/Users/example/Library/Mobile Documents/com~apple~CloudDocs/Projects';
+    const lines = formatRemovalPlan({
+      plan: {
+        approved: [
+          buildTestEvictCandidate({
+            folderPath: folderPath,
+            targets: [buildTestEvictTarget({ path: `${folderPath}/video.mov` })],
+            allocatedBytes: 1000,
+          }),
+          buildCandidate({ path: '/fixture/a', allocatedBytes: 1000, isComplete: true }),
+        ],
+        refused: [],
+      },
+    });
+
+    expect(lines[0]).toBe(
+      'These 2 items will be removed from this Mac, 2.0 kB in total; iCloud Drive keeps the evicted files, and the rest is deleted permanently:',
+    );
   });
 
   test('marks an incomplete approved size as at least', () => {

@@ -6,6 +6,7 @@ import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
+import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 const CUTOFF_MS = Date.UTC(2026, 0, 1);
@@ -33,6 +34,9 @@ function decide(params: {
     ownerState: params.ownerState ?? 'stopped',
     isProtectedDeveloperApp: params.isProtectedDeveloperApp ?? false,
     minAppBytes: 256 * MIB,
+    systemVersion: '26.2',
+    nowMs: CUTOFF_MS,
+    user: buildTestUserIdentity({ uid: 501 }),
   });
 }
 

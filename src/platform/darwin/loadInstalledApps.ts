@@ -1,9 +1,10 @@
+import { lstat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { MacBundleId } from '../../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../../catalog/catalogOwner.js';
-import { stubPartNotBuilt } from '../../notBuilt.js';
 import type { Result } from '../../result.js';
 import { buildFailureIssues } from '../../scan/buildReadIssue.js';
+import { isMacosInstallerBundleId } from '../../scan/decideInstallerCandidate.js';
 import type { ScanIssue } from '../../scan/issue.js';
 import type { InstalledApp } from '../../scan/scanPlatform.js';
 import type { CommandFailure } from '../../system/loadCommandOutput.js';
@@ -67,14 +68,20 @@ export async function loadInstalledApps(params: {
 
     issues.push(...nested.issues);
 
+    const bundleId = bundleIdResult.kind === 'succeeded' ? bundleIdResult.value : null;
+
     apps.push({
       bundlePath: bundlePath,
       displayName: basename(bundlePath).slice(0, -APP_BUNDLE_SUFFIX.length),
-      bundleId: bundleIdResult.kind === 'succeeded' ? bundleIdResult.value : null,
+      bundleId: bundleId,
       nestedBundleIds: nested.bundleIds,
-      // Part 3b reads both from the bundle; until then each reads as unknown.
-      bundleShortVersion: stubPartNotBuilt<string | null>(null),
-      ownerUid: stubPartNotBuilt<number | null>(null),
+      builtForSystemVersion: isMacosInstallerBundleId(bundleId)
+        ? await loadBuiltForSystemVersion({
+            bundlePath: bundlePath,
+            commandTimeoutMs: params.commandTimeoutMs,
+          })
+        : null,
+      ownerUid: await loadOwnerUid({ path: bundlePath }),
     });
   }
 
@@ -157,6 +164,46 @@ async function findVendorBundlePaths(params: { vendorPath: string }): Promise<Ap
 
 function isAppBundleName(params: { name: string }): boolean {
   return params.name.toLowerCase().endsWith(APP_BUNDLE_SUFFIX);
+}
+
+/**
+ * The macOS an installer installs, from the SDK platform version its Info.plist names: Apple
+ * documents no key for it, and Mole's `lib/clean/system.sh` reads this one (`PlistBuddy -c "Print
+ * :DTPlatformVersion"`) to tell an installer of the running release. `null` when it has none.
+ */
+async function loadBuiltForSystemVersion(params: {
+  bundlePath: string;
+  commandTimeoutMs: number;
+}): Promise<string | null> {
+  const output = await loadCommandOutput({
+    command: 'plutil',
+    args: [
+      '-extract',
+      'DTPlatformVersion',
+      'raw',
+      '-o',
+      '-',
+      join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
+    ],
+    timeoutMs: params.commandTimeoutMs,
+  });
+
+  if (output.kind === 'failed') {
+    return null;
+  }
+
+  const version = output.value.trim();
+
+  return version === '' ? null : version;
+}
+
+/** The user that owns the bundle itself, never a link's target; `null` when it cannot be read. */
+async function loadOwnerUid(params: { path: string }): Promise<number | null> {
+  try {
+    return (await lstat(params.path)).uid;
+  } catch {
+    return null;
+  }
 }
 
 /** Reads the id from the first Info.plist that holds one; the failure is the macOS layout's. */

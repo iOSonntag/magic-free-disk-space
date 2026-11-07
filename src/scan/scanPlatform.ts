@@ -10,8 +10,11 @@ export type InstalledApp = {
   bundleId: MacBundleId | null;
   /** Bundle ids of helpers and extensions inside the app; they belong to the app. */
   nestedBundleIds: MacBundleId[];
-  /** The version its Info.plist shows people; `null` when none could be read. */
-  bundleShortVersion: string | null;
+  /**
+   * The version of the system the bundle was built for, read only for a macOS installer, whose
+   * build names the macOS it installs; `null` for every other app and when none could be read.
+   */
+  builtForSystemVersion: string | null;
   /** The user id that owns the bundle; `null` when it could not be read. */
   ownerUid: number | null;
 };

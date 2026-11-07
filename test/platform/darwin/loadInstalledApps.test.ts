@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadInstalledApps } from '../../../src/platform/darwin/loadInstalledApps.js';
+import { loadPlistProductVersion } from '../../../src/platform/darwin/loadSystemVersion.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../../src/system/limits.js';
 import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
@@ -10,17 +11,27 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../../support/fixtureRoot.js';
-import { TEST_INSTALLED_APP_FACTS_NONE } from '../../support/installedAppFixtures.js';
 import { buildTestMacBundleId } from '../../support/parsedValueFixtures.js';
 import { testOnPosix } from '../../support/posixOnly.js';
 
-function buildInfoPlistText(params: { bundleId: string }): string {
+/** A fixture bundle is no installer, and the user running the test owns it. */
+const FIXTURE_APP_FACTS = { builtForSystemVersion: null, ownerUid: process.getuid?.() ?? null };
+
+function buildInfoPlistText(params: {
+  bundleId: string;
+  platformVersion?: string | undefined;
+}): string {
+  const platformVersionLines =
+    params.platformVersion === undefined
+      ? ''
+      : `<key>DTPlatformVersion</key>\n<string>${params.platformVersion}</string>\n`;
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
 <key>CFBundleIdentifier</key>
 <string>${params.bundleId}</string>
-</dict>
+${platformVersionLines}</dict>
 </plist>
 `;
 }
@@ -28,13 +39,14 @@ function buildInfoPlistText(params: { bundleId: string }): string {
 async function createFixtureBundle(params: {
   bundlePath: string;
   bundleId: string;
+  platformVersion?: string;
 }): Promise<void> {
   const contentsPath = join(params.bundlePath, 'Contents');
 
   await createFixtureDirectory({ path: contentsPath });
   await writeFile(
     join(contentsPath, 'Info.plist'),
-    buildInfoPlistText({ bundleId: params.bundleId }),
+    buildInfoPlistText({ bundleId: params.bundleId, platformVersion: params.platformVersion }),
   );
 }
 
@@ -76,7 +88,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
         displayName: 'Pocket',
         bundleId: buildTestMacBundleId({ text: 'com.example.pocket' }),
         nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.pocket.widget' })],
-        ...TEST_INSTALLED_APP_FACTS_NONE,
+        ...FIXTURE_APP_FACTS,
       },
     ]);
   });
@@ -111,21 +123,21 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Example',
           bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
           nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.share' })],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
         {
           bundlePath: join(applicationDir, 'Loud.APP'),
           displayName: 'Loud',
           bundleId: buildTestMacBundleId({ text: 'com.example.loud' }),
           nestedBundleIds: [],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
         {
           bundlePath: join(applicationDir, 'Utilities', 'Helper.app'),
           displayName: 'Helper',
           bundleId: buildTestMacBundleId({ text: 'com.example.helper' }),
           nestedBundleIds: [],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
       ],
       issues: [],
@@ -149,7 +161,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Broken',
           bundleId: null,
           nestedBundleIds: [],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
       ],
       issues: [{ path: brokenPath, reason: 'commandFailed', detail: 'exitedWithError' }],
@@ -173,7 +185,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Foo',
           bundleId: buildTestMacBundleId({ text: '' }),
           nestedBundleIds: [],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
       ],
       issues: [],
@@ -260,7 +272,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Linked',
           bundleId: buildTestMacBundleId({ text: 'com.example.real' }),
           nestedBundleIds: [],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
       ],
       issues: [],
@@ -350,7 +362,7 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
             buildTestMacBundleId({ text: 'com.example.near' }),
             buildTestMacBundleId({ text: 'com.example.share' }),
           ],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
       ],
       issues: [],
@@ -386,10 +398,84 @@ describeAwaitingWin32Platform('loadInstalledApps', () => {
           displayName: 'Example',
           bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
           nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.share' })],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
+          ...FIXTURE_APP_FACTS,
         },
       ],
       issues: [],
     });
+  });
+
+  test('reads the release a macOS installer installs, by its bundle id alone', async () => {
+    const installerPath = join(fixtureRoot.applicationDir, 'Install macOS Sequoia.app');
+    const otherPath = join(fixtureRoot.applicationDir, 'Install Something.app');
+
+    await createFixtureBundle({
+      bundlePath: installerPath,
+      bundleId: 'com.apple.InstallAssistant',
+      platformVersion: '15.6',
+    });
+    await createFixtureBundle({
+      bundlePath: otherPath,
+      bundleId: 'com.example.installer',
+      platformVersion: '15.6',
+    });
+
+    const result = await loadInstalledApps({
+      appDirs: [fixtureRoot.applicationDir],
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
+    });
+
+    expect(result.issues).toEqual([]);
+    expect(
+      result.apps.map((app) => ({
+        displayName: app.displayName,
+        builtForSystemVersion: app.builtForSystemVersion,
+      })),
+    ).toEqual([
+      { displayName: 'Install Something', builtForSystemVersion: null },
+      { displayName: 'Install macOS Sequoia', builtForSystemVersion: '15.6' },
+    ]);
+  });
+
+  test('an installer without a platform version has none, so it is never offered', async () => {
+    await createFixtureBundle({
+      bundlePath: join(fixtureRoot.applicationDir, 'Install macOS Old.app'),
+      bundleId: 'com.apple.InstallAssistant',
+    });
+
+    const result = await loadInstalledApps({
+      appDirs: [fixtureRoot.applicationDir],
+      commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
+    });
+
+    expect(result.apps.map((app) => app.builtForSystemVersion)).toEqual([null]);
+  });
+});
+
+describeAwaitingWin32Platform('loadPlistProductVersion', () => {
+  testOnPosix('reads the product version of a plist, and null for none or no file', async () => {
+    const fixtureRoot = await createFixtureRoot();
+
+    try {
+      const plistPath = join(fixtureRoot.rootDir, 'SystemVersion.plist');
+      const emptyPlistPath = join(fixtureRoot.rootDir, 'Empty.plist');
+
+      await writeFile(
+        plistPath,
+        '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n<key>ProductVersion</key>\n<string>26.2</string>\n</dict>\n</plist>\n',
+      );
+      await writeFile(
+        emptyPlistPath,
+        '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n</dict>\n</plist>\n',
+      );
+
+      expect(await loadPlistProductVersion({ plistPath: plistPath })).toBe('26.2');
+      expect(await loadPlistProductVersion({ plistPath: emptyPlistPath })).toBeNull();
+      expect(
+        await loadPlistProductVersion({ plistPath: join(fixtureRoot.rootDir, 'Missing.plist') }),
+      ).toBeNull();
+    } finally {
+      await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
+    }
   });
 });
