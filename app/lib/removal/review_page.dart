@@ -147,7 +147,7 @@ class _ReviewHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isComplete = sumPlannedItemSizes(plan.items).isComplete;
+    final bool isComplete = isPlanTotalComplete(plan);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

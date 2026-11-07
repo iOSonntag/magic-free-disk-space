@@ -1,8 +1,4 @@
-import type {
-  CatalogEntry,
-  CatalogRemovalExplore,
-  EngineProbeId,
-} from '../../../catalog/catalog.js';
+import type { CatalogEntry, EngineProbeId } from '../../../catalog/catalog.js';
 import { CONTAINER_ENGINES } from '../containerEngines.js';
 import { buildBundleIdOwner } from './buildBundleIdOwner.js';
 
@@ -143,16 +139,6 @@ function buildEngineEntry(params: {
   advice: string;
   app: EngineApp | null;
 }): CatalogEntry {
-  const removal: CatalogRemovalExplore = {
-    kind: 'explore',
-    probe: params.engineProbeId,
-    advice: params.advice,
-  };
-
-  if (params.app !== null) {
-    removal.uninstalledOwnerAdvice = params.app.uninstalledAdvice;
-  }
-
   return {
     id: params.id,
     category: 'containerEngines',
@@ -164,7 +150,13 @@ function buildEngineEntry(params: {
     path: CONTAINER_ENGINES[params.engineProbeId].diskImagePath.join('/'),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: params.app === null ? null : buildBundleIdOwner({ text: params.app.bundleId }),
-    removal: removal,
+    owner:
+      params.app === null
+        ? null
+        : buildBundleIdOwner({
+            text: params.app.bundleId,
+            uninstalledAdvice: params.app.uninstalledAdvice,
+          }),
+    removal: { kind: 'explore', probe: params.engineProbeId, advice: params.advice },
   };
 }

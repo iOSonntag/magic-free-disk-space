@@ -97,8 +97,12 @@ class CleanerController extends ChangeNotifier {
   final CleanerBridge _bridge;
   CleanerState _state = const IdleState();
   List<NoticeView> _statusNotices = const [];
-  bool _isRequestPending = false;
+  /// The token of the request whose answer the shown state waits for; `null`
+  /// when no state waits, such as after the user left a replan.
+  Object? _pendingRequest;
   bool _isDisposed = false;
+
+  bool get _isRequestPending => _pendingRequest != null;
 
   CleanerState get state => _state;
 
@@ -205,6 +209,9 @@ class CleanerController extends ChangeNotifier {
     if (current is! ConfirmingState) {
       return;
     }
+    // The answer of a replan on its way is dropped once the list shows, so
+    // its request no longer holds back a tick, a plan or a scan.
+    _pendingRequest = null;
     _showList(current);
   }
 
@@ -285,20 +292,26 @@ class CleanerController extends ChangeNotifier {
 
   /// Runs one request to the bridge; returns null when it threw, after
   /// moving to an [IdleState] whose notice is the error, below [errorLead]
-  /// when given.
+  /// when given and while a state still waits for this request.
   Future<TAnswer?> _request<TAnswer>(
     Future<TAnswer> Function() send, {
     String? errorLead,
   }) async {
-    _isRequestPending = true;
+    final Object request = Object();
+    _pendingRequest = request;
     try {
       return await send();
     } catch (error) {
+      if (!identical(_pendingRequest, request)) {
+        return null;
+      }
       final String notice = errorLead == null ? '$error' : '$errorLead\n$error';
       _setState(IdleState(notice: notice));
       return null;
     } finally {
-      _isRequestPending = false;
+      if (identical(_pendingRequest, request)) {
+        _pendingRequest = null;
+      }
     }
   }
 

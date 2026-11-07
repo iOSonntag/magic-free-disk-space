@@ -3,13 +3,13 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { toNonEmpty } from '../../system/nonEmptyList.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { BrowserFamily } from '../explorePlatform.js';
+import { BROWSER_FAMILIES } from '../explorePlatform.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
 import type { ExploreFinding, ExploreFoundFile } from '../exploreUnit.js';
 import { formatCountText, formatIsoDay } from '../formatLimitTexts.js';
 import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import type { DownloadsFileKind } from './downloadsFiles.js';
 import {
-  BROWSER_FAMILIES,
   buildDownloadsActivityFacts,
   getDownloadsFileKind,
   loadLatestModified,

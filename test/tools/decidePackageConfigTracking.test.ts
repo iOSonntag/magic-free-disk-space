@@ -20,6 +20,7 @@ function buildFileStats(params: { dev?: bigint; ino: bigint }): EntryStatsResult
       accessedMs: 0,
       bornMs: 0,
       linkCount: 1,
+      ownerUid: 501,
     },
   };
 }

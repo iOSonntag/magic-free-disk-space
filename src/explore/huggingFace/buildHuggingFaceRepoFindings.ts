@@ -71,7 +71,7 @@ function buildHuggingFaceRepoFinding(params: {
         regeneration: 'The Hugging Face libraries download it again when a program loads it.',
         risk: 'review',
         evidenceLines: [
-          `Its refs name ${formatCountText({ count: params.offer.revisionCount, noun: 'downloaded revision' })}.`,
+          `It holds ${formatCountText({ count: params.offer.revisionCount, noun: 'current revision' })}.`,
           ...formatLinkedBlobLines({ linkedBlobCount: params.repo.linkedBlobCount }),
         ],
         displayPath: params.repo.repoPath,

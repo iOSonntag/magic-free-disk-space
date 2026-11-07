@@ -127,8 +127,6 @@ class AmbientClock extends ChangeNotifier implements ValueListenable<double> {
   @override
   double get value => (_elapsedBeforeThisRun + _elapsedInThisRun).inMicroseconds / Duration.microsecondsPerSecond;
 
-  bool get isTicking => _ticker.isActive;
-
   set isRunningAllowed(bool allowed) {
     _isRunningAllowed = allowed;
     _updateTicker();

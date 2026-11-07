@@ -3,7 +3,6 @@ import type { UserIdentity } from '../system/userIdentity.js';
 import type { CandidateDecision } from './candidate.js';
 import { DAY_MS } from './limits.js';
 import type { Measurement } from './loadPathMeasurement.js';
-import type { OwnerState } from './resolveOwnerState.js';
 import type { InstalledApp, SystemInstaller } from './scanPlatform.js';
 
 /** An installer that came onto this Mac within these days may be about to run. */
@@ -13,28 +12,19 @@ const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
 
 /**
  * Offers the app, an installer of the system, when it is older than 14 days and installs another
- * release than this Mac runs, while it does not run. One the user does not own becomes advice,
- * since only an administrator may remove it. An installer whose release or the running one cannot
- * be read is never offered, as if it installed the running release.
+ * release than this Mac runs. One the user does not own becomes advice, since only an
+ * administrator may remove it. An installer whose release or the running one cannot be read is
+ * never offered, as if it installed the running release.
  */
 export function decideInstallerCandidate(params: {
   app: InstalledApp;
   installer: SystemInstaller;
   bundleId: MacBundleId;
   measurement: Measurement;
-  ownerState: OwnerState;
   systemVersion: string | null;
   nowMs: number;
   user: UserIdentity;
 }): CandidateDecision {
-  if (params.ownerState === 'running') {
-    return { kind: 'skip', path: params.app.bundlePath, reason: 'ownerRunning' };
-  }
-
-  if (params.ownerState === 'unknown') {
-    return { kind: 'skip', path: params.app.bundlePath, reason: 'runningUnknown' };
-  }
-
   const installerRelease = parseSystemRelease({ version: params.installer.builtForSystemVersion });
   const runningRelease = parseSystemRelease({ version: params.systemVersion });
 

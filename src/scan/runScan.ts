@@ -70,6 +70,7 @@ import type {
   OrphanLocation,
   ScanPlatform,
   ScanPlatformApps,
+  SystemApp,
 } from './scanPlatform.js';
 import { skipOffersTheRemovalRefuses } from './skipOffersTheRemovalRefuses.js';
 import type { ArtifactFinding, ProjectWalk } from './walkProjects.js';
@@ -123,6 +124,8 @@ type ScanContext = {
   installedApps: InstalledApp[];
   /** False when an app folder or a bundle id could not be read: no container counts as orphaned. */
   isInstalledAppListComplete: boolean;
+  /** Asked only for the bundles of an owner, never listed or judged as apps. */
+  systemApps: SystemApp[];
   /** `null` when `ps` failed: every item with an owner app is then withheld. */
   processCommands: string[] | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
@@ -266,6 +269,7 @@ export async function runScan(params: {
     systemVersion: systemVersion,
     installedApps: installed.apps,
     isInstalledAppListComplete: installed.issues.length === 0,
+    systemApps: params.scan.systemApps,
     processCommands: await knownProcessCommandsLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
     entryReads: params.system.entryReads,
@@ -621,10 +625,12 @@ async function loadCatalogTargetPhase(params: {
         ownerBundlePaths: findOwnerBundlePaths({
           owner: owner,
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
         }),
         ownerState: resolveOwnerState({
           owner: owner,
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
           processCommands: params.context.processCommands,
         }),
         ownerAppName: findOwnerAppName({
@@ -634,6 +640,7 @@ async function loadCatalogTargetPhase(params: {
         isOwnerUninstalled: isOwnerUninstalled({
           owner: owner,
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
           isInstalledAppListComplete: params.context.isInstalledAppListComplete,
         }),
         activity: activity,
@@ -741,6 +748,7 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
         ownerState: resolveOwnerState({
           owner: buildAppOwner({ app: app }),
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
           processCommands: params.context.processCommands,
         }),
         isProtectedDeveloperApp: isProtectedDeveloperApp({

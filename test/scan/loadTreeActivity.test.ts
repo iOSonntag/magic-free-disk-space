@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, lutimes, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
+import type { EntryReads } from '../../src/system/entryReads.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -17,6 +19,9 @@ import { testOnPosix } from '../support/posixOnly.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** How long a test walk may take before its deadline. */
+const TEST_WALK_DURATION_MS = 60_000;
+
 const probeTimes = {
   cutoffMs: Date.now() - 30 * DAY_MS,
   oldModifiedMs: Date.now() - 365 * DAY_MS,
@@ -30,6 +35,25 @@ async function updateModifiedMsInOrder(params: {
   for (const path of params.paths) {
     await updateModifiedMs({ path: path, modifiedMs: params.modifiedMs });
   }
+}
+
+async function loadActivity(params: {
+  path: string;
+  excludedNames?: string[];
+  excludedPaths?: ReadonlySet<string>;
+  maxEntries?: number;
+  deadlineMs?: number;
+  entryReads?: EntryReads;
+}): Promise<ActivityProbe> {
+  return loadTreeActivity({
+    path: params.path,
+    cutoffMs: probeTimes.cutoffMs,
+    excludedNames: params.excludedNames ?? [],
+    excludedPaths: params.excludedPaths ?? new Set(),
+    maxEntries: params.maxEntries ?? 10_000,
+    deadlineMs: params.deadlineMs ?? Date.now() + TEST_WALK_DURATION_MS,
+    entryReads: params.entryReads ?? darwinPlatform.system.entryReads,
+  });
 }
 
 describeAwaitingWin32Platform('loadTreeActivity', () => {
@@ -58,15 +82,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir });
 
     expect(activity).toBe('quiet');
   });
@@ -86,15 +102,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir });
 
     expect(activity).toBe('recent');
   });
@@ -114,24 +122,11 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
-    const excludedActivity = await loadTreeActivity({
+    const excludedActivity = await loadActivity({
       path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
       excludedNames: ['node_modules'],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
     });
-    const includedActivity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const includedActivity = await loadActivity({ path: homeDir });
 
     expect(excludedActivity).toBe('quiet');
     expect(includedActivity).toBe('recent');
@@ -167,14 +162,9 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
-    const excludedActivity = await loadTreeActivity({
+    const excludedActivity = await loadActivity({
       path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
       excludedPaths: new Set([artifactDirPath]),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
     });
 
     await createFixtureFile({
@@ -187,14 +177,9 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
-    const sameNameActivity = await loadTreeActivity({
+    const sameNameActivity = await loadActivity({
       path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
       excludedPaths: new Set([artifactDirPath]),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
     });
 
     expect(excludedActivity).toBe('quiet');
@@ -216,13 +201,8 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
-    const activity = await loadTreeActivity({
+    const activity = await loadActivity({
       path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
       entryReads: buildTestEntryReads({
         privateBytes: null,
         isEntryEvicted: (entry) => entry.path === evictedDirPath,
@@ -247,15 +227,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
     });
     await updateModifiedMsInOrder({ paths: [homeDir], modifiedMs: probeTimes.oldModifiedMs });
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir });
 
     expect(activity).toBe('recent');
   });
@@ -270,15 +242,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
     });
     await updateModifiedMsInOrder({ paths: [homeDir], modifiedMs: probeTimes.recentModifiedMs });
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir });
 
     expect(activity).toBe('recent');
   });
@@ -295,15 +259,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
     }
     await updateModifiedMsInOrder({ paths: [homeDir], modifiedMs: probeTimes.oldModifiedMs });
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 2,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir, maxEntries: 2 });
 
     expect(activity).toBe('unknown');
   });
@@ -323,15 +279,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: 0,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir, deadlineMs: 0 });
 
     expect(activity).toBe('unknown');
   });
@@ -352,15 +300,7 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
     });
     await chmod(lockedDirPath, 0o000);
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir });
 
     expect(activity).toBe('unknown');
   });
@@ -380,29 +320,13 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
     await lutimes(linkPath, probeTimes.oldModifiedMs / 1000, probeTimes.oldModifiedMs / 1000);
     await updateModifiedMsInOrder({ paths: [homeDir], modifiedMs: probeTimes.oldModifiedMs });
 
-    const activity = await loadTreeActivity({
-      path: homeDir,
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: homeDir });
 
     expect(activity).toBe('quiet');
   });
 
   test('reports unknown for a missing root', async () => {
-    const activity = await loadTreeActivity({
-      path: join(fixtureRoot.homeDir, 'missing'),
-      cutoffMs: probeTimes.cutoffMs,
-      excludedNames: [],
-      excludedPaths: new Set(),
-      maxEntries: 10_000,
-      deadlineMs: Date.now() + 60_000,
-      entryReads: darwinPlatform.system.entryReads,
-    });
+    const activity = await loadActivity({ path: join(fixtureRoot.homeDir, 'missing') });
 
     expect(activity).toBe('unknown');
   });

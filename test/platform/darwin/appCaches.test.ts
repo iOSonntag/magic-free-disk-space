@@ -38,7 +38,7 @@ describe('APP_CACHE_ENTRIES', () => {
 
   test("Adobe's shared media cache is held back while any app of its video family runs", () => {
     expect(
-      APP_CACHE_ENTRIES.find((entry) => entry.id === 'adobe-media-cache-files')?.owner,
+      APP_CACHE_ENTRIES.find((entry) => entry.id === 'adobe-media-cache-files')?.owner?.app,
     ).toEqual({
       kind: 'bundleIdFamily',
       bundleIdPrefixes: [

@@ -69,7 +69,7 @@ describeAwaitingWin32Platform('BROWSER_ENTRIES', () => {
 
       expect(entry).toMatchObject({
         risk: 'safe',
-        owner: { kind: 'bundleId', bundleId: bundleId },
+        owner: { app: { kind: 'bundleId', bundleId: bundleId } },
         selection: {
           kind: 'profileFolders',
           markerName: 'Preferences',
@@ -96,7 +96,8 @@ describeAwaitingWin32Platform('BROWSER_ENTRIES', () => {
 
   test("Firefox's caches are taken from each profile's local folder, where Firefox keeps cache2", () => {
     const firefoxEntries = CATALOG_ENTRIES.filter(
-      (entry) => entry.owner?.kind === 'bundleId' && entry.owner.bundleId === 'org.mozilla.firefox',
+      (entry) =>
+        entry.owner?.app.kind === 'bundleId' && entry.owner.app.bundleId === 'org.mozilla.firefox',
     );
 
     expect(firefoxEntries).toHaveLength(1);

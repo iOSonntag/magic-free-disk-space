@@ -43,11 +43,17 @@ ItemSizeSum sumPlannedItemSizes(Iterable<PlannedItemView> items) {
   return ItemSizeSum(allocatedBytes: allocatedBytes, isComplete: isComplete);
 }
 
+/// Whether the plan's total is whole: false when an item of it was not
+/// measured whole, so the total reads "at least".
+bool isPlanTotalComplete(PlannedEvent plan) {
+  return sumPlannedItemSizes(plan.items).isComplete;
+}
+
 /// The plan's total, "at least" when an item of it was not measured whole.
 String formatPlanTotalText(PlannedEvent plan) {
   return formatSizeText(
     allocatedBytes: plan.totalBytes,
-    isComplete: sumPlannedItemSizes(plan.items).isComplete,
+    isComplete: isPlanTotalComplete(plan),
   );
 }
 

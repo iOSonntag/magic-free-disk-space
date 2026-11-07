@@ -37,7 +37,7 @@ export function isUnusedTaggedImage(image: EngineImageRecord): boolean {
  */
 export function isUnusedImage(image: EngineImageRecord): boolean {
   const repositories = new Set(
-    [...image.tags, ...image.digests].map((reference) => readReferenceRepository(reference)),
+    [...image.tags, ...image.digests].map((reference) => parseReferenceRepository(reference)),
   );
 
   return image.containerCount === 0 && image.tags.length <= 1 && repositories.size <= 1;
@@ -53,7 +53,7 @@ export function isUnusedVolume(volume: EngineVolumeRecord): boolean {
 }
 
 /** `localhost:5000/app` of `localhost:5000/app:1.2` or of `localhost:5000/app@sha256:…`. */
-function readReferenceRepository(reference: string): string {
+function parseReferenceRepository(reference: string): string {
   const digestStart = reference.indexOf('@');
 
   if (digestStart !== -1) {

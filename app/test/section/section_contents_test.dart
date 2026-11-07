@@ -188,9 +188,7 @@ void main() {
   group('section titles', () {
     test('take the title the bridge gives, a key this app does not know included', () {
       final Map<String, Object?> json = loadSampleJson('scanned');
-      final Map<String, Object?> largeFiles = listSectionTotalJsons(json).singleWhere(
-        (Map<String, Object?> total) => total['sectionKey'] == 'largeFiles',
-      );
+      final Map<String, Object?> largeFiles = getSectionTotalJson(json, 'largeFiles');
       largeFiles['sectionKey'] = 'futureThings';
       largeFiles['titleText'] = 'Future things';
       final List<SectionTotal> totals = parseScanJson(json).sectionTotals;
@@ -216,15 +214,21 @@ void main() {
     });
 
     test('join the facts of an item under its title', () {
-      final ItemView xcode = sampleScan.selectableItems.singleWhere(
-        (ItemView item) => item.title == 'Xcode',
-      );
-      final ItemView oldVideo = sampleScan.selectableItems.singleWhere(
-        (ItemView item) => item.title == 'Old video',
-      );
+      final ItemView xcode = getSampleItem(3);
+      final ItemView oldVideo = getSampleItem(6);
 
       expect(formatItemFactsText(xcode, now: now), 'Xcode · Last used 5 months ago');
       expect(formatItemFactsText(oldVideo, now: now), 'Last used 3 months ago');
+    });
+
+    test('show the download date of an item that was never used, as of an AI model', () {
+      final Map<String, Object?> json = loadSampleJson('scanned');
+      getScanItemJson(json, 6)['lastUsedAt'] = null;
+      final ItemView neverUsedVideo = parseScanJson(json).selectableItems.singleWhere(
+        (ItemView item) => item.number == 6,
+      );
+
+      expect(formatItemFactsText(neverUsedVideo, now: now), 'Downloaded 8 months ago');
     });
 
     test('mark a leftover matched by its name, and none matched by its bundle id', () {

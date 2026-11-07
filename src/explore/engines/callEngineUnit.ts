@@ -10,27 +10,60 @@ import { loadEngineState } from './loadEngineState.js';
 import type { EngineRequestFailure } from './requestEngineEndpoint.js';
 import { parseEngineJson } from './requestEngineEndpoint.js';
 
-/** How a call ends; each is a kind of the delete flow's outcome. */
-export type EngineUnitCallOutcome =
-  | 'removed'
-  | 'alreadyGone'
-  | 'changedSinceScan'
-  | 'engineInUse'
-  | 'engineNotRunning'
-  | 'failed';
-
-export type EngineUnitCall = {
-  outcome: EngineUnitCallOutcome;
-  /**
-   * The space the engine freed inside its disk image: its own count for build cache, else the
-   * size the engine gave for what went.
-   */
+export type EngineUnitCallRemoved = {
+  outcome: 'removed';
   freedBytes: number;
-  /** The HTTP status of the answer that decided the outcome; `null` when none came. */
+  /** The HTTP status of the answer that removed it. */
+  status: number;
+};
+
+export type EngineUnitCallAlreadyGone = {
+  outcome: 'alreadyGone';
+  freedBytes: number;
+  /** The HTTP status of the answer that named it gone. */
+  status: number;
+};
+
+export type EngineUnitCallEngineInUse = {
+  outcome: 'engineInUse';
+  freedBytes: number;
+  /** The HTTP status of the answer that kept it. */
+  status: number;
+};
+
+export type EngineUnitCallChangedSinceScan = {
+  outcome: 'changedSinceScan';
+  freedBytes: number;
+};
+
+export type EngineUnitCallEngineNotRunning = {
+  outcome: 'engineNotRunning';
+  freedBytes: number;
+};
+
+export type EngineUnitCallFailed = {
+  outcome: 'failed';
+  freedBytes: number;
+  /** The HTTP status of the answer that failed; `null` when none came. */
   status: number | null;
-  /** For `failed`: the error of a request that got no answer, `HTTP <status>`, or `badAnswer`. */
+  /** The error of a request that got no answer, `HTTP <status>`, or `badAnswer`. */
   code: string | null;
 };
+
+/**
+ * How the calls of one unit ended; each outcome is a kind of the delete flow's outcome. Its
+ * `freedBytes` is what every call freed in the engine's disk image: the engine's own count for build
+ * cache, else the size the engine gave for what went.
+ */
+export type EngineUnitCall =
+  | EngineUnitCallRemoved
+  | EngineUnitCallAlreadyGone
+  | EngineUnitCallEngineInUse
+  | EngineUnitCallChangedSinceScan
+  | EngineUnitCallEngineNotRunning
+  | EngineUnitCallFailed;
+
+type EngineUnitCallOutcome = EngineUnitCall['outcome'];
 
 /** One removal request, and the bytes it frees when the engine names no count of its own. */
 type EngineRemovalRequest = {
@@ -94,7 +127,7 @@ export async function callEngineUnit(params: {
   }
 
   if (!isEngineUnitUnchanged({ unit: params.unit, usage: state.value.usage, nowMs: Date.now() })) {
-    return { outcome: 'changedSinceScan', freedBytes: 0, status: null, code: null };
+    return { outcome: 'changedSinceScan', freedBytes: 0 };
   }
 
   const calls: EngineUnitCall[] = [];
@@ -107,7 +140,7 @@ export async function callEngineUnit(params: {
       requestPath: request.requestPath,
       timeoutMs: params.timeoutMs,
     });
-    const call = readRemovalAnswer({ request: request, answer: answer });
+    const call = toRemovalCall({ request: request, answer: answer });
 
     calls.push(call);
 
@@ -123,15 +156,15 @@ export async function callEngineUnit(params: {
 function buildRecheckFailureCall(params: { failure: EngineRequestFailure }): EngineUnitCall {
   switch (params.failure.kind) {
     case 'socketMissing':
-      return { outcome: 'engineNotRunning', freedBytes: 0, status: null, code: null };
+      return { outcome: 'engineNotRunning', freedBytes: 0 };
     case 'socketUntrusted':
-      return { outcome: 'changedSinceScan', freedBytes: 0, status: null, code: null };
+      return { outcome: 'changedSinceScan', freedBytes: 0 };
     case 'requestFailed':
       return {
         outcome: 'failed',
         freedBytes: 0,
         status: params.failure.status,
-        code: readFailureCode({ status: params.failure.status, code: params.failure.code }),
+        code: toFailureCode({ status: params.failure.status, code: params.failure.code }),
       };
     case 'badAnswer':
       return { outcome: 'failed', freedBytes: 0, status: null, code: 'badAnswer' };
@@ -193,18 +226,18 @@ function listRemovalRequests(params: {
   }
 }
 
-function readRemovalAnswer(params: {
+function toRemovalCall(params: {
   request: EngineRemovalRequest;
   answer: UnixSocketRequestResult;
 }): EngineUnitCall {
   if (params.answer.kind === 'failed') {
     switch (params.answer.failure.kind) {
       case 'socketMissing':
-        return { outcome: 'engineNotRunning', freedBytes: 0, status: null, code: null };
+        return { outcome: 'engineNotRunning', freedBytes: 0 };
       case 'socketUntrusted':
-        return { outcome: 'changedSinceScan', freedBytes: 0, status: null, code: null };
+        return { outcome: 'changedSinceScan', freedBytes: 0 };
       case 'requestFailed':
-        return readRefusal({
+        return toRefusalCall({
           status: params.answer.failure.status,
           code: params.answer.failure.code,
         });
@@ -216,7 +249,6 @@ function readRemovalAnswer(params: {
       outcome: 'removed',
       freedBytes: params.request.sizeBytes,
       status: params.answer.value.status,
-      code: null,
     };
   }
 
@@ -240,7 +272,6 @@ function readRemovalAnswer(params: {
       outcome: 'engineInUse',
       freedBytes: 0,
       status: params.answer.value.status,
-      code: null,
     };
   }
 
@@ -248,28 +279,27 @@ function readRemovalAnswer(params: {
     outcome: 'removed',
     freedBytes: prune.value.freedBytes,
     status: params.answer.value.status,
-    code: null,
   };
 }
 
-function readRefusal(params: { status: number | null; code: string | null }): EngineUnitCall {
+function toRefusalCall(params: { status: number | null; code: string | null }): EngineUnitCall {
   if (params.status === STATUS_NOT_FOUND) {
-    return { outcome: 'alreadyGone', freedBytes: 0, status: params.status, code: null };
+    return { outcome: 'alreadyGone', freedBytes: 0, status: params.status };
   }
 
   if (params.status === STATUS_CONFLICT) {
-    return { outcome: 'engineInUse', freedBytes: 0, status: params.status, code: null };
+    return { outcome: 'engineInUse', freedBytes: 0, status: params.status };
   }
 
   return {
     outcome: 'failed',
     freedBytes: 0,
     status: params.status,
-    code: readFailureCode({ status: params.status, code: params.code }),
+    code: toFailureCode({ status: params.status, code: params.code }),
   };
 }
 
-function readFailureCode(params: { status: number | null; code: string | null }): string | null {
+function toFailureCode(params: { status: number | null; code: string | null }): string | null {
   return params.status === null ? params.code : `HTTP ${params.status}`;
 }
 
@@ -307,5 +337,5 @@ function combineCalls(params: { calls: EngineUnitCall[] }): EngineUnitCall {
     }
   }
 
-  return { outcome: 'changedSinceScan', freedBytes: 0, status: null, code: null };
+  return { outcome: 'changedSinceScan', freedBytes: 0 };
 }

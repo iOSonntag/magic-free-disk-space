@@ -1,4 +1,3 @@
-import { lstat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { MacBundleId } from '../../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../../catalog/catalogOwner.js';
@@ -75,6 +74,7 @@ export async function loadInstalledApps(params: {
     issues.push(...nested.issues);
 
     const bundleId = bundleIdResult.kind === 'succeeded' ? bundleIdResult.value : null;
+    const bundleStats = await loadEntryStats({ path: bundlePath });
 
     apps.push({
       bundlePath: bundlePath,
@@ -88,7 +88,7 @@ export async function loadInstalledApps(params: {
               commandTimeoutMs: params.commandTimeoutMs,
             })
           : null,
-      ownerUid: await loadOwnerUid({ path: bundlePath }),
+      ownerUid: bundleStats.kind === 'succeeded' ? bundleStats.value.ownerUid : null,
     });
   }
 
@@ -189,15 +189,6 @@ async function loadSystemInstaller(params: {
       timeoutMs: params.commandTimeoutMs,
     }),
   };
-}
-
-/** The user that owns the bundle itself, never a link's target; `null` when it cannot be read. */
-async function loadOwnerUid(params: { path: string }): Promise<number | null> {
-  try {
-    return (await lstat(params.path)).uid;
-  } catch {
-    return null;
-  }
 }
 
 /** Reads the id from the first Info.plist that holds one; the failure is the macOS layout's. */

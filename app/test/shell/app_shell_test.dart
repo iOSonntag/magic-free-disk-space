@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner.dart';
 import 'package:magic_free_disk_space/design/design.dart';
+import 'package:magic_free_disk_space/main.dart';
 import 'package:magic_free_disk_space/overview/overview.dart';
 import 'package:magic_free_disk_space/removal/deleted_page.dart';
 import 'package:magic_free_disk_space/removal/deleting_view.dart';
@@ -42,26 +43,20 @@ Future<_ShellParts> _pumpShell(
   FakeUrlOpener? urlOpener,
   Size windowSize = stageWindowSize,
 }) async {
-  final CleanerController controller = startScanningCleaner(bridge);
-  final NavigationController navigation = NavigationController();
-  addTearDown(navigation.dispose);
   final FakeUrlOpener shownUrlOpener = urlOpener ?? FakeUrlOpener(isOpening: true);
-  final Widget app = MaterialApp(
-    theme: buildStageTheme(),
-    builder: (BuildContext context, Widget? child) {
-      return DestinationStage(navigation: navigation, child: child!);
-    },
-    home: AppShell(
-      cleanerController: controller,
-      updateController: createUpdateController(FakeUpdateBridge()),
-      navigation: navigation,
-      urlOpener: shownUrlOpener,
+  setStageWindowSize(tester, size: windowSize);
+  await tester.pumpWidget(
+    buildStageScopes(
+      MagicFreeDiskSpaceApp(
+        cleanerBridge: bridge,
+        updateBridge: FakeUpdateBridge(),
+        urlOpener: shownUrlOpener,
+      ),
     ),
   );
-  setStageWindowSize(tester, size: windowSize);
-  await tester.pumpWidget(buildStageScopes(app));
   await tester.pumpAndSettle();
-  return (controller: controller, navigation: navigation, urlOpener: shownUrlOpener);
+  final AppShell shell = tester.widget<AppShell>(find.byType(AppShell));
+  return (controller: shell.cleanerController, navigation: shell.navigation, urlOpener: shownUrlOpener);
 }
 
 FakeCleanerBridge _createSampleBridge({ScannedEvent? scan}) {
@@ -674,8 +669,7 @@ void main() {
     const String bridgeTitle = 'Freed in their own apps';
     expect(bridgeTitle, isNot(handledElsewhereTitle));
     final Map<String, Object?> json = loadScanJsonWithOwnAppAdvice();
-    listSectionTotalJsons(json).singleWhere((Map<String, Object?> total) => total['sectionKey'] == 'ownApp')['titleText'] =
-        bridgeTitle;
+    getSectionTotalJson(json, 'ownApp')['titleText'] = bridgeTitle;
     await _pumpShell(tester, bridge: _createSampleBridge(scan: parseScanJson(json)));
 
     expect(find.bySemanticsLabel('$bridgeTitle, 1 place'), findsOneWidget);

@@ -1,9 +1,13 @@
 import { basename } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
-import type { CatalogOwner, MacBundleId } from '../catalog/catalogOwner.js';
+import type {
+  CatalogOwner,
+  CatalogOwnerBundleIdFamily,
+  MacBundleId,
+} from '../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
-import type { InstalledApp } from './scanPlatform.js';
+import type { InstalledApp, SystemApp } from './scanPlatform.js';
 
 export type OwnerState = 'running' | 'stopped' | 'unknown';
 
@@ -64,7 +68,7 @@ export function resolveTargetOwner(params: {
   switch (params.entry.selection.kind) {
     case 'path':
     case 'profileFolders':
-      return params.entry.owner;
+      return params.entry.owner === null ? null : params.entry.owner.app;
     case 'children':
       return resolveChildOwner({ path: params.path, installedApps: params.installedApps });
   }
@@ -121,17 +125,38 @@ function isOwnerApp(params: { owner: CatalogOwner; app: InstalledApp }): boolean
         return false;
       }
 
-      return params.owner.bundleIdPrefixes.some(
-        (prefix) => appBundleId === prefix || appBundleId.startsWith(`${prefix}.`),
-      );
+      return isFamilyBundleId({ family: params.owner, bundleId: appBundleId });
     }
   }
 }
 
-/** The bundle paths of the installed apps that are the owner, as `isOwnerApp` tells them. */
+/** Whether the system app is the owner, by its own id alone, as `isOwnerApp` tells an app. */
+function isOwnerSystemApp(params: { owner: CatalogOwner; app: SystemApp }): boolean {
+  switch (params.owner.kind) {
+    case 'bundleId':
+      return params.app.bundleId === params.owner.bundleId;
+    case 'bundleIdFamily':
+      return isFamilyBundleId({ family: params.owner, bundleId: params.app.bundleId });
+  }
+}
+
+function isFamilyBundleId(params: {
+  family: CatalogOwnerBundleIdFamily;
+  bundleId: MacBundleId;
+}): boolean {
+  return params.family.bundleIdPrefixes.some(
+    (prefix) => params.bundleId === prefix || params.bundleId.startsWith(`${prefix}.`),
+  );
+}
+
+/**
+ * The bundle paths of the installed apps that are the owner, as `isOwnerApp` tells them, then of
+ * the system apps that are it.
+ */
 export function findOwnerBundlePaths(params: {
   owner: CatalogOwner | null;
   installedApps: InstalledApp[];
+  systemApps: SystemApp[];
 }): string[] {
   const owner = params.owner;
 
@@ -139,18 +164,20 @@ export function findOwnerBundlePaths(params: {
     return [];
   }
 
-  return params.installedApps
-    .filter((app) => isOwnerApp({ owner: owner, app: app }))
-    .map((app) => app.bundlePath);
+  return [
+    ...params.installedApps.filter((app) => isOwnerApp({ owner: owner, app: app })),
+    ...params.systemApps.filter((app) => isOwnerSystemApp({ owner: owner, app: app })),
+  ].map((app) => app.bundlePath);
 }
 
 /**
- * True when an owner is set and no app of the complete list of installed apps is it; false for no
- * owner, and while the list is incomplete, since the owner may be an app it misses.
+ * True when an owner is set and neither a system app nor an app of the complete list of installed
+ * apps is it; false for no owner, and while the list is incomplete, since it may miss the owner.
  */
 export function isOwnerUninstalled(params: {
   owner: CatalogOwner | null;
   installedApps: InstalledApp[];
+  systemApps: SystemApp[];
   isInstalledAppListComplete: boolean;
 }): boolean {
   const owner = params.owner;
@@ -159,7 +186,13 @@ export function isOwnerUninstalled(params: {
     return false;
   }
 
-  return !params.installedApps.some((app) => isOwnerApp({ owner: owner, app: app }));
+  const ownerBundlePaths = findOwnerBundlePaths({
+    owner: owner,
+    installedApps: params.installedApps,
+    systemApps: params.systemApps,
+  });
+
+  return ownerBundlePaths.length === 0;
 }
 
 /**
@@ -199,12 +232,13 @@ export function findOwnerAppName(params: {
 
 /**
  * Returns `stopped` for no owner, `unknown` for any owner while the process list is missing,
- * `stopped` for an owner that no installed app is, and `running` when a process runs from the
- * bundle of any app that is the owner.
+ * `stopped` for an owner that no installed or system app is, and `running` when a process runs
+ * from the bundle of any app that is the owner.
  */
 export function resolveOwnerState(params: {
   owner: CatalogOwner | null;
   installedApps: InstalledApp[];
+  systemApps: SystemApp[];
   processCommands: string[] | null;
 }): OwnerState {
   if (params.owner === null) {
@@ -219,6 +253,7 @@ export function resolveOwnerState(params: {
     bundlePaths: findOwnerBundlePaths({
       owner: params.owner,
       installedApps: params.installedApps,
+      systemApps: params.systemApps,
     }),
     processCommands: params.processCommands,
   });

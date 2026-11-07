@@ -76,6 +76,12 @@ List<Map<String, Object?>> listSectionTotalJsons(Map<String, Object?> json) {
   return (json['sectionTotals']! as List<Object?>).cast();
 }
 
+/// The JSON map of the section total of [sectionKey] in a scan's [json];
+/// throws unless exactly one total has it.
+Map<String, Object?> getSectionTotalJson(Map<String, Object?> json, String sectionKey) {
+  return listSectionTotalJsons(json).singleWhere((Map<String, Object?> total) => total['sectionKey'] == sectionKey);
+}
+
 /// The sample scan with its section totals reversed, so that the bridge's
 /// order differs from the order of [SectionKey].
 ScannedEvent loadScanWithReversedTotals() {
@@ -89,16 +95,11 @@ ScannedEvent loadScanWithReversedTotals() {
 /// total of that section as the bridge counts advice: by number, not size.
 Map<String, Object?> loadScanJsonWithOwnAppAdvice() {
   final Map<String, Object?> json = loadSampleJson('scanned');
-  final Map<String, Object?> photos = listScanAdviceJsons(
-    json,
-  ).singleWhere((Map<String, Object?> advice) => advice['title'] == 'Photos library');
-  final List<Map<String, Object?>> totals = listSectionTotalJsons(json);
-  final Map<String, Object?> formerTotal = totals.singleWhere(
-    (Map<String, Object?> total) => total['sectionKey'] == photos['sectionKey'],
-  );
+  final Map<String, Object?> photos = getScanAdviceJson(json, 'Photos library');
+  final Map<String, Object?> formerTotal = getSectionTotalJson(json, photos['sectionKey']! as String);
   formerTotal['adviceCount'] = (formerTotal['adviceCount']! as int) - 1;
   photos['sectionKey'] = 'ownApp';
-  totals.add({
+  listSectionTotalJsons(json).add({
     'sectionKey': 'ownApp',
     'allocatedBytes': 0,
     'isComplete': true,
@@ -116,7 +117,7 @@ Map<String, Object?> loadScanJsonWithOwnAppAdvice() {
 /// review group of Caches beside the App cache (#2).
 ScannedEvent loadScanWithNeverItemInCaches() {
   final Map<String, Object?> json = loadSampleJson('scanned');
-  listScanItemJsons(json).singleWhere((Map<String, Object?> item) => item['number'] == 3)['sectionKey'] = 'caches';
+  getScanItemJson(json, 3)['sectionKey'] = 'caches';
   return parseScanJson(json);
 }
 
@@ -135,10 +136,22 @@ List<Map<String, Object?>> listScanItemJsons(Map<String, Object?> json) {
   return items;
 }
 
+/// The JSON map of the selectable item numbered [number] in a scan's
+/// [json]; throws unless exactly one item has it.
+Map<String, Object?> getScanItemJson(Map<String, Object?> json, int number) {
+  return listScanItemJsons(json).singleWhere((Map<String, Object?> item) => item['number'] == number);
+}
+
 /// The JSON maps of the advice items of a scan's [json].
 List<Map<String, Object?>> listScanAdviceJsons(Map<String, Object?> json) {
   final Map<String, Object?> explore = json['explore']! as Map<String, Object?>;
   final Map<String, Object?> adviceGroup =
       explore['adviceGroup']! as Map<String, Object?>;
   return (adviceGroup['items']! as List<Object?>).cast();
+}
+
+/// The JSON map of the advice item titled [title] in a scan's [json];
+/// throws unless exactly one advice item has it.
+Map<String, Object?> getScanAdviceJson(Map<String, Object?> json, String title) {
+  return listScanAdviceJsons(json).singleWhere((Map<String, Object?> advice) => advice['title'] == title);
 }

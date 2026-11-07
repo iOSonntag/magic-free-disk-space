@@ -842,7 +842,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
         timeoutMs: TIMEOUT_MS,
       });
 
-      expect(call).toEqual({ outcome: 'removed', freedBytes: 300, status: 204, code: null });
+      expect(call).toEqual({ outcome: 'removed', freedBytes: 300, status: 204 });
       expect(engine.requests).toEqual([
         'GET /_ping',
         'GET /version',
@@ -877,7 +877,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
             user: environment.user,
             timeoutMs: TIMEOUT_MS,
           }),
-        ).toEqual({ outcome: answer.outcome, freedBytes: 0, status: answer.status, code: null });
+        ).toEqual({ outcome: answer.outcome, freedBytes: 0, status: answer.status });
         expect(engine.requests.slice(3)).toEqual([`DELETE /v${FAKE_API_VERSION}/volumes/db`]);
       } finally {
         engine.stop();
@@ -921,7 +921,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
           user: environment.user,
           timeoutMs: TIMEOUT_MS,
         }),
-      ).toEqual({ outcome: 'changedSinceScan', freedBytes: 0, status: null, code: null });
+      ).toEqual({ outcome: 'changedSinceScan', freedBytes: 0 });
       expect(engine.requests.filter((request) => request.startsWith('DELETE'))).toEqual([]);
     } finally {
       engine.stop();
@@ -937,13 +937,13 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
 
     expect(
       await callEngineUnit({ unit: unit, user: environment.user, timeoutMs: TIMEOUT_MS }),
-    ).toEqual({ outcome: 'engineNotRunning', freedBytes: 0, status: null, code: null });
+    ).toEqual({ outcome: 'engineNotRunning', freedBytes: 0 });
 
     await writeFixtureTextFile({ path: socketPath, text: 'not a socket' });
 
     expect(
       await callEngineUnit({ unit: unit, user: environment.user, timeoutMs: TIMEOUT_MS }),
-    ).toEqual({ outcome: 'changedSinceScan', freedBytes: 0, status: null, code: null });
+    ).toEqual({ outcome: 'changedSinceScan', freedBytes: 0 });
   });
 
   test('prunes each build record by its id and counts the space the engine reports', async () => {
@@ -973,7 +973,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
         timeoutMs: TIMEOUT_MS,
       });
 
-      expect(call).toEqual({ outcome: 'engineInUse', freedBytes: 1234, status: 200, code: null });
+      expect(call).toEqual({ outcome: 'engineInUse', freedBytes: 1234, status: 200 });
       expect(engine.requests.slice(3)).toEqual(
         recordIds.map(
           (recordId) =>
@@ -1011,7 +1011,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
           user: environment.user,
           timeoutMs: TIMEOUT_MS,
         }),
-      ).toEqual({ outcome: 'engineInUse', freedBytes: 700, status: 409, code: null });
+      ).toEqual({ outcome: 'engineInUse', freedBytes: 700, status: 409 });
       expect(engine.requests.slice(3)).toEqual(
         imageIds.map((imageId) => `DELETE /v${FAKE_API_VERSION}/images/${imageId}`),
       );

@@ -15,13 +15,13 @@ import '../support/semantics_labels.dart';
 import '../support/stage_controls.dart';
 import '../support/stage_harness.dart';
 
+const AdviceCardKey _toolStoreAdviceCardKey = AdviceCardKey('catalog:tool-store:/Users/me/Library/ToolStore');
+
 /// The sample scan, with the evidence, command and advice lines a probe
 /// gives added to the App cache (#2).
 ScannedEvent _buildScanWithEveryLineKind() {
   final Map<String, Object?> json = loadSampleJson('scanned');
-  final Map<String, Object?> appCache = listScanItemJsons(
-    json,
-  ).singleWhere((Map<String, Object?> item) => item['number'] == 2);
+  final Map<String, Object?> appCache = getScanItemJson(json, 2);
   appCache['detailLines'] = [
     ...appCache['detailLines']! as List<Object?>,
     {'kind': 'evidence', 'text': 'Not opened for 200 days.'},
@@ -68,11 +68,13 @@ void main() {
     expect(find.text('Safe to remove'), findsOneWidget);
     expect(find.text('Review first'), findsOneWidget);
     expect(find.text('Tool cache'), findsOneWidget);
+    expect(find.bySemanticsLabel('Tool cache, 6.0 MB'), findsOneWidget);
     expect(find.text('App cache'), findsNothing);
 
     await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
 
     expect(find.text('App cache'), findsOneWidget);
+    expect(find.bySemanticsLabel('App cache, at least 4.0 MB'), findsOneWidget);
     expect(find.bySemanticsLabel('Hide Review first'), findsOneWidget);
     expectEveryTappableNodeLabelled();
   });
@@ -269,9 +271,7 @@ void main() {
       urlOpener: urlOpener,
     );
 
-    final Finder adviceCard = find.byKey(
-      const AdviceCardKey('catalog:tool-store:/Users/me/Library/ToolStore'),
-    );
+    final Finder adviceCard = find.byKey(_toolStoreAdviceCardKey);
     expect(find.text('TO HANDLE YOURSELF'), findsOneWidget);
     expect(adviceCard, findsOneWidget);
     expect(find.descendant(of: adviceCard, matching: find.text('6.0 MB')), findsOneWidget);
@@ -298,13 +298,10 @@ void main() {
     WidgetTester tester,
   ) async {
     final Map<String, Object?> json = loadSampleJson('scanned');
-    listScanAdviceJsons(json).singleWhere((Map<String, Object?> advice) => advice['title'] == 'Tool store')['isComplete'] =
-        false;
+    getScanAdviceJson(json, 'Tool store')['isComplete'] = false;
     await _pumpSectionPage(tester, sectionKey: SectionKey.developerTools, scan: parseScanJson(json));
 
-    final Finder adviceCard = find.byKey(
-      const AdviceCardKey('catalog:tool-store:/Users/me/Library/ToolStore'),
-    );
+    final Finder adviceCard = find.byKey(_toolStoreAdviceCardKey);
     expect(find.descendant(of: adviceCard, matching: find.text('at least 6.0 MB')), findsOneWidget);
   });
 
@@ -321,8 +318,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Map<String, Object?> json = loadSampleJson('scanned');
-    listSectionTotalJsons(json).singleWhere((Map<String, Object?> total) => total['sectionKey'] == 'caches')['titleText'] =
-        'Caches of apps and tools';
+    getSectionTotalJson(json, 'caches')['titleText'] = 'Caches of apps and tools';
     await _pumpSectionPage(tester, sectionKey: SectionKey.caches, scan: parseScanJson(json));
 
     expect(find.text('Caches of apps and tools'), findsOneWidget);

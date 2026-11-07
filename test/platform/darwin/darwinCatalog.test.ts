@@ -6,6 +6,7 @@ import { isSameOrInsidePath } from '../../../src/path/isSameOrInsidePath.js';
 import { parseAbsolutePath } from '../../../src/path/parseAbsolutePath.js';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
 import { getCatalogEntryPath } from '../../../src/scan/getCatalogEntryPath.js';
+import { isAppleBundleId } from '../../../src/scan/resolveOwnerState.js';
 import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import {
@@ -63,10 +64,27 @@ describeAwaitingWin32Platform('the catalog of darwinPlatform', () => {
 
   test('every entry is owned by no app, a bundle id or a family of bundle ids', () => {
     const otherOwnerIds = darwinPlatform.catalog.entries
-      .filter((entry) => entry.owner !== null && !DARWIN_OWNER_KINDS.includes(entry.owner.kind))
+      .filter((entry) => entry.owner !== null && !DARWIN_OWNER_KINDS.includes(entry.owner.app.kind))
       .map((entry) => entry.id);
 
     expect(otherOwnerIds).toEqual([]);
+  });
+
+  test('every app of macOS that owns an entry is a system app, and every system app owns one', () => {
+    const ownerBundleIds = darwinPlatform.catalog.entries.flatMap((entry) =>
+      entry.owner !== null && entry.owner.app.kind === 'bundleId' ? [entry.owner.app.bundleId] : [],
+    );
+    const systemBundleIds = darwinPlatform.scan.systemApps.map((app) => app.bundleId);
+    const unlistedAppleOwnerIds = ownerBundleIds.filter(
+      (bundleId) =>
+        isAppleBundleId({ bundleId: bundleId }) &&
+        // Xcode comes from the App Store into the app folder, which lists it as an installed app.
+        bundleId !== 'com.apple.dt.Xcode' &&
+        !systemBundleIds.includes(bundleId),
+    );
+
+    expect(unlistedAppleOwnerIds).toEqual([]);
+    expect(systemBundleIds.filter((bundleId) => !ownerBundleIds.includes(bundleId))).toEqual([]);
   });
 
   test('every entry resolves under its root in a fixture environment', () => {

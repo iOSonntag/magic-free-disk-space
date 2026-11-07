@@ -872,7 +872,11 @@ ItemView _parseItem(Object? json) {
         lastUsedAt: _parseInstant(lastUsedAt),
         downloadedAt: _parseInstant(downloadedAt),
         appName: appName,
-        matchedBy: _parseLeftoverMatch(matchedBy),
+        matchedBy: _parseOptionalKeyName(
+          LeftoverMatch.values,
+          matchedBy,
+          LeftoverMatch.unknown,
+        ),
       ),
     _ => throw const FormatException('Unknown shape of an item.'),
   };
@@ -918,16 +922,14 @@ AdviceItemView _parseAdviceItem(Object? json) {
         opener: _parseOpener(opener),
         lastUsedAt: _parseInstant(lastUsedAt),
         appName: appName,
-        matchedBy: _parseLeftoverMatch(matchedBy),
+        matchedBy: _parseOptionalKeyName(
+          LeftoverMatch.values,
+          matchedBy,
+          LeftoverMatch.unknown,
+        ),
       ),
     _ => throw const FormatException('Unknown shape of an advice item.'),
   };
-}
-
-LeftoverMatch? _parseLeftoverMatch(String? name) {
-  return name == null
-      ? null
-      : _parseKeyName(LeftoverMatch.values, name, LeftoverMatch.unknown);
 }
 
 /// `null` for no opener and for an opener of a kind a newer bridge added.
@@ -997,13 +999,11 @@ DeletedOutcomeView _parseDeletedOutcome(Object? json) {
           outcome,
           DeletedOutcome.unknown,
         ),
-        reasonKey: reasonKey == null
-            ? null
-            : _parseKeyName(
-                DeletedReason.values,
-                reasonKey,
-                DeletedReason.unknown,
-              ),
+        reasonKey: _parseOptionalKeyName(
+          DeletedReason.values,
+          reasonKey,
+          DeletedReason.unknown,
+        ),
         freedBytes: freedBytes,
       ),
     _ => throw const FormatException('Unknown shape of an outcome.'),
@@ -1107,6 +1107,15 @@ TValue _parseKeyName<TValue extends Enum>(
   TValue unknown,
 ) {
   return values.asNameMap()[name] ?? unknown;
+}
+
+/// [_parseKeyName] for an optional key: no name stays `null`.
+TValue? _parseOptionalKeyName<TValue extends Enum>(
+  List<TValue> values,
+  String? name,
+  TValue unknown,
+) {
+  return name == null ? null : _parseKeyName(values, name, unknown);
 }
 
 /// For a list of lines the app does not show, which must still be text.

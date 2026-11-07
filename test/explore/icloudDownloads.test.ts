@@ -43,6 +43,7 @@ const VALUE_STATS: EntryStats = {
   ino: 2n,
   allocatedBytes: FILE_SIZE_BYTES,
   linkCount: 1,
+  ownerUid: 501,
   modifiedMs: OLD_MS,
   accessedMs: OLD_MS,
   bornMs: OLD_MS,
@@ -233,6 +234,35 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
               join(cloudDocs, 'Projects', 'old.txt'),
             ],
           },
+        ]);
+      },
+    });
+  });
+
+  test('goes by the unused window, not the stale one', async () => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const cloudDocs = join(getMobileDocumentsPath({ home: home }), 'com~apple~CloudDocs');
+        const unusedMs = NOW_MS - 200 * DAY_MS;
+
+        await createIcloudFile({ path: join(cloudDocs, 'stale.txt') });
+        await createIcloudFile({
+          path: join(cloudDocs, 'unused.txt'),
+          modifiedMs: unusedMs,
+          accessedMs: unusedMs,
+        });
+
+        const probed = getProbeFindings(
+          await loadIcloudDownloadFindings({
+            ...buildRun({ home: home }),
+            staleCutoffMs: CUTOFF_MS,
+            unusedCutoffMs: NOW_MS - 180 * DAY_MS,
+          }),
+        );
+
+        expect(summarizeFindings(probed.findings).map((finding) => finding.filePaths)).toEqual([
+          [join(cloudDocs, 'unused.txt')],
         ]);
       },
     });

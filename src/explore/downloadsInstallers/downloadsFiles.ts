@@ -4,6 +4,7 @@ import type { Result } from '../../result.js';
 import { walkDirectoryTree } from '../../system/walkDirectoryTree.js';
 import type { UnitActivityFacts } from '../decideUnitActivity.js';
 import type { BrowserFamily, BrowserFamilyBundles } from '../explorePlatform.js';
+import { BROWSER_FAMILIES } from '../explorePlatform.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreEntryStats } from '../loadExploreRead.js';
@@ -16,9 +17,6 @@ export type DownloadsFileKindIncomplete = { kind: 'incomplete'; browserFamily: B
 
 /** What a file in Downloads is, by its name. */
 export type DownloadsFileKind = DownloadsFileKindInstaller | DownloadsFileKindIncomplete;
-
-/** The browser families in the order of their findings. */
-export const BROWSER_FAMILIES: BrowserFamily[] = ['chromium', 'firefox', 'safari'];
 
 /** Disk images, packages, and archives of an app or a system that install it and are done then. */
 const INSTALLER_EXTENSIONS = ['.dmg', '.pkg', '.mpkg', '.xip', '.iso'];

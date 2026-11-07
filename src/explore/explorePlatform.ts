@@ -70,8 +70,11 @@ export type ExplorePlatform = {
   browserBundles: BrowserBundles;
 };
 
+/** The browser families in the order of their findings. */
+export const BROWSER_FAMILIES = ['chromium', 'firefox', 'safari'] as const;
+
 /** The browsers of one engine, which name their partial downloads alike. */
-export type BrowserFamily = 'chromium' | 'firefox' | 'safari';
+export type BrowserFamily = (typeof BROWSER_FAMILIES)[number];
 
 /** The browsers of a family by the bundle names in the app folders, and those the system keeps. */
 export type BrowserFamilyBundles = { appBundleNames: string[]; systemBundlePaths: string[] };

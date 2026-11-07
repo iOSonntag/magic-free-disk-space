@@ -31,7 +31,7 @@ export async function requestEngineEndpoint<TValue>(params: {
     user: params.user,
     method: 'GET',
     requestPath: params.requestPath,
-    timeoutMs: readEngineTimeoutMs({ deadlineMs: params.deadlineMs }),
+    timeoutMs: getEngineTimeoutMs({ deadlineMs: params.deadlineMs }),
   });
 
   if (answer.kind === 'failed') {
@@ -76,6 +76,6 @@ export function parseEngineJson<TValue>(params: {
 }
 
 /** The time left until `deadlineMs`, at least 1 ms, so a late request still fails as timed out. */
-function readEngineTimeoutMs(params: { deadlineMs: number }): number {
+function getEngineTimeoutMs(params: { deadlineMs: number }): number {
   return Math.max(params.deadlineMs - Date.now(), 1);
 }

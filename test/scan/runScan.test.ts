@@ -20,15 +20,17 @@ import {
 import {
   buildTestPathEnvironment,
   createFixtureFile,
-  loadTestEnvironment,
   updateModifiedMs,
-  withFixtureRoot,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { withFixtureHome } from '../support/probeRunFixtures.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
 
 const HOME_DIR = '/Users/example';
+
+/** The time of every scan of a fixture home, half a year after its files were written. */
+const SCAN_NOW_MS = Date.UTC(2026, 6, 1);
 
 const ENVIRONMENT = buildTestPathEnvironment({ homeDir: HOME_DIR, nowMs: Date.UTC(2026, 0, 1) });
 
@@ -222,9 +224,10 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
 
 describeAwaitingWin32Platform('runScan', () => {
   test('never shows a section larger while it scans than the report makes it, for a folder a probe claims', async () => {
-    await withFixtureRoot({
-      run: async (fixtureRoot) => {
-        const cachesPath = join(fixtureRoot.homeDir, 'Library/Caches');
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const cachesPath = join(home.fixtureRoot.homeDir, 'Library/Caches');
         const jetBrainsCachesPath = join(cachesPath, 'JetBrains');
         const outdatedCachePath = join(jetBrainsCachesPath, 'IntelliJIdea2023.3');
         const files = [
@@ -233,7 +236,7 @@ describeAwaitingWin32Platform('runScan', () => {
           { path: join(jetBrainsCachesPath, 'IntelliJIdea2024.1/index.dat'), sizeBytes: 4096 },
           {
             path: join(
-              fixtureRoot.homeDir,
+              home.fixtureRoot.homeDir,
               'Library/Application Support/JetBrains/IntelliJIdea2024.1/options.xml',
             ),
             sizeBytes: 4096,
@@ -250,10 +253,7 @@ describeAwaitingWin32Platform('runScan', () => {
 
         const progress: ScanProgress[] = [];
         const report = await runTestScan({
-          environment: await loadTestEnvironment({
-            fixtureRoot: fixtureRoot,
-            nowMs: Date.UTC(2026, 6, 1),
-          }),
+          environment: home.environment,
           catalogEntries: [
             getCatalogEntry('user-caches'),
             getCatalogEntry('jetbrains-ide-versions'),
@@ -276,9 +276,10 @@ describeAwaitingWin32Platform('runScan', () => {
   });
 
   test('never counts a large file in a project SDK while it scans, which the report holds back for the probe', async () => {
-    await withFixtureRoot({
-      run: async (fixtureRoot) => {
-        const documentsPath = join(fixtureRoot.homeDir, 'Documents');
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const documentsPath = join(home.fixtureRoot.homeDir, 'Documents');
         const sdkRoot = join(documentsPath, 'AndroidSdk');
         const imageFolderPath = await writeAndroidSystemImage({
           sdkRoot: sdkRoot,
@@ -286,7 +287,7 @@ describeAwaitingWin32Platform('runScan', () => {
           abi: 'arm64-v8a',
         });
         const imagePath = join(imageFolderPath, 'system.img');
-        await createAndroidAvdHome({ homeDir: fixtureRoot.homeDir });
+        await createAndroidAvdHome({ homeDir: home.fixtureRoot.homeDir });
         await createFixtureFile({
           path: imagePath,
           sizeBytes: SCAN_LIMITS.minUserFileBytes,
@@ -299,10 +300,7 @@ describeAwaitingWin32Platform('runScan', () => {
 
         const progress: ScanProgress[] = [];
         const report = await runTestScan({
-          environment: await loadTestEnvironment({
-            fixtureRoot: fixtureRoot,
-            nowMs: Date.UTC(2026, 6, 1),
-          }),
+          environment: home.environment,
           catalogEntries: [getCatalogEntry('android-system-images')],
           onProgress: (step) => progress.push(step),
         });
@@ -322,25 +320,28 @@ describeAwaitingWin32Platform('runScan', () => {
   });
 
   test('offers an old large file in a folder named like an artifact only while no marker is beside it', async () => {
-    await withFixtureRoot({
-      run: async (fixtureRoot) => {
-        const moviePath = join(fixtureRoot.homeDir, 'Movies/build/old.mov');
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const moviePath = join(home.fixtureRoot.homeDir, 'Movies/build/old.mov');
         await createFixtureFile({
           path: moviePath,
           sizeBytes: SCAN_LIMITS.minUserFileBytes,
           modifiedMs: Date.UTC(2025, 0, 1),
         });
-        const environment = await loadTestEnvironment({
-          fixtureRoot: fixtureRoot,
-          nowMs: Date.UTC(2026, 6, 1),
-        });
 
-        const unmarkedReport = await runTestScan({ environment: environment, catalogEntries: [] });
+        const unmarkedReport = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [],
+        });
         await writeFixtureTextFile({
-          path: join(fixtureRoot.homeDir, 'Movies/build.gradle'),
+          path: join(home.fixtureRoot.homeDir, 'Movies/build.gradle'),
           text: 'plugins {}\n',
         });
-        const markedReport = await runTestScan({ environment: environment, catalogEntries: [] });
+        const markedReport = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [],
+        });
 
         expect(listOfferedPaths(unmarkedReport)).toEqual([moviePath]);
         expect(listOfferedPaths(markedReport)).toEqual([]);
@@ -349,10 +350,11 @@ describeAwaitingWin32Platform('runScan', () => {
   });
 
   test('counts an edit in a folder of the project named like an artifact as its activity', async () => {
-    await withFixtureRoot({
-      run: async (fixtureRoot) => {
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
         const oldMs = Date.UTC(2025, 0, 1);
-        const projectPath = join(fixtureRoot.homeDir, 'Documents/app');
+        const projectPath = join(home.fixtureRoot.homeDir, 'Documents/app');
         const nodeModulesPath = join(projectPath, 'node_modules');
         const sourceBuildPath = join(projectPath, 'src/build');
         await createFixtureFile({
@@ -381,13 +383,7 @@ describeAwaitingWin32Platform('runScan', () => {
           await updateModifiedMs({ path: folderPath, modifiedMs: oldMs });
         }
 
-        const report = await runTestScan({
-          environment: await loadTestEnvironment({
-            fixtureRoot: fixtureRoot,
-            nowMs: Date.UTC(2026, 6, 1),
-          }),
-          catalogEntries: [],
-        });
+        const report = await runTestScan({ environment: home.environment, catalogEntries: [] });
 
         expect(listOfferedPaths(report)).toEqual([]);
         expect(report.skipped).toContainEqual({ path: nodeModulesPath, reason: 'recentActivity' });
@@ -396,10 +392,11 @@ describeAwaitingWin32Platform('runScan', () => {
   });
 
   test('advises deleting the folder of a removed Docker Desktop, never starting it', async () => {
-    await withFixtureRoot({
-      run: async (fixtureRoot) => {
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
         const diskImagePath = join(
-          fixtureRoot.homeDir,
+          home.fixtureRoot.homeDir,
           'Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
         );
         await createFixtureFile({
@@ -409,10 +406,7 @@ describeAwaitingWin32Platform('runScan', () => {
         });
 
         const report = await runTestScan({
-          environment: await loadTestEnvironment({
-            fixtureRoot: fixtureRoot,
-            nowMs: Date.UTC(2026, 6, 1),
-          }),
+          environment: home.environment,
           catalogEntries: [getCatalogEntry('docker-desktop-disk-image')],
         });
         const diskImageAdvice = report.advice.find((advice) => advice.path === diskImagePath);
@@ -424,9 +418,10 @@ describeAwaitingWin32Platform('runScan', () => {
   });
 
   test('offers no folder of the caches whose place an earlier entry read, though it offers nothing there', async () => {
-    await withFixtureRoot({
-      run: async (fixtureRoot) => {
-        const denoPath = join(fixtureRoot.homeDir, 'Library/Caches/deno');
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const denoPath = join(home.fixtureRoot.homeDir, 'Library/Caches/deno');
         await createFixtureFile({
           path: join(denoPath, 'location_data/hash/kv.sqlite3'),
           sizeBytes: SCAN_LIMITS.minOfferedBytes,
@@ -434,10 +429,7 @@ describeAwaitingWin32Platform('runScan', () => {
         });
 
         const report = await runTestScan({
-          environment: await loadTestEnvironment({
-            fixtureRoot: fixtureRoot,
-            nowMs: Date.UTC(2026, 6, 1),
-          }),
+          environment: home.environment,
           catalogEntries: [getCatalogEntry('deno-cache'), getCatalogEntry('user-caches')],
         });
 

@@ -22,6 +22,15 @@ export type InstalledApp = {
   ownerUid: number | null;
 };
 
+/**
+ * An app of the system at the path the system keeps it, outside the app folders. It tells only
+ * whether an owner runs: it is never listed, offered, or the owner of a leftover.
+ */
+export type SystemApp = {
+  bundlePath: string;
+  bundleId: MacBundleId;
+};
+
 /** The folders of a location are named by an app's bundle id alone. */
 export type OrphanLocationNamingBundleId = { kind: 'bundleId' };
 
@@ -83,6 +92,8 @@ export type ScanPlatformApps = ScanPlatformAppsOffered;
 /** What the scan takes from the operating system. */
 export type ScanPlatform = {
   apps: ScanPlatformApps;
+  /** The system's own apps that own catalog data, which no app folder holds. */
+  systemApps: SystemApp[];
   /** The real path of the active Xcode bundle, `null` for none. Never throws. */
   loadActiveXcodeBundlePath: (params: {
     commandTimeoutMs: number;

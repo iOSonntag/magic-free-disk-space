@@ -48,8 +48,9 @@ export type HuggingFaceRepoState = {
   repoPath: AbsolutePath;
   name: HuggingFaceRepoName;
   /**
-   * The commits its refs point at; `null` when a ref does not read as a commit or `snapshots`
-   * holds what is no folder, so which revision is current cannot be told.
+   * The commits its refs point at, or every snapshot's when no ref names one; `null` when a ref
+   * does not read as a commit or `snapshots` holds what is no folder, so which revision is current
+   * cannot be told.
    */
   currentCommits: ReadonlySet<string> | null;
   snapshots: HuggingFaceSnapshot[];
@@ -186,20 +187,42 @@ export async function loadHuggingFaceRepoState(params: {
     return snapshots;
   }
 
-  const isJudged = refCommits.value !== null && snapshots.value.isEveryEntryFolder;
-
   return {
     kind: 'succeeded',
     value: {
       repoPath: params.repoPath,
       name: repoName,
-      currentCommits: isJudged ? new Set(refCommits.value) : null,
+      currentCommits: getCurrentCommits({
+        refCommits: refCommits.value,
+        snapshots: snapshots.value,
+      }),
       snapshots: snapshots.value.snapshots,
       blobs: blobs.value.blobs,
       linkedBlobCount: blobs.value.linkedBlobCount,
       metadataPaths: metadataPaths,
     },
   };
+}
+
+/**
+ * The commits the refs name, or every snapshot's when no ref names one; `null` when the refs or the
+ * snapshots cannot tell the current revisions.
+ */
+function getCurrentCommits(params: {
+  refCommits: string[] | null;
+  snapshots: Snapshots;
+}): ReadonlySet<string> | null {
+  if (params.refCommits === null || !params.snapshots.isEveryEntryFolder) {
+    return null;
+  }
+
+  // A download pinned to a full commit hash writes no ref, so a repository without one keeps
+  // every revision it holds.
+  if (params.refCommits.length === 0) {
+    return new Set(params.snapshots.snapshots.map((snapshot) => snapshot.commit));
+  }
+
+  return new Set(params.refCommits);
 }
 
 /**

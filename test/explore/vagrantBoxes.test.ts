@@ -90,7 +90,7 @@ function buildOutdatedUnit(params: {
     processCommands: [],
   }).map((finding) => finding.unit);
 
-  if (unit === undefined || unit.kind !== 'vagrantBoxVersion') {
+  if (unit?.kind !== 'vagrantBoxVersion') {
     throw new Error('The test list has no outdated box');
   }
 

@@ -7,8 +7,9 @@ import type { InstalledApp } from './scanPlatform.js';
 
 /**
  * Offers an app unused since `unusedCutoffMs`, and a macOS installer as
- * `decideInstallerCandidate` judges it. An app without a bundle id is skipped, because whether it
- * runs cannot be checked; a protected developer app is offered as `never`.
+ * `decideInstallerCandidate` judges it, either one only while it does not run. An app without a
+ * bundle id is skipped, because whether it runs cannot be checked; a protected developer app is
+ * offered as `never`.
  */
 export function decideAppCandidate(params: {
   app: InstalledApp;
@@ -33,25 +34,24 @@ export function decideAppCandidate(params: {
     return { kind: 'skip', path: path, reason: 'notBundleId' };
   }
 
-  if (params.app.systemInstaller !== null) {
-    return decideInstallerCandidate({
-      app: params.app,
-      installer: params.app.systemInstaller,
-      bundleId: params.app.bundleId,
-      measurement: params.measurement,
-      ownerState: params.ownerState,
-      systemVersion: params.systemVersion,
-      nowMs: params.nowMs,
-      user: params.user,
-    });
-  }
-
   if (params.ownerState === 'running') {
     return { kind: 'skip', path: path, reason: 'ownerRunning' };
   }
 
   if (params.ownerState === 'unknown') {
     return { kind: 'skip', path: path, reason: 'runningUnknown' };
+  }
+
+  if (params.app.systemInstaller !== null) {
+    return decideInstallerCandidate({
+      app: params.app,
+      installer: params.app.systemInstaller,
+      bundleId: params.app.bundleId,
+      measurement: params.measurement,
+      systemVersion: params.systemVersion,
+      nowMs: params.nowMs,
+      user: params.user,
+    });
   }
 
   if (params.measurement.allocatedBytes < params.minAppBytes) {

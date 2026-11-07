@@ -3,7 +3,6 @@ import { ANDROID_SDK_PATH_NAMES, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot
 import {
   DOWNLOADS_ROOT_PATH_NAMES,
   ICLOUD_DRIVE_ROOT_PATH_NAMES,
-  MAIL_BUNDLE_PATHS,
   MAIL_DOWNLOADS_ROOT_PATH_NAMES,
 } from './appleDataRoots.js';
 import { BROWSER_BUNDLES } from './browserBundles.js';
@@ -28,6 +27,7 @@ import {
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from './projectSearchEvidence.js';
 import { removeTree } from './removeTree.js';
 import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOT_RELATIVE_PATHS } from './scanHomeFolders.js';
+import { DARWIN_SYSTEM_APPS, MAIL_BUNDLE_PATHS } from './systemApps.js';
 import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
 
 /** Everything the app takes from macOS; the entry points hand each module its slice. */
@@ -54,6 +54,7 @@ export const darwinPlatform: Platform = {
       loadInstalledApps: loadInstalledApps,
       orphanLocations: ORPHAN_LOCATIONS,
     },
+    systemApps: DARWIN_SYSTEM_APPS,
     loadActiveXcodeBundlePath: loadActiveXcodeBundlePath,
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     userFileRootRelativePaths: USER_FILE_ROOT_RELATIVE_PATHS,

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
+import type { CandidateProbed } from '../../src/scan/candidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
@@ -156,8 +157,8 @@ describeAwaitingWin32Platform('validateRemoval', () => {
   test('judges each target of a unit, and refuses the item at the first target refused', () => {
     const repoPath = buildHomePath('.cache/huggingface/hub');
     const allowedPath = `${repoPath}/models--example--model/blobs/a`;
-    const buildUnitCandidate = (targetPaths: [string, ...string[]]) =>
-      buildTestUnitPathsCandidate({
+    function buildUnitCandidate(targetPaths: [string, ...string[]]): CandidateProbed {
+      return buildTestUnitPathsCandidate({
         probe: 'huggingFaceRepos',
         unit: {
           kind: 'huggingFaceRepository',
@@ -168,6 +169,8 @@ describeAwaitingWin32Platform('validateRemoval', () => {
         path: `${repoPath}/models--example--model`,
         targetPaths: targetPaths,
       });
+    }
+
     const allowed = buildUnitCandidate([allowedPath, `${allowedPath}-other`]);
 
     expect(validateRemoval({ candidate: allowed, environment: ENVIRONMENT })).toEqual({

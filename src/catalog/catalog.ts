@@ -153,8 +153,6 @@ export type CatalogRemovalExplore = {
   kind: 'explore';
   probe: ExploreProbeId;
   advice: string;
-  /** The advice in place of `advice` once no installed app is the entry's owner. */
-  uninstalledOwnerAdvice?: string;
 };
 
 export type CatalogRemoval = CatalogRemovalDelete | CatalogRemovalAdvice | CatalogRemovalExplore;
@@ -193,6 +191,16 @@ export type CatalogAgeRuleUnchangedDays = { kind: 'unchangedDays'; days: number 
 
 export type CatalogAgeRule = CatalogAgeRuleNone | CatalogAgeRuleUnchangedDays;
 
+/** The app, or the family of apps, that owns an entry's data, with what to advise once it is gone. */
+export type CatalogEntryOwner = {
+  app: CatalogOwner;
+  /**
+   * The advice in place of an advice or explore entry's own once no installed app is the owner;
+   * `null` keeps the entry's advice.
+   */
+  uninstalledAdvice: string | null;
+};
+
 export type CatalogEntry = {
   id: string;
   category: CandidateCategory;
@@ -209,6 +217,6 @@ export type CatalogEntry = {
    * The app that owns the data, or `null`. While it runs, or that cannot be checked, the entry is
    * held back, except an `advice` entry, which deletes nothing, and an engine probe's entry.
    */
-  owner: CatalogOwner | null;
+  owner: CatalogEntryOwner | null;
   removal: CatalogRemoval;
 };

@@ -1,3 +1,4 @@
+import type { EngineUnitCall } from '../explore/engines/callEngineUnit.js';
 import { callEngineUnit } from '../explore/engines/callEngineUnit.js';
 import { listEngineUnitIds } from '../explore/exploreUnit.js';
 import type { Candidate, CandidateRemovalCallEngine } from '../scan/candidate.js';
@@ -29,7 +30,7 @@ export async function callEngineCandidate(params: {
       candidate: params.candidate,
       freedBytes: call.freedBytes,
       outcome: call.outcome,
-      code: call.code,
+      code: call.outcome === 'failed' ? call.code : null,
     },
     outcomeEntries: [
       {
@@ -39,8 +40,22 @@ export async function callEngineCandidate(params: {
         unitKind: params.removal.unit.kind,
         unitIds: listEngineUnitIds(params.removal.unit),
         outcome: call.outcome,
-        status: call.status,
+        status: getEngineCallStatus(call),
       },
     ],
   };
+}
+
+/** The HTTP status of the answer that decided the call; `null` when none did. */
+function getEngineCallStatus(call: EngineUnitCall): number | null {
+  switch (call.outcome) {
+    case 'removed':
+    case 'alreadyGone':
+    case 'engineInUse':
+    case 'failed':
+      return call.status;
+    case 'changedSinceScan':
+    case 'engineNotRunning':
+      return null;
+  }
 }

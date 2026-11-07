@@ -41,6 +41,9 @@ describeAwaitingWin32Platform('placeCandidate', () => {
     expect(
       placeCandidate(buildTestCandidate({ path: '/fixture/Kept.app', category: 'leftovers' })),
     ).toMatchObject({ section: 'apps' });
+    expect(
+      placeCandidate(buildTestCandidate({ path: '/fixture/Backup', category: 'appManaged' })),
+    ).toMatchObject({ section: 'ownApp' });
   });
 });
 

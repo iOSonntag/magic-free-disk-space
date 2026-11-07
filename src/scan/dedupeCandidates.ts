@@ -6,21 +6,9 @@ import { isProbedCandidate } from './candidate.js';
 import { listCandidateFootprint, listProbedTargetPaths } from './listCandidateFootprint.js';
 
 /**
- * Turns into a skip each offer with a footprint path that would remove what the scan held back
- * or offered already: one holding a skipped or advised path, one inside an advised path but
- * outside the advice's carved paths, one equal to an earlier skipped path, and one overlapping an
- * earlier kept footprint. Paths are
- * compared as the scan produced them, never followed through links. The result keeps length and
- * order.
- *
- * Then a probe's places are its own: an offer that no probe made gives way as `heldByProbe` when
- * its footprint holds or equals one of `reservedEntryPaths`, or holds, equals, or lies inside a
- * target of a probed offer. An offer inside an entry path stays, since a probe claims only what
- * its units name.
- *
- * A skip for the age or the use of a path holds no probed offer back, since a probe judges the
- * activity of its own units: a large file skipped as recently used still goes as the old installer
- * a probe found it to be.
+ * Turns into a skip each offer whose footprint would remove what the scan held back, advised on or
+ * offered already, and each offer no probe made that takes a probe's place. Paths compare as the
+ * scan produced them, never through links; the result keeps length and order.
  */
 export function dedupeCandidates(params: {
   pathRules: PathRules;
@@ -96,6 +84,7 @@ function listHoldingSkipPaths(params: {
   skips: CandidateDecisionSkip[];
   isProbed: boolean;
 }): string[] {
+  // A probe judges the activity of its own units, so a file skipped as recently used still goes.
   return params.skips
     .filter((skip) => !params.isProbed || !isAgeSkipReason(skip.reason))
     .map((skip) => skip.path);
@@ -136,13 +125,17 @@ function isProbeReservedPath(params: {
   reservedEntryPaths: string[];
   unitTargetPaths: string[];
 }): boolean {
-  return (
-    params.reservedEntryPaths.some((entryPath) =>
-      isSameOrInsidePath({ rules: params.pathRules, path: entryPath, parentPath: params.path }),
-    ) ||
-    params.unitTargetPaths.some((targetPath) =>
-      isOverlappingPath({ rules: params.pathRules, path: params.path, otherPath: targetPath }),
-    )
+  // Only an offer that holds the entry path gives way: a probe claims only what its units name.
+  const isHoldingEntryPath = params.reservedEntryPaths.some((entryPath) =>
+    isSameOrInsidePath({ rules: params.pathRules, path: entryPath, parentPath: params.path }),
+  );
+
+  if (isHoldingEntryPath) {
+    return true;
+  }
+
+  return params.unitTargetPaths.some((targetPath) =>
+    isOverlappingPath({ rules: params.pathRules, path: params.path, otherPath: targetPath }),
   );
 }
 
@@ -157,21 +150,32 @@ function isOverlappingHeldPath(params: {
   earlierSkippedPaths: string[];
   keptOfferPaths: string[];
 }): boolean {
-  return (
-    [...params.skippedPaths, ...params.advisedPlaces.map((place) => place.path)].some((heldPath) =>
-      isStrictlyInsidePath({
-        pathRules: params.pathRules,
-        path: heldPath,
-        parentPath: params.path,
-      }),
-    ) ||
-    params.advisedPlaces.some((place) =>
-      isHeldByAdvice({ pathRules: params.pathRules, path: params.path, place: place }),
-    ) ||
-    params.earlierSkippedPaths.includes(params.path) ||
-    params.keptOfferPaths.some((keptPath) =>
-      isOverlappingPath({ rules: params.pathRules, path: params.path, otherPath: keptPath }),
-    )
+  const heldPaths = [...params.skippedPaths, ...params.advisedPlaces.map((place) => place.path)];
+  // Any skip or advice counts, earlier or later: removing the path would remove what it holds back.
+  const isHoldingHeldPath = heldPaths.some((heldPath) =>
+    isStrictlyInsidePath({ pathRules: params.pathRules, path: heldPath, parentPath: params.path }),
+  );
+
+  if (isHoldingHeldPath) {
+    return true;
+  }
+
+  const isInsideAdvisedPlace = params.advisedPlaces.some((place) =>
+    isHeldByAdvice({ pathRules: params.pathRules, path: params.path, place: place }),
+  );
+
+  if (isInsideAdvisedPlace) {
+    return true;
+  }
+
+  // On the same path the earlier entry's decision wins, so only an earlier skip holds it back.
+  if (params.earlierSkippedPaths.includes(params.path)) {
+    return true;
+  }
+
+  // The first offer of a place keeps it, so no two offers remove the same entry.
+  return params.keptOfferPaths.some((keptPath) =>
+    isOverlappingPath({ rules: params.pathRules, path: params.path, otherPath: keptPath }),
   );
 }
 

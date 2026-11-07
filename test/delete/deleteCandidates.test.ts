@@ -1101,9 +1101,9 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
     firstPath: string;
     secondPath: string;
   }): Promise<Candidate> {
-    const allocatedBytes =
-      (await loadMeasuredAllocatedBytes({ paths: [params.firstPath] })) +
-      (await loadMeasuredAllocatedBytes({ paths: [params.secondPath] }));
+    const allocatedBytes = await loadMeasuredAllocatedBytes({
+      paths: [params.firstPath, params.secondPath],
+    });
 
     return buildTestCandidate({
       path: join(fixtureRoot.homeDir, 'Library/Caches'),

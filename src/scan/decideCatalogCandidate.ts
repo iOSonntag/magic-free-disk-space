@@ -1,5 +1,6 @@
 import type {
   CatalogEntry,
+  CatalogEntryOwner,
   CatalogRemoval,
   CatalogRemovalAdvice,
   CatalogRemovalExplore,
@@ -105,6 +106,7 @@ export function decideCatalogCandidate(params: {
           explanation: params.entry.explanation,
           advice: getAdviceText({
             removal: params.entry.removal,
+            entryOwner: params.entry.owner,
             isOwnerUninstalled: params.isOwnerUninstalled,
           }),
           opener: params.entry.removal.kind === 'advice' ? params.entry.removal.opener : null,
@@ -192,17 +194,18 @@ function isHeldByOwner(params: { removal: CatalogRemoval }): boolean {
   }
 }
 
-/** An explore entry's advice for an uninstalled owner, where it words one; its advice otherwise. */
+/** The advice the owner words for once it is uninstalled, if any; the entry's own otherwise. */
 function getAdviceText(params: {
   removal: CatalogRemovalAdvice | CatalogRemovalExplore;
+  entryOwner: CatalogEntryOwner | null;
   isOwnerUninstalled: boolean;
 }): string {
   if (
-    params.removal.kind === 'explore' &&
     params.isOwnerUninstalled &&
-    params.removal.uninstalledOwnerAdvice !== undefined
+    params.entryOwner !== null &&
+    params.entryOwner.uninstalledAdvice !== null
   ) {
-    return params.removal.uninstalledOwnerAdvice;
+    return params.entryOwner.uninstalledAdvice;
   }
 
   return params.removal.advice;

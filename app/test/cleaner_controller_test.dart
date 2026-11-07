@@ -407,6 +407,31 @@ void main() {
         expect(state.selectedNumbers, {1});
       });
 
+      test('cancelled while the new plan is on its way takes a tick at once', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        controller.cancelConfirmation();
+        controller.toggleCandidate(2);
+        await replan;
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, {1, 2});
+      });
+
+      test('cancelled while the new plan is on its way scans again at once', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        controller.cancelConfirmation();
+        final Future<void> rescan = controller.scan();
+        await replan;
+        await rescan;
+
+        expect(bridge.requestKinds.last, 'scan');
+        expect(controller.state, isA<ScannedState>());
+      });
+
       test('a new plan that approves nothing shows the list with its lines', () async {
         await planSafeItemAndVideo();
         bridge.planAnswer = const NothingApprovedEvent(

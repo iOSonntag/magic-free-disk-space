@@ -104,9 +104,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
           })),
         );
         expect(
-          probed.findings.flatMap((finding) =>
-            finding.unit.kind === 'downloadsIncomplete' ? [finding] : [],
-          ),
+          probed.findings.filter((finding) => finding.unit.kind === 'downloadsIncomplete'),
         ).toMatchObject([
           {
             title: 'Unfinished downloads of Chrome and other Chromium browsers',

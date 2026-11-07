@@ -101,6 +101,31 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
     });
   });
 
+  test('goes by the stale window, not the unused one', async () => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const savedPath = join(getMailDownloadsPath(home), 'A1', 'saved.pdf');
+
+        await createMailFile({ path: savedPath });
+
+        const probed = getProbeFindings(
+          await loadMailDownloadFindings({
+            ...buildTestProbeRun({ environment: home.environment }),
+            staleCutoffMs: STALE_CUTOFF_MS,
+            unusedCutoffMs: NOW_MS - 180 * DAY_MS,
+          }),
+        );
+
+        expect(
+          getUnitOfKind({ findings: probed, kind: 'mailDownloads' }).foundFiles.map(
+            (file) => file.path,
+          ),
+        ).toEqual([buildTestAbsolutePath({ text: savedPath })]);
+      },
+    });
+  });
+
   test('tells the attachments busy while Mail runs', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,

@@ -39,7 +39,7 @@ export async function loadEngineFindings(params: {
   engineProbeId: EngineProbeId;
   engine: ContainerEngine;
 }): Promise<ExploreProbeEngineResult> {
-  const sockets = await listEngineSockets({
+  const sockets = await loadEngineSockets({
     environment: params.run.environment,
     engine: params.engine,
   });
@@ -135,19 +135,19 @@ async function loadSocketFindings(params: {
 }
 
 /** The instances of the engine to ask, each at a socket path that exists. */
-async function listEngineSockets(params: {
+async function loadEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngine;
 }): Promise<EngineSocket[]> {
   switch (params.engine.kind) {
     case 'fixed':
-      return listFixedEngineSockets({ environment: params.environment, engine: params.engine });
+      return loadFixedEngineSockets({ environment: params.environment, engine: params.engine });
     case 'profiles':
-      return listProfileEngineSockets({ environment: params.environment, engine: params.engine });
+      return loadProfileEngineSockets({ environment: params.environment, engine: params.engine });
   }
 }
 
-async function listFixedEngineSockets(params: {
+async function loadFixedEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngineFixed;
 }): Promise<EngineSocket[]> {
@@ -174,7 +174,7 @@ async function listFixedEngineSockets(params: {
  * The socket of each profile folder that holds one. Only the default profile's is tried when the
  * profiles' folder cannot be listed, so the engine is still asked, and refused there if so.
  */
-async function listProfileEngineSockets(params: {
+async function loadProfileEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngineProfiles;
 }): Promise<EngineSocket[]> {

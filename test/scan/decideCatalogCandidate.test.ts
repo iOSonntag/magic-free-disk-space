@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { TargetsMeasurement } from '../../src/scan/candidate.js';
 import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
@@ -9,13 +10,10 @@ import {
   buildTestCatalogEntry,
   buildTestTargetsMeasurement,
 } from '../support/candidateFixtures.js';
-import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
-import { buildTestCatalogOwner } from '../support/parsedValueFixtures.js';
+import { buildTestCatalogOwner, buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 const PATH = '/home/Library/Caches/com.example.app';
-
-const PATH_RULES = buildTestPathEnvironment({ homeDir: '/home', nowMs: 0 }).pathRules;
 
 const UNCHANGED_30_DAYS = { kind: 'unchangedDays', days: 30 } as const;
 
@@ -128,11 +126,14 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('gives an explore entry its uninstalled-owner advice only for an uninstalled owner', () => {
     const entry = buildTestCatalogEntry({
+      owner: {
+        app: { kind: 'bundleId', bundleId: buildTestMacBundleId({ text: 'com.example.engine' }) },
+        uninstalledAdvice: 'Delete the folder of the removed engine.',
+      },
       removal: {
         kind: 'explore',
         probe: 'dockerDesktopEngine',
         advice: 'Start the engine, then prune it.',
-        uninstalledOwnerAdvice: 'Delete the folder of the removed engine.',
       },
     });
     const installed = decide({ entry: entry, ownerBundleId: 'com.example.engine' });
@@ -150,7 +151,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
     );
   });
 
-  test('keeps the advice of an advice entry for an uninstalled owner', () => {
+  test('keeps the advice of an advice entry for an uninstalled owner that words none', () => {
     const decision = decide({
       entry: buildTestCatalogEntry({
         removal: { kind: 'advice', advice: 'Run the tool.', carvedPaths: [], opener: null },
@@ -208,7 +209,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
       },
     });
     const carvedPaths = buildCarvedPaths({
-      pathRules: PATH_RULES,
+      pathRules: DARWIN_PATH_RULES,
       entry: entry,
       path: PATH,
     });
@@ -221,7 +222,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
   test('carves nothing for an entry that is no advice', () => {
     expect(
       buildCarvedPaths({
-        pathRules: PATH_RULES,
+        pathRules: DARWIN_PATH_RULES,
         entry: buildTestCatalogEntry({}),
         path: PATH,
       }),

@@ -2,10 +2,7 @@
  * Whether two lists hold the same paths in any order, the recheck's test that a unit still names
  * exactly what its scan found.
  */
-export function hasSamePaths(params: {
-  left: readonly string[];
-  right: readonly string[];
-}): boolean {
+export function hasSamePaths(params: { left: string[]; right: string[] }): boolean {
   const left = new Set(params.left);
   const right = new Set(params.right);
 

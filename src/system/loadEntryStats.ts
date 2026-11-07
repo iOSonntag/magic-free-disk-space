@@ -21,6 +21,8 @@ export type EntryStats = {
   accessedMs: number;
   /** When the entry was created on this volume. */
   bornMs: number;
+  /** The user id that owns the entry. */
+  ownerUid: number;
 };
 
 export type EntryStatsResult = Result<EntryStats, FileFailure>;
@@ -41,6 +43,7 @@ export async function loadEntryStats(params: { path: string }): Promise<EntrySta
         modifiedMs: Number(stats.mtimeMs),
         accessedMs: Number(stats.atimeMs),
         bornMs: Number(stats.birthtimeMs),
+        ownerUid: Number(stats.uid),
       },
     };
   } catch (error) {

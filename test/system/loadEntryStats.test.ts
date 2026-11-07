@@ -96,6 +96,16 @@ describeAwaitingWin32Platform('loadEntryStats', () => {
     expect(stats.bornMs).toBeLessThanOrEqual(Date.now());
   });
 
+  testOnPosix('reports the user that owns the entry', async () => {
+    const filePath = join(fixtureRoot.homeDir, 'owned.txt');
+    await createFixtureFile({ path: filePath, sizeBytes: 10, modifiedMs: oldModifiedMs });
+
+    const stats = await loadEntryStatsOrThrow({ path: filePath });
+
+    // A file a process creates belongs to its effective user.
+    expect(stats.ownerUid).toBe(process.geteuid?.() ?? -1);
+  });
+
   testOnPosix('reports a symbolic link itself, not the size of its target', async () => {
     const targetPath = join(fixtureRoot.homeDir, 'large.bin');
     const linkPath = join(fixtureRoot.homeDir, 'link-to-large.bin');

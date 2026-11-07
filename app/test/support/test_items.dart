@@ -11,7 +11,6 @@ ItemView buildTestItemView({
   required int allocatedBytes,
   ItemOrigin origin = ItemOrigin.catalog,
   ItemRemoval removal = ItemRemoval.delete,
-  bool isComplete = true,
 }) {
   final String path = '/Users/me/Test/$title';
   return ItemView(
@@ -25,7 +24,7 @@ ItemView buildTestItemView({
     origin: origin,
     removal: removal,
     allocatedBytes: allocatedBytes,
-    isComplete: isComplete,
+    isComplete: true,
     displayPath: '~/Test/$title',
     revealPath: path,
     lastUsedAt: null,

@@ -3,9 +3,6 @@ import type { HomeRelativePathNames } from '../../explore/explorePlatform.js';
 /** The folder browsers download into. */
 export const DOWNLOADS_ROOT_PATH_NAMES: HomeRelativePathNames = ['Downloads'];
 
-/** Mail, which keeps its saved attachments open while it runs. */
-export const MAIL_BUNDLE_PATHS: string[] = ['/System/Applications/Mail.app'];
-
 /**
  * iCloud Drive's local folder on macOS: one folder per app that syncs there, and
  * `com~apple~CloudDocs` for the files the person keeps in iCloud Drive. Only an evict may take a

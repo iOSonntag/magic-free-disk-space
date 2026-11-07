@@ -1,6 +1,13 @@
-import type { CatalogOwner } from '../../../catalog/catalogOwner.js';
+import type { CatalogEntryOwner } from '../../../catalog/catalog.js';
 import { parseMacBundleId } from '../../../catalog/catalogOwner.js';
 
-export function buildBundleIdOwner(params: { text: string }): CatalogOwner {
-  return { kind: 'bundleId', bundleId: parseMacBundleId({ text: params.text }) };
+/** The app of the bundle id `text` as an entry's owner, with the advice for once it is gone. */
+export function buildBundleIdOwner(params: {
+  text: string;
+  uninstalledAdvice?: string;
+}): CatalogEntryOwner {
+  return {
+    app: { kind: 'bundleId', bundleId: parseMacBundleId({ text: params.text }) },
+    uninstalledAdvice: params.uninstalledAdvice ?? null,
+  };
 }

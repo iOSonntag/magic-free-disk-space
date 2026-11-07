@@ -386,10 +386,10 @@ describe('buildHuggingFaceRepoFindings', () => {
       }).findings.map((finding) => finding.evidenceLines);
     }
 
-    expect(listEvidenceLines(0)).toEqual([['Its refs name 1 downloaded revision.']]);
+    expect(listEvidenceLines(0)).toEqual([['It holds 1 current revision.']]);
     expect(listEvidenceLines(2)).toEqual([
       [
-        'Its refs name 1 downloaded revision.',
+        'It holds 1 current revision.',
         '2 of its files are links to copies that stay, such as those the hub cache shares across repositories.',
       ],
     ]);
@@ -431,7 +431,7 @@ describeAwaitingWin32Platform('loadHuggingFaceRepoFindings', () => {
           'Unfinished downloads of Hugging Face model example-org/example-model',
         ]);
         expect(probed.findings[0]?.evidenceLines).toEqual([
-          'Its refs name 1 downloaded revision.',
+          'It holds 1 current revision.',
           '1 of its files is a link to a copy that stays, such as one the hub cache shares across repositories.',
         ]);
         expect(listSortedPaths(repository)).toEqual(
@@ -470,6 +470,39 @@ describeAwaitingWin32Platform('loadHuggingFaceRepoFindings', () => {
         expect(probed.findings.map((finding) => finding.unit.kind)).toEqual([
           'huggingFacePartialDownloads',
         ]);
+      },
+    });
+  });
+
+  test('keeps every revision of a repository no ref names, as a download pinned to a commit leaves it', async () => {
+    await withHubFixture({
+      run: async (fixture) => {
+        await createFixtureFile({
+          path: join(fixture.repoPath, 'blobs', 'weights'),
+          sizeBytes: 4096,
+          modifiedMs: NOW_MS,
+        });
+        await createSnapshot({
+          fixture: fixture,
+          commit: CURRENT_COMMIT,
+          links: { 'weights.bin': 'weights' },
+          modifiedMs: CURRENT_SNAPSHOT_MODIFIED_MS,
+        });
+
+        const probed = await loadFindings({ environment: fixture.environment });
+
+        expect(probed.isComplete).toBe(true);
+        expect(probed.findings.map((finding) => [finding.unit.kind, finding.risk])).toEqual([
+          ['huggingFaceRepository', 'review'],
+        ]);
+        const repository = getUnitOfKind({ findings: probed, kind: 'huggingFaceRepository' });
+
+        expect(listSortedPaths(repository)).toEqual(
+          [
+            join(fixture.repoPath, 'snapshots', CURRENT_COMMIT),
+            join(fixture.repoPath, 'blobs', 'weights'),
+          ].toSorted(),
+        );
       },
     });
   });

@@ -33,14 +33,6 @@ import {
 
 let nextTestIno = 1000n;
 
-/** The facts of an item no source read: no fallback, no use, no download, no app. */
-export const TEST_LISTING_FACTS_NONE = {
-  privateSizeFallbackCount: 0,
-  lastUsedAtMs: null,
-  downloadedAtMs: null,
-  appName: null,
-};
-
 export function buildTestIdentity(params: { realPath: string; kind?: FileKind }): FileIdentity {
   nextTestIno += 1n;
 
@@ -183,7 +175,10 @@ export function buildTestAdvice(overrides: Partial<Advice> & { path: string }): 
     carvedPaths: [],
     allocatedBytes: 4096,
     isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
+    privateSizeFallbackCount: 0,
+    lastUsedAtMs: null,
+    downloadedAtMs: null,
+    appName: null,
     ...overrides,
   };
 }
