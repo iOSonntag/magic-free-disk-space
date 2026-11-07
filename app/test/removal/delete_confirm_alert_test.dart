@@ -56,7 +56,7 @@ void main() {
         origin: DeleteAlertOrigin.cleanSafeItems,
       );
 
-      expect(find.text('Delete 10 MB for good?'), findsOneWidget);
+      expect(find.text('Delete 15 MB for good?'), findsOneWidget);
       expect(
         find.descendant(of: find.byType(Dialog), matching: find.text('Tool cache')),
         findsOneWidget,
@@ -114,7 +114,7 @@ void main() {
     expect(bridge.deleteRequest, isNull);
     expect(find.byType(Dialog), findsNothing);
     final ScannedState state = controller.state as ScannedState;
-    expect(state.selectedNumbers, {1, 2});
+    expect(state.selectedNumbers, listPlannedNumbers(samplePlan).toSet());
     expect(find.byType(ReviewPage), findsNothing);
   });
 
@@ -129,7 +129,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(bridge.deleteRequest, isNull);
-    expect((controller.state as ScannedState).selectedNumbers, {1, 2});
+    expect(
+      (controller.state as ScannedState).selectedNumbers,
+      listPlannedNumbers(samplePlan).toSet(),
+    );
   });
 
   testWidgets('Show list closes the alert and leaves the plan on its Review page', (
@@ -153,29 +156,7 @@ void main() {
   testWidgets('names no evicted item among those that cannot come back', (
     WidgetTester tester,
   ) async {
-    final PlannedItemView toolCache = samplePlan.items.first;
-    final PlannedItemView appCache = samplePlan.items.last;
-    final PlannedEvent evictPlan = PlannedEvent(
-      planId: 4,
-      lines: samplePlan.lines,
-      warningLines: samplePlan.warningLines,
-      items: [
-        PlannedItemView(
-          number: toolCache.number,
-          key: toolCache.key,
-          title: 'Holiday photos',
-          sectionKey: SectionKey.icloud,
-          risk: Risk.safe,
-          removal: ItemRemoval.evict,
-          allocatedBytes: toolCache.allocatedBytes + appCache.allocatedBytes,
-        ),
-        appCache,
-      ],
-      totalBytes: samplePlan.totalBytes,
-      holdsCareful: false,
-    );
-
-    await openAlert(tester, plan: evictPlan, origin: DeleteAlertOrigin.review);
+    await openAlert(tester, plan: samplePlan, origin: DeleteAlertOrigin.review);
 
     final Finder alert = find.byType(Dialog);
     expect(
@@ -185,7 +166,17 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.descendant(of: alert, matching: find.text(appCache.title)), findsOneWidget);
-    expect(find.descendant(of: alert, matching: find.text('Holiday photos')), findsNothing);
+    final List<PlannedItemView> evicted = [
+      for (final PlannedItemView item in samplePlan.items)
+        if (item.removal == ItemRemoval.evict) item,
+    ];
+    expect(evicted, isNotEmpty);
+    for (final PlannedItemView item in samplePlan.items) {
+      expect(
+        find.descendant(of: alert, matching: find.text(item.title)),
+        evicted.contains(item) ? findsNothing : findsOneWidget,
+        reason: item.title,
+      );
+    }
   });
 }

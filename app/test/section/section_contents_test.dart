@@ -33,7 +33,15 @@ void main() {
         SectionKey.developerTools,
       );
 
-      expect(_listNumbers(developerTools.getGroupItems(ShownItemGroup.review)), [6]);
+      final List<int> exploreNumbers = [
+        for (final ItemView item in sampleScan.explore!.items)
+          if (item.sectionKey == SectionKey.developerTools) item.number,
+      ];
+      expect(exploreNumbers, isNotEmpty);
+      expect(
+        _listNumbers(developerTools.getGroupItems(ShownItemGroup.review)),
+        exploreNumbers,
+      );
       expect(
         [for (final AdviceItemView item in developerTools.adviceItems) item.title],
         ['Tool store'],
@@ -112,9 +120,54 @@ void main() {
       );
       expect(
         formatSectionCountText(findSectionTotal(totals, SectionKey.developerTools)!),
-        '1 item · 1 to handle yourself',
+        '2 items · 1 to handle yourself',
+      );
+      expect(
+        formatSectionCountText(findSectionTotal(totals, SectionKey.icloud)!),
+        '1 item',
       );
       expect(findSectionTotal(totals, SectionKey.trash), isNull);
+    });
+
+    test('keep the order the bridge sends them in', () {
+      final List<SectionTotal> totals = sampleScan.sectionTotals;
+
+      expect(
+        [for (final SectionTotal total in mergeSectionTotalsByKey(totals)) total.sectionKey],
+        [for (final SectionTotal total in totals) total.sectionKey],
+      );
+    });
+
+    test('stand in the order of the sections, whatever order the scan finds them in', () {
+      const List<SectionKey> sectionOrder = [
+        SectionKey.caches,
+        SectionKey.developerTools,
+        SectionKey.projects,
+        SectionKey.containers,
+        SectionKey.aiModels,
+        SectionKey.apps,
+        SectionKey.downloads,
+        SectionKey.largeFiles,
+        SectionKey.icloud,
+        SectionKey.trash,
+        SectionKey.ownApp,
+      ];
+
+      final List<SectionTotal> merged = mergeSectionTotalsByKey([
+        for (final SectionKey sectionKey in [SectionKey.unknown, ...sectionOrder.reversed])
+          SectionTotal(
+            sectionKey: sectionKey,
+            allocatedBytes: 1000000,
+            itemCount: 1,
+            safeBytes: 0,
+            adviceCount: 0,
+          ),
+      ]);
+
+      expect([for (final SectionTotal total in merged) total.sectionKey], [
+        ...sectionOrder,
+        SectionKey.unknown,
+      ]);
     });
   });
 
@@ -152,10 +205,10 @@ void main() {
 
     test('join the facts of an item under its title', () {
       final ItemView xcode = sampleScan.selectableItems.singleWhere(
-        (ItemView item) => item.number == 3,
+        (ItemView item) => item.title == 'Xcode',
       );
       final ItemView oldVideo = sampleScan.selectableItems.singleWhere(
-        (ItemView item) => item.number == 5,
+        (ItemView item) => item.title == 'Old video',
       );
 
       expect(formatItemFactsText(xcode, now: now), 'Xcode · Last used 5 months ago');

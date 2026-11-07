@@ -18,16 +18,19 @@ enum FullDiskAccess { granted, denied, unknown }
 
 /// The section an item belongs to, Explore's items included; [unknown] stands
 /// for a section of a newer bridge, shown by the bridge's title.
+///
+/// The members stand in the order the app shows the sections in, the order
+/// the bridge sends them in, with [unknown] last.
 enum SectionKey {
   caches,
   developerTools,
   projects,
   containers,
   aiModels,
-  downloads,
-  icloud,
   apps,
+  downloads,
   largeFiles,
+  icloud,
   trash,
   ownApp,
   unknown,

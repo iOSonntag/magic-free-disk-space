@@ -57,9 +57,9 @@ void main() {
     }
 
     test('parses the summary with its totals and its disk', () {
-      expect(scanned.summary.titleText, 'Found 6 items, at least 19 MB in total');
+      expect(scanned.summary.titleText, 'Found 9 items, at least 28 MB in total');
       expect(scanned.summary.lines, hasLength(3));
-      expect(scanned.summary.totalBytes, 19000000);
+      expect(scanned.summary.totalBytes, 26000000);
       expect(scanned.summary.safeBytes, 6000000);
       expect(scanned.summary.disk!.capacityBytes, 500000000000);
       expect(scanned.summary.disk!.availableBytes, 52000000000);
@@ -99,8 +99,8 @@ void main() {
         ],
         [
           [2],
-          [3, 4],
-          [5],
+          [3, 4, 5],
+          [6],
         ],
       );
       expect(
@@ -151,29 +151,46 @@ void main() {
       expect(xcode.displayPath, '/Applications/Xcode.app');
       expect(xcode.lastUsedAt, DateTime.utc(2025, 3, 15));
 
-      final ItemView leftover = getItem(4);
-      expect(leftover.origin, ItemOrigin.leftover);
-      expect(leftover.group, ItemGroup.careful);
-      expect(leftover.matchedBy, LeftoverMatch.bundleId);
+      final ItemView leftoverByName = getItem(4);
+      expect(leftoverByName.origin, ItemOrigin.leftover);
+      expect(leftoverByName.group, ItemGroup.careful);
+      expect(leftoverByName.matchedBy, LeftoverMatch.name);
+      expect(leftoverByName.lastUsedAt, DateTime.utc(2024, 9, 1));
 
-      final ItemView oldVideo = getItem(5);
+      final ItemView leftoverByBundleId = getItem(5);
+      expect(leftoverByBundleId.origin, ItemOrigin.leftover);
+      expect(leftoverByBundleId.matchedBy, LeftoverMatch.bundleId);
+
+      final ItemView oldVideo = getItem(6);
       expect(oldVideo.origin, ItemOrigin.largeFile);
       expect(oldVideo.lastUsedAt, DateTime.utc(2025, 6, 1));
       expect(oldVideo.downloadedAt, DateTime.utc(2024, 12, 24));
 
-      final ItemView simulator = getItem(6);
+      final ItemView icloudFolder = getItem(7);
+      expect(icloudFolder.origin, ItemOrigin.explore);
+      expect(icloudFolder.removal, ItemRemoval.evict);
+      expect(icloudFolder.sectionKey, SectionKey.icloud);
+
+      final ItemView simulator = getItem(8);
       expect(simulator.origin, ItemOrigin.explore);
       expect(simulator.removal, ItemRemoval.tool);
       expect(simulator.sectionKey, SectionKey.developerTools);
       expect(simulator.group, ItemGroup.review);
+
+      final ItemView buildCache = getItem(9);
+      expect(buildCache.removal, ItemRemoval.engine);
+      expect(buildCache.risk, Risk.safe);
+      expect(buildCache.group, ItemGroup.review);
+      expect(buildCache.revealPath, isNull);
     });
 
     test('parses Explore with its items and its advice group', () {
       final ExploreView explore = scanned.explore!;
       expect(explore.titleText, 'Explore');
       expect(explore.introText, isNotEmpty);
-      expect(getItemNumbers(explore.items), [6]);
-      expect(getDetailLineKinds(explore.items.single.detailLines), [
+      expect(getItemNumbers(explore.items), [7, 8, 9]);
+      final ItemView simulator = getItem(8);
+      expect(getDetailLineKinds(simulator.detailLines), [
         ItemDetailLineKind.path,
         ItemDetailLineKind.explanation,
         ItemDetailLineKind.regeneration,
@@ -181,7 +198,7 @@ void main() {
         ItemDetailLineKind.command,
       ]);
       expect(
-        explore.items.single.detailLines.last.text,
+        simulator.detailLines.last.text,
         'xcrun simctl delete 0A1B2C3D-0000-4000-8000-000000000001',
       );
 
@@ -190,7 +207,15 @@ void main() {
         adviceGroup.titleText,
         'Handle these yourself; this tool never deletes them',
       );
-      final AdviceItemView toolStore = adviceGroup.items.single;
+      expect(
+        [for (final AdviceItemView item in adviceGroup.items) item.title],
+        ['Photos library', 'Tool store'],
+      );
+      final AdviceItemView photos = adviceGroup.items.first;
+      expect(photos.sectionKey, SectionKey.largeFiles);
+      expect((photos.opener! as AppOpener).app, OpenableApp.photos);
+
+      final AdviceItemView toolStore = adviceGroup.items.last;
       expect(toolStore.title, 'Tool store');
       expect(toolStore.riskText, 'review');
       expect(getDetailLineKinds(toolStore.detailLines), [
@@ -222,9 +247,10 @@ void main() {
         ],
         [
           (SectionKey.caches, 10000000, 2, 6000000, 0),
-          (SectionKey.developerTools, 3000000, 1, 0, 1),
-          (SectionKey.apps, 3000000, 2, 0, 0),
-          (SectionKey.largeFiles, 3000000, 1, 0, 0),
+          (SectionKey.developerTools, 5000000, 2, 0, 1),
+          (SectionKey.apps, 5000000, 3, 0, 0),
+          (SectionKey.largeFiles, 3000000, 1, 0, 1),
+          (SectionKey.icloud, 5000000, 1, 0, 0),
         ],
       );
     });
@@ -234,10 +260,13 @@ void main() {
         '/Users/me/Library/Caches/ToolCache',
         '/Users/me/Library/Caches/com.example.other',
         '/Applications/Xcode.app',
+        '/Users/me/Library/Application Support/Example Removed',
         '/Users/me/Library/Containers/com.example.removed',
         '/Users/me/Movies/holiday.mov',
+        '/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Projects',
         '/Users/me/Library/Developer/CoreSimulator/Devices/'
             '0A1B2C3D-0000-4000-8000-000000000001',
+        '/Users/me/Pictures/Photos Library.photoslibrary',
         '/Users/me/Library/ToolStore',
       });
     });
@@ -305,7 +334,7 @@ void main() {
             .explore!
             .adviceGroup!
             .items
-            .single
+            .first
             .opener;
       }
 
@@ -363,7 +392,7 @@ void main() {
 
       final ScannedEvent scan = parseBridgeEvent(json) as ScannedEvent;
       final ItemView item = scan.sections.first.items.single;
-      final AdviceItemView advice = scan.explore!.adviceGroup!.items.single;
+      final AdviceItemView advice = scan.explore!.adviceGroup!.items.first;
 
       expect(scan.sections.first.key, SectionKey.unknown);
       expect(item.sectionKey, SectionKey.unknown);
@@ -443,7 +472,7 @@ void main() {
       contains('Type DELETE to delete them permanently.'),
     );
     expect(loadSampleEvent<NothingApprovedEvent>().lines, isNotEmpty);
-    expect(loadSampleEvent<DeletedEvent>().lines, hasLength(4));
+    expect(loadSampleEvent<DeletedEvent>().lines, hasLength(9));
     expect(
       loadSampleEvent<CancelledEvent>().message,
       'Cancelled. Nothing was deleted.',
@@ -466,11 +495,18 @@ void main() {
     expect(
       [
         for (final PlannedItemView item in planned.items)
-          (item.number, item.title, item.sectionKey, item.risk),
+          (item.number, item.title, item.sectionKey, item.risk, item.removal),
       ],
       [
-        (1, 'Tool cache', SectionKey.caches, Risk.safe),
-        (2, 'App cache', SectionKey.caches, Risk.review),
+        (1, 'Tool cache', SectionKey.caches, Risk.safe, ItemRemoval.delete),
+        (2, 'App cache', SectionKey.caches, Risk.review, ItemRemoval.delete),
+        (
+          7,
+          'Test iCloud folder /Users/me/Library/Mobile Documents/com~apple~CloudDocs/Projects',
+          SectionKey.icloud,
+          Risk.review,
+          ItemRemoval.evict,
+        ),
       ],
     );
     expect(
@@ -478,7 +514,7 @@ void main() {
       'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
     );
     expect(planned.items.first.allocatedBytes, 6000000);
-    expect(planned.totalBytes, 10000000);
+    expect(planned.totalBytes, 15000000);
     expect(planned.holdsCareful, isFalse);
   });
 
@@ -494,15 +530,21 @@ void main() {
         [
           (1, DeletedOutcome.removed, null),
           (2, DeletedOutcome.kept, DeletedReason.ownerRunning),
+          (7, DeletedOutcome.partlyRemoved, DeletedReason.changedSinceScan),
+          (6, DeletedOutcome.failed, DeletedReason.permissionDenied),
+          (9, DeletedOutcome.removed, null),
         ],
       );
       expect(
         deleted.outcomes.first.key,
         'catalog:tool-cache:/Users/me/Library/Caches/ToolCache',
       );
-      expect(deleted.outcomes.first.freedBytes, 6000000);
-      expect(deleted.freedBytes, 6000000);
-      expect(deleted.returnsLaterBytes, 0);
+      expect(
+        [for (final DeletedOutcomeView outcome in deleted.outcomes) outcome.freedBytes],
+        [6000000, 0, 3000000, 0, 2000000],
+      );
+      expect(deleted.freedBytes, 9000000);
+      expect(deleted.returnsLaterBytes, 2000000);
       expect(deleted.availableBytesAfter, 58000000000);
       expect(deleted.logPath, deletionLogPath);
     });

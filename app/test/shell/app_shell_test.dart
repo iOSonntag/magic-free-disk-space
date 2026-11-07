@@ -148,7 +148,10 @@ ScannedEvent _buildScanWithUnknownSections() {
     return (first['key'] == 'futureThings' ? 0 : 1) -
         (second['key'] == 'futureThings' ? 0 : 1);
   });
-  for (final Map<String, Object?> item in listScanItemJsons(json)) {
+  for (final Map<String, Object?> item in [
+    ...listScanItemJsons(json),
+    ...listScanAdviceJsons(json),
+  ]) {
     item['sectionKey'] = unknownKeys[item['sectionKey']] ?? item['sectionKey'];
   }
   for (final Object? total in json['sectionTotals']! as List<Object?>) {
@@ -197,14 +200,22 @@ void main() {
     final _ShellParts parts = await _pumpShell(tester, bridge: _createSampleBridge());
 
     expect(find.byType(OverviewPage), findsOneWidget);
-    for (final SectionKey sectionKey in [
-      SectionKey.caches,
-      SectionKey.developerTools,
-      SectionKey.apps,
-      SectionKey.largeFiles,
-    ]) {
+    final List<SectionKey> bridgeOrder = [
+      for (final SectionTotal total in sampleScan.sectionTotals) total.sectionKey,
+    ];
+    for (final SectionKey sectionKey in bridgeOrder) {
       expect(_findSectionEntry(sectionKey), findsOneWidget);
     }
+    expect(
+      [...bridgeOrder]..sort(
+        (SectionKey upper, SectionKey lower) => tester
+            .getTopLeft(_findSectionEntry(upper))
+            .dy
+            .compareTo(tester.getTopLeft(_findSectionEntry(lower)).dy),
+      ),
+      bridgeOrder,
+      reason: 'the sidebar lists the sections in the order the bridge sends',
+    );
     // The barriers of the pages' routes must not hide the sidebar and the
     // toolbar from VoiceOver.
     expect(find.bySemanticsLabel('Caches, 10 MB'), findsOneWidget);
@@ -295,7 +306,7 @@ void main() {
     await tapAndSettle(tester, find.text('Scan again'));
 
     expect(bridge.requestKinds, ['status', 'scan', 'scan']);
-    expect(find.text('19 MB can be freed'), findsOneWidget);
+    expect(find.text('26 MB can be freed'), findsOneWidget);
   });
 
   testWidgets('one selection holds items of two sections, and Review plans them together', (
@@ -399,7 +410,7 @@ void main() {
     await tapAndSettle(tester, _findSectionEntry(SectionKey.caches));
     await tapAndSettle(tester, find.byKey(const ItemRowKey(1)));
     await tapAndSettle(tester, find.bySemanticsLabel('Review the 1 item selected'));
-    await tapAndSettle(tester, findButtonLabelled('Delete 10 MB'));
+    await tapAndSettle(tester, findButtonLabelled('Delete 15 MB'));
 
     await tapAndSettle(tester, findButtonLabelled('Delete'));
 
@@ -546,12 +557,8 @@ void main() {
     }
 
     expectNoLayoutError('the Overview');
-    for (final SectionKey sectionKey in [
-      SectionKey.caches,
-      SectionKey.developerTools,
-      SectionKey.apps,
-      SectionKey.largeFiles,
-    ]) {
+    for (final SectionTotal total in sampleScan.sectionTotals) {
+      final SectionKey sectionKey = total.sectionKey;
       await _showAndTap(tester, _findSectionEntry(sectionKey));
       expect(find.byType(SectionPage), findsOneWidget);
       expectNoLayoutError('the page of ${sectionKey.name}');
@@ -570,7 +577,7 @@ void main() {
     await _showAndTap(tester, findButtonLabelled('Show list'));
     expect(find.byType(ReviewPage), findsOneWidget);
     expectNoLayoutError('Review');
-    await _showAndTap(tester, findButtonLabelled('Delete 10 MB'));
+    await _showAndTap(tester, findButtonLabelled('Delete 15 MB'));
     expectNoLayoutError('the alert over Review');
 
     final Completer<DeleteAnswer> heldDelete = bridge.holdNextDelete();
@@ -591,7 +598,7 @@ void main() {
       bridge: _createSampleBridge(scan: _buildScanWithUnknownSections()),
     );
 
-    expect(find.bySemanticsLabel('Future things, 6.0 MB'), findsOneWidget);
+    expect(find.bySemanticsLabel('Future things, 8.0 MB'), findsOneWidget);
     expect(find.byKey(const SectionCardKey(SectionKey.unknown)), findsOneWidget);
     expectEveryTappableNodeLabelled();
 

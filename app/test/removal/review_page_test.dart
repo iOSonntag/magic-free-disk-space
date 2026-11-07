@@ -44,7 +44,7 @@ void main() {
   Future<CleanerController> pumpReview(
     WidgetTester tester, {
     PlannedEvent? plan,
-    List<int> selectedNumbers = const [1, 2],
+    List<int>? selectedNumbers,
     MotionState motion = MotionState.reduced,
   }) async {
     final CleanerController controller = await createConfirmingController(
@@ -71,40 +71,57 @@ void main() {
     await pumpReview(tester);
 
     expect(find.text('Caches'), findsOneWidget);
-    expect(find.text('10 MB'), findsWidgets);
+    expect(find.text('iCloud Drive'), findsOneWidget);
+    expect(find.text('15 MB'), findsWidgets);
     expect(find.bySemanticsLabel('Tool cache, 6.0 MB, Safe to remove'), findsOneWidget);
     expect(find.bySemanticsLabel('App cache, 4.0 MB, Review first'), findsOneWidget);
-    expect(find.byTooltip('Keep Tool cache'), findsOneWidget);
-    expect(find.byTooltip('Keep App cache'), findsOneWidget);
-    expect(findButtonLabelled('Delete 10 MB'), findsOneWidget);
+    for (final PlannedItemView item in samplePlan.items) {
+      expect(find.byTooltip('Keep ${item.title}'), findsOneWidget);
+    }
+    expect(findButtonLabelled('Delete 15 MB'), findsOneWidget);
     expect(find.textContaining('type DELETE'), findsNothing);
     expectEveryTappableNodeLabelled();
   });
 
-  testWidgets('groups a plan across two sections under the heading of each', (
+  testWidgets('groups a plan across sections under the heading of each, in the order of the sections', (
     WidgetTester tester,
   ) async {
-    final PlannedItemView toolCache = _planSampleItem(1);
+    final PlannedItemView icloudFolder = _planSampleItem(7);
     final PlannedItemView removedAppData = _planSampleItem(4);
-    final PlannedEvent twoSectionPlan = PlannedEvent(
+    final PlannedItemView toolCache = _planSampleItem(1);
+    final List<PlannedItemView> items = [icloudFolder, removedAppData, toolCache];
+    final PlannedEvent threeSectionPlan = PlannedEvent(
       planId: 5,
       lines: const [],
       warningLines: const [],
-      items: [toolCache, removedAppData],
-      totalBytes: toolCache.allocatedBytes + removedAppData.allocatedBytes,
+      items: items,
+      totalBytes: items.fold(0, (int sum, PlannedItemView item) => sum + item.allocatedBytes),
       holdsCareful: true,
     );
 
-    await pumpReview(tester, plan: twoSectionPlan, selectedNumbers: [1, 4]);
+    await pumpReview(tester, plan: threeSectionPlan, selectedNumbers: [7, 4, 1]);
 
-    final Finder cachesCard = _findSectionCard(find.text('Caches'));
-    final Finder appsCard = _findSectionCard(find.text('Apps'));
-    expect(cachesCard, findsOneWidget);
-    expect(appsCard, findsOneWidget);
-    expect(find.descendant(of: cachesCard, matching: find.text(toolCache.title)), findsOneWidget);
-    expect(find.descendant(of: cachesCard, matching: find.text(removedAppData.title)), findsNothing);
-    expect(find.descendant(of: appsCard, matching: find.text(removedAppData.title)), findsOneWidget);
-    expect(find.descendant(of: appsCard, matching: find.text(toolCache.title)), findsNothing);
+    final Map<String, PlannedItemView> itemsByHeading = {
+      'Caches': toolCache,
+      'Apps': removedAppData,
+      'iCloud Drive': icloudFolder,
+    };
+    for (final MapEntry<String, PlannedItemView> section in itemsByHeading.entries) {
+      final Finder card = _findSectionCard(find.text(section.key));
+      expect(card, findsOneWidget);
+      for (final PlannedItemView item in items) {
+        expect(
+          find.descendant(of: card, matching: find.text(item.title)),
+          item == section.value ? findsOneWidget : findsNothing,
+          reason: '${item.title} on the card of ${section.key}',
+        );
+      }
+    }
+    final List<double> cardTops = [
+      for (final String heading in itemsByHeading.keys)
+        tester.getTopLeft(_findSectionCard(find.text(heading))).dy,
+    ];
+    expect(cardTops, orderedEquals([...cardTops]..sort()));
     expectEveryTappableNodeLabelled();
   });
 
@@ -122,14 +139,14 @@ void main() {
     WidgetTester tester,
   ) async {
     final CleanerController controller = await pumpReview(tester);
-    bridge.planAnswer = toolCachePlan;
+    bridge.planAnswer = planWithoutAppCache;
 
     await tapAndSettle(tester, find.byTooltip('Keep App cache'));
 
-    expect(bridge.plannedNumbers, [1]);
+    expect(bridge.plannedNumbers, listPlannedNumbers(planWithoutAppCache));
     expect(find.text('App cache'), findsNothing);
-    expect(findButtonLabelled('Delete 6.0 MB'), findsOneWidget);
-    expect((controller.state as ConfirmingState).plan, same(toolCachePlan));
+    expect(findButtonLabelled('Delete 11 MB'), findsOneWidget);
+    expect((controller.state as ConfirmingState).plan, same(planWithoutAppCache));
     expectEveryTappableNodeLabelled();
   });
 
@@ -145,7 +162,7 @@ void main() {
     expect(find.byType(ReviewPage), findsNothing);
     final ScannedState state = controller.state as ScannedState;
     expect(state.notice, nothingApproved.lines.join('\n'));
-    expect(state.selectedNumbers, {1});
+    expect(state.selectedNumbers, listPlannedNumbers(planWithoutAppCache).toSet());
   });
 
   testWidgets('Details unfolds the lines of the plan', (WidgetTester tester) async {
@@ -167,9 +184,9 @@ void main() {
   ) async {
     await pumpReview(tester);
 
-    await tapAndSettle(tester, findButtonLabelled('Delete 10 MB'));
+    await tapAndSettle(tester, findButtonLabelled('Delete 15 MB'));
 
-    expect(find.text('Delete 10 MB for good?'), findsOneWidget);
+    expect(find.text('Delete 15 MB for good?'), findsOneWidget);
     expect(findButtonLabelled('Show list'), findsNothing);
     expectEveryTappableNodeLabelled();
   });
@@ -179,7 +196,7 @@ void main() {
   ) async {
     final CleanerController controller = await pumpReview(tester);
     final CleanerState before = controller.state;
-    await tapAndSettle(tester, findButtonLabelled('Delete 10 MB'));
+    await tapAndSettle(tester, findButtonLabelled('Delete 15 MB'));
 
     await tapAndSettle(tester, findButtonLabelled('Cancel'));
 
@@ -194,14 +211,17 @@ void main() {
 
     await tapAndSettle(tester, findButtonLabelled('Back'));
 
-    expect((controller.state as ScannedState).selectedNumbers, {1, 2});
+    expect(
+      (controller.state as ScannedState).selectedNumbers,
+      listPlannedNumbers(samplePlan).toSet(),
+    );
     expect(find.byType(ReviewPage), findsNothing);
     expect(bridge.deleteRequest, isNull);
   });
 
   testWidgets('with motion on, the total counts down to the new plan', (WidgetTester tester) async {
     await pumpReview(tester, motion: MotionState.allowed);
-    bridge.planAnswer = toolCachePlan;
+    bridge.planAnswer = planWithoutAppCache;
 
     await tester.tap(find.byTooltip('Keep App cache'));
     await tester.pump();
@@ -212,9 +232,9 @@ void main() {
       matching: find.byType(Text),
     );
     final String? countingText = tester.widget<Text>(total).data;
-    expect(countingText, isNot(anyOf('10 MB', '6.0 MB')));
+    expect(countingText, isNot(anyOf('15 MB', '11 MB')));
     await tester.pump(const Duration(seconds: 2));
-    expect(tester.widget<Text>(total).data, '6.0 MB');
+    expect(tester.widget<Text>(total).data, '11 MB');
     expectEveryTappableNodeLabelled();
   });
 }

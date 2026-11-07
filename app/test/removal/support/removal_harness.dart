@@ -10,42 +10,56 @@ import '../../support/fake_cleaner_bridge.dart';
 import '../../support/sample_events.dart';
 import '../../support/stage_harness.dart';
 
-/// Items 1 (safe) and 2 (review) of the scan, 10 MB, with no careful item.
+/// The two caches 1 (safe) and 2 (review) to delete and the iCloud folder 7
+/// to evict, with no careful item.
 final PlannedEvent samplePlan = loadSampleEvent<PlannedEvent>();
 
-/// Item 1 removed, item 2 kept because its app runs.
+/// A run with one item of each outcome the bridge words, the App cache kept
+/// because its app runs.
 final DeletedEvent sampleDeleted = loadSampleEvent<DeletedEvent>();
 
-/// [samplePlan] with its second item careful.
+/// [samplePlan] with its App cache careful.
 final PlannedEvent carefulPlan = PlannedEvent(
   planId: 2,
   lines: samplePlan.lines,
   warningLines: samplePlan.warningLines,
   items: [
-    samplePlan.items.first,
-    PlannedItemView(
-      number: samplePlan.items.last.number,
-      key: samplePlan.items.last.key,
-      title: samplePlan.items.last.title,
-      sectionKey: samplePlan.items.last.sectionKey,
-      risk: Risk.careful,
-      removal: samplePlan.items.last.removal,
-      allocatedBytes: samplePlan.items.last.allocatedBytes,
-    ),
+    for (final PlannedItemView item in samplePlan.items)
+      if (item.number == 2)
+        PlannedItemView(
+          number: item.number,
+          key: item.key,
+          title: item.title,
+          sectionKey: item.sectionKey,
+          risk: Risk.careful,
+          removal: item.removal,
+          allocatedBytes: item.allocatedBytes,
+        )
+      else
+        item,
   ],
   totalBytes: samplePlan.totalBytes,
   holdsCareful: true,
 );
 
-/// The plan of item 1 alone, as the bridge answers once item 2 is taken out.
-final PlannedEvent toolCachePlan = PlannedEvent(
-  planId: 3,
-  lines: [samplePlan.lines[1]],
-  warningLines: samplePlan.warningLines,
-  items: [samplePlan.items.first],
-  totalBytes: samplePlan.items.first.allocatedBytes,
-  holdsCareful: false,
-);
+/// [samplePlan] without its App cache, as the bridge answers once Keep takes
+/// item 2 out.
+final PlannedEvent planWithoutAppCache = _planSampleWithout(2);
+
+PlannedEvent _planSampleWithout(int number) {
+  final List<PlannedItemView> items = [
+    for (final PlannedItemView item in samplePlan.items)
+      if (item.number != number) item,
+  ];
+  return PlannedEvent(
+    planId: 3,
+    lines: const [],
+    warningLines: samplePlan.warningLines,
+    items: items,
+    totalBytes: items.fold(0, (int sum, PlannedItemView item) => sum + item.allocatedBytes),
+    holdsCareful: false,
+  );
+}
 
 /// Pumps the step of the delete flow that [controller] is in, as the shell
 /// shows it over the pages, with [motion] as the window's motion; nothing
@@ -73,18 +87,24 @@ Future<void> pumpRemovalFlow(
   return pumpOnStage(tester, flowStep, motion: motion);
 }
 
+/// The numbers of the items of [plan].
+List<int> listPlannedNumbers(PlannedEvent plan) {
+  return [for (final PlannedItemView item in plan.items) item.number];
+}
+
 /// A controller over [bridge] whose state confirms [plan] of
-/// [selectedNumbers]; disposed at tear-down.
+/// [selectedNumbers], the items of [plan] when not given; disposed at
+/// tear-down.
 Future<CleanerController> createConfirmingController(
   FakeCleanerBridge bridge, {
   required PlannedEvent plan,
-  List<int> selectedNumbers = const [1, 2],
+  List<int>? selectedNumbers,
 }) async {
   bridge.planAnswer = plan;
   final CleanerController controller = CleanerController(bridge: bridge);
   addTearDown(controller.dispose);
   await controller.scan();
-  for (final int number in selectedNumbers) {
+  for (final int number in selectedNumbers ?? listPlannedNumbers(plan)) {
     controller.toggleCandidate(number);
   }
   await controller.requestPlan();

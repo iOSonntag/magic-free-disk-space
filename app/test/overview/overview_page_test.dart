@@ -48,6 +48,20 @@ Future<_OverviewParts> _pumpOverview(
   return (cleanerController: cleanerController, selectedSections: selectedSections);
 }
 
+/// [sectionKeys] in the order their cards stand on the page, row by row.
+List<SectionKey> _sortByCardPlace(WidgetTester tester, List<SectionKey> sectionKeys) {
+  Offset findCardPlace(SectionKey sectionKey) {
+    return tester.getTopLeft(find.byKey(SectionCardKey(sectionKey)));
+  }
+
+  return [...sectionKeys]..sort((SectionKey left, SectionKey right) {
+    final Offset leftPlace = findCardPlace(left);
+    final Offset rightPlace = findCardPlace(right);
+    final int byRow = leftPlace.dy.compareTo(rightPlace.dy);
+    return byRow != 0 ? byRow : leftPlace.dx.compareTo(rightPlace.dx);
+  });
+}
+
 bool _isCleanButtonEnabled(WidgetTester tester) {
   return isButtonEnabled(
     tester,
@@ -69,22 +83,21 @@ void main() {
     );
 
     expect(find.text('Overview'), findsOneWidget);
-    expect(find.text('19 MB can be freed'), findsOneWidget);
+    expect(find.text('26 MB can be freed'), findsOneWidget);
     expect(find.text('52 GB available of 500 GB'), findsOneWidget);
     expect(find.text('6.0 MB of it is safe to remove at once'), findsOneWidget);
     expect(find.text('WHERE THE SPACE IS'), findsOneWidget);
-    for (final SectionKey sectionKey in [
-      SectionKey.caches,
-      SectionKey.developerTools,
-      SectionKey.apps,
-      SectionKey.largeFiles,
-    ]) {
+    final List<SectionKey> bridgeOrder = [
+      for (final SectionTotal total in sampleScan.sectionTotals) total.sectionKey,
+    ];
+    for (final SectionKey sectionKey in bridgeOrder) {
       expect(find.byKey(SectionCardKey(sectionKey)), findsOneWidget);
     }
+    expect(_sortByCardPlace(tester, bridgeOrder), bridgeOrder);
     expect(
       find.descendant(
         of: find.byKey(const SectionCardKey(SectionKey.developerTools)),
-        matching: find.text('1 item · 1 to handle yourself'),
+        matching: find.text('2 items · 1 to handle yourself'),
       ),
       findsOneWidget,
     );
@@ -271,7 +284,7 @@ void main() {
     heldScan.complete(sampleScan);
     await tester.pumpAndSettle();
 
-    expect(find.text('19 MB can be freed'), findsOneWidget);
+    expect(find.text('26 MB can be freed'), findsOneWidget);
     expect(find.byKey(const SectionCardKey(SectionKey.apps)), findsOneWidget);
   });
 }

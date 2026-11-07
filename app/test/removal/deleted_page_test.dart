@@ -73,8 +73,8 @@ void main() {
     await pumpResult(tester, run: sampleDeleted);
 
     expect(find.text('FREED'), findsOneWidget);
-    expect(find.text('6.0 MB'), findsOneWidget);
-    expect(find.text('1 item removed.'), findsOneWidget);
+    expect(find.text('9.0 MB'), findsOneWidget);
+    expect(find.text('2 items removed.'), findsOneWidget);
     expect(find.text('58 GB free on the disk now.'), findsOneWidget);
     expect(find.text('What stayed'), findsOneWidget);
     expect(find.text('App cache'), findsOneWidget);
@@ -82,7 +82,19 @@ void main() {
       find.text('Kept. Its app is open, so it was left alone. Quit the app and try again.'),
       findsOneWidget,
     );
-    expect(find.textContaining('more comes back'), findsNothing);
+    final PlannedItemView evictedFolder = samplePlan.items.singleWhere(
+      (PlannedItemView item) => item.removal == ItemRemoval.evict,
+    );
+    expect(find.text(evictedFolder.title), findsOneWidget);
+    expect(
+      find.text('Partly removed, 3.0 MB freed. It changed since the scan, so it was left alone.'),
+      findsOneWidget,
+    );
+    expect(find.text('Not removed. macOS did not allow it to be removed.'), findsOneWidget);
+    expect(
+      find.text('2.0 MB more comes back within minutes, as the container engine gives it up.'),
+      findsOneWidget,
+    );
     expect(findButtonLabelled('Show log'), findsOneWidget);
     expect(findButtonLabelled('Done'), findsOneWidget);
     expectEveryTappableNodeLabelled();
@@ -118,12 +130,15 @@ void main() {
   testWidgets('words an item kept for a reason this app does not know by its outcome alone', (
     WidgetTester tester,
   ) async {
+    final PlannedItemView appCache = samplePlan.items.singleWhere(
+      (PlannedItemView item) => item.title == 'App cache',
+    );
     final DeletedEvent runWithUnknownReason = DeletedEvent(
       lines: const ['Freed nothing.'],
       outcomes: [
         DeletedOutcomeView(
-          number: 2,
-          key: samplePlan.items.last.key,
+          number: appCache.number,
+          key: appCache.key,
           outcome: DeletedOutcome.kept,
           reasonKey: DeletedReason.unknown,
           freedBytes: 0,
@@ -138,7 +153,7 @@ void main() {
     await pumpResult(tester, run: runWithUnknownReason);
 
     expect(find.text('What stayed'), findsOneWidget);
-    expect(find.text('App cache'), findsOneWidget);
+    expect(find.text(appCache.title), findsOneWidget);
     expect(find.text('Kept.'), findsOneWidget);
     expectEveryTappableNodeLabelled();
   });

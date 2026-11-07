@@ -40,12 +40,13 @@ void main() {
   ) async {
     await pumpDeleting(tester, plan: samplePlan, motion: MotionState.reduced);
 
-    expect(find.text('Deleting 10 MB'), findsOneWidget);
-    expect(find.text('Tool cache'), findsOneWidget);
-    expect(find.text('App cache'), findsOneWidget);
+    expect(find.text('Deleting 15 MB'), findsOneWidget);
+    for (final PlannedItemView item in samplePlan.items) {
+      expect(find.text(item.title), findsOneWidget);
+    }
     expect(countDissolvedRows(tester), 0);
     await tester.pump();
-    expect(countDissolvedRows(tester), 2);
+    expect(countDissolvedRows(tester), samplePlan.items.length);
     expectEveryTappableNodeLabelled();
 
     await tester.pumpAndSettle();
@@ -91,7 +92,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(countDissolvedRows(tester), 2);
+    expect(countDissolvedRows(tester), samplePlan.items.length);
     await tester.pumpAndSettle();
     expect(find.text('Still deleting. This can take a minute.'), findsOneWidget);
   });
