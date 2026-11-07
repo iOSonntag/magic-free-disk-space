@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
-import type { CatalogOwner, CatalogOwnerBundleId, MacBundleId } from '../catalog/catalogOwner.js';
+import type { CatalogOwner, MacBundleId } from '../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { InstalledApp } from './scanPlatform.js';
@@ -10,14 +10,32 @@ export type OwnerState = 'running' | 'stopped' | 'unknown';
 // Reverse-DNS names with at least three segments; shorter names collide with ordinary folder names.
 const BUNDLE_ID_PATTERN = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+){2,}$/;
 
-const APPLE_BUNDLE_ID_PREFIX = 'com.apple.';
+// A Group Containers folder of Apple's own apps is named `group.com.apple.<name>`.
+const APPLE_BUNDLE_ID_PREFIXES = ['com.apple.', 'group.com.apple.'];
+
+// A folder shared by one developer's apps is named `<team id>.<bundle id>`; the team id Apple
+// assigns is ten upper-case letters and digits.
+const TEAM_ID_PREFIX_PATTERN = /^[A-Z0-9]{10}\./;
 
 export function isBundleIdShape(params: { name: string }): boolean {
   return BUNDLE_ID_PATTERN.test(params.name);
 }
 
-/** The folder name as the bundle id it is shaped like; `null` for any other name. */
+/**
+ * The folder name as the bundle id it is shaped like, a team-id prefix taken off; `null` for any
+ * other name.
+ */
 export function parseBundleIdShapedName(params: { name: string }): MacBundleId | null {
+  const teamIdPrefix = TEAM_ID_PREFIX_PATTERN.exec(params.name);
+
+  if (teamIdPrefix !== null) {
+    const unprefixedName = params.name.slice(teamIdPrefix[0].length);
+
+    if (isBundleIdShape({ name: unprefixedName })) {
+      return parseMacBundleId({ text: unprefixedName });
+    }
+  }
+
   if (!isBundleIdShape({ name: params.name })) {
     return null;
   }
@@ -26,7 +44,7 @@ export function parseBundleIdShapedName(params: { name: string }): MacBundleId |
 }
 
 export function isAppleBundleId(params: { bundleId: MacBundleId }): boolean {
-  return params.bundleId.startsWith(APPLE_BUNDLE_ID_PREFIX);
+  return APPLE_BUNDLE_ID_PREFIXES.some((prefix) => params.bundleId.startsWith(prefix));
 }
 
 /**
@@ -80,44 +98,77 @@ export function buildAppOwner(params: { app: InstalledApp }): CatalogOwner | nul
   return { kind: 'bundleId', bundleId: params.app.bundleId };
 }
 
-/** The bundle paths of the installed apps that carry the owner's id, as app or as nested helper. */
-export function findOwnerBundlePaths(params: {
-  owner: CatalogOwner | null;
-  installedApps: InstalledApp[];
-}): string[] {
-  if (params.owner === null) {
-    return [];
-  }
-
+/**
+ * Whether the installed app is the owner: for a bundle id, the app of that id or one nesting it as
+ * a helper; for a family, an app whose own id belongs to it. A family takes no nested helper, so an
+ * app that bundles one of its helpers, such as Creative Cloud, never counts as one of its apps.
+ */
+function isOwnerApp(params: { owner: CatalogOwner; app: InstalledApp }): boolean {
   switch (params.owner.kind) {
-    case 'bundleId': {
-      const bundleId = params.owner.bundleId;
+    case 'bundleId':
+      return (
+        params.app.bundleId === params.owner.bundleId ||
+        params.app.nestedBundleIds.includes(params.owner.bundleId)
+      );
+    case 'bundleIdFamily': {
+      const appBundleId = params.app.bundleId;
 
-      return params.installedApps
-        .filter((app) => app.bundleId === bundleId || app.nestedBundleIds.includes(bundleId))
-        .map((app) => app.bundlePath);
+      if (appBundleId === null) {
+        return false;
+      }
+
+      return params.owner.bundleIdPrefixes.some(
+        (prefix) => appBundleId === prefix || appBundleId.startsWith(`${prefix}.`),
+      );
     }
   }
 }
 
+/** The bundle paths of the installed apps that are the owner, as `isOwnerApp` tells them. */
+export function findOwnerBundlePaths(params: {
+  owner: CatalogOwner | null;
+  installedApps: InstalledApp[];
+}): string[] {
+  const owner = params.owner;
+
+  if (owner === null) {
+    return [];
+  }
+
+  return params.installedApps
+    .filter((app) => isOwnerApp({ owner: owner, app: app }))
+    .map((app) => app.bundlePath);
+}
+
 /**
- * The name of the installed app that carries the owner's id: the app of that id itself before an
- * app that nests it as a helper. `null` when no installed app carries it.
+ * The name of the installed app that is the owner: for a bundle id, the app of that id itself
+ * before an app that nests it as a helper; for a family, its first installed app. `null` when no
+ * installed app is the owner.
  */
 export function findOwnerAppName(params: {
   owner: CatalogOwner | null;
   installedApps: InstalledApp[];
 }): string | null {
-  if (params.owner === null) {
+  const owner = params.owner;
+
+  if (owner === null) {
     return null;
   }
 
-  switch (params.owner.kind) {
+  switch (owner.kind) {
     case 'bundleId': {
-      const bundleId = params.owner.bundleId;
       const app =
-        params.installedApps.find((installed) => installed.bundleId === bundleId) ??
-        params.installedApps.find((installed) => installed.nestedBundleIds.includes(bundleId));
+        params.installedApps.find((installed) => installed.bundleId === owner.bundleId) ??
+        params.installedApps.find((installed) =>
+          installed.nestedBundleIds.includes(owner.bundleId),
+        );
+
+      return app?.displayName ?? null;
+    }
+    case 'bundleIdFamily': {
+      const app = params.installedApps.find((installed) =>
+        isOwnerApp({ owner: owner, app: installed }),
+      );
 
       return app?.displayName ?? null;
     }
@@ -126,8 +177,8 @@ export function findOwnerAppName(params: {
 
 /**
  * Returns `stopped` for no owner, `unknown` for any owner while the process list is missing,
- * `stopped` for an owner that no installed app carries, and `running` when a process runs from
- * the owner's bundle.
+ * `stopped` for an owner that no installed app is, and `running` when a process runs from the
+ * bundle of any app that is the owner.
  */
 export function resolveOwnerState(params: {
   owner: CatalogOwner | null;
@@ -138,21 +189,6 @@ export function resolveOwnerState(params: {
     return 'stopped';
   }
 
-  switch (params.owner.kind) {
-    case 'bundleId':
-      return resolveBundleOwnerState({
-        owner: params.owner,
-        installedApps: params.installedApps,
-        processCommands: params.processCommands,
-      });
-  }
-}
-
-function resolveBundleOwnerState(params: {
-  owner: CatalogOwnerBundleId;
-  installedApps: InstalledApp[];
-  processCommands: string[] | null;
-}): OwnerState {
   if (params.processCommands === null) {
     return 'unknown';
   }

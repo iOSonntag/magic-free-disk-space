@@ -20,6 +20,7 @@ export type FixtureRoot = {
   rootDir: string;
   homeDir: AbsolutePath;
   tempDir: AbsolutePath;
+  userCacheDir: AbsolutePath;
   applicationDir: AbsolutePath;
 };
 
@@ -29,11 +30,13 @@ export async function createFixtureRoot(): Promise<FixtureRoot> {
     rootDir,
     homeDir: buildTestAbsolutePath({ text: join(rootDir, 'home') }),
     tempDir: buildTestAbsolutePath({ text: join(rootDir, 'tmp') }),
+    userCacheDir: buildTestAbsolutePath({ text: join(rootDir, 'cache') }),
     applicationDir: buildTestAbsolutePath({ text: join(rootDir, 'Applications') }),
   };
 
   await mkdir(fixtureRoot.homeDir);
   await mkdir(fixtureRoot.tempDir);
+  await mkdir(fixtureRoot.userCacheDir);
   await mkdir(fixtureRoot.applicationDir);
 
   return fixtureRoot;
@@ -50,6 +53,7 @@ export async function loadTestEnvironment(params: {
 }): Promise<Environment> {
   const homeRealPath = await realpath(params.fixtureRoot.homeDir);
   const tempRealPath = await realpath(params.fixtureRoot.tempDir);
+  const userCacheRealPath = await realpath(params.fixtureRoot.userCacheDir);
   const applicationRealPath = await realpath(params.fixtureRoot.applicationDir);
 
   return buildDarwinEnvironment({
@@ -60,6 +64,8 @@ export async function loadTestEnvironment(params: {
     homeRealPath: buildTestAbsolutePath({ text: homeRealPath }),
     tempDir: params.fixtureRoot.tempDir,
     tempRealPath: buildTestAbsolutePath({ text: tempRealPath }),
+    userCacheDir: params.fixtureRoot.userCacheDir,
+    userCacheRealPath: buildTestAbsolutePath({ text: userCacheRealPath }),
     applicationDirs: [params.fixtureRoot.applicationDir],
     applicationRealPaths: [buildTestAbsolutePath({ text: applicationRealPath })],
   });

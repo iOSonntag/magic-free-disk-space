@@ -14,6 +14,8 @@ const ENVIRONMENT = buildDarwinEnvironment({
   homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
   tempDir: buildTestAbsolutePath({ text: '/private/tmp/tester' }),
   tempRealPath: buildTestAbsolutePath({ text: '/private/tmp/tester' }),
+  userCacheDir: buildTestAbsolutePath({ text: '/private/tmp/tester-cache' }),
+  userCacheRealPath: buildTestAbsolutePath({ text: '/private/tmp/tester-cache' }),
   applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
   applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
 });

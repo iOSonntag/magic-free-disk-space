@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test';
+import type { CatalogOwner } from '../../src/catalog/catalogOwner.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import {
   findOwnerAppName,
   findOwnerBundlePaths,
   isAppleBundleId,
   isBundleIdShape,
+  parseBundleIdShapedName,
   resolveOwnerState,
   resolveTargetOwner,
 } from '../../src/scan/resolveOwnerState.js';
@@ -54,13 +56,47 @@ describeAwaitingWin32Platform('isBundleIdShape', () => {
   });
 });
 
+describeAwaitingWin32Platform('parseBundleIdShapedName', () => {
+  test('takes a bundle-id-shaped name as it is', () => {
+    expect(parseBundleIdShapedName({ name: 'com.example.app' })).toEqual(
+      buildTestMacBundleId({ text: 'com.example.app' }),
+    );
+    expect(parseBundleIdShapedName({ name: 'group.com.apple.notes' })).toEqual(
+      buildTestMacBundleId({ text: 'group.com.apple.notes' }),
+    );
+  });
+
+  test('takes the team id off a team-prefixed name', () => {
+    expect(parseBundleIdShapedName({ name: 'UBF8T346G9.com.microsoft.teams' })).toEqual(
+      buildTestMacBundleId({ text: 'com.microsoft.teams' }),
+    );
+  });
+
+  test('names no bundle id for a team-prefixed name without one', () => {
+    expect(parseBundleIdShapedName({ name: 'UBF8T346G9.Office' })).toBeNull();
+    expect(parseBundleIdShapedName({ name: 'Homebrew' })).toBeNull();
+  });
+
+  test('keeps a lower-case first segment of ten characters as part of the id', () => {
+    expect(parseBundleIdShapedName({ name: 'abcdefghij.example.app' })).toEqual(
+      buildTestMacBundleId({ text: 'abcdefghij.example.app' }),
+    );
+  });
+});
+
 describeAwaitingWin32Platform('isAppleBundleId', () => {
-  test('matches the com.apple. prefix only', () => {
+  test('matches the com.apple. prefix and the group.com.apple. prefix only', () => {
     expect(isAppleBundleId({ bundleId: buildTestMacBundleId({ text: 'com.apple.Safari' }) })).toBe(
       true,
     );
     expect(
+      isAppleBundleId({ bundleId: buildTestMacBundleId({ text: 'group.com.apple.notes' }) }),
+    ).toBe(true);
+    expect(
       isAppleBundleId({ bundleId: buildTestMacBundleId({ text: 'com.applesauce.app' }) }),
+    ).toBe(false);
+    expect(
+      isAppleBundleId({ bundleId: buildTestMacBundleId({ text: 'group.com.example.app' }) }),
     ).toBe(false);
   });
 });
@@ -97,6 +133,21 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
         installedApps: [],
       }),
     ).toEqual(buildTestCatalogOwner({ bundleId: null }));
+  });
+
+  test('takes the bundle id of a team-prefixed child of a children entry', () => {
+    const entry = buildTestCatalogEntry({
+      selection: { kind: 'children' },
+      owner: buildTestCatalogOwner({ bundleId: null }),
+    });
+
+    expect(
+      resolveTargetOwner({
+        entry: entry,
+        path: '/home/Library/Group Containers/UBF8T346G9.com.microsoft.teams',
+        installedApps: [],
+      }),
+    ).toEqual(buildTestCatalogOwner({ bundleId: 'com.microsoft.teams' }));
   });
 
   test('takes the installed app named like a child, ignoring case', () => {
@@ -286,5 +337,63 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
         processCommands: ['/Users/tester/Applications/Slack.app/Contents/MacOS/Slack'],
       }),
     ).toBe('running');
+  });
+});
+
+describeAwaitingWin32Platform('a bundle id family owner', () => {
+  const owner: CatalogOwner = {
+    kind: 'bundleIdFamily',
+    bundleIdPrefixes: ['com.adobe.PremierePro', 'com.adobe.ame'],
+  };
+  const premiere = buildTestInstalledApp({
+    bundlePath: '/Applications/Adobe Premiere Pro 2025/Adobe Premiere Pro 2025.app',
+    displayName: 'Adobe Premiere Pro 2025',
+    bundleId: 'com.adobe.PremierePro.25',
+  });
+  const creativeCloud = buildTestInstalledApp({
+    bundlePath: '/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app',
+    displayName: 'Creative Cloud',
+    bundleId: 'com.adobe.acc.AdobeCreativeCloud',
+    nestedBundleIds: ['com.adobe.ame.helper', 'com.adobe.ccxprocess', 'com.adobe.CoreSync'],
+  });
+  const lookalike = buildTestInstalledApp({
+    bundlePath: '/Applications/Amex.app',
+    displayName: 'Amex',
+    bundleId: 'com.adobe.amex',
+  });
+  const installedApps = [premiere, creativeCloud, lookalike];
+
+  test('a running member of the family marks the owner running', () => {
+    expect(
+      resolveOwnerState({
+        owner: owner,
+        installedApps: installedApps,
+        processCommands: [
+          '/Applications/Adobe Premiere Pro 2025/Adobe Premiere Pro 2025.app/Contents/MacOS/Adobe Premiere Pro 2025',
+        ],
+      }),
+    ).toBe('running');
+  });
+
+  test('a running Creative Cloud helper leaves the owner stopped, though it nests a lookalike id', () => {
+    expect(
+      resolveOwnerState({
+        owner: owner,
+        installedApps: installedApps,
+        processCommands: [
+          '/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app/Contents/MacOS/Creative Cloud',
+          '/Applications/Amex.app/Contents/MacOS/Amex',
+        ],
+      }),
+    ).toBe('stopped');
+  });
+
+  test('lists and names only the apps whose own id continues a prefix after a dot', () => {
+    expect(findOwnerBundlePaths({ owner: owner, installedApps: installedApps })).toEqual([
+      premiere.bundlePath,
+    ]);
+    expect(findOwnerAppName({ owner: owner, installedApps: installedApps })).toBe(
+      'Adobe Premiere Pro 2025',
+    );
   });
 });

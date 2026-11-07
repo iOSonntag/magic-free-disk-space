@@ -1,6 +1,6 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
 
-/** macOS itself: its downloaded updates and the device backups it keeps. */
+/** macOS itself, such as its downloaded updates. */
 export const SYSTEM_ENTRIES: CatalogEntry[] = [
   {
     id: 'macos-update-downloads',
@@ -21,27 +21,6 @@ export const SYSTEM_ENTRIES: CatalogEntry[] = [
       opener: null,
       advice:
         'Downloaded macOS updates. Install or cancel the pending update in System Settings > General > Software Update; macOS removes the files afterwards.',
-    },
-  },
-  {
-    id: 'iphone-backups',
-    category: 'system',
-    title: 'iPhone and iPad backups',
-    explanation:
-      'Backups of your iPhones and iPads, which may be the only copy of their data. Manage them in Finder.',
-    regeneration: 'A deleted backup does not come back.',
-    risk: 'never',
-    root: 'home',
-    path: 'Library/Application Support/MobileSync/Backup',
-    selection: { kind: 'path' },
-    ageRule: { kind: 'none' },
-    owner: null,
-    removal: {
-      kind: 'advice',
-      carvedPaths: [],
-      opener: null,
-      advice:
-        'Backups of iPhones and iPads may be the only copy of their data. Manage them in Finder: select the device, then Manage Backups.',
     },
   },
 ];

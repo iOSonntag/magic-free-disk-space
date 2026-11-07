@@ -1,4 +1,100 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
+import { SCAN_LIMITS } from '../../../scan/limits.js';
+import { buildBundleIdOwner } from './buildBundleIdOwner.js';
 
-/** The logs and crash reports that macOS and apps write. */
-export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [];
+/** The logs and crash reports that macOS and apps write, and the small caches of macOS's apps. */
+export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
+  {
+    id: 'messages-attachment-previews',
+    category: 'caches',
+    title: 'Messages attachment previews',
+    explanation:
+      'Small previews of the photos and files in your chats, kept to show them faster. Your messages and attachments stay.',
+    regeneration: 'Messages makes them again when you open a chat.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Messages/Caches/Previews/Attachments',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: buildBundleIdOwner({ text: 'com.apple.MobileSMS' }),
+    removal: { kind: 'delete' },
+  },
+  {
+    id: 'messages-sticker-previews',
+    category: 'caches',
+    title: 'Messages sticker previews',
+    explanation: 'Previews of the stickers in your chats, kept to show them faster.',
+    regeneration: 'Messages makes them again when you open a chat.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Messages/Caches/Previews/StickerCache',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: buildBundleIdOwner({ text: 'com.apple.MobileSMS' }),
+    removal: { kind: 'delete' },
+  },
+  {
+    id: 'messages-sticker-cache',
+    category: 'caches',
+    title: 'Messages sticker cache',
+    explanation: 'Stickers that Messages keeps to show them in your chats faster.',
+    regeneration: 'Messages downloads or makes them again when a chat shows them.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Messages/StickerCache',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: buildBundleIdOwner({ text: 'com.apple.MobileSMS' }),
+    removal: { kind: 'delete' },
+  },
+  {
+    // This app's deletion log, a child of the logs folder below, is never removed; the advice
+    // holds it back from that entry.
+    id: 'own-deletion-log',
+    category: 'system',
+    title: 'Record of what this app deleted',
+    explanation: 'The list of everything Magic Free Disk Space deleted, kept so you can look back.',
+    regeneration: 'It is kept on purpose and stays.',
+    risk: 'never',
+    root: 'home',
+    path: 'Library/Logs/magic-free-disk-space',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: null,
+    removal: {
+      kind: 'advice',
+      carvedPaths: [],
+      opener: null,
+      advice: 'Magic Free Disk Space keeps this record of its deletions and never deletes it.',
+    },
+  },
+  {
+    id: 'crash-reports',
+    category: 'system',
+    title: 'Old crash reports',
+    explanation: 'Reports that apps and macOS wrote when something crashed, untouched for a while.',
+    regeneration: 'New reports appear only if something crashes again.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Logs/DiagnosticReports',
+    selection: { kind: 'children' },
+    ageRule: { kind: 'unchangedDays', days: SCAN_LIMITS.defaultStaleDays },
+    owner: null,
+    removal: { kind: 'delete' },
+  },
+  {
+    id: 'user-logs',
+    category: 'system',
+    title: 'Old app logs',
+    explanation:
+      'Notes that apps write about what they did, for finding problems, untouched for a while. One folder for each app.',
+    regeneration: 'Apps write new ones while they run.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Logs',
+    selection: { kind: 'children' },
+    ageRule: { kind: 'unchangedDays', days: SCAN_LIMITS.defaultStaleDays },
+    owner: null,
+    removal: { kind: 'delete' },
+  },
+];
