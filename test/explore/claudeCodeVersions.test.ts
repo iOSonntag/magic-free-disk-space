@@ -10,6 +10,7 @@ import type {
   ClaudeCodeVersionStateInstalled,
 } from '../../src/explore/claudeCodeVersions/loadClaudeCodeVersionState.js';
 import { recheckClaudeCodeVersionUnit } from '../../src/explore/claudeCodeVersions/recheckClaudeCodeVersionUnit.js';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type { ExplorePathUnitClaudeCodeVersion } from '../../src/explore/exploreUnit.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
@@ -249,13 +250,17 @@ describeAwaitingWin32Platform('recheckClaudeCodeVersionUnit', () => {
           throw new Error('The version was not offered.');
         }
 
-        const recheck = () =>
-          recheckClaudeCodeVersionUnit({
-            unit: unit,
+        // A function declaration does not keep the narrowing of `unit`.
+        const offeredUnit = unit;
+
+        function recheck(): Promise<PathUnitRecheck> {
+          return recheckClaudeCodeVersionUnit({
+            unit: offeredUnit,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
             processCommands: [],
           });
+        }
 
         expect(await recheck()).toEqual({ kind: 'unchanged' });
 

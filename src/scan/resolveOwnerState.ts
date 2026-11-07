@@ -196,19 +196,40 @@ export function isOwnerUninstalled(params: {
 }
 
 /**
- * The name of the installed app that is the owner: for a bundle id, the app of that id itself
- * before an app that nests it as a helper; for a family, its first installed app. `null` when no
- * installed app is the owner.
+ * The name of the app that is the owner: for a bundle id, the installed app of that id itself
+ * before one that nests it as a helper; for a family, its first installed app; then the first
+ * system app that is it. `null` when no app is the owner.
  */
 export function findOwnerAppName(params: {
   owner: CatalogOwner | null;
   installedApps: InstalledApp[];
+  systemApps: SystemApp[];
 }): string | null {
   const owner = params.owner;
 
   if (owner === null) {
     return null;
   }
+
+  const installedAppName = findOwnerInstalledAppName({
+    owner: owner,
+    installedApps: params.installedApps,
+  });
+
+  if (installedAppName !== null) {
+    return installedAppName;
+  }
+
+  const systemApp = params.systemApps.find((app) => isOwnerSystemApp({ owner: owner, app: app }));
+
+  return systemApp?.displayName ?? null;
+}
+
+function findOwnerInstalledAppName(params: {
+  owner: CatalogOwner;
+  installedApps: InstalledApp[];
+}): string | null {
+  const owner = params.owner;
 
   switch (owner.kind) {
     case 'bundleId': {

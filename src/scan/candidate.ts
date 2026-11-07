@@ -104,7 +104,7 @@ export type CandidateListing = {
   lastUsedAtMs: number | null;
   /** When the item came onto this Mac; `null` until a source reads it. */
   downloadedAtMs: number | null;
-  /** The installed app the item belongs to, by the name the person knows it by. */
+  /** The app the item belongs to, installed or of the system, by the name the person knows it by. */
   appName: string | null;
 };
 

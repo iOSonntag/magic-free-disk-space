@@ -1,5 +1,6 @@
 import { isOverlappingPath } from '../path/isOverlappingPath.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isStrictlyInsidePath } from '../path/isStrictlyInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { CandidateDecision, CandidateDecisionSkip, SkipReason } from './candidate.js';
 import { isProbedCandidate } from './candidate.js';
@@ -153,7 +154,7 @@ function isOverlappingHeldPath(params: {
   const heldPaths = [...params.skippedPaths, ...params.advisedPlaces.map((place) => place.path)];
   // Any skip or advice counts, earlier or later: removing the path would remove what it holds back.
   const isHoldingHeldPath = heldPaths.some((heldPath) =>
-    isStrictlyInsidePath({ pathRules: params.pathRules, path: heldPath, parentPath: params.path }),
+    isStrictlyInsidePath({ rules: params.pathRules, path: heldPath, parentPath: params.path }),
   );
 
   if (isHoldingHeldPath) {
@@ -194,20 +195,5 @@ function isHeldByAdvice(params: {
     !params.place.carvedPaths.some((carvedPath) =>
       isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: carvedPath }),
     )
-  );
-}
-
-function isStrictlyInsidePath(params: {
-  pathRules: PathRules;
-  path: string;
-  parentPath: string;
-}): boolean {
-  return (
-    params.path !== params.parentPath &&
-    isSameOrInsidePath({
-      rules: params.pathRules,
-      path: params.path,
-      parentPath: params.parentPath,
-    })
   );
 }

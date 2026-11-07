@@ -23,7 +23,8 @@ type TestProbeRunParams = {
   /** `null` for processes that could not be read; no process runs when it is left out. */
   processCommands?: string[] | null;
   platform?: ExploreProbePlatform;
-  cutoffMs?: number;
+  staleCutoffMs?: number;
+  unusedCutoffMs?: number;
 };
 
 /** A unit of the kind `TKind`. */
@@ -54,18 +55,16 @@ export async function withFixtureHome(params: {
 
 /**
  * A probe run over `environment` with the test platform, due ten seconds from now. No process
- * runs unless `processCommands` names one, and both cutoffs are `cutoffMs`, 0 when it is left out.
+ * runs unless `processCommands` names one, and each cutoff left out is 0.
  */
 export function buildTestProbeRun(params: TestProbeRunParams): ExploreProbeRun {
-  const cutoffMs = params.cutoffMs ?? 0;
-
   return {
     environment: params.environment,
     platform: params.platform ?? buildTestProbePlatform(),
     processCommands: params.processCommands === undefined ? [] : params.processCommands,
     deadlineMs: Date.now() + TEST_PROBE_RUN_DURATION_MS,
-    unusedCutoffMs: cutoffMs,
-    staleCutoffMs: cutoffMs,
+    unusedCutoffMs: params.unusedCutoffMs ?? 0,
+    staleCutoffMs: params.staleCutoffMs ?? 0,
   };
 }
 

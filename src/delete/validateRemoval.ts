@@ -1,8 +1,8 @@
 import { isRemovableRisk } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { TargetRefusalReason, TargetRemovalKind } from '../environment/findTargetRefusal.js';
-import { findTargetRefusal } from '../environment/findTargetRefusal.js';
-import type { Candidate, RemovalTarget, RemovalTargets } from '../scan/candidate.js';
+import type { TargetRefusalReason } from '../environment/findTargetRefusal.js';
+import type { Candidate } from '../scan/candidate.js';
+import { findRemovalRefusal } from '../scan/findRemovalRefusal.js';
 
 export type RefusalReason = 'neverRisk' | TargetRefusalReason;
 
@@ -13,9 +13,8 @@ export type RemovalDecisionRefused = { kind: 'refused'; path: string; reason: Re
 export type RemovalDecision = RemovalDecisionApproved | RemovalDecisionRefused;
 
 /**
- * Refuses a candidate marked `never`. Approves an item of paths or an evict only when the
- * environment refuses none of its targets, as `findTargetRefusal` judges a delete or an evict. A
- * tool item and an engine item pass, since their own tool or engine removes them after a recheck.
+ * Refuses a candidate marked `never`, then one at the first target `findRemovalRefusal` refuses.
+ * A tool item and an engine item pass, since their own tool or engine removes them after a recheck.
  */
 export function validateRemoval(params: {
   candidate: Candidate;
@@ -25,45 +24,13 @@ export function validateRemoval(params: {
     return { kind: 'refused', path: params.candidate.path, reason: 'neverRisk' };
   }
 
-  switch (params.candidate.removal.kind) {
-    case 'deletePaths':
-    case 'deleteUnitPaths':
-      return validateTargetsRemoval({
-        candidate: params.candidate,
-        removal: 'delete',
-        targets: params.candidate.removal.targets,
-        environment: params.environment,
-      });
-    case 'evictUnitFiles':
-      return validateTargetsRemoval({
-        candidate: params.candidate,
-        removal: 'evict',
-        targets: params.candidate.removal.targets,
-        environment: params.environment,
-      });
-    case 'runTool':
-    case 'callEngine':
-      return { kind: 'approved', candidate: params.candidate };
-  }
-}
+  const refusal = findRemovalRefusal({
+    environment: params.environment,
+    removal: params.candidate.removal,
+  });
 
-/** The first target refused refuses the whole item, at that target's path. */
-function validateTargetsRemoval(params: {
-  candidate: Candidate;
-  removal: TargetRemovalKind;
-  targets: RemovalTargets<RemovalTarget>;
-  environment: Environment;
-}): RemovalDecision {
-  for (const target of params.targets) {
-    const reason = findTargetRefusal({
-      environment: params.environment,
-      removal: params.removal,
-      identity: target.identity,
-    });
-
-    if (reason !== null) {
-      return { kind: 'refused', path: target.path, reason: reason };
-    }
+  if (refusal !== null) {
+    return { kind: 'refused', path: refusal.path, reason: refusal.reason };
   }
 
   return { kind: 'approved', candidate: params.candidate };

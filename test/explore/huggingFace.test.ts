@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type {
   ExplorePathUnitHuggingFacePartialDownloads,
   ExploreProbeFindings,
@@ -541,13 +542,14 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
         ];
 
         for (const unit of units) {
-          const recheck = (processCommands: string[] | null) =>
-            recheckHuggingFaceUnit({
+          function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+            return recheckHuggingFaceUnit({
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
               processCommands: processCommands,
             });
+          }
 
           expect(await recheck([])).toEqual({ kind: 'unchanged' });
           expect(await recheck(['huggingface-cli download example-org/example-model'])).toEqual({

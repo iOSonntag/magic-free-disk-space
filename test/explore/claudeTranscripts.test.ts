@@ -12,6 +12,7 @@ import type {
 } from '../../src/explore/claudeTranscripts/loadClaudeProjectsState.js';
 import { loadClaudeTranscriptFindings } from '../../src/explore/claudeTranscripts/loadClaudeTranscriptFindings.js';
 import { recheckClaudeTranscriptsUnit } from '../../src/explore/claudeTranscripts/recheckClaudeTranscriptsUnit.js';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type {
   ExploreFoundPaths,
   ExplorePathUnitClaudeTranscripts,
@@ -278,13 +279,14 @@ describeAwaitingWin32Platform('recheckClaudeTranscriptsUnit', () => {
           ),
           kind: 'claudeTranscripts',
         });
-        const recheck = () =>
-          recheckClaudeTranscriptsUnit({
+        function recheck(): Promise<PathUnitRecheck> {
+          return recheckClaudeTranscriptsUnit({
             unit: unit,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
             processCommands: [],
           });
+        }
 
         expect(await recheck()).toEqual({ kind: 'unchanged' });
 

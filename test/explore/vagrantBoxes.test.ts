@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { UnitComparison } from '../../src/explore/decideComparisonActivity.js';
 import type { ExploreToolUnitVagrantBoxVersion } from '../../src/explore/exploreUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import { buildVagrantBoxFindings } from '../../src/explore/vagrantBoxes/buildVagrantBoxFindings.js';
@@ -202,14 +203,15 @@ describe('compareVagrantBoxUnit', () => {
 
   test('is unchanged while a newer version still outdates it, busy while vagrant runs', () => {
     const boxes = parseBoxes(BOX_LIST_TEXT);
-    const compare = (processCommands: string[]) =>
-      compareVagrantBoxUnit({
+    function compare(processCommands: string[]): UnitComparison {
+      return compareVagrantBoxUnit({
         unit: unit,
         boxes: boxes,
         pathRules: DARWIN_PATH_RULES,
         homeDir: HOME_DIR,
         processCommands: processCommands,
       });
+    }
 
     expect(compare([])).toEqual({ kind: 'unchanged' });
     expect(compare(VAGRANT_RUNNING)).toEqual({ kind: 'busy' });

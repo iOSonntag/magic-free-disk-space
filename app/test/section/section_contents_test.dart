@@ -224,9 +224,7 @@ void main() {
     test('show the download date of an item that was never used, as of an AI model', () {
       final Map<String, Object?> json = loadSampleJson('scanned');
       getScanItemJson(json, 6)['lastUsedAt'] = null;
-      final ItemView neverUsedVideo = parseScanJson(json).selectableItems.singleWhere(
-        (ItemView item) => item.number == 6,
-      );
+      final ItemView neverUsedVideo = getScanItem(parseScanJson(json), 6);
 
       expect(formatItemFactsText(neverUsedVideo, now: now), 'Downloaded 8 months ago');
     });

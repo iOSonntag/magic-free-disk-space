@@ -373,7 +373,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
         buildTestProbeToolRun({
           environment: environment,
           tool: failing,
-          cutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
+          unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
         }),
       ),
     ).toEqual({
@@ -393,7 +393,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       buildTestProbeToolRun({
         environment: environment,
         tool: garbled,
-        cutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
+        unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
       }),
     );
 

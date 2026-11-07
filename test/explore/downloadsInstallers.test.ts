@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { chmod, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadDownloadsInstallerFindings } from '../../src/explore/downloadsInstallers/loadDownloadsInstallerFindings.js';
 import { recheckDownloadsUnit } from '../../src/explore/downloadsInstallers/recheckDownloadsUnit.js';
 import type { ExploreFinding, ExploreUnit } from '../../src/explore/exploreUnit.js';
@@ -80,7 +81,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
 
         const probed = getProbeFindings(
           await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
           ),
         );
         const installers = getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' });
@@ -137,6 +138,37 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
     });
   });
 
+  test('goes by the stale window, not the unused one', async () => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const downloads = getDownloadsPath(home);
+
+        await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
+        await createDownloadsFile({
+          path: join(downloads, 'Recent.dmg'),
+          modifiedMs: NOW_MS - 10 * DAY_MS,
+        });
+
+        const probed = getProbeFindings(
+          await loadDownloadsInstallerFindings(
+            buildTestProbeRun({
+              environment: home.environment,
+              staleCutoffMs: STALE_CUTOFF_MS,
+              unusedCutoffMs: NOW_MS - 180 * DAY_MS,
+            }),
+          ),
+        );
+
+        expect(
+          getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' }).foundFiles.map(
+            (file) => file.path,
+          ),
+        ).toEqual([buildTestAbsolutePath({ text: join(downloads, 'Old.dmg') })]);
+      },
+    });
+  });
+
   test('keeps a partial download whose newest part is recent', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -148,7 +180,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
 
         expect(
           await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
           ),
         ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
       },
@@ -168,7 +200,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
 
         const probed = getProbeFindings(
           await loadDownloadsInstallerFindings({
-            ...buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
+            ...buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
             deadlineMs: Date.now() - 1,
           }),
         );
@@ -193,7 +225,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
 
         expect(
           await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
           ),
         ).toMatchObject({
           kind: 'failed',
@@ -217,7 +249,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
             buildTestProbeRun({
               environment: home.environment,
               processCommands: [buildChromeCommand(home)],
-              cutoffMs: STALE_CUTOFF_MS,
+              staleCutoffMs: STALE_CUTOFF_MS,
             }),
           ),
         ).findings;
@@ -245,7 +277,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
             buildTestProbeRun({
               environment: home.environment,
               processCommands: [buildChromeCommand(home)],
-              cutoffMs: STALE_CUTOFF_MS,
+              staleCutoffMs: STALE_CUTOFF_MS,
             }),
           ),
         ).findings;
@@ -267,7 +299,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
       run: async (home) => {
         expect(
           await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
           ),
         ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
       },
@@ -285,18 +317,22 @@ describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
         await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
         await createDownloadsFile({ path: join(downloads, 'Other.pkg') });
 
-        const run = buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS });
+        const run = buildTestProbeRun({
+          environment: home.environment,
+          staleCutoffMs: STALE_CUTOFF_MS,
+        });
         const unit = getUnitOfKind({
           findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
           kind: 'downloadsInstallers',
         });
-        const recheck = () =>
-          recheckDownloadsUnit({
+        function recheck(): Promise<PathUnitRecheck> {
+          return recheckDownloadsUnit({
             unit: unit,
             environment: run.environment,
             platform: run.platform,
             processCommands: [],
           });
+        }
 
         expect(await recheck()).toEqual({ kind: 'unchanged' });
 
@@ -320,7 +356,10 @@ describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
 
         await createDownloadsFile({ path: join(downloads, 'A.part') });
 
-        const run = buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS });
+        const run = buildTestProbeRun({
+          environment: home.environment,
+          staleCutoffMs: STALE_CUTOFF_MS,
+        });
         const unit = getUnitOfKind({
           findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
           kind: 'downloadsIncomplete',

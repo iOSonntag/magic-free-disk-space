@@ -1,6 +1,7 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
 import { SCAN_LIMITS } from '../../../scan/limits.js';
-import { buildBundleIdOwner } from './buildBundleIdOwner.js';
+import { MESSAGES_APP } from '../systemApps.js';
+import { buildSystemAppOwner } from './buildSystemAppOwner.js';
 
 /** The logs and crash reports that macOS and apps write, and the small caches of macOS's apps. */
 export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
@@ -16,7 +17,7 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Messages/Caches/Previews/Attachments',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: buildBundleIdOwner({ text: 'com.apple.MobileSMS' }),
+    owner: buildSystemAppOwner({ app: MESSAGES_APP }),
     removal: { kind: 'delete' },
   },
   {
@@ -30,7 +31,7 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Messages/Caches/Previews/StickerCache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: buildBundleIdOwner({ text: 'com.apple.MobileSMS' }),
+    owner: buildSystemAppOwner({ app: MESSAGES_APP }),
     removal: { kind: 'delete' },
   },
   {
@@ -44,7 +45,7 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     path: 'Library/Messages/StickerCache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: buildBundleIdOwner({ text: 'com.apple.MobileSMS' }),
+    owner: buildSystemAppOwner({ app: MESSAGES_APP }),
     removal: { kind: 'delete' },
   },
   {

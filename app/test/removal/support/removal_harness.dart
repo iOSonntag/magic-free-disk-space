@@ -87,11 +87,6 @@ Future<void> pumpRemovalFlow(
   return pumpOnStage(tester, flowStep, motion: motion);
 }
 
-/// The numbers of the items of [plan].
-List<int> listPlannedNumbers(PlannedEvent plan) {
-  return [for (final PlannedItemView item in plan.items) item.number];
-}
-
 /// A controller over [bridge] whose state confirms [plan] of
 /// [selectedNumbers], the items of [plan] when not given; disposed at
 /// tear-down.
@@ -104,7 +99,7 @@ Future<CleanerController> createConfirmingController(
   final CleanerController controller = CleanerController(bridge: bridge);
   addTearDown(controller.dispose);
   await controller.scan();
-  for (final int number in selectedNumbers ?? listPlannedNumbers(plan)) {
+  for (final int number in selectedNumbers ?? getPlannedItemNumbers(plan)) {
     controller.toggleCandidate(number);
   }
   await controller.requestPlan();

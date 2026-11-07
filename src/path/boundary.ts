@@ -8,6 +8,7 @@ export const moduleBoundary = {
     'formatHomeRelativePath.ts',
     'isOverlappingPath.ts',
     'isSameOrInsidePath.ts',
+    'isStrictlyInsidePath.ts',
     'joinAbsolutePath.ts',
     'parseAbsolutePath.ts',
     'pathRules.ts',

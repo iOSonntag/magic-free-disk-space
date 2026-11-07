@@ -105,7 +105,7 @@ final class RevealUrl extends OpenableUrl {
   /// and absolute, so `open` never reads it as an option.
   static RevealUrl parse(String path, {required Set<String> allowedPaths}) {
     if (!path.startsWith('/')) {
-      throw FormatException('"$path" is not an absolute path.');
+      throw const FormatException('A path to reveal is not absolute.');
     }
     if (!allowedPaths.contains(path)) {
       throw const FormatException(

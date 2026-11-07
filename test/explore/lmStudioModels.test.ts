@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type { ExplorePathUnitLmStudioModel } from '../../src/explore/exploreUnit.js';
 import { compareLmStudioModelUnit } from '../../src/explore/lmStudioModels/compareLmStudioModelUnit.js';
 import { loadLmStudioModelFindings } from '../../src/explore/lmStudioModels/loadLmStudioModelFindings.js';
@@ -182,13 +183,14 @@ describeAwaitingWin32Platform('recheckLmStudioModelUnit', () => {
           ),
           kind: 'lmStudioModel',
         });
-        const recheck = () =>
-          recheckLmStudioModelUnit({
+        function recheck(): Promise<PathUnitRecheck> {
+          return recheckLmStudioModelUnit({
             unit: unit,
             environment: home.environment,
             platform: buildTestProbePlatform(),
             processCommands: [],
           });
+        }
 
         expect(await recheck()).toEqual({ kind: 'unchanged' });
 

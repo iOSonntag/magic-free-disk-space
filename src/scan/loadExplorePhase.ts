@@ -22,10 +22,13 @@ import type {
   CandidateRemovalEvictUnitFiles,
   CandidateRemovalProbed,
   CandidateRemovalRunTool,
+  RemovalTarget,
+  RemovalTargets,
 } from './candidate.js';
 import { hasSymbolicLinkTarget } from './candidate.js';
 import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
+import type { FoundTarget } from './loadMeasuredTargetsPhase.js';
 import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import type { PathMeasurement } from './loadPathMeasurement.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
@@ -294,12 +297,7 @@ async function loadToolFindingPhase(params: {
   return { decisions: [{ kind: 'offer', candidate: candidate }], issues: [] };
 }
 
-/**
- * Offers the unit's paths at any size as its targets, each with the identity it has now, which
- * the deletion checks again, shown at the finding's place. A symbolic link is skipped, since only
- * the path itself may be deleted. A vanished, unreadable, or mounted path is handled by
- * `loadMeasuredTargetsPhase`, as every offer of paths is.
- */
+/** Offers the unit's paths as its delete targets, as `loadTargetsFindingPhase` offers them. */
 function loadPathFindingPhase(params: {
   finding: ExploreFinding;
   probe: ExploreProbeId;
@@ -317,43 +315,20 @@ function loadPathFindingPhase(params: {
     return Promise.resolve({ decisions: [], issues: [] });
   }
 
-  return loadMeasuredTargetsPhase({
+  return loadTargetsFindingPhase({
+    ...params,
     found: mapNonEmpty(unitPaths, (unitPath) => ({ path: unitPath })),
-    carve: null,
-    measureTimeoutMs: params.measureTimeoutMs,
-    runItemMeasurement: params.runItemMeasurement,
-    entryReads: params.entryReads,
-    privacyDenialCode: params.privacyDenialCode,
-    decide: async (measurement) => {
-      if (hasSymbolicLinkTarget(measurement)) {
-        return { kind: 'skip', path: params.finding.displayPath, reason: 'symbolicLink' };
-      }
-
-      const removal: CandidateRemovalDeleteUnitPaths = {
-        kind: 'deleteUnitPaths',
-        targets: measurement.targets,
-        unit: params.unit,
-      };
-
-      return {
-        kind: 'offer',
-        candidate: buildExploreCandidate({
-          finding: params.finding,
-          probe: params.probe,
-          path: params.finding.displayPath,
-          removal: removal,
-          category: params.category,
-          measurement: measurement,
-        }),
-      };
-    },
+    buildRemoval: (targets): CandidateRemovalDeleteUnitPaths => ({
+      kind: 'deleteUnitPaths',
+      targets: targets,
+      unit: params.unit,
+    }),
   });
 }
 
 /**
- * Offers the unit's downloaded files at any size as its evict targets, each with the identity it
- * has now and the times its probe read, which the evict checks again. A symbolic link is skipped,
- * since the system evicts only a file.
+ * Offers the unit's downloaded files as its evict targets, with the times its probe read, which
+ * the evict checks again, as `loadTargetsFindingPhase` offers them.
  */
 function loadEvictFindingPhase(params: {
   finding: ExploreFinding;
@@ -365,23 +340,47 @@ function loadEvictFindingPhase(params: {
   entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
-  return loadMeasuredTargetsPhase({
+  return loadTargetsFindingPhase({
+    ...params,
     found: params.unit.foundFiles,
+    buildRemoval: (targets): CandidateRemovalEvictUnitFiles => ({
+      kind: 'evictUnitFiles',
+      targets: targets,
+      unit: params.unit,
+    }),
+  });
+}
+
+/**
+ * Offers the found paths at any size as the removal's targets, each with the identity it has now,
+ * which the removal checks again, shown at the finding's place; a symbolic link among them skips
+ * the finding. A vanished, unreadable, or mounted path is handled by `loadMeasuredTargetsPhase`.
+ */
+function loadTargetsFindingPhase<TFound extends FoundTarget>(params: {
+  finding: ExploreFinding;
+  probe: ExploreProbeId;
+  found: [TFound, ...TFound[]];
+  buildRemoval: (
+    targets: RemovalTargets<TFound & RemovalTarget>,
+  ) => CandidateRemovalDeleteUnitPaths | CandidateRemovalEvictUnitFiles;
+  category: CandidateCategory;
+  measureTimeoutMs: number;
+  runItemMeasurement: ConcurrencyLimit;
+  entryReads: EntryReads;
+  privacyDenialCode: string | null;
+}): Promise<ScanPhase> {
+  return loadMeasuredTargetsPhase({
+    found: params.found,
     carve: null,
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
     privacyDenialCode: params.privacyDenialCode,
     decide: async (measurement) => {
+      // A delete takes only the link itself, and the system evicts only a file.
       if (hasSymbolicLinkTarget(measurement)) {
         return { kind: 'skip', path: params.finding.displayPath, reason: 'symbolicLink' };
       }
-
-      const removal: CandidateRemovalEvictUnitFiles = {
-        kind: 'evictUnitFiles',
-        targets: measurement.targets,
-        unit: params.unit,
-      };
 
       return {
         kind: 'offer',
@@ -389,7 +388,7 @@ function loadEvictFindingPhase(params: {
           finding: params.finding,
           probe: params.probe,
           path: params.finding.displayPath,
-          removal: removal,
+          removal: params.buildRemoval(measurement.targets),
           category: params.category,
           measurement: measurement,
         }),

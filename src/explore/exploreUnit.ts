@@ -387,6 +387,9 @@ export type ExplorePathUnit =
 /** A downloaded iCloud file a probe found to evict, with the times its recheck compares. */
 export type ExploreFoundEvictFile = { path: AbsolutePath; modifiedMs: number; accessedMs: number };
 
+/** The files a probe found to evict, never empty. */
+export type ExploreFoundEvictFiles = [ExploreFoundEvictFile, ...ExploreFoundEvictFile[]];
+
 /**
  * The files of an iCloud Drive folder downloaded and untouched since `cutoffMs`, never empty, which
  * an evict frees while iCloud keeps them. `tool` is the `brctl` the probe located, looked up again
@@ -397,7 +400,7 @@ export type ExploreEvictUnitIcloudFolder = {
   tool: LocatedTool;
   folderPath: AbsolutePath;
   cutoffMs: number;
-  foundFiles: [ExploreFoundEvictFile, ...ExploreFoundEvictFile[]];
+  foundFiles: ExploreFoundEvictFiles;
 };
 
 /** An item whose local copies the system evicts, file by file. */

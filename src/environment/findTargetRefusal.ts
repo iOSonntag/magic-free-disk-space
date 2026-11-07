@@ -1,5 +1,6 @@
 import { isAbsolute } from 'node:path';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isStrictlyInsidePath } from '../path/isStrictlyInsidePath.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import type { Environment } from './buildEnvironment.js';
 import { isTouchingProtectedPath } from './isTouchingProtectedPath.js';
@@ -73,14 +74,12 @@ function findDeleteRefusal(params: {
     return 'protectedRoot';
   }
 
-  const isInsideAllowedRoot = params.environment.allowedRealRoots.some(
-    (allowedRoot) =>
-      params.identity.realPath !== allowedRoot &&
-      isSameOrInsidePath({
-        rules: params.environment.pathRules,
-        path: params.identity.realPath,
-        parentPath: allowedRoot,
-      }),
+  const isInsideAllowedRoot = params.environment.allowedRealRoots.some((allowedRoot) =>
+    isStrictlyInsidePath({
+      rules: params.environment.pathRules,
+      path: params.identity.realPath,
+      parentPath: allowedRoot,
+    }),
   );
 
   if (!isInsideAllowedRoot) {

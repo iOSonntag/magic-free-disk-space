@@ -82,9 +82,7 @@ void main() {
       find.text('Kept. Its app is open, so it was left alone. Quit the app and try again.'),
       findsOneWidget,
     );
-    final PlannedItemView evictedFolder = samplePlan.items.singleWhere(
-      (PlannedItemView item) => item.removal == ItemRemoval.evict,
-    );
+    final PlannedItemView evictedFolder = evictOnlyPlan.items.single;
     expect(find.text(evictedFolder.title), findsOneWidget);
     expect(
       find.text('Partly removed, 3.0 MB freed. It changed since the scan, so it was left alone.'),
@@ -131,9 +129,7 @@ void main() {
   testWidgets('words an item kept for a reason this app does not know by its outcome alone', (
     WidgetTester tester,
   ) async {
-    final PlannedItemView appCache = samplePlan.items.singleWhere(
-      (PlannedItemView item) => item.title == 'App cache',
-    );
+    final PlannedItemView appCache = planSampleItem(2);
     final DeletedEvent runWithUnknownReason = DeletedEvent(
       lines: const ['Freed nothing.'],
       outcomes: [

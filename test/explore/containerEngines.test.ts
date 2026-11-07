@@ -815,8 +815,13 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
     });
 
     test('answers socketMissing when no profile holds a socket, or Colima has no folder', async () => {
-      const loadColima = () =>
-        loadEngineFindings({ run: buildRun(), engineProbeId: 'colimaEngine', engine: colima });
+      function loadColima(): Promise<ExploreProbeEngineResult> {
+        return loadEngineFindings({
+          run: buildRun(),
+          engineProbeId: 'colimaEngine',
+          engine: colima,
+        });
+      }
 
       expect(await loadColima()).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
 

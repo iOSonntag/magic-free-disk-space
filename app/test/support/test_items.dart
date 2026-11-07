@@ -39,6 +39,11 @@ List<int> getItemNumbers(List<ItemView> items) {
   return [for (final ItemView item in items) item.number];
 }
 
+/// The numbers of the items of [plan], in its order.
+List<int> getPlannedItemNumbers(PlannedEvent plan) {
+  return [for (final PlannedItemView item in plan.items) item.number];
+}
+
 /// [item] as a plan of the bridge lists it.
 PlannedItemView planItem(ItemView item) {
   return PlannedItemView(

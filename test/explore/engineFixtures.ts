@@ -4,25 +4,23 @@
  */
 
 import type { EngineProbeId } from '../../src/catalog/catalog.js';
+import type { EngineUnitPlace } from '../../src/explore/engines/buildEngineFindings.js';
 import type {
   EngineBuildRecordId,
   EngineContainerId,
   EngineImageId,
   EngineVolumeName,
 } from '../../src/explore/engines/engineObjectIds.js';
-import type { ExploreEngineUnitPlace } from '../../src/explore/exploreUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 export const FAKE_API_VERSION = '1.47';
 
-export const FAKE_VERSION_ANSWER = { ApiVersion: FAKE_API_VERSION, MinAPIVersion: '1.24' };
+const FAKE_VERSION_ANSWER = { ApiVersion: FAKE_API_VERSION, MinAPIVersion: '1.24' };
 
 export const NOW_MS = Date.UTC(2026, 9, 1);
 
-export type FakeEngineRequest = { method: string; path: string; bodyText: string };
-
-export type FakeEngineAnswer = { status: number; bodyText: string };
+type FakeEngineAnswer = { status: number; bodyText: string };
 
 export type FakeEngine = {
   /** Each request as `METHOD path?query`, its query decoded. */
@@ -40,12 +38,12 @@ export function startFakeEngine(params: {
   usage: unknown;
   versionAnswer?: unknown;
   diskUsageStatus?: number;
-  answerRequest?: (request: FakeEngineRequest) => FakeEngineAnswer;
+  answerRequest?: (request: { path: string }) => FakeEngineAnswer;
 }): FakeEngine {
   const requests: string[] = [];
   const server = Bun.serve({
     unix: params.socketPath,
-    fetch: async (request) => {
+    fetch: (request) => {
       const url = new URL(request.url);
       const path = `${url.pathname}${decodeURIComponent(url.search)}`;
 
@@ -63,11 +61,10 @@ export function startFakeEngine(params: {
         return Response.json(params.usage, { status: params.diskUsageStatus ?? 200 });
       }
 
-      const answer = params.answerRequest?.({
-        method: request.method,
-        path: path,
-        bodyText: await request.text(),
-      }) ?? { status: 404, bodyText: JSON.stringify({ message: 'page not found' }) };
+      const answer = params.answerRequest?.({ path: path }) ?? {
+        status: 404,
+        bodyText: JSON.stringify({ message: 'page not found' }),
+      };
 
       return new Response(answer.status === 204 ? null : answer.bodyText, {
         status: answer.status,
@@ -203,7 +200,7 @@ export function buildDiskUsageAnswer(params: {
 export function buildFakeUnitPlace(params: {
   homeDir: string;
   engineProbeId?: EngineProbeId;
-}): Omit<ExploreEngineUnitPlace, 'sizeBytes'> {
+}): EngineUnitPlace {
   return {
     engineProbeId: params.engineProbeId ?? 'dockerDesktopEngine',
     engineName: 'Docker Desktop',

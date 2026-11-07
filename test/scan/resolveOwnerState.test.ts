@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import type { CatalogEntryOwner } from '../../src/catalog/catalog.js';
 import type { CatalogOwner } from '../../src/catalog/catalogOwner.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
@@ -20,17 +19,6 @@ import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 import { buildTestCatalogOwner, buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 import { getCatalogEntry } from '../support/scanRunFixtures.js';
 
-/** The owner of a test entry: the app of `bundleId` with no advice for once it is gone. */
-function buildTestEntryOwner(params: { bundleId: string | null }): CatalogEntryOwner | null {
-  const app = buildTestCatalogOwner({ bundleId: params.bundleId });
-
-  if (app === null) {
-    return null;
-  }
-
-  return { app: app, uninstalledAdvice: null };
-}
-
 /**
  * The state of the owner of `Library/Caches/foo`, a child of a `children` entry, while `Foo.app`,
  * whose Info.plist names an empty id, is the one installed app.
@@ -42,10 +30,7 @@ function resolveFooCacheOwnerState(params: { processCommands: string[] | null })
     bundleId: '',
   });
   const owner = resolveTargetOwner({
-    entry: buildTestCatalogEntry({
-      selection: { kind: 'children' },
-      owner: buildTestEntryOwner({ bundleId: null }),
-    }),
+    entry: buildTestCatalogEntry({ selection: { kind: 'children' } }),
     path: '/home/Library/Caches/foo',
     installedApps: [foo],
   });
@@ -136,7 +121,10 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
   test('takes the owner of a path entry', () => {
     const entry = buildTestCatalogEntry({
       selection: { kind: 'path' },
-      owner: buildTestEntryOwner({ bundleId: 'com.example.app' }),
+      owner: {
+        app: { kind: 'bundleId', bundleId: buildTestMacBundleId({ text: 'com.example.app' }) },
+        uninstalledAdvice: null,
+      },
     });
 
     expect(
@@ -145,10 +133,7 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
   });
 
   test('takes the child name of a children entry when it is a bundle id', () => {
-    const entry = buildTestCatalogEntry({
-      selection: { kind: 'children' },
-      owner: buildTestEntryOwner({ bundleId: null }),
-    });
+    const entry = buildTestCatalogEntry({ selection: { kind: 'children' } });
 
     expect(
       resolveTargetOwner({
@@ -167,10 +152,7 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
   });
 
   test('takes the bundle id of a team-prefixed child of a children entry', () => {
-    const entry = buildTestCatalogEntry({
-      selection: { kind: 'children' },
-      owner: buildTestEntryOwner({ bundleId: null }),
-    });
+    const entry = buildTestCatalogEntry({ selection: { kind: 'children' } });
 
     expect(
       resolveTargetOwner({
@@ -182,10 +164,7 @@ describeAwaitingWin32Platform('resolveTargetOwner', () => {
   });
 
   test('takes the installed app named like a child, ignoring case', () => {
-    const entry = buildTestCatalogEntry({
-      selection: { kind: 'children' },
-      owner: buildTestEntryOwner({ bundleId: null }),
-    });
+    const entry = buildTestCatalogEntry({ selection: { kind: 'children' } });
     const slack = buildTestInstalledApp({ displayName: 'Slack', bundleId: 'com.example.slack' });
 
     expect(
@@ -245,6 +224,7 @@ describeAwaitingWin32Platform('findOwnerAppName', () => {
       findOwnerAppName({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
         installedApps: [host, helper],
+        systemApps: [],
       }),
     ).toBe('Helper');
   });
@@ -254,18 +234,47 @@ describeAwaitingWin32Platform('findOwnerAppName', () => {
       findOwnerAppName({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
         installedApps: [host],
+        systemApps: [],
       }),
     ).toBe('Host');
   });
 
-  test('names no app for no owner or an id no installed app carries', () => {
+  test('names the system app that is the owner after the installed apps', () => {
+    const notes: SystemApp = {
+      bundlePath: '/fixture/System/Applications/Notes.app',
+      displayName: 'Notes',
+      bundleId: buildTestMacBundleId({ text: 'com.example.helper' }),
+    };
+
     expect(
-      findOwnerAppName({ owner: buildTestCatalogOwner({ bundleId: null }), installedApps: [host] }),
+      findOwnerAppName({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
+        installedApps: [],
+        systemApps: [notes],
+      }),
+    ).toBe('Notes');
+    expect(
+      findOwnerAppName({
+        owner: buildTestCatalogOwner({ bundleId: 'com.example.helper' }),
+        installedApps: [host],
+        systemApps: [notes],
+      }),
+    ).toBe('Host');
+  });
+
+  test('names no app for no owner or an id no app carries', () => {
+    expect(
+      findOwnerAppName({
+        owner: buildTestCatalogOwner({ bundleId: null }),
+        installedApps: [host],
+        systemApps: [],
+      }),
     ).toBeNull();
     expect(
       findOwnerAppName({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
         installedApps: [host, helper],
+        systemApps: darwinPlatform.scan.systemApps,
       }),
     ).toBeNull();
   });
@@ -424,6 +433,7 @@ describeAwaitingWin32Platform('resolveOwnerState', () => {
 describeAwaitingWin32Platform('a system app owner', () => {
   const notes: SystemApp = {
     bundlePath: '/fixture/System/Applications/Notes.app',
+    displayName: 'Notes',
     bundleId: buildTestMacBundleId({ text: 'com.example.notes' }),
   };
   const notesOwner = buildTestCatalogOwner({ bundleId: 'com.example.notes' });
@@ -468,7 +478,7 @@ describeAwaitingWin32Platform('a system app owner', () => {
   });
 
   test('holds the Messages caches and the Mail downloads of macOS while their app runs', () => {
-    const ownerRuns = [
+    const ownerRuns: [string, string][] = [
       ['messages-attachment-previews', '/System/Applications/Messages.app/Contents/MacOS/Messages'],
       ['messages-sticker-previews', '/System/Applications/Messages.app/Contents/MacOS/Messages'],
       ['messages-sticker-cache', '/System/Applications/Messages.app/Contents/MacOS/Messages'],
@@ -478,10 +488,10 @@ describeAwaitingWin32Platform('a system app owner', () => {
     expect(
       ownerRuns.map(([id, command]) =>
         resolveOwnerState({
-          owner: resolveCatalogEntryOwner({ id: id ?? '' }),
+          owner: resolveCatalogEntryOwner({ id: id }),
           installedApps: [],
           systemApps: darwinPlatform.scan.systemApps,
-          processCommands: [command ?? ''],
+          processCommands: [command],
         }),
       ),
     ).toEqual(['running', 'running', 'running', 'running']);
@@ -542,7 +552,7 @@ describeAwaitingWin32Platform('a bundle id family owner', () => {
     expect(
       findOwnerBundlePaths({ owner: owner, installedApps: installedApps, systemApps: [] }),
     ).toEqual([premiere.bundlePath]);
-    expect(findOwnerAppName({ owner: owner, installedApps: installedApps })).toBe(
+    expect(findOwnerAppName({ owner: owner, installedApps: installedApps, systemApps: [] })).toBe(
       'Adobe Premiere Pro 2025',
     );
   });

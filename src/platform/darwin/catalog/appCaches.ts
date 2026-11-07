@@ -1,6 +1,8 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
 import { MAIL_DOWNLOADS_ROOT_PATH_NAMES } from '../appleDataRoots.js';
+import { MAIL_APP } from '../systemApps.js';
 import { buildBundleIdOwner } from './buildBundleIdOwner.js';
+import { buildSystemAppOwner } from './buildSystemAppOwner.js';
 
 /** The caches and downloads of everyday apps, such as Spotify, Slack, and Zoom. */
 export const APP_CACHE_ENTRIES: CatalogEntry[] = [
@@ -219,7 +221,7 @@ export const APP_CACHE_ENTRIES: CatalogEntry[] = [
     path: MAIL_DOWNLOADS_ROOT_PATH_NAMES.join('/'),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: buildBundleIdOwner({ text: 'com.apple.mail' }),
+    owner: buildSystemAppOwner({ app: MAIL_APP }),
     removal: {
       kind: 'explore',
       probe: 'mailDownloads',

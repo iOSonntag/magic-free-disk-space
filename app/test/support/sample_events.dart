@@ -29,9 +29,15 @@ TEvent loadSampleEvent<TEvent extends BridgeEvent>() {
 
 final ScannedEvent _sampleScan = loadSampleEvent<ScannedEvent>();
 
+/// The selectable item of [scan] numbered [number]; throws unless exactly
+/// one item has it.
+ItemView getScanItem(ScannedEvent scan, int number) {
+  return scan.selectableItems.singleWhere((ItemView item) => item.number == number);
+}
+
 /// The item of the sample scan numbered [number]; throws when it holds none.
 ItemView getSampleItem(int number) {
-  return _sampleScan.selectableItems.singleWhere((ItemView item) => item.number == number);
+  return getScanItem(_sampleScan, number);
 }
 
 /// A fresh copy of the first sample line of [kind], for a test to change

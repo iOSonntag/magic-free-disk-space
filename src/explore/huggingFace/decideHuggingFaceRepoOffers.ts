@@ -128,7 +128,7 @@ export function decideHuggingFaceRevisionOffers(params: {
     ...detachedBlobPaths,
   ]);
 
-  if (detachedPaths !== null && detachedSnapshots.length > 0) {
+  if (detachedPaths !== null) {
     offers.push({
       kind: 'huggingFaceDetachedRevisions',
       paths: detachedPaths,

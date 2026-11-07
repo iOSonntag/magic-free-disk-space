@@ -9,14 +9,17 @@ import { buildTestPlatform } from './platformFixtures.js';
 
 /**
  * Scans the fixture home of `environment` through the macOS platform with only `catalogEntries`
- * and no tool, the processes, the active Xcode, and the system version made up, so the scan starts
- * no command.
+ * and no tool, the processes (`processCommands`, none when left out), the active Xcode, and the
+ * system version made up, so the scan starts no command.
  */
 export function runTestScan(params: {
   environment: Environment;
   catalogEntries: CatalogEntry[];
+  processCommands?: string[];
   onProgress?: (progress: ScanProgress) => void;
 }): Promise<ScanReport> {
+  const processCommands = params.processCommands ?? [];
+
   const platform = buildTestPlatform({
     catalogEntries: params.catalogEntries,
     toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
@@ -32,7 +35,7 @@ export function runTestScan(params: {
     },
     system: {
       ...platform.system,
-      loadRunningProcesses: async () => ({ kind: 'succeeded', value: [] }),
+      loadRunningProcesses: async () => ({ kind: 'succeeded', value: processCommands }),
       loadSystemVersion: async () => null,
     },
     explore: platform.explore,

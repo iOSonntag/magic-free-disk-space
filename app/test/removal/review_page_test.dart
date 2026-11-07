@@ -148,7 +148,7 @@ void main() {
 
     await tapAndSettle(tester, find.byTooltip('Keep App cache'));
 
-    expect(bridge.plannedNumbers, listPlannedNumbers(planWithoutAppCache));
+    expect(bridge.plannedNumbers, getPlannedItemNumbers(planWithoutAppCache));
     expect(find.text('App cache'), findsNothing);
     expect(findButtonLabelled('Delete 11 MB'), findsOneWidget);
     expect((controller.state as ConfirmingState).plan, same(planWithoutAppCache));
@@ -167,7 +167,7 @@ void main() {
     expect(find.byType(ReviewPage), findsNothing);
     final ScannedState state = controller.state as ScannedState;
     expect(state.notice, nothingApproved.lines.join('\n'));
-    expect(state.selectedNumbers, listPlannedNumbers(planWithoutAppCache).toSet());
+    expect(state.selectedNumbers, getPlannedItemNumbers(planWithoutAppCache).toSet());
   });
 
   testWidgets('Details unfolds the lines of the plan', (WidgetTester tester) async {
@@ -218,7 +218,7 @@ void main() {
 
     expect(
       (controller.state as ScannedState).selectedNumbers,
-      listPlannedNumbers(samplePlan).toSet(),
+      getPlannedItemNumbers(samplePlan).toSet(),
     );
     expect(find.byType(ReviewPage), findsNothing);
     expect(bridge.deleteRequest, isNull);

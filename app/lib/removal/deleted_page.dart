@@ -379,7 +379,7 @@ class _StayedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ({String text, IconData glyph, Color color}) verdict = _describeOutcome(
+    final ({String text, IconData glyph, Color color}) verdict = _outcomeToVerdict(
       outcome,
     );
     return Padding(
@@ -410,7 +410,7 @@ class _StayedRow extends StatelessWidget {
 }
 
 /// What happened to the item of [outcome], in a few words, and its mark.
-({String text, IconData glyph, Color color}) _describeOutcome(
+({String text, IconData glyph, Color color}) _outcomeToVerdict(
   DeletedOutcomeView outcome,
 ) {
   return switch (outcome.outcome) {

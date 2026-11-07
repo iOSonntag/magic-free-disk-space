@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type {
   ExploreFoundPaths,
   ExplorePathUnitIdeVersionFolder,
@@ -490,13 +491,14 @@ describeAwaitingWin32Platform('recheckIdeVersionUnit', () => {
         });
 
         for (const unit of units) {
-          const recheck = (processCommands: string[] | null) =>
-            recheckIdeVersionUnit({
+          function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+            return recheckIdeVersionUnit({
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
               processCommands: processCommands,
             });
+          }
 
           expect(await recheck([])).toEqual({ kind: 'unchanged' });
           expect(await recheck(null)).toEqual({ kind: 'busy' });

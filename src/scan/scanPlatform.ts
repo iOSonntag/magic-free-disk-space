@@ -24,10 +24,11 @@ export type InstalledApp = {
 
 /**
  * An app of the system at the path the system keeps it, outside the app folders. It tells only
- * whether an owner runs: it is never listed, offered, or the owner of a leftover.
+ * whether an owner runs and its name: it is never listed, offered, or the owner of a leftover.
  */
 export type SystemApp = {
   bundlePath: string;
+  displayName: string;
   bundleId: MacBundleId;
 };
 

@@ -636,6 +636,7 @@ async function loadCatalogTargetPhase(params: {
         ownerAppName: findOwnerAppName({
           owner: owner,
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
         }),
         isOwnerUninstalled: isOwnerUninstalled({
           owner: owner,

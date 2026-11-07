@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { utimes } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadMailDownloadFindings } from '../../src/explore/mailDownloads/loadMailDownloadFindings.js';
 import { recheckMailDownloadsUnit } from '../../src/explore/mailDownloads/recheckMailDownloadsUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
@@ -65,7 +66,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
         expect(
           getProbeFindings(
             await loadMailDownloadFindings(
-              buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
+              buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
             ),
           ),
         ).toEqual({
@@ -110,11 +111,13 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
         await createMailFile({ path: savedPath });
 
         const probed = getProbeFindings(
-          await loadMailDownloadFindings({
-            ...buildTestProbeRun({ environment: home.environment }),
-            staleCutoffMs: STALE_CUTOFF_MS,
-            unusedCutoffMs: NOW_MS - 180 * DAY_MS,
-          }),
+          await loadMailDownloadFindings(
+            buildTestProbeRun({
+              environment: home.environment,
+              staleCutoffMs: STALE_CUTOFF_MS,
+              unusedCutoffMs: NOW_MS - 180 * DAY_MS,
+            }),
+          ),
         );
 
         expect(
@@ -137,7 +140,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
             buildTestProbeRun({
               environment: home.environment,
               processCommands: [MAIL_COMMAND],
-              cutoffMs: STALE_CUTOFF_MS,
+              staleCutoffMs: STALE_CUTOFF_MS,
             }),
           ),
         );
@@ -153,7 +156,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
       run: async (home) => {
         expect(
           await loadMailDownloadFindings(
-            buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
           ),
         ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
       },
@@ -170,18 +173,23 @@ describeAwaitingWin32Platform('recheckMailDownloadsUnit', () => {
 
         await createMailFile({ path: filePath });
 
-        const run = buildTestProbeRun({ environment: home.environment, cutoffMs: STALE_CUTOFF_MS });
+        const run = buildTestProbeRun({
+          environment: home.environment,
+          staleCutoffMs: STALE_CUTOFF_MS,
+        });
         const unit = getUnitOfKind({
           findings: getProbeFindings(await loadMailDownloadFindings(run)),
           kind: 'mailDownloads',
         });
-        const recheck = (processCommands: string[] | null) =>
-          recheckMailDownloadsUnit({
+
+        function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+          return recheckMailDownloadsUnit({
             unit: unit,
             environment: run.environment,
             platform: run.platform,
             processCommands: processCommands,
           });
+        }
 
         expect(await recheck([])).toEqual({ kind: 'unchanged' });
         expect(await recheck([MAIL_COMMAND])).toEqual({ kind: 'busy' });

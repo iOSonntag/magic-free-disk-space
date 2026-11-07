@@ -9,7 +9,6 @@ import {
 } from '../../src/delete/deleteCandidates.js';
 import type { DeletePlatform } from '../../src/delete/deletePlatform.js';
 import type { DeletionJournal, JournalEntry } from '../../src/delete/deletionJournal.js';
-import { createDeletionJournal } from '../../src/delete/deletionJournal.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type {
   ExploreToolUnit,
@@ -46,6 +45,7 @@ import {
   buildTestProbedCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { createTestJournal } from '../support/deletionJournalFixtures.js';
 import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -143,17 +143,12 @@ function buildFailingRemoval(params: {
   };
 }
 
-async function createTestJournal(): Promise<DeletionJournal> {
-  const journal = await createDeletionJournal({
+/** A journal of the deletions in the fixture root's own log. */
+function createFixtureRootJournal(): Promise<DeletionJournal> {
+  return createTestJournal({
     logPath: join(fixtureRoot.rootDir, 'deletions.jsonl'),
     nowMs: NOW_MS,
   });
-
-  if (journal.kind === 'failed') {
-    throw new Error(`Journal failed: ${journal.failure.reason}`);
-  }
-
-  return journal.value;
 }
 
 async function loadJournalLines(journal: DeletionJournal): Promise<unknown[]> {
@@ -314,7 +309,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
   test('deletes exactly the given items and records intent before outcome', async () => {
     const selected = await createCacheFolder('selected');
     const sibling = await createCacheFolder('sibling');
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     const selectedCandidate = await scanCandidate(selected);
 
@@ -362,7 +357,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
       const run = await deleteCandidates({
         candidates: [await scanCandidate(selected)],
-        journal: await createTestJournal(),
+        journal: await createFixtureRootJournal(),
         loadProcessCommands: buildProcessCommandsLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
@@ -384,7 +379,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: [scanned],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -407,7 +402,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
       const run = await deleteCandidates({
         candidates: [scanned],
-        journal: await createTestJournal(),
+        journal: await createFixtureRootJournal(),
         loadProcessCommands: buildProcessCommandsLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
@@ -429,7 +424,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -453,7 +448,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -474,7 +469,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const candidate = await scanMeasuredCandidate(selected);
     const run = await deleteCandidates({
       candidates: [candidate],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -505,7 +500,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: [candidate],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -522,7 +517,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: [candidate],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -541,7 +536,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
   testOnPosix('deletes nothing when the intent cannot be recorded', async () => {
     const first = await createCacheFolder('first');
     const second = await createCacheFolder('second');
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
     const candidates = [await scanCandidate(first), await scanCandidate(second)];
 
     await chmod(journal.logPath, 0o400);
@@ -568,7 +563,10 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const first = await createCacheFolder('first');
     const second = await createCacheFolder('second');
     const candidates = [await scanCandidate(first), await scanCandidate(second)];
-    const journal = buildFailingJournal({ inner: await createTestJournal(), successCount: 1 });
+    const journal = buildFailingJournal({
+      inner: await createFixtureRootJournal(),
+      successCount: 1,
+    });
 
     const run = await deleteCandidates({
       candidates: candidates,
@@ -595,7 +593,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([
         '/Applications/Example.app/Contents/MacOS/Example',
       ]),
@@ -618,7 +616,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader(null),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -694,7 +692,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
   test('does nothing for an empty list', async () => {
     const run = await deleteCandidates({
       candidates: [],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -716,7 +714,7 @@ process.exit(0);`,
     const allocatedBytes = await loadMeasuredAllocatedBytes({
       paths: listUnitPaths(readToolUnit(candidate)),
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     const run = await deleteCandidates({
       candidates: [candidate],
@@ -760,7 +758,7 @@ process.exit(0);`,
       buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
 process.exit(0);`,
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     const run = await deleteCandidates({
       candidates: [candidate],
@@ -795,7 +793,7 @@ process.exit(0);`,
       buildCommandBody: () => `fs.writeSync(2, 'node@20.1.0 is in use\\n');
 process.exit(1);`,
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
     const failure = {
       reason: 'commandFailed',
       failure: { reason: 'exitedWithError', exitCode: 1, stderrTail: 'node@20.1.0 is in use\n' },
@@ -849,7 +847,7 @@ process.exit(0);`,
       paths: listUnitPaths(readToolUnit(toolCandidate)),
     });
     const pathCandidate = await scanCandidate(pathItem);
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     const run = await deleteCandidates({
       candidates: [pathCandidate, toolCandidate],
@@ -897,7 +895,7 @@ process.exit(0);`,
 
     const run = await deleteCandidates({
       candidates: [await scanCandidate(pathItem), simulatorCandidate],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       environment: environment,
       ...DELETION_PLATFORM,
       loadProcessCommands: async () => {
@@ -939,7 +937,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
   }): Promise<RemovalRun> {
     return deleteCandidates({
       candidates: [params.candidate],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: params.loadProcessCommands,
       environment: environment,
       ...DELETION_PLATFORM,
@@ -949,7 +947,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 
   test('deletes the folder as a path and records a path intent and outcome', async () => {
     const candidate = await scanVscodeCandidate();
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: journal,
@@ -1138,7 +1136,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
       firstPath: firstPath,
       secondPath: secondPath,
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
 
@@ -1175,7 +1173,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
       firstPath: firstPath,
       secondPath: secondPath,
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     await rm(firstPath, { recursive: true });
     await createCacheFolder('replaced');
@@ -1204,7 +1202,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
       firstPath: firstPath,
       secondPath: secondPath,
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     await rm(firstPath, { recursive: true });
 
@@ -1233,7 +1231,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
 
     const run = await deleteTargetsCandidate({
       candidate: candidate,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'alreadyGone', freedBytes: 0 });

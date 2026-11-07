@@ -8,6 +8,7 @@ import type {
   ExploreFileUnreadable,
   ExploreFinding,
   ExploreFoundEvictFile,
+  ExploreFoundEvictFiles,
 } from '../exploreUnit.js';
 import { formatCountText, formatIsoDay } from '../formatLimitTexts.js';
 import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
@@ -135,7 +136,9 @@ async function loadCloudDocsPlaces(params: {
   run: ExploreProbeToolRun;
   folderPath: AbsolutePath;
 }): Promise<Result<IcloudPlace[], ExploreFileUnreadable>> {
-  if (isFolderEvicted({ run: params.run, path: params.folderPath })) {
+  if (
+    params.run.platform.entryReads.isEntryEvicted({ path: params.folderPath, kind: 'directory' })
+  ) {
     return { kind: 'succeeded', value: [] };
   }
 
@@ -196,7 +199,7 @@ async function loadPlaceFiles(params: {
 function buildIcloudFinding(params: {
   run: ExploreProbeToolRun;
   place: IcloudPlace;
-  foundFiles: [ExploreFoundEvictFile, ...ExploreFoundEvictFile[]];
+  foundFiles: ExploreFoundEvictFiles;
 }): ExploreFinding {
   const lastTouchedMs = Math.max(
     ...params.foundFiles.map((file) => Math.max(file.modifiedMs, file.accessedMs)),
@@ -224,10 +227,6 @@ function buildIcloudFinding(params: {
       processCommands: params.run.processCommands,
     }),
   };
-}
-
-function isFolderEvicted(params: { run: ExploreProbeToolRun; path: string }): boolean {
-  return params.run.platform.entryReads.isEntryEvicted({ path: params.path, kind: 'directory' });
 }
 
 function joinPath(params: {

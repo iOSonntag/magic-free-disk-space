@@ -77,11 +77,16 @@ async function createIcloudFile(params: {
   });
 }
 
-/** A run over the fixture home; the folders at `evictedPaths` hold only what the cloud holds. */
+/**
+ * A run over the fixture home; the folders at `evictedPaths` hold only what the cloud holds. Its
+ * unused cutoff is `CUTOFF_MS` and its stale cutoff 0 unless the caller names them.
+ */
 function buildRun(params: {
   home: FixtureHome;
   evictedPaths?: string[];
   hasIcloudDrive?: boolean;
+  unusedCutoffMs?: number;
+  staleCutoffMs?: number;
 }): ExploreProbeToolRun {
   const platform = buildTestProbePlatform();
   const evictedPaths = params.evictedPaths ?? [];
@@ -96,12 +101,13 @@ function buildRun(params: {
         icloudDriveRoot: params.hasIcloudDrive === false ? null : platform.explore.icloudDriveRoot,
       },
       entryReads: {
+        ...platform.entryReads,
         isEntryEvicted: (entry) =>
           evictedPaths.includes(entry.path) || platform.entryReads.isEntryEvicted(entry),
-        loadPrivateBytes: platform.entryReads.loadPrivateBytes,
       },
     },
-    cutoffMs: CUTOFF_MS,
+    unusedCutoffMs: params.unusedCutoffMs ?? CUTOFF_MS,
+    staleCutoffMs: params.staleCutoffMs ?? 0,
   });
 }
 
@@ -254,11 +260,13 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
         });
 
         const probed = getProbeFindings(
-          await loadIcloudDownloadFindings({
-            ...buildRun({ home: home }),
-            staleCutoffMs: CUTOFF_MS,
-            unusedCutoffMs: NOW_MS - 180 * DAY_MS,
-          }),
+          await loadIcloudDownloadFindings(
+            buildRun({
+              home: home,
+              staleCutoffMs: CUTOFF_MS,
+              unusedCutoffMs: NOW_MS - 180 * DAY_MS,
+            }),
+          ),
         );
 
         expect(summarizeFindings(probed.findings).map((finding) => finding.filePaths)).toEqual([

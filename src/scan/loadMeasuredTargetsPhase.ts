@@ -1,4 +1,4 @@
-import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isStrictlyInsidePath } from '../path/isStrictlyInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
@@ -109,10 +109,8 @@ async function listUncarvedPaths(params: {
   const uncarvedPaths: string[] = [];
 
   for (const path of params.paths) {
-    const carvedInside = params.carve.carvedPaths.filter(
-      (carvedPath) =>
-        carvedPath !== path &&
-        isSameOrInsidePath({ rules: params.carve.pathRules, path: carvedPath, parentPath: path }),
+    const carvedInside = params.carve.carvedPaths.filter((carvedPath) =>
+      isStrictlyInsidePath({ rules: params.carve.pathRules, path: carvedPath, parentPath: path }),
     );
 
     if (carvedInside.length === 0) {

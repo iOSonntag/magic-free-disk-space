@@ -11,6 +11,7 @@ import '../support/fake_url_opener.dart';
 import '../support/sample_events.dart';
 import '../support/semantics_labels.dart';
 import '../support/stage_controls.dart';
+import '../support/test_items.dart';
 import 'support/removal_harness.dart';
 
 void main() {
@@ -114,7 +115,7 @@ void main() {
     expect(bridge.deleteRequest, isNull);
     expect(find.byType(Dialog), findsNothing);
     final ScannedState state = controller.state as ScannedState;
-    expect(state.selectedNumbers, listPlannedNumbers(samplePlan).toSet());
+    expect(state.selectedNumbers, getPlannedItemNumbers(samplePlan).toSet());
     expect(find.byType(ReviewPage), findsNothing);
   });
 
@@ -131,7 +132,7 @@ void main() {
     expect(bridge.deleteRequest, isNull);
     expect(
       (controller.state as ScannedState).selectedNumbers,
-      listPlannedNumbers(samplePlan).toSet(),
+      getPlannedItemNumbers(samplePlan).toSet(),
     );
   });
 
@@ -177,10 +178,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    final List<PlannedItemView> evicted = [
-      for (final PlannedItemView item in samplePlan.items)
-        if (item.removal == ItemRemoval.evict) item,
-    ];
+    final List<PlannedItemView> evicted = evictOnlyPlan.items;
     expect(evicted, isNotEmpty);
     for (final PlannedItemView item in samplePlan.items) {
       expect(

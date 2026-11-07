@@ -107,7 +107,7 @@ async function loadAndroidProbeAnswers(
   const run = buildTestProbeRun({
     environment: environment,
     processCommands: processCommands,
-    cutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+    unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
   });
 
   return {
@@ -542,7 +542,10 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     });
     expect(
       await loadAndroidSystemImageFindings({
-        run: buildTestProbeRun({ environment: environment, cutoffMs: ANDROID_UNUSED_CUTOFF_MS }),
+        run: buildTestProbeRun({
+          environment: environment,
+          unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+        }),
         sdkRoots: buildSdkRoots(),
       }),
     ).toMatchObject({ kind: 'failed', failure: { reason: 'fileUnreadable', path: avd.iniPath } });

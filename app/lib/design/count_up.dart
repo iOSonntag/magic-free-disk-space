@@ -43,7 +43,7 @@ class _CountUpState extends State<CountUp> with SingleTickerProviderStateMixin {
       return;
     }
 
-    _fromValue = _shownValue(oldWidget.value);
+    _fromValue = _getShownValue(oldWidget.value);
     if (MotionScope.of(context).isReduced) {
       _progress.value = 1;
       return;
@@ -59,7 +59,7 @@ class _CountUpState extends State<CountUp> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  int _shownValue(int targetValue) {
+  int _getShownValue(int targetValue) {
     final double progress = _eased.value;
     return (_fromValue * (1 - progress) + targetValue * progress).round();
   }
@@ -72,7 +72,7 @@ class _CountUpState extends State<CountUp> with SingleTickerProviderStateMixin {
       child: AnimatedBuilder(
         animation: _eased,
         builder: (BuildContext context, Widget? child) {
-          return Text(widget.format(_shownValue(widget.value)), style: widget.style);
+          return Text(widget.format(_getShownValue(widget.value)), style: widget.style);
         },
       ),
     );
