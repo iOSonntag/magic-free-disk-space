@@ -138,6 +138,27 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     ]);
   });
 
+  test('keeps an offer of an advice path carved out of the advice, or inside it, on either side', () => {
+    const advice = buildAdviceDecision({ path: '/a/b', carvedPaths: ['/a/b/carved'] });
+    const carved = buildOfferDecision({ path: '/a/b/carved', realPath: '/a/b/carved' });
+    const inside = buildOfferDecision({ path: '/a/b/carved/x', realPath: '/a/b/carved/x' });
+
+    expect(dedupe({ decisions: [carved, advice] })).toEqual([carved, advice]);
+    expect(dedupe({ decisions: [advice, inside] })).toEqual([advice, inside]);
+  });
+
+  test('still skips an offer inside an advice path beside its carved path', () => {
+    const advice = buildAdviceDecision({ path: '/a/b', carvedPaths: ['/a/b/carved'] });
+    const sibling = buildOfferDecision({ path: '/a/b/carvedx', realPath: '/a/b/carvedx' });
+    const holding = buildOfferDecision({ path: '/a', realPath: '/a' });
+
+    expect(dedupe({ decisions: [advice, sibling, holding] })).toEqual([
+      advice,
+      { kind: 'skip', path: '/a/b/carvedx', reason: 'overlapsEarlierCandidate' },
+      { kind: 'skip', path: '/a', reason: 'overlapsEarlierCandidate' },
+    ]);
+  });
+
   test('a folder holding a withheld item is not offered whole', () => {
     const withheld: CandidateDecision = {
       kind: 'skip',
@@ -399,7 +420,7 @@ function buildOfferDecision(params: { path: string; realPath: string }): Candida
   };
 }
 
-function buildAdviceDecision(params: { path: string }): CandidateDecision {
+function buildAdviceDecision(params: { path: string; carvedPaths?: string[] }): CandidateDecision {
   return {
     kind: 'advice',
     advice: {
@@ -411,6 +432,7 @@ function buildAdviceDecision(params: { path: string }): CandidateDecision {
       explanation: 'Fixture explanation.',
       advice: 'Fixture advice text.',
       opener: null,
+      carvedPaths: params.carvedPaths ?? [],
       allocatedBytes: 1024,
       isComplete: true,
       ...TEST_LISTING_FACTS_NONE,

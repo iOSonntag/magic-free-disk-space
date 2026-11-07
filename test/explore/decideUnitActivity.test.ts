@@ -49,6 +49,43 @@ const NVM_VERSION_FOLDER_PATH = buildTestAbsolutePath({
   text: '/Users/example/.nvm/versions/node/v20.11.1',
 });
 
+/**
+ * Each local model unit, with the commands of its tool and commands that only look alike, which
+ * leave it idle.
+ */
+const MODEL_PROCESS_RULES: {
+  facts: UnitActivityFacts;
+  ownerCommands: string[];
+  otherCommands: string[];
+}[] = [
+  {
+    facts: { kind: 'ollama' },
+    ownerCommands: [
+      '/Applications/Ollama.app/Contents/Resources/ollama serve',
+      'ollama run llama3',
+    ],
+    otherCommands: ['/usr/local/bin/ollama-proxy'],
+  },
+  {
+    facts: { kind: 'huggingFace' },
+    ownerCommands: ['/opt/homebrew/bin/hf download org/name', 'huggingface-cli scan-cache'],
+    otherCommands: ['/usr/local/bin/hfs mount', '/opt/example/hf-tools/run'],
+  },
+  {
+    facts: { kind: 'lmStudio' },
+    ownerCommands: [
+      '/Applications/LM Studio.app/Contents/MacOS/LM Studio',
+      '/Users/example/.lmstudio/bin/lms server start',
+      'llmster',
+    ],
+    otherCommands: ['/usr/local/bin/lmserve'],
+  },
+];
+
+const CLAUDE_CODE_VERSION_PATH = buildTestAbsolutePath({
+  text: '/Users/example/.local/share/claude/versions/2.1.3',
+});
+
 describeAwaitingWin32Platform('decideUnitActivity', () => {
   test('a shut-down device is idle while Simulator.app does not run', () => {
     expect(
@@ -159,6 +196,57 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'versionFolder', folderPath: NVM_VERSION_FOLDER_PATH },
+        processCommands: null,
+      }),
+    ).toBe('unknown');
+  });
+
+  test('a local model unit is busy while its tool runs, idle without it, and unknown without processes', () => {
+    for (const rule of MODEL_PROCESS_RULES) {
+      for (const ownerCommand of rule.ownerCommands) {
+        expect(
+          decideUnitActivity({
+            facts: rule.facts,
+            processCommands: [UNRELATED_COMMAND, ownerCommand],
+          }),
+        ).toBe('busy');
+      }
+
+      expect(
+        decideUnitActivity({
+          facts: rule.facts,
+          processCommands: [UNRELATED_COMMAND, ...rule.otherCommands],
+        }),
+      ).toBe('idle');
+      expect(decideUnitActivity({ facts: rule.facts, processCommands: null })).toBe('unknown');
+    }
+  });
+
+  test('every Claude Code version is busy while a claude session runs through the launcher', () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+        processCommands: [UNRELATED_COMMAND, 'claude --resume'],
+      }),
+    ).toBe('busy');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+        processCommands: [`${CLAUDE_CODE_VERSION_PATH} --print`],
+      }),
+    ).toBe('busy');
+  });
+
+  test('a Claude Code version stays idle beside a version whose number only starts with its own', () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+        processCommands: [`${CLAUDE_CODE_VERSION_PATH}0 --print`, '/usr/local/bin/claude-monitor'],
+      }),
+    ).toBe('idle');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
         processCommands: null,
       }),
     ).toBe('unknown');

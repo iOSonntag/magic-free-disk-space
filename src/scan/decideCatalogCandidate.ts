@@ -1,5 +1,6 @@
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogOwner } from '../catalog/catalogOwner.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { CandidateDecision, SkipReason } from './candidate.js';
 import type { TargetsMeasurement } from './loadMeasuredTargetsPhase.js';
 import { hasSymbolicLinkTarget } from './loadMeasuredTargetsPhase.js';
@@ -24,6 +25,8 @@ export function decideCatalogCandidate(params: {
   ownerAppName: string | null;
   activity: ActivityProbe | null;
   minOfferedBytes: number;
+  /** The absolute paths of the entry's carved subpaths below `path`, from `buildCarvedPaths`. */
+  carvedPaths: string[];
 }): CandidateDecision {
   if (hasSymbolicLinkTarget(params.measurement)) {
     return { kind: 'skip', path: params.path, reason: 'symbolicLink' };
@@ -94,6 +97,7 @@ export function decideCatalogCandidate(params: {
           explanation: params.entry.explanation,
           advice: params.entry.removal.advice,
           opener: params.entry.removal.kind === 'advice' ? params.entry.removal.opener : null,
+          carvedPaths: params.carvedPaths,
           allocatedBytes: params.measurement.allocatedBytes,
           isComplete: params.measurement.isComplete,
           privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
@@ -103,6 +107,24 @@ export function decideCatalogCandidate(params: {
         },
       };
   }
+}
+
+/**
+ * The absolute paths of an advice entry's carved subpaths below the item's path, which the
+ * catalog writes with `/`; none for any other entry.
+ */
+export function buildCarvedPaths(params: {
+  pathRules: PathRules;
+  entry: CatalogEntry;
+  path: string;
+}): string[] {
+  if (params.entry.removal.kind !== 'advice') {
+    return [];
+  }
+
+  return params.entry.removal.carvedPaths.map((carvedPath) =>
+    [params.path, ...carvedPath.split('/')].join(params.pathRules.separator),
+  );
 }
 
 /** An Apple-named child of a `children` entry belongs to macOS; the scanner skips it unmeasured. */
@@ -117,6 +139,8 @@ export function isSystemOwnedTarget(params: {
   switch (params.owner.kind) {
     case 'bundleId':
       return isAppleBundleId({ bundleId: params.owner.bundleId });
+    case 'bundleIdFamily':
+      return false;
   }
 }
 

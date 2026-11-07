@@ -42,6 +42,7 @@ async function loadPhase(paths: [string, ...string[]]) {
   const measurements: TargetsMeasurement[] = [];
   const phase = await loadMeasuredTargetsPhase({
     found: buildFoundTargets(paths),
+    carve: null,
     measureTimeoutMs: 10_000,
     runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
     entryReads: darwinPlatform.system.entryReads,

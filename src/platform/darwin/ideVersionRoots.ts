@@ -1,11 +1,11 @@
 import type { IdeVersionRoots } from '../../explore/explorePlatform.js';
-import { stubPartNotBuilt } from '../../notBuilt.js';
 
 /**
  * The folders of the JetBrains IDEs and Android Studio on macOS that hold one folder per version,
- * by kind. Part 4a settles them; until then no probe reads them.
+ * by kind: `~/Library/<kind>/<productVendor>/<dataDirectoryName>`, as the JetBrains launcher forms
+ * them, with Google as Android Studio's vendor.
  */
-export const IDE_VERSION_ROOTS = stubPartNotBuilt<IdeVersionRoots>({
+export const IDE_VERSION_ROOTS: IdeVersionRoots = {
   caches: [
     ['Library', 'Caches', 'JetBrains'],
     ['Library', 'Caches', 'Google'],
@@ -18,4 +18,4 @@ export const IDE_VERSION_ROOTS = stubPartNotBuilt<IdeVersionRoots>({
     ['Library', 'Application Support', 'JetBrains'],
     ['Library', 'Application Support', 'Google'],
   ],
-});
+};

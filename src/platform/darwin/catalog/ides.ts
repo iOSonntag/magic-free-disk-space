@@ -1,8 +1,70 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
 import { buildBundleIdOwner } from './buildBundleIdOwner.js';
 
-/** Code editors, such as Visual Studio Code, their caches and their extensions. */
+/** Code editors, such as Visual Studio Code and the JetBrains IDEs, their caches and their extensions. */
 export const IDE_ENTRIES: CatalogEntry[] = [
+  {
+    id: 'jetbrains-ide-versions',
+    category: 'developer',
+    title: 'Old JetBrains IDE and Android Studio versions',
+    explanation:
+      'The settings, plugins, caches, and logs that older versions of the JetBrains IDEs and Android Studio left behind.',
+    regeneration: 'An IDE makes its folders again when you open that version again.',
+    risk: 'review',
+    root: 'home',
+    path: 'Library/Application Support/JetBrains',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: null,
+    removal: {
+      kind: 'explore',
+      probe: 'ideVersions',
+      advice:
+        'Older versions of the JetBrains IDEs leave their folders behind. Remove them in the IDE with Help, Delete Leftover IDE Directories.',
+    },
+  },
+  {
+    id: 'vscode-code-cache',
+    category: 'caches',
+    title: 'Visual Studio Code script cache',
+    explanation: 'Compiled scripts that Visual Studio Code keeps so its windows open faster.',
+    regeneration: 'Visual Studio Code compiles them again while it runs.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Application Support/Code/Code Cache',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: buildBundleIdOwner({ text: 'com.microsoft.VSCode' }),
+    removal: { kind: 'delete' },
+  },
+  {
+    id: 'vscode-gpu-cache',
+    category: 'caches',
+    title: 'Visual Studio Code graphics cache',
+    explanation: 'Graphics programs that Visual Studio Code keeps so it draws its windows faster.',
+    regeneration: 'Visual Studio Code makes them again while it runs.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Application Support/Code/GPUCache',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: buildBundleIdOwner({ text: 'com.microsoft.VSCode' }),
+    removal: { kind: 'delete' },
+  },
+  {
+    id: 'vscode-logs',
+    category: 'caches',
+    title: 'Visual Studio Code logs',
+    explanation: 'The logs Visual Studio Code writes each time it starts.',
+    regeneration: 'Visual Studio Code writes new logs the next time it starts.',
+    risk: 'safe',
+    root: 'home',
+    path: 'Library/Application Support/Code/logs',
+    selection: { kind: 'path' },
+    ageRule: { kind: 'none' },
+    owner: buildBundleIdOwner({ text: 'com.microsoft.VSCode' }),
+    removal: { kind: 'delete' },
+  },
   {
     id: 'vscode-cache',
     category: 'caches',

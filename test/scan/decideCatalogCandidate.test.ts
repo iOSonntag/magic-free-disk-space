@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import { decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
@@ -22,6 +23,7 @@ function decide(params: {
   ownerBundleId?: string | null;
   ownerState?: OwnerState;
   activity?: ActivityProbe | null;
+  carvedPaths?: string[];
 }) {
   return decideCatalogCandidate({
     entry: params.entry ?? buildTestCatalogEntry({}),
@@ -34,6 +36,7 @@ function decide(params: {
     ownerAppName: 'Example',
     activity: params.activity === undefined ? null : params.activity,
     minOfferedBytes: MIB,
+    carvedPaths: params.carvedPaths ?? [],
   });
 }
 
@@ -97,6 +100,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
         explanation: 'A cache for tests.',
         advice: 'Run the tool.',
         opener: null,
+        carvedPaths: [],
         allocatedBytes: 5 * MIB,
         isComplete: true,
         privateSizeFallbackCount: 0,
@@ -116,6 +120,36 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
     expect(decision.kind === 'advice' && decision.advice.advice).toBe('Run mise prune.');
     expect(decision.kind === 'advice' && decision.advice.opener).toBeNull();
+  });
+
+  test('gives the advice its carved paths, joined below its path', () => {
+    const entry = buildTestCatalogEntry({
+      removal: {
+        kind: 'advice',
+        advice: 'Tidy it.',
+        carvedPaths: ['Previews', 'a/b'],
+        opener: null,
+      },
+    });
+    const carvedPaths = buildCarvedPaths({
+      pathRules: DARWIN_PATH_RULES,
+      entry: entry,
+      path: PATH,
+    });
+    const decision = decide({ entry: entry, carvedPaths: carvedPaths });
+
+    expect(carvedPaths).toEqual([`${PATH}/Previews`, `${PATH}/a/b`]);
+    expect(decision.kind === 'advice' && decision.advice.carvedPaths).toEqual(carvedPaths);
+  });
+
+  test('carves nothing for an entry that is no advice', () => {
+    expect(
+      buildCarvedPaths({
+        pathRules: DARWIN_PATH_RULES,
+        entry: buildTestCatalogEntry({}),
+        path: PATH,
+      }),
+    ).toEqual([]);
   });
 
   test("gives an advice entry's opener to its advice", () => {

@@ -1,12 +1,23 @@
-import { stubPartNotBuilt } from '../../notBuilt.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
+import { buildOllamaModelFindings } from './buildOllamaModelFindings.js';
+import { loadOllamaModelState } from './loadOllamaModelState.js';
 
-/** Reads Ollama's manifests and offers each model with the blobs no other manifest names. */
-export function loadOllamaModelFindings(_run: ExploreProbeRun): Promise<ExploreProbeFilesResult> {
-  return Promise.resolve(
-    stubPartNotBuilt<ExploreProbeFilesResult>({
-      kind: 'failed',
-      failure: { reason: 'placeMissing' },
-    }),
-  );
+/** The models in `~/.ollama/models`, each with the blobs no other model names. */
+export async function loadOllamaModelFindings(
+  run: ExploreProbeRun,
+): Promise<ExploreProbeFilesResult> {
+  const state = await loadOllamaModelState({
+    pathRules: run.environment.pathRules,
+    homeDir: run.environment.homeDir,
+    privacyDenialCode: run.platform.privacyDenialCode,
+  });
+
+  if (state.kind === 'failed') {
+    return state;
+  }
+
+  return {
+    kind: 'succeeded',
+    value: buildOllamaModelFindings({ state: state.value, processCommands: run.processCommands }),
+  };
 }

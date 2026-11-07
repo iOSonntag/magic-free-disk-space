@@ -6,8 +6,9 @@ import { listCandidateFootprint, listProbedTargetPaths } from './listCandidateFo
 
 /**
  * Turns into a skip each offer with a footprint path that would remove what the scan held back
- * or offered already: one holding a skipped or advised path, one inside an advised path, one
- * equal to an earlier skipped path, and one overlapping an earlier kept footprint. Paths are
+ * or offered already: one holding a skipped or advised path, one inside an advised path but
+ * outside the advice's carved paths, one equal to an earlier skipped path, and one overlapping an
+ * earlier kept footprint. Paths are
  * compared as the scan produced them, never followed through links. The result keeps length and
  * order.
  *
@@ -25,8 +26,10 @@ export function dedupeCandidates(params: {
   const skippedPaths = params.decisions.flatMap((decision) =>
     decision.kind === 'skip' ? [decision.path] : [],
   );
-  const advisedPaths = params.decisions.flatMap((decision) =>
-    decision.kind === 'advice' ? [decision.advice.path] : [],
+  const advisedPlaces = params.decisions.flatMap((decision): AdvisedPlace[] =>
+    decision.kind === 'advice'
+      ? [{ path: decision.advice.path, carvedPaths: decision.advice.carvedPaths }]
+      : [],
   );
   const unitTargetPaths = params.decisions.flatMap((decision) =>
     decision.kind === 'offer' ? listProbedTargetPaths(decision.candidate) : [],
@@ -51,7 +54,7 @@ export function dedupeCandidates(params: {
         pathRules: params.pathRules,
         path: path,
         skippedPaths: skippedPaths,
-        advisedPaths: advisedPaths,
+        advisedPlaces: advisedPlaces,
         earlierSkippedPaths: earlierSkippedPaths,
         keptOfferPaths: keptOfferPaths,
       }),
@@ -104,30 +107,51 @@ function isProbeReservedPath(params: {
   );
 }
 
+/** An advice's path with the paths inside it that other entries offer, which it never holds back. */
+type AdvisedPlace = { path: string; carvedPaths: string[] };
+
 function isOverlappingHeldPath(params: {
   pathRules: PathRules;
   path: string;
   skippedPaths: string[];
-  advisedPaths: string[];
+  advisedPlaces: AdvisedPlace[];
   earlierSkippedPaths: string[];
   keptOfferPaths: string[];
 }): boolean {
   return (
-    [...params.skippedPaths, ...params.advisedPaths].some((heldPath) =>
+    [...params.skippedPaths, ...params.advisedPlaces.map((place) => place.path)].some((heldPath) =>
       isStrictlyInsidePath({
         pathRules: params.pathRules,
         path: heldPath,
         parentPath: params.path,
       }),
     ) ||
-    params.advisedPaths.some((advisedPath) =>
-      isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: advisedPath }),
+    params.advisedPlaces.some((place) =>
+      isHeldByAdvice({ pathRules: params.pathRules, path: params.path, place: place }),
     ) ||
     params.earlierSkippedPaths.includes(params.path) ||
     params.keptOfferPaths.some(
       (keptPath) =>
         isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: keptPath }) ||
         isSameOrInsidePath({ rules: params.pathRules, path: keptPath, parentPath: params.path }),
+    )
+  );
+}
+
+/** Inside the advised path, unless inside one of its carved paths, which the advice leaves out. */
+function isHeldByAdvice(params: {
+  pathRules: PathRules;
+  path: string;
+  place: AdvisedPlace;
+}): boolean {
+  return (
+    isSameOrInsidePath({
+      rules: params.pathRules,
+      path: params.path,
+      parentPath: params.place.path,
+    }) &&
+    !params.place.carvedPaths.some((carvedPath) =>
+      isSameOrInsidePath({ rules: params.pathRules, path: params.path, parentPath: carvedPath }),
     )
   );
 }
