@@ -56,7 +56,7 @@ void main() {
         origin: DeleteAlertOrigin.cleanSafeItems,
       );
 
-      expect(find.text('Delete 15 MB for good?'), findsOneWidget);
+      expect(find.text('Delete 10 MB for good?'), findsOneWidget);
       expect(
         find.descendant(of: find.byType(Dialog), matching: find.text('Tool cache')),
         findsOneWidget,
@@ -153,16 +153,27 @@ void main() {
     expect(bridge.deleteRequest, isNull);
   });
 
-  testWidgets('names no evicted item among those that cannot come back', (
+  testWidgets('names no evicted item among those that cannot come back, nor counts it as gone', (
     WidgetTester tester,
   ) async {
     await openAlert(tester, plan: samplePlan, origin: DeleteAlertOrigin.review);
 
     final Finder alert = find.byType(Dialog);
     expect(
+      find.descendant(of: alert, matching: find.text('Delete 10 MB for good?')),
+      findsOneWidget,
+    );
+    expect(
       find.descendant(
         of: alert,
         matching: find.text('These skip the Trash, so they cannot come back:'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: alert,
+        matching: find.text('5.0 MB stays in iCloud and downloads again when opened.'),
       ),
       findsOneWidget,
     );
@@ -178,5 +189,28 @@ void main() {
         reason: item.title,
       );
     }
+  });
+
+  testWidgets('a plan that only evicts asks to remove its bytes from this Mac, never for good', (
+    WidgetTester tester,
+  ) async {
+    await openAlert(tester, plan: evictOnlyPlan, origin: DeleteAlertOrigin.review);
+
+    final Finder alert = find.byType(Dialog);
+    expect(
+      find.descendant(of: alert, matching: find.text('Remove 5.0 MB from this Mac?')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: alert, matching: find.textContaining('cannot come back')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: alert,
+        matching: find.text('5.0 MB stays in iCloud and downloads again when opened.'),
+      ),
+      findsOneWidget,
+    );
   });
 }

@@ -7,6 +7,7 @@ import '../scan_view/scan_view.dart';
 import 'accent_button.dart';
 import 'delete_confirm_alert.dart';
 import 'lines_details.dart';
+import 'removal_reach.dart';
 import 'size_ease.dart';
 
 /// The Review step: lists what the plan of [state] deletes, and opens the
@@ -45,7 +46,7 @@ class ReviewPage extends StatelessWidget {
                   children: [
                     _ReviewHero(
                       totalBytes: state.plan.totalBytes,
-                      itemCount: items.length,
+                      reach: RemovalReach.split(items),
                       isReplanning: isReplanning,
                     ),
                     if (state.plan.holdsCareful) ...[
@@ -130,12 +131,12 @@ class _ReviewHeader extends StatelessWidget {
 class _ReviewHero extends StatelessWidget {
   const _ReviewHero({
     required this.totalBytes,
-    required this.itemCount,
+    required this.reach,
     required this.isReplanning,
   });
 
   final int totalBytes;
-  final int itemCount;
+  final RemovalReach reach;
   final bool isReplanning;
 
   @override
@@ -155,14 +156,24 @@ class _ReviewHero extends StatelessWidget {
           ),
         ),
         const SizedBox(height: StageSpacing.small),
-        Text(
-          '${formatItemCount(itemCount)} go for good. They skip the Trash, so '
-          'they cannot come back.',
-          style: TypeRamp.body,
-        ),
+        Text(_formatReachText(reach), style: TypeRamp.body),
       ],
     );
   }
+}
+
+/// What the plan's removal leaves: the items gone for good, and the bytes
+/// that stay in iCloud.
+String _formatReachText(RemovalReach reach) {
+  final int finalCount = reach.finalItems.length;
+  final List<String> sentences = [
+    if (finalCount == 1)
+      '1 item goes for good. It skips the Trash, so it cannot come back.'
+    else if (finalCount > 1)
+      '$finalCount items go for good. They skip the Trash, so they cannot come back.',
+    if (reach.evictedItems.isNotEmpty) formatStaysInIcloudText(reach.evictedBytes),
+  ];
+  return sentences.join(' ');
 }
 
 class _CarefulNote extends StatelessWidget {

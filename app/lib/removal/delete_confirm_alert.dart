@@ -6,6 +6,7 @@ import '../design/design.dart';
 import '../scan_view/scan_view.dart';
 import 'accent_button.dart';
 import 'biggest_items.dart';
+import 'removal_reach.dart';
 
 /// The word the bridge demands for every deletion; the app sends it on the
 /// alert's Delete, and a plan with a careful item asks the user to type it.
@@ -66,17 +67,13 @@ Future<void> showDeleteConfirmAlert({
 
 enum _AlertChoice { delete, showList, cancel }
 
-/// Whether an item removed the way [removal] says is gone for good: every
-/// removal but an evict, whose item stays in iCloud and downloads again.
-bool _isRemovalFinal(ItemRemoval removal) {
-  return switch (removal) {
-    ItemRemoval.evict => false,
-    ItemRemoval.delete ||
-    ItemRemoval.tool ||
-    ItemRemoval.engine ||
-    ItemRemoval.advice ||
-    ItemRemoval.unknown => true,
-  };
+/// "Delete 10 MB for good?", or for a plan that only evicts, what leaves
+/// this Mac.
+String _formatHeadlineText(RemovalReach reach) {
+  if (reach.finalItems.isEmpty) {
+    return 'Remove ${formatBytes(reach.evictedBytes)} from this Mac?';
+  }
+  return 'Delete ${formatBytes(reach.finalBytes)} for good?';
 }
 
 class _DeleteConfirmAlert extends StatefulWidget {
@@ -104,12 +101,9 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
   @override
   Widget build(BuildContext context) {
     final PlannedEvent plan = widget.plan;
-    final String totalText = formatBytes(plan.totalBytes);
+    final RemovalReach reach = RemovalReach.split(plan.items);
     final BiggestItems finalItems = buildBiggestItems(
-      [
-        for (final PlannedItemView item in plan.items)
-          if (_isRemovalFinal(item.removal)) item,
-      ],
+      reach.finalItems,
       shownCount: _namedItemCount,
     );
     final bool canShowList = switch (widget.origin) {
@@ -149,7 +143,7 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
                       child: Semantics(
                         header: true,
                         child: Text(
-                          'Delete $totalText for good?',
+                          _formatHeadlineText(reach),
                           style: TypeRamp.headline,
                         ),
                       ),
@@ -173,6 +167,13 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
                         style: TypeRamp.caption,
                       ),
                     ),
+                ],
+                if (reach.evictedItems.isNotEmpty) ...[
+                  const SizedBox(height: StageSpacing.large),
+                  Text(
+                    formatStaysInIcloudText(reach.evictedBytes),
+                    style: TypeRamp.body,
+                  ),
                 ],
                 if (plan.holdsCareful) ...[
                   const SizedBox(height: StageSpacing.large),

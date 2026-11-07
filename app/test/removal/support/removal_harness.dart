@@ -44,13 +44,18 @@ final PlannedEvent carefulPlan = PlannedEvent(
 
 /// [samplePlan] without its App cache, as the bridge answers once Keep takes
 /// item 2 out.
-final PlannedEvent planWithoutAppCache = _planSampleWithout(2);
+final PlannedEvent planWithoutAppCache = _planSampleItems(
+  (PlannedItemView item) => item.number != 2,
+);
 
-PlannedEvent _planSampleWithout(int number) {
-  final List<PlannedItemView> items = [
-    for (final PlannedItemView item in samplePlan.items)
-      if (item.number != number) item,
-  ];
+/// [samplePlan] with its iCloud folder alone, which only leaves this Mac.
+final PlannedEvent evictOnlyPlan = _planSampleItems(
+  (PlannedItemView item) => item.removal == ItemRemoval.evict,
+);
+
+/// A plan of the items of [samplePlan] that [isKept] keeps.
+PlannedEvent _planSampleItems(bool Function(PlannedItemView item) isKept) {
+  final List<PlannedItemView> items = samplePlan.items.where(isKept).toList();
   return PlannedEvent(
     planId: 3,
     lines: const [],

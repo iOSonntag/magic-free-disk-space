@@ -83,6 +83,32 @@ void main() {
     expectEveryTappableNodeLabelled();
   });
 
+  testWidgets('counts only what goes for good as gone, and says what stays in iCloud', (
+    WidgetTester tester,
+  ) async {
+    await pumpReview(tester);
+
+    expect(
+      find.text(
+        '2 items go for good. They skip the Trash, so they cannot come back. '
+        '5.0 MB stays in iCloud and downloads again when opened.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('words a plan that only evicts with nothing gone for good', (
+    WidgetTester tester,
+  ) async {
+    await pumpReview(tester, plan: evictOnlyPlan);
+
+    expect(
+      find.text('5.0 MB stays in iCloud and downloads again when opened.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('for good'), findsNothing);
+  });
+
   testWidgets('groups a plan across sections under the heading of each, in the order of the sections', (
     WidgetTester tester,
   ) async {
@@ -186,7 +212,7 @@ void main() {
 
     await tapAndSettle(tester, findButtonLabelled('Delete 15 MB'));
 
-    expect(find.text('Delete 15 MB for good?'), findsOneWidget);
+    expect(find.text('Delete 10 MB for good?'), findsOneWidget);
     expect(findButtonLabelled('Show list'), findsNothing);
     expectEveryTappableNodeLabelled();
   });
