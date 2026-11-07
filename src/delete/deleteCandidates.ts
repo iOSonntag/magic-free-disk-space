@@ -254,15 +254,13 @@ async function removeCandidate(params: {
         candidate: params.candidate,
         removal: params.candidate.removal,
         environment: params.environment,
-        probePlatform: params.probePlatform,
-        entryReads: params.entryReads,
-        loadProcessCommands: params.loadProcessCommands,
         clock: params.clock,
       });
     case 'callEngine':
       return callEngineCandidate({
         candidate: params.candidate,
         removal: params.candidate.removal,
+        user: params.environment.user,
         clock: params.clock,
       });
     case 'runTool': {

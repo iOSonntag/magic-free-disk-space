@@ -14,7 +14,12 @@ import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
 import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parsePosixUid } from '../../system/userIdentity.js';
-import { PROTECTED_HOME_DIR_NAMES, SENSITIVE_HOME_DIR_NAMES } from './protectedPaths.js';
+import { ICLOUD_DRIVE_ROOT_PATH_NAMES } from './appleDataRoots.js';
+import {
+  PROTECTED_HOME_DIR_NAMES,
+  SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
+  SENSITIVE_HOME_DIR_NAMES,
+} from './protectedPaths.js';
 
 /** How macOS spells and compares an absolute path. */
 export const DARWIN_PATH_RULES: PathRules = { rootForm: 'posix', separator: '/' };
@@ -48,6 +53,9 @@ export const DARWIN_HOMEBREW_PREFIX_PATHS: AbsolutePath[] = ['/opt/homebrew', '/
 /** The name under which macOS keeps the per-user temporary folder, whatever `TMPDIR` says. */
 const USER_TEMP_DIR_NAME = 'DARWIN_USER_TEMP_DIR';
 
+/** The name under which macOS keeps the per-user folder of its own caches, the temp's sibling. */
+const USER_CACHE_DIR_NAME = 'DARWIN_USER_CACHE_DIR';
+
 export async function loadEnvironment(): Promise<Result<Environment, EnvironmentFailure>> {
   const homeText = homedir();
   const homeDir = parseEnvironmentPath({ text: homeText, failurePath: homeText });
@@ -78,7 +86,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   }
 
   // Read from the system, not from `TMPDIR`: every child of this folder may count as temporary.
-  const tempDir = await loadUserTempDir();
+  const tempDir = await loadUserConfDir({ name: USER_TEMP_DIR_NAME });
 
   if (tempDir.kind === 'failed') {
     return tempDir;
@@ -88,6 +96,18 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
 
   if (tempRealPath.kind === 'failed') {
     return tempRealPath;
+  }
+
+  const userCacheDir = await loadUserConfDir({ name: USER_CACHE_DIR_NAME });
+
+  if (userCacheDir.kind === 'failed') {
+    return userCacheDir;
+  }
+
+  const userCacheRealPath = await loadRealPath({ path: userCacheDir.value });
+
+  if (userCacheRealPath.kind === 'failed') {
+    return userCacheRealPath;
   }
 
   const user = getEffectiveUser();
@@ -114,6 +134,8 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
       homeRealPath: homeRealPath.value,
       tempDir: tempDir.value,
       tempRealPath: tempRealPath.value,
+      userCacheDir: userCacheDir.value,
+      userCacheRealPath: userCacheRealPath.value,
       applicationDirs: applicationDirs,
       applicationRealPaths: applicationRealPaths,
     }),
@@ -128,6 +150,8 @@ export function buildDarwinEnvironment(params: {
   homeRealPath: AbsolutePath;
   tempDir: AbsolutePath;
   tempRealPath: AbsolutePath;
+  userCacheDir: AbsolutePath;
+  userCacheRealPath: AbsolutePath;
   applicationDirs: AbsolutePath[];
   applicationRealPaths: AbsolutePath[];
 }): Environment {
@@ -139,11 +163,15 @@ export function buildDarwinEnvironment(params: {
     homeRealPath: params.homeRealPath,
     tempDir: params.tempDir,
     tempRealPath: params.tempRealPath,
+    userCacheDir: params.userCacheDir,
+    userCacheRealPath: params.userCacheRealPath,
     applicationDirs: params.applicationDirs,
     applicationRealPaths: params.applicationRealPaths,
     protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
     protectedHomeDirNames: PROTECTED_HOME_DIR_NAMES,
     sensitiveHomeDirNames: SENSITIVE_HOME_DIR_NAMES,
+    sensitiveExceptionHomeDirNames: SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
+    evictHomeDirNames: [ICLOUD_DRIVE_ROOT_PATH_NAMES],
     deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
     preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
   });
@@ -189,24 +217,27 @@ function getEffectiveUser(): UserIdentity {
   return { kind: 'posix', uid: uid.value };
 }
 
-async function loadUserTempDir(): Promise<Result<AbsolutePath, EnvironmentFailure>> {
+/** The per-user folder that `getconf` names by `name`, such as the temporary folder. */
+async function loadUserConfDir(params: {
+  name: string;
+}): Promise<Result<AbsolutePath, EnvironmentFailure>> {
   const output = await loadCommandOutput({
     command: 'getconf',
-    args: [USER_TEMP_DIR_NAME],
+    args: [params.name],
     timeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
 
   if (output.kind === 'failed') {
     return {
       kind: 'failed',
-      failure: { reason: 'unresolvable', path: USER_TEMP_DIR_NAME, code: output.failure.reason },
+      failure: { reason: 'unresolvable', path: params.name, code: output.failure.reason },
     };
   }
 
-  // Printed with a trailing slash, which would end up in every temporary path shown.
-  const tempDirText = output.value.trim().replace(/\/+$/, '');
+  // Printed with a trailing slash, which would end up in every path shown below it.
+  const dirText = output.value.trim().replace(/\/+$/, '');
 
-  return parseEnvironmentPath({ text: tempDirText, failurePath: USER_TEMP_DIR_NAME });
+  return parseEnvironmentPath({ text: dirText, failurePath: params.name });
 }
 
 /** The real path of `path`; unresolvable when it cannot be read or is not absolute. */

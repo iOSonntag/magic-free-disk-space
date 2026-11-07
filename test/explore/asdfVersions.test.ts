@@ -461,6 +461,7 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
       projectPins: buildFoundProjectPinsLoad({ files: params.files }),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: 0,
+      staleCutoffMs: 0,
     });
 
     return probes.asdfVersions;

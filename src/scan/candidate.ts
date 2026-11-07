@@ -8,6 +8,7 @@ import type {
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import type {
   CandidateOrigin,
+  CandidateOriginApplication,
   CandidateOriginCatalog,
   CandidateOriginExplore,
 } from './candidateOrigin.js';
@@ -110,8 +111,11 @@ export type CandidateProbed = CandidateListing & {
 export type Candidate = CandidateMatched | CandidateProbed;
 
 export type Advice = {
-  /** Advice comes only from a catalog entry, whose place the person handles with its own tool. */
-  origin: CandidateOriginCatalog;
+  /**
+   * Advice comes from a catalog entry, whose place the person handles with its own tool, or from an
+   * app the person must remove themselves, such as an installer that root owns.
+   */
+  origin: CandidateOriginCatalog | CandidateOriginApplication;
   path: string;
   title: string;
   category: CandidateCategory;
@@ -120,6 +124,11 @@ export type Advice = {
   advice: string;
   /** The app or settings pane the person handles the place in; `null` when none opens it. */
   opener: AdviceOpener | null;
+  /**
+   * The absolute paths inside `path` that other entries offer, so the advice's size holds none of
+   * their bytes and the scan lets their offers stand.
+   */
+  carvedPaths: string[];
   allocatedBytes: number;
   isComplete: boolean;
   privateSizeFallbackCount: number;
@@ -139,6 +148,12 @@ export type SkipReason =
   | 'recentUse'
   | 'useUnknown'
   | 'ownerInstalled'
+  /** A folder named by a vendor's or a generic word, which tells no single app it belongs to. */
+  | 'genericName'
+  /** An installer of the release of the system that runs now. */
+  | 'installsRunningSystem'
+  /** An installer whose release, or the running system's, could not be read. */
+  | 'systemVersionUnknown'
   | 'notBundleId'
   | 'installedAppsUnknown'
   | 'holdsOtherVolume'

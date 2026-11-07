@@ -249,6 +249,7 @@ async function loadIdleFindingPhase(params: {
     case 'claudeTranscripts':
     case 'claudeCodeVersion':
     case 'ideVersionFolder':
+    case 'lmStudioModel':
     case 'fvmVersion':
       return loadPathFindingPhase({ ...params, unit: unit });
     case 'icloudFolder':
@@ -320,6 +321,7 @@ function loadPathFindingPhase(params: {
 
   return loadMeasuredTargetsPhase({
     found: buildFoundTargets([firstPath, ...otherPaths]),
+    carve: null,
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
@@ -367,6 +369,7 @@ function loadEvictFindingPhase(params: {
 }): Promise<ScanPhase> {
   return loadMeasuredTargetsPhase({
     found: params.unit.foundFiles,
+    carve: null,
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
@@ -449,11 +452,55 @@ function buildExploreCandidate(params: {
     isComplete: params.measurement.isComplete,
     privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
     lastUsedAtMs: getUnitLastUsedAtMs({ unit: params.finding.unit }),
-    downloadedAtMs: null,
+    downloadedAtMs: getUnitDownloadedAtMs({ unit: params.finding.unit }),
     appName: null,
     removal: params.removal,
     evidenceLines: params.finding.evidenceLines,
   };
+}
+
+/** When the unit's tool finished its download; `null` for a unit whose probe reads none. */
+function getUnitDownloadedAtMs(params: { unit: ExploreUnit }): number | null {
+  switch (params.unit.kind) {
+    case 'ollamaModel':
+    case 'huggingFaceRepository':
+    case 'huggingFaceDetachedRevisions':
+    case 'lmStudioModel':
+      return params.unit.downloadedAtMs;
+    case 'simulatorRuntime':
+    case 'androidAvd':
+    case 'simulatorDevice':
+    case 'dartPubCache':
+    case 'miseVersion':
+    case 'homebrewOldVersions':
+    case 'homebrewOrphans':
+    case 'asdfVersion':
+    case 'androidSystemImage':
+    case 'androidEmulator':
+    case 'vscodeExtension':
+    case 'nvmVersion':
+    case 'androidPlatform':
+    case 'pnpmStore':
+    case 'vagrantBoxVersion':
+    case 'rustupToolchain':
+    case 'condaTarballs':
+    case 'condaPackages':
+    case 'downloadsInstallers':
+    case 'downloadsIncomplete':
+    case 'mailDownloads':
+    case 'huggingFacePartialDownloads':
+    case 'claudeTranscripts':
+    case 'claudeCodeVersion':
+    case 'ideVersionFolder':
+    case 'fvmVersion':
+    case 'icloudFolder':
+    case 'engineBuildCache':
+    case 'engineDanglingImages':
+    case 'engineImage':
+    case 'engineContainer':
+    case 'engineVolume':
+      return null;
+  }
 }
 
 /** The last use its own tool records for a unit; `null` for a unit whose tool records none. */
@@ -488,6 +535,7 @@ function getUnitLastUsedAtMs(params: { unit: ExploreUnit }): number | null {
     case 'claudeTranscripts':
     case 'claudeCodeVersion':
     case 'ideVersionFolder':
+    case 'lmStudioModel':
     case 'fvmVersion':
     case 'icloudFolder':
     case 'engineBuildCache':

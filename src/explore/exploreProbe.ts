@@ -1,6 +1,7 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolName } from '../tools/toolInstallLocations.js';
@@ -21,6 +22,8 @@ export type ExploreProbePlatform = {
   homebrewPrefixPaths: AbsolutePath[];
   /** The system slice's code of a privacy denial, for every read of the probes. */
   privacyDenialCode: string | null;
+  /** The system slice's entry reads, so a probe never lists a folder that only the cloud holds. */
+  entryReads: EntryReads;
 };
 
 /** What the probes and their rechecks take of the explore, tools, and system slices. */
@@ -33,12 +36,14 @@ export function buildExploreProbePlatform(params: {
     explore: params.explore,
     homebrewPrefixPaths: params.tools.homebrewPrefixPaths,
     privacyDenialCode: params.system.privacyDenialCode,
+    entryReads: params.system.entryReads,
   };
 }
 
 /**
  * What every probe gets: the processes read before any tool started, the time its commands and
- * reads must end by, and the scan's cutoff of last use for the units judged by it.
+ * reads must end by, and the scan's cutoffs of last use and of the stale window for the units
+ * judged by them.
  */
 export type ExploreProbeRun = {
   environment: Environment;
@@ -46,6 +51,7 @@ export type ExploreProbeRun = {
   processCommands: string[] | null;
   deadlineMs: number;
   unusedCutoffMs: number;
+  staleCutoffMs: number;
 };
 
 /** The run of a tool probe, with the tool its lookup located. */

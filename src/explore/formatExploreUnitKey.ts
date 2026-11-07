@@ -29,6 +29,7 @@ export function formatExploreUnitKey(params: { unit: ExploreUnit }): string {
     case 'downloadsIncomplete':
     case 'mailDownloads':
     case 'claudeCodeVersion':
+    case 'lmStudioModel':
     case 'fvmVersion':
     case 'icloudFolder':
       return `${params.unit.kind}:${params.unit.folderPath}`;
@@ -40,7 +41,7 @@ export function formatExploreUnitKey(params: { unit: ExploreUnit }): string {
     case 'condaPackages':
       return params.unit.kind;
     case 'ollamaModel':
-      return `ollamaModel:${params.unit.modelName}`;
+      return `ollamaModel:${params.unit.manifestPath}`;
     case 'huggingFaceRepository':
     case 'huggingFaceDetachedRevisions':
     case 'huggingFacePartialDownloads':

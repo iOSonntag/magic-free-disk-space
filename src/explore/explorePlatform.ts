@@ -25,8 +25,11 @@ export type ExplorePlatform = {
   pnpmXdgStoreRoot: HomeRelativePathNames;
   /** The Android SDK below the home folder. */
   androidSdkRoot: HomeRelativePathNames;
-  /** Flutter's settings file below the home folder, whose `android-sdk` may name a second SDK. */
-  flutterSettingsPath: HomeRelativePathNames;
+  /**
+   * Flutter's settings files below the home folder, in order; the first that exists is Flutter's,
+   * whose `android-sdk` may name a second SDK.
+   */
+  flutterSettingsPaths: HomeRelativePathNames[];
   /** The evidence line of a project search that did not search everything, such as cloud-only folders. */
   projectSearchIncompleteEvidence: string;
   containerEngines: Record<EngineProbeId, ContainerEngine>;
@@ -36,4 +39,13 @@ export type ExplorePlatform = {
   icloudDriveRoot: HomeRelativePathNames | null;
   /** Mail's folder of saved attachments; `null` where the platform has none, so its probe cannot run. */
   mailDownloadsRoot: HomeRelativePathNames | null;
+  /** The bundles of Mail, whose running process may still open the attachments it saved. */
+  mailBundlePaths: string[];
+  /** The person's folder of downloads, the browsers' default target. */
+  downloadsRoot: HomeRelativePathNames;
+  /** The browsers that write a partial download, which must not run while one goes. */
+  browserBundles: BrowserBundles;
 };
+
+/** The browsers by the bundle names in the app folders, and the bundles the system keeps itself. */
+export type BrowserBundles = { appBundleNames: string[]; systemBundlePaths: string[] };

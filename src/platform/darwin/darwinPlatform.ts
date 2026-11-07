@@ -1,6 +1,12 @@
 import type { Platform } from '../platform.js';
-import { ANDROID_SDK_PATH_NAMES, FLUTTER_SETTINGS_PATH_NAMES } from './androidSdkRoot.js';
-import { ICLOUD_DRIVE_ROOT_PATH_NAMES, MAIL_DOWNLOADS_ROOT_PATH_NAMES } from './appleDataRoots.js';
+import { ANDROID_SDK_PATH_NAMES, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
+import {
+  BROWSER_BUNDLES,
+  DOWNLOADS_ROOT_PATH_NAMES,
+  ICLOUD_DRIVE_ROOT_PATH_NAMES,
+  MAIL_BUNDLE_PATHS,
+  MAIL_DOWNLOADS_ROOT_PATH_NAMES,
+} from './appleDataRoots.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
 import { CONTAINER_ENGINES } from './containerEngines.js';
 import { isEntryEvicted } from './hasDatalessFlag.js';
@@ -53,12 +59,15 @@ export const darwinPlatform: Platform = {
     pnpmStoreRoot: PNPM_STORE_ROOT_PATH_NAMES,
     pnpmXdgStoreRoot: PNPM_XDG_STORE_ROOT_PATH_NAMES,
     androidSdkRoot: ANDROID_SDK_PATH_NAMES,
-    flutterSettingsPath: FLUTTER_SETTINGS_PATH_NAMES,
+    flutterSettingsPaths: FLUTTER_SETTINGS_PATHS,
     projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     containerEngines: CONTAINER_ENGINES,
     ideVersionRoots: IDE_VERSION_ROOTS,
     icloudDriveRoot: ICLOUD_DRIVE_ROOT_PATH_NAMES,
     mailDownloadsRoot: MAIL_DOWNLOADS_ROOT_PATH_NAMES,
+    mailBundlePaths: MAIL_BUNDLE_PATHS,
+    downloadsRoot: DOWNLOADS_ROOT_PATH_NAMES,
+    browserBundles: BROWSER_BUNDLES,
   },
   report: {
     computerPhrase: 'this Mac',

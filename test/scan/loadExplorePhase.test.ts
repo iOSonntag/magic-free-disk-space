@@ -104,6 +104,7 @@ function buildProbes(
     downloadsInstallers: Promise.resolve(outcomes.downloadsInstallers ?? toolMissing),
     mailDownloads: Promise.resolve(outcomes.mailDownloads ?? toolMissing),
     ollamaModels: Promise.resolve(outcomes.ollamaModels ?? toolMissing),
+    lmStudioModels: Promise.resolve(outcomes.lmStudioModels ?? toolMissing),
     huggingFaceRepos: Promise.resolve(outcomes.huggingFaceRepos ?? toolMissing),
     claudeTranscripts: Promise.resolve(outcomes.claudeTranscripts ?? toolMissing),
     claudeCodeVersions: Promise.resolve(outcomes.claudeCodeVersions ?? toolMissing),
@@ -149,6 +150,7 @@ async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
     processCommands: [],
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: 0,
+    staleCutoffMs: 0,
   });
 
   if (findings.kind === 'failed') {
@@ -213,6 +215,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: 10_000,
       unusedCutoffMs: 0,
+      staleCutoffMs: 0,
     });
 
     const phase = await loadExplorePhase({

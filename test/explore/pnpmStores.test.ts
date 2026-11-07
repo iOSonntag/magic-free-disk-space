@@ -694,6 +694,7 @@ for (const probeCase of probeCases) {
         projectPins: buildFoundProjectPinsLoad({ files: params.files }),
         timeoutMs: 10_000,
         unusedCutoffMs: 0,
+        staleCutoffMs: 0,
       });
 
       return probes[probeCase.probeId];

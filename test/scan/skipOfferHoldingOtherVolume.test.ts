@@ -49,6 +49,7 @@ describeAwaitingWin32Platform('skipOfferHoldingOtherVolume', () => {
         explanation: 'Runtimes.',
         advice: 'Use xcrun simctl.',
         opener: null,
+        carvedPaths: [],
         allocatedBytes: 4096,
         isComplete: true,
         ...TEST_LISTING_FACTS_NONE,

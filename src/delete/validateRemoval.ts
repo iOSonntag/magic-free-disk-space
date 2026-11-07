@@ -126,8 +126,24 @@ function findTargetRefusal(params: {
       parentPath: sensitivePath.toLowerCase(),
     }),
   );
+  // Compared with case, unlike the refusals above: an exception lets more go, so only the exact
+  // folder on disk counts.
+  const isInsideSensitiveException = params.environment.sensitiveExceptionRealPaths.some(
+    (exceptionPath) =>
+      isSameOrInsidePath({
+        rules: params.environment.pathRules,
+        path: realPath,
+        parentPath: exceptionPath,
+      }),
+  );
 
-  if (holdsProtectedPath || isInsideSensitivePath) {
+  if (holdsProtectedPath || (isInsideSensitivePath && !isInsideSensitiveException)) {
+    return { kind: 'refused', path: path, reason: 'protectedRoot' };
+  }
+
+  if (
+    isTouchingEvictRoot({ lowerCaseRealPath: lowerCaseRealPath, environment: params.environment })
+  ) {
     return { kind: 'refused', path: path, reason: 'protectedRoot' };
   }
 
@@ -146,4 +162,27 @@ function findTargetRefusal(params: {
   }
 
   return null;
+}
+
+/** A delete that is, holds, or lies in a folder of cloud files, which only an evict may touch. */
+function isTouchingEvictRoot(params: {
+  lowerCaseRealPath: string;
+  environment: Environment;
+}): boolean {
+  return params.environment.evictRealRoots.some((evictRoot) => {
+    const lowerCaseEvictRoot = evictRoot.toLowerCase();
+
+    return (
+      isSameOrInsidePath({
+        rules: params.environment.pathRules,
+        path: lowerCaseEvictRoot,
+        parentPath: params.lowerCaseRealPath,
+      }) ||
+      isSameOrInsidePath({
+        rules: params.environment.pathRules,
+        path: params.lowerCaseRealPath,
+        parentPath: lowerCaseEvictRoot,
+      })
+    );
+  });
 }

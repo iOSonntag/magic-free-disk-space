@@ -28,21 +28,22 @@ const EXPLORE_PROBE_IDS: Record<ExploreProbeId, 'entry' | 'notBuilt'> = {
   androidPlatforms: 'entry',
   pnpmStores: 'entry',
   pnpmStoresXdg: 'entry',
-  dockerDesktopEngine: 'notBuilt',
-  orbStackEngine: 'notBuilt',
-  colimaEngine: 'notBuilt',
-  vagrantBoxes: 'notBuilt',
-  icloudDownloads: 'notBuilt',
-  downloadsInstallers: 'notBuilt',
-  mailDownloads: 'notBuilt',
-  ollamaModels: 'notBuilt',
-  huggingFaceRepos: 'notBuilt',
-  claudeTranscripts: 'notBuilt',
-  claudeCodeVersions: 'notBuilt',
-  ideVersions: 'notBuilt',
-  rustupToolchains: 'notBuilt',
-  condaPackages: 'notBuilt',
-  fvmVersions: 'notBuilt',
+  dockerDesktopEngine: 'entry',
+  orbStackEngine: 'entry',
+  colimaEngine: 'entry',
+  vagrantBoxes: 'entry',
+  icloudDownloads: 'entry',
+  downloadsInstallers: 'entry',
+  mailDownloads: 'entry',
+  ollamaModels: 'entry',
+  huggingFaceRepos: 'entry',
+  lmStudioModels: 'entry',
+  claudeTranscripts: 'entry',
+  claudeCodeVersions: 'entry',
+  ideVersions: 'entry',
+  rustupToolchains: 'entry',
+  condaPackages: 'entry',
+  fvmVersions: 'entry',
 };
 
 function isBlankText(text: string): boolean {
@@ -219,7 +220,7 @@ describe('CATALOG_ENTRIES', () => {
       .filter((pair) => pair.entry.removal.kind === 'explore')
       .map((pair) => pair.entry.id);
 
-    expect(exploreIds).toEqual([]);
+    expect(exploreIds).toEqual(['huggingface-hub']);
   });
 
   test("no explore entry's path holds another entry's path", () => {

@@ -9,6 +9,7 @@ export const moduleBoundary = {
     'buildSectionTotals.ts',
     'candidate.ts',
     'candidateOrigin.ts',
+    'decideInstallerCandidate.ts',
     'issue.ts',
     'limits.ts',
     'loadPathMeasurement.ts',

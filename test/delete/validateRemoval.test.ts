@@ -19,6 +19,8 @@ const ENVIRONMENT = buildDarwinEnvironment({
   homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
   tempDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/T' }),
   tempRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/T' }),
+  userCacheDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/C' }),
+  userCacheRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/C' }),
   applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
   applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
 });
@@ -161,6 +163,7 @@ describeAwaitingWin32Platform('validateRemoval', () => {
         unit: {
           kind: 'huggingFaceRepository',
           repoPath: buildTestAbsolutePath({ text: '/Users/tester/.cache/huggingface/hub' }),
+          downloadedAtMs: null,
           foundPaths: [buildTestAbsolutePath({ text: allowedPath })],
         },
         path: '/Users/tester/.cache/huggingface/hub/models--example--model',

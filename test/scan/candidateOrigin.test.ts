@@ -20,6 +20,7 @@ const ADVICE: Advice = {
   explanation: 'Packages the tool keeps.',
   advice: 'Run the tool prune command.',
   opener: null,
+  carvedPaths: [],
   allocatedBytes: 1,
   isComplete: true,
   ...TEST_LISTING_FACTS_NONE,

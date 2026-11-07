@@ -5,10 +5,12 @@ export const moduleBoundary = {
   imports: ['catalog', 'environment', 'path', 'system', 'tools'],
   readsTablesOf: [],
   exposes: [
+    'engines/callEngineUnit.ts',
     'explorePlatform.ts',
     'exploreProbe.ts',
     'exploreUnit.ts',
     'formatExploreUnitKey.ts',
+    'icloudDownloads/decideEvictFile.ts',
     'projectPins/loadProjectPins.ts',
     'projectPins/projectPins.ts',
     'recheckExploreUnit.ts',

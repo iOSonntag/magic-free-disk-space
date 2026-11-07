@@ -58,6 +58,7 @@ function buildRun(processCommands: string[] | null): ExploreProbeRun {
     processCommands: processCommands,
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: 0,
+    staleCutoffMs: 0,
   };
 }
 

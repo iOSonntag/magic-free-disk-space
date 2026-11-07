@@ -18,7 +18,6 @@ import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
-import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import { buildScanReport } from './buildScanReport.js';
 import type { SectionTotal } from './buildSectionTotals.js';
@@ -26,8 +25,18 @@ import { buildSectionTotals } from './buildSectionTotals.js';
 import type { Advice, Candidate, SkipReason } from './candidate.js';
 import { decideAppCandidate } from './decideAppCandidate.js';
 import { decideArtifactCandidate } from './decideArtifactCandidate.js';
-import { decideCatalogCandidate, isSystemOwnedTarget } from './decideCatalogCandidate.js';
-import { decideOrphanCandidate, getOrphanNameSkipReason } from './decideOrphanCandidate.js';
+import {
+  buildCarvedPaths,
+  decideCatalogCandidate,
+  isSystemOwnedTarget,
+} from './decideCatalogCandidate.js';
+import type { OrphanInstalledFacts } from './decideOrphanCandidate.js';
+import {
+  buildOrphanInstalledFacts,
+  decideOrphanCandidate,
+  isOrphanNameSkipReported,
+  matchOrphanName,
+} from './decideOrphanCandidate.js';
 import { decideUserFileCandidate } from './decideUserFileCandidate.js';
 import { dedupeCandidates } from './dedupeCandidates.js';
 import type { CatalogTarget } from './findCatalogTargets.js';
@@ -41,6 +50,8 @@ import { loadExplorePhase } from './loadExplorePhase.js';
 import { loadMeasuredPhase } from './loadMeasuredPhase.js';
 import { buildFoundTargets, loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
+import type { OrphanLocation } from './orphanLocations.js';
+import { ORPHAN_LOCATIONS } from './orphanLocations.js';
 import {
   buildAppOwner,
   findOwnerAppName,
@@ -97,6 +108,8 @@ type ScanContext = {
   staleDays: number;
   staleCutoffMs: number;
   unusedCutoffMs: number;
+  /** The running system's version, which an installer of the same release never goes for. */
+  systemVersion: string | null;
   installedApps: InstalledApp[];
   /** False when an app folder or a bundle id could not be read: no container counts as orphaned. */
   isInstalledAppListComplete: boolean;
@@ -164,6 +177,7 @@ export async function runScan(params: {
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
   const unusedCutoffMs = params.environment.nowMs - params.options.unusedDays * DAY_MS;
+  const staleCutoffMs = params.environment.nowMs - params.options.staleDays * DAY_MS;
   // One walk serves the artifact phase and the pinned probes, its deadline counted from scan start.
   const projectWalk = walkProjects({
     pathRules: params.environment.pathRules,
@@ -203,18 +217,21 @@ export async function runScan(params: {
     ),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
     unusedCutoffMs: unusedCutoffMs,
+    staleCutoffMs: staleCutoffMs,
     projectPins: projectPins,
   });
-  const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
+  const [processCommands, installed, activeXcodeBundlePath, systemVersion] = await Promise.all([
     processCommandsLoad,
     loadPlatformApps({ apps: params.scan.apps, appDirs: params.environment.applicationDirs }),
     activeXcodeBundlePathLoad,
+    params.system.loadSystemVersion(),
   ]);
   const context: ScanContext = {
     environment: params.environment,
     staleDays: params.options.staleDays,
-    staleCutoffMs: params.environment.nowMs - params.options.staleDays * DAY_MS,
+    staleCutoffMs: staleCutoffMs,
     unusedCutoffMs: unusedCutoffMs,
+    systemVersion: systemVersion,
     installedApps: installed.apps,
     isInstalledAppListComplete: installed.issues.length === 0,
     processCommands: await knownProcessCommandsLoad,
@@ -468,8 +485,12 @@ async function loadCatalogTargetPhase(params: {
     return { decisions: [{ kind: 'skip', path: path, reason: 'systemOwned' }], issues: [] };
   }
 
+  const pathRules = params.context.environment.pathRules;
+  const carvedPaths = buildCarvedPaths({ pathRules: pathRules, entry: entry, path: path });
+
   return loadMeasuredTargetsPhase({
     found: buildFoundTargets(params.target.targetPaths),
+    carve: carvedPaths.length === 0 ? null : { pathRules: pathRules, carvedPaths: carvedPaths },
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.context.entryReads,
@@ -511,6 +532,7 @@ async function loadCatalogTargetPhase(params: {
         }),
         activity: activity,
         minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
+        carvedPaths: carvedPaths,
       });
     },
   });
@@ -613,6 +635,9 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
           activeXcodeBundlePath: params.context.activeXcodeBundlePath,
         }),
         minAppBytes: SCAN_LIMITS.minAppBytes,
+        systemVersion: params.context.systemVersion,
+        nowMs: params.context.environment.nowMs,
+        user: params.context.environment.user,
       });
     },
   });
@@ -643,33 +668,60 @@ async function loadUserFilePhase(params: { context: ScanContext }): Promise<Scan
 }
 
 async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPhase> {
-  const containersPath = join(params.context.environment.homeDir, 'Library/Containers');
-  const names = await loadDirectoryNames({ path: containersPath });
+  const installed = buildOrphanInstalledFacts({
+    apps: params.context.installedApps,
+    applicationDirs: params.context.environment.applicationDirs,
+    isComplete: params.context.isInstalledAppListComplete,
+  });
+  const locationPhases = await Promise.all(
+    ORPHAN_LOCATIONS.map((location) =>
+      loadOrphanLocationPhase({
+        context: params.context,
+        location: location,
+        installed: installed,
+      }),
+    ),
+  );
+
+  return mergeScanPhases({ phases: locationPhases });
+}
+
+/** The folders of one location that may be the data of a removed app; a missing one has none. */
+async function loadOrphanLocationPhase(params: {
+  context: ScanContext;
+  location: OrphanLocation;
+  installed: OrphanInstalledFacts;
+}): Promise<ScanPhase> {
+  const locationPath = join(params.context.environment.homeDir, ...params.location.pathNames);
+  const names = await loadDirectoryNames({ path: locationPath });
 
   if (names.kind === 'failed') {
     return {
       decisions: [],
       issues: buildFailureIssues({
-        path: containersPath,
+        path: locationPath,
         failure: names.failure,
         privacyDenialCode: params.context.privacyDenialCode,
       }),
     };
   }
 
-  const installedBundleIds = buildInstalledBundleIds({ apps: params.context.installedApps });
   const namePhases = await Promise.all(
     names.value.map((name) => {
-      const path = join(containersPath, name);
-      const nameSkipReason = getOrphanNameSkipReason({
+      const path = join(locationPath, name);
+      const nameMatch = matchOrphanName({
         name: name,
-        installedBundleIds: installedBundleIds,
-        isInstalledAppListComplete: params.context.isInstalledAppListComplete,
+        location: params.location,
+        installed: params.installed,
       });
 
-      if (nameSkipReason !== null) {
+      if (nameMatch.kind === 'skip') {
+        const isReported = isOrphanNameSkipReported({
+          reason: nameMatch.reason,
+          location: params.location,
+        });
         const skipPhase: ScanPhase = {
-          decisions: [{ kind: 'skip', path: path, reason: nameSkipReason }],
+          decisions: isReported ? [{ kind: 'skip', path: path, reason: nameMatch.reason }] : [],
           issues: [],
         };
 
@@ -686,9 +738,9 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
           decideOrphanCandidate({
             path: path,
             name: name,
+            matchedBy: nameMatch.matchedBy,
+            location: params.location,
             measurement: measurement,
-            installedBundleIds: installedBundleIds,
-            isInstalledAppListComplete: params.context.isInstalledAppListComplete,
             unusedCutoffMs: params.context.unusedCutoffMs,
             minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
           }),

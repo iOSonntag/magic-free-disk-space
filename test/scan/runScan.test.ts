@@ -35,6 +35,7 @@ const vscodeAdvice: Advice = {
   explanation: 'Extensions VS Code installed.',
   advice: 'Uninstall the extensions you no longer use in VS Code.',
   opener: null,
+  carvedPaths: [],
   allocatedBytes: 65_536,
   isComplete: true,
   ...TEST_LISTING_FACTS_NONE,
@@ -86,6 +87,7 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
       unit: {
         kind: 'huggingFaceRepository',
         repoPath: buildTestAbsolutePath({ text: repositoryPath }),
+        downloadedAtMs: null,
         foundPaths: [buildTestAbsolutePath({ text: repositoryPath })],
       },
       path: repositoryPath,

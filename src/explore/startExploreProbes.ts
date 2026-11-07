@@ -37,6 +37,7 @@ import { loadHuggingFaceRepoFindings } from './huggingFace/loadHuggingFaceRepoFi
 import { loadIcloudDownloadFindings } from './icloudDownloads/loadIcloudDownloadFindings.js';
 import { loadIdeVersionFindings } from './ideVersions/loadIdeVersionFindings.js';
 import { EXPLORE_PROBE_DEADLINE_GRACE_MS } from './limits.js';
+import { loadLmStudioModelFindings } from './lmStudioModels/loadLmStudioModelFindings.js';
 import type { ExploreProbeDefinition } from './loadProbeOutput.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
 import { loadMailDownloadFindings } from './mailDownloads/loadMailDownloadFindings.js';
@@ -109,6 +110,8 @@ type ExploreProbeStart = {
   timeoutMs: number;
   /** The scan's cutoff of last use, the same value the scan context holds. */
   unusedCutoffMs: number;
+  /** The scan's cutoff of the stale window, the same value the scan context holds. */
+  staleCutoffMs: number;
   /** The end of the project walk and the pins it found, which every pinned probe waits for. */
   projectPins: ProjectPinsLoad;
 };
@@ -149,12 +152,29 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
     loadFindings: loadSimulatorRuntimeFindings,
   },
   androidAvds: {
-    kind: 'tool',
-    toolName: 'avdmanager',
-    loadFindings: loadAndroidAvdFindings,
+    kind: 'pinned',
+    buildProbe: (params) => ({
+      kind: 'tool',
+      toolName: 'avdmanager',
+      loadFindings: (run) => loadAndroidAvdFindings({ run: run, projectPins: params.projectPins }),
+    }),
   },
-  androidSystemImages: { kind: 'files', loadFindings: loadAndroidSystemImageFindings },
-  androidEmulator: { kind: 'files', loadFindings: loadAndroidEmulatorFindings },
+  androidSystemImages: {
+    kind: 'pinned',
+    buildProbe: (params) => ({
+      kind: 'files',
+      loadFindings: (run) =>
+        loadAndroidSystemImageFindings({ run: run, projectPins: params.projectPins }),
+    }),
+  },
+  androidEmulator: {
+    kind: 'pinned',
+    buildProbe: (params) => ({
+      kind: 'files',
+      loadFindings: (run) =>
+        loadAndroidEmulatorFindings({ run: run, projectPins: params.projectPins }),
+    }),
+  },
   homebrewAppleSilicon: {
     kind: 'tool',
     toolName: 'brewAppleSilicon',
@@ -217,10 +237,11 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
   orbStackEngine: buildEngineProbe('orbStackEngine'),
   colimaEngine: buildEngineProbe('colimaEngine'),
   vagrantBoxes: { kind: 'tool', toolName: 'vagrant', loadFindings: loadVagrantBoxFindings },
-  icloudDownloads: { kind: 'files', loadFindings: loadIcloudDownloadFindings },
+  icloudDownloads: { kind: 'tool', toolName: 'brctl', loadFindings: loadIcloudDownloadFindings },
   downloadsInstallers: { kind: 'files', loadFindings: loadDownloadsInstallerFindings },
   mailDownloads: { kind: 'files', loadFindings: loadMailDownloadFindings },
   ollamaModels: { kind: 'files', loadFindings: loadOllamaModelFindings },
+  lmStudioModels: { kind: 'files', loadFindings: loadLmStudioModelFindings },
   huggingFaceRepos: { kind: 'files', loadFindings: loadHuggingFaceRepoFindings },
   claudeTranscripts: { kind: 'files', loadFindings: loadClaudeTranscriptFindings },
   claudeCodeVersions: { kind: 'files', loadFindings: loadClaudeCodeVersionFindings },
@@ -290,6 +311,7 @@ export function startExploreProbes(
     }),
     mailDownloads: runExploreProbe({ probe: EXPLORE_PROBES.mailDownloads, start: params }),
     ollamaModels: runExploreProbe({ probe: EXPLORE_PROBES.ollamaModels, start: params }),
+    lmStudioModels: runExploreProbe({ probe: EXPLORE_PROBES.lmStudioModels, start: params }),
     huggingFaceRepos: runExploreProbe({ probe: EXPLORE_PROBES.huggingFaceRepos, start: params }),
     claudeTranscripts: runExploreProbe({ probe: EXPLORE_PROBES.claudeTranscripts, start: params }),
     claudeCodeVersions: runExploreProbe({
@@ -354,6 +376,7 @@ export async function runExploreProbe(params: {
     processCommands: processCommands,
     deadlineMs: Date.now() + params.start.timeoutMs,
     unusedCutoffMs: params.start.unusedCutoffMs,
+    staleCutoffMs: params.start.staleCutoffMs,
   };
 
   return raceExploreProbeDeadline({

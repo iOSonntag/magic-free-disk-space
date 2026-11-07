@@ -592,6 +592,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
       deadlineMs: Date.now() + TIMEOUT_MS,
       processCommands: [],
       unusedCutoffMs: 0,
+      staleCutoffMs: 0,
     });
   }
 
@@ -633,6 +634,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: 0,
+      staleCutoffMs: 0,
     });
     const appleSiliconOutcome = await probes.homebrewAppleSilicon;
     const intelOutcome = await probes.homebrewIntel;
@@ -677,6 +679,7 @@ describeAwaitingWin32Platform('with fake brews', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: 0,
+      staleCutoffMs: 0,
     });
     const outcome = await probes.homebrewIntel;
 

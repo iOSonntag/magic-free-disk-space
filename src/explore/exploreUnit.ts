@@ -260,26 +260,38 @@ export type ExplorePathUnitMailDownloads = {
   foundFiles: ExploreFoundFiles;
 };
 
-/** An Ollama model: its manifest and the blobs no other manifest names. */
+/**
+ * An Ollama model: its manifest and the blobs no other manifest names. `downloadedAtMs` is the
+ * manifest's change time, which Ollama writes last when a pull ends.
+ */
 export type ExplorePathUnitOllamaModel = {
   kind: 'ollamaModel';
   modelName: string;
   manifestPath: AbsolutePath;
+  downloadedAtMs: number | null;
   foundPaths: ExploreFoundPaths;
 };
 
-/** What a Hugging Face repository holds for its current revisions. */
+/**
+ * What a Hugging Face repository holds for its current revisions. `downloadedAtMs` is the change
+ * time of its newest current snapshot folder.
+ */
 export type ExplorePathUnitHuggingFaceRepository = {
   kind: 'huggingFaceRepository';
   repoPath: AbsolutePath;
+  downloadedAtMs: number | null;
   foundPaths: ExploreFoundPaths;
 };
 
-/** The snapshots of a Hugging Face repository that no ref names, with the blobs only they link. */
+/**
+ * The snapshots of a Hugging Face repository that no ref names, with the blobs only they link.
+ * `downloadedAtMs` is the change time of the newest of these snapshot folders.
+ */
 export type ExplorePathUnitHuggingFaceDetachedRevisions = {
   kind: 'huggingFaceDetachedRevisions';
   repoPath: AbsolutePath;
   revisions: string[];
+  downloadedAtMs: number | null;
   foundPaths: ExploreFoundPaths;
 };
 
@@ -298,7 +310,10 @@ export type ExplorePathUnitClaudeTranscripts = {
   foundPaths: ExploreFoundPaths;
 };
 
-/** A Claude Code version that is neither the newest nor the one `~/.local/bin/claude` runs. */
+/**
+ * A Claude Code version that is neither one of the two newest nor the one `~/.local/bin/claude`
+ * runs. `folderPath` is the version's entry in the versions folder, a file or a folder.
+ */
 export type ExplorePathUnitClaudeCodeVersion = {
   kind: 'claudeCodeVersion';
   folderPath: AbsolutePath;
@@ -317,6 +332,18 @@ export type ExplorePathUnitIdeVersionFolder = {
   /** The version's folder of its kind, or its settings folder for `plugins`. */
   folderPath: AbsolutePath;
   foundPaths: ExploreFoundPaths;
+};
+
+/**
+ * One model of LM Studio: a `<publisher>/<model>` folder of its models folder. `downloadedAtMs` is
+ * the folder's change time.
+ */
+export type ExplorePathUnitLmStudioModel = {
+  kind: 'lmStudioModel';
+  publisher: string;
+  modelName: string;
+  folderPath: AbsolutePath;
+  downloadedAtMs: number | null;
 };
 
 /**
@@ -351,6 +378,7 @@ export type ExplorePathUnit =
   | ExplorePathUnitClaudeTranscripts
   | ExplorePathUnitClaudeCodeVersion
   | ExplorePathUnitIdeVersionFolder
+  | ExplorePathUnitLmStudioModel
   | ExplorePathUnitFvmVersion;
 
 /** A downloaded iCloud file a probe found to evict, with the times its recheck compares. */
@@ -358,10 +386,12 @@ export type ExploreFoundEvictFile = { path: AbsolutePath; modifiedMs: number; ac
 
 /**
  * The files of an iCloud Drive folder downloaded and untouched since `cutoffMs`, never empty, which
- * an evict frees while iCloud keeps them.
+ * an evict frees while iCloud keeps them. `tool` is the `brctl` the probe located, looked up again
+ * before the evict.
  */
 export type ExploreEvictUnitIcloudFolder = {
   kind: 'icloudFolder';
+  tool: LocatedTool;
   folderPath: AbsolutePath;
   cutoffMs: number;
   foundFiles: [ExploreFoundEvictFile, ...ExploreFoundEvictFile[]];
@@ -498,6 +528,7 @@ export function listUnitPaths(unit: ExploreUnit): AbsolutePath[] {
     case 'androidPlatform':
     case 'pnpmStore':
     case 'claudeCodeVersion':
+    case 'lmStudioModel':
     case 'fvmVersion':
       return [unit.folderPath];
     case 'downloadsInstallers':

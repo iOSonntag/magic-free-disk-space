@@ -87,6 +87,7 @@ export type ExploreProbeId =
   | 'downloadsInstallers'
   | 'mailDownloads'
   | 'ollamaModels'
+  | 'lmStudioModels'
   | 'huggingFaceRepos'
   | 'claudeTranscripts'
   | 'claudeCodeVersions'
@@ -106,13 +107,16 @@ export type CatalogSelectionPath = { kind: 'path' };
 export type CatalogSelectionChildren = { kind: 'children' };
 
 /**
- * One item per child folder that holds `markerName`, such as a browser profile's `Preferences`;
- * its targets are the `subpaths` that exist in it.
+ * One item per profile folder, a child folder or the path itself that holds `markerName`, such as
+ * a browser profile's `Preferences`; its targets are the `subpaths` that exist in it. The path's
+ * own item also takes the `rootSubpaths` that exist beside the profiles, such as a browser's
+ * shared caches.
  */
 export type CatalogSelectionProfileFolders = {
   kind: 'profileFolders';
   markerName: string;
   subpaths: string[];
+  rootSubpaths: string[];
 };
 
 /** Which paths of an entry's path become items. */

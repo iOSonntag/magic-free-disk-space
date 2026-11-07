@@ -347,6 +347,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     const outcome = await probes.simulatorRuntimes;
@@ -375,6 +376,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       processCommands: [],
       deadlineMs: Date.now() + TIMEOUT_MS,
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     };
 
     expect(await loadSimulatorRuntimeFindings({ ...run, tool: failing })).toEqual({

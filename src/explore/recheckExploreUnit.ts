@@ -1,9 +1,8 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
-import { compareAndroidPathUnit } from './android/compareAndroidPathUnit.js';
-import { loadAndroidSdkState } from './android/loadAndroidSdkState.js';
 import { recheckAndroidAvdUnit } from './android/recheckAndroidAvdUnit.js';
+import { recheckAndroidPackageUnit } from './android/recheckAndroidPackageUnit.js';
 import { recheckAndroidPlatformUnit } from './android/recheckAndroidPlatformUnit.js';
 import { recheckAsdfVersionUnit } from './asdfVersions/recheckAsdfVersionUnit.js';
 import { recheckClaudeCodeVersionUnit } from './claudeCodeVersions/recheckClaudeCodeVersionUnit.js';
@@ -26,6 +25,7 @@ import { recheckFvmVersionUnit } from './fvmVersions/recheckFvmVersionUnit.js';
 import { recheckHomebrewUnit } from './homebrew/recheckHomebrewUnit.js';
 import { recheckHuggingFaceUnit } from './huggingFace/recheckHuggingFaceUnit.js';
 import { recheckIdeVersionUnit } from './ideVersions/recheckIdeVersionUnit.js';
+import { recheckLmStudioModelUnit } from './lmStudioModels/recheckLmStudioModelUnit.js';
 import { loadProbeOutput } from './loadProbeOutput.js';
 import { recheckMailDownloadsUnit } from './mailDownloads/recheckMailDownloadsUnit.js';
 import type { MisePrunableVersion } from './miseVersions/parseMisePrunableVersions.js';
@@ -134,24 +134,8 @@ export async function recheckExplorePathUnit(params: {
 }): Promise<PathUnitRecheck> {
   switch (params.unit.kind) {
     case 'androidSystemImage':
-    case 'androidEmulator': {
-      const state = await loadAndroidSdkState({
-        pathRules: params.environment.pathRules,
-        homeDir: params.environment.homeDir,
-        androidSdkRoot: params.platform.explore.androidSdkRoot,
-        privacyDenialCode: params.platform.privacyDenialCode,
-      });
-
-      if (state.kind === 'failed') {
-        return state;
-      }
-
-      return compareAndroidPathUnit({
-        unit: params.unit,
-        state: state.value,
-        processCommands: params.processCommands,
-      });
-    }
+    case 'androidEmulator':
+      return recheckAndroidPackageUnit({ ...params, unit: params.unit });
     case 'vscodeExtension': {
       const state = await loadVscodeExtensionState({
         pathRules: params.environment.pathRules,
@@ -192,6 +176,8 @@ export async function recheckExplorePathUnit(params: {
       return recheckClaudeCodeVersionUnit({ ...params, unit: params.unit });
     case 'ideVersionFolder':
       return recheckIdeVersionUnit({ ...params, unit: params.unit });
+    case 'lmStudioModel':
+      return recheckLmStudioModelUnit({ ...params, unit: params.unit });
     case 'fvmVersion':
       return recheckFvmVersionUnit({ ...params, unit: params.unit });
   }

@@ -128,6 +128,7 @@ function buildProbeStart(): Parameters<typeof runExploreProbe>[0]['start'] {
     projectPins: buildEmptyProjectPinsLoad(),
     timeoutMs: TIMEOUT_MS,
     unusedCutoffMs: UNUSED_CUTOFF_MS,
+    staleCutoffMs: 0,
   };
 }
 
@@ -144,6 +145,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     const simulatorDevices = await probes.simulatorDevices;
@@ -184,6 +186,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     const outcomes = [
@@ -211,6 +214,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     await Bun.sleep(HELD_WAIT_MS);
@@ -239,6 +243,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
@@ -270,6 +275,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     expect(await probes.simulatorDevices).toEqual({
@@ -298,6 +304,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     const outcome = await probes.miseVersions;
@@ -322,6 +329,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     expect(await probes.dartPubCache).toEqual({
@@ -342,6 +350,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: TIMEOUT_MS,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
@@ -364,6 +373,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
         projectPins: buildEmptyProjectPinsLoad(),
         timeoutMs: 50,
         unusedCutoffMs: UNUSED_CUTOFF_MS,
+        staleCutoffMs: 0,
       },
     });
 
@@ -461,6 +471,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
         },
         timeoutMs: timeoutMs,
         unusedCutoffMs: UNUSED_CUTOFF_MS,
+        staleCutoffMs: 0,
       },
     });
 
@@ -498,6 +509,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
         }),
         timeoutMs: TIMEOUT_MS,
         unusedCutoffMs: UNUSED_CUTOFF_MS,
+        staleCutoffMs: 0,
       },
     });
 
@@ -528,6 +540,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
         projectPins: { walkEnded: Promise.resolve(), pins: new Promise(() => {}) },
         timeoutMs: 50,
         unusedCutoffMs: UNUSED_CUTOFF_MS,
+        staleCutoffMs: 0,
       },
     });
 
@@ -551,6 +564,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: 100,
       unusedCutoffMs: UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     expect(await probes.miseVersions).toEqual({

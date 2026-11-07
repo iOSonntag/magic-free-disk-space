@@ -597,6 +597,7 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
       projectPins: projectPins,
       timeoutMs: 10_000,
       unusedCutoffMs: 0,
+      staleCutoffMs: 0,
     });
 
     return probes.nvmVersions;
