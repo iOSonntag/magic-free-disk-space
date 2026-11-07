@@ -5,6 +5,7 @@ import type { EntryEvictionCheck, EvictionCandidate } from '../../src/system/ent
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -40,10 +41,10 @@ async function collectEntries(params: {
     isStatsNeeded: params.isStatsNeeded,
     maxConcurrentDirectories: 2,
     isStopped: params.isStopped ?? (() => false),
-    entryReads: {
+    entryReads: buildTestEntryReads({
+      privateBytes: null,
       isEntryEvicted: params.isEntryEvicted ?? (() => false),
-      loadPrivateBytes: () => null,
-    },
+    }),
     visitEntry: (entry) => {
       entries.push(entry);
 

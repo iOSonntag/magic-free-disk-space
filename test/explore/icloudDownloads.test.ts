@@ -19,9 +19,8 @@ import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureFile,
-  createFixtureRoot,
-  deleteFixtureRoot,
   loadTestEnvironment,
+  withFixtureRoot,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
@@ -61,18 +60,6 @@ const VALUE_IDENTITY: FileIdentity = {
   kind: 'file',
   realPath: '/Users/example/Library/Mobile Documents/com~apple~CloudDocs/old.txt',
 };
-
-async function withFixtureRoot(params: {
-  run: (fixtureRoot: FixtureRoot) => Promise<void>;
-}): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
-
-  try {
-    await params.run(fixtureRoot);
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
-}
 
 function getMobileDocumentsPath(params: { fixtureRoot: FixtureRoot }): string {
   return join(params.fixtureRoot.homeDir, 'Library', 'Mobile Documents');

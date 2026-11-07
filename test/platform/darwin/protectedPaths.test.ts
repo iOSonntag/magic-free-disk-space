@@ -1,22 +1,11 @@
 import { expect, test } from 'bun:test';
 import { validateRemoval } from '../../../src/delete/validateRemoval.js';
-import { buildDarwinEnvironment } from '../../../src/platform/darwin/loadEnvironment.js';
 import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../../support/candidateFixtures.js';
-import { buildTestAbsolutePath, buildTestUserIdentity } from '../../support/parsedValueFixtures.js';
+import { buildTestMacEnvironment } from '../../support/fixtureRoot.js';
+import { buildTestAbsolutePath } from '../../support/parsedValueFixtures.js';
 
-const ENVIRONMENT = buildDarwinEnvironment({
-  nowMs: 0,
-  user: buildTestUserIdentity({ uid: 501 }),
-  homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
-  homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
-  tempDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/T' }),
-  tempRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/T' }),
-  userCacheDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/C' }),
-  userCacheRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/C' }),
-  applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
-  applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
-});
+const ENVIRONMENT = buildTestMacEnvironment();
 
 function validatePath(params: { path: string }): ReturnType<typeof validateRemoval> {
   return validateRemoval({
