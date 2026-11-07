@@ -9,7 +9,7 @@ import '../support/fake_cleaner_bridge.dart';
 import '../support/fake_update_bridge.dart';
 import '../support/fake_url_opener.dart';
 import '../support/sample_events.dart';
-import 'support/stage_harness.dart';
+import '../support/stage_harness.dart';
 
 /// One bridge for both controllers, as the process bridge is, that names
 /// each request in the order the app makes it.
@@ -63,11 +63,8 @@ final class _OrderRecordingBridge implements CleanerBridge, UpdateBridge {
 }
 
 void main() {
-  final List<BridgeEvent> sampleEvents = loadSampleEvents();
-  final ScannedEvent sampleScan = sampleEvents.whereType<ScannedEvent>().single;
-  final UpdateCheckedEvent sampleCheck = sampleEvents
-      .whereType<UpdateCheckedEvent>()
-      .single;
+  final ScannedEvent sampleScan = loadSampleEvent<ScannedEvent>();
+  final UpdateCheckedEvent sampleCheck = loadSampleEvent<UpdateCheckedEvent>();
 
   testWidgets(
     'starts the scan at launch, queued before the update check, and shows its Overview',

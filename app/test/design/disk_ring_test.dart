@@ -28,8 +28,7 @@ Widget buildRing(ValueNotifier<MotionState> windowMotion, DiskRingReading readin
 }
 
 DiskRingPainter findRingPainter(WidgetTester tester) {
-  final Finder paint = find.descendant(of: find.byType(DiskRing), matching: find.byType(CustomPaint)).first;
-  return tester.widget<CustomPaint>(paint).painter! as DiskRingPainter;
+  return tester.widget<CustomPaint>(findRingPaint()).painter! as DiskRingPainter;
 }
 
 void main() {

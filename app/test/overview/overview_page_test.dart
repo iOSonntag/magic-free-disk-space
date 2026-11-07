@@ -1,20 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/bridge/openable_url.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_bridge.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
-import 'package:magic_free_disk_space/design/stage_button.dart';
-import 'package:magic_free_disk_space/overview/overview_page.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
+import 'package:magic_free_disk_space/overview/overview.dart';
 import 'package:magic_free_disk_space/overview/section_card.dart';
-import 'package:magic_free_disk_space/removal/clean_safe_items.dart';
-import 'package:magic_free_disk_space/update/update_controller.dart';
+import 'package:magic_free_disk_space/removal/removal.dart';
+import 'package:magic_free_disk_space/update/update.dart';
 
-import '../shell/support/stage_harness.dart';
 import '../support/fake_cleaner_bridge.dart';
 import '../support/fake_update_bridge.dart';
 import '../support/fake_url_opener.dart';
+import '../support/sample_events.dart';
 import '../support/semantics_labels.dart';
+import '../support/stage_controls.dart';
+import '../support/stage_harness.dart';
 
 typedef _OverviewParts = ({
   CleanerController cleanerController,
@@ -23,18 +24,21 @@ typedef _OverviewParts = ({
 
 Future<_OverviewParts> _pumpOverview(
   WidgetTester tester, {
-  required CleanerBridge bridge,
-  UpdateController? updateController,
+  required FakeCleanerBridge bridge,
+  UpdateCheckAnswer updateCheck = quietUpdateCheck,
   FakeUrlOpener? urlOpener,
 }) async {
   final CleanerController cleanerController = startScanningCleaner(bridge);
+  final UpdateController updateController = createUpdateController(
+    FakeUpdateBridge(answerCheck: () async => updateCheck),
+  );
   final List<SectionKey> selectedSections = [];
   await pumpOnStage(
     tester,
     Builder(
       builder: (BuildContext context) => OverviewPage(
         cleanerController: cleanerController,
-        updateController: updateController ?? createQuietUpdateController(),
+        updateController: updateController,
         onSectionSelected: selectedSections.add,
         onCleanSafeItems: () => cleanSafeItems(context, cleanerController),
         urlOpener: urlOpener ?? FakeUrlOpener(isOpening: true),
@@ -44,29 +48,17 @@ Future<_OverviewParts> _pumpOverview(
   return (cleanerController: cleanerController, selectedSections: selectedSections);
 }
 
-UpdateController _createUpdateController(UpdateCheckAnswer answer) {
-  final UpdateController controller = UpdateController(
-    bridge: FakeUpdateBridge(answerCheck: () async => answer),
+bool _isCleanButtonEnabled(WidgetTester tester) {
+  return isButtonEnabled(
+    tester,
+    findButtonAround(find.textContaining('Clean safe items')),
   );
-  addTearDown(controller.dispose);
-  return controller;
-}
-
-VoidCallback? _readCleanButtonPress(WidgetTester tester) {
-  return tester
-      .widget<StageButton>(
-        find.ancestor(
-          of: find.textContaining('Clean safe items'),
-          matching: find.byType(StageButton),
-        ),
-      )
-      .onPressed;
 }
 
 void main() {
-  final ScannedEvent sampleScan = loadSampleScan();
-  final StatusEvent deniedStatus = loadFirstSampleEvent<StatusEvent>();
-  final UpdateCheckedEvent sampleCheck = loadFirstSampleEvent<UpdateCheckedEvent>();
+  final ScannedEvent sampleScan = loadSampleEvent<ScannedEvent>();
+  final StatusEvent deniedStatus = loadSampleEvent<StatusEvent>();
+  final UpdateCheckedEvent sampleCheck = loadSampleEvent<UpdateCheckedEvent>();
 
   testWidgets('shows what can be freed on the disk and a card per section', (
     WidgetTester tester,
@@ -96,7 +88,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(_readCleanButtonPress(tester), isNotNull);
+    expect(_isCleanButtonEnabled(tester), isTrue);
     expectEveryTappableNodeLabelled();
 
     await tapAndSettle(tester, find.byKey(const SectionCardKey(SectionKey.caches)));
@@ -108,7 +100,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final FakeCleanerBridge bridge = FakeCleanerBridge(scanAnswer: sampleScan)
-      ..planAnswer = loadFirstSampleEvent<PlannedEvent>();
+      ..planAnswer = loadSampleEvent<PlannedEvent>();
     final _OverviewParts parts = await _pumpOverview(tester, bridge: bridge);
 
     await tapAndSettle(tester, find.text('Clean safe items · 6.0 MB'));
@@ -122,7 +114,7 @@ void main() {
   testWidgets('offers no clean while nothing is safe to remove', (
     WidgetTester tester,
   ) async {
-    final Map<String, Object?> json = loadSampleScanJson();
+    final Map<String, Object?> json = loadSampleJson('scanned');
     json['safeNumbers'] = <Object?>[];
     (json['summary']! as Map<String, Object?>)['safeBytes'] = 0;
     await _pumpOverview(
@@ -134,7 +126,7 @@ void main() {
       find.text('Nothing is safe to remove at once; review each section.'),
       findsOneWidget,
     );
-    expect(_readCleanButtonPress(tester), isNull);
+    expect(_isCleanButtonEnabled(tester), isFalse);
   });
 
   testWidgets('shows the Full Disk Access notice with its settings link', (
@@ -194,7 +186,7 @@ void main() {
     await _pumpOverview(
       tester,
       bridge: FakeCleanerBridge(scanAnswer: sampleScan),
-      updateController: _createUpdateController(sampleCheck),
+      updateCheck: sampleCheck,
       urlOpener: urlOpener,
     );
 
@@ -217,7 +209,7 @@ void main() {
     await _pumpOverview(
       tester,
       bridge: FakeCleanerBridge(scanAnswer: sampleScan),
-      updateController: _createUpdateController(sampleCheck),
+      updateCheck: sampleCheck,
       urlOpener: FakeUrlOpener(isOpening: false),
     );
 
@@ -263,11 +255,9 @@ void main() {
   testWidgets('lands each section found while the scan runs', (
     WidgetTester tester,
   ) async {
-    final HoldingCleanerBridge bridge = HoldingCleanerBridge(
-      inner: FakeCleanerBridge(scanAnswer: sampleScan),
-      isHoldingScan: true,
-      heldProgress: loadFirstSampleEvent<ProgressEvent>(),
-    );
+    final FakeCleanerBridge bridge = FakeCleanerBridge(scanAnswer: sampleScan)
+      ..scanProgress = loadSampleEvent<ProgressEvent>();
+    final Completer<ScanAnswer> heldScan = bridge.holdNextScan();
     await _pumpOverview(tester, bridge: bridge);
 
     expect(find.text('found so far'), findsOneWidget);
@@ -275,10 +265,10 @@ void main() {
     expect(find.byKey(const SectionCardKey(SectionKey.developerTools)), findsOneWidget);
     expect(find.byKey(const SectionCardKey(SectionKey.apps)), findsNothing);
     expect(find.text('Clean safe items'), findsOneWidget);
-    expect(_readCleanButtonPress(tester), isNull);
+    expect(_isCleanButtonEnabled(tester), isFalse);
     expectEveryTappableNodeLabelled();
 
-    bridge.completeHeldScan(sampleScan);
+    heldScan.complete(sampleScan);
     await tester.pumpAndSettle();
 
     expect(find.text('19 MB can be freed'), findsOneWidget);

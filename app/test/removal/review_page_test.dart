@@ -1,32 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
-import 'package:magic_free_disk_space/design/count_up.dart';
-import 'package:magic_free_disk_space/design/motion.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
+import 'package:magic_free_disk_space/design/design.dart';
 import 'package:magic_free_disk_space/removal/review_page.dart';
 
 import '../support/fake_cleaner_bridge.dart';
 import '../support/fake_url_opener.dart';
+import '../support/sample_events.dart';
 import '../support/semantics_labels.dart';
-import 'removal_harness.dart';
+import '../support/stage_controls.dart';
+import 'support/removal_harness.dart';
+
+/// The item of the sample scan numbered [number], as a plan lists it.
+PlannedItemView _planSampleItem(int number) {
+  final ItemView item = loadSampleEvent<ScannedEvent>().selectableItems.singleWhere(
+    (ItemView item) => item.number == number,
+  );
+  return PlannedItemView(
+    number: item.number,
+    key: item.key,
+    title: item.title,
+    sectionKey: item.sectionKey,
+    risk: item.risk,
+    removal: item.removal,
+    allocatedBytes: item.allocatedBytes,
+  );
+}
+
+/// The closest glass card around [heading], which holds its section.
+Finder _findSectionCard(Finder heading) {
+  return find.ancestor(of: heading, matching: find.byType(GlassCard)).first;
+}
 
 void main() {
   late FakeCleanerBridge bridge;
 
   setUp(() {
-    bridge = FakeCleanerBridge(scanAnswer: sampleScan)
+    bridge = FakeCleanerBridge(scanAnswer: loadSampleEvent<ScannedEvent>())
       ..deleteAnswer = sampleDeleted;
   });
 
   Future<CleanerController> pumpReview(
     WidgetTester tester, {
     PlannedEvent? plan,
+    List<int> selectedNumbers = const [1, 2],
     MotionState motion = MotionState.reduced,
   }) async {
     final CleanerController controller = await createConfirmingController(
       bridge,
       plan: plan ?? samplePlan,
+      selectedNumbers: selectedNumbers,
     );
     await pumpRemovalFlow(
       tester,
@@ -35,9 +59,7 @@ void main() {
       motion: motion,
     );
     // With motion on, the ambient glow never settles.
-    if (motion.isReduced) {
-      await tester.pumpAndSettle();
-    } else {
+    if (!motion.isReduced) {
       await tester.pump(const Duration(seconds: 2));
     }
     return controller;
@@ -56,6 +78,33 @@ void main() {
     expect(find.byTooltip('Keep App cache'), findsOneWidget);
     expect(findButtonLabelled('Delete 10 MB'), findsOneWidget);
     expect(find.textContaining('type DELETE'), findsNothing);
+    expectEveryTappableNodeLabelled();
+  });
+
+  testWidgets('groups a plan across two sections under the heading of each', (
+    WidgetTester tester,
+  ) async {
+    final PlannedItemView toolCache = _planSampleItem(1);
+    final PlannedItemView removedAppData = _planSampleItem(4);
+    final PlannedEvent twoSectionPlan = PlannedEvent(
+      planId: 5,
+      lines: const [],
+      warningLines: const [],
+      items: [toolCache, removedAppData],
+      totalBytes: toolCache.allocatedBytes + removedAppData.allocatedBytes,
+      holdsCareful: true,
+    );
+
+    await pumpReview(tester, plan: twoSectionPlan, selectedNumbers: [1, 4]);
+
+    final Finder cachesCard = _findSectionCard(find.text('Caches'));
+    final Finder appsCard = _findSectionCard(find.text('Apps'));
+    expect(cachesCard, findsOneWidget);
+    expect(appsCard, findsOneWidget);
+    expect(find.descendant(of: cachesCard, matching: find.text(toolCache.title)), findsOneWidget);
+    expect(find.descendant(of: cachesCard, matching: find.text(removedAppData.title)), findsNothing);
+    expect(find.descendant(of: appsCard, matching: find.text(removedAppData.title)), findsOneWidget);
+    expect(find.descendant(of: appsCard, matching: find.text(toolCache.title)), findsNothing);
     expectEveryTappableNodeLabelled();
   });
 
@@ -84,17 +133,19 @@ void main() {
     expectEveryTappableNodeLabelled();
   });
 
-  testWidgets('a new plan that approves nothing shows its lines on the list', (
+  testWidgets('a new plan that approves nothing leaves the flow with its lines as the notice', (
     WidgetTester tester,
   ) async {
-    await pumpReview(tester);
-    bridge.planAnswer = sampleNothingApproved;
+    final NothingApprovedEvent nothingApproved = loadSampleEvent<NothingApprovedEvent>();
+    final CleanerController controller = await pumpReview(tester);
+    bridge.planAnswer = nothingApproved;
 
     await tapAndSettle(tester, find.byTooltip('Keep App cache'));
 
     expect(find.byType(ReviewPage), findsNothing);
-    final Text list = tester.widget<Text>(find.byKey(listKey));
-    expect(list.data, sampleNothingApproved.lines.join('\n'));
+    final ScannedState state = controller.state as ScannedState;
+    expect(state.notice, nothingApproved.lines.join('\n'));
+    expect(state.selectedNumbers, {1});
   });
 
   testWidgets('Details unfolds the lines of the plan', (WidgetTester tester) async {
@@ -144,6 +195,7 @@ void main() {
     await tapAndSettle(tester, findButtonLabelled('Back'));
 
     expect((controller.state as ScannedState).selectedNumbers, {1, 2});
+    expect(find.byType(ReviewPage), findsNothing);
     expect(bridge.deleteRequest, isNull);
   });
 

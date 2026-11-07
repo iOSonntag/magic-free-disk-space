@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
-import 'package:magic_free_disk_space/design/dissolve.dart';
-import 'package:magic_free_disk_space/design/motion.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
+import 'package:magic_free_disk_space/design/design.dart';
 import 'package:magic_free_disk_space/removal/deleting_view.dart';
 
 import '../design/support/design_harness.dart';
 import '../support/semantics_labels.dart';
-import 'removal_harness.dart';
+import '../support/stage_harness.dart';
+import 'support/removal_harness.dart';
 
 void main() {
+  /// Pumps the first frame of the Deleting view of [plan] over a window
+  /// motion the test turns.
   Future<ValueNotifier<MotionState>> pumpDeleting(
     WidgetTester tester, {
     required PlannedEvent plan,
@@ -18,9 +20,9 @@ void main() {
   }) async {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(motion);
     await tester.pumpWidget(
-      buildRemovalHarness(
+      buildStagePage(
+        DeletingView(state: DeletingState(plan: plan)),
         windowMotion: windowMotion,
-        child: DeletingView(state: DeletingState(plan: plan)),
       ),
     );
     return windowMotion;

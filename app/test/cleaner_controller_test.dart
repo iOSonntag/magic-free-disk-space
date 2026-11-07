@@ -237,6 +237,21 @@ Future<void> waitForAnswers() {
   return Future<void>.delayed(Duration.zero);
 }
 
+/// Each state of type [TState] that [controller] takes from now on, in
+/// order.
+List<TState> recordStates<TState extends CleanerState>(
+  CleanerController controller,
+) {
+  final List<TState> states = [];
+  controller.addListener(() {
+    final CleanerState state = controller.state;
+    if (state is TState) {
+      states.add(state);
+    }
+  });
+  return states;
+}
+
 void main() {
   late FakeCleanerBridge bridge;
   late CleanerController controller;
@@ -354,17 +369,16 @@ void main() {
     }
 
     test('a scan reaches the scanned state through its progress', () async {
-      final List<ProgressEvent?> progressEvents = [];
-      controller.addListener(() {
-        final CleanerState state = controller.state;
-        if (state is ScanningState) {
-          progressEvents.add(state.progress);
-        }
-      });
+      final List<ScanningState> scanningStates = recordStates<ScanningState>(
+        controller,
+      );
 
       await controller.scan();
 
-      expect(progressEvents, [null, same(appsProgress)]);
+      expect(
+        [for (final ScanningState state in scanningStates) state.progress],
+        [null, same(appsProgress)],
+      );
       final ScannedState state = controller.state as ScannedState;
       expect(state.scan, same(scannedEvent));
       expect(state.selectedNumbers, isEmpty);
@@ -395,13 +409,9 @@ void main() {
     test(
       'a deletion runs through a state that holds its plan, and its result keeps the plan and its scan',
       () async {
-        final List<DeletingState> deletingStates = [];
-        controller.addListener(() {
-          final CleanerState state = controller.state;
-          if (state is DeletingState) {
-            deletingStates.add(state);
-          }
-        });
+        final List<DeletingState> deletingStates = recordStates<DeletingState>(
+          controller,
+        );
         await scanAndSelectSafe();
         await controller.requestPlan();
 
@@ -428,13 +438,8 @@ void main() {
         'plans the rest again, and holds the old plan as replanning meanwhile',
         () async {
           await planSafeItemAndVideo();
-          final List<ConfirmingState> confirmingStates = [];
-          controller.addListener(() {
-            final CleanerState state = controller.state;
-            if (state is ConfirmingState) {
-              confirmingStates.add(state);
-            }
-          });
+          final List<ConfirmingState> confirmingStates =
+              recordStates<ConfirmingState>(controller);
 
           await controller.removeCandidateFromPlan(2);
 

@@ -14,6 +14,8 @@ const String _scannedLine =
     '"safeBytes":0,"disk":null},"sections":[],"sectionTotals":[],'
     '"explore":null,"safeNumbers":[],"skipped":null,"notices":[]}';
 
+void ignoreProgress(ProgressEvent _) {}
+
 void main() {
   late Directory directory;
   late ProcessBridgeClient client;
@@ -59,11 +61,11 @@ done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (ProgressEvent _) {}),
+      client.scan(onProgress: ignoreProgress),
       throwsFormatException,
     );
     final ScanAnswer answer = await client.scan(
-      onProgress: (ProgressEvent _) {},
+      onProgress: ignoreProgress,
     );
 
     expect((answer as ScannedEvent).summary.titleText, 'fresh');
@@ -81,7 +83,7 @@ done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (ProgressEvent _) {}),
+      client.scan(onProgress: ignoreProgress),
       throwsA(
         isA<BridgeStoppedException>()
             .having((error) => error.exitCode, 'exitCode', 3)
@@ -118,7 +120,7 @@ exit 1
 ''');
 
       final Future<ScanAnswer> scan = client.scan(
-        onProgress: (ProgressEvent _) {},
+        onProgress: ignoreProgress,
       );
       final Future<StatusAnswer> status = client.status();
 
@@ -150,11 +152,11 @@ done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (ProgressEvent _) {}),
+      client.scan(onProgress: ignoreProgress),
       throwsFormatException,
     );
     final ScanAnswer answer = await client.scan(
-      onProgress: (ProgressEvent _) {},
+      onProgress: ignoreProgress,
     );
 
     expect((answer as ScannedEvent).summary.titleText, 'fresh');
@@ -187,7 +189,7 @@ while read -r request; do
 done
 ''');
       final Future<ScanAnswer> answer = client.scan(
-        onProgress: (ProgressEvent _) {},
+        onProgress: ignoreProgress,
       );
 
       client.dispose();
@@ -247,7 +249,7 @@ done
 ''');
 
     final Future<ScanAnswer> scan = client.scan(
-      onProgress: (ProgressEvent _) {},
+      onProgress: ignoreProgress,
     );
     final Future<UpdateCheckSetAnswer> save = client.setUpdateCheck(false);
 
@@ -332,7 +334,7 @@ done
 
     final StatusAnswer status = await client.status();
     final ScanAnswer answer = await client.scan(
-      onProgress: (ProgressEvent _) {},
+      onProgress: ignoreProgress,
     );
 
     expect(
@@ -350,10 +352,10 @@ done
     client = await createClientOverScript(failingFirstStartScript);
 
     final ScanAnswer failed = await client.scan(
-      onProgress: (ProgressEvent _) {},
+      onProgress: ignoreProgress,
     );
     final ScanAnswer answer = await client.scan(
-      onProgress: (ProgressEvent _) {},
+      onProgress: ignoreProgress,
     );
 
     expect(failed, isA<FailedEvent>());

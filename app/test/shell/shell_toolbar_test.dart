@@ -3,7 +3,7 @@ import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
 import 'package:magic_free_disk_space/shell/shell_toolbar.dart';
 
-import 'support/stage_harness.dart';
+import '../support/stage_harness.dart';
 
 void main() {
   testWidgets('shows the message of a phase this app does not know with one ellipsis', (

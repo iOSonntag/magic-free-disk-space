@@ -9,7 +9,6 @@ import 'package:magic_free_disk_space/design/section_glow.dart';
 
 import 'support/design_harness.dart';
 
-const MotionState hiddenWindow = MotionState(isReduced: false, isWindowVisible: false);
 const MethodChannel windowMotionChannel = MethodChannel(windowMotionChannelName);
 
 Future<void> sendMotionStateChange(WidgetTester tester, Object? arguments) async {
@@ -17,12 +16,16 @@ Future<void> sendMotionStateChange(WidgetTester tester, Object? arguments) async
   await tester.binding.defaultBinaryMessenger.handlePlatformMessage(windowMotionChannelName, message, (_) {});
 }
 
+/// Answers each call the app makes on the runner's channel with [answer],
+/// until tear-down.
+void mockRunnerChannel(WidgetTester tester, Future<Object?> Function(MethodCall call) answer) {
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, answer);
+  addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, null));
+}
+
 /// Answers the channel as a runner without it does, such as the Windows one.
 void mockRunnerWithoutChannel(WidgetTester tester) {
-  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, (MethodCall call) async {
-    throw MissingPluginException();
-  });
-  addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, null));
+  mockRunnerChannel(tester, (MethodCall call) async => throw MissingPluginException());
 }
 
 ValueListenable<double> findAmbientTime(WidgetTester tester) {
@@ -62,7 +65,7 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 500));
 
-      windowMotion.value = hiddenWindow;
+      windowMotion.value = hiddenWindowMotion;
       await tester.pump();
       final double frozenSeconds = findAmbientTime(tester).value;
       await tester.pump(const Duration(seconds: 5));
@@ -99,7 +102,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(tester.hasRunningAnimations, isTrue);
 
-    windowMotion.value = hiddenWindow;
+    windowMotion.value = hiddenWindowMotion;
     await tester.pump();
 
     expect(tester.hasRunningAnimations, isFalse);
@@ -144,10 +147,10 @@ void main() {
       );
       expect(seen, MotionState.allowed);
 
-      windowMotion.value = hiddenWindow;
+      windowMotion.value = hiddenWindowMotion;
       await tester.pump();
 
-      expect(seen, hiddenWindow);
+      expect(seen, hiddenWindowMotion);
       expect(seen.runsAmbientEffects, isFalse);
     });
   });
@@ -180,10 +183,9 @@ void main() {
     });
 
     testWidgets('takes the state the runner loads', (WidgetTester tester) async {
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, (MethodCall call) async {
+      mockRunnerChannel(tester, (MethodCall call) async {
         return <String, Object?>{'reducesMotion': true, 'isWindowVisible': true};
       });
-      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, null));
       final WindowMotionChannel channel = WindowMotionChannel();
       addTearDown(channel.dispose);
 
@@ -199,18 +201,17 @@ void main() {
       await channel.connect();
 
       await sendMotionStateChange(tester, <String, Object?>{'reducesMotion': false, 'isWindowVisible': false});
-      expect(channel.value, hiddenWindow);
+      expect(channel.value, hiddenWindowMotion);
 
       await sendMotionStateChange(tester, <String, Object?>{'isWindowVisible': true});
-      expect(channel.value, hiddenWindow);
+      expect(channel.value, hiddenWindowMotion);
     });
 
     testWidgets('keeps a change that arrives before the load answer', (WidgetTester tester) async {
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, (MethodCall call) async {
+      mockRunnerChannel(tester, (MethodCall call) async {
         await sendMotionStateChange(tester, <String, Object?>{'reducesMotion': true, 'isWindowVisible': false});
         return <String, Object?>{'reducesMotion': false, 'isWindowVisible': true};
       });
-      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(windowMotionChannel, null));
       final WindowMotionChannel channel = WindowMotionChannel();
       addTearDown(channel.dispose);
 

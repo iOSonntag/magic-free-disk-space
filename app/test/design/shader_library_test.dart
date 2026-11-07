@@ -1,8 +1,9 @@
 import 'dart:typed_data';
 import 'dart:ui';
-import 'dart:ui' as ui;
 
-import 'package:flutter/widgets.dart';
+// The widgets library has an Image widget of its own, which would clash with
+// the Image of dart:ui that rasterizePainter reads its pixels from.
+import 'package:flutter/widgets.dart' hide Image;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/design/cinematic_stage.dart';
 import 'package:magic_free_disk_space/design/disk_ring/disk_ring.dart';
@@ -70,7 +71,7 @@ Future<ByteData> rasterizePainter(CustomPainter painter, Size size) async {
   final PictureRecorder recorder = PictureRecorder();
   painter.paint(Canvas(recorder), size);
   final Picture picture = recorder.endRecording();
-  final ui.Image image = await picture.toImage(size.width.toInt(), size.height.toInt());
+  final Image image = await picture.toImage(size.width.toInt(), size.height.toInt());
   final ByteData? pixels = await image.toByteData(format: ImageByteFormat.rawStraightRgba);
   image.dispose();
   picture.dispose();
@@ -89,9 +90,7 @@ Pixel readPixel(ByteData pixels, {required int width, required int x, required i
 
 RenderObject findBackdropRender(WidgetTester tester) => tester.renderObject(find.byType(CinematicBackdrop));
 
-RenderObject findRingRender(WidgetTester tester) {
-  return tester.renderObject(find.descendant(of: find.byType(DiskRing), matching: find.byType(CustomPaint)).first);
-}
+RenderObject findRingRender(WidgetTester tester) => tester.renderObject(findRingPaint());
 
 void main() {
   testWidgets('loads both fragment programs from the bundled assets and paints them through Paint.shader', (

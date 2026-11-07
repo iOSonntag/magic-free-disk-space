@@ -16,17 +16,13 @@ Widget buildSweep(ValueNotifier<MotionState> windowMotion, {required bool isSwee
   );
 }
 
-Finder findSweepLight() {
-  return find.byWidgetPredicate((Widget widget) => widget is CustomPaint && widget.foregroundPainter is ScanSweepPainter);
-}
-
 void main() {
   testWidgets('passes its light over the child while sweeping', (WidgetTester tester) async {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
     await tester.pumpWidget(buildSweep(windowMotion, isSweeping: true));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(findSweepLight(), findsOneWidget);
+    expect(findForegroundPainter<ScanSweepPainter>(), findsOneWidget);
     expect(tester.hasRunningAnimations, isTrue);
   });
 
@@ -34,7 +30,7 @@ void main() {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.reduced);
     await tester.pumpWidget(buildSweep(windowMotion, isSweeping: true));
 
-    expect(findSweepLight(), findsNothing);
+    expect(findForegroundPainter<ScanSweepPainter>(), findsNothing);
     expect(tester.hasRunningAnimations, isFalse);
   });
 
@@ -43,7 +39,7 @@ void main() {
     await tester.pumpWidget(buildSweep(windowMotion, isSweeping: true));
     await tester.pumpWidget(buildSweep(windowMotion, isSweeping: false));
 
-    expect(findSweepLight(), findsNothing);
+    expect(findForegroundPainter<ScanSweepPainter>(), findsNothing);
     expect(tester.hasRunningAnimations, isFalse);
   });
 }

@@ -1,38 +1,46 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/design/format_bytes.dart';
+import 'dart:convert';
+import 'dart:io';
 
-// The cases of test/report/formatBytes.test.ts, so the app and the CLI show one size alike.
+import 'package:flutter_test/flutter_test.dart';
+import 'package:magic_free_disk_space/design/design.dart';
+
+/// The sizes the CLI's formatBytes test reads too, each with the text Finder
+/// shows for it, so the app and the CLI show one size alike; read from the
+/// `app` folder, where `flutter test` runs.
+List<({int bytes, String text})> loadSharedSizeCases() {
+  final Object? json = jsonDecode(
+    File('../test/report/formatBytesCases.json').readAsStringSync(),
+  );
+  if (json is! List<Object?>) {
+    throw const FormatException('formatBytesCases.json must hold a list of cases.');
+  }
+  return [
+    for (final Object? item in json)
+      switch (item) {
+        {'bytes': final int bytes, 'text': final String text} => (
+          bytes: bytes,
+          text: text,
+        ),
+        _ => throw FormatException(
+          'A case of formatBytesCases.json is not { bytes, text }: $item',
+        ),
+      },
+  ];
+}
+
 void main() {
   group('formatBytes', () {
-    test('shows counts under one KB in bytes', () {
-      expect(formatBytes(0), '0 B');
-      expect(formatBytes(999), '999 B');
+    final List<({int bytes, String text})> sizeCases = loadSharedSizeCases();
+
+    test('reads the cases it shares with the CLI', () {
+      expect(sizeCases, isNotEmpty);
     });
 
-    test('shows one decimal below ten of a unit and a whole number from ten up', () {
-      expect(formatBytes(1000), '1.0 KB');
-      expect(formatBytes(1500), '1.5 KB');
-      expect(formatBytes(9500), '9.5 KB');
-      expect(formatBytes(10000), '10 KB');
-      expect(formatBytes(10000000), '10 MB');
-    });
-
-    test('counts binary sizes in decimal units', () {
-      expect(formatBytes(1024), '1.0 KB');
-      expect(formatBytes(1024 * 1024), '1.0 MB');
-      expect(formatBytes(1024 * 1024 * 1024), '1.1 GB');
-    });
-
-    test('moves up a unit at each step of 1000, after rounding', () {
-      expect(formatBytes(999600), '1.0 MB');
-      expect(formatBytes(1000000000), '1.0 GB');
-      expect(formatBytes(2254857830), '2.3 GB');
-      expect(formatBytes(2 * 1000 * 1000 * 1000 * 1000), '2.0 TB');
-    });
-
-    test('keeps TB as the largest unit', () {
-      expect(formatBytes(1000 * 1000 * 1000 * 1000 * 1000), '1000 TB');
-    });
+    for (final ({int bytes, String text}) sizeCase in sizeCases) {
+      test('shows ${sizeCase.bytes} bytes as ${sizeCase.text}', () {
+        expect(formatBytes(sizeCase.bytes), sizeCase.text);
+      });
+    }
 
     test('throws for a negative count', () {
       expect(() => formatBytes(-1), throwsArgumentError);

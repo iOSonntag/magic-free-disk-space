@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge/openable_url.dart';
@@ -39,25 +37,13 @@ void main() {
   final List<String> sampleLines = loadSampleLines();
   final List<BridgeEvent> events = loadSampleEvents();
 
-  /// A fresh copy of the sample line of [kind], to change one value of.
-  Map<String, Object?> decodeSample(String kind) {
-    for (final String line in sampleLines) {
-      final Map<String, Object?> json =
-          jsonDecode(line) as Map<String, Object?>;
-      if (json['kind'] == kind) {
-        return json;
-      }
-    }
-    throw StateError('No sample line has the kind $kind.');
-  }
-
   test('parses every sample line of the bridge', () {
     expect(events, hasLength(sampleLines.length));
     expect(events, isNotEmpty);
   });
 
   group('the scan', () {
-    final ScannedEvent scanned = events.whereType<ScannedEvent>().single;
+    final ScannedEvent scanned = loadSampleEvent<ScannedEvent>();
 
     /// The item of [scanned] numbered [number].
     ItemView getItem(int number) {
@@ -283,7 +269,7 @@ void main() {
     test(
       'parses a scan without Explore, skipped, a check group, advice, or disk',
       () {
-        final Map<String, Object?> json = decodeSample('scanned')
+        final Map<String, Object?> json = loadSampleJson('scanned')
           ..['explore'] = null
           ..['skipped'] = null;
         getMapAt(json, ['sections', 0])['checkGroup'] = null;
@@ -296,7 +282,7 @@ void main() {
         expect(scan.sections.first.checkGroup, isNull);
         expect(scan.summary.disk, isNull);
 
-        final Map<String, Object?> withoutAdvice = decodeSample('scanned');
+        final Map<String, Object?> withoutAdvice = loadSampleJson('scanned');
         getMapAt(withoutAdvice, ['explore'])['adviceGroup'] = null;
 
         expect(
@@ -311,7 +297,7 @@ void main() {
     group('parses the opener of an advice item', () {
       /// The opener of the sample's advice item once its JSON is [opener].
       AdviceOpener? parseOpener(Object? opener) {
-        final Map<String, Object?> json = decodeSample('scanned');
+        final Map<String, Object?> json = loadSampleJson('scanned');
         getMapAt(json, ['explore', 'adviceGroup', 'items', 0])['opener'] =
             opener;
 
@@ -360,7 +346,7 @@ void main() {
     });
 
     test('parses every key of a newer bridge as unknown, never throwing', () {
-      final Map<String, Object?> json = decodeSample('scanned');
+      final Map<String, Object?> json = loadSampleJson('scanned');
       getMapAt(json, ['sections', 0])['key'] = 'pets';
       getMapAt(json, ['sections', 0, 'items', 0])
         ..['sectionKey'] = 'pets'
@@ -396,7 +382,7 @@ void main() {
   });
 
   test('parses the progress with its phase and what it found so far', () {
-    final ProgressEvent progress = events.whereType<ProgressEvent>().single;
+    final ProgressEvent progress = loadSampleEvent<ProgressEvent>();
 
     expect(progress.message, 'Measuring apps…');
     expect(progress.phase, ScanPhase.apps);
@@ -406,7 +392,7 @@ void main() {
     );
     expect(progress.found.first.allocatedBytes, 10000000);
 
-    final Map<String, Object?> json = decodeSample('progress')
+    final Map<String, Object?> json = loadSampleJson('progress')
       ..['phase'] = 'containers';
 
     expect(
@@ -416,7 +402,7 @@ void main() {
   });
 
   test('parses the status with the notice of its banner', () {
-    final StatusEvent status = events.whereType<StatusEvent>().single;
+    final StatusEvent status = loadSampleEvent<StatusEvent>();
 
     expect(status.fullDiskAccess, FullDiskAccess.denied);
     final NoticeView notice = status.notices.single;
@@ -426,9 +412,7 @@ void main() {
   });
 
   test('parses the update check with its notice and the saved switch', () {
-    final UpdateCheckedEvent checked = events
-        .whereType<UpdateCheckedEvent>()
-        .single;
+    final UpdateCheckedEvent checked = loadSampleEvent<UpdateCheckedEvent>();
 
     expect(checked.isUpdateCheckEnabled, isTrue);
     final UpdateNoticeView notice = checked.notice!;
@@ -439,29 +423,29 @@ void main() {
     expect(notice.downloadLink.url.text, releasePageUrl);
     expect(notice.downloadLink.failedText, startsWith('The browser did not'));
     expect(
-      events.whereType<UpdateCheckSetEvent>().single.isUpdateCheckEnabled,
+      loadSampleEvent<UpdateCheckSetEvent>().isUpdateCheckEnabled,
       isFalse,
     );
   });
 
   test('parses an update check without a notice', () {
-    final Map<String, Object?> json = decodeSample('updateChecked')
+    final Map<String, Object?> json = loadSampleJson('updateChecked')
       ..['notice'] = null;
 
     expect((parseBridgeEvent(json) as UpdateCheckedEvent).notice, isNull);
   });
 
   test('parses the plan, the answers, and the three failures', () {
-    final PlannedEvent planned = events.whereType<PlannedEvent>().single;
+    final PlannedEvent planned = loadSampleEvent<PlannedEvent>();
     expect(planned.planId, 1);
     expect(
       planned.warningLines,
       contains('Type DELETE to delete them permanently.'),
     );
-    expect(events.whereType<NothingApprovedEvent>().single.lines, isNotEmpty);
-    expect(events.whereType<DeletedEvent>().single.lines, hasLength(4));
+    expect(loadSampleEvent<NothingApprovedEvent>().lines, isNotEmpty);
+    expect(loadSampleEvent<DeletedEvent>().lines, hasLength(4));
     expect(
-      events.whereType<CancelledEvent>().single.message,
+      loadSampleEvent<CancelledEvent>().message,
       'Cancelled. Nothing was deleted.',
     );
     expect(
@@ -477,7 +461,7 @@ void main() {
   });
 
   test('parses the items of the plan, its total, and whether it holds careful', () {
-    final PlannedEvent planned = events.whereType<PlannedEvent>().single;
+    final PlannedEvent planned = loadSampleEvent<PlannedEvent>();
 
     expect(
       [
@@ -499,7 +483,7 @@ void main() {
   });
 
   group('the run', () {
-    final DeletedEvent deleted = events.whereType<DeletedEvent>().single;
+    final DeletedEvent deleted = loadSampleEvent<DeletedEvent>();
 
     test('parses each outcome with its reason, and what the run freed', () {
       expect(
@@ -524,7 +508,7 @@ void main() {
     });
 
     test('parses a run whose disk and log are unknown', () {
-      final Map<String, Object?> json = decodeSample('deleted')
+      final Map<String, Object?> json = loadSampleJson('deleted')
         ..['availableBytesAfter'] = null
         ..['logPath'] = null;
 
@@ -535,7 +519,7 @@ void main() {
     });
 
     test('parses an outcome or a reason of a newer bridge as unknown', () {
-      final Map<String, Object?> json = decodeSample('deleted');
+      final Map<String, Object?> json = loadSampleJson('deleted');
       getMapAt(json, ['outcomes', 1])
         ..['outcome'] = 'parked'
         ..['reasonKey'] = 'engineBusy';
@@ -562,7 +546,7 @@ void main() {
     });
 
     test('on an unknown risk', () {
-      final Map<String, Object?> json = decodeSample('scanned');
+      final Map<String, Object?> json = loadSampleJson('scanned');
       getMapAt(json, ['explore', 'adviceGroup', 'items', 0])['risk'] =
           'harmless';
 
@@ -570,21 +554,21 @@ void main() {
     });
 
     test('on an unknown risk of a planned item', () {
-      final Map<String, Object?> json = decodeSample('planned');
+      final Map<String, Object?> json = loadSampleJson('planned');
       getMapAt(json, ['items', 0])['risk'] = 'harmless';
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });
 
     test('on an unknown effect of a failure', () {
-      final Map<String, Object?> json = decodeSample('failed');
+      final Map<String, Object?> json = loadSampleJson('failed');
       json['effect'] = 'scanLost';
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });
 
     test('on an unknown kind of a detail line', () {
-      final Map<String, Object?> json = decodeSample('scanned');
+      final Map<String, Object?> json = loadSampleJson('scanned');
       getMapAt(json, ['sections', 0, 'items', 0, 'detailLines', 0])['kind'] =
           'hint';
 
@@ -592,14 +576,14 @@ void main() {
     });
 
     test('on an unknown state of Full Disk Access', () {
-      final Map<String, Object?> json = decodeSample('status')
+      final Map<String, Object?> json = loadSampleJson('status')
         ..['fullDiskAccess'] = 'partial';
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });
 
     test('on a last use that is not an instant', () {
-      final Map<String, Object?> json = decodeSample('scanned');
+      final Map<String, Object?> json = loadSampleJson('scanned');
       getMapAt(json, ['sections', 1, 'checkGroup', 'items', 0])['lastUsedAt'] =
           'yesterday';
 
@@ -611,9 +595,9 @@ void main() {
       'https://example.com',
     ]) {
       test('on a settings link to $url', () {
-        final Map<String, Object?> scanned = decodeSample('scanned');
+        final Map<String, Object?> scanned = loadSampleJson('scanned');
         getMapAt(scanned, ['notices', 0, 'settingsLink'])['url'] = url;
-        final Map<String, Object?> status = decodeSample('status');
+        final Map<String, Object?> status = loadSampleJson('status');
         getMapAt(status, ['notices', 0, 'settingsLink'])['url'] = url;
 
         expect(() => parseBridgeEvent(scanned), throwsFormatException);
@@ -623,7 +607,7 @@ void main() {
     }
 
     test('on a download link to a pane of System Settings', () {
-      final Map<String, Object?> json = decodeSample('updateChecked');
+      final Map<String, Object?> json = loadSampleJson('updateChecked');
       getMapAt(json, ['notice', 'downloadLink'])['url'] =
           fullDiskAccessSettingsUrl;
 
@@ -631,7 +615,7 @@ void main() {
     });
 
     test('on a settings link to a release page', () {
-      final Map<String, Object?> json = decodeSample('status');
+      final Map<String, Object?> json = loadSampleJson('status');
       getMapAt(json, ['notices', 0, 'settingsLink'])['url'] = releasePageUrl;
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
@@ -655,7 +639,7 @@ void main() {
       'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
     ]) {
       test('on a download link to $url', () {
-        final Map<String, Object?> json = decodeSample('updateChecked');
+        final Map<String, Object?> json = loadSampleJson('updateChecked');
         getMapAt(json, ['notice', 'downloadLink'])['url'] = url;
 
         expect(() => parseBridgeEvent(json), throwsFormatException);
@@ -664,26 +648,26 @@ void main() {
     }
 
     test('on an update check without its switch', () {
-      final Map<String, Object?> json = decodeSample('updateChecked')
+      final Map<String, Object?> json = loadSampleJson('updateChecked')
         ..remove('isUpdateCheckEnabled');
 
       expect(() => parseBridgeEvent(json), throwsFormatException);
     });
 
     test('on a missing key', () {
-      final Map<String, Object?> withoutSafeNumbers = decodeSample('scanned')
+      final Map<String, Object?> withoutSafeNumbers = loadSampleJson('scanned')
         ..remove('safeNumbers');
-      final Map<String, Object?> withoutCheckGroup = decodeSample('scanned');
+      final Map<String, Object?> withoutCheckGroup = loadSampleJson('scanned');
       getMapAt(withoutCheckGroup, ['sections', 0]).remove('checkGroup');
-      final Map<String, Object?> withoutSettingsLink = decodeSample('status');
+      final Map<String, Object?> withoutSettingsLink = loadSampleJson('status');
       getMapAt(withoutSettingsLink, ['notices', 0]).remove('settingsLink');
-      final Map<String, Object?> withoutRevealPath = decodeSample('scanned');
+      final Map<String, Object?> withoutRevealPath = loadSampleJson('scanned');
       getMapAt(withoutRevealPath, ['sections', 0, 'items', 0]).remove(
         'revealPath',
       );
-      final Map<String, Object?> withoutLogPath = decodeSample('deleted')
+      final Map<String, Object?> withoutLogPath = loadSampleJson('deleted')
         ..remove('logPath');
-      final Map<String, Object?> withoutPhase = decodeSample('progress')
+      final Map<String, Object?> withoutPhase = loadSampleJson('progress')
         ..remove('phase');
 
       for (final Map<String, Object?> json in [
@@ -699,9 +683,9 @@ void main() {
     });
 
     test('on a value of the wrong type', () {
-      final Map<String, Object?> json = decodeSample('scanned')
+      final Map<String, Object?> json = loadSampleJson('scanned')
         ..['safeNumbers'] = ['1'];
-      final Map<String, Object?> textBytes = decodeSample('planned')
+      final Map<String, Object?> textBytes = loadSampleJson('planned')
         ..['totalBytes'] = '10 MB';
 
       expect(() => parseBridgeEvent(json), throwsFormatException);

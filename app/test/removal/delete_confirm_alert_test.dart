@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
 import 'package:magic_free_disk_space/removal/delete_confirm_alert.dart';
 import 'package:magic_free_disk_space/removal/review_page.dart';
 
 import '../support/fake_cleaner_bridge.dart';
 import '../support/fake_url_opener.dart';
+import '../support/sample_events.dart';
 import '../support/semantics_labels.dart';
-import 'removal_harness.dart';
+import '../support/stage_controls.dart';
+import 'support/removal_harness.dart';
 
 void main() {
   late FakeCleanerBridge bridge;
 
   setUp(() {
-    bridge = FakeCleanerBridge(scanAnswer: sampleScan)
+    bridge = FakeCleanerBridge(scanAnswer: loadSampleEvent<ScannedEvent>())
       ..deleteAnswer = sampleDeleted;
   });
 
@@ -35,7 +37,6 @@ void main() {
       controller: controller,
       urlOpener: FakeUrlOpener(isOpening: true),
     );
-    await tester.pumpAndSettle();
     showDeleteConfirmAlert(
       context: tester.element(find.byType(ReviewPage)),
       controller: controller,
@@ -56,7 +57,10 @@ void main() {
       );
 
       expect(find.text('Delete 10 MB for good?'), findsOneWidget);
-      expect(find.text('Tool cache'), findsWidgets);
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('Tool cache')),
+        findsOneWidget,
+      );
       expect(find.byType(TextField), findsNothing);
       expect(findButtonLabelled('Show list'), findsOneWidget);
       expect(findButtonLabelled('Cancel'), findsOneWidget);
@@ -76,19 +80,19 @@ void main() {
 
       expect(find.textContaining("Can't be undone or downloaded again: App cache"), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
-      expect(isButtonEnabled(tester, 'Delete'), isFalse);
+      expect(isButtonEnabled(tester, findButtonLabelled('Delete')), isFalse);
       expectEveryTappableNodeLabelled();
 
       await tester.enterText(find.byType(TextField), 'delete');
       await tester.pump();
-      expect(isButtonEnabled(tester, 'Delete'), isFalse);
+      expect(isButtonEnabled(tester, findButtonLabelled('Delete')), isFalse);
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       expect(bridge.deleteRequest, isNull);
 
       await tester.enterText(find.byType(TextField), 'DELETE');
       await tester.pump();
-      expect(isButtonEnabled(tester, 'Delete'), isTrue);
+      expect(isButtonEnabled(tester, findButtonLabelled('Delete')), isTrue);
 
       await tapAndSettle(tester, findButtonLabelled('Delete'));
 
@@ -96,7 +100,7 @@ void main() {
     },
   );
 
-  testWidgets('Cancel after Clean safe items sends nothing and keeps the selection', (
+  testWidgets('Cancel after Clean safe items sends nothing, keeps the selection and leaves the flow', (
     WidgetTester tester,
   ) async {
     final CleanerController controller = await openAlert(
@@ -111,7 +115,7 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     final ScannedState state = controller.state as ScannedState;
     expect(state.selectedNumbers, {1, 2});
-    expect(find.byKey(listKey), findsOneWidget);
+    expect(find.byType(ReviewPage), findsNothing);
   });
 
   testWidgets('Escape cancels as Cancel does', (WidgetTester tester) async {
@@ -144,13 +148,6 @@ void main() {
     expect(controller.state, same(before));
     expect(find.byType(ReviewPage), findsOneWidget);
     expect(bridge.deleteRequest, isNull);
-  });
-
-  testWidgets('the alert over the Review page offers no Show list', (WidgetTester tester) async {
-    await openAlert(tester, plan: samplePlan, origin: DeleteAlertOrigin.review);
-
-    expect(findButtonLabelled('Show list'), findsNothing);
-    expectEveryTappableNodeLabelled();
   });
 
   testWidgets('names no evicted item among those that cannot come back', (

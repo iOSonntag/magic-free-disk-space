@@ -1,23 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/bridge/openable_url.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
-import 'package:magic_free_disk_space/design/stage_check_mark.dart';
-import 'package:magic_free_disk_space/scan_view/section_contents.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
+import 'package:magic_free_disk_space/design/design.dart';
+import 'package:magic_free_disk_space/scan_view/scan_view.dart';
 import 'package:magic_free_disk_space/section/advice_card.dart';
 import 'package:magic_free_disk_space/section/item_group_card.dart';
 import 'package:magic_free_disk_space/section/item_row.dart';
-import 'package:magic_free_disk_space/section/section_page.dart';
+import 'package:magic_free_disk_space/section/section.dart';
 
-import '../shell/support/stage_harness.dart';
 import '../support/fake_cleaner_bridge.dart';
 import '../support/fake_url_opener.dart';
+import '../support/sample_events.dart';
 import '../support/semantics_labels.dart';
+import '../support/stage_controls.dart';
+import '../support/stage_harness.dart';
 
 /// The sample scan, with the evidence, command and advice lines a probe
 /// gives added to the App cache (#2).
 ScannedEvent _buildScanWithEveryLineKind() {
-  final Map<String, Object?> json = loadSampleScanJson();
+  final Map<String, Object?> json = loadSampleJson('scanned');
   final Map<String, Object?> appCache = listScanItemJsons(
     json,
   ).singleWhere((Map<String, Object?> item) => item['number'] == 2);
@@ -37,7 +38,7 @@ Future<CleanerController> _pumpSectionPage(
   FakeUrlOpener? urlOpener,
 }) async {
   final CleanerController controller = startScanningCleaner(
-    FakeCleanerBridge(scanAnswer: scan ?? loadSampleScan()),
+    FakeCleanerBridge(scanAnswer: scan ?? loadSampleEvent<ScannedEvent>()),
   );
   await pumpOnStage(
     tester,
@@ -52,17 +53,6 @@ Future<CleanerController> _pumpSectionPage(
 
 Set<int> _readSelectedNumbers(CleanerController controller) {
   return (controller.state as ScannedState).selectedNumbers;
-}
-
-bool? _readRowMark(WidgetTester tester, int number) {
-  return tester
-      .widget<StageCheckMark>(
-        find.descendant(
-          of: find.byKey(ItemRowKey(number)),
-          matching: find.byType(StageCheckMark),
-        ),
-      )
-      .value;
 }
 
 void main() {
@@ -132,12 +122,12 @@ void main() {
     await tapAndSettle(tester, find.byKey(const ItemRowKey(1)));
 
     expect(_readSelectedNumbers(controller), {1});
-    expect(_readRowMark(tester, 1), isTrue);
+    expect(readRowMark(tester, 1), isTrue);
 
     await tapAndSettle(tester, find.byKey(const ItemRowKey(1)));
 
     expect(_readSelectedNumbers(controller), isEmpty);
-    expect(_readRowMark(tester, 1), isFalse);
+    expect(readRowMark(tester, 1), isFalse);
   });
 
   testWidgets('select safe ticks only the safe item', (WidgetTester tester) async {
@@ -150,8 +140,8 @@ void main() {
     controller.selectSafeCandidates();
     await tester.pumpAndSettle();
 
-    expect(_readRowMark(tester, 1), isTrue);
-    expect(_readRowMark(tester, 2), isFalse);
+    expect(readRowMark(tester, 1), isTrue);
+    expect(readRowMark(tester, 2), isFalse);
   });
 
   testWidgets('the details panel shows every line kind and reveals the item in Finder', (

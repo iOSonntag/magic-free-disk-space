@@ -2,27 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/design/stage_switch_track.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/design/design.dart';
 import 'package:magic_free_disk_space/settings/settings_page.dart';
-import 'package:magic_free_disk_space/update/update_controller.dart';
+import 'package:magic_free_disk_space/update/update.dart';
 
-import '../shell/support/stage_harness.dart';
 import '../support/fake_update_bridge.dart';
 import '../support/semantics_labels.dart';
+import '../support/stage_controls.dart';
+import '../support/stage_harness.dart';
 import '../support/update_matchers.dart';
-
-const UpdateCheckedEvent _checkedOn = UpdateCheckedEvent(
-  isUpdateCheckEnabled: true,
-  notice: null,
-);
 
 Future<UpdateController> _pumpSettings(
   WidgetTester tester,
   FakeUpdateBridge bridge,
 ) async {
-  final UpdateController controller = UpdateController(bridge: bridge);
-  addTearDown(controller.dispose);
+  final UpdateController controller = createUpdateController(bridge);
   await pumpOnStage(tester, SettingsPage(updateController: controller));
   return controller;
 }
@@ -46,7 +41,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final FakeUpdateBridge bridge = FakeUpdateBridge(
-      answerCheck: () async => _checkedOn,
+      answerCheck: () async => quietUpdateCheck,
     );
     final UpdateController controller = await _pumpSettings(tester, bridge);
 
@@ -65,7 +60,7 @@ void main() {
   testWidgets('is disabled while the save runs', (WidgetTester tester) async {
     final Completer<UpdateCheckSetAnswer> save = Completer<UpdateCheckSetAnswer>();
     final FakeUpdateBridge bridge = FakeUpdateBridge(
-      answerCheck: () async => _checkedOn,
+      answerCheck: () async => quietUpdateCheck,
     )..answerSet = (bool isEnabled) => save.future;
     await _pumpSettings(tester, bridge);
 
@@ -106,7 +101,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final FakeUpdateBridge bridge = FakeUpdateBridge(
-      answerCheck: () async => _checkedOn,
+      answerCheck: () async => quietUpdateCheck,
     )..answerSet = (bool isEnabled) async => const FailedEvent(
         message: 'The setting could not be saved.',
         effect: FailureEffect.scanKept,
@@ -121,7 +116,7 @@ void main() {
   });
 
   testWidgets('opens the licences', (WidgetTester tester) async {
-    await _pumpSettings(tester, FakeUpdateBridge(answerCheck: () async => _checkedOn));
+    await _pumpSettings(tester, FakeUpdateBridge(answerCheck: () async => quietUpdateCheck));
 
     await tapAndSettle(tester, find.text('Licences'));
 

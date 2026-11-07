@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/bridge/openable_url.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
-import 'package:magic_free_disk_space/design/disk_ring/disk_ring.dart';
-import 'package:magic_free_disk_space/design/disk_ring/disk_ring_arcs.dart';
-import 'package:magic_free_disk_space/design/motion.dart';
-import 'package:magic_free_disk_space/design/tokens.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
+import 'package:magic_free_disk_space/design/design.dart';
+import 'package:magic_free_disk_space/removal/deleted_page.dart';
 
 import '../support/fake_cleaner_bridge.dart';
 import '../support/fake_url_opener.dart';
+import '../support/sample_events.dart';
 import '../support/semantics_labels.dart';
-import 'removal_harness.dart';
+import '../support/stage_controls.dart';
+import 'support/removal_harness.dart';
 
 /// A run that kept, partly removed and failed items, and freed space inside
 /// Docker's disk image.
@@ -43,7 +42,7 @@ void main() {
   late FakeCleanerBridge bridge;
 
   setUp(() {
-    bridge = FakeCleanerBridge(scanAnswer: sampleScan);
+    bridge = FakeCleanerBridge(scanAnswer: loadSampleEvent<ScannedEvent>());
   });
 
   /// Pumps the flow through a deletion of [samplePlan] that answers [run].
@@ -65,9 +64,6 @@ void main() {
       urlOpener: urlOpener ?? FakeUrlOpener(isOpening: true),
       motion: motion,
     );
-    if (motion.isReduced) {
-      await tester.pumpAndSettle();
-    }
     return controller;
   }
 
@@ -119,6 +115,34 @@ void main() {
     expectEveryTappableNodeLabelled();
   });
 
+  testWidgets('words an item kept for a reason this app does not know by its outcome alone', (
+    WidgetTester tester,
+  ) async {
+    final DeletedEvent runWithUnknownReason = DeletedEvent(
+      lines: const ['Freed nothing.'],
+      outcomes: [
+        DeletedOutcomeView(
+          number: 2,
+          key: samplePlan.items.last.key,
+          outcome: DeletedOutcome.kept,
+          reasonKey: DeletedReason.unknown,
+          freedBytes: 0,
+        ),
+      ],
+      freedBytes: 0,
+      returnsLaterBytes: 0,
+      availableBytesAfter: null,
+      logPath: null,
+    );
+
+    await pumpResult(tester, run: runWithUnknownReason);
+
+    expect(find.text('What stayed'), findsOneWidget);
+    expect(find.text('App cache'), findsOneWidget);
+    expect(find.text('Kept.'), findsOneWidget);
+    expectEveryTappableNodeLabelled();
+  });
+
   testWidgets('Details unfolds the lines of the run', (WidgetTester tester) async {
     await pumpResult(tester, run: sampleDeleted);
     final Finder runLines = find.byWidgetPredicate(
@@ -156,14 +180,14 @@ void main() {
     expect(find.text('The log could not be shown in Finder.'), findsOneWidget);
   });
 
-  testWidgets('Done scans again', (WidgetTester tester) async {
+  testWidgets('Done scans again and leaves the flow', (WidgetTester tester) async {
     final CleanerController controller = await pumpResult(tester, run: sampleDeleted);
 
     await tapAndSettle(tester, findButtonLabelled('Done'));
 
-    expect(bridge.requestKinds.last, 'scan');
+    expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete', 'scan']);
     expect(controller.state, isA<ScannedState>());
-    expect(find.byKey(listKey), findsOneWidget);
+    expect(find.byType(DeletedPage), findsNothing);
   });
 
   testWidgets('under reduced motion the ring shows the disk after the run at once', (

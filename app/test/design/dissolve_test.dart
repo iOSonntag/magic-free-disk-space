@@ -20,10 +20,6 @@ Widget buildDissolve(ValueNotifier<MotionState> windowMotion, {required bool isD
   );
 }
 
-Finder findMotes() {
-  return find.byWidgetPredicate((Widget widget) => widget is CustomPaint && widget.foregroundPainter is DissolveMotesPainter);
-}
-
 void main() {
   testWidgets('sheds glowing motes behind a wipe, then reports the child gone', (WidgetTester tester) async {
     final ValueNotifier<MotionState> windowMotion = createWindowMotion(MotionState.allowed);
@@ -33,14 +29,14 @@ void main() {
     await tester.pumpWidget(buildDissolve(windowMotion, isDissolved: true, onDissolved: () => dissolvedCount++));
     await tester.pump(MotionTokens.dissolve ~/ 2);
 
-    expect(findMotes(), findsOneWidget);
+    expect(findForegroundPainter<DissolveMotesPainter>(), findsOneWidget);
     expect(find.byType(ShaderMask), findsOneWidget);
     expect(dissolvedCount, 0);
 
     await tester.pumpAndSettle();
 
     expect(dissolvedCount, 1);
-    expect(findMotes(), findsNothing);
+    expect(findForegroundPainter<DissolveMotesPainter>(), findsNothing);
     expect(tester.widget<Opacity>(find.byType(Opacity)).opacity, 0);
   });
 
@@ -52,7 +48,7 @@ void main() {
     await tester.pumpWidget(buildDissolve(windowMotion, isDissolved: true, onDissolved: () => dissolvedCount++));
     await tester.pump(MotionTokens.plainFade ~/ 2);
 
-    expect(findMotes(), findsNothing);
+    expect(findForegroundPainter<DissolveMotesPainter>(), findsNothing);
     expect(find.byType(ShaderMask), findsNothing);
     expect(tester.widget<Opacity>(find.byType(Opacity)).opacity, inExclusiveRange(0, 1));
 
@@ -68,7 +64,7 @@ void main() {
     await tester.pumpWidget(buildDissolve(windowMotion, isDissolved: true));
     await tester.pump(MotionTokens.dissolve ~/ 4);
 
-    windowMotion.value = const MotionState(isReduced: false, isWindowVisible: false);
+    windowMotion.value = hiddenWindowMotion;
     await tester.pump();
 
     expect(tester.hasRunningAnimations, isFalse);

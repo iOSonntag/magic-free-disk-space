@@ -5,14 +5,14 @@ import 'package:magic_free_disk_space/scan_view/scan_view.dart';
 import 'package:magic_free_disk_space/section/advice_card.dart';
 import 'package:magic_free_disk_space/section/item_group_card.dart';
 
-import '../shell/support/stage_harness.dart';
+import '../support/sample_events.dart';
 
 List<int> _listNumbers(List<ItemView> items) {
   return [for (final ItemView item in items) item.number];
 }
 
 void main() {
-  final ScannedEvent sampleScan = loadSampleScan();
+  final ScannedEvent sampleScan = loadSampleEvent<ScannedEvent>();
 
   group('buildSectionContents', () {
     test('sorts the items of a section into their groups', () {
@@ -120,7 +120,7 @@ void main() {
 
   group('section titles', () {
     test('take the bridge title of a key this app does not know', () {
-      final Map<String, Object?> json = loadSampleScanJson();
+      final Map<String, Object?> json = loadSampleJson('scanned');
       final Map<String, Object?> largeFiles = (json['sections']! as List<Object?>)
           .cast<Map<String, Object?>>()
           .singleWhere((Map<String, Object?> section) => section['key'] == 'largeFiles');
