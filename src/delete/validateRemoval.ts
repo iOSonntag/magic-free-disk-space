@@ -1,18 +1,10 @@
-import { isAbsolute } from 'node:path';
 import type { Risk } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import { isTouchingProtectedPath } from '../environment/isTouchingProtectedPath.js';
-import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import type { TargetRefusalReason, TargetRemovalKind } from '../environment/findTargetRefusal.js';
+import { findTargetRefusal } from '../environment/findTargetRefusal.js';
 import type { Candidate, RemovalTarget, RemovalTargets } from '../scan/candidate.js';
-import type { FileIdentity } from '../system/loadFileIdentity.js';
-import { validateEvictRemoval } from './validateEvictRemoval.js';
 
-export type RefusalReason =
-  | 'neverRisk'
-  | 'protectedRoot'
-  | 'outsideAllowedRoot'
-  | 'symbolicLink'
-  | 'unsupportedKind';
+export type RefusalReason = 'neverRisk' | TargetRefusalReason;
 
 export type RemovalDecisionApproved = { kind: 'approved'; candidate: Candidate };
 
@@ -33,10 +25,9 @@ export function isRemovableRisk(risk: Risk): boolean {
 }
 
 /**
- * Refuses a candidate marked `never`. Approves an item of paths only when each target is a plain
- * file or folder strictly inside an allowed root, is no protected folder and holds none, and lies
- * in no sensitive folder; an evict only as `validateEvictRemoval` allows it. A tool item and an
- * engine item pass, since their own tool or engine removes them after a recheck.
+ * Refuses a candidate marked `never`. Approves an item of paths or an evict only when the
+ * environment refuses none of its targets, as `findTargetRefusal` judges a delete or an evict. A
+ * tool item and an engine item pass, since their own tool or engine removes them after a recheck.
  */
 export function validateRemoval(params: {
   candidate: Candidate;
@@ -51,13 +42,15 @@ export function validateRemoval(params: {
     case 'deleteUnitPaths':
       return validateTargetsRemoval({
         candidate: params.candidate,
+        removal: 'delete',
         targets: params.candidate.removal.targets,
         environment: params.environment,
       });
     case 'evictUnitFiles':
-      return validateEvictRemoval({
+      return validateTargetsRemoval({
         candidate: params.candidate,
-        removal: params.candidate.removal,
+        removal: 'evict',
+        targets: params.candidate.removal.targets,
         environment: params.environment,
       });
     case 'runTool':
@@ -69,94 +62,21 @@ export function validateRemoval(params: {
 /** The first target refused refuses the whole item, at that target's path. */
 function validateTargetsRemoval(params: {
   candidate: Candidate;
+  removal: TargetRemovalKind;
   targets: RemovalTargets<RemovalTarget>;
   environment: Environment;
 }): RemovalDecision {
   for (const target of params.targets) {
-    const refusal = findTargetRefusal({
-      path: target.path,
-      identity: target.identity,
+    const reason = findTargetRefusal({
       environment: params.environment,
+      removal: params.removal,
+      identity: target.identity,
     });
 
-    if (refusal !== null) {
-      return refusal;
+    if (reason !== null) {
+      return { kind: 'refused', path: target.path, reason: reason };
     }
   }
 
   return { kind: 'approved', candidate: params.candidate };
-}
-
-function findTargetRefusal(params: {
-  path: string;
-  identity: FileIdentity;
-  environment: Environment;
-}): RemovalDecisionRefused | null {
-  const path = params.path;
-  const realPath = params.identity.realPath;
-  const kind = params.identity.kind;
-
-  if (kind === 'symbolicLink') {
-    return { kind: 'refused', path: path, reason: 'symbolicLink' };
-  }
-
-  if (kind !== 'file' && kind !== 'directory') {
-    return { kind: 'refused', path: path, reason: 'unsupportedKind' };
-  }
-
-  if (!isAbsolute(realPath)) {
-    return { kind: 'refused', path: path, reason: 'outsideAllowedRoot' };
-  }
-
-  if (isTouchingProtectedPath({ environment: params.environment, realPath: realPath })) {
-    return { kind: 'refused', path: path, reason: 'protectedRoot' };
-  }
-
-  if (
-    isTouchingEvictRoot({
-      lowerCaseRealPath: realPath.toLowerCase(),
-      environment: params.environment,
-    })
-  ) {
-    return { kind: 'refused', path: path, reason: 'protectedRoot' };
-  }
-
-  const isInsideAllowedRoot = params.environment.allowedRealRoots.some(
-    (allowedRoot) =>
-      realPath !== allowedRoot &&
-      isSameOrInsidePath({
-        rules: params.environment.pathRules,
-        path: realPath,
-        parentPath: allowedRoot,
-      }),
-  );
-
-  if (!isInsideAllowedRoot) {
-    return { kind: 'refused', path: path, reason: 'outsideAllowedRoot' };
-  }
-
-  return null;
-}
-
-/** A delete that is, holds, or lies in a folder of cloud files, which only an evict may touch. */
-function isTouchingEvictRoot(params: {
-  lowerCaseRealPath: string;
-  environment: Environment;
-}): boolean {
-  return params.environment.evictRealRoots.some((evictRoot) => {
-    const lowerCaseEvictRoot = evictRoot.toLowerCase();
-
-    return (
-      isSameOrInsidePath({
-        rules: params.environment.pathRules,
-        path: lowerCaseEvictRoot,
-        parentPath: params.lowerCaseRealPath,
-      }) ||
-      isSameOrInsidePath({
-        rules: params.environment.pathRules,
-        path: params.lowerCaseRealPath,
-        parentPath: lowerCaseEvictRoot,
-      })
-    );
-  });
 }

@@ -142,6 +142,10 @@ export type SkipReason =
   | 'symbolicLink'
   /** It is, holds, or lies in a folder the removal never touches, such as Mail or the deletion log. */
   | 'protectedPath'
+  /** It lies outside every folder the removal may take from, such as an evict outside iCloud. */
+  | 'outsideAllowedRoot'
+  /** Neither a plain file nor a folder, or a folder an evict would take, which takes only files. */
+  | 'unsupportedKind'
   | 'systemOwned'
   | 'ownerRunning'
   | 'runningUnknown'

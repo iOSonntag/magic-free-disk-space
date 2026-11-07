@@ -1,6 +1,6 @@
 import type { UserIdentity } from '../system/userIdentity.js';
 import type { CandidateDecision } from './candidate.js';
-import { decideInstallerCandidate, isMacosInstallerBundleId } from './decideInstallerCandidate.js';
+import { decideInstallerCandidate } from './decideInstallerCandidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import type { OwnerState } from './resolveOwnerState.js';
 import type { InstalledApp } from './scanPlatform.js';
@@ -33,9 +33,10 @@ export function decideAppCandidate(params: {
     return { kind: 'skip', path: path, reason: 'notBundleId' };
   }
 
-  if (isMacosInstallerBundleId(params.app.bundleId)) {
+  if (params.app.systemInstaller !== null) {
     return decideInstallerCandidate({
       app: params.app,
+      installer: params.app.systemInstaller,
       bundleId: params.app.bundleId,
       measurement: params.measurement,
       ownerState: params.ownerState,

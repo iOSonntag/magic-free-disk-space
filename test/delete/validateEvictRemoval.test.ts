@@ -1,30 +1,17 @@
 import { expect, test } from 'bun:test';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
-import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate } from '../support/candidateFixtures.js';
 import {
   buildTestEvictCandidate,
   buildTestEvictTarget,
 } from '../support/evictCandidateFixtures.js';
-import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
+import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
 
-const ENVIRONMENT = buildDarwinEnvironment({
-  nowMs: 0,
-  user: buildTestUserIdentity({ uid: 501 }),
-  homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
-  homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
-  tempDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/T' }),
-  tempRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/T' }),
-  userCacheDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/C' }),
-  userCacheRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/C' }),
-  applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
-  applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
-});
+const ENVIRONMENT = buildTestMacEnvironment();
 
-const CLOUD_DOCS = '/Users/tester/Library/Mobile Documents/com~apple~CloudDocs';
+const CLOUD_DOCS = `${TEST_MAC_HOME_DIR}/Library/Mobile Documents/com~apple~CloudDocs`;
 
-describeAwaitingWin32Platform('validateEvictRemoval', () => {
+describeAwaitingWin32Platform('validateRemoval of an evict', () => {
   test('approves an evict of files inside iCloud Drive', () => {
     const candidate = buildTestEvictCandidate({
       folderPath: `${CLOUD_DOCS}/Projects`,
@@ -42,8 +29,8 @@ describeAwaitingWin32Platform('validateEvictRemoval', () => {
 
   test('refuses an evict of a file outside iCloud Drive, at that file', () => {
     for (const outsidePath of [
-      '/Users/tester/Downloads/video.mov',
-      '/Users/tester/Library/Mobile DocumentsX/video.mov',
+      `${TEST_MAC_HOME_DIR}/Downloads/video.mov`,
+      `${TEST_MAC_HOME_DIR}/Library/Mobile DocumentsX/video.mov`,
       '/etc/hosts',
     ]) {
       const candidate = buildTestEvictCandidate({
@@ -63,7 +50,7 @@ describeAwaitingWin32Platform('validateEvictRemoval', () => {
   });
 
   test('refuses an evict of iCloud Drive itself, of a folder, and of a symbolic link', () => {
-    const rootPath = '/Users/tester/Library/Mobile Documents';
+    const rootPath = `${TEST_MAC_HOME_DIR}/Library/Mobile Documents`;
 
     expect(
       validateRemoval({
@@ -94,31 +81,23 @@ describeAwaitingWin32Platform('validateEvictRemoval', () => {
     ).toMatchObject({ reason: 'symbolicLink' });
   });
 
-  test('refuses a delete that is, holds, or lies in iCloud Drive', () => {
-    for (const path of [
-      '/Users/tester/Library/Mobile Documents',
-      `${CLOUD_DOCS}/Projects/video.mov`,
-      '/Users/tester/library/mobile documents/com~apple~clouddocs/video.mov',
-      '/Users/tester/Library/Mobile Documents/iCloud~com~example~app/Documents',
-    ]) {
-      expect(
-        validateRemoval({
-          candidate: buildTestCandidate({ path: path, kind: 'file' }),
-          environment: ENVIRONMENT,
-        }),
-      ).toEqual({ kind: 'refused', path: path, reason: 'protectedRoot' });
-    }
-  });
-
-  test('approves a delete inside Mail Downloads, which lies outside Mail', () => {
-    const path =
-      '/Users/tester/Library/Containers/com.apple.mail/Data/Library/Mail Downloads/ABC/invoice.pdf';
+  test('refuses an evict of a file a protected folder holds, even inside a cloud folder', () => {
+    const libraryPath = `${TEST_MAC_HOME_DIR}/Library`;
+    const chatPath = `${libraryPath}/Messages/chat.db`;
+    // No cloud folder of macOS holds a protected one, so this one is made up to hold Messages.
+    const environment = { ...ENVIRONMENT, evictRealRoots: [libraryPath] };
 
     expect(
       validateRemoval({
-        candidate: buildTestCandidate({ path: path, kind: 'file' }),
-        environment: ENVIRONMENT,
-      }).kind,
-    ).toBe('approved');
+        candidate: buildTestEvictCandidate({
+          folderPath: libraryPath,
+          targets: [
+            buildTestEvictTarget({ path: `${libraryPath}/Logs/old.log` }),
+            buildTestEvictTarget({ path: chatPath }),
+          ],
+        }),
+        environment: environment,
+      }),
+    ).toEqual({ kind: 'refused', path: chatPath, reason: 'protectedRoot' });
   });
 });

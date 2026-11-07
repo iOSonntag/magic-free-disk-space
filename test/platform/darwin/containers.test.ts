@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { CatalogEntry, EngineProbeId } from '../../../src/catalog/catalog.js';
 import { CONTAINER_ENTRIES } from '../../../src/platform/darwin/catalog/containers.js';
 import { CONTAINER_ENGINES } from '../../../src/platform/darwin/containerEngines.js';
+import { buildRiskAndPathById } from './catalogPins.js';
 
 function findEngineEntry(engineProbeId: EngineProbeId): CatalogEntry | undefined {
   return CONTAINER_ENTRIES.find(
@@ -10,6 +11,25 @@ function findEngineEntry(engineProbeId: EngineProbeId): CatalogEntry | undefined
 }
 
 describe('CONTAINER_ENTRIES', () => {
+  test('pins the risk and the path of every entry', () => {
+    expect(buildRiskAndPathById(CONTAINER_ENTRIES)).toEqual({
+      'docker-desktop-disk-image': [
+        'careful',
+        'Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
+      ],
+      'orbstack-disk-image': [
+        'careful',
+        'Library/Group Containers/HUAQ24HBR6.dev.orbstack/data/data.img',
+      ],
+      'colima-disk-image': ['careful', '.colima/_lima/_disks/colima/datadisk'],
+      'lima-download-cache': ['safe', 'Library/Caches/lima'],
+      'colima-download-cache': ['safe', 'Library/Caches/colima'],
+      'rancher-desktop-cache': ['review', 'Library/Caches/rancher-desktop'],
+      'tart-image-cache': ['review', '.tart/cache/OCIs'],
+      'vagrant-boxes': ['review', '.vagrant.d/boxes'],
+    });
+  });
+
   test('the Docker entry has no owner, so it is not held back while Docker runs', () => {
     expect(findEngineEntry('dockerDesktopEngine')?.owner).toBeNull();
   });

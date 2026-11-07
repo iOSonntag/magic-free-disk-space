@@ -4,11 +4,19 @@ import type {
   ExploreProbeId,
   Risk,
 } from '../../src/catalog/catalog.js';
+import type {
+  RemovalOutcomeCoded,
+  RemovalOutcomeCodedKind,
+} from '../../src/delete/deleteCandidates.js';
 import type { ExplorePathUnit } from '../../src/explore/exploreUnit.js';
 import type {
+  Advice,
   Candidate,
+  CandidateListing,
   CandidateMatched,
   CandidateProbed,
+  CandidateRemovalDeletePaths,
+  CandidateRemovalProbed,
   RemovalTarget,
   RemovalTargets,
 } from '../../src/scan/candidate.js';
@@ -81,28 +89,73 @@ export function buildTestTargetsMeasurement(params: {
   return { ...measured, targets: [{ path: params.path, identity: identity }] };
 }
 
-export function buildTestCandidate(params: {
+/** What a test may set of an item's listing; each left out has a made-up value. */
+export type TestListingParams = {
   path: string;
   title?: string;
   category?: CandidateCategory;
   risk?: Risk;
-  kind?: FileKind;
   explanation?: string;
   regeneration?: string;
   allocatedBytes?: number;
   isComplete?: boolean;
-  origin?: CandidateMatched['origin'];
   privateSizeFallbackCount?: number;
   lastUsedAtMs?: number | null;
   downloadedAtMs?: number | null;
   appName?: string | null;
-}): CandidateMatched {
+};
+
+export function buildTestCandidate(
+  params: TestListingParams & {
+    kind?: FileKind;
+    /** The real path of the one target, its path when left out. */
+    realPath?: string;
+    origin?: CandidateMatched['origin'];
+    /** The removal when the one target at `path` will not do. */
+    removal?: CandidateRemovalDeletePaths;
+  },
+): CandidateMatched {
+  return {
+    ...buildTestListing(params),
+    origin: params.origin ?? { kind: 'catalog', entryId: 'test-entry' },
+    removal: params.removal ?? {
+      kind: 'deletePaths',
+      targets: [
+        {
+          path: params.path,
+          identity: buildTestIdentity({
+            realPath: params.realPath ?? params.path,
+            kind: params.kind ?? 'directory',
+          }),
+        },
+      ],
+      ownerBundlePaths: [],
+    },
+  };
+}
+
+/** An item the probe `probe` found, removed as `removal`. */
+export function buildTestProbedCandidate(
+  params: TestListingParams & {
+    probe: ExploreProbeId;
+    removal: CandidateRemovalProbed;
+    evidenceLines?: string[];
+  },
+): CandidateProbed {
+  return {
+    ...buildTestListing(params),
+    origin: { kind: 'explore', probe: params.probe },
+    removal: params.removal,
+    evidenceLines: params.evidenceLines ?? [],
+  };
+}
+
+function buildTestListing(params: TestListingParams): CandidateListing {
   return {
     path: params.path,
     title: params.title ?? `Test item ${params.path}`,
     category: params.category ?? 'caches',
     risk: params.risk ?? 'safe',
-    origin: params.origin ?? { kind: 'catalog', entryId: 'test-entry' },
     explanation: params.explanation ?? 'A test item.',
     regeneration: params.regeneration ?? 'Rebuilt by the test.',
     allocatedBytes: params.allocatedBytes ?? 4096,
@@ -112,16 +165,39 @@ export function buildTestCandidate(params: {
     lastUsedAtMs: params.lastUsedAtMs ?? null,
     downloadedAtMs: params.downloadedAtMs ?? null,
     appName: params.appName ?? null,
-    removal: {
-      kind: 'deletePaths',
-      targets: [
-        {
-          path: params.path,
-          identity: buildTestIdentity({ realPath: params.path, kind: params.kind ?? 'directory' }),
-        },
-      ],
-      ownerBundlePaths: [],
-    },
+  };
+}
+
+/** The advice of a place at `path`, each field left out made up. */
+export function buildTestAdvice(overrides: Partial<Advice> & { path: string }): Advice {
+  return {
+    origin: { kind: 'catalog', entryId: 'test-entry' },
+    title: `Test advice ${overrides.path}`,
+    category: 'caches',
+    risk: 'review',
+    explanation: 'A place for tests.',
+    advice: 'Handle it in its own app.',
+    opener: null,
+    carvedPaths: [],
+    allocatedBytes: 4096,
+    isComplete: true,
+    ...TEST_LISTING_FACTS_NONE,
+    ...overrides,
+  };
+}
+
+/** How the removal of `candidate` ended; no code when `code` is left out. */
+export function buildTestRemovalOutcome(params: {
+  candidate: Candidate;
+  outcome: RemovalOutcomeCodedKind;
+  freedBytes: number;
+  code?: string | null;
+}): RemovalOutcomeCoded {
+  return {
+    candidate: params.candidate,
+    freedBytes: params.freedBytes,
+    outcome: params.outcome,
+    code: params.code ?? null,
   };
 }
 
@@ -193,16 +269,18 @@ export function buildTestDartToolCandidate(params: { homeDir: string }): Candida
   };
 }
 
-/**
- * A probed item of `unit` shown at `path` and deleted as `targetPaths`, as `probe` would offer
- * it; its identities are made up.
- */
-export function buildTestUnitPathsCandidate(params: {
+export type TestUnitPathsCandidateParams = {
   probe: ExploreProbeId;
   unit: ExplorePathUnit;
   path: string;
   targetPaths: RemovalTargets<string>;
-}): CandidateProbed {
+};
+
+/**
+ * A probed item of `unit` shown at `path` and deleted as `targetPaths`, as `probe` would offer
+ * it; its identities are made up.
+ */
+export function buildTestUnitPathsCandidate(params: TestUnitPathsCandidateParams): CandidateProbed {
   const [firstTargetPath, ...restTargetPaths] = params.targetPaths;
 
   return {
@@ -228,6 +306,47 @@ export function buildTestUnitPathsCandidate(params: {
 
 function buildTestTarget(path: string): RemovalTarget {
   return { path: path, identity: buildTestIdentity({ realPath: path }) };
+}
+
+/** The caches folder `folderPath` of an outdated `product` `version`, as the probe of IDE versions offers it. */
+export function buildTestIdeVersionCandidate(params: {
+  product: string;
+  version: string;
+  folderPath: string;
+}): CandidateProbed {
+  const folderPath = buildTestAbsolutePath({ text: params.folderPath });
+
+  return buildTestUnitPathsCandidate({
+    probe: 'ideVersions',
+    unit: {
+      kind: 'ideVersionFolder',
+      product: params.product,
+      version: params.version,
+      folderKind: 'caches',
+      folderPath: folderPath,
+      foundPaths: [folderPath],
+    },
+    path: params.folderPath,
+    targetPaths: [params.folderPath],
+  });
+}
+
+/** The one old installer at `installerPath` in `downloadsPath`, as the probe of installers offers it. */
+export function buildTestInstallersCandidate(params: {
+  downloadsPath: string;
+  installerPath: string;
+}): CandidateProbed {
+  return buildTestUnitPathsCandidate({
+    probe: 'downloadsInstallers',
+    unit: {
+      kind: 'downloadsInstallers',
+      folderPath: buildTestAbsolutePath({ text: params.downloadsPath }),
+      cutoffMs: 0,
+      foundFiles: [{ path: buildTestAbsolutePath({ text: params.installerPath }), modifiedMs: 0 }],
+    },
+    path: params.downloadsPath,
+    targetPaths: [params.installerPath],
+  });
 }
 
 /**

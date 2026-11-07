@@ -1,9 +1,8 @@
 # magic-free-disk-space
 
 Finds the storage leftovers on a Mac, sorts them into sections, and permanently deletes the ones
-you select. Nothing is deleted unless you pick it and confirm: the command line tool asks you to
-type `DELETE`, and the app asks in an alert, which asks for `DELETE` too when what you picked
-does not come back.
+you select. Nothing is deleted unless you pick it and confirm, as
+[How it keeps you safe](#how-it-keeps-you-safe) describes.
 
 It looks where space hides, for developers and for everyone else, in these sections:
 
@@ -167,17 +166,13 @@ bun run app:run        # build and start a debug version
   freed, and a card for each section with its size and its number of items. Each section that
   holds anything has a page of its own. It groups its items as "Safe to remove", "Review first",
   and "Can't be undone", and each item shows its size, its last use, and its path, its
-  explanation, and "Reveal in Finder". The items a developer tool owns sit in their section, as
-  they would under Explore in the CLI.
+  explanation, and "Reveal in Finder".
 - "Clean safe items" on the Overview ticks the items `safe` selects and opens the confirmation at
   once. It never holds an item that does not come back.
-- The selection holds across the pages. Its plan opens a Review page, and Delete opens an alert
-  that names what goes. When the plan holds a `careful` item, the alert also asks you to type
-  `DELETE`. The result names the space freed and each item kept, with its reason. Space that
-  Docker frees inside its disk image comes back to macOS within minutes, and the result says so.
-- "Handled by its own app" holds the places only their own app can clean, with the step in that
-  app and a button that opens it, or its pane of System Settings for Storage, iCloud, and Time
-  Machine.
+- The selection holds across the pages. Its plan opens a Review page, and Delete asks for the
+  confirmation [How it keeps you safe](#how-it-keeps-you-safe) describes. The result names the
+  space freed and each item that stayed, whole or in part, with its reason.
+- "Handled by its own app" has a page too, with the places the sections above name.
 - A scan older than an hour must be redone before anything is deleted, since the app may stay
   open for days.
 - Full Disk Access goes to the app, not the terminal. At start the app checks whether it has it;
@@ -236,10 +231,10 @@ bun run app:run        # build and start a debug version
   read again, so an app opened during the scan keeps its data. If they cannot be read, every
   app-owned item is held back.
 - **Tools remove what they own.** Items that a developer tool owns, such as a simulator, an
-  Android emulator, or an old Homebrew version, are listed under Explore, or in their section in
-  the app, with the reasons the tool gave, and the plan names the command that removes each. An item whose tool has no command
-  for it, such as an Android system image or an old VS Code extension, is deleted as its folder,
-  under the same guards as every other folder. They are never selected for you, not even by
+  Android emulator, or an old Homebrew version, are listed with the reasons the tool gave, and
+  the plan names the command that removes each. An item whose tool has no command for it, such as
+  an Android system image or an old VS Code extension, is deleted as its folder, under the same
+  guards as every other folder. They are never selected for you, not even by
   "safe". A tool counts only from a known install location, never from `PATH`, and only when it
   is owned by you or root and nobody else can change it. Right before its command runs or its
   folder is deleted, the item is checked again: a changed item, or one whose app or tool is busy,
@@ -263,8 +258,8 @@ bun run app:run        # build and start a debug version
   item, the command before it runs, and its exit code, the end of its error output, and the space
   it freed after. If the log cannot be written, the run stops.
 - **Interactive only.** The CLI deletes only in a terminal; a piped or scripted run is refused
-  before the scan. `--list` and `--dry-run` never delete. The app deletes exactly the plan its
-  alert showed.
+  before the scan. `--list` and `--dry-run` never delete. The app deletes exactly the plan you
+  confirmed.
 
 ## Privacy
 
@@ -324,7 +319,8 @@ such as Photos, or with `-R` and an item's path to show it in Finder.
   The tool deletes nothing in iCloud Drive's own folder, but a folder such as Desktop or
   Documents may sync to it too.
 - Space Docker frees lies inside its disk image, which macOS gets back within minutes, not at
-  once. While no engine runs, the scan shows only the disk image's size, with advice.
+  once; the result of a deletion says so. While no engine runs, the scan shows only the disk
+  image's size, with advice.
 - Docker's images used by more than one name, and volumes whose size or use the engine does not
   report, are not offered.
 - A disk mounted inside a folder after the scan, or in a part of it the scan could not read,

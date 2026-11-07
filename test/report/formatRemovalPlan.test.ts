@@ -4,9 +4,9 @@ import type { Candidate } from '../../src/scan/candidate.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 import {
   buildTestEvictCandidate,
@@ -18,29 +18,15 @@ function buildCandidate(params: {
   allocatedBytes: number;
   isComplete: boolean;
 }): Candidate {
-  return {
+  return buildTestCandidate({
     path: params.path,
     title: 'Derived data',
     category: 'developer',
-    risk: 'safe',
-    origin: { kind: 'catalog', entryId: 'test-entry' },
     explanation: 'Build products.',
     regeneration: 'Rebuilt by the next build.',
     allocatedBytes: params.allocatedBytes,
-    entryCount: 1,
     isComplete: params.isComplete,
-    ...TEST_LISTING_FACTS_NONE,
-    removal: {
-      kind: 'deletePaths',
-      targets: [
-        {
-          path: params.path,
-          identity: { dev: 1n, ino: 1n, birthtimeNs: 1n, kind: 'directory', realPath: params.path },
-        },
-      ],
-      ownerBundlePaths: [],
-    },
-  };
+  });
 }
 
 describeAwaitingWin32Platform('formatRemovalPlan', () => {
@@ -59,8 +45,8 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'This item will be deleted permanently, 1.0 kB in total:',
-      '- 1.0 kB /fixture/clip\\u{1b}[1A\\u{1b}[2K.mov',
+      'This item will be deleted permanently, 1.0 KB in total:',
+      '- 1.0 KB /fixture/clip\\u{1b}[1A\\u{1b}[2K.mov',
       '',
       'Refused 1 selected item:',
       '- 2. /fixture/a\\u{d}b: a protected folder',
@@ -85,9 +71,9 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'These 2 items will be deleted permanently, 3.0 kB in total:',
-      '- 1.0 kB /fixture/a',
-      '- 2.0 kB /fixture/b',
+      'These 2 items will be deleted permanently, 3.0 KB in total:',
+      '- 1.0 KB /fixture/a',
+      '- 2.0 KB /fixture/b',
     ]);
   });
 
@@ -108,9 +94,9 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'These 2 items will be deleted permanently, 3.0 kB in total:',
-      '- 1.0 kB /fixture/a',
-      '- 2.0 kB /fixture/home/.local/share/mise/installs/node/20.1.0',
+      'These 2 items will be deleted permanently, 3.0 KB in total:',
+      '- 1.0 KB /fixture/a',
+      '- 2.0 KB /fixture/home/.local/share/mise/installs/node/20.1.0',
       '   by running: mise uninstall node@20.1.0',
     ]);
   });
@@ -132,8 +118,8 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'This item will be deleted permanently, 4.1 kB in total:',
-      '- 4.1 kB /Users/example/.vscode/extensions/example.alpha-1.0.0',
+      'This item will be deleted permanently, 4.1 KB in total:',
+      '- 4.1 KB /Users/example/.vscode/extensions/example.alpha-1.0.0',
     ]);
   });
 
@@ -153,8 +139,8 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'This item will be removed from this Mac, 1.0 kB in total; iCloud Drive keeps the files:',
-      `- 1.0 kB ${folderPath}`,
+      'This item will be removed from this Mac, 1.0 KB in total; iCloud Drive keeps the files:',
+      `- 1.0 KB ${folderPath}`,
       '   evicted from this Mac; iCloud Drive keeps the files',
     ]);
   });
@@ -176,7 +162,7 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines[0]).toBe(
-      'These 2 items will be removed from this Mac, 2.0 kB in total; iCloud Drive keeps the evicted files, and the rest is deleted permanently:',
+      'These 2 items will be removed from this Mac, 2.0 KB in total; iCloud Drive keeps the evicted files, and the rest is deleted permanently:',
     );
   });
 
@@ -188,7 +174,7 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
       },
     });
 
-    expect(lines[1]).toBe('- at least 1.0 kB /fixture/a');
+    expect(lines[1]).toBe('- at least 1.0 KB /fixture/a');
   });
 
   test('shows refused items after a blank line when nothing of the selection is approved', () => {
@@ -222,8 +208,8 @@ describeAwaitingWin32Platform('formatRemovalPlan', () => {
     });
 
     expect(lines).toEqual([
-      'This item will be deleted permanently, 1.0 kB in total:',
-      '- 1.0 kB /fixture/ok',
+      'This item will be deleted permanently, 1.0 KB in total:',
+      '- 1.0 KB /fixture/ok',
       '',
       'Refused 5 selected items:',
       '- 1. /fixture/a: marked never-delete',

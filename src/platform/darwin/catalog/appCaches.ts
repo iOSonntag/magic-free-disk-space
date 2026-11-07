@@ -1,4 +1,5 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
+import { MAIL_DOWNLOADS_ROOT_PATH_NAMES } from '../appleDataRoots.js';
 import { buildBundleIdOwner } from './buildBundleIdOwner.js';
 
 /** The caches and downloads of everyday apps, such as Spotify, Slack, and Zoom. */
@@ -215,7 +216,7 @@ export const APP_CACHE_ENTRIES: CatalogEntry[] = [
     regeneration: 'Mail makes a new copy when you open the attachment again.',
     risk: 'review',
     root: 'home',
-    path: 'Library/Containers/com.apple.mail/Data/Library/Mail Downloads',
+    path: MAIL_DOWNLOADS_ROOT_PATH_NAMES.join('/'),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: buildBundleIdOwner({ text: 'com.apple.mail' }),

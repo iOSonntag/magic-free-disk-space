@@ -85,8 +85,9 @@ export const AI_MODEL_ENTRIES: CatalogEntry[] = [
     category: 'aiModels',
     title: 'Hugging Face Xet cache',
     explanation:
-      'Pieces of files the Xet storage of Hugging Face kept while it downloaded them. The downloaded files themselves stay.',
-    regeneration: 'Xet keeps new pieces during the next download.',
+      'Lists of file parts that the Xet storage of Hugging Face keeps for a few weeks to skip the parts it already uploaded, and the work of an upload that stopped. Your downloaded models and datasets stay.',
+    regeneration:
+      'Xet fetches the lists again on the next upload, and a stopped upload starts over.',
     risk: 'safe',
     root: 'home',
     path: '.cache/huggingface/xet',

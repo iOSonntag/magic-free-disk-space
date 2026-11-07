@@ -1,15 +1,15 @@
 import { expect, test } from 'bun:test';
-import type { ExplorePathUnit } from '../../src/explore/exploreUnit.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestAdvice,
+  buildTestCandidate,
+  buildTestIdeVersionCandidate,
+  buildTestInstallersCandidate,
   buildTestToolCandidate,
-  buildTestUnitPathsCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 const HUGGING_FACE_HUB_PATH = '/home/.cache/huggingface/hub';
 const JETBRAINS_CACHES_PATH = '/home/Library/Caches/JetBrains';
@@ -57,7 +57,7 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     const skip: CandidateDecision = {
       kind: 'skip',
       path: '/home/.local/share/mise/installs/node/20.1.0/lib',
-      reason: 'recentActivity',
+      reason: 'ownerRunning',
     };
     const toolOffer: CandidateDecision = {
       kind: 'offer',
@@ -69,6 +69,48 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
       path: '/home/.local/share/mise/installs/node/20.1.0',
       reason: 'overlapsEarlierCandidate',
     });
+  });
+
+  test('keeps a probed unit whose targets a skip for recent use names, since its probe judged their age', () => {
+    const installerPath = '/home/Downloads/Example-1.0.dmg';
+    const recentLargeFile: CandidateDecision = {
+      kind: 'skip',
+      path: installerPath,
+      reason: 'recentUse',
+    };
+    const installersOffer: CandidateDecision = {
+      kind: 'offer',
+      candidate: buildTestInstallersCandidate({
+        downloadsPath: '/home/Downloads',
+        installerPath: installerPath,
+      }),
+    };
+
+    expect(dedupe({ decisions: [recentLargeFile, installersOffer] })).toEqual([
+      recentLargeFile,
+      installersOffer,
+    ]);
+  });
+
+  test('still holds a probed unit back behind a skip that protects its target', () => {
+    const installerPath = '/home/Downloads/Example-1.0.dmg';
+    const protectedSkip: CandidateDecision = {
+      kind: 'skip',
+      path: installerPath,
+      reason: 'protectedPath',
+    };
+    const installersOffer: CandidateDecision = {
+      kind: 'offer',
+      candidate: buildTestInstallersCandidate({
+        downloadsPath: '/home/Downloads',
+        installerPath: installerPath,
+      }),
+    };
+
+    expect(dedupe({ decisions: [protectedSkip, installersOffer] })).toEqual([
+      protectedSkip,
+      { kind: 'skip', path: '/home/Downloads', reason: 'overlapsEarlierCandidate' },
+    ]);
   });
 
   test('skips an offer whose real path equals an earlier offer', () => {
@@ -317,16 +359,9 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     const installerPath = `${downloadsPath}/old-installer.dmg`;
     const installersOffer: CandidateDecision = {
       kind: 'offer',
-      candidate: buildTestUnitPathsCandidate({
-        probe: 'downloadsInstallers',
-        unit: {
-          kind: 'downloadsInstallers',
-          folderPath: buildTestAbsolutePath({ text: downloadsPath }),
-          cutoffMs: 0,
-          foundFiles: [{ path: buildTestAbsolutePath({ text: installerPath }), modifiedMs: 0 }],
-        },
-        path: downloadsPath,
-        targetPaths: [installerPath],
+      candidate: buildTestInstallersCandidate({
+        downloadsPath: downloadsPath,
+        installerPath: installerPath,
       }),
     };
 
@@ -365,22 +400,12 @@ function dedupe(params: {
 
 /** The caches folder of an outdated IntelliJ IDEA, as the probe of IDE versions offers it. */
 function buildIdeCacheUnitDecision(): CandidateDecision {
-  const unit: ExplorePathUnit = {
-    kind: 'ideVersionFolder',
-    product: 'IntelliJIdea',
-    version: '2024.1',
-    folderKind: 'caches',
-    folderPath: buildTestAbsolutePath({ text: OUTDATED_IDE_CACHE_PATH }),
-    foundPaths: [buildTestAbsolutePath({ text: OUTDATED_IDE_CACHE_PATH })],
-  };
-
   return {
     kind: 'offer',
-    candidate: buildTestUnitPathsCandidate({
-      probe: 'ideVersions',
-      unit: unit,
-      path: OUTDATED_IDE_CACHE_PATH,
-      targetPaths: [OUTDATED_IDE_CACHE_PATH],
+    candidate: buildTestIdeVersionCandidate({
+      product: 'IntelliJIdea',
+      version: '2024.1',
+      folderPath: OUTDATED_IDE_CACHE_PATH,
     }),
   };
 }
@@ -388,54 +413,23 @@ function buildIdeCacheUnitDecision(): CandidateDecision {
 function buildOfferDecision(params: { path: string; realPath: string }): CandidateDecision {
   return {
     kind: 'offer',
-    candidate: {
+    candidate: buildTestCandidate({
       path: params.path,
-      title: 'Fixture cache',
-      category: 'caches',
-      risk: 'safe',
-      origin: { kind: 'catalog', entryId: 'test-entry' },
-      explanation: 'Fixture explanation.',
-      regeneration: 'Fixture regeneration.',
+      realPath: params.realPath,
+      kind: 'directory',
       allocatedBytes: 1024,
-      entryCount: 1,
-      isComplete: true,
-      ...TEST_LISTING_FACTS_NONE,
-      removal: {
-        kind: 'deletePaths',
-        targets: [
-          {
-            path: params.path,
-            identity: {
-              dev: 1n,
-              ino: 1n,
-              birthtimeNs: 1n,
-              kind: 'directory',
-              realPath: params.realPath,
-            },
-          },
-        ],
-        ownerBundlePaths: [],
-      },
-    },
+    }),
   };
 }
 
 function buildAdviceDecision(params: { path: string; carvedPaths?: string[] }): CandidateDecision {
   return {
     kind: 'advice',
-    advice: {
-      origin: { kind: 'catalog', entryId: 'test-entry' },
+    advice: buildTestAdvice({
       path: params.path,
-      title: 'Fixture advice',
       category: 'system',
       risk: 'never',
-      explanation: 'Fixture explanation.',
-      advice: 'Fixture advice text.',
-      opener: null,
       carvedPaths: params.carvedPaths ?? [],
-      allocatedBytes: 1024,
-      isComplete: true,
-      ...TEST_LISTING_FACTS_NONE,
-    },
+    }),
   };
 }

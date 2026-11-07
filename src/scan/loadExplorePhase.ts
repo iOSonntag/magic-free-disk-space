@@ -29,8 +29,8 @@ import {
   hasSymbolicLinkTarget,
   loadMeasuredTargetsPhase,
 } from './loadMeasuredTargetsPhase.js';
-import type { UnitMeasurement } from './loadUnitMeasurement.js';
-import { loadUnitMeasurement } from './loadUnitMeasurement.js';
+import type { PathMeasurement } from './loadPathMeasurement.js';
+import { loadPathMeasurement } from './loadPathMeasurement.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
 
@@ -259,7 +259,7 @@ async function loadIdleFindingPhase(params: {
     case 'engineImage':
     case 'engineContainer':
     case 'engineVolume':
-      return Promise.resolve(loadEngineFindingPhase({ ...params, unit: unit }));
+      return loadEngineFindingPhase({ ...params, unit: unit });
   }
 }
 
@@ -277,8 +277,8 @@ async function loadToolFindingPhase(params: {
   entryReads: EntryReads;
 }): Promise<ScanPhase> {
   const measurement = await params.runItemMeasurement(() =>
-    loadUnitMeasurement({
-      unit: params.unit,
+    loadPathMeasurement({
+      paths: listUnitPaths(params.unit),
       deadlineMs: Date.now() + params.measureTimeoutMs,
       entryReads: params.entryReads,
     }),
@@ -435,7 +435,7 @@ function buildExploreCandidate(params: {
   removal: CandidateRemovalProbed;
   category: CandidateCategory;
   measurement: Pick<
-    UnitMeasurement,
+    PathMeasurement,
     'allocatedBytes' | 'entryCount' | 'isComplete' | 'privateSizeFallbackCount'
   >;
 }): CandidateProbed {

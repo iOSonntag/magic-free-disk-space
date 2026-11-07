@@ -1,24 +1,12 @@
 import { expect, test } from 'bun:test';
 import type { RemovalPlan } from '../../src/delete/planRemoval.js';
 import { planRemoval } from '../../src/delete/planRemoval.js';
-import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
 import type { Candidate } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../support/candidateFixtures.js';
-import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
+import { buildTestMacEnvironment } from '../support/fixtureRoot.js';
 
-const ENVIRONMENT = buildDarwinEnvironment({
-  nowMs: 0,
-  user: buildTestUserIdentity({ uid: 501 }),
-  homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
-  homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
-  tempDir: buildTestAbsolutePath({ text: '/private/tmp/tester' }),
-  tempRealPath: buildTestAbsolutePath({ text: '/private/tmp/tester' }),
-  userCacheDir: buildTestAbsolutePath({ text: '/private/tmp/tester-cache' }),
-  userCacheRealPath: buildTestAbsolutePath({ text: '/private/tmp/tester-cache' }),
-  applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
-  applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
-});
+const ENVIRONMENT = buildTestMacEnvironment();
 
 const VALID_CANDIDATES: Candidate[] = [1, 2, 3, 4, 5, 6].map((index) =>
   buildTestCandidate({ path: `/Users/tester/Library/Caches/com.example.app${index}` }),
@@ -31,7 +19,7 @@ const MIXED_CANDIDATES: Candidate[] = [
   buildTestCandidate({ path: '/Users/tester/Downloads/three.zip', kind: 'file' }),
   buildTestCandidate({ path: '/Users/tester/.cache/four' }),
   buildTestCandidate({ path: '/Applications/Xcode.app', risk: 'never' }),
-  buildTestCandidate({ path: '/private/tmp/tester/six' }),
+  buildTestCandidate({ path: '/private/var/folders/xy/abc/T/six' }),
 ];
 
 function buildAllSelections(count: number): number[][] {

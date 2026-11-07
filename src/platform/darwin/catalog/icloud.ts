@@ -1,4 +1,5 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
+import { ICLOUD_DRIVE_ROOT_PATH_NAMES } from '../appleDataRoots.js';
 
 /** iCloud Drive files kept on this Mac. */
 export const ICLOUD_ENTRIES: CatalogEntry[] = [
@@ -11,7 +12,7 @@ export const ICLOUD_ENTRIES: CatalogEntry[] = [
     regeneration: 'Downloaded again from iCloud Drive when a file is opened.',
     risk: 'review',
     root: 'home',
-    path: 'Library/Mobile Documents',
+    path: ICLOUD_DRIVE_ROOT_PATH_NAMES.join('/'),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,

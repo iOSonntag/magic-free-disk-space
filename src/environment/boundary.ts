@@ -8,6 +8,6 @@ export const moduleBoundary = {
     'buildEnvironment.ts',
     'checkEnvironmentRoots.ts',
     'environmentPlatform.ts',
-    'isTouchingProtectedPath.ts',
+    'findTargetRefusal.ts',
   ],
 } satisfies ModuleBoundary;

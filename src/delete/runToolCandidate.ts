@@ -1,12 +1,11 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ExploreProbeFailure, ExploreToolUnit } from '../explore/exploreUnit.js';
-import { buildUnitCommand } from '../explore/exploreUnit.js';
+import { buildUnitCommand, listUnitPaths } from '../explore/exploreUnit.js';
 import { recheckExploreUnit } from '../explore/recheckExploreUnit.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
-import { getMeasuredFreedBytes } from '../scan/loadPathMeasurement.js';
-import type { UnitMeasurement } from '../scan/loadUnitMeasurement.js';
-import { loadUnitMeasurement } from '../scan/loadUnitMeasurement.js';
+import type { PathMeasurement } from '../scan/loadPathMeasurement.js';
+import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
 import type { EntryReads } from '../system/entryReads.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
@@ -56,8 +55,8 @@ export async function runToolCandidate(params: {
   loadProcessCommands: () => Promise<string[] | null>;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
-  const before = await loadUnitMeasurement({
-    unit: params.unit,
+  const before = await loadPathMeasurement({
+    paths: listUnitPaths(params.unit),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
   });
@@ -105,7 +104,7 @@ async function runCheckedUnitCommand(params: {
   tool: LocatedTool;
   environment: Environment;
   entryReads: EntryReads;
-  before: UnitMeasurement;
+  before: PathMeasurement;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
   const command = await runToolCommand({
@@ -115,8 +114,8 @@ async function runCheckedUnitCommand(params: {
     tempDir: params.environment.tempDir,
     timeoutMs: params.timeoutMs,
   });
-  const after = await loadUnitMeasurement({
-    unit: params.unit,
+  const after = await loadPathMeasurement({
+    paths: listUnitPaths(params.unit),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
   });

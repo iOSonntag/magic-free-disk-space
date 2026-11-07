@@ -15,7 +15,6 @@ export const moduleBoundary = {
     'loadDirectoryEntries.ts',
     'loadDirectoryNames.ts',
     'loadEntryStats.ts',
-    'loadEntryTimes.ts',
     'loadFileBytes.ts',
     'loadFileIdentity.ts',
     'loadFileText.ts',

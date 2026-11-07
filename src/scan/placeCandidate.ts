@@ -45,10 +45,10 @@ export const CONSUMER_SECTION_ORDER: ConsumerSection[] = [
   'projects',
   'containers',
   'aiModels',
-  'downloads',
-  'icloud',
   'apps',
+  'downloads',
   'largeFiles',
+  'icloud',
   'trash',
   'ownApp',
 ];

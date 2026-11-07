@@ -28,8 +28,6 @@ export async function callEngineCandidate(params: {
   return {
     outcome: {
       candidate: params.candidate,
-      path: params.candidate.path,
-      allocatedBytes: params.candidate.allocatedBytes,
       freedBytes: call.freedBytes,
       outcome: call.outcome,
       code: call.code,

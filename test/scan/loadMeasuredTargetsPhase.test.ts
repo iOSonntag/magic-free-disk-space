@@ -104,16 +104,12 @@ describeAwaitingWin32Platform('loadMeasuredTargetsPhase', () => {
     await createFixtureFile({ path: lockedPath, sizeBytes: 16, modifiedMs: MODIFIED_MS });
     await chmod(lockedFolder, 0o000);
 
-    try {
-      const { phase, measurements } = await loadPhase([firstPath, lockedPath]);
+    const { phase, measurements } = await loadPhase([firstPath, lockedPath]);
 
-      expect(phase.decisions).toEqual([]);
-      expect(phase.issues).toEqual([
-        expect.objectContaining({ path: lockedPath, reason: 'permissionDenied' }),
-      ]);
-      expect(measurements).toEqual([]);
-    } finally {
-      await chmod(lockedFolder, 0o755);
-    }
+    expect(phase.decisions).toEqual([]);
+    expect(phase.issues).toEqual([
+      expect.objectContaining({ path: lockedPath, reason: 'permissionDenied' }),
+    ]);
+    expect(measurements).toEqual([]);
   });
 });

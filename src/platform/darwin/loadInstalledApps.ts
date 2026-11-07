@@ -4,14 +4,13 @@ import type { MacBundleId } from '../../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../../catalog/catalogOwner.js';
 import type { Result } from '../../result.js';
 import { buildFailureIssues } from '../../scan/buildReadIssue.js';
-import { isMacosInstallerBundleId } from '../../scan/decideInstallerCandidate.js';
 import type { ScanIssue } from '../../scan/issue.js';
-import type { InstalledApp } from '../../scan/scanPlatform.js';
+import type { InstalledApp, SystemInstaller } from '../../scan/scanPlatform.js';
 import type { CommandFailure } from '../../system/loadCommandOutput.js';
-import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../../system/loadDirectoryNames.js';
 import { loadEntryStats } from '../../system/loadEntryStats.js';
 import { DARWIN_PRIVACY_DENIAL_CODE } from './loadFullDiskAccess.js';
+import { loadPlistValue } from './loadPlistValue.js';
 
 type AppBundleSearch = {
   bundlePaths: string[];
@@ -35,6 +34,12 @@ const FALLBACK_INFO_PLIST_RELATIVE_PATHS = [`${WRAPPED_BUNDLE_NAME}/Info.plist`,
  * `Frameworks/X.framework/Versions/A/XPCServices/Y.xpc`, whose container must not look orphaned.
  */
 const NESTED_BUNDLE_MAX_DEPTH = 6;
+
+/**
+ * The bundle id every "Install macOS" app carries, whose name changes with each release; the one
+ * sign an app is an installer, as Mole's `lib/clean/system.sh` matches it.
+ */
+const MACOS_INSTALLER_BUNDLE_ID_TEXT = 'com.apple.InstallAssistant';
 
 /**
  * Lists the apps in the app folders and in the vendor folders one level down. Failures are
@@ -75,12 +80,13 @@ export async function loadInstalledApps(params: {
       displayName: basename(bundlePath).slice(0, -APP_BUNDLE_SUFFIX.length),
       bundleId: bundleId,
       nestedBundleIds: nested.bundleIds,
-      builtForSystemVersion: isMacosInstallerBundleId(bundleId)
-        ? await loadBuiltForSystemVersion({
-            bundlePath: bundlePath,
-            commandTimeoutMs: params.commandTimeoutMs,
-          })
-        : null,
+      systemInstaller:
+        bundleId === MACOS_INSTALLER_BUNDLE_ID_TEXT
+          ? await loadSystemInstaller({
+              bundlePath: bundlePath,
+              commandTimeoutMs: params.commandTimeoutMs,
+            })
+          : null,
       ownerUid: await loadOwnerUid({ path: bundlePath }),
     });
   }
@@ -167,34 +173,23 @@ function isAppBundleName(params: { name: string }): boolean {
 }
 
 /**
- * The macOS an installer installs, from the SDK platform version its Info.plist names: Apple
- * documents no key for it, and Mole's `lib/clean/system.sh` reads this one (`PlistBuddy -c "Print
- * :DTPlatformVersion"`) to tell an installer of the running release. `null` when it has none.
+ * A macOS installer, with the macOS it installs from the SDK platform version its Info.plist
+ * names: Apple documents no key for it, and Mole's `lib/clean/system.sh` reads this one
+ * (`PlistBuddy -c "Print :DTPlatformVersion"`) to tell an installer of the running release.
  */
-async function loadBuiltForSystemVersion(params: {
+async function loadSystemInstaller(params: {
   bundlePath: string;
   commandTimeoutMs: number;
-}): Promise<string | null> {
-  const output = await loadCommandOutput({
-    command: 'plutil',
-    args: [
-      '-extract',
-      'DTPlatformVersion',
-      'raw',
-      '-o',
-      '-',
-      join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
-    ],
+}): Promise<SystemInstaller> {
+  const version = await loadPlistValue({
+    plistPath: join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
+    key: 'DTPlatformVersion',
     timeoutMs: params.commandTimeoutMs,
   });
 
-  if (output.kind === 'failed') {
-    return null;
-  }
-
-  const version = output.value.trim();
-
-  return version === '' ? null : version;
+  return {
+    builtForSystemVersion: version.kind === 'failed' || version.value === '' ? null : version.value,
+  };
 }
 
 /** The user that owns the bundle itself, never a link's target; `null` when it cannot be read. */
@@ -238,17 +233,17 @@ async function loadInfoPlistBundleId(params: {
   infoPlistPath: string;
   commandTimeoutMs: number;
 }): Promise<Result<MacBundleId, CommandFailure>> {
-  const plutilResult = await loadCommandOutput({
-    command: 'plutil',
-    args: ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', params.infoPlistPath],
+  const bundleId = await loadPlistValue({
+    plistPath: params.infoPlistPath,
+    key: 'CFBundleIdentifier',
     timeoutMs: params.commandTimeoutMs,
   });
 
-  if (plutilResult.kind === 'failed') {
-    return plutilResult;
+  if (bundleId.kind === 'failed') {
+    return bundleId;
   }
 
-  return { kind: 'succeeded', value: parseMacBundleId({ text: plutilResult.value.trim() }) };
+  return { kind: 'succeeded', value: parseMacBundleId({ text: bundleId.value }) };
 }
 
 /**

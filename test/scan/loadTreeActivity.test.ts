@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -27,7 +28,7 @@ async function updateModifiedMsInOrder(params: {
   modifiedMs: number;
 }): Promise<void> {
   for (const path of params.paths) {
-    await updateModifiedMs({ path, modifiedMs: params.modifiedMs });
+    await updateModifiedMs({ path: path, modifiedMs: params.modifiedMs });
   }
 }
 
@@ -153,10 +154,10 @@ describeAwaitingWin32Platform('loadTreeActivity', () => {
       excludedNames: [],
       maxEntries: 10_000,
       deadlineMs: Date.now() + 60_000,
-      entryReads: {
+      entryReads: buildTestEntryReads({
+        privateBytes: null,
         isEntryEvicted: (entry) => entry.path === evictedDirPath,
-        loadPrivateBytes: () => null,
-      },
+      }),
     });
 
     expect(activity).toBe('quiet');

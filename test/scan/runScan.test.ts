@@ -1,16 +1,31 @@
 import { expect, test } from 'bun:test';
+import { dirname, join } from 'node:path';
+import type { CatalogEntry } from '../../src/catalog/catalog.js';
+import { CATALOG_ENTRIES } from '../../src/platform/darwin/catalogEntries.js';
+import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
-import type { ScanReport } from '../../src/scan/runScan.js';
+import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
+import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
 import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import type { TestUnitPathsCandidateParams } from '../support/candidateFixtures.js';
 import {
+  buildTestAdvice,
   buildTestCandidate,
+  buildTestIdeVersionCandidate,
+  buildTestInstallersCandidate,
   buildTestUnitPathsCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
-import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
+import {
+  buildTestPathEnvironment,
+  createFixtureDirectory,
+  createFixtureFile,
+  loadTestEnvironment,
+  withFixtureRoot,
+} from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { runTestScan } from '../support/scanRunFixtures.js';
 
 const HOME_DIR = '/Users/example';
 
@@ -28,20 +43,16 @@ const DOWNLOADS_PATH = `${HOME_DIR}/Downloads`;
 
 const INSTALLER_PATH = `${DOWNLOADS_PATH}/Example-1.0.dmg`;
 
-const vscodeAdvice: Advice = {
+const MIB = 1024 * 1024;
+
+const vscodeAdvice: Advice = buildTestAdvice({
   origin: { kind: 'catalog', entryId: 'vscode-extensions' },
   path: `${HOME_DIR}/.vscode/extensions`,
   title: 'VS Code extensions',
   category: 'developer',
-  risk: 'review',
-  explanation: 'Extensions VS Code installed.',
   advice: 'Uninstall the extensions you no longer use in VS Code.',
-  opener: null,
-  carvedPaths: [],
   allocatedBytes: 65_536,
-  isComplete: true,
-  ...TEST_LISTING_FACTS_NONE,
-};
+});
 
 const vscodeCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR });
 
@@ -167,17 +178,13 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
   test('keeps a large file in Downloads that no unit names, while an installer a unit names gives way', () => {
     const largeFile = buildUserFileOffer({ path: `${DOWNLOADS_PATH}/archive.iso` });
     const installerFile = buildUserFileOffer({ path: INSTALLER_PATH });
-    const installersOffer = buildUnitOffer({
-      probe: 'downloadsInstallers',
-      unit: {
-        kind: 'downloadsInstallers',
-        folderPath: buildTestAbsolutePath({ text: DOWNLOADS_PATH }),
-        cutoffMs: 0,
-        foundFiles: [{ path: buildTestAbsolutePath({ text: INSTALLER_PATH }), modifiedMs: 0 }],
-      },
-      path: DOWNLOADS_PATH,
-      targetPaths: [INSTALLER_PATH],
-    });
+    const installersOffer: CandidateDecision = {
+      kind: 'offer',
+      candidate: buildTestInstallersCandidate({
+        downloadsPath: DOWNLOADS_PATH,
+        installerPath: INSTALLER_PATH,
+      }),
+    };
 
     const report = buildReportOfPhases({
       reservedEntryPaths: [DOWNLOADS_PATH],
@@ -209,6 +216,63 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
     expect(report.skipped).toEqual([
       { path: `${DOWNLOADS_PATH}/archive.iso`, reason: 'overlapsEarlierCandidate' },
     ]);
+  });
+});
+
+describeAwaitingWin32Platform('runScan', () => {
+  test('never shows a section larger while it scans than the report makes it, for a folder a probe claims', async () => {
+    await withFixtureRoot({
+      run: async (fixtureRoot) => {
+        const cachesPath = join(fixtureRoot.homeDir, 'Library/Caches');
+        const jetBrainsCachesPath = join(cachesPath, 'JetBrains');
+        const outdatedCachePath = join(jetBrainsCachesPath, 'IntelliJIdea2023.3');
+        const files = [
+          { path: join(cachesPath, 'com.example.app/cache.db'), sizeBytes: 2 * MIB },
+          { path: join(outdatedCachePath, 'index.dat'), sizeBytes: 2 * MIB },
+          { path: join(jetBrainsCachesPath, 'IntelliJIdea2024.1/index.dat'), sizeBytes: 4096 },
+          {
+            path: join(
+              fixtureRoot.homeDir,
+              'Library/Application Support/JetBrains/IntelliJIdea2024.1/options.xml',
+            ),
+            sizeBytes: 4096,
+          },
+        ];
+
+        for (const file of files) {
+          await createFixtureDirectory({ path: dirname(file.path) });
+          await createFixtureFile({
+            path: file.path,
+            sizeBytes: file.sizeBytes,
+            modifiedMs: Date.UTC(2026, 0, 1),
+          });
+        }
+
+        const progress: ScanProgress[] = [];
+        const report = await runTestScan({
+          environment: await loadTestEnvironment({
+            fixtureRoot: fixtureRoot,
+            nowMs: Date.UTC(2026, 6, 1),
+          }),
+          catalogEntries: [
+            findCatalogEntry('user-caches'),
+            findCatalogEntry('jetbrains-ide-versions'),
+          ],
+          onProgress: (step) => progress.push(step),
+        });
+        const finalBytes = buildFinalSectionBytes(report);
+
+        expect(listOfferedPaths(report)).toContain(outdatedCachePath);
+        expect(report.skipped).toContainEqual({ path: jetBrainsCachesPath, reason: 'heldByProbe' });
+        expect(progress.length).toBeGreaterThan(0);
+
+        for (const step of progress) {
+          for (const total of step.found) {
+            expect(total.allocatedBytes).toBeLessThanOrEqual(finalBytes.get(total.sectionKey) ?? 0);
+          }
+        }
+      },
+    });
   });
 });
 
@@ -251,25 +315,35 @@ function buildUserFileOffer(params: { path: string }): CandidateDecision {
   };
 }
 
-function buildUnitOffer(
-  params: Parameters<typeof buildTestUnitPathsCandidate>[0],
-): CandidateDecision {
+function buildUnitOffer(params: TestUnitPathsCandidateParams): CandidateDecision {
   return { kind: 'offer', candidate: buildTestUnitPathsCandidate(params) };
 }
 
 /** The caches folder of an outdated version of `product`, as the probe of IDE versions offers it. */
 function buildIdeVersionOffer(params: { product: string; folderPath: string }): CandidateDecision {
-  return buildUnitOffer({
-    probe: 'ideVersions',
-    unit: {
-      kind: 'ideVersionFolder',
+  return {
+    kind: 'offer',
+    candidate: buildTestIdeVersionCandidate({
       product: params.product,
       version: '2023.1',
-      folderKind: 'caches',
-      folderPath: buildTestAbsolutePath({ text: params.folderPath }),
-      foundPaths: [buildTestAbsolutePath({ text: params.folderPath })],
-    },
-    path: params.folderPath,
-    targetPaths: [params.folderPath],
-  });
+      folderPath: params.folderPath,
+    }),
+  };
+}
+
+function findCatalogEntry(id: string): CatalogEntry {
+  const entry = CATALOG_ENTRIES.find((candidate) => candidate.id === id);
+
+  if (entry === undefined) {
+    throw new Error(`The catalog holds no entry ${id}.`);
+  }
+
+  return entry;
+}
+
+/** The total of each section in the report, the way the scan view sums it. */
+function buildFinalSectionBytes(report: ScanReport): Map<ConsumerSection, number> {
+  const totals = buildSectionTotals({ candidates: report.candidates, advice: report.advice });
+
+  return new Map(totals.map((total) => [total.sectionKey, total.allocatedBytes]));
 }

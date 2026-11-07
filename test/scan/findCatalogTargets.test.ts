@@ -7,6 +7,7 @@ import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { CatalogTarget } from '../../src/scan/findCatalogTargets.js';
 import { findCatalogTargets } from '../../src/scan/findCatalogTargets.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -27,14 +28,14 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
   beforeEach(async () => {
     fixtureRoot = await createFixtureRoot();
-    environment = await loadTestEnvironment({ fixtureRoot, nowMs: TEST_NOW_MS });
+    environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: TEST_NOW_MS });
   });
 
   afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot });
+    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
-  test('a path entrygives its target only when the path exists', async () => {
+  test('a path entry gives its target only when the path exists', async () => {
     const cacheDir = join(fixtureRoot.homeDir, 'Library/Caches/example');
     await createFixtureDirectory({ path: cacheDir });
     const presentEntry = buildCatalogEntry({
@@ -51,7 +52,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [presentEntry, missingEntry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
@@ -79,7 +80,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
@@ -114,7 +115,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [missingEntry, fileEntry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
@@ -126,7 +127,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     const entry = buildCatalogEntry({ id: 'temp-root', root: 'temp', path: '', selection: 'path' });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
@@ -148,7 +149,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
@@ -170,7 +171,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
@@ -193,7 +194,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
@@ -205,7 +206,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
   });
 
   testOnPosix(
-    'a path entrybehind an unreadable folder gives a permissionDenied issue',
+    'a path entry behind an unreadable folder gives a permissionDenied issue',
     async () => {
       const lockedDir = join(fixtureRoot.homeDir, 'Locked');
       await createFixtureDirectory({ path: lockedDir });
@@ -218,7 +219,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       });
 
       const result = await findCatalogTargets({
-        environment,
+        environment: environment,
         entries: [entry],
         privacyDenialCode: PRIVACY_DENIAL_CODE,
       });
@@ -231,7 +232,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
   );
 
   testOnPosix(
-    'a path entrybehind a symbolic link loop gives an unexpected issue with its code',
+    'a path entry behind a symbolic link loop gives an unexpected issue with its code',
     async () => {
       const loopPath = join(fixtureRoot.homeDir, 'Loop');
       await symlink(loopPath, loopPath);
@@ -243,7 +244,7 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       });
 
       const result = await findCatalogTargets({
-        environment,
+        environment: environment,
         entries: [entry],
         privacyDenialCode: PRIVACY_DENIAL_CODE,
       });
@@ -262,20 +263,12 @@ function buildCatalogEntry(params: {
   path: string;
   selection: 'path' | 'children';
 }): CatalogEntry {
-  return {
+  return buildTestCatalogEntry({
     id: params.id,
-    category: 'developer',
-    title: 'Fixture entry',
-    explanation: 'A fixture entry.',
-    regeneration: 'Fixture regeneration.',
-    risk: 'safe',
     root: params.root,
     path: params.path,
     selection: { kind: params.selection },
-    ageRule: { kind: 'none' },
-    owner: null,
-    removal: { kind: 'delete' },
-  };
+  });
 }
 
 /** A path or a children selection gives one target per item, which is its item path. */

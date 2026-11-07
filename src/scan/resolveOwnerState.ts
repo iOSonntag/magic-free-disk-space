@@ -23,7 +23,7 @@ export function isBundleIdShape(params: { name: string }): boolean {
 
 /**
  * The folder name as the bundle id it is shaped like, a team-id prefix taken off; `null` for any
- * other name.
+ * other name, a team-prefixed one whose rest is no bundle id included.
  */
 export function parseBundleIdShapedName(params: { name: string }): MacBundleId | null {
   const teamIdPrefix = TEAM_ID_PREFIX_PATTERN.exec(params.name);
@@ -31,9 +31,13 @@ export function parseBundleIdShapedName(params: { name: string }): MacBundleId |
   if (teamIdPrefix !== null) {
     const unprefixedName = params.name.slice(teamIdPrefix[0].length);
 
-    if (isBundleIdShape({ name: unprefixedName })) {
-      return parseMacBundleId({ text: unprefixedName });
+    // The whole name would read the team id as a vendor, which matches no installed app, so the
+    // shared folder of an installed app such as `2BUA8C4S2C.com.1password` would pass as a leftover.
+    if (!isBundleIdShape({ name: unprefixedName })) {
+      return null;
     }
+
+    return parseMacBundleId({ text: unprefixedName });
   }
 
   if (!isBundleIdShape({ name: params.name })) {

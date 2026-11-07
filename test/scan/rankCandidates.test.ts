@@ -47,10 +47,10 @@ describeAwaitingWin32Platform('rankByPlace', () => {
       'projects',
       'containerEngines',
       'aiModels',
-      'installers',
-      'cloudCopies',
       'appContainers',
+      'installers',
       'userFiles',
+      'cloudCopies',
       'trash',
       'appManaged',
     ];

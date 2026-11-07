@@ -1,35 +1,41 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { formatBytes, formatSizeText, formatTotalSizeText } from '../../src/report/formatBytes.js';
 
+/** One count and its text, shared with the app's tests so both word a size alike. */
+type FormatBytesCase = { bytes: number; text: string };
+
+const FORMAT_BYTES_CASES = parseFormatBytesCases(
+  JSON.parse(readFileSync(join(import.meta.dir, 'formatBytesCases.json'), 'utf8')),
+);
+
+function parseFormatBytesCases(value: unknown): FormatBytesCase[] {
+  if (!Array.isArray(value)) {
+    throw new Error('formatBytesCases.json must hold an array of cases.');
+  }
+
+  return value.map((item: unknown) => {
+    if (
+      typeof item !== 'object' ||
+      item === null ||
+      !('bytes' in item) ||
+      !('text' in item) ||
+      typeof item.bytes !== 'number' ||
+      typeof item.text !== 'string'
+    ) {
+      throw new Error(
+        `A case of formatBytesCases.json is not { bytes, text }: ${JSON.stringify(item)}`,
+      );
+    }
+
+    return { bytes: item.bytes, text: item.text };
+  });
+}
+
 describe('formatBytes', () => {
-  test('shows counts under one kB in bytes', () => {
-    expect(formatBytes(0)).toBe('0 B');
-    expect(formatBytes(999)).toBe('999 B');
-  });
-
-  test('shows one decimal below ten of a unit and a whole number from ten up', () => {
-    expect(formatBytes(1000)).toBe('1.0 kB');
-    expect(formatBytes(1500)).toBe('1.5 kB');
-    expect(formatBytes(9500)).toBe('9.5 kB');
-    expect(formatBytes(10_000)).toBe('10 kB');
-    expect(formatBytes(10_000_000)).toBe('10 MB');
-  });
-
-  test('counts in powers of 1000, as macOS shows disk space', () => {
-    expect(formatBytes(1024)).toBe('1.0 kB');
-    expect(formatBytes(1024 ** 2)).toBe('1.0 MB');
-    expect(formatBytes(1024 ** 3)).toBe('1.1 GB');
-  });
-
-  test('moves up a unit at each step of 1000, after rounding', () => {
-    expect(formatBytes(999_600)).toBe('1.0 MB');
-    expect(formatBytes(1_000_000_000)).toBe('1.0 GB');
-    expect(formatBytes(2_254_857_830)).toBe('2.3 GB');
-    expect(formatBytes(2 * 1000 ** 4)).toBe('2.0 TB');
-  });
-
-  test('keeps TB as the largest unit', () => {
-    expect(formatBytes(1000 ** 5)).toBe('1000 TB');
+  test.each(FORMAT_BYTES_CASES)('shows $bytes bytes as $text', (formatCase) => {
+    expect(formatBytes(formatCase.bytes)).toBe(formatCase.text);
   });
 
   test('throws for a negative, non-integer, or non-finite count', () => {
@@ -42,11 +48,11 @@ describe('formatBytes', () => {
 
 describe('formatSizeText', () => {
   test('shows a complete size as formatBytes does', () => {
-    expect(formatSizeText({ allocatedBytes: 1500, isComplete: true })).toBe('1.5 kB');
+    expect(formatSizeText({ allocatedBytes: 1500, isComplete: true })).toBe('1.5 KB');
   });
 
   test('prefixes an incomplete size with at least', () => {
-    expect(formatSizeText({ allocatedBytes: 1500, isComplete: false })).toBe('at least 1.5 kB');
+    expect(formatSizeText({ allocatedBytes: 1500, isComplete: false })).toBe('at least 1.5 KB');
   });
 });
 
@@ -57,7 +63,7 @@ describe('formatTotalSizeText', () => {
       { allocatedBytes: 500, isComplete: true },
     ];
 
-    expect(formatTotalSizeText({ items: items })).toBe('1.5 kB');
+    expect(formatTotalSizeText({ items: items })).toBe('1.5 KB');
   });
 
   test('reads at least when any item is incomplete', () => {
@@ -66,7 +72,7 @@ describe('formatTotalSizeText', () => {
       { allocatedBytes: 500, isComplete: false },
     ];
 
-    expect(formatTotalSizeText({ items: items })).toBe('at least 1.5 kB');
+    expect(formatTotalSizeText({ items: items })).toBe('at least 1.5 KB');
   });
 
   test('gives zero bytes for no item', () => {

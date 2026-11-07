@@ -1,7 +1,15 @@
 import { expect, test } from 'bun:test';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildPlannedFacts } from '../../src/report/buildPlannedFacts.js';
+import { formatDeletionWarningLines } from '../../src/report/formatDeletionConfirmation.js';
+import { formatRemovalPlan } from '../../src/report/formatRemovalPlan.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
+import {
+  buildProtocolFixturePlan,
+  buildProtocolFixtureReport,
+} from '../support/protocolFixtureScan.js';
 
 const SAFE_CACHE = buildTestCandidate({
   path: '/fixture/cache',
@@ -28,10 +36,22 @@ const TOOL_VERSION = buildTestToolCandidate({
 const RANKED = [SAFE_CACHE, OLD_VIDEO, TOOL_VERSION];
 
 describeAwaitingWin32Platform('buildPlannedFacts', () => {
-  test('numbers each approved item by its scan, with its key, section, risk, and size', () => {
+  test('gives the planned event of the protocol fixture for the plan it shows', async () => {
+    const plan = buildProtocolFixturePlan();
+
+    expect<unknown>({
+      kind: 'planned',
+      planId: 1,
+      lines: formatRemovalPlan({ plan: plan }),
+      warningLines: formatDeletionWarningLines({ texts: darwinPlatform.report }),
+      ...buildPlannedFacts({ plan: plan, ranked: buildProtocolFixtureReport().candidates }),
+    }).toEqual(await loadProtocolFixtureEventOfKind('planned'));
+  });
+
+  test('numbers each approved item by its scan, with its key, section, risk, removal, and size', () => {
     expect<unknown>(
       buildPlannedFacts({
-        plan: { approved: [OLD_VIDEO, SAFE_CACHE], refused: [] },
+        plan: { approved: [OLD_VIDEO, SAFE_CACHE, TOOL_VERSION], refused: [] },
         ranked: RANKED,
       }),
     ).toEqual({
@@ -42,6 +62,7 @@ describeAwaitingWin32Platform('buildPlannedFacts', () => {
           title: 'movie\\u{a}.mov',
           sectionKey: 'largeFiles',
           risk: 'careful',
+          removal: 'delete',
           allocatedBytes: 3000,
         },
         {
@@ -50,10 +71,20 @@ describeAwaitingWin32Platform('buildPlannedFacts', () => {
           title: 'Tool cache',
           sectionKey: 'caches',
           risk: 'safe',
+          removal: 'delete',
           allocatedBytes: 1000,
         },
+        {
+          number: 3,
+          key: 'explore:miseVersions:miseVersion:node@20.1.0',
+          title: TOOL_VERSION.title,
+          sectionKey: 'developerTools',
+          risk: 'careful',
+          removal: 'tool',
+          allocatedBytes: 2000,
+        },
       ],
-      totalBytes: 4000,
+      totalBytes: 6000,
       holdsCareful: true,
     });
   });

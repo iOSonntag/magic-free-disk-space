@@ -3,9 +3,9 @@ import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestAdvice,
   buildTestCandidate,
   buildTestToolCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 
 function buildOffers(candidates: Candidate[]): CandidateDecision[] {
@@ -24,20 +24,13 @@ describeAwaitingWin32Platform('buildScanReport', () => {
       { kind: 'offer', candidate: large },
       {
         kind: 'advice',
-        advice: {
-          origin: { kind: 'catalog', entryId: 'test-entry' },
+        advice: buildTestAdvice({
           path: '/opt/tool',
           title: 'Tool',
           category: 'packages',
           risk: 'careful',
-          explanation: 'Packages of a tool.',
-          advice: 'Run the tool cleanup.',
-          opener: null,
-          carvedPaths: [],
           allocatedBytes: 500,
-          isComplete: true,
-          ...TEST_LISTING_FACTS_NONE,
-        },
+        }),
       },
     ];
     const issue = { path: '/home/locked', reason: 'permissionDenied' as const, detail: 'EACCES' };

@@ -4,27 +4,20 @@ import { buildItemKey } from '../../src/scan/candidateOrigin.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestAdvice,
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
-const ADVICE: Advice = {
+const ADVICE: Advice = buildTestAdvice({
   origin: { kind: 'catalog', entryId: 'tool-store' },
   path: '/fixture/store',
   title: 'Tool store',
   category: 'packages',
-  risk: 'review',
-  explanation: 'Packages the tool keeps.',
-  advice: 'Run the tool prune command.',
-  opener: null,
-  carvedPaths: [],
   allocatedBytes: 1,
-  isComplete: true,
-  ...TEST_LISTING_FACTS_NONE,
-};
+});
 
 describeAwaitingWin32Platform('buildItemKey', () => {
   test('names an item by its source, the id that source knows it by, and its path', () => {

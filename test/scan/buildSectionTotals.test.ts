@@ -3,26 +3,19 @@ import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestAdvice,
   buildTestCandidate,
   buildTestToolCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 
 function buildAdvice(params: { path: string }): Advice {
-  return {
+  return buildTestAdvice({
     origin: { kind: 'catalog', entryId: 'tool-store' },
     path: params.path,
     title: 'Tool store',
     category: 'packages',
-    risk: 'review',
-    explanation: 'Packages the tool keeps.',
-    advice: 'Run the tool prune command.',
-    opener: null,
-    carvedPaths: [],
     allocatedBytes: 9000,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
-  };
+  });
 }
 
 describeAwaitingWin32Platform('buildSectionTotals', () => {

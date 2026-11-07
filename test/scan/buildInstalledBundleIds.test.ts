@@ -1,26 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import { buildInstalledBundleIds } from '../../src/scan/buildInstalledBundleIds.js';
-import { TEST_INSTALLED_APP_FACTS_NONE } from '../support/installedAppFixtures.js';
+import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 describe('buildInstalledBundleIds', () => {
   test('collects the bundle id of each app and the ids nested in it', () => {
     const bundleIds = buildInstalledBundleIds({
       apps: [
-        {
+        buildTestInstalledApp({
           bundlePath: '/a/Example.app',
           displayName: 'Example',
-          bundleId: buildTestMacBundleId({ text: 'com.example.app' }),
-          nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.app.helper' })],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
-        },
-        {
+          bundleId: 'com.example.app',
+          nestedBundleIds: ['com.example.app.helper'],
+        }),
+        buildTestInstalledApp({
           bundlePath: '/a/Other.app',
           displayName: 'Other',
-          bundleId: buildTestMacBundleId({ text: 'com.example.other' }),
-          nestedBundleIds: [],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
-        },
+          bundleId: 'com.example.other',
+        }),
       ],
     });
 
@@ -34,13 +31,12 @@ describe('buildInstalledBundleIds', () => {
   test('leaves out a null bundle id and keeps the nested ids', () => {
     const bundleIds = buildInstalledBundleIds({
       apps: [
-        {
+        buildTestInstalledApp({
           bundlePath: '/a/Broken.app',
           displayName: 'Broken',
           bundleId: null,
-          nestedBundleIds: [buildTestMacBundleId({ text: 'com.example.broken.share' })],
-          ...TEST_INSTALLED_APP_FACTS_NONE,
-        },
+          nestedBundleIds: ['com.example.broken.share'],
+        }),
       ],
     });
 

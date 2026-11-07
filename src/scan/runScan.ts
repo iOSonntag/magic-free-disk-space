@@ -3,12 +3,15 @@ import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { ExplorePlatform } from '../explore/explorePlatform.js';
+import type { ExplorePlatform, IdeVersionRoots } from '../explore/explorePlatform.js';
 import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js';
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
+import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
@@ -21,7 +24,8 @@ import { buildFailureIssues } from './buildReadIssue.js';
 import { buildScanReport } from './buildScanReport.js';
 import type { SectionTotal } from './buildSectionTotals.js';
 import { buildSectionTotals } from './buildSectionTotals.js';
-import type { Advice, Candidate, SkipReason } from './candidate.js';
+import type { Advice, Candidate, CandidateDecision, SkipReason } from './candidate.js';
+import { isProbedCandidate } from './candidate.js';
 import { decideAppCandidate } from './decideAppCandidate.js';
 import { decideArtifactCandidate } from './decideArtifactCandidate.js';
 import {
@@ -45,12 +49,11 @@ import { findLastSignOfUse } from './findLastSignOfUse.js';
 import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 import { DAY_MS, SCAN_LIMITS } from './limits.js';
+import { listCandidateFootprint } from './listCandidateFootprint.js';
 import { loadExplorePhase } from './loadExplorePhase.js';
 import { loadMeasuredPhase } from './loadMeasuredPhase.js';
 import { buildFoundTargets, loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
-import type { OrphanLocation } from './orphanLocations.js';
-import { ORPHAN_LOCATIONS } from './orphanLocations.js';
 import {
   buildAppOwner,
   findOwnerAppName,
@@ -60,8 +63,13 @@ import {
 } from './resolveOwnerState.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
-import type { InstalledApp, ScanPlatform, ScanPlatformApps } from './scanPlatform.js';
-import { skipOffersTouchingProtectedPath } from './skipOffersTouchingProtectedPath.js';
+import type {
+  InstalledApp,
+  OrphanLocation,
+  ScanPlatform,
+  ScanPlatformApps,
+} from './scanPlatform.js';
+import { skipOffersTheRemovalRefuses } from './skipOffersTheRemovalRefuses.js';
 import type { ArtifactFinding, ProjectWalk } from './walkProjects.js';
 import { walkProjects } from './walkProjects.js';
 
@@ -157,15 +165,31 @@ export async function runScan(params: {
       ? [getCatalogEntryPath({ environment: params.environment, entry: entry })]
       : [],
   );
-
-  params.onProgress(
-    buildScanProgress({
-      step: { message: 'Checking installed apps and running processes…', phase: 'apps' },
+  // The probe of the IDE versions takes folders outside its entry, in the roots of every version.
+  const probeClaimPaths = [
+    ...reservedEntryPaths,
+    ...listIdeVersionRootPaths({
       environment: params.environment,
-      reservedEntryPaths: reservedEntryPaths,
-      finishedPhases: [],
+      roots: params.explore.ideVersionRoots,
     }),
-  );
+  ];
+
+  function reportProgress(progress: { step: ScanProgressStep; finishedPhases: ScanPhase[] }): void {
+    params.onProgress(
+      buildScanProgress({
+        step: progress.step,
+        environment: params.environment,
+        reservedEntryPaths: reservedEntryPaths,
+        probeClaimPaths: probeClaimPaths,
+        finishedPhases: progress.finishedPhases,
+      }),
+    );
+  }
+
+  reportProgress({
+    step: { message: 'Checking installed apps and running processes…', phase: 'apps' },
+    finishedPhases: [],
+  });
 
   const processCommandsLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
@@ -248,75 +272,44 @@ export async function runScan(params: {
     ],
   };
 
-  params.onProgress(
-    buildScanProgress({
-      step: { message: 'Measuring known storage locations…', phase: 'catalog' },
-      environment: params.environment,
-      reservedEntryPaths: reservedEntryPaths,
-      finishedPhases: [setup],
-    }),
-  );
+  reportProgress({
+    step: { message: 'Measuring known storage locations…', phase: 'catalog' },
+    finishedPhases: [setup],
+  });
   const catalog = await loadCatalogPhase({
     context: context,
     entries: params.catalog.entries.filter((entry) => entry.removal.kind !== 'explore'),
   });
 
-  params.onProgress(
-    buildScanProgress({
-      step: { message: 'Searching your projects for old build folders…', phase: 'projects' },
-      environment: params.environment,
-      reservedEntryPaths: reservedEntryPaths,
-      finishedPhases: [setup, catalog],
-    }),
-  );
+  reportProgress({
+    step: { message: 'Searching your projects for old build folders…', phase: 'projects' },
+    finishedPhases: [setup, catalog],
+  });
   const artifacts = await loadArtifactPhase({ context: context, projectWalk: projectWalk });
 
   const apps = await loadAppPhaseOfAppSection({
     apps: params.scan.apps,
     context: context,
-    onStep: (step) =>
-      params.onProgress(
-        buildScanProgress({
-          step: step,
-          environment: params.environment,
-          reservedEntryPaths: reservedEntryPaths,
-          finishedPhases: [setup, catalog, artifacts],
-        }),
-      ),
+    onStep: (step) => reportProgress({ step: step, finishedPhases: [setup, catalog, artifacts] }),
   });
 
-  params.onProgress(
-    buildScanProgress({
-      step: { message: 'Looking for large old files…', phase: 'largeFiles' },
-      environment: params.environment,
-      reservedEntryPaths: reservedEntryPaths,
-      finishedPhases: [setup, catalog, artifacts, apps],
-    }),
-  );
+  reportProgress({
+    step: { message: 'Looking for large old files…', phase: 'largeFiles' },
+    finishedPhases: [setup, catalog, artifacts, apps],
+  });
   const userFiles = await loadUserFilePhase({ context: context });
 
   const orphans = await loadOrphanPhaseOfAppSection({
     apps: params.scan.apps,
     context: context,
     onStep: (step) =>
-      params.onProgress(
-        buildScanProgress({
-          step: step,
-          environment: params.environment,
-          reservedEntryPaths: reservedEntryPaths,
-          finishedPhases: [setup, catalog, artifacts, apps, userFiles],
-        }),
-      ),
+      reportProgress({ step: step, finishedPhases: [setup, catalog, artifacts, apps, userFiles] }),
   });
 
-  params.onProgress(
-    buildScanProgress({
-      step: { message: 'Asking developer tools what they can clean…', phase: 'tools' },
-      environment: params.environment,
-      reservedEntryPaths: reservedEntryPaths,
-      finishedPhases: [setup, catalog, artifacts, apps, userFiles, orphans],
-    }),
-  );
+  reportProgress({
+    step: { message: 'Asking developer tools what they can clean…', phase: 'tools' },
+    finishedPhases: [setup, catalog, artifacts, apps, userFiles, orphans],
+  });
   const explore = await loadExplorePhase({
     environment: params.environment,
     probes: probes,
@@ -391,24 +384,27 @@ function loadOrphanPhaseOfAppSection(params: {
     case 'offerUnusedApps':
       params.onStep({ message: 'Looking for data of removed apps…', phase: 'leftovers' });
 
-      return loadOrphanPhase({ context: params.context });
+      return loadOrphanPhase({ context: params.context, locations: params.apps.orphanLocations });
   }
 }
 
-/** Dedupes what the finished phases found the same way the report does, so no total shrinks. */
+/**
+ * Dedupes what the finished phases found the same way the report does, and leaves out each offer
+ * that is, holds, or lies in a place a probe still running may claim, so a total grows to the
+ * report's and never shrinks for a claim. An offer the report holds back for a skip or an advice
+ * of the Explore phase inside it can still count here.
+ */
 function buildScanProgress(params: {
   step: ScanProgressStep;
   environment: Environment;
   reservedEntryPaths: string[];
+  probeClaimPaths: string[];
   finishedPhases: ScanPhase[];
 }): ScanProgress {
-  const decisions = dedupeCandidates({
-    pathRules: params.environment.pathRules,
-    decisions: skipOffersTouchingProtectedPath({
-      environment: params.environment,
-      decisions: mergeScanPhases({ phases: params.finishedPhases }).decisions,
-    }),
+  const decisions = dedupeScanDecisions({
+    environment: params.environment,
     reservedEntryPaths: params.reservedEntryPaths,
+    decisions: mergeScanPhases({ phases: params.finishedPhases }).decisions,
   });
 
   return {
@@ -416,7 +412,14 @@ function buildScanProgress(params: {
     phase: params.step.phase,
     found: buildSectionTotals({
       candidates: decisions.flatMap((decision) =>
-        decision.kind === 'offer' ? [decision.candidate] : [],
+        decision.kind === 'offer' &&
+        !isInProbeClaim({
+          pathRules: params.environment.pathRules,
+          candidate: decision.candidate,
+          probeClaimPaths: params.probeClaimPaths,
+        })
+          ? [decision.candidate]
+          : [],
       ),
       advice: decisions.flatMap((decision) =>
         decision.kind === 'advice' ? [decision.advice] : [],
@@ -426,9 +429,8 @@ function buildScanProgress(params: {
 }
 
 /**
- * Skips the offers that touch a protected path, dedupes the decisions of the phases, in their
- * order, with the paths of the Explore entries reserved for their probes, then adds the advice of
- * the Explore entries whose probe judged only part of their units, and builds the report.
+ * Dedupes the decisions of the phases as `dedupeScanDecisions` does, then adds the advice of the
+ * Explore entries whose probe judged only part of their units, and builds the report.
  */
 export function buildScanReportOfPhases(params: {
   environment: Environment;
@@ -440,13 +442,10 @@ export function buildScanReportOfPhases(params: {
 
   return buildScanReport({
     decisions: [
-      ...dedupeCandidates({
-        pathRules: params.environment.pathRules,
-        decisions: skipOffersTouchingProtectedPath({
-          environment: params.environment,
-          decisions: scan.decisions,
-        }),
+      ...dedupeScanDecisions({
+        environment: params.environment,
         reservedEntryPaths: params.reservedEntryPaths,
+        decisions: scan.decisions,
       }),
       // Added after the dedupe, so this advice holds back no offer of its own entry, whose units
       // lie inside its path. Moved before it, the advice would skip every finding of its probe.
@@ -454,6 +453,59 @@ export function buildScanReportOfPhases(params: {
     ],
     issues: [...scan.issues, ...params.incompleteExploreAdvice.issues],
   });
+}
+
+/**
+ * Skips the offers the removal plan would refuse, then dedupes the decisions in their order, with
+ * the paths of the Explore entries reserved for their probes: the one chain of the progress and
+ * the report.
+ */
+function dedupeScanDecisions(params: {
+  environment: Environment;
+  reservedEntryPaths: string[];
+  decisions: CandidateDecision[];
+}): CandidateDecision[] {
+  return dedupeCandidates({
+    pathRules: params.environment.pathRules,
+    decisions: skipOffersTheRemovalRefuses({
+      environment: params.environment,
+      decisions: params.decisions,
+    }),
+    reservedEntryPaths: params.reservedEntryPaths,
+  });
+}
+
+/** The roots of every IDE version below the home folder, of each kind. */
+function listIdeVersionRootPaths(params: {
+  environment: Environment;
+  roots: IdeVersionRoots;
+}): string[] {
+  return [...params.roots.caches, ...params.roots.logs, ...params.roots.settings].map((names) =>
+    joinAbsolutePath({
+      rules: params.environment.pathRules,
+      parentPath: params.environment.homeDir,
+      names: names,
+    }),
+  );
+}
+
+/** Whether an offer no probe made is, holds, or lies in one of `probeClaimPaths`. */
+function isInProbeClaim(params: {
+  pathRules: PathRules;
+  candidate: Candidate;
+  probeClaimPaths: string[];
+}): boolean {
+  if (isProbedCandidate(params.candidate)) {
+    return false;
+  }
+
+  return listCandidateFootprint(params.candidate).some((path) =>
+    params.probeClaimPaths.some(
+      (claimPath) =>
+        isSameOrInsidePath({ rules: params.pathRules, path: path, parentPath: claimPath }) ||
+        isSameOrInsidePath({ rules: params.pathRules, path: claimPath, parentPath: path }),
+    ),
+  );
 }
 
 async function loadCatalogPhase(params: {
@@ -673,14 +725,17 @@ async function loadUserFilePhase(params: { context: ScanContext }): Promise<Scan
   return { decisions: decisions, issues: found.issues };
 }
 
-async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPhase> {
+async function loadOrphanPhase(params: {
+  context: ScanContext;
+  locations: OrphanLocation[];
+}): Promise<ScanPhase> {
   const installed = buildOrphanInstalledFacts({
     apps: params.context.installedApps,
     applicationDirs: params.context.environment.applicationDirs,
     isComplete: params.context.isInstalledAppListComplete,
   });
   const locationPhases = await Promise.all(
-    ORPHAN_LOCATIONS.map((location) =>
+    params.locations.map((location) =>
       loadOrphanLocationPhase({
         context: params.context,
         location: location,

@@ -1,4 +1,5 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
+import { DOWNLOADS_ROOT_PATH_NAMES } from '../appleDataRoots.js';
 
 /** The Downloads folder and the installers left in it. */
 export const DOWNLOAD_ENTRIES: CatalogEntry[] = [
@@ -11,7 +12,7 @@ export const DOWNLOAD_ENTRIES: CatalogEntry[] = [
     regeneration: 'Download it again from its maker, or start the download again in the browser.',
     risk: 'careful',
     root: 'home',
-    path: 'Downloads',
+    path: DOWNLOADS_ROOT_PATH_NAMES.join('/'),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,

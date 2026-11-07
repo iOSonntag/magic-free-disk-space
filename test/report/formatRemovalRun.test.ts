@@ -1,7 +1,16 @@
 import { expect, test } from 'bun:test';
+import type {
+  RemovalOutcomeCoded,
+  RemovalOutcomeCodedKind,
+  RemovalOutcomeToolFailed,
+} from '../../src/delete/deleteCandidates.js';
 import { formatAvailableSpaceLine, formatRemovalRun } from '../../src/report/formatRemovalRun.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate, buildTestEngineCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestCandidate,
+  buildTestEngineCandidate,
+  buildTestRemovalOutcome,
+} from '../support/candidateFixtures.js';
 
 describeAwaitingWin32Platform('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
@@ -14,54 +23,17 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     const lines = formatRemovalRun({
       run: {
         outcomes: [
-          {
-            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 1024 }),
-            path: '/fixture/a',
-            allocatedBytes: 1024,
-            freedBytes: 1024,
-            outcome: 'removed',
-            code: null,
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/b', allocatedBytes: 0 }),
-            path: '/fixture/b',
-            allocatedBytes: 0,
-            freedBytes: 0,
-            outcome: 'alreadyGone',
-            code: null,
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/c', allocatedBytes: 0 }),
-            path: '/fixture/c',
-            allocatedBytes: 0,
-            freedBytes: 0,
-            outcome: 'changedSinceScan',
-            code: null,
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/d', allocatedBytes: 5 * 1024 ** 2 }),
+          buildPathOutcome({ path: '/fixture/a', outcome: 'removed', freedBytes: 1024 }),
+          buildPathOutcome({ path: '/fixture/b', outcome: 'alreadyGone', freedBytes: 0 }),
+          buildPathOutcome({ path: '/fixture/c', outcome: 'changedSinceScan', freedBytes: 0 }),
+          buildPathOutcome({
             path: '/fixture/d',
-            allocatedBytes: 5 * 1024 ** 2,
-            freedBytes: 0,
             outcome: 'permissionDenied',
+            freedBytes: 0,
             code: 'EACCES',
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/e', allocatedBytes: 5 * 1024 ** 2 }),
-            path: '/fixture/e',
-            allocatedBytes: 5 * 1024 ** 2,
-            freedBytes: 0,
-            outcome: 'failed',
-            code: 'EIO',
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/f', allocatedBytes: 0 }),
-            path: '/fixture/f',
-            allocatedBytes: 0,
-            freedBytes: 0,
-            outcome: 'notAttempted',
-            code: null,
-          },
+          }),
+          buildPathOutcome({ path: '/fixture/e', outcome: 'failed', freedBytes: 0, code: 'EIO' }),
+          buildPathOutcome({ path: '/fixture/f', outcome: 'notAttempted', freedBytes: 0 }),
         ],
         journalFailure: null,
       },
@@ -74,7 +46,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       '- permission denied: /fixture/d (EACCES)',
       '- failed: /fixture/e (EIO)',
       '- not attempted: /fixture/f',
-      'Freed about 1.0 kB in 1 item.',
+      'Freed about 1.0 KB in 1 item.',
       '2 items could not be deleted.',
       '1 item was not attempted.',
     ]);
@@ -85,32 +57,21 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     const lines = formatRemovalRun({
       run: {
         outcomes: [
-          {
-            candidate: buildTestCandidate({ path: `${extensionsPath}/example.alpha-1.0.0` }),
+          buildPathOutcome({
             path: `${extensionsPath}/example.alpha-1.0.0`,
-            allocatedBytes: 4096,
-            freedBytes: 4096,
             outcome: 'removed',
-            code: null,
-          },
-          {
-            candidate: buildTestCandidate({
-              path: `${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
-            }),
+            freedBytes: 4096,
+          }),
+          buildPathOutcome({
             path: `${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
-            allocatedBytes: 4096,
-            freedBytes: 0,
             outcome: 'changedSinceScan',
-            code: null,
-          },
-          {
-            candidate: buildTestCandidate({ path: `${extensionsPath}/example.gamma-3.0.0` }),
-            path: `${extensionsPath}/example.gamma-3.0.0`,
-            allocatedBytes: 4096,
             freedBytes: 0,
+          }),
+          buildPathOutcome({
+            path: `${extensionsPath}/example.gamma-3.0.0`,
             outcome: 'ownerRunning',
-            code: null,
-          },
+            freedBytes: 0,
+          }),
         ],
         journalFailure: null,
       },
@@ -120,49 +81,25 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       `- deleted: ${extensionsPath}/example.alpha-1.0.0`,
       `- changed since the scan, left alone: ${extensionsPath}/example.beta-2.0.0-darwin-arm64`,
       `- its app or tool is running now, left alone: ${extensionsPath}/example.gamma-3.0.0`,
-      'Freed about 4.1 kB in 1 item.',
+      'Freed about 4.1 KB in 1 item.',
     ]);
   });
 
-  test('counts what an engine freed apart, as space its disk image gives back later', () => {
+  test('counts what an engine freed apart, as space its disk image gives back within minutes', () => {
     const cleaned = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 5000 });
     const inUse = buildTestEngineCandidate({ homeDir: '/fixture/other', allocatedBytes: 7000 });
     const stopped = buildTestEngineCandidate({ homeDir: '/fixture/third', allocatedBytes: 9000 });
     const lines = formatRemovalRun({
       run: {
         outcomes: [
-          {
-            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 1000 }),
-            path: '/fixture/a',
-            allocatedBytes: 1000,
-            freedBytes: 1000,
-            outcome: 'removed',
-            code: null,
-          },
-          {
-            candidate: cleaned,
-            path: cleaned.path,
-            allocatedBytes: 5000,
-            freedBytes: 5000,
-            outcome: 'removed',
-            code: null,
-          },
-          {
-            candidate: inUse,
-            path: inUse.path,
-            allocatedBytes: 7000,
-            freedBytes: 0,
-            outcome: 'engineInUse',
-            code: null,
-          },
-          {
+          buildPathOutcome({ path: '/fixture/a', outcome: 'removed', freedBytes: 1000 }),
+          buildTestRemovalOutcome({ candidate: cleaned, outcome: 'removed', freedBytes: 5000 }),
+          buildTestRemovalOutcome({ candidate: inUse, outcome: 'engineInUse', freedBytes: 0 }),
+          buildTestRemovalOutcome({
             candidate: stopped,
-            path: stopped.path,
-            allocatedBytes: 9000,
-            freedBytes: 0,
             outcome: 'engineNotRunning',
-            code: null,
-          },
+            freedBytes: 0,
+          }),
         ],
         journalFailure: null,
       },
@@ -170,34 +107,35 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
 
     expect(lines).toEqual([
       '- deleted: /fixture/a',
-      `- deleted: ${cleaned.path}`,
-      `- its engine still uses it, left alone: ${inUse.path}`,
-      `- its engine is not running, left alone: ${stopped.path}`,
-      'Freed about 1.0 kB in 1 item.',
-      'About 5.0 kB more comes back once the container engines give up the space of their disk images.',
+      '- deleted: Docker Desktop build cache, in Docker Desktop',
+      '- its engine still uses it, left alone: Docker Desktop build cache, in Docker Desktop',
+      '- its engine is not running, left alone: Docker Desktop build cache, in Docker Desktop',
+      'Freed about 1.0 KB in 1 item.',
+      'About 5.0 KB more comes back within minutes, once the container engines give up the space of their disk images.',
     ]);
+  });
+
+  test('names an engine item by its unit and its engine, never by the disk image its engine keeps', () => {
+    const cleaned = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 5000 });
+    const lines = formatRemovalRun({
+      run: {
+        outcomes: [
+          buildTestRemovalOutcome({ candidate: cleaned, outcome: 'removed', freedBytes: 5000 }),
+        ],
+        journalFailure: null,
+      },
+    });
+
+    expect(lines.some((line) => line.includes(cleaned.path))).toBe(false);
+    expect(lines[0]).toBe('- deleted: Docker Desktop build cache, in Docker Desktop');
   });
 
   test('omits the summary lines that do not apply', () => {
     const lines = formatRemovalRun({
       run: {
         outcomes: [
-          {
-            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 2048 }),
-            path: '/fixture/a',
-            allocatedBytes: 2048,
-            freedBytes: 2048,
-            outcome: 'removed',
-            code: null,
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/b', allocatedBytes: 0 }),
-            path: '/fixture/b',
-            allocatedBytes: 0,
-            freedBytes: 0,
-            outcome: 'alreadyGone',
-            code: null,
-          },
+          buildPathOutcome({ path: '/fixture/a', outcome: 'removed', freedBytes: 2048 }),
+          buildPathOutcome({ path: '/fixture/b', outcome: 'alreadyGone', freedBytes: 0 }),
         ],
         journalFailure: null,
       },
@@ -206,7 +144,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     expect(lines).toEqual([
       '- deleted: /fixture/a',
       '- already gone: /fixture/b',
-      'Freed about 2.0 kB in 1 item.',
+      'Freed about 2.0 KB in 1 item.',
     ]);
   });
 
@@ -214,20 +152,10 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     const lines = formatRemovalRun({
       run: {
         outcomes: [
-          {
-            candidate: buildTestCandidate({ path: '/fixture/tool-a' }),
-            path: '/fixture/tool-a',
-            allocatedBytes: 4096,
-            freedBytes: 3072,
-            outcome: 'removed',
-            code: null,
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/tool-b' }),
+          buildPathOutcome({ path: '/fixture/tool-a', outcome: 'removed', freedBytes: 3072 }),
+          buildToolFailedOutcome({
             path: '/fixture/tool-b',
-            allocatedBytes: 4096,
             freedBytes: 1024,
-            outcome: 'toolFailed',
             failure: {
               reason: 'commandFailed',
               failure: {
@@ -236,34 +164,21 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
                 stderrTail: 'device busy\n\n  try again later\n',
               },
             },
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/tool-c' }),
+          }),
+          buildToolFailedOutcome({
             path: '/fixture/tool-c',
-            allocatedBytes: 4096,
             freedBytes: 0,
-            outcome: 'toolFailed',
             failure: {
               reason: 'commandFailed',
               failure: { reason: 'timedOut', timeoutMs: 600_000, stderrTail: 'still deleting' },
             },
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/tool-d' }),
+          }),
+          buildToolFailedOutcome({
             path: '/fixture/tool-d',
-            allocatedBytes: 4096,
             freedBytes: 0,
-            outcome: 'toolFailed',
             failure: { reason: 'outputUnreadable', detail: 'no device list' },
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/tool-e' }),
-            path: '/fixture/tool-e',
-            allocatedBytes: 4096,
-            freedBytes: 0,
-            outcome: 'ownerRunning',
-            code: null,
-          },
+          }),
+          buildPathOutcome({ path: '/fixture/tool-e', outcome: 'ownerRunning', freedBytes: 0 }),
         ],
         journalFailure: null,
       },
@@ -278,7 +193,7 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
       '   still deleting',
       '- its tool failed: /fixture/tool-d (its output could not be read: no device list)',
       '- its app or tool is running now, left alone: /fixture/tool-e',
-      'Freed about 4.1 kB in 1 item.',
+      'Freed about 4.1 KB in 1 item.',
       '3 items could not be deleted.',
     ]);
   });
@@ -287,39 +202,30 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     const lines = formatRemovalRun({
       run: {
         outcomes: [
-          {
-            candidate: buildTestCandidate({ path: '/fixture/a', allocatedBytes: 0 }),
+          buildToolFailedOutcome({
             path: '/fixture/a',
-            allocatedBytes: 0,
             freedBytes: 0,
-            outcome: 'toolFailed',
             failure: {
               reason: 'commandFailed',
               failure: { reason: 'endedBySignal', signal: 'SIGKILL', stderrTail: '' },
             },
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/b', allocatedBytes: 0 }),
+          }),
+          buildToolFailedOutcome({
             path: '/fixture/b',
-            allocatedBytes: 0,
             freedBytes: 0,
-            outcome: 'toolFailed',
             failure: {
               reason: 'commandFailed',
               failure: { reason: 'spawnFailed', message: 'ENOENT' },
             },
-          },
-          {
-            candidate: buildTestCandidate({ path: '/fixture/c', allocatedBytes: 0 }),
+          }),
+          buildToolFailedOutcome({
             path: '/fixture/c',
-            allocatedBytes: 0,
             freedBytes: 0,
-            outcome: 'toolFailed',
             failure: {
               reason: 'commandFailed',
               failure: { reason: 'outputTooLarge', maxOutputBytes: 1024 ** 2, stderrTail: '' },
             },
-          },
+          }),
         ],
         journalFailure: null,
       },
@@ -336,18 +242,15 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     const lines = formatRemovalRun({
       run: {
         outcomes: [
-          {
-            candidate: buildTestCandidate({ path: '/fixture/avd', allocatedBytes: 0 }),
+          buildToolFailedOutcome({
             path: '/fixture/avd',
-            allocatedBytes: 0,
             freedBytes: 0,
-            outcome: 'toolFailed',
             failure: {
               reason: 'fileUnreadable',
               path: '/fixture/avd/config.ini',
               failure: { reason: 'permissionDenied', code: 'EACCES' },
             },
-          },
+          }),
         ],
         journalFailure: null,
       },
@@ -379,3 +282,31 @@ describeAwaitingWin32Platform('formatRemovalRun', () => {
     ]);
   });
 });
+
+/** The outcome of an item at `path` deleted as its one target. */
+function buildPathOutcome(params: {
+  path: string;
+  outcome: RemovalOutcomeCodedKind;
+  freedBytes: number;
+  code?: string;
+}): RemovalOutcomeCoded {
+  return buildTestRemovalOutcome({
+    candidate: buildTestCandidate({ path: params.path }),
+    outcome: params.outcome,
+    freedBytes: params.freedBytes,
+    code: params.code ?? null,
+  });
+}
+
+function buildToolFailedOutcome(params: {
+  path: string;
+  freedBytes: number;
+  failure: RemovalOutcomeToolFailed['failure'];
+}): RemovalOutcomeToolFailed {
+  return {
+    candidate: buildTestCandidate({ path: params.path }),
+    freedBytes: params.freedBytes,
+    outcome: 'toolFailed',
+    failure: params.failure,
+  };
+}

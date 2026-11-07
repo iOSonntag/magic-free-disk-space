@@ -76,8 +76,6 @@ describeAwaitingWin32Platform('callEngineCandidate', () => {
       expect(removed).toEqual({
         outcome: {
           candidate: candidate,
-          path: candidate.path,
-          allocatedBytes: VOLUME_BYTES,
           freedBytes: VOLUME_BYTES,
           outcome: 'removed',
           code: null,
@@ -113,8 +111,6 @@ describeAwaitingWin32Platform('callEngineCandidate', () => {
     ).toEqual({
       outcome: {
         candidate: candidate,
-        path: candidate.path,
-        allocatedBytes: VOLUME_BYTES,
         freedBytes: 0,
         outcome: 'engineNotRunning',
         code: null,

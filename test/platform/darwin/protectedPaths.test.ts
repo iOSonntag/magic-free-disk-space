@@ -75,6 +75,18 @@ describeAwaitingWin32Platform('the sensitive folders of the darwin platform', ()
       expect(validatePath({ path: path })).toMatchObject({ reason: 'protectedRoot' });
     }
   });
+
+  test('refuses a delete that is, holds, or lies in iCloud Drive', () => {
+    const icloudDrivePath = '/Users/tester/Library/Mobile Documents';
+
+    expect(validatePath({ path: icloudDrivePath })).toMatchObject({ reason: 'protectedRoot' });
+    expect(validatePath({ path: '/Users/tester/Library' })).toMatchObject({
+      reason: 'protectedRoot',
+    });
+    expect(
+      validatePath({ path: `${icloudDrivePath}/com~apple~CloudDocs/Projects/video.mov` }),
+    ).toMatchObject({ reason: 'protectedRoot' });
+  });
 });
 
 describeAwaitingWin32Platform('the user cache folder of the darwin platform', () => {

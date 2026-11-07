@@ -263,12 +263,20 @@ export const LANGUAGE_ENTRIES: CatalogEntry[] = [
     id: 'deno-cache',
     category: 'packages',
     title: 'Deno cache',
-    explanation: 'Code modules that Deno downloaded and compiled.',
+    explanation:
+      'Code modules and packages that Deno downloaded and compiled. What scripts stored with Deno, such as their KV databases, stays.',
     regeneration: 'Deno downloads them again the next time a script needs them.',
     risk: 'safe',
     root: 'home',
+    // `Library/Caches/deno` is Deno's own folder on macOS; its `location_data` holds what scripts
+    // stored, so only the caches `libs/resolver/cache/deno_dir.rs` names go.
     path: 'Library/Caches/deno',
-    selection: { kind: 'path' },
+    selection: {
+      kind: 'profileFolders',
+      markerName: null,
+      subpaths: [],
+      rootSubpaths: ['remote', 'npm', 'gen', 'registries', 'dl'],
+    },
     ageRule: { kind: 'none' },
     owner: null,
     removal: { kind: 'delete' },
@@ -320,12 +328,19 @@ export const LANGUAGE_ENTRIES: CatalogEntry[] = [
     id: 'sst-providers',
     category: 'developer',
     title: 'SST providers and tools',
-    explanation: 'The cloud providers and helper tools that SST downloaded for your projects.',
+    explanation:
+      'The cloud providers and helper tools that SST downloaded for your projects. The state of apps SST keeps on this Mac and its certificates stay.',
     regeneration: 'SST downloads them again the next time it runs.',
     risk: 'review',
     root: 'home',
+    // The folder also holds the state and the secrets of apps deployed with `home: "local"`.
     path: 'Library/Application Support/sst',
-    selection: { kind: 'path' },
+    selection: {
+      kind: 'profileFolders',
+      markerName: null,
+      subpaths: [],
+      rootSubpaths: ['bin', 'plugins'],
+    },
     ageRule: { kind: 'none' },
     owner: null,
     removal: { kind: 'delete' },

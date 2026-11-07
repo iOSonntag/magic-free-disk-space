@@ -4,19 +4,18 @@ import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import type { CandidateDecision, SkipReason } from './candidate.js';
 import type { LeftoverMatch } from './candidateOrigin.js';
 import type { Measurement } from './loadPathMeasurement.js';
-import type { OrphanLocation } from './orphanLocations.js';
-import { APPLE_SUPPORT_FOLDER_NAMES, GENERIC_SUPPORT_FOLDER_NAMES } from './orphanLocations.js';
 import { isAppleBundleId, parseBundleIdShapedName } from './resolveOwnerState.js';
-import type { InstalledApp } from './scanPlatform.js';
+import type {
+  InstalledApp,
+  OrphanLocation,
+  OrphanLocationNamingBundleIdOrName,
+} from './scanPlatform.js';
 
 /** The prefix of an app group's id, which names the group, not an app. */
 const APP_GROUP_PREFIX = 'group.';
 
 /** A word of a name shorter than this, such as `app` or `pro`, ties a folder to no app. */
 const MIN_NAME_WORD_LENGTH = 4;
-
-/** A daemon of macOS keeps its folder under its own lower-case name, such as `rapportd`. */
-const SYSTEM_DAEMON_NAME_PATTERN = /^[a-z]+d$/;
 
 /** The skips of a name that ties its folder to no app at all, so it was never a possible leftover. */
 const UNTIED_NAME_SKIP_REASONS: SkipReason[] = ['notBundleId', 'genericName'];
@@ -103,9 +102,9 @@ export function getOrphanNameSkipReason(params: {
 /**
  * Whether the folder `name` of the location may be the data of a removed app, and how it was tied
  * to one. It needs no measurement, so the scanner skips the others without reading their folders.
- * A name that is no bundle id matches only where the location allows it, and never an Apple
- * name, a generic word, or any word of an installed app's name or vendor folder: such a folder
- * may hold what an installed app still uses.
+ * A name that is no bundle id matches only where the location's naming allows it, and never a
+ * name the system keeps, a generic word, or any word of an installed app's name or vendor folder:
+ * such a folder may hold what an installed app still uses.
  */
 export function matchOrphanName(params: {
   name: string;
@@ -120,14 +119,22 @@ export function matchOrphanName(params: {
   const bundleId = parseBundleIdShapedName({ name: idName });
 
   if (bundleId !== null) {
-    return matchOrphanBundleId({ ...params, bundleId: bundleId });
+    return matchOrphanBundleId({
+      bundleId: bundleId,
+      location: params.location,
+      installed: params.installed,
+    });
   }
 
-  if (params.location.naming === 'bundleId' || params.location.nameSuffix !== '') {
+  if (params.location.naming.kind === 'bundleId' || params.location.nameSuffix !== '') {
     return { kind: 'skip', reason: 'notBundleId' };
   }
 
-  return matchOrphanAppName({ name: idName, installed: params.installed });
+  return matchOrphanAppName({
+    name: idName,
+    naming: params.location.naming,
+    installed: params.installed,
+  });
 }
 
 /**
@@ -142,7 +149,6 @@ export function isOrphanNameSkipReported(params: {
 }
 
 function matchOrphanBundleId(params: {
-  name: string;
   bundleId: MacBundleId;
   location: OrphanLocation;
   installed: OrphanInstalledFacts;
@@ -173,20 +179,21 @@ function matchOrphanBundleId(params: {
 
 function matchOrphanAppName(params: {
   name: string;
+  naming: OrphanLocationNamingBundleIdOrName;
   installed: OrphanInstalledFacts;
 }): OrphanNameMatch {
   const lowerCaseName = params.name.toLowerCase();
 
   if (
-    APPLE_SUPPORT_FOLDER_NAMES.has(lowerCaseName) ||
-    SYSTEM_DAEMON_NAME_PATTERN.test(params.name)
+    params.naming.systemFolderNames.has(lowerCaseName) ||
+    params.naming.systemServiceNamePattern.test(params.name)
   ) {
     return { kind: 'skip', reason: 'systemOwned' };
   }
 
   const words = listNameWords({ name: params.name });
 
-  if (GENERIC_SUPPORT_FOLDER_NAMES.has(lowerCaseName) || words.length === 0) {
+  if (params.naming.genericFolderNames.has(lowerCaseName) || words.length === 0) {
     return { kind: 'skip', reason: 'genericName' };
   }
 

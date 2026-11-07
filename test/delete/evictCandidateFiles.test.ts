@@ -1,27 +1,19 @@
 import { expect } from 'bun:test';
-import {
-  chmod,
-  mkdir,
-  readFile,
-  realpath,
-  rm,
-  truncate,
-  utimes,
-  writeFile,
-} from 'node:fs/promises';
+import { readFile, realpath, rm, truncate, utimes } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { evictCandidateFiles } from '../../src/delete/evictCandidateFiles.js';
 import type { EvictTarget } from '../../src/scan/candidate.js';
-import { loadEntryTimes } from '../../src/system/loadEntryTimes.js';
+import { loadEntryStats } from '../../src/system/loadEntryStats.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestIdentity } from '../support/candidateFixtures.js';
 import { buildTestEvictCandidate } from '../support/evictCandidateFixtures.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
-  createFixtureRoot,
-  deleteFixtureRoot,
+  createFixtureDirectory,
+  createFixtureFile,
   loadTestEnvironment,
+  withFixtureRoot,
 } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
@@ -29,18 +21,8 @@ const NOW_MS = Date.UTC(2026, 9, 1);
 const OLD_MS = Date.UTC(2026, 0, 1);
 /** The fake `brctl` refuses a file of this name, as the real one may for any file. */
 const REFUSED_FILE_NAME = 'refused.txt';
-
-async function withFixtureRoot(params: {
-  run: (fixtureRoot: FixtureRoot) => Promise<void>;
-}): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
-
-  try {
-    await params.run(fixtureRoot);
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
-}
+/** The mode of a tool only its owner may change. */
+const TRUSTED_TOOL_MODE = 0o755;
 
 function getCloudDocsPath(params: { fixtureRoot: FixtureRoot }): string {
   return join(params.fixtureRoot.homeDir, 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
@@ -65,11 +47,8 @@ async function createFakeBrctl(params: {
       `appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(args) + '\\n');`,
       `process.exit((args[1] ?? '').endsWith(${JSON.stringify(REFUSED_FILE_NAME)}) ? 1 : 0);`,
     ].join('\n'),
+    mode: params.mode ?? TRUSTED_TOOL_MODE,
   });
-
-  if (params.mode !== undefined) {
-    await chmod(path, params.mode);
-  }
 
   return realpath(path);
 }
@@ -89,13 +68,12 @@ async function loadToolCalls(params: { fixtureRoot: FixtureRoot }): Promise<stri
 
 /** A downloaded file iCloud Drive keeps, untouched since `OLD_MS`, as the scan found it. */
 async function createScannedFile(params: { path: string }): Promise<EvictTarget> {
-  await mkdir(dirname(params.path), { recursive: true });
-  await writeFile(params.path, Buffer.alloc(8192, 1));
-  await utimes(params.path, new Date(OLD_MS), new Date(OLD_MS));
+  await createFixtureDirectory({ path: dirname(params.path) });
+  await createFixtureFile({ path: params.path, sizeBytes: 8192, modifiedMs: OLD_MS });
 
-  const times = await loadEntryTimes({ path: params.path });
+  const stats = await loadEntryStats({ path: params.path });
 
-  if (times.kind === 'failed') {
+  if (stats.kind === 'failed') {
     throw new Error(`The fixture file ${params.path} cannot be read.`);
   }
 
@@ -103,12 +81,12 @@ async function createScannedFile(params: { path: string }): Promise<EvictTarget>
     path: params.path,
     identity: {
       ...buildTestIdentity({ realPath: params.path, kind: 'file' }),
-      dev: times.value.dev,
-      ino: times.value.ino,
-      birthtimeNs: BigInt(times.value.bornMs) * 1_000_000n,
+      dev: stats.value.dev,
+      ino: stats.value.ino,
+      birthtimeNs: BigInt(stats.value.bornMs) * 1_000_000n,
     },
-    modifiedMs: times.value.modifiedMs,
-    accessedMs: times.value.accessedMs,
+    modifiedMs: stats.value.modifiedMs,
+    accessedMs: stats.value.accessedMs,
   };
 }
 
@@ -143,11 +121,11 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         const first = await createScannedFile({ path: join(cloudDocs, 'Docs', 'a.txt') });
         const second = await createScannedFile({ path: join(cloudDocs, 'Docs', 'b.txt') });
         const toolPath = await createFakeBrctl({ fixtureRoot: fixtureRoot });
-        const firstTimes = await loadEntryTimes({ path: first.path });
-        const secondTimes = await loadEntryTimes({ path: second.path });
+        const firstStats = await loadEntryStats({ path: first.path });
+        const secondStats = await loadEntryStats({ path: second.path });
         const blocks =
-          (firstTimes.kind === 'succeeded' ? firstTimes.value.allocatedBytes : 0) +
-          (secondTimes.kind === 'succeeded' ? secondTimes.value.allocatedBytes : 0);
+          (firstStats.kind === 'succeeded' ? firstStats.value.allocatedBytes : 0) +
+          (secondStats.kind === 'succeeded' ? secondStats.value.allocatedBytes : 0);
 
         const recorded = await evict({
           fixtureRoot: fixtureRoot,
@@ -161,7 +139,6 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         ]);
         expect(blocks).toBeGreaterThan(0);
         expect(recorded.outcome).toMatchObject({
-          path: cloudDocs,
           outcome: 'removed',
           code: null,
           freedBytes: blocks,
@@ -213,7 +190,7 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         const refused = await createScannedFile({ path: join(cloudDocs, REFUSED_FILE_NAME) });
         const evicted = await createScannedFile({ path: join(cloudDocs, 'evicted.txt') });
         const toolPath = await createFakeBrctl({ fixtureRoot: fixtureRoot });
-        const evictedTimes = await loadEntryTimes({ path: evicted.path });
+        const evictedStats = await loadEntryStats({ path: evicted.path });
 
         const recorded = await evict({
           fixtureRoot: fixtureRoot,
@@ -232,7 +209,7 @@ describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
         expect(recorded.outcome).toMatchObject({
           outcome: 'toolFailed',
           failure: toolFailure,
-          freedBytes: evictedTimes.kind === 'succeeded' ? evictedTimes.value.allocatedBytes : -1,
+          freedBytes: evictedStats.kind === 'succeeded' ? evictedStats.value.allocatedBytes : -1,
         });
         expect(recorded.outcomeEntries).toMatchObject([
           { kind: 'eviction', path: refused.path, outcome: 'toolFailed', failure: toolFailure },

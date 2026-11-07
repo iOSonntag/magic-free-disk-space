@@ -48,10 +48,7 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     removal: { kind: 'delete' },
   },
   {
-    // The GPU caches macOS keeps for each app, one folder per app in the user cache folder, as
-    // Mole cleans them (tw93/Mole `lib/clean/system.sh`, lines 9-28). Mole takes one only when
-    // nothing in it changed for a day, so a running app keeps the cache it uses (lines 30-51); the
-    // age rule here judges the whole folder of the app, which is at least as strict.
+    // A running app writes to its graphics cache, so only an app folder unchanged for a day goes.
     id: 'metal-caches',
     category: 'caches',
     title: 'Old graphics caches',
@@ -72,27 +69,14 @@ export const SYSTEM_LOG_ENTRIES: CatalogEntry[] = [
     removal: { kind: 'delete' },
   },
   {
-    id: 'crash-reports',
-    category: 'caches',
-    title: 'Old crash reports',
-    explanation: 'Reports that apps and macOS wrote when something crashed, untouched for a while.',
-    regeneration: 'New reports appear only if something crashes again.',
-    risk: 'safe',
-    root: 'home',
-    path: 'Library/Logs/DiagnosticReports',
-    selection: { kind: 'children' },
-    ageRule: { kind: 'unchangedDays', days: SCAN_LIMITS.defaultStaleDays },
-    owner: null,
-    removal: { kind: 'delete' },
-  },
-  {
     // This app's deletion log, a child of this folder, is never offered: the scan skips each
-    // offer that touches a protected path.
+    // offer that touches a protected path. The crash reports in `DiagnosticReports` are one child,
+    // as each report alone lies below the smallest size offered.
     id: 'user-logs',
     category: 'caches',
     title: 'Old app logs',
     explanation:
-      'Notes that apps write about what they did, for finding problems, untouched for a while. One folder for each app.',
+      'Notes that apps write about what they did, and the reports of their crashes, for finding problems, untouched for a while. One folder for each app, and one for the crash reports.',
     regeneration: 'Apps write new ones while they run.',
     risk: 'safe',
     root: 'home',

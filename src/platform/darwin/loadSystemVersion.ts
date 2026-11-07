@@ -1,5 +1,5 @@
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
-import { loadCommandOutput } from '../../system/loadCommandOutput.js';
+import { loadPlistValue } from './loadPlistValue.js';
 
 /** Where macOS names its own version, as `sw_vers` reads it. */
 const SYSTEM_VERSION_PLIST_PATH = '/System/Library/CoreServices/SystemVersion.plist';
@@ -13,17 +13,11 @@ export function loadSystemVersion(): Promise<string | null> {
 export async function loadPlistProductVersion(params: {
   plistPath: string;
 }): Promise<string | null> {
-  const output = await loadCommandOutput({
-    command: 'plutil',
-    args: ['-extract', 'ProductVersion', 'raw', '-o', '-', params.plistPath],
+  const version = await loadPlistValue({
+    plistPath: params.plistPath,
+    key: 'ProductVersion',
     timeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
 
-  if (output.kind === 'failed') {
-    return null;
-  }
-
-  const version = output.value.trim();
-
-  return version === '' ? null : version;
+  return version.kind === 'failed' || version.value === '' ? null : version.value;
 }

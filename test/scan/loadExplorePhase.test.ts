@@ -27,6 +27,7 @@ import {
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -48,20 +49,14 @@ const MEASURE_TIMEOUT_MS = 10_000;
 const runItemMeasurement = createConcurrencyLimit({ maxConcurrent: 4 });
 
 function buildExploreEntry(params: { id: string; probe: ExploreProbeId }): CatalogEntry {
-  return {
+  return buildTestCatalogEntry({
     id: params.id,
     category: 'developer',
     title: `Entry ${params.id}`,
-    explanation: 'An example entry.',
-    regeneration: 'It comes back.',
     risk: 'review',
-    root: 'home',
     path: params.id,
-    selection: { kind: 'path' },
-    ageRule: { kind: 'none' },
-    owner: null,
     removal: { kind: 'explore', probe: params.probe, advice: `Advice of ${params.id}.` },
-  };
+  });
 }
 
 const simulatorEntry = buildExploreEntry({ id: 'devices', probe: 'simulatorDevices' });

@@ -413,7 +413,8 @@ describeAwaitingWin32Platform('runBridge', () => {
       summary: {
         titleText: 'Found 3 items, 9.4 MB in total',
         lines: ['4.2 MB safe to free', '3.1 MB to check before deleting'],
-        totalBytes: 9 * MIB,
+        // The 2 MiB never item counts in the title alone: the plan refuses it.
+        totalBytes: 7 * MIB,
         safeBytes: 4 * MIB,
         disk: TEST_DISK,
       },

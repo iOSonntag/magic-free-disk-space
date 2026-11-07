@@ -21,6 +21,7 @@ import { callEngineCandidate } from './callEngineCandidate.js';
 import type { DeletePlatform } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
 import { evictCandidateFiles } from './evictCandidateFiles.js';
+import { fileFailureToOutcome } from './fileFailureToOutcome.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
 import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
 
@@ -43,11 +44,10 @@ export type RemovalOutcomeCodedKind = Exclude<RemovalOutcomeKind, 'toolFailed'>;
 
 export type RemovalOutcomeCoded = {
   candidate: Candidate;
-  path: string;
-  allocatedBytes: number;
   /**
-   * The space the removal gave back: a deleted item's size, the measured drop of an item whose
-   * targets went only in part, a tool run's measured drop, or what an engine reports it freed.
+   * The space this run gave back: the scanned size of the targets it found and deleted, the
+   * measured drop of an item whose targets went only in part, a tool run's measured drop, the
+   * blocks of the files an evict took, or what an engine reports it freed.
    */
   freedBytes: number;
   outcome: RemovalOutcomeCodedKind;
@@ -58,8 +58,6 @@ export type RemovalOutcomeCoded = {
 /** A tool that failed may still have removed part of its unit, which `freedBytes` holds. */
 export type RemovalOutcomeToolFailed = {
   candidate: Candidate;
-  path: string;
-  allocatedBytes: number;
   freedBytes: number;
   outcome: 'toolFailed';
   failure: ExploreProbeFailure;
@@ -302,8 +300,6 @@ export function toolCandidateRunToRemoval(params: {
       return {
         outcome: {
           candidate: params.candidate,
-          path: params.candidate.path,
-          allocatedBytes: params.candidate.allocatedBytes,
           freedBytes: params.run.freedBytes,
           outcome: 'removed',
           code: null,
@@ -324,8 +320,6 @@ export function toolCandidateRunToRemoval(params: {
       return {
         outcome: {
           candidate: params.candidate,
-          path: params.candidate.path,
-          allocatedBytes: params.candidate.allocatedBytes,
           freedBytes: 0,
           outcome: params.run.reason,
           code: null,
@@ -343,8 +337,6 @@ export function toolCandidateRunToRemoval(params: {
       return {
         outcome: {
           candidate: params.candidate,
-          path: params.candidate.path,
-          allocatedBytes: params.candidate.allocatedBytes,
           freedBytes: params.run.freedBytes,
           outcome: 'toolFailed',
           failure: params.run.failure,
@@ -470,12 +462,12 @@ function buildKeptRemoval(params: {
   });
 
   return {
-    outcome: buildPathOutcome({
+    outcome: {
       candidate: params.candidate,
-      path: params.candidate.path,
+      freedBytes: 0,
       outcome: params.outcome,
       code: params.code,
-    }),
+    },
     outcomeEntries: [buildEntry(firstTarget), ...otherTargets.map(buildEntry)],
   };
 }
@@ -511,6 +503,11 @@ async function deleteScannedTargets(params: {
   entryReads: EntryReads;
   clock: () => number;
 }): Promise<RecordedRemoval> {
+  const presentBytes = await loadPresentTargetsBytes({
+    candidate: params.candidate,
+    targets: params.targets,
+    entryReads: params.entryReads,
+  });
   const [firstTarget, ...otherTargets] = params.targets;
   const targetOutcomes: [TargetOutcome, ...TargetOutcome[]] = [
     await deleteScannedTarget({ target: firstTarget, delete: params.delete, clock: params.clock }),
@@ -535,10 +532,55 @@ async function deleteScannedTargets(params: {
     outcome: await loadTargetsOutcome({
       candidate: params.candidate,
       targetOutcomes: targetOutcomes,
+      presentBytes: presentBytes,
       entryReads: params.entryReads,
     }),
     outcomeEntries: [buildEntry(firstOutcome), ...otherOutcomes.map(buildEntry)],
   };
+}
+
+/**
+ * What the targets still there before the run hold, as the scan measures them: the scanned size
+ * while each is there, 0 when none is, else a fresh measurement of those still there, so a target
+ * gone before the run counts as nothing this run freed.
+ */
+async function loadPresentTargetsBytes(params: {
+  candidate: Candidate;
+  targets: RemovalTargets<RemovalTarget>;
+  entryReads: EntryReads;
+}): Promise<number> {
+  const presentPaths = await listPresentTargetPaths({ targets: params.targets });
+
+  if (presentPaths.length === params.targets.length) {
+    return params.candidate.allocatedBytes;
+  }
+
+  if (presentPaths.length === 0) {
+    return 0;
+  }
+
+  const present = await loadPathMeasurement({
+    paths: presentPaths,
+    deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
+    entryReads: params.entryReads,
+  });
+
+  return present.allocatedBytes;
+}
+
+/** The paths of the targets that are not missing; one that cannot be read counts as there. */
+async function listPresentTargetPaths(params: { targets: RemovalTarget[] }): Promise<string[]> {
+  const presentPaths: string[] = [];
+
+  for (const target of params.targets) {
+    const identity = await loadFileIdentity({ path: target.path });
+
+    if (identity.kind === 'succeeded' || identity.failure.reason !== 'missing') {
+      presentPaths.push(target.path);
+    }
+  }
+
+  return presentPaths;
 }
 
 /** Deletes the target only while its identity still matches the scan. */
@@ -551,22 +593,13 @@ async function deleteScannedTarget(params: {
   const currentIdentity = await loadFileIdentity({ path: path });
 
   if (currentIdentity.kind === 'failed') {
-    if (currentIdentity.failure.reason === 'missing') {
-      return {
-        path: path,
-        atMs: params.clock(),
-        outcome: 'alreadyGone',
-        code: null,
-        deleteRan: false,
-      };
-    }
+    const failedOutcome = fileFailureToOutcome(currentIdentity.failure);
 
     return {
       path: path,
       atMs: params.clock(),
-      outcome:
-        currentIdentity.failure.reason === 'permissionDenied' ? 'permissionDenied' : 'failed',
-      code: currentIdentity.failure.code,
+      outcome: failedOutcome.outcome,
+      code: failedOutcome.code,
       deleteRan: false,
     };
   }
@@ -597,13 +630,15 @@ async function deleteScannedTarget(params: {
 }
 
 /**
- * The item is gone once each target is: `alreadyGone` when none went by this run, else `removed`
- * with its scanned size. Otherwise it takes the first target that stayed, and frees what its
- * targets no longer hold, measured as the scan measured them, once any delete ran.
+ * The item is gone once each target is: `alreadyGone` when none went by this run, else `removed`,
+ * freeing `presentBytes`, what its targets held before the run. Otherwise it takes the first
+ * target that stayed, and frees the drop from `presentBytes` to what its targets still hold,
+ * measured as the scan measured them, once any delete ran.
  */
 async function loadTargetsOutcome(params: {
   candidate: Candidate;
   targetOutcomes: [TargetOutcome, ...TargetOutcome[]];
+  presentBytes: number;
   entryReads: EntryReads;
 }): Promise<RemovalOutcomeCoded> {
   const isGone = (targetOutcome: TargetOutcome): boolean =>
@@ -615,21 +650,25 @@ async function loadTargetsOutcome(params: {
       (targetOutcome) => targetOutcome.outcome === 'removed',
     );
 
-    return buildPathOutcome({
+    if (!hasRemoved) {
+      return { candidate: params.candidate, freedBytes: 0, outcome: 'alreadyGone', code: null };
+    }
+
+    return {
       candidate: params.candidate,
-      path: params.candidate.path,
-      outcome: hasRemoved ? 'removed' : 'alreadyGone',
+      freedBytes: params.presentBytes,
+      outcome: 'removed',
       code: null,
-    });
+    };
   }
 
   if (!params.targetOutcomes.some((targetOutcome) => targetOutcome.deleteRan)) {
-    return buildPathOutcome({
+    return {
       candidate: params.candidate,
-      path: params.candidate.path,
+      freedBytes: 0,
       outcome: stayedOutcome.outcome,
       code: stayedOutcome.code,
-    });
+    };
   }
 
   const left = await loadPathMeasurement({
@@ -640,31 +679,9 @@ async function loadTargetsOutcome(params: {
 
   return {
     candidate: params.candidate,
-    path: params.candidate.path,
-    allocatedBytes: params.candidate.allocatedBytes,
-    freedBytes: getMeasuredFreedBytes({
-      beforeBytes: params.candidate.allocatedBytes,
-      after: left,
-    }),
+    freedBytes: getMeasuredFreedBytes({ beforeBytes: params.presentBytes, after: left }),
     outcome: stayedOutcome.outcome,
     code: stayedOutcome.code,
-  };
-}
-
-/** A deleted path frees its scanned size; any other outcome built here frees nothing. */
-function buildPathOutcome(params: {
-  candidate: Candidate;
-  path: string;
-  outcome: RemovalOutcomeCodedKind;
-  code: string | null;
-}): RemovalOutcomeCoded {
-  return {
-    candidate: params.candidate,
-    path: params.path,
-    allocatedBytes: params.candidate.allocatedBytes,
-    freedBytes: params.outcome === 'removed' ? params.candidate.allocatedBytes : 0,
-    outcome: params.outcome,
-    code: params.code,
   };
 }
 
@@ -698,12 +715,10 @@ function isSameIdentity(params: { current: FileIdentity; scanned: FileIdentity }
 }
 
 function buildNotAttemptedOutcomes(params: { candidates: Candidate[] }): RemovalOutcome[] {
-  return params.candidates.map((candidate) =>
-    buildPathOutcome({
-      candidate: candidate,
-      path: candidate.path,
-      outcome: 'notAttempted',
-      code: null,
-    }),
-  );
+  return params.candidates.map((candidate) => ({
+    candidate: candidate,
+    freedBytes: 0,
+    outcome: 'notAttempted',
+    code: null,
+  }));
 }

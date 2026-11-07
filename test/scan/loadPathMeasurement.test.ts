@@ -5,8 +5,8 @@ import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { PathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import type { EntryReads } from '../../src/system/entryReads.js';
-import { loadEntryStats } from '../../src/system/loadEntryStats.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestEntryReads, loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -18,11 +18,6 @@ import {
 import { testOnPosix } from '../support/posixOnly.js';
 
 const FAR_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
-
-/** Entry reads that answer `privateBytes` for every entry but a folder; `null` is a failed read. */
-function buildEntryReads(privateBytes: number | null): EntryReads {
-  return { isEntryEvicted: () => false, loadPrivateBytes: () => privateBytes };
-}
 
 async function loadMeasurement(params: {
   paths: string[];
@@ -36,18 +31,10 @@ async function loadMeasurement(params: {
   });
 }
 
-async function loadAllocatedBytes(params: { path: string }): Promise<number> {
-  const statsResult = await loadEntryStats(params);
-
-  if (statsResult.kind === 'failed') {
-    throw new Error(`Stats failed: ${statsResult.failure.reason}`);
-  }
-
-  return statsResult.value.allocatedBytes;
-}
-
 async function sumAllocatedBytes(paths: string[]): Promise<number> {
-  const entryBytes = await Promise.all(paths.map((path) => loadAllocatedBytes({ path: path })));
+  const entryBytes = await Promise.all(
+    paths.map((path) => loadEntryAllocatedBytes({ path: path })),
+  );
 
   return entryBytes.reduce((sum, bytes) => sum + bytes, 0);
 }
@@ -60,7 +47,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
   });
 
   afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot });
+    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
   test('measures a single file', async () => {
@@ -123,11 +110,11 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
 
     const measurement = await loadMeasurement({
       paths: [treeDirPath],
-      entryReads: buildEntryReads(1000),
+      entryReads: buildTestEntryReads({ privateBytes: 1000 }),
     });
 
     expect(measurement.allocatedBytes).toBe(
-      (await loadAllocatedBytes({ path: treeDirPath })) + 2 * 1000,
+      (await loadEntryAllocatedBytes({ path: treeDirPath })) + 2 * 1000,
     );
     expect(measurement.privateSizeFallbackCount).toBe(0);
   });
@@ -143,7 +130,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
 
     const measurement = await loadMeasurement({
       paths: [treeDirPath],
-      entryReads: buildEntryReads(null),
+      entryReads: buildTestEntryReads({ privateBytes: null }),
     });
 
     expect(measurement.allocatedBytes).toBe(
@@ -198,7 +185,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
 
     const measurement = await loadMeasurement({ paths: [insideDirPath] });
 
-    expect(measurement.allocatedBytes).toBe(await loadAllocatedBytes({ path: insideDirPath }));
+    expect(measurement.allocatedBytes).toBe(await loadEntryAllocatedBytes({ path: insideDirPath }));
     expect(measurement.entryCount).toBe(2);
     expect(measurement.isComplete).toBe(true);
   });
@@ -216,7 +203,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
     const firstAlone = await loadMeasurement({ paths: [firstDirPath] });
     const offer = await loadMeasurement({ paths: [firstDirPath, secondDirPath] });
 
-    expect(firstAlone.allocatedBytes).toBe(await loadAllocatedBytes({ path: firstDirPath }));
+    expect(firstAlone.allocatedBytes).toBe(await loadEntryAllocatedBytes({ path: firstDirPath }));
     expect(offer.allocatedBytes).toBe(
       await sumAllocatedBytes([firstDirPath, secondDirPath, originalPath]),
     );
@@ -235,7 +222,9 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
     expect(measurement.allocatedBytes).toBe(
       await sumAllocatedBytes([fixtureRoot.homeDir, linkPath]),
     );
-    expect(measurement.allocatedBytes).toBeLessThan(await loadAllocatedBytes({ path: targetPath }));
+    expect(measurement.allocatedBytes).toBeLessThan(
+      await loadEntryAllocatedBytes({ path: targetPath }),
+    );
   });
 
   testOnPosix('reports an unreadable subfolder as incomplete', async () => {
@@ -286,7 +275,7 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
     const measurement = await loadMeasurement({ paths: [fixtureRoot.homeDir], deadlineMs: 0 });
 
     expect(measurement.allocatedBytes).toBe(
-      await loadAllocatedBytes({ path: fixtureRoot.homeDir }),
+      await loadEntryAllocatedBytes({ path: fixtureRoot.homeDir }),
     );
     expect(measurement.entryCount).toBe(1);
     expect(measurement.isComplete).toBe(false);
@@ -327,6 +316,19 @@ describeAwaitingWin32Platform('loadPathMeasurement', () => {
     expect(measurement.entryCount).toBe(2);
     expect(measurement.isComplete).toBe(true);
     expect(measurement.latestModifiedMs).toBe(1_700_000_000_000);
+  });
+
+  test('holds another volume when any path does, a missing one counting false', async () => {
+    const filePath = join(fixtureRoot.homeDir, 'example.sha256');
+    const missingPath = join(fixtureRoot.homeDir, 'gone');
+
+    await createFixtureFile({ path: filePath, sizeBytes: 64, modifiedMs: 1_700_000_000_000 });
+
+    const plain = await loadMeasurement({ paths: [filePath, missingPath] });
+    const mounted = await loadMeasurement({ paths: [filePath, '/dev', missingPath] });
+
+    expect(plain.holdsOtherVolume).toBe(false);
+    expect(mounted.holdsOtherVolume).toBe(true);
   });
 });
 

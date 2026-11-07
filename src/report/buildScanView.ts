@@ -4,7 +4,7 @@ import type { ExploreEngineAnswerFailure } from '../explore/exploreProbe.js';
 import { formatHomeRelativePath } from '../path/formatHomeRelativePath.js';
 import type { SectionTotal } from '../scan/buildSectionTotals.js';
 import { buildSectionTotals } from '../scan/buildSectionTotals.js';
-import type { Advice, Candidate, CandidateRemoval, SkipReason } from '../scan/candidate.js';
+import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
 import { isProbedCandidate } from '../scan/candidate.js';
 import type { CandidateOrigin, ItemKey, LeftoverMatch } from '../scan/candidateOrigin.js';
 import { buildItemKey } from '../scan/candidateOrigin.js';
@@ -28,6 +28,8 @@ import { formatCandidateCommandText } from './formatCandidateCommandText.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
 import { formatToolFailureFirstStderrLine, formatToolFailureSummary } from './formatToolFailure.js';
+import type { ItemRemovalView } from './itemRemovalView.js';
+import { buildItemRemovalView } from './itemRemovalView.js';
 import type { NoticeView } from './noticeView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from './noticeView.js';
 import type { ReportTexts } from './reportTexts.js';
@@ -51,7 +53,7 @@ export type ScanView = {
 type SummaryView = {
   titleText: string;
   lines: string[];
-  /** The bytes of every offered item, as the title counts them. */
+  /** The bytes the plan may free: every offered item but a `never` one, which the title counts. */
   totalBytes: number;
   /** The bytes of the items of every `safe` group. */
   safeBytes: number;
@@ -95,12 +97,6 @@ type ItemOriginView =
   | 'leftover'
   | 'explore';
 
-/**
- * How an offered item goes: deleted as its paths, by its tool's command, over its engine's API,
- * or evicted from the Mac while iCloud keeps it.
- */
-type ItemRemovalView = 'delete' | 'tool' | 'engine' | 'evict';
-
 /** A selectable item; `number` is what the selection names, `key` what a client keeps it by. */
 export type ItemView = {
   number: number;
@@ -125,10 +121,10 @@ export type ItemView = {
    * item, which lives inside the engine's disk image and has no path of its own.
    */
   revealPath: string | null;
-  /** ISO 8601; `null` when the scan judged no use. */
-  lastUsedAt: string | null;
-  /** ISO 8601; `null` when unknown. */
-  downloadedAt: string | null;
+  /** In ms since the epoch; `null` when the scan judged no use. */
+  lastUsedAt: number | null;
+  /** In ms since the epoch; `null` when unknown. */
+  downloadedAt: number | null;
   appName: string | null;
   /** How a leftover was tied to its app; `null` for every other item. */
   matchedBy: LeftoverMatch | null;
@@ -209,14 +205,6 @@ const originViews: Record<CandidateOrigin['kind'], ItemOriginView> = {
   explore: 'explore',
 };
 
-const removalViews: Record<CandidateRemoval['kind'], ItemRemovalView> = {
-  deletePaths: 'delete',
-  deleteUnitPaths: 'delete',
-  runTool: 'tool',
-  callEngine: 'engine',
-  evictUnitFiles: 'evict',
-};
-
 const riskTexts: Record<Risk, string> = {
   safe: 'safe',
   review: 'review',
@@ -235,6 +223,8 @@ function buildSkipReasonTexts(params: { texts: ReportTexts }): Record<SkipReason
     belowSizeThreshold: 'too small to matter',
     symbolicLink: 'symbolic link, never followed',
     protectedPath: 'a protected folder, never deleted',
+    outsideAllowedRoot: 'outside the folders this tool may clean',
+    unsupportedKind: 'neither a file nor a folder it may remove',
     systemOwned: `owned by ${params.texts.systemName}`,
     ownerRunning: 'its app or tool is running',
     runningUnknown: 'could not check whether its app or tool runs',
@@ -319,8 +309,17 @@ export function buildScanView(params: {
     };
   });
 
+  const sectionTotals = buildSectionTotals({
+    candidates: params.report.candidates,
+    advice: params.report.advice,
+  });
+
   return {
-    summary: buildSummaryView({ placedItems: placedItems, disk: params.disk }),
+    summary: buildSummaryView({
+      placedItems: placedItems,
+      sectionTotals: sectionTotals,
+      disk: params.disk,
+    }),
     sections: buildSectionViews({ placedItems: placedItems, texts: params.texts }),
     explore: buildExploreView({
       placedItems: placedItems,
@@ -337,26 +336,27 @@ export function buildScanView(params: {
       }),
       ...buildPrivateSizeFallbackNotices({ report: params.report, texts: params.texts }),
     ],
-    sectionTotals: buildSectionTotals({
-      candidates: params.report.candidates,
-      advice: params.report.advice,
-    }),
+    sectionTotals: sectionTotals,
   };
 }
 
-/** The total of every candidate, then one line per part of the summary that holds an item. */
+/**
+ * The title over every candidate, then one line per part of the summary that holds an item. The
+ * safe bytes are those of the sections' safe groups, since every candidate lies in one section
+ * and no Explore item is safe.
+ */
 function buildSummaryView(params: {
   placedItems: PlacedItem[];
+  sectionTotals: SectionTotal[];
   disk: VolumeSpace | null;
 }): SummaryView {
+  // A `never` item stays in its section's total, but the plan refuses it, so it frees nothing.
   const totalBytes = sumAllocatedBytes({
-    items: params.placedItems.map((item) => item.candidate),
-  });
-  const safeBytes = sumAllocatedBytes({
     items: params.placedItems.flatMap((item) =>
-      item.place.group === 'safe' ? [item.candidate] : [],
+      isRemovableRisk(item.candidate.risk) ? [item.candidate] : [],
     ),
   });
+  const safeBytes = params.sectionTotals.reduce((sum, total) => sum + total.safeBytes, 0);
 
   if (params.placedItems.length === 0) {
     return {
@@ -531,13 +531,13 @@ function buildItemView(params: {
     sectionKey: params.place.section,
     group: params.place.group,
     origin: formatItemOrigin({ item: params.candidate }),
-    removal: removalViews[params.candidate.removal.kind],
+    removal: buildItemRemovalView({ removal: params.candidate.removal }),
     allocatedBytes: params.candidate.allocatedBytes,
     isComplete: params.candidate.isComplete,
     displayPath: formatDisplayPath({ path: params.candidate.path, homeDir: params.homeDir }),
     revealPath: params.candidate.removal.kind === 'callEngine' ? null : params.candidate.path,
-    lastUsedAt: formatInstantText({ ms: params.candidate.lastUsedAtMs }),
-    downloadedAt: formatInstantText({ ms: params.candidate.downloadedAtMs }),
+    lastUsedAt: params.candidate.lastUsedAtMs,
+    downloadedAt: params.candidate.downloadedAtMs,
     appName: formatAppName({ appName: params.candidate.appName }),
     matchedBy:
       params.candidate.origin.kind === 'leftover' ? params.candidate.origin.matchedBy : null,
@@ -557,14 +557,6 @@ function formatDisplayPath(params: { path: string; homeDir: string }): string {
   return formatDisplayText({
     text: formatHomeRelativePath({ path: params.path, homeDir: params.homeDir }),
   });
-}
-
-function formatInstantText(params: { ms: number | null }): string | null {
-  if (params.ms === null) {
-    return null;
-  }
-
-  return new Date(params.ms).toISOString();
 }
 
 function formatAppName(params: { appName: string | null }): string | null {

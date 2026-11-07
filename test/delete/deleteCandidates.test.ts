@@ -15,10 +15,10 @@ import type {
   ExploreToolUnit,
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
+import { listUnitPaths } from '../../src/explore/exploreUnit.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Candidate, RemovalTarget } from '../../src/scan/candidate.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
-import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
@@ -44,9 +44,10 @@ import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js
 import {
   buildTestCandidate,
   buildTestDartToolCandidate,
+  buildTestProbedCandidate,
   buildTestToolCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
+import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -92,47 +93,36 @@ function buildProcessCommandsLoader(
   return async () => processCommands;
 }
 
-/** Scans a fixture path the way the scanner does, so the candidate carries its real identity. */
-async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Promise<Candidate> {
+/** The target at `path` with the identity it has now, as the scanner reads it. */
+async function scanTarget(path: string): Promise<RemovalTarget> {
   const identity = await loadFileIdentity({ path: path });
 
   if (identity.kind === 'failed') {
     throw new Error(`Cannot scan ${path}: ${identity.failure.reason}`);
   }
 
-  return {
-    path: path,
-    title: 'Fixture item',
-    category: 'caches',
-    risk: 'safe',
-    origin: { kind: 'catalog', entryId: 'test-entry' },
-    explanation: 'A fixture.',
-    regeneration: 'None.',
-    allocatedBytes: 4096,
-    entryCount: 1,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
-    removal: {
-      kind: 'deletePaths',
-      targets: [{ path: path, identity: identity.value }],
-      ownerBundlePaths: ownerBundlePaths,
-    },
-  };
+  return { path: path, identity: identity.value };
 }
 
-async function measurePathBytes(path: string): Promise<number> {
-  const measurement = await loadPathMeasurement({
-    paths: [path],
-    deadlineMs: Date.now() + 60_000,
-    entryReads: darwinPlatform.system.entryReads,
+/** Scans a fixture path the way the scanner does, so the candidate carries its real identity. */
+async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Promise<Candidate> {
+  return buildTestCandidate({
+    path: path,
+    title: 'Fixture item',
+    removal: {
+      kind: 'deletePaths',
+      targets: [await scanTarget(path)],
+      ownerBundlePaths: ownerBundlePaths,
+    },
   });
-
-  return measurement.allocatedBytes;
 }
 
 /** Scans a fixture path with its identity and its size as the scanner measures it. */
 async function scanMeasuredCandidate(path: string): Promise<Candidate> {
-  return { ...(await scanCandidate(path)), allocatedBytes: await measurePathBytes(path) };
+  return {
+    ...(await scanCandidate(path)),
+    allocatedBytes: await loadMeasuredAllocatedBytes({ path: path }),
+  };
 }
 
 /**
@@ -299,26 +289,20 @@ ${buildRemoveFolderBody(dataPath)}
 process.exit(0);`,
   });
 
-  return {
+  return buildTestProbedCandidate({
     path: dirname(dataPath),
     title: 'Simulator iPhone 15',
     category: 'developer',
     risk: 'review',
-    origin: { kind: 'explore', probe: 'simulatorDevices' },
-    explanation: 'A simulator device.',
-    regeneration: 'It does not come back.',
     allocatedBytes: 8192,
-    entryCount: 1,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
+    probe: 'simulatorDevices',
     removal: { kind: 'runTool', unit: unit },
-    evidenceLines: [],
-  };
+  });
 }
 
 async function measureAllocatedBytes(candidate: Candidate): Promise<number> {
-  const measurement = await loadUnitMeasurement({
-    unit: readToolUnit(candidate),
+  const measurement = await loadPathMeasurement({
+    paths: listUnitPaths(readToolUnit(candidate)),
     deadlineMs: Date.now() + 60_000,
     entryReads: darwinPlatform.system.entryReads,
   });
@@ -359,8 +343,6 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       outcomes: [
         {
           candidate: selectedCandidate,
-          path: selected,
-          allocatedBytes: 4096,
           freedBytes: 4096,
           outcome: 'removed',
           code: null,
@@ -513,15 +495,13 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       }),
       clock: () => NOW_MS,
     });
-    const leftBytes = await measurePathBytes(selected);
+    const leftBytes = await loadMeasuredAllocatedBytes({ path: selected });
 
     expect(leftBytes).toBeGreaterThan(0);
     expect(candidate.allocatedBytes - leftBytes).toBeGreaterThanOrEqual(8192);
     expect(run.outcomes).toEqual([
       {
         candidate: candidate,
-        path: selected,
-        allocatedBytes: candidate.allocatedBytes,
         freedBytes: candidate.allocatedBytes - leftBytes,
         outcome: 'permissionDenied',
         code: 'EACCES',
@@ -691,16 +671,12 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     expect(run.outcomes).toEqual([
       {
         candidate: toolCandidate,
-        path: toolCandidate.path,
-        allocatedBytes: toolCandidate.allocatedBytes,
         freedBytes: 0,
         outcome: 'notAttempted',
         code: null,
       },
       {
         candidate: pathCandidate,
-        path: pathItem,
-        allocatedBytes: 4096,
         freedBytes: 0,
         outcome: 'notAttempted',
         code: null,
@@ -765,8 +741,6 @@ process.exit(0);`,
       outcomes: [
         {
           candidate: candidate,
-          path: candidate.path,
-          allocatedBytes: candidate.allocatedBytes,
           freedBytes: allocatedBytes,
           outcome: 'removed',
           code: null,
@@ -810,8 +784,6 @@ process.exit(0);`,
       outcomes: [
         {
           candidate: candidate,
-          path: candidate.path,
-          allocatedBytes: candidate.allocatedBytes,
           freedBytes: 0,
           outcome: 'changedSinceScan',
           code: null,
@@ -851,8 +823,6 @@ process.exit(1);`,
       outcomes: [
         {
           candidate: candidate,
-          path: candidate.path,
-          allocatedBytes: candidate.allocatedBytes,
           freedBytes: 0,
           outcome: 'toolFailed',
           failure: failure,
@@ -902,16 +872,12 @@ process.exit(0);`,
       outcomes: [
         {
           candidate: pathCandidate,
-          path: pathItem,
-          allocatedBytes: 4096,
           freedBytes: 4096,
           outcome: 'removed',
           code: null,
         },
         {
           candidate: toolCandidate,
-          path: toolCandidate.path,
-          allocatedBytes: toolCandidate.allocatedBytes,
           freedBytes: toolAllocatedBytes,
           outcome: 'removed',
           code: null,
@@ -1006,8 +972,6 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
       outcomes: [
         {
           candidate: candidate,
-          path: candidate.path,
-          allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
           freedBytes: VSCODE_FOLDER_SIZE_BYTES,
           outcome: 'removed',
           code: null,
@@ -1141,35 +1105,24 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 });
 
 describeAwaitingWin32Platform('deleteCandidates with an item of several targets', () => {
-  async function scanTarget(path: string): Promise<RemovalTarget> {
-    const identity = await loadFileIdentity({ path: path });
-
-    if (identity.kind === 'failed') {
-      throw new Error(`Cannot scan ${path}: ${identity.failure.reason}`);
-    }
-
-    return { path: path, identity: identity.value };
-  }
-
   /** An item shown at the caches folder that goes as two of its folders, each scanned as it is. */
   async function scanTwoTargetsCandidate(params: {
     firstPath: string;
     secondPath: string;
   }): Promise<Candidate> {
     const allocatedBytes =
-      (await measurePathBytes(params.firstPath)) + (await measurePathBytes(params.secondPath));
+      (await loadMeasuredAllocatedBytes({ path: params.firstPath })) +
+      (await loadMeasuredAllocatedBytes({ path: params.secondPath }));
 
-    return {
-      ...buildTestCandidate({
-        path: join(fixtureRoot.homeDir, 'Library/Caches'),
-        allocatedBytes: allocatedBytes,
-      }),
+    return buildTestCandidate({
+      path: join(fixtureRoot.homeDir, 'Library/Caches'),
+      allocatedBytes: allocatedBytes,
       removal: {
         kind: 'deletePaths',
         targets: [await scanTarget(params.firstPath), await scanTarget(params.secondPath)],
         ownerBundlePaths: [],
       },
-    };
+    });
   }
 
   async function deleteTargetsCandidate(params: {
@@ -1201,8 +1154,6 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
     expect(run.outcomes).toEqual([
       {
         candidate: candidate,
-        path: candidate.path,
-        allocatedBytes: candidate.allocatedBytes,
         freedBytes: candidate.allocatedBytes,
         outcome: 'removed',
         code: null,
@@ -1228,7 +1179,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
   test('deletes the other targets when one changed since the scan, and counts what went', async () => {
     const firstPath = await createCacheFolder('replaced');
     const secondPath = await createCacheFolder('kept-identity');
-    const secondBytes = await measurePathBytes(secondPath);
+    const secondBytes = await loadMeasuredAllocatedBytes({ path: secondPath });
     const candidate = await scanTwoTargetsCandidate({
       firstPath: firstPath,
       secondPath: secondPath,
@@ -1241,7 +1192,6 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
     const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
 
     expect(run.outcomes[0]).toMatchObject({
-      path: candidate.path,
       outcome: 'changedSinceScan',
       freedBytes: secondBytes,
     });
@@ -1255,9 +1205,10 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
     expect(await isPresent(secondPath)).toBe(false);
   });
 
-  test('is removed when a target was gone already and the other deleted', async () => {
+  test('is removed when a target was gone already and the other deleted, counting only what this run deleted', async () => {
     const firstPath = await createCacheFolder('gone');
     const secondPath = await createCacheFolder('deleted');
+    const secondBytes = await loadMeasuredAllocatedBytes({ path: secondPath });
     const candidate = await scanTwoTargetsCandidate({
       firstPath: firstPath,
       secondPath: secondPath,
@@ -1268,10 +1219,8 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
 
     const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
 
-    expect(run.outcomes[0]).toMatchObject({
-      outcome: 'removed',
-      freedBytes: candidate.allocatedBytes,
-    });
+    expect(secondBytes).toBeLessThan(candidate.allocatedBytes);
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'removed', freedBytes: secondBytes });
     expect(await loadJournalLines(journal)).toMatchObject([
       { kind: 'sessionStart' },
       { kind: 'intent' },
@@ -1337,8 +1286,6 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
     ).toEqual({
       outcome: {
         candidate: toolCandidate,
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
         freedBytes: 6144,
         outcome: 'removed',
         code: null,
@@ -1367,8 +1314,6 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
     ).toEqual({
       outcome: {
         candidate: toolCandidate,
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
         freedBytes: 0,
         outcome: 'ownerRunning',
         code: null,
@@ -1394,8 +1339,6 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
     ).toEqual({
       outcome: {
         candidate: toolCandidate,
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
         freedBytes: 1024,
         outcome: 'toolFailed',
         failure: failure,

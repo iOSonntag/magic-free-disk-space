@@ -216,30 +216,12 @@ export const BROWSER_ENTRIES: CatalogEntry[] = [
     regeneration: 'Firefox fills it again while you browse.',
     risk: 'safe',
     root: 'home',
+    // On macOS Firefox keeps each profile's `cache2` in its local folder here, never beside the
+    // profile in `Application Support`.
     path: 'Library/Caches/Firefox/Profiles',
     selection: {
       kind: 'profileFolders',
       markerName: 'cache2',
-      subpaths: ['cache2'],
-      rootSubpaths: [],
-    },
-    ageRule: { kind: 'none' },
-    owner: buildBundleIdOwner({ text: 'org.mozilla.firefox' }),
-    removal: { kind: 'delete' },
-  },
-  {
-    id: 'firefox-profile-data-caches',
-    category: 'caches',
-    title: 'Firefox profile caches',
-    explanation:
-      'Pages and images that Firefox keeps for one of your Firefox profiles to load websites faster. Your history, passwords and logins stay.',
-    regeneration: 'Firefox fills it again while you browse.',
-    risk: 'safe',
-    root: 'home',
-    path: 'Library/Application Support/Firefox/Profiles',
-    selection: {
-      kind: 'profileFolders',
-      markerName: 'prefs.js',
       subpaths: ['cache2'],
       rootSubpaths: [],
     },

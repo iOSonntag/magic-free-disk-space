@@ -77,6 +77,11 @@ describeAwaitingWin32Platform('parseBundleIdShapedName', () => {
     expect(parseBundleIdShapedName({ name: 'Homebrew' })).toBeNull();
   });
 
+  test('names no bundle id for a team-prefixed name whose rest is too short for one', () => {
+    // The group folder of 1Password, whose app is `com.1password.1password`.
+    expect(parseBundleIdShapedName({ name: '2BUA8C4S2C.com.1password' })).toBeNull();
+  });
+
   test('keeps a lower-case first segment of ten characters as part of the id', () => {
     expect(parseBundleIdShapedName({ name: 'abcdefghij.example.app' })).toEqual(
       buildTestMacBundleId({ text: 'abcdefghij.example.app' }),

@@ -1,8 +1,11 @@
-import type { RemovalOutcome, RemovalOutcomeKind, RemovalRun } from '../delete/deleteCandidates.js';
+import type { RemovalOutcomeKind, RemovalRun } from '../delete/deleteCandidates.js';
+import { isUnremovedOutcome } from '../delete/deleteCandidates.js';
 import type { Candidate } from '../scan/candidate.js';
 import type { ItemKey } from '../scan/candidateOrigin.js';
 import { buildItemKey } from '../scan/candidateOrigin.js';
 import { findRankedNumber } from './findRankedNumber.js';
+import type { FreedSpace } from './sumFreedSpace.js';
+import { sumFreedSpace } from './sumFreedSpace.js';
 
 /** How an item ended, as a client words it; the reason key says why. */
 export type DeletedOutcomeKey = 'removed' | 'partlyRemoved' | 'kept' | 'failed';
@@ -19,31 +22,11 @@ export type DeletedOutcomeFacts = {
 };
 
 /** What a run did, for a client to word its result by. */
-export type DeletedFacts = {
+export type DeletedFacts = FreedSpace & {
   outcomes: DeletedOutcomeFacts[];
-  /** The space the disk got back, every engine's left out. */
-  freedBytes: number;
-  /** What the engines freed inside their disk images, which the disk gets back only later. */
-  returnsLaterBytes: number;
   /** The free space of the home folder's volume after the run; `null` when it could not be read. */
   availableBytesAfter: number | null;
   logPath: string;
-};
-
-/** `unremoved` turns `partlyRemoved` when the run freed some of the item, else `failed`. */
-type OutcomeClass = 'removed' | 'kept' | 'unremoved';
-
-const outcomeClasses: Record<RemovalOutcomeKind, OutcomeClass> = {
-  removed: 'removed',
-  alreadyGone: 'removed',
-  changedSinceScan: 'kept',
-  ownerRunning: 'kept',
-  notAttempted: 'kept',
-  permissionDenied: 'unremoved',
-  failed: 'unremoved',
-  toolFailed: 'unremoved',
-  engineInUse: 'kept',
-  engineNotRunning: 'kept',
 };
 
 /** `ranked` is the candidates of the scan the run deleted from, which number its outcomes. */
@@ -53,12 +36,7 @@ export function buildDeletedFacts(params: {
   availableBytesAfter: number | null;
   logPath: string;
 }): DeletedFacts {
-  const engineOutcomes = params.run.outcomes.filter(
-    (outcome) => outcome.candidate.removal.kind === 'callEngine',
-  );
-  const hostOutcomes = params.run.outcomes.filter(
-    (outcome) => outcome.candidate.removal.kind !== 'callEngine',
-  );
+  const freedSpace = sumFreedSpace(params.run.outcomes);
 
   return {
     outcomes: params.run.outcomes.map((outcome) => ({
@@ -68,27 +46,33 @@ export function buildDeletedFacts(params: {
       reasonKey: outcome.outcome === 'removed' ? null : outcome.outcome,
       freedBytes: outcome.freedBytes,
     })),
-    freedBytes: sumFreedBytes({ outcomes: hostOutcomes }),
-    returnsLaterBytes: sumFreedBytes({ outcomes: engineOutcomes }),
+    freedBytes: freedSpace.freedBytes,
+    returnsLaterBytes: freedSpace.returnsLaterBytes,
     availableBytesAfter: params.availableBytesAfter,
     logPath: params.logPath,
   };
 }
 
-function sumFreedBytes(params: { outcomes: RemovalOutcome[] }): number {
-  return params.outcomes.reduce((sum, outcome) => sum + outcome.freedBytes, 0);
-}
-
+/**
+ * `removed` for an item that went whole, as one already gone did; else `partlyRemoved` once the
+ * run freed part of it, whatever kept the rest; else `failed` when a failure kept it, `kept` when
+ * a check did.
+ */
 function decideOutcomeKey(params: {
   kind: RemovalOutcomeKind;
   freedBytes: number;
 }): DeletedOutcomeKey {
-  switch (outcomeClasses[params.kind]) {
-    case 'removed':
-      return 'removed';
-    case 'kept':
-      return 'kept';
-    case 'unremoved':
-      return params.freedBytes > 0 ? 'partlyRemoved' : 'failed';
+  if (params.kind === 'removed' || params.kind === 'alreadyGone') {
+    return 'removed';
   }
+
+  if (params.freedBytes > 0) {
+    return 'partlyRemoved';
+  }
+
+  if (isUnremovedOutcome(params.kind)) {
+    return 'failed';
+  }
+
+  return 'kept';
 }

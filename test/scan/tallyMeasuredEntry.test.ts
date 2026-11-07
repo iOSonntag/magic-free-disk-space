@@ -80,15 +80,6 @@ describeAwaitingWin32Platform('tallyMeasuredEntry', () => {
     expect(totals).toEqual({ countedBytes: 0, privateSizeFallbackCount: 0 });
   });
 
-  test('counts once an inode whose links are split across two paths of one offer', () => {
-    const totals = tallyOfferPaths([
-      [buildFileEntry({ ino: 7n, linkCount: 2, allocatedBytes: 102_400, privateBytes: 102_400 })],
-      [buildFileEntry({ ino: 7n, linkCount: 2, allocatedBytes: 102_400, privateBytes: 102_400 })],
-    ]);
-
-    expect(totals).toEqual({ countedBytes: 102_400, privateSizeFallbackCount: 0 });
-  });
-
   test('keeps inodes of the same number on two devices apart', () => {
     const tally = createEntryTally();
 

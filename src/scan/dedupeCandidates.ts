@@ -1,6 +1,6 @@
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
-import type { CandidateDecision } from './candidate.js';
+import type { CandidateDecision, CandidateDecisionSkip, SkipReason } from './candidate.js';
 import { isProbedCandidate } from './candidate.js';
 import { listCandidateFootprint, listProbedTargetPaths } from './listCandidateFootprint.js';
 
@@ -16,6 +16,10 @@ import { listCandidateFootprint, listProbedTargetPaths } from './listCandidateFo
  * its footprint holds or equals one of `reservedEntryPaths`, or holds, equals, or lies inside a
  * target of a probed offer. An offer inside an entry path stays, since a probe claims only what
  * its units name.
+ *
+ * A skip for the age or the use of a path holds no probed offer back, since a probe judges the
+ * activity of its own units: a large file skipped as recently used still goes as the old installer
+ * a probe found it to be.
  */
 export function dedupeCandidates(params: {
   pathRules: PathRules;
@@ -23,8 +27,8 @@ export function dedupeCandidates(params: {
   /** The path of every explore entry, whether its probe ran or fell back to advice. */
   reservedEntryPaths: string[];
 }): CandidateDecision[] {
-  const skippedPaths = params.decisions.flatMap((decision) =>
-    decision.kind === 'skip' ? [decision.path] : [],
+  const skips = params.decisions.flatMap((decision) =>
+    decision.kind === 'skip' ? [decision] : [],
   );
   const advisedPlaces = params.decisions.flatMap((decision): AdvisedPlace[] =>
     decision.kind === 'advice'
@@ -34,12 +38,12 @@ export function dedupeCandidates(params: {
   const unitTargetPaths = params.decisions.flatMap((decision) =>
     decision.kind === 'offer' ? listProbedTargetPaths(decision.candidate) : [],
   );
-  const earlierSkippedPaths: string[] = [];
+  const earlierSkips: CandidateDecisionSkip[] = [];
   const keptOfferPaths: string[] = [];
 
   return params.decisions.map((decision): CandidateDecision => {
     if (decision.kind === 'skip') {
-      earlierSkippedPaths.push(decision.path);
+      earlierSkips.push(decision);
 
       return decision;
     }
@@ -48,14 +52,15 @@ export function dedupeCandidates(params: {
       return decision;
     }
 
+    const isProbed = isProbedCandidate(decision.candidate);
     const footprint = listCandidateFootprint(decision.candidate);
     const isOverlapping = footprint.some((path) =>
       isOverlappingHeldPath({
         pathRules: params.pathRules,
         path: path,
-        skippedPaths: skippedPaths,
+        skippedPaths: listHoldingSkipPaths({ skips: skips, isProbed: isProbed }),
         advisedPlaces: advisedPlaces,
-        earlierSkippedPaths: earlierSkippedPaths,
+        earlierSkippedPaths: listHoldingSkipPaths({ skips: earlierSkips, isProbed: isProbed }),
         keptOfferPaths: keptOfferPaths,
       }),
     );
@@ -65,7 +70,7 @@ export function dedupeCandidates(params: {
     }
 
     const isHeldByProbe =
-      !isProbedCandidate(decision.candidate) &&
+      !isProbed &&
       footprint.some((path) =>
         isProbeReservedPath({
           pathRules: params.pathRules,
@@ -83,6 +88,45 @@ export function dedupeCandidates(params: {
 
     return decision;
   });
+}
+
+/** The paths of the skips that hold the offer back: every skip, or for a probed offer all but an age skip. */
+function listHoldingSkipPaths(params: {
+  skips: CandidateDecisionSkip[];
+  isProbed: boolean;
+}): string[] {
+  return params.skips
+    .filter((skip) => !params.isProbed || !isAgeSkipReason(skip.reason))
+    .map((skip) => skip.path);
+}
+
+/** Whether the skip judged the path by its age or its use, which a probe judges for its own units. */
+function isAgeSkipReason(reason: SkipReason): boolean {
+  switch (reason) {
+    case 'recentActivity':
+    case 'activityUnknown':
+    case 'recentUse':
+    case 'useUnknown':
+      return true;
+    case 'belowSizeThreshold':
+    case 'symbolicLink':
+    case 'protectedPath':
+    case 'outsideAllowedRoot':
+    case 'unsupportedKind':
+    case 'systemOwned':
+    case 'ownerRunning':
+    case 'runningUnknown':
+    case 'ownerInstalled':
+    case 'genericName':
+    case 'installsRunningSystem':
+    case 'systemVersionUnknown':
+    case 'notBundleId':
+    case 'installedAppsUnknown':
+    case 'holdsOtherVolume':
+    case 'overlapsEarlierCandidate':
+    case 'heldByProbe':
+      return false;
+  }
 }
 
 function isProbeReservedPath(params: {

@@ -9,9 +9,10 @@ import type {
   ExploreToolUnitMiseVersion,
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
+import { listUnitPaths } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
+import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import type { ProbeCommandName } from '../explore/probeFakeTools.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
@@ -190,8 +191,8 @@ function buildRemoveCommands(paths: AbsolutePath[]): string {
 }
 
 async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
-  const measurement = await loadUnitMeasurement({
-    unit: unit,
+  const measurement = await loadPathMeasurement({
+    paths: listUnitPaths(unit),
     deadlineMs: Date.now() + 60_000,
     entryReads: darwinPlatform.system.entryReads,
   });
@@ -543,8 +544,8 @@ process.exit(0);`,
         loadProcessCommands: loadNoProcessCommands,
         timeoutMs: TIMEOUT_MS,
       });
-      const measurementAfter = await loadUnitMeasurement({
-        unit: unit,
+      const measurementAfter = await loadPathMeasurement({
+        paths: listUnitPaths(unit),
         deadlineMs: Date.now() + 60_000,
         entryReads: darwinPlatform.system.entryReads,
       });

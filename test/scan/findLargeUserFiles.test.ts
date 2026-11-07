@@ -3,9 +3,8 @@ import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
-import type { EntryReads } from '../../src/system/entryReads.js';
-import { loadEntryStats } from '../../src/system/loadEntryStats.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestEntryReads, loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -20,21 +19,6 @@ const LARGE_FILE_BYTES = 2 * 1024 * 1024;
 const SMALL_FILE_BYTES = 1024;
 const TEST_MODIFIED_MS = 1_600_000_000_000;
 const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
-
-/** Entry reads that answer `privateBytes` for every entry but a folder; `null` is a failed read. */
-function buildEntryReads(privateBytes: number | null): EntryReads {
-  return { isEntryEvicted: () => false, loadPrivateBytes: () => privateBytes };
-}
-
-async function loadAllocatedBytes(path: string): Promise<number> {
-  const stats = await loadEntryStats({ path: path });
-
-  if (stats.kind === 'failed') {
-    throw new Error(`Stats failed: ${stats.failure.reason}`);
-  }
-
-  return stats.value.allocatedBytes;
-}
 
 describeAwaitingWin32Platform('findLargeUserFiles', () => {
   let fixtureRoot: FixtureRoot;
@@ -313,7 +297,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      entryReads: buildEntryReads(SMALL_FILE_BYTES),
+      entryReads: buildTestEntryReads({ privateBytes: SMALL_FILE_BYTES }),
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -332,14 +316,14 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      entryReads: buildEntryReads(MIN_ALLOCATED_BYTES + 4096),
+      entryReads: buildTestEntryReads({ privateBytes: MIN_ALLOCATED_BYTES + 4096 }),
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
     const unread = await findLargeUserFiles({
       rootDirs: [fixtureRoot.homeDir],
       minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      entryReads: buildEntryReads(null),
+      entryReads: buildTestEntryReads({ privateBytes: null }),
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -349,7 +333,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     expect(unread.findings).toMatchObject([
       {
         path: largePath,
-        allocatedBytes: await loadAllocatedBytes(largePath),
+        allocatedBytes: await loadEntryAllocatedBytes({ path: largePath }),
         privateSizeFallbackCount: 1,
       },
     ]);

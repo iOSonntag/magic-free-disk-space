@@ -11,6 +11,7 @@ import { formatBytes } from './formatBytes.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
 import { formatToolFailureStderrLines, formatToolFailureSummary } from './formatToolFailure.js';
+import { isEngineOutcome, sumFreedSpace } from './sumFreedSpace.js';
 
 const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   removed: 'deleted',
@@ -26,10 +27,15 @@ const outcomeTexts: Record<RemovalOutcomeKind, string> = {
 };
 
 export function formatRemovalRun(params: { run: RemovalRun }): string[] {
+  const freedSpace = sumFreedSpace(params.run.outcomes);
+
   return [
     ...params.run.outcomes.flatMap((outcome) => formatOutcomeLines({ outcome: outcome })),
-    formatFreedSummaryLine({ outcomes: params.run.outcomes }),
-    ...formatReturnsLaterLines({ outcomes: params.run.outcomes }),
+    formatFreedSummaryLine({
+      outcomes: params.run.outcomes,
+      freedBytes: freedSpace.freedBytes,
+    }),
+    ...formatReturnsLaterLines({ returnsLaterBytes: freedSpace.returnsLaterBytes }),
     ...formatUnremovedSummaryLines({ outcomes: params.run.outcomes }),
     ...formatJournalFailureLines({ journalFailure: params.run.journalFailure }),
   ];
@@ -51,7 +57,7 @@ function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
 function formatCodedOutcomeLine(params: { outcome: RemovalOutcomeCoded }): string {
   const codeText = params.outcome.code === null ? '' : ` (${params.outcome.code})`;
 
-  return `- ${outcomeTexts[params.outcome.outcome]}: ${formatDisplayText({ text: params.outcome.path })}${codeText}`;
+  return `- ${outcomeTexts[params.outcome.outcome]}: ${formatOutcomeItemText({ outcome: params.outcome })}${codeText}`;
 }
 
 /** The failure in short, then the end of what the tool wrote to stderr when it wrote any. */
@@ -60,9 +66,25 @@ function formatToolFailedLines(params: { outcome: RemovalOutcomeToolFailed }): s
   const stderrLines = formatToolFailureStderrLines({ failure: params.outcome.failure });
 
   return [
-    `- ${outcomeTexts.toolFailed}: ${formatDisplayText({ text: params.outcome.path })} (${failureText})`,
+    `- ${outcomeTexts.toolFailed}: ${formatOutcomeItemText({ outcome: params.outcome })} (${failureText})`,
     ...stderrLines.map((line) => `   ${line}`),
   ];
+}
+
+/**
+ * The item an outcome is about: its path, or for an engine's unit its title and its engine, since
+ * the path shown for it is the engine's disk image, which the engine keeps.
+ */
+function formatOutcomeItemText(params: { outcome: RemovalOutcome }): string {
+  const candidate = params.outcome.candidate;
+
+  if (candidate.removal.kind === 'callEngine') {
+    return formatDisplayText({
+      text: `${candidate.title}, in ${candidate.removal.unit.engineName}`,
+    });
+  }
+
+  return formatDisplayText({ text: candidate.path });
 }
 
 /**
@@ -70,35 +92,27 @@ function formatToolFailedLines(params: { outcome: RemovalOutcomeToolFailed }): s
  * that gave it; an engine's space comes back only later, so `formatReturnsLaterLines` counts it
  * apart.
  */
-function formatFreedSummaryLine(params: { outcomes: RemovalOutcome[] }): string {
-  const hostOutcomes = params.outcomes.filter((outcome) => !isEngineOutcome(outcome));
-  const removedCount = countOutcomesOfKind({ outcomes: hostOutcomes, kind: 'removed' });
-  const freedBytes = sumFreedBytes({ outcomes: hostOutcomes });
+function formatFreedSummaryLine(params: {
+  outcomes: RemovalOutcome[];
+  freedBytes: number;
+}): string {
+  const removedCount = countOutcomesOfKind({
+    outcomes: params.outcomes.filter((outcome) => !isEngineOutcome(outcome)),
+    kind: 'removed',
+  });
 
-  return `Freed about ${formatBytes(freedBytes)} in ${formatCount({ count: removedCount, singular: 'item', plural: 'items' })}.`;
+  return `Freed about ${formatBytes(params.freedBytes)} in ${formatCount({ count: removedCount, singular: 'item', plural: 'items' })}.`;
 }
 
 /** What the engines freed inside their disk images, only when they freed any. */
-function formatReturnsLaterLines(params: { outcomes: RemovalOutcome[] }): string[] {
-  const returnsLaterBytes = sumFreedBytes({
-    outcomes: params.outcomes.filter((outcome) => isEngineOutcome(outcome)),
-  });
-
-  if (returnsLaterBytes === 0) {
+function formatReturnsLaterLines(params: { returnsLaterBytes: number }): string[] {
+  if (params.returnsLaterBytes === 0) {
     return [];
   }
 
   return [
-    `About ${formatBytes(returnsLaterBytes)} more comes back once the container engines give up the space of their disk images.`,
+    `About ${formatBytes(params.returnsLaterBytes)} more comes back within minutes, once the container engines give up the space of their disk images.`,
   ];
-}
-
-function isEngineOutcome(outcome: RemovalOutcome): boolean {
-  return outcome.candidate.removal.kind === 'callEngine';
-}
-
-function sumFreedBytes(params: { outcomes: RemovalOutcome[] }): number {
-  return params.outcomes.reduce((sum, outcome) => sum + outcome.freedBytes, 0);
 }
 
 function formatUnremovedSummaryLines(params: { outcomes: RemovalOutcome[] }): string[] {

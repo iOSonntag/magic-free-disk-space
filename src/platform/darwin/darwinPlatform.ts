@@ -1,12 +1,12 @@
 import type { Platform } from '../platform.js';
 import { ANDROID_SDK_PATH_NAMES, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
 import {
-  BROWSER_BUNDLES,
   DOWNLOADS_ROOT_PATH_NAMES,
   ICLOUD_DRIVE_ROOT_PATH_NAMES,
   MAIL_BUNDLE_PATHS,
   MAIL_DOWNLOADS_ROOT_PATH_NAMES,
 } from './appleDataRoots.js';
+import { BROWSER_BUNDLES } from './browserBundles.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
 import { CONTAINER_ENGINES } from './containerEngines.js';
 import { isEntryEvicted } from './hasDatalessFlag.js';
@@ -19,6 +19,7 @@ import { loadPrivateBytes } from './loadPrivateSize.js';
 import { loadProcessCommands } from './loadProcessCommands.js';
 import { loadSystemVersion } from './loadSystemVersion.js';
 import { loadVolumeSpace } from './loadVolumeSpace.js';
+import { ORPHAN_LOCATIONS } from './orphanLocations.js';
 import {
   PNPM_HOMES_PATH_NAMES,
   PNPM_STORE_ROOT_PATH_NAMES,
@@ -48,7 +49,11 @@ export const darwinPlatform: Platform = {
     ],
   },
   scan: {
-    apps: { appSection: 'offerUnusedApps', loadInstalledApps: loadInstalledApps },
+    apps: {
+      appSection: 'offerUnusedApps',
+      loadInstalledApps: loadInstalledApps,
+      orphanLocations: ORPHAN_LOCATIONS,
+    },
     loadActiveXcodeBundlePath: loadActiveXcodeBundlePath,
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     userFileRootRelativePaths: USER_FILE_ROOT_RELATIVE_PATHS,

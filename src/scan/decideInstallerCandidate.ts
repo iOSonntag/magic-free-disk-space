@@ -4,32 +4,22 @@ import type { CandidateDecision } from './candidate.js';
 import { DAY_MS } from './limits.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import type { OwnerState } from './resolveOwnerState.js';
-import type { InstalledApp } from './scanPlatform.js';
-
-/**
- * The bundle id every "Install macOS" app carries, whose name changes with each release; the one
- * sign an app is an installer, as Mole's `lib/clean/system.sh` matches it.
- */
-const MACOS_INSTALLER_BUNDLE_ID_TEXT = 'com.apple.InstallAssistant';
+import type { InstalledApp, SystemInstaller } from './scanPlatform.js';
 
 /** An installer that came onto this Mac within these days may be about to run. */
 const INSTALLER_MIN_AGE_DAYS = 14;
 
 const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
 
-/** Whether the app is a macOS installer, by its bundle id alone. */
-export function isMacosInstallerBundleId(bundleId: MacBundleId | null): boolean {
-  return bundleId === MACOS_INSTALLER_BUNDLE_ID_TEXT;
-}
-
 /**
- * Offers a macOS installer older than 14 days that installs another release of macOS than this Mac
- * runs, while it does not run. One the user does not own becomes advice, since only an
- * administrator may remove it. An installer whose release or the running one cannot be read is
- * never offered, as if it installed the running release.
+ * Offers the app, an installer of the system, when it is older than 14 days and installs another
+ * release than this Mac runs, while it does not run. One the user does not own becomes advice,
+ * since only an administrator may remove it. An installer whose release or the running one cannot
+ * be read is never offered, as if it installed the running release.
  */
 export function decideInstallerCandidate(params: {
   app: InstalledApp;
+  installer: SystemInstaller;
   bundleId: MacBundleId;
   measurement: Measurement;
   ownerState: OwnerState;
@@ -47,7 +37,7 @@ export function decideInstallerCandidate(params: {
     return { kind: 'skip', path: path, reason: 'runningUnknown' };
   }
 
-  const installerRelease = parseSystemRelease({ version: params.app.builtForSystemVersion });
+  const installerRelease = parseSystemRelease({ version: params.installer.builtForSystemVersion });
   const runningRelease = parseSystemRelease({ version: params.systemVersion });
 
   if (installerRelease === null || runningRelease === null) {

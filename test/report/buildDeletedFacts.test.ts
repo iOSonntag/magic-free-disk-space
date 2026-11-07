@@ -5,36 +5,53 @@ import type {
   RemovalRun,
 } from '../../src/delete/deleteCandidates.js';
 import { buildDeletedFacts } from '../../src/report/buildDeletedFacts.js';
-import type { Candidate } from '../../src/scan/candidate.js';
+import { formatDeletionLogLine } from '../../src/report/formatDeletionLog.js';
+import { formatRemovalRun } from '../../src/report/formatRemovalRun.js';
+import type { EvictTarget, RemovalTargets } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestEngineCandidate,
+  buildTestRemovalOutcome,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import {
+  buildTestEvictCandidate,
+  buildTestEvictTarget,
+} from '../support/evictCandidateFixtures.js';
+import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
+import {
+  buildProtocolFixtureReport,
+  buildProtocolFixtureRun,
+  PROTOCOL_FIXTURE_AVAILABLE_BYTES_AFTER,
+  PROTOCOL_FIXTURE_LOG_PATH,
+} from '../support/protocolFixtureScan.js';
 
 const LOG_PATH = '/fixture/Library/Logs/magic-free-disk-space/deletions.jsonl';
-
-function buildCodedOutcome(params: {
-  candidate: Candidate;
-  outcome: RemovalOutcomeCodedKind;
-  freedBytes: number;
-}): RemovalOutcome {
-  return {
-    candidate: params.candidate,
-    path: params.candidate.path,
-    allocatedBytes: params.candidate.allocatedBytes,
-    freedBytes: params.freedBytes,
-    outcome: params.outcome,
-    code: null,
-  };
-}
 
 function buildRun(params: { outcomes: RemovalOutcome[] }): RemovalRun {
   return { outcomes: params.outcomes, journalFailure: null };
 }
 
 describeAwaitingWin32Platform('buildDeletedFacts', () => {
+  test('gives the deleted event of the protocol fixture for the run it shows', async () => {
+    const run = buildProtocolFixtureRun();
+
+    expect<unknown>({
+      kind: 'deleted',
+      lines: [
+        ...formatRemovalRun({ run: run }),
+        formatDeletionLogLine({ logPath: PROTOCOL_FIXTURE_LOG_PATH }),
+      ],
+      ...buildDeletedFacts({
+        run: run,
+        ranked: buildProtocolFixtureReport().candidates,
+        availableBytesAfter: PROTOCOL_FIXTURE_AVAILABLE_BYTES_AFTER,
+        logPath: PROTOCOL_FIXTURE_LOG_PATH,
+      }),
+    }).toEqual(await loadProtocolFixtureEventOfKind('deleted'));
+  });
+
   test('words every outcome a run can give, with its reason, number, and key', () => {
     const codedKinds: RemovalOutcomeCodedKind[] = [
       'removed',
@@ -45,21 +62,19 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
       'permissionDenied',
       'failed',
     ];
-    const ranked = codedKinds.map((kind) => buildTestCandidate({ path: `/fixture/${kind}` }));
+    const codedOutcomes = codedKinds.map((kind) =>
+      buildTestRemovalOutcome({
+        candidate: buildTestCandidate({ path: `/fixture/${kind}` }),
+        outcome: kind,
+        freedBytes: kind === 'removed' ? 4096 : 0,
+      }),
+    );
     const toolCandidate = buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0' });
     const run = buildRun({
       outcomes: [
-        ...codedKinds.map((kind, index) =>
-          buildCodedOutcome({
-            candidate: ranked[index] as Candidate,
-            outcome: kind,
-            freedBytes: kind === 'removed' ? 4096 : 0,
-          }),
-        ),
+        ...codedOutcomes,
         {
           candidate: toolCandidate,
-          path: toolCandidate.path,
-          allocatedBytes: toolCandidate.allocatedBytes,
           freedBytes: 0,
           outcome: 'toolFailed',
           failure: { reason: 'outputUnreadable', detail: 'no version list' },
@@ -69,7 +84,7 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
 
     const facts = buildDeletedFacts({
       run: run,
-      ranked: [...ranked, toolCandidate],
+      ranked: run.outcomes.map((outcome) => outcome.candidate),
       availableBytesAfter: 52_000_000_000,
       logPath: LOG_PATH,
     });
@@ -105,8 +120,12 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
     const facts = buildDeletedFacts({
       run: buildRun({
         outcomes: [
-          buildCodedOutcome({ candidate: removed, outcome: 'removed', freedBytes: 1000 }),
-          buildCodedOutcome({ candidate: partly, outcome: 'permissionDenied', freedBytes: 2000 }),
+          buildTestRemovalOutcome({ candidate: removed, outcome: 'removed', freedBytes: 1000 }),
+          buildTestRemovalOutcome({
+            candidate: partly,
+            outcome: 'permissionDenied',
+            freedBytes: 2000,
+          }),
         ],
       }),
       ranked: [removed, partly],
@@ -134,6 +153,66 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
     expect(facts.availableBytesAfter).toBeNull();
   });
 
+  test('words an iCloud folder whose evict took 9 files and left 1 changed as partly removed', () => {
+    const folderPath = '/fixture/Library/Mobile Documents/com~apple~CloudDocs/Archive';
+    const targets: RemovalTargets<EvictTarget> = [
+      buildTestEvictTarget({ path: `${folderPath}/file-0.pdf` }),
+      ...Array.from({ length: 9 }, (_, index) =>
+        buildTestEvictTarget({ path: `${folderPath}/file-${index + 1}.pdf` }),
+      ),
+    ];
+    const candidate = buildTestEvictCandidate({
+      folderPath: folderPath,
+      targets: targets,
+      allocatedBytes: 10 * 8192,
+    });
+
+    const facts = buildDeletedFacts({
+      run: buildRun({
+        outcomes: [
+          buildTestRemovalOutcome({
+            candidate: candidate,
+            outcome: 'changedSinceScan',
+            freedBytes: 9 * 8192,
+          }),
+        ],
+      }),
+      ranked: [candidate],
+      availableBytesAfter: null,
+      logPath: LOG_PATH,
+    });
+
+    expect(facts.outcomes.map((outcome) => [outcome.outcome, outcome.reasonKey])).toEqual([
+      ['partlyRemoved', 'changedSinceScan'],
+    ]);
+    expect(facts.freedBytes).toBe(9 * 8192);
+  });
+
+  test('words an engine unit of many ids whose later call its engine refused as partly removed', () => {
+    const candidate = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 9000 });
+
+    const facts = buildDeletedFacts({
+      run: buildRun({
+        outcomes: [
+          buildTestRemovalOutcome({
+            candidate: candidate,
+            outcome: 'engineInUse',
+            freedBytes: 3000,
+            code: '409',
+          }),
+        ],
+      }),
+      ranked: [candidate],
+      availableBytesAfter: null,
+      logPath: LOG_PATH,
+    });
+
+    expect(facts.outcomes.map((outcome) => [outcome.outcome, outcome.reasonKey])).toEqual([
+      ['partlyRemoved', 'engineInUse'],
+    ]);
+    expect(facts).toMatchObject({ freedBytes: 0, returnsLaterBytes: 3000 });
+  });
+
   test('counts what an engine freed as space that comes back later, and keeps an item it holds', () => {
     const pathCandidate = buildTestCandidate({ path: '/fixture/a', allocatedBytes: 1000 });
     const cleaned = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 5000 });
@@ -143,10 +222,18 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
     const facts = buildDeletedFacts({
       run: buildRun({
         outcomes: [
-          buildCodedOutcome({ candidate: pathCandidate, outcome: 'removed', freedBytes: 1000 }),
-          buildCodedOutcome({ candidate: cleaned, outcome: 'removed', freedBytes: 5000 }),
-          buildCodedOutcome({ candidate: inUse, outcome: 'engineInUse', freedBytes: 0 }),
-          buildCodedOutcome({ candidate: stopped, outcome: 'engineNotRunning', freedBytes: 0 }),
+          buildTestRemovalOutcome({
+            candidate: pathCandidate,
+            outcome: 'removed',
+            freedBytes: 1000,
+          }),
+          buildTestRemovalOutcome({ candidate: cleaned, outcome: 'removed', freedBytes: 5000 }),
+          buildTestRemovalOutcome({ candidate: inUse, outcome: 'engineInUse', freedBytes: 0 }),
+          buildTestRemovalOutcome({
+            candidate: stopped,
+            outcome: 'engineNotRunning',
+            freedBytes: 0,
+          }),
         ],
       }),
       ranked: [pathCandidate, cleaned, inUse, stopped],

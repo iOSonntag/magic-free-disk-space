@@ -2,7 +2,7 @@ import type { Environment } from '../environment/buildEnvironment.js';
 import type { ExploreToolFailure } from '../explore/exploreUnit.js';
 import { isEvictFileUnchanged } from '../explore/icloudDownloads/decideEvictFile.js';
 import type { Candidate, CandidateRemovalEvictUnitFiles, EvictTarget } from '../scan/candidate.js';
-import { loadEntryTimes } from '../system/loadEntryTimes.js';
+import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
@@ -12,6 +12,7 @@ import type {
   RemovalOutcomeCodedKind,
 } from './deleteCandidates.js';
 import type { JournalEntry } from './deletionJournal.js';
+import { fileFailureToOutcome } from './fileFailureToOutcome.js';
 
 /** One file's evict asks the cloud daemon to drop its copy, which returns long before this. */
 const EVICT_FILE_TIMEOUT_MS = 60_000;
@@ -47,7 +48,9 @@ export async function evictCandidateFiles(params: {
   const [firstTarget, ...otherTargets] = params.removal.targets;
   const evictTarget = (target: EvictTarget): Promise<EvictFileOutcome> => {
     if (trustedTool.kind === 'failed') {
-      return Promise.resolve(buildKeptOutcome({ path: target.path, outcome: 'changedSinceScan' }));
+      return Promise.resolve(
+        buildKeptOutcome({ path: target.path, outcome: 'changedSinceScan', code: null }),
+      );
     }
 
     return evictFile({ target: target, tool: trustedTool.value, environment: params.environment });
@@ -77,37 +80,28 @@ async function evictFile(params: {
   tool: LocatedTool;
   environment: Environment;
 }): Promise<EvictFileOutcome> {
-  const times = await loadEntryTimes({ path: params.target.path });
+  const stats = await loadEntryStats({ path: params.target.path });
 
-  if (times.kind === 'failed') {
-    switch (times.failure.reason) {
-      case 'missing':
-        return buildKeptOutcome({ path: params.target.path, outcome: 'alreadyGone' });
-      case 'permissionDenied':
-        return buildKeptOutcome({
-          path: params.target.path,
-          outcome: 'permissionDenied',
-          code: times.failure.code,
-        });
-      case 'unexpected':
-        return buildKeptOutcome({
-          path: params.target.path,
-          outcome: 'failed',
-          code: times.failure.code,
-        });
-    }
+  if (stats.kind === 'failed') {
+    const failedOutcome = fileFailureToOutcome(stats.failure);
+
+    return buildKeptOutcome({
+      path: params.target.path,
+      outcome: failedOutcome.outcome,
+      code: failedOutcome.code,
+    });
   }
 
   // Changed, read, replaced, or already evicted since the scan: kept, as the person may use it.
   if (
     !isEvictFileUnchanged({
-      times: times.value,
+      times: stats.value,
       identity: params.target.identity,
       modifiedMs: params.target.modifiedMs,
       accessedMs: params.target.accessedMs,
     })
   ) {
-    return buildKeptOutcome({ path: params.target.path, outcome: 'changedSinceScan' });
+    return buildKeptOutcome({ path: params.target.path, outcome: 'changedSinceScan', code: null });
   }
 
   const evicted = await runToolCommand({
@@ -132,20 +126,20 @@ async function evictFile(params: {
     path: params.target.path,
     outcome: 'removed',
     code: null,
-    freedBytes: times.value.allocatedBytes,
+    freedBytes: stats.value.allocatedBytes,
   };
 }
 
 function buildKeptOutcome(params: {
   path: string;
   outcome: RemovalOutcomeCodedKind;
-  code?: string;
+  code: string | null;
 }): EvictFileOutcome {
   return {
     kind: 'coded',
     path: params.path,
     outcome: params.outcome,
-    code: params.code ?? null,
+    code: params.code,
     freedBytes: 0,
   };
 }
@@ -162,12 +156,7 @@ function buildEvictOutcome(params: {
     (total, fileOutcome) => total + (fileOutcome.kind === 'coded' ? fileOutcome.freedBytes : 0),
     0,
   );
-  const base = {
-    candidate: params.candidate,
-    path: params.candidate.path,
-    allocatedBytes: params.candidate.allocatedBytes,
-    freedBytes: freedBytes,
-  };
+  const base = { candidate: params.candidate, freedBytes: freedBytes };
   const keptOutcome = params.fileOutcomes.find(
     (fileOutcome) =>
       fileOutcome.kind === 'toolFailed' ||

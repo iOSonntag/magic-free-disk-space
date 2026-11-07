@@ -1,6 +1,9 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
 
-/** The code packages that package tools downloaded for projects, and the browsers test tools downloaded. */
+/**
+ * What package tools and test tools downloaded: the code packages of projects, Poetry's virtual
+ * environments, the browsers of Playwright and Puppeteer, the Cypress app, and Electron's builds.
+ */
 export const PACKAGE_MANAGER_ENTRIES: CatalogEntry[] = [
   {
     id: 'dart-pub-cache',

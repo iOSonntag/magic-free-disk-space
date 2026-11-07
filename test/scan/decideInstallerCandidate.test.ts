@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { decideAppCandidate } from '../../src/scan/decideAppCandidate.js';
 import { DAY_MS } from '../../src/scan/limits.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
+import type { SystemInstaller } from '../../src/scan/scanPlatform.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
@@ -13,8 +14,7 @@ const USER_UID = 501;
 const INSTALLER_PATH = '/Applications/Install macOS Sequoia.app';
 
 function decide(params: {
-  bundleId?: string;
-  builtForSystemVersion?: string | null;
+  systemInstaller?: SystemInstaller | null;
   systemVersion?: string | null;
   ownerUid?: number | null;
   ownerState?: OwnerState;
@@ -23,9 +23,11 @@ function decide(params: {
   const app = buildTestInstalledApp({
     bundlePath: INSTALLER_PATH,
     displayName: 'Install macOS Sequoia',
-    bundleId: params.bundleId ?? 'com.apple.InstallAssistant',
-    builtForSystemVersion:
-      params.builtForSystemVersion === undefined ? '15.6' : params.builtForSystemVersion,
+    bundleId: 'com.apple.InstallAssistant',
+    systemInstaller:
+      params.systemInstaller === undefined
+        ? { builtForSystemVersion: '15.6' }
+        : params.systemInstaller,
     ownerUid: params.ownerUid === undefined ? USER_UID : params.ownerUid,
   });
   const measurement = buildTestMeasurement({ realPath: INSTALLER_PATH, allocatedBytes: 900 * MIB });
@@ -64,8 +66,8 @@ describeAwaitingWin32Platform('decideAppCandidate for a macOS installer', () => 
     });
   });
 
-  test('judges an app as an installer by its bundle id alone, not its name', () => {
-    expect(decide({ bundleId: 'com.example.app' })).toMatchObject({
+  test('judges an app as an installer only when the platform marks it one, not by its name', () => {
+    expect(decide({ systemInstaller: null })).toMatchObject({
       kind: 'skip',
       reason: 'recentUse',
     });
@@ -77,17 +79,17 @@ describeAwaitingWin32Platform('decideAppCandidate for a macOS installer', () => 
   });
 
   test('never offers an installer of the release this Mac runs, by its first number', () => {
-    expect(decide({ builtForSystemVersion: '26.0' })).toMatchObject({
+    expect(decide({ systemInstaller: { builtForSystemVersion: '26.0' } })).toMatchObject({
       kind: 'skip',
       reason: 'installsRunningSystem',
     });
   });
 
   test('never offers an installer whose release or the running one is unknown', () => {
-    expect(decide({ builtForSystemVersion: null })).toMatchObject({
+    expect(decide({ systemInstaller: { builtForSystemVersion: null } })).toMatchObject({
       reason: 'systemVersionUnknown',
     });
-    expect(decide({ builtForSystemVersion: 'unknown' })).toMatchObject({
+    expect(decide({ systemInstaller: { builtForSystemVersion: 'unknown' } })).toMatchObject({
       reason: 'systemVersionUnknown',
     });
     expect(decide({ systemVersion: null })).toMatchObject({ reason: 'systemVersionUnknown' });

@@ -99,7 +99,7 @@ export const IDE_ENTRIES: CatalogEntry[] = [
     title: 'Visual Studio Code extension downloads',
     explanation: 'Copies of the extensions that Visual Studio Code downloaded to install them.',
     regeneration: 'They are downloaded again when an extension updates.',
-    risk: 'review',
+    risk: 'safe',
     root: 'home',
     path: 'Library/Application Support/Code/CachedExtensionVSIXs',
     selection: { kind: 'path' },

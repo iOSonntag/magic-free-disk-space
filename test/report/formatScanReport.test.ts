@@ -6,10 +6,10 @@ import type { ScanReport } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestAdvice,
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
 import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
@@ -27,7 +27,7 @@ function buildAdvice(params: {
   allocatedBytes: number;
   isComplete: boolean;
 }): Advice {
-  return {
+  return buildTestAdvice({
     origin: { kind: 'catalog', entryId: 'simulator-runtimes' },
     path: params.path,
     title: params.title,
@@ -35,12 +35,9 @@ function buildAdvice(params: {
     risk: 'careful',
     explanation: 'Installed simulator runtimes.',
     advice: 'Remove the runtimes you no longer need with xcrun simctl runtime delete.',
-    opener: null,
-    carvedPaths: [],
     allocatedBytes: params.allocatedBytes,
     isComplete: params.isComplete,
-    ...TEST_LISTING_FACTS_NONE,
-  };
+  });
 }
 
 /** The lines the CLI prints for `report`, with no disk read, as when its volume cannot be read. */
@@ -97,24 +94,24 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 3 items, 7.2 kB in total:',
-      '- 1.0 kB safe to free',
-      '- 6.1 kB to check before deleting',
+      'Found 3 items, 7.2 KB in total:',
+      '- 1.0 KB safe to free',
+      '- 6.1 KB to check before deleting',
       '',
-      'Caches (3.1 kB):',
-      '1. 1.0 kB [safe] Derived data',
+      'Caches (3.1 KB):',
+      '1. 1.0 KB [safe] Derived data',
       '   /fixture/a',
       '   Cached files.',
       '   Rebuilt when needed.',
       'Check before deleting:',
-      '2. 2.0 kB [careful] Archives',
+      '2. 2.0 KB [careful] Archives',
       '   /fixture/b',
       '   Cached files.',
       '   Rebuilt when needed.',
       '',
-      'Large files (4.1 kB):',
+      'Large files (4.1 KB):',
       'Check before deleting:',
-      '3. 4.1 kB [careful] Old video',
+      '3. 4.1 KB [careful] Old video',
       '   /fixture/movie.mov',
       '   Cached files.',
       '   Rebuilt when needed.',
@@ -141,11 +138,11 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines.slice(0, 5)).toEqual([
-      'Found 1 item, at least 1.0 kB in total:',
-      '- at least 1.0 kB safe to free',
+      'Found 1 item, at least 1.0 KB in total:',
+      '- at least 1.0 KB safe to free',
       '',
-      'Caches (at least 1.0 kB):',
-      '1. at least 1.0 kB [safe] Derived data',
+      'Caches (at least 1.0 KB):',
+      '1. at least 1.0 KB [safe] Derived data',
     ]);
   });
 
@@ -248,8 +245,8 @@ describeAwaitingWin32Platform('formatScanReport', () => {
         ...EMPTY_REPORT,
         candidates: [
           buildTestCandidate({
-            title: 'movie.mov\n2. 1.0 kB [safe] Xcode build data',
-            path: '/fixture/Downloads/movie.mov\n2. 1.0 kB [safe] Xcode build data',
+            title: 'movie.mov\n2. 1.0 KB [safe] Xcode build data',
+            path: '/fixture/Downloads/movie.mov\n2. 1.0 KB [safe] Xcode build data',
             risk: 'careful',
             explanation: 'Cached files.',
             regeneration: 'Rebuilt when needed.',
@@ -261,8 +258,8 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines.slice(5, 7)).toEqual([
-      '1. 1.0 kB [careful] movie.mov\\u{a}2. 1.0 kB [safe] Xcode build data',
-      '   /fixture/Downloads/movie.mov\\u{a}2. 1.0 kB [safe] Xcode build data',
+      '1. 1.0 KB [careful] movie.mov\\u{a}2. 1.0 KB [safe] Xcode build data',
+      '   /fixture/Downloads/movie.mov\\u{a}2. 1.0 KB [safe] Xcode build data',
     ]);
     expect(lines.join('\n').split('\n')).toHaveLength(lines.length);
   });
@@ -406,19 +403,19 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 2 items, 3.1 kB in total:',
-      '- 1.0 kB safe to free',
-      '- 2.0 kB in Explore',
+      'Found 2 items, 3.1 KB in total:',
+      '- 1.0 KB safe to free',
+      '- 2.0 KB in Explore',
       '',
-      'Caches (1.0 kB):',
-      '1. 1.0 kB [safe] Derived data',
+      'Caches (1.0 KB):',
+      '1. 1.0 KB [safe] Derived data',
       '   /fixture/a',
       '   Cached files.',
       '   Rebuilt when needed.',
       '',
       'Explore:',
       EXPLORE_INTRO,
-      '2. 2.0 kB [safe] node 20.1.0',
+      '2. 2.0 KB [safe] node 20.1.0',
       '   /fixture/home/.local/share/mise/installs/node/20.1.0',
       `   ${toolCandidate.explanation}`,
       `   ${toolCandidate.regeneration}`,
@@ -447,12 +444,12 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 1 item, 4.1 kB in total:',
-      '- 4.1 kB in Explore',
+      'Found 1 item, 4.1 KB in total:',
+      '- 4.1 KB in Explore',
       '',
       'Explore:',
       EXPLORE_INTRO,
-      '1. 4.1 kB [review] VS Code extension example.alpha 1.0.0',
+      '1. 4.1 KB [review] VS Code extension example.alpha 1.0.0',
       '   /Users/example/.vscode/extensions/example.alpha-1.0.0',
       '   An extension folder VS Code marked for removal after an uninstall or an update.',
       '   VS Code downloads it again only if you install this version again.',
@@ -493,11 +490,11 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     });
 
     expect(lines).toEqual([
-      'Found 1 item, 1.0 kB in total:',
-      '- 1.0 kB safe to free',
+      'Found 1 item, 1.0 KB in total:',
+      '- 1.0 KB safe to free',
       '',
-      'Caches (1.0 kB):',
-      '1. 1.0 kB [safe] Derived data',
+      'Caches (1.0 KB):',
+      '1. 1.0 KB [safe] Derived data',
       '   /fixture/a',
       '   Cached files.',
       '   Rebuilt when needed.',

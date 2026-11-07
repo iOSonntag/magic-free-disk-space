@@ -7,6 +7,8 @@ import type { ConsumerSection } from '../scan/placeCandidate.js';
 import { placeCandidate } from '../scan/placeCandidate.js';
 import { findRankedNumber } from './findRankedNumber.js';
 import { formatDisplayText } from './formatDisplayText.js';
+import type { ItemRemovalView } from './itemRemovalView.js';
+import { buildItemRemovalView } from './itemRemovalView.js';
 
 export type PlannedItemFacts = {
   number: number;
@@ -15,6 +17,8 @@ export type PlannedItemFacts = {
   title: string;
   sectionKey: ConsumerSection;
   risk: Risk;
+  /** How the item goes, as the scan view words it: an evicted item stays in iCloud. */
+  removal: ItemRemovalView;
   allocatedBytes: number;
 };
 
@@ -38,6 +42,7 @@ export function buildPlannedFacts(params: {
       title: formatDisplayText({ text: candidate.title }),
       sectionKey: placeCandidate(candidate).section,
       risk: candidate.risk,
+      removal: buildItemRemovalView({ removal: candidate.removal }),
       allocatedBytes: candidate.allocatedBytes,
     })),
     totalBytes: params.plan.approved.reduce((sum, candidate) => sum + candidate.allocatedBytes, 0),

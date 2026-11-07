@@ -4,28 +4,27 @@ import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { CATALOG_ENTRIES } from '../../src/platform/darwin/catalogEntries.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
+import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import {
   buildFoundTargets,
   loadMeasuredTargetsPhase,
 } from '../../src/scan/loadMeasuredTargetsPhase.js';
-import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
-import type { ScanPhase } from '../../src/scan/scanPhase.js';
 import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   createFixtureDirectory,
   createFixtureFile,
-  createFixtureRoot,
-  deleteFixtureRoot,
   loadTestEnvironment,
+  withFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { runTestScan } from '../support/scanRunFixtures.js';
 
-const PREVIEWS_FILE_BYTES = 1_048_576;
+// Both are large enough to offer, and the snippet is smaller than the previews.
+const PREVIEWS_FILE_BYTES = 4 * SCAN_LIMITS.minOfferedBytes;
 
-const SNIPPET_FILE_BYTES = 8192;
+const SNIPPET_FILE_BYTES = SCAN_LIMITS.minOfferedBytes;
 
 const MODIFIED_MS = Date.UTC(2026, 0, 1);
 
@@ -35,19 +34,17 @@ type UserDataFixture = { environment: Environment; userDataPath: string; preview
 async function withUserData(params: {
   run: (fixture: UserDataFixture) => Promise<void>;
 }): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
+  await withFixtureRoot({
+    run: async (fixtureRoot) => {
+      const userDataPath = join(fixtureRoot.homeDir, 'Library', 'Developer', 'Xcode', 'UserData');
 
-  try {
-    const userDataPath = join(fixtureRoot.homeDir, 'Library', 'Developer', 'Xcode', 'UserData');
-
-    await params.run({
-      environment: await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: MODIFIED_MS }),
-      userDataPath: userDataPath,
-      previewsPath: join(userDataPath, 'Previews'),
-    });
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
+      await params.run({
+        environment: await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: MODIFIED_MS }),
+        userDataPath: userDataPath,
+        previewsPath: join(userDataPath, 'Previews'),
+      });
+    },
+  });
 }
 
 /** A large preview build inside `Previews`, and a snippet beside it. */
@@ -80,35 +77,36 @@ function findEntry(id: string): CatalogEntry {
 }
 
 /**
- * The phase of one catalog entry at `path` as the scan runs it: its carved paths, the measurement
- * less them, and the decision, with the owner stopped. Keeps each measurement its decide got.
+ * Measures the user data entry at its path as the scan's target phase does, carved or whole, and
+ * returns the measurement its decide got.
  */
-function loadEntryPhase(params: {
-  entry: CatalogEntry;
-  path: string;
+async function loadUserDataMeasurement(params: {
+  fixture: UserDataFixture;
   isCarved: boolean;
-  measurements: TargetsMeasurement[];
-}): Promise<ScanPhase> {
+}): Promise<TargetsMeasurement | undefined> {
+  const entry = findEntry('xcode-user-data');
+  const pathRules = params.fixture.environment.pathRules;
+  const path = params.fixture.userDataPath;
   const carvedPaths = params.isCarved
-    ? buildCarvedPaths({ pathRules: DARWIN_PATH_RULES, entry: params.entry, path: params.path })
+    ? buildCarvedPaths({ pathRules: pathRules, entry: entry, path: path })
     : [];
+  const measurements: TargetsMeasurement[] = [];
 
-  return loadMeasuredTargetsPhase({
-    found: buildFoundTargets([params.path]),
-    carve:
-      carvedPaths.length === 0 ? null : { pathRules: DARWIN_PATH_RULES, carvedPaths: carvedPaths },
+  await loadMeasuredTargetsPhase({
+    found: buildFoundTargets([path]),
+    carve: carvedPaths.length === 0 ? null : { pathRules: pathRules, carvedPaths: carvedPaths },
     measureTimeoutMs: 10_000,
     runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
     entryReads: darwinPlatform.system.entryReads,
     privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     decide: async (measurement) => {
-      params.measurements.push(measurement);
+      measurements.push(measurement);
 
       return decideCatalogCandidate({
-        entry: params.entry,
-        path: params.path,
+        entry: entry,
+        path: path,
         measurement: measurement,
-        owner: params.entry.owner,
+        owner: entry.owner,
         ownerBundlePaths: [],
         ownerState: 'stopped',
         ownerAppName: 'Xcode',
@@ -118,6 +116,8 @@ function loadEntryPhase(params: {
       });
     },
   });
+
+  return measurements[0];
 }
 
 describeAwaitingWin32Platform('the carve of the Xcode previews out of the user data advice', () => {
@@ -126,24 +126,9 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
       run: async (fixture) => {
         await createUserData(fixture);
 
-        const measurements: TargetsMeasurement[] = [];
-        const previewsPhase = await loadEntryPhase({
-          entry: findEntry('xcode-previews'),
-          path: fixture.previewsPath,
-          isCarved: true,
-          measurements: measurements,
-        });
-        const userDataPhase = await loadEntryPhase({
-          entry: findEntry('xcode-user-data'),
-          path: fixture.userDataPath,
-          isCarved: true,
-          measurements: measurements,
-        });
-        const report = buildScanReportOfPhases({
+        const report = await runTestScan({
           environment: fixture.environment,
-          reservedEntryPaths: [],
-          phases: [previewsPhase, userDataPhase],
-          incompleteExploreAdvice: { decisions: [], issues: [] },
+          catalogEntries: [findEntry('xcode-previews'), findEntry('xcode-user-data')],
         });
         const [previews] = report.candidates;
         const [userData] = report.advice;
@@ -167,29 +152,16 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
       run: async (fixture) => {
         await createUserData(fixture);
 
-        const carved: TargetsMeasurement[] = [];
-        const whole: TargetsMeasurement[] = [];
+        const carved = await loadUserDataMeasurement({ fixture: fixture, isCarved: true });
+        const whole = await loadUserDataMeasurement({ fixture: fixture, isCarved: false });
 
-        await loadEntryPhase({
-          entry: findEntry('xcode-user-data'),
-          path: fixture.userDataPath,
-          isCarved: true,
-          measurements: carved,
-        });
-        await loadEntryPhase({
-          entry: findEntry('xcode-user-data'),
-          path: fixture.userDataPath,
-          isCarved: false,
-          measurements: whole,
-        });
-
-        expect(carved[0]?.targets.map((target) => [target.path, target.identity.kind])).toEqual([
+        expect(carved?.targets.map((target) => [target.path, target.identity.kind])).toEqual([
           [fixture.userDataPath, 'directory'],
         ]);
-        expect(whole[0]?.allocatedBytes).toBeGreaterThanOrEqual(
+        expect(whole?.allocatedBytes).toBeGreaterThanOrEqual(
           PREVIEWS_FILE_BYTES + SNIPPET_FILE_BYTES,
         );
-        expect(carved[0]?.allocatedBytes).toBeLessThan(PREVIEWS_FILE_BYTES);
+        expect(carved?.allocatedBytes).toBeLessThan(PREVIEWS_FILE_BYTES);
       },
     });
   });
@@ -204,14 +176,14 @@ describeAwaitingWin32Platform('the carve of the Xcode previews out of the user d
           modifiedMs: MODIFIED_MS,
         });
 
-        const phase = await loadEntryPhase({
-          entry: findEntry('xcode-user-data'),
-          path: fixture.userDataPath,
-          isCarved: true,
-          measurements: [],
+        const report = await runTestScan({
+          environment: fixture.environment,
+          catalogEntries: [findEntry('xcode-user-data')],
         });
 
-        expect(phase).toEqual({ decisions: [], issues: [] });
+        expect(report.candidates).toEqual([]);
+        expect(report.advice).toEqual([]);
+        expect(report.skipped).toEqual([]);
       },
     });
   });

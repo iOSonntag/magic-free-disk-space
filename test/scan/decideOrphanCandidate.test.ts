@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { ORPHAN_LOCATIONS } from '../../src/platform/darwin/orphanLocations.js';
 import type { LeftoverMatch } from '../../src/scan/candidateOrigin.js';
 import type { OrphanInstalledFacts } from '../../src/scan/decideOrphanCandidate.js';
 import {
@@ -7,8 +8,7 @@ import {
   isOrphanNameSkipReported,
   matchOrphanName,
 } from '../../src/scan/decideOrphanCandidate.js';
-import type { OrphanLocation } from '../../src/scan/orphanLocations.js';
-import { ORPHAN_LOCATIONS } from '../../src/scan/orphanLocations.js';
+import type { OrphanLocation } from '../../src/scan/scanPlatform.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
@@ -300,6 +300,29 @@ describeAwaitingWin32Platform('matchOrphanName by app name in Application Suppor
     expect(match({ name: 'org.removed.tool', location: APPLICATION_SUPPORT })).toEqual({
       kind: 'match',
       matchedBy: 'bundleId',
+    });
+  });
+
+  test('takes the system and generic names from the naming of the location', () => {
+    const location: OrphanLocation = {
+      ...APPLICATION_SUPPORT,
+      naming: {
+        kind: 'bundleIdOrName',
+        systemFolderNames: new Set(['removed tool']),
+        systemServiceNamePattern: /^service$/,
+        genericFolderNames: new Set(['mobilesync']),
+      },
+    };
+
+    expect(match({ name: 'Removed Tool', location: location })).toMatchObject({
+      reason: 'systemOwned',
+    });
+    expect(match({ name: 'MobileSync', location: location })).toMatchObject({
+      reason: 'genericName',
+    });
+    expect(match({ name: 'rapportd', location: location })).toEqual({
+      kind: 'match',
+      matchedBy: 'name',
     });
   });
 });

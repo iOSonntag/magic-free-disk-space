@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { TargetsMeasurement } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
@@ -10,10 +9,13 @@ import {
   buildTestCatalogEntry,
   buildTestTargetsMeasurement,
 } from '../support/candidateFixtures.js';
+import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
 import { buildTestCatalogOwner } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 const PATH = '/home/Library/Caches/com.example.app';
+
+const PATH_RULES = buildTestPathEnvironment({ homeDir: '/home', nowMs: 0 }).pathRules;
 
 const UNCHANGED_30_DAYS = { kind: 'unchangedDays', days: 30 } as const;
 
@@ -132,7 +134,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
       },
     });
     const carvedPaths = buildCarvedPaths({
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: PATH_RULES,
       entry: entry,
       path: PATH,
     });
@@ -145,7 +147,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
   test('carves nothing for an entry that is no advice', () => {
     expect(
       buildCarvedPaths({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: PATH_RULES,
         entry: buildTestCatalogEntry({}),
         path: PATH,
       }),

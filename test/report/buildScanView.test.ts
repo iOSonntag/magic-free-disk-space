@@ -11,56 +11,24 @@ import type { VolumeSpace } from '../../src/system/volumeSpace.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestAdvice,
   buildTestCandidate,
   buildTestEngineCandidate,
   buildTestToolCandidate,
-  TEST_LISTING_FACTS_NONE,
 } from '../support/candidateFixtures.js';
-import {
-  buildTestAbsolutePath,
-  buildTestMacBundleId,
-  buildTestUdid,
-} from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
+import {
+  buildProtocolFixtureReport,
+  PROTOCOL_FIXTURE_DISK,
+  PROTOCOL_FIXTURE_HOME_DIR,
+} from '../support/protocolFixtureScan.js';
 import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const MB = 1_000_000;
 
 const TEXTS = darwinPlatform.report;
 
-const HOME_DIR = '/Users/me';
-
-const DISK: VolumeSpace = { capacityBytes: 500_000_000_000, availableBytes: 52_000_000_000 };
-
-const SIMULATOR_UDID = '0A1B2C3D-0000-4000-8000-000000000001';
-
-function buildSimulatorCandidate(): Candidate {
-  const path = `${HOME_DIR}/Library/Developer/CoreSimulator/Devices/${SIMULATOR_UDID}`;
-
-  return {
-    path: path,
-    title: 'Simulator iPhone 15',
-    category: 'developer',
-    risk: 'review',
-    origin: { kind: 'explore', probe: 'simulatorDevices' },
-    explanation: 'A simulated device whose runtime is gone.',
-    regeneration: 'Xcode creates a new one when you add it again.',
-    allocatedBytes: 3 * MB,
-    entryCount: 1,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
-    removal: {
-      kind: 'runTool',
-      unit: {
-        kind: 'simulatorDevice',
-        tool: { name: 'xcrun', path: '/usr/bin/xcrun' },
-        udid: buildTestUdid({ text: SIMULATOR_UDID }),
-        dataPath: buildTestAbsolutePath({ text: path }),
-      },
-    },
-    evidenceLines: ['Its runtime iOS 17.0 is no longer installed.'],
-  };
-}
+const HOME_DIR = PROTOCOL_FIXTURE_HOME_DIR;
 
 function buildAdvice(params: {
   path: string;
@@ -68,21 +36,16 @@ function buildAdvice(params: {
   allocatedBytes: number;
   privateSizeFallbackCount?: number;
 }): Advice {
-  return {
+  return buildTestAdvice({
     origin: { kind: 'catalog', entryId: 'tool-store' },
     path: params.path,
     title: params.title,
     category: 'packages',
-    risk: 'review',
     explanation: 'Packages the tool keeps for its projects.',
     advice: 'Run the tool prune command.',
-    opener: null,
-    carvedPaths: [],
     allocatedBytes: params.allocatedBytes,
-    isComplete: true,
-    ...TEST_LISTING_FACTS_NONE,
     privateSizeFallbackCount: params.privateSizeFallbackCount ?? 0,
-  };
+  });
 }
 
 /** Ranks the candidates as a scan does, so their numbers are those of a real report. */
@@ -101,7 +64,7 @@ function buildRankedReport(params: {
   return buildScanReport({ decisions: [...offers, ...advice], issues: params.issues ?? [] });
 }
 
-function buildView(params: { report: ScanReport; disk?: VolumeSpace | null }): ScanView {
+function buildView(params: { report: ScanReport; disk?: VolumeSpace }): ScanView {
   return buildScanView({
     report: params.report,
     fullDiskAccessHolder: 'app',
@@ -109,107 +72,6 @@ function buildView(params: { report: ScanReport; disk?: VolumeSpace | null }): S
     homeDir: HOME_DIR,
     disk: params.disk ?? null,
   });
-}
-
-/** The scan the `scanned` event of the protocol fixture shows: one item of every origin. */
-function buildProtocolFixtureReport(): ScanReport {
-  const report = buildRankedReport({
-    candidates: [
-      buildSimulatorCandidate(),
-      buildTestCandidate({
-        path: `${HOME_DIR}/Movies/holiday.mov`,
-        title: 'Old video',
-        category: 'userFiles',
-        risk: 'careful',
-        explanation: 'A large file unchanged for 180 days.',
-        regeneration: 'It does not come back.',
-        allocatedBytes: 3 * MB,
-        origin: { kind: 'userFile' },
-        lastUsedAtMs: Date.UTC(2025, 5, 1),
-        downloadedAtMs: Date.UTC(2024, 11, 24),
-      }),
-      buildTestCandidate({
-        path: '/Applications/Xcode.app',
-        title: 'Xcode',
-        category: 'applications',
-        risk: 'never',
-        explanation: "Apple's developer app, which other developer tools need.",
-        regeneration: 'Installing it again takes a long download.',
-        allocatedBytes: 2 * MB,
-        origin: {
-          kind: 'application',
-          bundleId: buildTestMacBundleId({ text: 'com.apple.dt.Xcode' }),
-        },
-        lastUsedAtMs: Date.UTC(2025, 2, 15),
-        appName: 'Xcode',
-      }),
-      buildTestCandidate({
-        path: `${HOME_DIR}/Library/Containers/com.example.removed`,
-        title: 'Data of an app that is no longer installed (com.example.removed)',
-        category: 'leftovers',
-        risk: 'careful',
-        explanation: 'The sandbox container of an app that is not installed.',
-        regeneration: 'Not regenerated.',
-        allocatedBytes: MB,
-        origin: { kind: 'leftover', matchedBy: 'bundleId' },
-        lastUsedAtMs: Date.UTC(2025, 0, 10),
-      }),
-      buildTestCandidate({
-        path: `${HOME_DIR}/Library/Caches/com.example.other`,
-        title: 'App cache',
-        category: 'caches',
-        risk: 'review',
-        explanation: 'Files an app keeps to work faster.',
-        regeneration: 'The app builds them again, which can take a while.',
-        allocatedBytes: 4 * MB,
-        isComplete: false,
-        origin: { kind: 'catalog', entryId: 'app-cache' },
-        appName: 'Example',
-      }),
-      buildTestCandidate({
-        path: `${HOME_DIR}/Library/Caches/ToolCache`,
-        title: 'Tool cache',
-        category: 'caches',
-        risk: 'safe',
-        explanation: 'Files the tool keeps to work faster.',
-        regeneration: 'The tool downloads them again when it needs them.',
-        allocatedBytes: 6 * MB,
-        origin: { kind: 'catalog', entryId: 'tool-cache' },
-      }),
-    ],
-    advice: [
-      buildAdvice({
-        path: `${HOME_DIR}/Library/ToolStore`,
-        title: 'Tool store',
-        allocatedBytes: 6 * MB,
-        privateSizeFallbackCount: 2,
-      }),
-    ],
-    issues: [
-      { path: `${HOME_DIR}/Library/Mail`, reason: 'privacyDenied', detail: 'EPERM' },
-      { path: `${HOME_DIR}/Projects/locked`, reason: 'permissionDenied', detail: 'EACCES' },
-      {
-        path: '/opt/homebrew/bin/brew',
-        reason: 'toolFailed',
-        failure: {
-          reason: 'commandFailed',
-          failure: { reason: 'exitedWithError', exitCode: 1, stderrTail: '' },
-        },
-      },
-    ],
-  });
-  const skipped: ScanReport['skipped'] = [
-    ...Array.from({ length: 9 }, (_, i) => ({
-      path: `${HOME_DIR}/small-${i}`,
-      reason: 'belowSizeThreshold' as const,
-    })),
-    ...Array.from({ length: 3 }, (_, i) => ({
-      path: `${HOME_DIR}/busy-${i}`,
-      reason: 'ownerRunning' as const,
-    })),
-  ];
-
-  return { ...report, skipped: skipped };
 }
 
 /** Every number of the view, top to bottom as the app and the CLI show them. */
@@ -225,13 +87,13 @@ function listNumbersTopToBottom(params: { view: ScanView }): number[] {
 
 describeAwaitingWin32Platform('buildScanView', () => {
   test('shows an empty scan as its summary alone, with the disk it read', () => {
-    expect(buildView({ report: EMPTY_REPORT, disk: DISK })).toEqual({
+    expect(buildView({ report: EMPTY_REPORT, disk: PROTOCOL_FIXTURE_DISK })).toEqual({
       summary: {
         titleText: 'Nothing to delete was found.',
         lines: [],
         totalBytes: 0,
         safeBytes: 0,
-        disk: DISK,
+        disk: PROTOCOL_FIXTURE_DISK,
       },
       sections: [],
       explore: null,
@@ -245,7 +107,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
   test('gives the scanned event of the protocol fixture for the scan it shows', async () => {
     const fixtureEvent = await loadProtocolFixtureEventOfKind('scanned');
 
-    const view = buildView({ report: buildProtocolFixtureReport(), disk: DISK });
+    const view = buildView({ report: buildProtocolFixtureReport(), disk: PROTOCOL_FIXTURE_DISK });
 
     expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
   });
@@ -299,7 +161,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
     expect(view.summary).toEqual({
       titleText: 'Found 1 item, 2.0 MB in total',
       lines: [],
-      totalBytes: 2 * MB,
+      totalBytes: 0,
       safeBytes: 0,
       disk: null,
     });
@@ -331,6 +193,33 @@ describeAwaitingWin32Platform('buildScanView', () => {
         matchedBy: null,
       },
     ]);
+  });
+
+  test('counts in the space to free a review item but no never item, which the plan refuses', () => {
+    const view = buildView({
+      report: buildRankedReport({
+        candidates: [
+          buildTestCandidate({
+            path: '/Applications/Xcode.app',
+            category: 'applications',
+            risk: 'never',
+            allocatedBytes: 10_000 * MB,
+          }),
+          buildTestCandidate({
+            path: '/fixture/Library/Caches/Tool',
+            risk: 'review',
+            allocatedBytes: 1000 * MB,
+          }),
+        ],
+      }),
+    });
+
+    expect(view.summary).toMatchObject({
+      titleText: 'Found 2 items, 11 GB in total',
+      lines: ['1.0 GB to check before deleting'],
+      totalBytes: 1000 * MB,
+      safeBytes: 0,
+    });
   });
 
   test('groups review before careful under the check group of one section', () => {
@@ -462,7 +351,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
     expect(view.explore?.items).toEqual([
       expect.objectContaining({
-        key: 'explore:dockerDesktopEngine:engineBuildCache:dockerDesktopEngine',
+        key: `explore:dockerDesktopEngine:engineBuildCache:dockerDesktopEngine:${HOME_DIR}/.docker/run/docker.sock`,
         removal: 'engine',
         displayPath: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
         revealPath: null,

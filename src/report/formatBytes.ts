@@ -1,9 +1,10 @@
-type DecimalUnitValue = { value: number; unit: 'kB' | 'MB' | 'GB' | 'TB' };
+/** The units as Finder labels them, with an upper-case K. */
+type DecimalUnitValue = { value: number; unit: 'KB' | 'MB' | 'GB' | 'TB' };
 
 const BYTES_PER_KILOBYTE = 1000;
 
 const decimalUnitScales = [
-  { unit: 'kB', bytesPerUnit: BYTES_PER_KILOBYTE },
+  { unit: 'KB', bytesPerUnit: BYTES_PER_KILOBYTE },
   { unit: 'MB', bytesPerUnit: BYTES_PER_KILOBYTE ** 2 },
   { unit: 'GB', bytesPerUnit: BYTES_PER_KILOBYTE ** 3 },
 ] as const;
@@ -54,7 +55,7 @@ function bytesToDecimalUnitValue(params: { bytes: number }): DecimalUnitValue {
   for (const scale of decimalUnitScales) {
     const value = params.bytes / scale.bytesPerUnit;
 
-    // Compared after rounding, so 999.6 kB shows as 1.0 MB rather than 1000 kB.
+    // Compared after rounding, so 999.6 KB shows as 1.0 MB rather than 1000 KB.
     if (Math.round(value) < BYTES_PER_KILOBYTE) {
       return { value: value, unit: scale.unit };
     }
