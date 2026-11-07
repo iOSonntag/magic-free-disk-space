@@ -1,24 +1,32 @@
 import 'package:flutter/material.dart';
 
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/glass_card.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
 
-/// The cleaner's notice in [state] and how grave it is: a failure that
-/// dropped the scan is [isScanLost], a refusal or a cancel kept it.
-({String text, bool isScanLost})? findShellNotice(CleanerState state) {
+/// The cleaner's notice and how grave it is.
+final class ShellNotice {
+  const ShellNotice({required this.text, required this.isScanLost});
+
+  final String text;
+
+  /// Whether a failure dropped the scan; a refusal or a cancel kept it.
+  final bool isScanLost;
+}
+
+/// The cleaner's notice in [state], or `null` when it holds none.
+ShellNotice? findShellNotice(CleanerState state) {
   return switch (state) {
-    IdleState(:final String? notice) when notice != null => (
-      text: notice,
-      isScanLost: true,
-    ),
-    ScannedState(:final String? notice) when notice != null => (
+    IdleState(:final String notice) => ShellNotice(text: notice, isScanLost: true),
+    ScannedState(:final String notice) => ShellNotice(
       text: notice,
       isScanLost: false,
     ),
-    _ => null,
+    IdleState() ||
+    ScannedState() ||
+    ScanningState() ||
+    ConfirmingState() ||
+    DeletingState() ||
+    DeletedState() => null,
   };
 }
 
@@ -31,7 +39,7 @@ class ShellNoticeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ({String text, bool isScanLost})? notice = findShellNotice(state);
+    final ShellNotice? notice = findShellNotice(state);
     if (notice == null) {
       return const SizedBox.shrink();
     }

@@ -41,6 +41,7 @@ final PlannedEvent carefulPlan = PlannedEvent(
       title: samplePlan.items.last.title,
       sectionKey: samplePlan.items.last.sectionKey,
       risk: Risk.careful,
+      removal: samplePlan.items.last.removal,
       allocatedBytes: samplePlan.items.last.allocatedBytes,
     ),
   ],

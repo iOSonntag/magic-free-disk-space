@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../bridge/openable_url.dart';
-import '../design/app_icons.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../shell/open_url_button.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
 import 'item_detail_lines.dart';
 import 'reveal_in_finder_button.dart';
 
 /// The app or settings pane an advice opens: its name, its glyph and its
 /// URL.
-typedef AdviceOpenerTarget = ({String name, IconData glyph, OpenableUrl url});
+final class AdviceOpenerTarget {
+  const AdviceOpenerTarget({
+    required this.name,
+    required this.glyph,
+    required this.url,
+  });
+
+  final String name;
+  final IconData glyph;
+  final OpenableUrl url;
+}
 
 /// The target of [opener], or `null` when this app does not know the app or
 /// pane it names.
@@ -27,14 +30,14 @@ AdviceOpenerTarget? findAdviceOpenerTarget(AdviceOpener opener) {
       if (url == null || appLook == null) {
         return null;
       }
-      return (name: appLook.name, glyph: appLook.glyph, url: url);
+      return AdviceOpenerTarget(name: appLook.name, glyph: appLook.glyph, url: url);
     case SettingsOpener(:final SettingsPane pane):
       final SettingsPaneUrl? url = SettingsPaneUrl.forPane(pane);
       final ({String name, IconData glyph})? paneLook = _findPaneLook(pane);
       if (url == null || paneLook == null) {
         return null;
       }
-      return (name: paneLook.name, glyph: paneLook.glyph, url: url);
+      return AdviceOpenerTarget(name: paneLook.name, glyph: paneLook.glyph, url: url);
   }
 }
 
@@ -99,7 +102,7 @@ class AdviceCard extends StatelessWidget {
       displayPath: item.displayPath,
       details: ItemDetailLines(lines: item.detailLines, accent: accent),
       target: opener == null ? null : findAdviceOpenerTarget(opener),
-      revealUrl: findRevealUrl(item.revealPath, allowedPaths: revealPaths),
+      revealUrl: RevealUrl.tryParse(item.revealPath, allowedPaths: revealPaths),
       accent: accent,
       fallbackGlyph: sectionGlyph,
       urlOpener: urlOpener,

@@ -1,4 +1,4 @@
-import '../bridge/bridge_event.dart';
+import '../bridge/bridge.dart';
 
 /// The bridge as the update check needs it; a bridge older than these
 /// requests answers them with a [FailedEvent].

@@ -1,25 +1,27 @@
 import 'dart:async';
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge/openable_url.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
-import 'package:magic_free_disk_space/handled_elsewhere/handled_elsewhere_page.dart';
+import 'package:magic_free_disk_space/design/stage_button.dart';
+import 'package:magic_free_disk_space/design/stage_check_mark.dart';
 import 'package:magic_free_disk_space/overview/overview_page.dart';
 import 'package:magic_free_disk_space/overview/section_card.dart';
 import 'package:magic_free_disk_space/removal/deleted_page.dart';
 import 'package:magic_free_disk_space/removal/deleting_view.dart';
 import 'package:magic_free_disk_space/removal/review_page.dart';
+import 'package:magic_free_disk_space/section/handled_elsewhere_page.dart';
 import 'package:magic_free_disk_space/section/item_row.dart';
 import 'package:magic_free_disk_space/section/section_page.dart';
 import 'package:magic_free_disk_space/settings/settings_page.dart';
 import 'package:magic_free_disk_space/shell/app_destination.dart';
 import 'package:magic_free_disk_space/shell/navigation_controller.dart';
 import 'package:magic_free_disk_space/shell/sidebar.dart';
-import 'package:magic_free_disk_space/shell/stage_button.dart';
-import 'package:magic_free_disk_space/shell/stage_check_mark.dart';
 import 'package:magic_free_disk_space/shell/window_frame.dart';
 
 import '../support/fake_cleaner_bridge.dart';
@@ -174,7 +176,7 @@ void main() {
       SectionKey.apps,
       SectionKey.largeFiles,
     ]) {
-      expect(_findSidebarEntry(SectionDestination(sectionKey)), findsOneWidget);
+      expect(_findSidebarEntry(buildSectionDestination(sectionKey)), findsOneWidget);
     }
     // The barriers of the pages' routes must not hide the sidebar and the
     // toolbar from VoiceOver.
@@ -184,9 +186,9 @@ void main() {
     expect(_findSidebarEntry(const SettingsDestination()), findsOneWidget);
     expectEveryTappableNodeLabelled();
 
-    await tapAndSettle(tester, _findSidebarEntry(const SectionDestination(SectionKey.caches)));
+    await tapAndSettle(tester, _findSidebarEntry(buildSectionDestination(SectionKey.caches)));
 
-    expect(parts.navigation.destination, const SectionDestination(SectionKey.caches));
+    expect(parts.navigation.destination, buildSectionDestination(SectionKey.caches));
     expect(find.byType(SectionPage), findsOneWidget);
     expect(find.byType(OverviewPage), findsNothing);
     expect(find.text('Tool cache'), findsOneWidget);
@@ -267,7 +269,7 @@ void main() {
   ) async {
     final FakeCleanerBridge bridge = _createSampleBridge();
     final _ShellParts parts = await _pumpShell(tester, bridge: bridge);
-    await tapAndSettle(tester, _findSidebarEntry(const SectionDestination(SectionKey.caches)));
+    await tapAndSettle(tester, _findSidebarEntry(buildSectionDestination(SectionKey.caches)));
     await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
     await tapAndSettle(tester, find.byKey(const ItemRowKey(2)));
 
@@ -283,7 +285,7 @@ void main() {
 
     await tapAndSettle(tester, _findSidebarEntry(const SettingsDestination()));
 
-    expect(parts.navigation.destination, const SectionDestination(SectionKey.caches));
+    expect(parts.navigation.destination, buildSectionDestination(SectionKey.caches));
 
     parts.controller.cancelConfirmation();
     await tester.pumpAndSettle();
@@ -300,7 +302,7 @@ void main() {
     final FakeCleanerBridge bridge = _createSampleBridge()
       ..planAnswer = loadFirstSampleEvent<NothingApprovedEvent>();
     await _pumpShell(tester, bridge: bridge);
-    await tapAndSettle(tester, _findSidebarEntry(const SectionDestination(SectionKey.caches)));
+    await tapAndSettle(tester, _findSidebarEntry(buildSectionDestination(SectionKey.caches)));
     await tapAndSettle(tester, find.bySemanticsLabel('Show Review first'));
     await tapAndSettle(tester, find.byKey(const ItemRowKey(2)));
 
@@ -329,6 +331,34 @@ void main() {
     expect(find.text('Show list'), findsNothing);
     expect(find.byType(ReviewPage), findsOneWidget);
     expect(parts.controller.state, isA<ConfirmingState>());
+  });
+
+  testWidgets('Tab on Review never reaches a section card of the Overview below it', (
+    WidgetTester tester,
+  ) async {
+    final _ShellParts parts = await _pumpShell(tester, bridge: _createSampleBridge());
+    parts.controller.selectSafeCandidates();
+    await parts.controller.requestPlan();
+    await tester.pumpAndSettle();
+    expect(find.byType(ReviewPage), findsOneWidget);
+    expect(
+      find.byType(SectionCard, skipOffstage: false),
+      findsWidgets,
+      reason: 'the Overview stays built below Review',
+    );
+
+    final List<Key?> focusedCardKeys = [];
+    for (int i = 0; i < 40; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
+      final SectionCard? card = focused?.findAncestorWidgetOfExactType<SectionCard>();
+      if (card != null) {
+        focusedCardKeys.add(card.key);
+      }
+    }
+
+    expect(focusedCardKeys, isEmpty);
   });
 
   testWidgets('shows the run while it deletes, then its result', (

@@ -1,13 +1,11 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
 import 'advice_card.dart';
 import 'item_group_card.dart';
-import 'section_contents.dart';
 
 /// A section's groups that hold items, safe first, then the advice cards.
 class SectionContentsView extends StatelessWidget {
@@ -17,6 +15,7 @@ class SectionContentsView extends StatelessWidget {
     required this.look,
     required this.selectedNumbers,
     required this.onToggle,
+    required this.onToggleGroup,
     required this.revealPaths,
     required this.urlOpener,
     required this.adviceTitle,
@@ -29,6 +28,10 @@ class SectionContentsView extends StatelessWidget {
   /// Flips the item numbered by its argument; `null` while the selection
   /// cannot change.
   final void Function(int number)? onToggle;
+
+  /// Flips a group's items as one, as [ItemGroupCard.onToggleGroup] says;
+  /// `null` while the selection cannot change.
+  final void Function(List<int> numbers)? onToggleGroup;
   final Set<String> revealPaths;
   final UrlOpener urlOpener;
 
@@ -46,12 +49,13 @@ class SectionContentsView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: StageSpacing.regular),
               child: ItemGroupCard(
-                key: ValueKey<ShownItemGroup>(group),
+                key: ItemGroupCardKey(group),
                 group: group,
                 items: contents.getGroupItems(group),
                 look: look,
                 selectedNumbers: selectedNumbers,
                 onToggle: onToggle,
+                onToggleGroup: onToggleGroup,
                 revealPaths: revealPaths,
                 urlOpener: urlOpener,
                 now: now,

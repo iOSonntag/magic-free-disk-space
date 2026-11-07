@@ -1,8 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/app_icons.dart';
-import '../design/tokens.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
 import 'section_contents.dart';
 
 String formatGroupTitle(ShownItemGroup group) {

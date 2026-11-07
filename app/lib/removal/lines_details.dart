@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../design/app_icons.dart';
-import '../design/glass_card.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
+import '../design/design.dart';
 import 'accent_button.dart';
 import 'size_ease.dart';
 

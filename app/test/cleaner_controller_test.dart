@@ -163,6 +163,7 @@ const PlannedEvent plannedEvent = PlannedEvent(
       title: 'Tool cache',
       sectionKey: SectionKey.caches,
       risk: Risk.safe,
+      removal: ItemRemoval.delete,
       allocatedBytes: 6000000,
     ),
   ],
@@ -185,6 +186,7 @@ const PlannedEvent twoItemPlan = PlannedEvent(
       title: 'Tool cache',
       sectionKey: SectionKey.caches,
       risk: Risk.safe,
+      removal: ItemRemoval.delete,
       allocatedBytes: 6000000,
     ),
     PlannedItemView(
@@ -193,6 +195,7 @@ const PlannedEvent twoItemPlan = PlannedEvent(
       title: 'Old video',
       sectionKey: SectionKey.largeFiles,
       risk: Risk.careful,
+      removal: ItemRemoval.delete,
       allocatedBytes: 3000000,
     ),
   ],
@@ -351,19 +354,16 @@ void main() {
     }
 
     test('a scan reaches the scanned state through its progress', () async {
-      final List<String> progressMessages = [];
       final List<ProgressEvent?> progressEvents = [];
       controller.addListener(() {
         final CleanerState state = controller.state;
         if (state is ScanningState) {
-          progressMessages.add(state.progressMessage);
           progressEvents.add(state.progress);
         }
       });
 
       await controller.scan();
 
-      expect(progressMessages, ['Starting the scan…', 'Measuring apps…']);
       expect(progressEvents, [null, same(appsProgress)]);
       final ScannedState state = controller.state as ScannedState;
       expect(state.scan, same(scannedEvent));
@@ -526,6 +526,31 @@ void main() {
       await controller.finishDeletion();
 
       expect(bridge.requestKinds, ['status', 'scan']);
+    });
+
+    group('a group tap', () {
+      test('ticks the whole group while any of it is unticked, in one change', () async {
+        await scanAndSelectSafe();
+        int notificationCount = 0;
+        controller.addListener(() => notificationCount += 1);
+
+        controller.toggleCandidateGroup([1, 2, 3]);
+
+        expect(notificationCount, 1);
+        expect((controller.state as ScannedState).selectedNumbers, {1, 2, 3});
+      });
+
+      test('unticks the whole group once all of it is ticked, in one change', () async {
+        await controller.scan();
+        controller.toggleCandidateGroup([2, 3]);
+        int notificationCount = 0;
+        controller.addListener(() => notificationCount += 1);
+
+        controller.toggleCandidateGroup([2, 3]);
+
+        expect(notificationCount, 1);
+        expect((controller.state as ScannedState).selectedNumbers, isEmpty);
+      });
     });
 
     test('a tick while the plan request is pending changes nothing', () async {

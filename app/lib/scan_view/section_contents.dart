@@ -1,4 +1,4 @@
-import '../bridge/bridge_event.dart';
+import '../bridge/bridge.dart';
 
 /// The group a section page shows an item under. An item of a group this app
 /// does not know shows under [review], which is never ticked for anyone.
@@ -25,18 +25,6 @@ class SectionContents {
   }
 }
 
-/// Every selectable item of [scan]: those of its sections, their check
-/// groups, and Explore.
-List<ItemView> listScanItems(ScannedEvent scan) {
-  return [
-    for (final SectionView section in scan.sections) ...[
-      ...section.items,
-      ...?section.checkGroup?.items,
-    ],
-    ...?scan.explore?.items,
-  ];
-}
-
 ShownItemGroup getShownItemGroup(ItemGroup group) {
   return switch (group) {
     ItemGroup.safe => ShownItemGroup.safe,
@@ -45,15 +33,29 @@ ShownItemGroup getShownItemGroup(ItemGroup group) {
   };
 }
 
-SectionContents buildSectionContents(ScannedEvent scan, SectionKey sectionKey) {
-  final Map<ShownItemGroup, List<ItemView>> itemsByGroup = {
-    for (final ShownItemGroup group in ShownItemGroup.values) group: [],
+/// The group whose words name an item of [risk] in the delete flow.
+ShownItemGroup riskToShownItemGroup(Risk risk) {
+  return switch (risk) {
+    Risk.safe => ShownItemGroup.safe,
+    Risk.review => ShownItemGroup.review,
+    // The bridge never plans an item of the risk never; were it to, it
+    // reads as the strictest group.
+    Risk.careful || Risk.never => ShownItemGroup.careful,
   };
-  for (final ItemView item in listScanItems(scan)) {
-    if (item.sectionKey == sectionKey) {
-      itemsByGroup[getShownItemGroup(item.group)]!.add(item);
-    }
-  }
+}
+
+SectionContents buildSectionContents(ScannedEvent scan, SectionKey sectionKey) {
+  final List<ItemView> sectionItems = [
+    for (final ItemView item in scan.selectableItems)
+      if (item.sectionKey == sectionKey) item,
+  ];
+  final Map<ShownItemGroup, List<ItemView>> itemsByGroup = {
+    for (final ShownItemGroup group in ShownItemGroup.values)
+      group: [
+        for (final ItemView item in sectionItems)
+          if (getShownItemGroup(item.group) == group) item,
+      ],
+  };
   final List<AdviceItemView> adviceItems = [
     for (final AdviceItemView item
         in scan.explore?.adviceGroup?.items ?? const <AdviceItemView>[])
@@ -65,19 +67,27 @@ SectionContents buildSectionContents(ScannedEvent scan, SectionKey sectionKey) {
 /// The items of [scan] that [numbers] name.
 List<ItemView> listSelectedItems(ScannedEvent scan, Set<int> numbers) {
   return [
-    for (final ItemView item in listScanItems(scan))
+    for (final ItemView item in scan.selectableItems)
       if (numbers.contains(item.number)) item,
   ];
 }
 
-/// The size of [items] together, and whether every one of them was measured
-/// whole.
-({int allocatedBytes, bool isComplete}) sumItemSizes(List<ItemView> items) {
+/// The size of some items together.
+final class ItemSizeSum {
+  const ItemSizeSum({required this.allocatedBytes, required this.isComplete});
+
+  final int allocatedBytes;
+
+  /// Whether every one of the items was measured whole.
+  final bool isComplete;
+}
+
+ItemSizeSum sumItemSizes(List<ItemView> items) {
   int allocatedBytes = 0;
   bool isComplete = true;
   for (final ItemView item in items) {
     allocatedBytes += item.allocatedBytes;
     isComplete = isComplete && item.isComplete;
   }
-  return (allocatedBytes: allocatedBytes, isComplete: isComplete);
+  return ItemSizeSum(allocatedBytes: allocatedBytes, isComplete: isComplete);
 }

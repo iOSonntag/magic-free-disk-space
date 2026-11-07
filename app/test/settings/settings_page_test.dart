@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
+import 'package:magic_free_disk_space/design/stage_switch_track.dart';
 import 'package:magic_free_disk_space/settings/settings_page.dart';
-import 'package:magic_free_disk_space/shell/stage_switch_track.dart';
 import 'package:magic_free_disk_space/update/update_controller.dart';
 
 import '../shell/support/stage_harness.dart';
@@ -33,6 +33,12 @@ StageSwitchTrack _readSwitchTrack(WidgetTester tester) {
 
 Finder _findSwitchRow() {
   return find.bySemanticsLabel(updateCheckItemText);
+}
+
+Matcher _isSwitchLook({required bool isOn, required bool isEnabled}) {
+  return isA<UpdateCheckSwitchLook>()
+      .having((UpdateCheckSwitchLook look) => look.isOn, 'isOn', isOn)
+      .having((UpdateCheckSwitchLook look) => look.isEnabled, 'isEnabled', isEnabled);
 }
 
 void main() {
@@ -125,19 +131,19 @@ void main() {
   test('the switch shows on only once the bridge confirmed it', () {
     expect(
       buildUpdateCheckSwitchLook(const UpdateCheckSwitchLoading()),
-      (isOn: false, isEnabled: false),
+      _isSwitchLook(isOn: false, isEnabled: false),
     );
     expect(
       buildUpdateCheckSwitchLook(const UpdateCheckSwitchSaving(isEnabled: true)),
-      (isOn: true, isEnabled: false),
+      _isSwitchLook(isOn: true, isEnabled: false),
     );
     expect(
       buildUpdateCheckSwitchLook(const UpdateCheckSwitchConfirmed(isEnabled: true)),
-      (isOn: true, isEnabled: true),
+      _isSwitchLook(isOn: true, isEnabled: true),
     );
     expect(
       buildUpdateCheckSwitchLook(const UpdateCheckSwitchUnavailable()),
-      (isOn: false, isEnabled: false),
+      _isSwitchLook(isOn: false, isEnabled: false),
     );
   });
 }

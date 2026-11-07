@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../bridge/openable_url.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
 import 'item_detail_lines.dart';
-import 'item_words.dart';
 import 'reveal_in_finder_button.dart';
 
 /// What the (i) of a row opens: where the item is, why it is offered, how
@@ -29,7 +27,7 @@ class ItemDetailsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? displayPath = item.displayPath;
     final String? removalText = formatRemovalText(item.removal);
-    final RevealUrl? revealUrl = findRevealUrl(
+    final RevealUrl? revealUrl = RevealUrl.tryParse(
       item.revealPath,
       allowedPaths: revealPaths,
     );

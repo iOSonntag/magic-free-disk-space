@@ -27,20 +27,25 @@ class ShaderLibrary {
     return ShaderLibrary(backdrop: programs[0], ringGlow: programs[1]);
   }
 
-  /// The library of the nearest [ShaderLibraryScope].
+  /// The library of the nearest [ShaderLibraryScope]. Throws a [StateError]
+  /// when no [ShaderLibraryScope] is above [context].
   static ShaderLibrary of(BuildContext context) {
     final ShaderLibraryScope? scope = context.dependOnInheritedWidgetOfExactType<ShaderLibraryScope>();
-    assert(scope != null, 'No ShaderLibraryScope above this widget.');
-    return scope!.library;
+    if (scope == null) {
+      throw StateError('No ShaderLibraryScope above this widget.');
+    }
+    return scope.library;
   }
 }
 
 /// Loads one fragment program, or returns `null` and logs the failure when
 /// the asset is missing or does not compile for this renderer.
 Future<FragmentProgram?> loadFragmentProgramOrNull(String assetKey) async {
+  // The engine throws a plain Exception with its reason for a missing or
+  // broken program.
   try {
     return await FragmentProgram.fromAsset(assetKey);
-  } catch (error) {
+  } on Exception catch (error) {
     debugPrint('The shader $assetKey failed to load, so its painter draws the static fallback: $error');
     return null;
   }

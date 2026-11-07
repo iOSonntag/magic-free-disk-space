@@ -1,13 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge/openable_url.dart';
+import 'package:magic_free_disk_space/scan_view/scan_view.dart';
 import 'package:magic_free_disk_space/section/advice_card.dart';
 import 'package:magic_free_disk_space/section/item_group_card.dart';
-import 'package:magic_free_disk_space/section/item_words.dart';
-import 'package:magic_free_disk_space/section/reveal_in_finder_button.dart';
-import 'package:magic_free_disk_space/section/section_contents.dart';
-import 'package:magic_free_disk_space/section/section_labels.dart';
-import 'package:magic_free_disk_space/section/section_totals.dart';
 
 import '../shell/support/stage_harness.dart';
 
@@ -58,8 +54,12 @@ void main() {
     final List<ItemView> selected = listSelectedItems(sampleScan, {1, 2});
 
     expect(_listNumbers(selected), [1, 2]);
-    expect(sumItemSizes(selected), (allocatedBytes: 10000000, isComplete: false));
-    expect(sumItemSizes(const []), (allocatedBytes: 0, isComplete: true));
+    final ItemSizeSum selectedSize = sumItemSizes(selected);
+    expect(selectedSize.allocatedBytes, 10000000);
+    expect(selectedSize.isComplete, isFalse);
+    final ItemSizeSum emptySize = sumItemSizes(const []);
+    expect(emptySize.allocatedBytes, 0);
+    expect(emptySize.isComplete, isTrue);
   });
 
   group('section totals', () {
@@ -151,12 +151,12 @@ void main() {
     });
 
     test('join the facts of an item under its title', () {
-      final ItemView xcode = listScanItems(
-        sampleScan,
-      ).singleWhere((ItemView item) => item.number == 3);
-      final ItemView oldVideo = listScanItems(
-        sampleScan,
-      ).singleWhere((ItemView item) => item.number == 5);
+      final ItemView xcode = sampleScan.selectableItems.singleWhere(
+        (ItemView item) => item.number == 3,
+      );
+      final ItemView oldVideo = sampleScan.selectableItems.singleWhere(
+        (ItemView item) => item.number == 5,
+      );
 
       expect(formatItemFactsText(xcode, now: now), 'Xcode · Last used 5 months ago');
       expect(formatItemFactsText(oldVideo, now: now), 'Last used 3 months ago');
@@ -168,11 +168,6 @@ void main() {
       expect(findGroupSelectValue([1, 2], {1, 2}), isTrue);
       expect(findGroupSelectValue([1, 2], {}), isFalse);
       expect(findGroupSelectValue([1, 2], {2, 7}), isNull);
-    });
-
-    test('ticks what is left unticked, or unticks a group ticked whole', () {
-      expect(listGroupToggleNumbers([1, 2], {2}), [1]);
-      expect(listGroupToggleNumbers([1, 2], {1, 2}), [1, 2]);
     });
   });
 
@@ -212,11 +207,11 @@ void main() {
     final Set<String> revealPaths = sampleScan.revealPaths;
 
     expect(
-      findRevealUrl('/Users/me/Library/ToolStore', allowedPaths: revealPaths)?.text,
+      RevealUrl.tryParse('/Users/me/Library/ToolStore', allowedPaths: revealPaths)?.text,
       '/Users/me/Library/ToolStore',
     );
-    expect(findRevealUrl('/Users/me/Documents', allowedPaths: revealPaths), isNull);
-    expect(findRevealUrl('-a', allowedPaths: {'-a'}), isNull);
-    expect(findRevealUrl(null, allowedPaths: revealPaths), isNull);
+    expect(RevealUrl.tryParse('/Users/me/Documents', allowedPaths: revealPaths), isNull);
+    expect(RevealUrl.tryParse('-a', allowedPaths: {'-a'}), isNull);
+    expect(RevealUrl.tryParse(null, allowedPaths: revealPaths), isNull);
   });
 }

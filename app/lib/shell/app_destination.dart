@@ -1,9 +1,28 @@
-import '../bridge/bridge_event.dart';
+import '../bridge/bridge.dart';
 
 /// A page the sidebar leads to. The steps of the delete flow, Review and
 /// Result, are no destination: the shell shows them by the cleaner's state.
 sealed class AppDestination {
   const AppDestination();
+}
+
+/// The destination that shows the items of [sectionKey]: their own page, or
+/// "Handled by its own app" for [SectionKey.ownApp].
+AppDestination buildSectionDestination(SectionKey sectionKey) {
+  return switch (sectionKey) {
+    SectionKey.ownApp => const HandledElsewhereDestination(),
+    SectionKey.caches ||
+    SectionKey.developerTools ||
+    SectionKey.projects ||
+    SectionKey.containers ||
+    SectionKey.aiModels ||
+    SectionKey.downloads ||
+    SectionKey.icloud ||
+    SectionKey.apps ||
+    SectionKey.largeFiles ||
+    SectionKey.trash ||
+    SectionKey.unknown => SectionDestination._(sectionKey),
+  };
 }
 
 final class OverviewDestination extends AppDestination {
@@ -21,10 +40,10 @@ final class OverviewDestination extends AppDestination {
 }
 
 /// The page of one section; never [SectionKey.ownApp], whose items
-/// [HandledElsewhereDestination] shows.
+/// [HandledElsewhereDestination] shows, so [buildSectionDestination] alone
+/// makes one.
 final class SectionDestination extends AppDestination {
-  const SectionDestination(this.sectionKey)
-    : assert(sectionKey != SectionKey.ownApp);
+  const SectionDestination._(this.sectionKey);
 
   final SectionKey sectionKey;
 

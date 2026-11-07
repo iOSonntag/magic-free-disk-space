@@ -1,15 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../removal/item_count_words.dart';
-import '../section/section_contents.dart';
-import 'stage_button.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 
 /// The bar that floats over the pages while anything is ticked: how much,
 /// "Clear", and "Review", which asks the bridge for the plan of the one
@@ -26,7 +20,7 @@ class SelectionBar extends StatelessWidget {
       state.scan,
       state.selectedNumbers,
     );
-    final ({int allocatedBytes, bool isComplete}) size = sumItemSizes(selectedItems);
+    final ItemSizeSum size = sumItemSizes(selectedItems);
     final String countText = formatItemCount(selectedItems.length);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 640),

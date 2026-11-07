@@ -4,11 +4,10 @@ import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge/openable_url.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_bridge.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
+import 'package:magic_free_disk_space/design/stage_button.dart';
 import 'package:magic_free_disk_space/overview/overview_page.dart';
 import 'package:magic_free_disk_space/overview/section_card.dart';
-import 'package:magic_free_disk_space/shell/app_destination.dart';
-import 'package:magic_free_disk_space/shell/navigation_controller.dart';
-import 'package:magic_free_disk_space/shell/stage_button.dart';
+import 'package:magic_free_disk_space/removal/clean_safe_items.dart';
 import 'package:magic_free_disk_space/update/update_controller.dart';
 
 import '../shell/support/stage_harness.dart';
@@ -19,7 +18,7 @@ import '../support/semantics_labels.dart';
 
 typedef _OverviewParts = ({
   CleanerController cleanerController,
-  NavigationController navigation,
+  List<SectionKey> selectedSections,
 });
 
 Future<_OverviewParts> _pumpOverview(
@@ -29,17 +28,20 @@ Future<_OverviewParts> _pumpOverview(
   FakeUrlOpener? urlOpener,
 }) async {
   final CleanerController cleanerController = startScanningCleaner(bridge);
-  final NavigationController navigation = createNavigation();
+  final List<SectionKey> selectedSections = [];
   await pumpOnStage(
     tester,
-    OverviewPage(
-      cleanerController: cleanerController,
-      updateController: updateController ?? createQuietUpdateController(),
-      navigation: navigation,
-      urlOpener: urlOpener ?? FakeUrlOpener(isOpening: true),
+    Builder(
+      builder: (BuildContext context) => OverviewPage(
+        cleanerController: cleanerController,
+        updateController: updateController ?? createQuietUpdateController(),
+        onSectionSelected: selectedSections.add,
+        onCleanSafeItems: () => cleanSafeItems(context, cleanerController),
+        urlOpener: urlOpener ?? FakeUrlOpener(isOpening: true),
+      ),
     ),
   );
-  return (cleanerController: cleanerController, navigation: navigation);
+  return (cleanerController: cleanerController, selectedSections: selectedSections);
 }
 
 UpdateController _createUpdateController(UpdateCheckAnswer answer) {
@@ -99,7 +101,7 @@ void main() {
 
     await tapAndSettle(tester, find.byKey(const SectionCardKey(SectionKey.caches)));
 
-    expect(parts.navigation.destination, const SectionDestination(SectionKey.caches));
+    expect(parts.selectedSections, [SectionKey.caches]);
   });
 
   testWidgets('Clean safe items plans the safe items and opens the alert on them', (

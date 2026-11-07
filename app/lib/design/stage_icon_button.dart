@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../design/tokens.dart';
+import 'tokens.dart';
 
 /// A round button that shows only [icon]; [semanticsLabel] names it. Lit in
 /// [accent] while [isExpanded], which it also reports to assistive tech.
@@ -11,7 +11,7 @@ class StageIconButton extends StatelessWidget {
     required this.semanticsLabel,
     required this.onPressed,
     required this.isExpanded,
-    this.accent = StageColors.overviewAccent,
+    required this.accent,
   });
 
   final IconData icon;

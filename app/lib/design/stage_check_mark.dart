@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../design/app_icons.dart';
-import '../design/motion.dart';
-import '../design/tokens.dart';
+import 'app_icons.dart';
+import 'motion.dart';
+import 'tokens.dart';
 
 const double _markSide = 22;
 
@@ -25,9 +25,7 @@ class StageCheckMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool lit = value ?? true;
     final bool isMixed = value == null;
-    final Duration duration = MotionScope.of(context).isReduced
-        ? Duration.zero
-        : MotionTokens.plainFade;
+    final Duration duration = MotionScope.of(context).plainFadeDuration;
     return Opacity(
       opacity: enabled ? 1 : 0.42,
       child: AnimatedContainer(

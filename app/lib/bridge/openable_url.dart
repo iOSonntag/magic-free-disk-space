@@ -115,6 +115,19 @@ final class RevealUrl extends OpenableUrl {
     }
     return RevealUrl._(path);
   }
+
+  /// The URL of [path] as [parse] reads it, or `null` when [path] is `null`
+  /// or [parse] refuses it.
+  static RevealUrl? tryParse(String? path, {required Set<String> allowedPaths}) {
+    if (path == null) {
+      return null;
+    }
+    try {
+      return parse(path, allowedPaths: allowedPaths);
+    } on FormatException {
+      return null;
+    }
+  }
 }
 
 /// One app of the fixed list; its [text] is the app's bundle id.

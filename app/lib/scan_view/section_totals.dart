@@ -1,12 +1,12 @@
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../removal/item_count_words.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import 'item_count_words.dart';
 
 /// The scan of [state], or `null` while no scan is listed.
 ScannedEvent? findListedScan(CleanerState state) {
   return switch (state) {
     ListedState() => state.scan,
-    _ => null,
+    IdleState() || ScanningState() || DeletingState() || DeletedState() => null,
   };
 }
 

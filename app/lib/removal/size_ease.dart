@@ -1,7 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import '../design/motion.dart';
-import '../design/tokens.dart';
+import '../design/design.dart';
 
 /// Eases the height of [child] when it changes, from the top; under reduced
 /// motion the height jumps.

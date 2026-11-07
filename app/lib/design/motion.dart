@@ -3,6 +3,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'tokens.dart';
+
 /// Whether the app may move: Reduce Motion, and whether the window can be
 /// seen at all.
 @immutable
@@ -20,6 +22,9 @@ class MotionState {
 
   /// Shader time, glows and particles run only while this holds.
   bool get runsAmbientEffects => !isReduced && isWindowVisible;
+
+  /// [MotionTokens.plainFade], or no time at all while motion is reduced.
+  Duration get plainFadeDuration => isReduced ? Duration.zero : MotionTokens.plainFade;
 
   @override
   bool operator ==(Object other) =>
@@ -180,18 +185,24 @@ class MotionScope extends StatefulWidget {
   final ValueListenable<MotionState> windowMotion;
   final Widget child;
 
-  /// The joined state, which rebuilds the caller when it changes.
+  /// The joined state, which rebuilds the caller when it changes. Throws a
+  /// [StateError] when no [MotionScope] is above [context].
   static MotionState of(BuildContext context) {
     final _MotionScopeMarker? marker = context.dependOnInheritedWidgetOfExactType<_MotionScopeMarker>();
-    assert(marker != null, 'No MotionScope above this widget.');
-    return marker!.state;
+    if (marker == null) {
+      throw StateError('No MotionScope above this widget.');
+    }
+    return marker.state;
   }
 
-  /// The ambient time in seconds, for a painter's `repaint`.
+  /// The ambient time in seconds, for a painter's `repaint`. Throws a
+  /// [StateError] when no [MotionScope] is above [context].
   static ValueListenable<double> ambientTimeOf(BuildContext context) {
     final _MotionScopeMarker? marker = context.getInheritedWidgetOfExactType<_MotionScopeMarker>();
-    assert(marker != null, 'No MotionScope above this widget.');
-    return marker!.ambientClock;
+    if (marker == null) {
+      throw StateError('No MotionScope above this widget.');
+    }
+    return marker.ambientClock;
   }
 
   @override

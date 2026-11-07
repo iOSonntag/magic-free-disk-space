@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import '../bridge/openable_url.dart';
-import '../link/url_opener.dart';
+import '../bridge/bridge.dart';
+import '../link/link.dart';
 
 const String _openExecutablePath = '/usr/bin/open';
 

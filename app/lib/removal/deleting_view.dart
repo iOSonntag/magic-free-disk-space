@@ -2,19 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/dissolve.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/motion.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../section/section_labels.dart';
-import 'item_count_words.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
+import 'biggest_items.dart';
 import 'size_ease.dart';
 
 /// How many of the biggest items the view shows; the rest dissolve as one
@@ -43,6 +35,7 @@ class _DeletingViewState extends State<DeletingView>
     with SingleTickerProviderStateMixin {
   late final List<PlannedItemView> _shownItems;
   late final int _moreCount;
+  late final Duration _staggerDuration;
   late final AnimationController _stagger;
   int _dissolvedCount = 0;
 
@@ -54,17 +47,15 @@ class _DeletingViewState extends State<DeletingView>
   @override
   void initState() {
     super.initState();
-    final List<PlannedItemView> biggestFirst = [...widget.state.plan.items]
-      ..sort(
-        (PlannedItemView a, PlannedItemView b) =>
-            b.allocatedBytes.compareTo(a.allocatedBytes),
-      );
-    _shownItems = biggestFirst.take(_shownItemCount).toList();
-    _moreCount = biggestFirst.length - _shownItems.length;
-    _stagger = AnimationController(
-      vsync: this,
-      duration: _dissolveLead + _dissolveStep * math.max(_rowCount - 1, 0),
-    )..addListener(_updateDissolvedCount);
+    final BiggestItems biggestItems = buildBiggestItems(
+      widget.state.plan.items,
+      shownCount: _shownItemCount,
+    );
+    _shownItems = biggestItems.shownItems;
+    _moreCount = biggestItems.moreCount;
+    _staggerDuration = _dissolveLead + _dissolveStep * math.max(_rowCount - 1, 0);
+    _stagger = AnimationController(vsync: this, duration: _staggerDuration)
+      ..addListener(_updateDissolvedCount);
   }
 
   @override
@@ -93,7 +84,7 @@ class _DeletingViewState extends State<DeletingView>
 
   void _updateDissolvedCount() {
     final int dissolvedCount = _countDissolvedRows(
-      elapsed: _stagger.duration! * _stagger.value,
+      elapsed: _staggerDuration * _stagger.value,
     );
     if (dissolvedCount != _dissolvedCount) {
       setState(() => _dissolvedCount = dissolvedCount);

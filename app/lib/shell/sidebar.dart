@@ -1,17 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/motion.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../section/section_labels.dart';
-import '../section/section_totals.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 import 'app_destination.dart';
 import 'window_frame.dart';
 
@@ -91,7 +83,7 @@ class Sidebar extends StatelessWidget {
               const SizedBox(height: StageSpacing.small),
               _buildEntry(
                 destination: const HandledElsewhereDestination(),
-                title: formatSectionTitle(SectionKey.ownApp),
+                title: SectionLook.ownApp.title,
                 glyph: SectionLook.ownApp.glyph,
                 accent: SectionLook.ownApp.accent,
                 allocatedBytes: ownAppTotal?.allocatedBytes,
@@ -114,7 +106,7 @@ class Sidebar extends StatelessWidget {
   Widget _buildSectionEntry(SectionTotal total, ScannedEvent? scan) {
     final SectionLook look = sectionKeyToLook(total.sectionKey);
     return _buildEntry(
-      destination: SectionDestination(total.sectionKey),
+      destination: buildSectionDestination(total.sectionKey),
       title: formatScanSectionTitle(total.sectionKey, scan: scan),
       glyph: look.glyph,
       accent: look.accent,
@@ -167,9 +159,7 @@ class _SidebarEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? sizeText = this.sizeText;
     final BorderRadius radius = BorderRadius.circular(12);
-    final Duration duration = MotionScope.of(context).isReduced
-        ? Duration.zero
-        : MotionTokens.plainFade;
+    final Duration duration = MotionScope.of(context).plainFadeDuration;
     return Semantics(
       container: true,
       button: true,

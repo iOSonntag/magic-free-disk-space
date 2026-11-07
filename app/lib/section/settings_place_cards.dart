@@ -1,12 +1,9 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../bridge/openable_url.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../section/advice_card.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import 'advice_card.dart';
 
 /// A place that only a pane of System Settings frees, with no folder the
 /// scan could measure.

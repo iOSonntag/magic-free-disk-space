@@ -1,22 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/count_up.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/motion.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../section/section_labels.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 import 'accent_button.dart';
 import 'delete_confirm_alert.dart';
-import 'item_count_words.dart';
 import 'lines_details.dart';
-import 'risk_words.dart';
 import 'size_ease.dart';
 
 /// The Review step: lists what the plan of [state] deletes, and opens the
@@ -86,7 +76,7 @@ class ReviewPage extends StatelessWidget {
                     context: context,
                     controller: controller,
                     state: state,
-                    canShowList: false,
+                    origin: DeleteAlertOrigin.review,
                   ),
           ),
         ],
@@ -150,7 +140,6 @@ class _ReviewHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isReduced = MotionScope.of(context).isReduced;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -158,7 +147,7 @@ class _ReviewHero extends StatelessWidget {
         const SizedBox(height: StageSpacing.small),
         AnimatedOpacity(
           opacity: isReplanning ? 0.45 : 1,
-          duration: isReduced ? Duration.zero : MotionTokens.plainFade,
+          duration: MotionScope.of(context).plainFadeDuration,
           child: CountUp(
             value: totalBytes,
             format: formatBytes,
@@ -232,10 +221,7 @@ class _SectionCard extends StatelessWidget {
                 GlyphTile(glyph: look.glyph, accent: look.accent, size: 40),
                 const SizedBox(width: StageSpacing.medium),
                 Expanded(
-                  child: Text(
-                    formatSectionTitle(group.sectionKey),
-                    style: TypeRamp.title,
-                  ),
+                  child: Text(look.title, style: TypeRamp.title),
                 ),
                 Text(formatBytes(sectionBytes), style: TypeRamp.figure),
               ],
@@ -263,17 +249,19 @@ class _ReviewRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String sizeText = formatBytes(item.allocatedBytes);
-    final RiskWords riskWords = riskToWords(item.risk);
+    final ShownItemGroup group = riskToShownItemGroup(item.risk);
+    final String groupTitle = formatGroupTitle(group);
+    final Color tone = getGroupTone(group);
     final void Function(int number)? remove = onRemove;
     return Semantics(
       container: true,
-      label: '${item.title}, $sizeText, ${riskWords.label}',
+      label: '${item.title}, $sizeText, $groupTitle',
       child: Padding(
         padding: const EdgeInsets.only(top: StageSpacing.small),
         child: Row(
           children: [
             ExcludeSemantics(
-              child: Icon(riskWords.glyph, size: 18, color: riskWords.color, fill: 1),
+              child: Icon(getGroupGlyph(group), size: 18, color: tone, fill: 1),
             ),
             const SizedBox(width: StageSpacing.medium),
             Expanded(
@@ -288,8 +276,8 @@ class _ReviewRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      riskWords.label,
-                      style: TypeRamp.caption.copyWith(color: riskWords.color),
+                      groupTitle,
+                      style: TypeRamp.caption.copyWith(color: tone),
                     ),
                   ],
                 ),

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../cleaner/cleaner_controller.dart';
-import '../link/url_opener.dart';
-import '../removal/deleted_page.dart';
-import '../removal/deleting_view.dart';
-import '../removal/review_page.dart';
-import '../update/update_controller.dart';
+import '../cleaner/cleaner.dart';
+import '../link/link.dart';
+import '../removal/removal.dart';
+import '../update/update.dart';
 import 'destination_navigator.dart';
 import 'navigation_controller.dart';
 import 'selection_bar.dart';
@@ -35,21 +33,27 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget destinationPages = DestinationNavigator(
+      cleanerController: cleanerController,
+      updateController: updateController,
+      navigation: navigation,
+      urlOpener: urlOpener,
+    );
     return Scaffold(
       body: ListenableBuilder(
         listenable: Listenable.merge([cleanerController, navigation]),
-        builder: (BuildContext context, Widget? destinationPages) {
+        builder: (BuildContext context, Widget? _) {
           final CleanerState state = cleanerController.state;
-          final Widget? flowStep = _buildFlowStep(state);
+          final bool isFlowStepShown = state is RemovalFlowState;
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Sidebar(
                 state: state,
                 destination: navigation.destination,
-                onDestinationSelected: flowStep == null
-                    ? navigation.showDestination
-                    : null,
+                onDestinationSelected: isFlowStepShown
+                    ? null
+                    : navigation.showDestination,
               ),
               Expanded(
                 child: Column(
@@ -62,15 +66,27 @@ class AppShell extends StatelessWidget {
                       child: Stack(
                         children: [
                           Positioned.fill(
-                            child: Offstage(
-                              offstage: flowStep != null,
-                              child: TickerMode(
-                                enabled: flowStep == null,
-                                child: destinationPages!,
+                            // Offstage keeps the pages in the focus tree, so
+                            // Tab would reach their controls under the step.
+                            child: ExcludeFocus(
+                              excluding: isFlowStepShown,
+                              child: Offstage(
+                                offstage: isFlowStepShown,
+                                child: TickerMode(
+                                  enabled: !isFlowStepShown,
+                                  child: destinationPages,
+                                ),
                               ),
                             ),
                           ),
-                          ?flowStep,
+                          if (state is RemovalFlowState)
+                            Positioned.fill(
+                              child: RemovalFlowStep(
+                                state: state,
+                                controller: cleanerController,
+                                urlOpener: urlOpener,
+                              ),
+                            ),
                           if (state is ScannedState && state.selectedNumbers.isNotEmpty)
                             Positioned(
                               left: 24,
@@ -92,32 +108,7 @@ class AppShell extends StatelessWidget {
             ],
           );
         },
-        child: DestinationNavigator(
-          cleanerController: cleanerController,
-          updateController: updateController,
-          navigation: navigation,
-          urlOpener: urlOpener,
-        ),
       ),
     );
-  }
-
-  /// The step of the delete flow [state] shows over the pages, or `null`
-  /// when the pages show.
-  Widget? _buildFlowStep(CleanerState state) {
-    return switch (state) {
-      ConfirmingState() => Positioned.fill(
-        child: ReviewPage(state: state, controller: cleanerController),
-      ),
-      DeletingState() => Positioned.fill(child: DeletingView(state: state)),
-      DeletedState() => Positioned.fill(
-        child: DeletedPage(
-          state: state,
-          controller: cleanerController,
-          urlOpener: urlOpener,
-        ),
-      ),
-      IdleState() || ScanningState() || ScannedState() => null,
-    };
   }
 }

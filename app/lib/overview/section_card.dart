@@ -1,18 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/app_icons.dart';
-import '../design/count_up.dart';
-import '../design/format_bytes.dart';
-import '../design/motion.dart';
-import '../design/section_look.dart';
-import '../design/sweep.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../section/section_hero_tile.dart';
-import '../section/section_labels.dart';
-import '../section/section_totals.dart';
-import '../shell/glass_card_button.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 
 const double sectionCardWidth = 236;
 
@@ -72,7 +62,7 @@ class SectionCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SectionHeroTile(sectionKey: total.sectionKey, size: 44),
+                    SectionHeroTile(look: look, size: 44),
                     const Spacer(),
                     const Icon(
                       AppIcons.forward,

@@ -1,27 +1,23 @@
 import 'package:flutter/material.dart';
 
-import '../design/motion.dart';
-import '../design/tokens.dart';
+import 'motion.dart';
+import 'tokens.dart';
 
-/// The look of an on/off switch, lit in [accent] while [value]. It takes no
-/// tap; the row that holds it does.
+/// The look of an on/off switch, lit in the Overview's accent while [value].
+/// It takes no tap; the row that holds it does.
 class StageSwitchTrack extends StatelessWidget {
   const StageSwitchTrack({
     super.key,
     required this.value,
     required this.enabled,
-    this.accent = StageColors.overviewAccent,
   });
 
   final bool value;
   final bool enabled;
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final Duration duration = MotionScope.of(context).isReduced
-        ? Duration.zero
-        : MotionTokens.plainFade;
+    final Duration duration = MotionScope.of(context).plainFadeDuration;
     return Opacity(
       opacity: enabled ? 1 : 0.42,
       child: AnimatedContainer(
@@ -33,13 +29,13 @@ class StageSwitchTrack extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(13),
           color: value
-              ? accent.withValues(alpha: 0.85)
+              ? StageColors.overviewAccent.withValues(alpha: 0.85)
               : Colors.white.withValues(alpha: 0.1),
           border: Border.all(color: GlassTokens.rimLight),
           boxShadow: value
               ? [
                   BoxShadow(
-                    color: accent.withValues(alpha: 0.45),
+                    color: StageColors.overviewAccent.withValues(alpha: 0.45),
                     blurRadius: 16,
                     spreadRadius: -4,
                   ),

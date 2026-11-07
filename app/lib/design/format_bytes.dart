@@ -1,7 +1,8 @@
 typedef _DecimalUnitScale = ({String unit, int bytesPerUnit});
 
 const List<_DecimalUnitScale> _decimalUnitScales = <_DecimalUnitScale>[
-  (unit: 'kB', bytesPerUnit: 1000),
+  // Finder writes the thousand bytes as KB.
+  (unit: 'KB', bytesPerUnit: 1000),
   (unit: 'MB', bytesPerUnit: 1000 * 1000),
   (unit: 'GB', bytesPerUnit: 1000 * 1000 * 1000),
 ];
@@ -40,7 +41,7 @@ String formatSizeText({required int allocatedBytes, required bool isComplete}) {
 ({double value, String unit}) _scaleToDecimalUnit(int bytes) {
   for (final _DecimalUnitScale scale in _decimalUnitScales) {
     final double value = bytes / scale.bytesPerUnit;
-    // Compared after rounding, so 999.6 kB shows as 1.0 MB rather than 1000 kB.
+    // Compared after rounding, so 999.6 KB shows as 1.0 MB rather than 1000 KB.
     if (value.round() < 1000) {
       return (value: value, unit: scale.unit);
     }

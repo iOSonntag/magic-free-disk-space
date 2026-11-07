@@ -1,22 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../bridge/openable_url.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/count_up.dart';
-import '../design/disk_ring/disk_ring.dart';
-import '../design/disk_ring/disk_ring_arcs.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/motion.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../feedback/error_text.dart';
-import '../link/url_opener.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../feedback/feedback.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
 import 'accent_button.dart';
-import 'item_count_words.dart';
 import 'lines_details.dart';
 
 /// The Result step: what the run of [state] freed and kept, its details, and
@@ -61,7 +51,8 @@ class _DeletedPageState extends State<DeletedPage> {
         if (outcome.outcome != DeletedOutcome.removed) outcome,
     ];
     final int removedCount = result.outcomes.length - stayedOutcomes.length;
-    final RevealUrl? logUrl = _buildLogUrl(result.logPath);
+    final String? logPath = result.logPath;
+    final RevealUrl? logUrl = RevealUrl.tryParse(logPath, allowedPaths: {?logPath});
     return Material(
       type: MaterialType.transparency,
       child: Column(
@@ -126,19 +117,6 @@ class _DeletedPageState extends State<DeletedPage> {
         ],
       ),
     );
-  }
-}
-
-/// The reveal URL of the run's log, or `null` when the run wrote none or
-/// its path is refused.
-RevealUrl? _buildLogUrl(String? logPath) {
-  if (logPath == null) {
-    return null;
-  }
-  try {
-    return RevealUrl.parse(logPath, allowedPaths: {logPath});
-  } on FormatException {
-    return null;
   }
 }
 
@@ -299,7 +277,7 @@ class _RunFacts extends StatelessWidget {
             accent: StageColors.overviewAccent,
             text:
                 '${formatBytes(result.returnsLaterBytes)} more comes back '
-                'once the container engine gives it up.',
+                'within minutes, as the container engine gives it up.',
           ),
         if (availableBytesAfter != null)
           _FactLine(

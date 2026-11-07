@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../bridge/bridge_event.dart';
+import '../bridge/bridge.dart';
 import 'cleaner_bridge.dart';
 
 sealed class CleanerState {
@@ -16,9 +16,7 @@ final class IdleState extends CleanerState {
 }
 
 final class ScanningState extends CleanerState {
-  const ScanningState({required this.progressMessage, this.progress});
-
-  final String progressMessage;
+  const ScanningState({this.progress});
 
   /// The bridge's latest progress, with the sections found so far; `null`
   /// until its first.
@@ -33,6 +31,10 @@ sealed class ListedState extends CleanerState {
   final Set<int> selectedNumbers;
 }
 
+/// A step of the delete flow, which covers the pages: a plan under review,
+/// its deletion, and its result.
+sealed class RemovalFlowState implements CleanerState {}
+
 final class ScannedState extends ListedState {
   const ScannedState({
     required super.scan,
@@ -44,7 +46,7 @@ final class ScannedState extends ListedState {
 }
 
 /// The plan of the selection waits for its confirmation word.
-final class ConfirmingState extends ListedState {
+final class ConfirmingState extends ListedState implements RemovalFlowState {
   const ConfirmingState({
     required super.scan,
     required super.selectedNumbers,
@@ -60,13 +62,13 @@ final class ConfirmingState extends ListedState {
   final bool isReplanning;
 }
 
-final class DeletingState extends CleanerState {
+final class DeletingState extends CleanerState implements RemovalFlowState {
   const DeletingState({required this.plan});
 
   final PlannedEvent plan;
 }
 
-final class DeletedState extends CleanerState {
+final class DeletedState extends CleanerState implements RemovalFlowState {
   const DeletedState({
     required this.result,
     required this.scan,
@@ -114,16 +116,11 @@ class CleanerController extends ChangeNotifier {
     if (_isRequestPending) {
       return;
     }
-    _setState(const ScanningState(progressMessage: 'Starting the scan…'));
+    _setState(const ScanningState());
     final ScanAnswer? answer = await _request(
       () => _bridge.scan(
         onProgress: (ProgressEvent progress) {
-          _setState(
-            ScanningState(
-              progressMessage: progress.message,
-              progress: progress,
-            ),
-          );
+          _setState(ScanningState(progress: progress));
         },
       ),
     );
@@ -142,6 +139,20 @@ class CleanerController extends ChangeNotifier {
       final Set<int> selectedNumbers = {...current.selectedNumbers};
       if (!selectedNumbers.remove(number)) {
         selectedNumbers.add(number);
+      }
+      return selectedNumbers;
+    });
+  }
+
+  /// Ticks every item of [numbers] while any of them is unticked, else
+  /// unticks them all, in one change of the selection.
+  void toggleCandidateGroup(List<int> numbers) {
+    _select((ScannedState current) {
+      final Set<int> selectedNumbers = {...current.selectedNumbers};
+      if (numbers.every(selectedNumbers.contains)) {
+        selectedNumbers.removeAll(numbers);
+      } else {
+        selectedNumbers.addAll(numbers);
       }
       return selectedNumbers;
     });

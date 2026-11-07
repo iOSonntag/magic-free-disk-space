@@ -18,9 +18,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Both fonts are variable: Inter by wght and opsz, Material Symbols Rounded
-  # by FILL, wght, GRAD and opsz. The release build's icon tree shaker
-  # subsets the symbols to the const IconData of design/app_icons.dart.
+  # Both fonts are variable, so each is one file for every weight.
   fonts:
     - family: Inter
       fonts:

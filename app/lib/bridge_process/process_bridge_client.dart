@@ -3,10 +3,9 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
-import '../bridge/bridge_event.dart';
-import '../bridge/bridge_request.dart';
-import '../cleaner/cleaner_bridge.dart';
-import '../update/update_bridge.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../update/update.dart';
 
 const String bridgeExecutableName = 'magic-free-disk-space-bridge';
 const int _stderrTailLength = 5;

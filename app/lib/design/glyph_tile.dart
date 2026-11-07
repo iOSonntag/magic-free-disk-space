@@ -58,8 +58,8 @@ class _GlyphTileTintPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: <Color>[
-          Color.lerp(accent, black, 0.55)!.withValues(alpha: 0.6),
-          Color.lerp(accent, black, 0.8)!.withValues(alpha: 0.4),
+          (Color.lerp(accent, black, 0.55) ?? accent).withValues(alpha: 0.6),
+          (Color.lerp(accent, black, 0.8) ?? accent).withValues(alpha: 0.4),
         ],
       ).createShader(bounds);
     canvas.drawRRect(RRect.fromRectAndRadius(bounds, Radius.circular(borderRadius)), tint);

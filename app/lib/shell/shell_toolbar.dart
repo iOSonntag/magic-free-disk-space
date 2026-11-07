@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/sweep.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import 'scan_phase_text.dart';
-import 'stage_button.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 
 /// Whether "Scan again" may start a scan in [state]: not while one runs,
 /// and not while a delete is confirmed or runs.

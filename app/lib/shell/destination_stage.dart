@@ -1,9 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-import '../design/cinematic_stage.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../section/section_labels.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 import 'app_destination.dart';
 import 'navigation_controller.dart';
 
@@ -32,13 +30,12 @@ class DestinationStage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: navigation,
-      builder: (BuildContext context, Widget? child) {
+      builder: (BuildContext context, Widget? _) {
         return CinematicStage(
           accent: getDestinationAccent(navigation.destination),
-          child: child!,
+          child: child,
         );
       },
-      child: child,
     );
   }
 }

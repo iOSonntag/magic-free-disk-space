@@ -1,14 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/format_bytes.dart';
-import '../design/section_look.dart';
-import '../design/sweep.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import 'section_hero_tile.dart';
-import 'section_labels.dart';
-import 'section_totals.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 
 /// The head of a section's page: its tile, which flew in from the Overview,
 /// its title, and what it holds. It sweeps while [isScanning].
@@ -37,7 +31,7 @@ class SectionPageHeader extends StatelessWidget {
         accent: look.accent,
         child: Row(
           children: [
-            SectionHeroTile(sectionKey: sectionKey, size: 64),
+            SectionHeroTile(look: look, size: 64),
             const SizedBox(width: StageSpacing.large - 4),
             Expanded(
               child: Column(

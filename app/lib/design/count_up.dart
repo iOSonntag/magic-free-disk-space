@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/widgets.dart';
 
 import 'motion.dart';
@@ -62,7 +60,8 @@ class _CountUpState extends State<CountUp> with SingleTickerProviderStateMixin {
   }
 
   int _shownValue(int targetValue) {
-    return lerpDouble(_fromValue, targetValue, _eased.value)!.round();
+    final double progress = _eased.value;
+    return (_fromValue * (1 - progress) + targetValue * progress).round();
   }
 
   @override

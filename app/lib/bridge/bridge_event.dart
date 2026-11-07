@@ -355,6 +355,7 @@ final class PlannedItemView {
     required this.title,
     required this.sectionKey,
     required this.risk,
+    required this.removal,
     required this.allocatedBytes,
   });
 
@@ -363,6 +364,9 @@ final class PlannedItemView {
   final String title;
   final SectionKey sectionKey;
   final Risk risk;
+
+  /// How the run removes it, as the scan's item says.
+  final ItemRemoval removal;
   final int allocatedBytes;
 }
 
@@ -445,16 +449,22 @@ final class ScannedEvent extends BridgeEvent implements ScanAnswer {
   /// Every section that holds an item or advice, top to bottom.
   final List<SectionTotal> sectionTotals;
 
+  /// Every selectable item of this scan: those of its sections, their check
+  /// groups, and Explore.
+  List<ItemView> get selectableItems {
+    return [
+      for (final SectionView section in sections) ...[
+        ...section.items,
+        ...?section.checkGroup?.items,
+      ],
+      ...?explore?.items,
+    ];
+  }
+
   /// The paths of this scan that may be shown in Finder.
   Set<String> get revealPaths {
     return {
-      for (final SectionView section in sections) ...[
-        for (final ItemView item in section.items) ?item.revealPath,
-        for (final ItemView item in section.checkGroup?.items ?? <ItemView>[])
-          ?item.revealPath,
-      ],
-      for (final ItemView item in explore?.items ?? <ItemView>[])
-        ?item.revealPath,
+      for (final ItemView item in selectableItems) ?item.revealPath,
       for (final AdviceItemView item
           in explore?.adviceGroup?.items ?? <AdviceItemView>[])
         ?item.revealPath,
@@ -817,8 +827,8 @@ ItemView _parseItem(Object? json) {
       'isComplete': final bool isComplete,
       'displayPath': final String? displayPath,
       'revealPath': final String? revealPath,
-      'lastUsedAt': final String? lastUsedAt,
-      'downloadedAt': final String? downloadedAt,
+      'lastUsedAt': final int? lastUsedAt,
+      'downloadedAt': final int? downloadedAt,
       'appName': final String? appName,
       'matchedBy': final String? matchedBy,
     } =>
@@ -923,6 +933,7 @@ PlannedItemView _parsePlannedItem(Object? json) {
       'title': final String title,
       'sectionKey': final String sectionKey,
       'risk': final String risk,
+      'removal': final String removal,
       'allocatedBytes': final int allocatedBytes,
     } =>
       PlannedItemView(
@@ -931,6 +942,11 @@ PlannedItemView _parsePlannedItem(Object? json) {
         title: title,
         sectionKey: _parseSectionKey(sectionKey),
         risk: _parseEnumName(Risk.values, risk),
+        removal: _parseKeyName(
+          ItemRemoval.values,
+          removal,
+          ItemRemoval.unknown,
+        ),
         allocatedBytes: allocatedBytes,
       ),
     _ => throw const FormatException('Unknown shape of a planned item.'),
@@ -1043,9 +1059,12 @@ SectionKey _parseSectionKey(String name) {
   return _parseKeyName(SectionKey.values, name, SectionKey.unknown);
 }
 
-/// An instant the bridge writes as ISO 8601 text; `null` stays `null`.
-DateTime? _parseInstant(String? text) {
-  return text == null ? null : DateTime.parse(text);
+/// An instant the bridge writes as milliseconds since the epoch; `null`
+/// stays `null`.
+DateTime? _parseInstant(int? epochMs) {
+  return epochMs == null
+      ? null
+      : DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true);
 }
 
 /// For the enums whose members this app relies on: an unknown name throws.

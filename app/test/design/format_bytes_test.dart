@@ -4,21 +4,21 @@ import 'package:magic_free_disk_space/design/format_bytes.dart';
 // The cases of test/report/formatBytes.test.ts, so the app and the CLI show one size alike.
 void main() {
   group('formatBytes', () {
-    test('shows counts under one kB in bytes', () {
+    test('shows counts under one KB in bytes', () {
       expect(formatBytes(0), '0 B');
       expect(formatBytes(999), '999 B');
     });
 
     test('shows one decimal below ten of a unit and a whole number from ten up', () {
-      expect(formatBytes(1000), '1.0 kB');
-      expect(formatBytes(1500), '1.5 kB');
-      expect(formatBytes(9500), '9.5 kB');
-      expect(formatBytes(10000), '10 kB');
+      expect(formatBytes(1000), '1.0 KB');
+      expect(formatBytes(1500), '1.5 KB');
+      expect(formatBytes(9500), '9.5 KB');
+      expect(formatBytes(10000), '10 KB');
       expect(formatBytes(10000000), '10 MB');
     });
 
     test('counts binary sizes in decimal units', () {
-      expect(formatBytes(1024), '1.0 kB');
+      expect(formatBytes(1024), '1.0 KB');
       expect(formatBytes(1024 * 1024), '1.0 MB');
       expect(formatBytes(1024 * 1024 * 1024), '1.1 GB');
     });
@@ -41,11 +41,11 @@ void main() {
 
   group('formatSizeText', () {
     test('shows a complete size as formatBytes does', () {
-      expect(formatSizeText(allocatedBytes: 1500, isComplete: true), '1.5 kB');
+      expect(formatSizeText(allocatedBytes: 1500, isComplete: true), '1.5 KB');
     });
 
     test('prefixes an incomplete size with at least', () {
-      expect(formatSizeText(allocatedBytes: 1500, isComplete: false), 'at least 1.5 kB');
+      expect(formatSizeText(allocatedBytes: 1500, isComplete: false), 'at least 1.5 KB');
     });
 
     test('gives zero bytes for nothing', () {

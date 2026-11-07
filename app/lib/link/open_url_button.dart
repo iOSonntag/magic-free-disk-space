@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../bridge/openable_url.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import 'stage_button.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import 'url_opener.dart';
 
 /// A [StageButton] that opens [url] through [urlOpener], and shows
 /// [failedText] below it once an open did not succeed.
@@ -16,19 +13,20 @@ class OpenUrlButton extends StatefulWidget {
     required this.url,
     required this.failedText,
     required this.urlOpener,
-    this.icon,
-    this.accent = StageColors.overviewAccent,
+    required IconData this.icon,
+    required this.accent,
   });
 
+  /// The button of [link], with its label alone.
   OpenUrlButton.forLink({
     super.key,
     required LinkView link,
     required this.urlOpener,
-    this.icon,
-    this.accent = StageColors.overviewAccent,
+    required this.accent,
   }) : labelText = link.labelText,
        url = link.url,
-       failedText = link.failedText;
+       failedText = link.failedText,
+       icon = null;
 
   final String labelText;
   final OpenableUrl url;

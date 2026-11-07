@@ -110,7 +110,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('1.2 GB more comes back once the container engine gives it up.'),
+      find.text('1.2 GB more comes back within minutes, as the container engine gives it up.'),
       findsOneWidget,
     );
     expect(find.textContaining('free on the disk now'), findsNothing);

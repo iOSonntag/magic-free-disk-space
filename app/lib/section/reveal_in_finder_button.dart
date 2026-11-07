@@ -1,22 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/openable_url.dart';
-import '../design/app_icons.dart';
-import '../link/url_opener.dart';
-import '../shell/open_url_button.dart';
-
-/// The reveal URL of [revealPath], or `null` when there is none or
-/// [allowedPaths], the reveal paths of the current scan, does not hold it.
-RevealUrl? findRevealUrl(String? revealPath, {required Set<String> allowedPaths}) {
-  if (revealPath == null) {
-    return null;
-  }
-  try {
-    return RevealUrl.parse(revealPath, allowedPaths: allowedPaths);
-  } on FormatException {
-    return null;
-  }
-}
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
 
 class RevealInFinderButton extends StatelessWidget {
   const RevealInFinderButton({

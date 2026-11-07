@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
+import 'tokens.dart';
+import 'type_ramp.dart';
 
 /// How loud a [StageButton] is: [primary] is lit in its accent, [quiet] is
 /// glass.
@@ -44,7 +44,7 @@ class StageButton extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color.lerp(accent, Colors.white, 0.18)!,
+                Color.lerp(accent, Colors.white, 0.18) ?? accent,
                 accent,
               ],
             ),

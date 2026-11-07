@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/app_icons.dart';
-import '../design/format_bytes.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../shell/stage_check_mark.dart';
-import '../shell/stage_icon_button.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
 import 'item_details_panel.dart';
-import 'item_words.dart';
 
 /// The key of the row of the item numbered [value].
 final class ItemRowKey extends ValueKey<int> {

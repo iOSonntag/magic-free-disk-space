@@ -3,20 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'bridge_process/process_bridge_client.dart';
-import 'cleaner/cleaner_bridge.dart';
-import 'cleaner/cleaner_controller.dart';
-import 'design/font_licenses.dart';
-import 'design/motion.dart';
-import 'design/shaders/shader_library.dart';
-import 'design/stage_theme.dart';
-import 'link/url_opener.dart';
-import 'link_process/process_url_opener.dart';
-import 'shell/app_shell.dart';
-import 'shell/destination_stage.dart';
-import 'shell/navigation_controller.dart';
-import 'update/update_bridge.dart';
-import 'update/update_controller.dart';
+import 'bridge_process/bridge_process.dart';
+import 'cleaner/cleaner.dart';
+import 'design/design.dart';
+import 'link/link.dart';
+import 'link_process/link_process.dart';
+import 'shell/shell.dart';
+import 'update/update.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,7 +83,10 @@ class _MagicFreeDiskSpaceAppState extends State<MagicFreeDiskSpaceApp> {
       debugShowCheckedModeBanner: false,
       theme: _theme,
       builder: (BuildContext context, Widget? child) {
-        return DestinationStage(navigation: _navigation, child: child!);
+        if (child == null) {
+          throw StateError('MaterialApp builds its navigator for the home page.');
+        }
+        return DestinationStage(navigation: _navigation, child: child);
       },
       home: AppShell(
         cleanerController: _cleanerController,

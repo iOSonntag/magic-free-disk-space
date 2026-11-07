@@ -20,11 +20,11 @@ void main() {
   });
 
   /// Pumps the flow over a plan of [plan] and opens the alert over its
-  /// Review page, as the Overview's one click does when [canShowList].
+  /// Review page, as [origin] opens it.
   Future<CleanerController> openAlert(
     WidgetTester tester, {
     required PlannedEvent plan,
-    required bool canShowList,
+    required DeleteAlertOrigin origin,
   }) async {
     final CleanerController controller = await createConfirmingController(
       bridge,
@@ -40,7 +40,7 @@ void main() {
       context: tester.element(find.byType(ReviewPage)),
       controller: controller,
       state: controller.state as ConfirmingState,
-      canShowList: canShowList,
+      origin: origin,
     );
     await tester.pumpAndSettle();
     return controller;
@@ -52,7 +52,7 @@ void main() {
       final CleanerController controller = await openAlert(
         tester,
         plan: samplePlan,
-        canShowList: true,
+        origin: DeleteAlertOrigin.cleanSafeItems,
       );
 
       expect(find.text('Delete 10 MB for good?'), findsOneWidget);
@@ -72,7 +72,7 @@ void main() {
   testWidgets(
     'a plan with a careful item keeps Delete disabled until DELETE is typed, and refuses lower case',
     (WidgetTester tester) async {
-      await openAlert(tester, plan: carefulPlan, canShowList: false);
+      await openAlert(tester, plan: carefulPlan, origin: DeleteAlertOrigin.review);
 
       expect(find.textContaining("Can't be undone or downloaded again: App cache"), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
@@ -96,11 +96,13 @@ void main() {
     },
   );
 
-  testWidgets('Cancel sends nothing and keeps the selection', (WidgetTester tester) async {
+  testWidgets('Cancel after Clean safe items sends nothing and keeps the selection', (
+    WidgetTester tester,
+  ) async {
     final CleanerController controller = await openAlert(
       tester,
       plan: samplePlan,
-      canShowList: true,
+      origin: DeleteAlertOrigin.cleanSafeItems,
     );
 
     await tapAndSettle(tester, findButtonLabelled('Cancel'));
@@ -116,7 +118,7 @@ void main() {
     final CleanerController controller = await openAlert(
       tester,
       plan: samplePlan,
-      canShowList: true,
+      origin: DeleteAlertOrigin.cleanSafeItems,
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -132,7 +134,7 @@ void main() {
     final CleanerController controller = await openAlert(
       tester,
       plan: samplePlan,
-      canShowList: true,
+      origin: DeleteAlertOrigin.cleanSafeItems,
     );
     final CleanerState before = controller.state;
 
@@ -145,9 +147,48 @@ void main() {
   });
 
   testWidgets('the alert over the Review page offers no Show list', (WidgetTester tester) async {
-    await openAlert(tester, plan: samplePlan, canShowList: false);
+    await openAlert(tester, plan: samplePlan, origin: DeleteAlertOrigin.review);
 
     expect(findButtonLabelled('Show list'), findsNothing);
     expectEveryTappableNodeLabelled();
+  });
+
+  testWidgets('names no evicted item among those that cannot come back', (
+    WidgetTester tester,
+  ) async {
+    final PlannedItemView toolCache = samplePlan.items.first;
+    final PlannedItemView appCache = samplePlan.items.last;
+    final PlannedEvent evictPlan = PlannedEvent(
+      planId: 4,
+      lines: samplePlan.lines,
+      warningLines: samplePlan.warningLines,
+      items: [
+        PlannedItemView(
+          number: toolCache.number,
+          key: toolCache.key,
+          title: 'Holiday photos',
+          sectionKey: SectionKey.icloud,
+          risk: Risk.safe,
+          removal: ItemRemoval.evict,
+          allocatedBytes: toolCache.allocatedBytes + appCache.allocatedBytes,
+        ),
+        appCache,
+      ],
+      totalBytes: samplePlan.totalBytes,
+      holdsCareful: false,
+    );
+
+    await openAlert(tester, plan: evictPlan, origin: DeleteAlertOrigin.review);
+
+    final Finder alert = find.byType(Dialog);
+    expect(
+      find.descendant(
+        of: alert,
+        matching: find.text('These skip the Trash, so they cannot come back:'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.descendant(of: alert, matching: find.text(appCache.title)), findsOneWidget);
+    expect(find.descendant(of: alert, matching: find.text('Holiday photos')), findsNothing);
   });
 }

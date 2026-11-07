@@ -1,16 +1,11 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../section/section_labels.dart';
-import '../section/section_totals.dart';
-import '../shell/navigation_controller.dart';
-import '../shell/stage_page_scroll.dart';
-import '../update/update_controller.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
+import '../update/update.dart';
 import 'disk_panel.dart';
 import 'notice_card.dart';
 import 'section_card.dart';
@@ -23,13 +18,19 @@ class OverviewPage extends StatelessWidget {
     super.key,
     required this.cleanerController,
     required this.updateController,
-    required this.navigation,
+    required this.onSectionSelected,
+    required this.onCleanSafeItems,
     required this.urlOpener,
   });
 
   final CleanerController cleanerController;
   final UpdateController updateController;
-  final NavigationController navigation;
+
+  /// Leads to the page of the section whose card was pressed.
+  final void Function(SectionKey sectionKey) onSectionSelected;
+
+  /// What "Clean safe items" does once the scan holds safe items.
+  final VoidCallback onCleanSafeItems;
   final UrlOpener urlOpener;
 
   @override
@@ -45,7 +46,10 @@ class OverviewPage extends StatelessWidget {
           children: [
             Text('Overview', style: TypeRamp.headline),
             const SizedBox(height: StageSpacing.large),
-            DiskPanel(controller: cleanerController),
+            DiskPanel(
+              controller: cleanerController,
+              onCleanSafeItems: onCleanSafeItems,
+            ),
             for (final NoticeView notice in cleanerController.statusNotices) ...[
               const SizedBox(height: StageSpacing.regular),
               NoticeCard(
@@ -82,9 +86,7 @@ class OverviewPage extends StatelessWidget {
                       total: total,
                       title: formatScanSectionTitle(total.sectionKey, scan: scan),
                       isScanning: state is ScanningState,
-                      onPressed: () => navigation.showDestination(
-                        buildSectionDestination(total.sectionKey),
-                      ),
+                      onPressed: () => onSectionSelected(total.sectionKey),
                     ),
                 ],
               ),

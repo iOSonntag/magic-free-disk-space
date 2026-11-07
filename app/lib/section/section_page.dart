@@ -1,15 +1,12 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../shell/stage_page_scroll.dart';
-import 'section_contents.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
 import 'section_contents_view.dart';
-import 'section_labels.dart';
 import 'section_page_header.dart';
-import 'section_totals.dart';
 
 /// The page of one section: its safe, review and careful groups, each row
 /// ticked into the one selection the bridge holds, and its advice.
@@ -65,6 +62,7 @@ class SectionPage extends StatelessWidget {
       look: sectionKeyToLook(sectionKey),
       selectedNumbers: state.selectedNumbers,
       onToggle: state is ScannedState ? controller.toggleCandidate : null,
+      onToggleGroup: state is ScannedState ? controller.toggleCandidateGroup : null,
       revealPaths: state.scan.revealPaths,
       urlOpener: urlOpener,
       adviceTitle: 'To handle yourself',

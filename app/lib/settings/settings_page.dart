@@ -1,30 +1,31 @@
 import 'package:flutter/material.dart';
 
-import '../design/app_icons.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../shell/stage_button.dart';
-import '../shell/stage_page_scroll.dart';
-import '../shell/stage_switch_track.dart';
-import '../update/update_controller.dart';
+import '../design/design.dart';
+import '../update/update.dart';
 
 const String updateCheckItemText = 'Look for updates at start';
 
-/// The switch of the update check as it shows: whether it is on, and
-/// whether a tap may change it.
-({bool isOn, bool isEnabled}) buildUpdateCheckSwitchLook(
+/// The switch of the update check as it shows.
+final class UpdateCheckSwitchLook {
+  const UpdateCheckSwitchLook({required this.isOn, required this.isEnabled});
+
+  final bool isOn;
+
+  /// Whether a tap may change it.
+  final bool isEnabled;
+}
+
+UpdateCheckSwitchLook buildUpdateCheckSwitchLook(
   UpdateCheckSwitch updateCheckSwitch,
 ) {
   return switch (updateCheckSwitch) {
-    UpdateCheckSwitchLoading() ||
-    UpdateCheckSwitchUnavailable() => (isOn: false, isEnabled: false),
-    UpdateCheckSwitchSaving(:final bool isEnabled) => (
+    UpdateCheckSwitchLoading() || UpdateCheckSwitchUnavailable() =>
+      const UpdateCheckSwitchLook(isOn: false, isEnabled: false),
+    UpdateCheckSwitchSaving(:final bool isEnabled) => UpdateCheckSwitchLook(
       isOn: isEnabled,
       isEnabled: false,
     ),
-    UpdateCheckSwitchConfirmed(:final bool isEnabled) => (
+    UpdateCheckSwitchConfirmed(:final bool isEnabled) => UpdateCheckSwitchLook(
       isOn: isEnabled,
       isEnabled: true,
     ),
@@ -102,7 +103,7 @@ class _UpdateCheckSetting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ({bool isOn, bool isEnabled}) look = buildUpdateCheckSwitchLook(
+    final UpdateCheckSwitchLook look = buildUpdateCheckSwitchLook(
       controller.updateCheckSwitch,
     );
     final String? saveFailureText = controller.saveFailureText;

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/app_icons.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
 
 final TextStyle _codeStyle = TypeRamp.caption.copyWith(
   fontFamily: 'Menlo',

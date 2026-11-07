@@ -123,6 +123,21 @@ void main() {
     expectEveryTappableNodeLabelled();
   });
 
+  testWidgets('Cancel on the alert closes it alone and keeps the plan on Review', (
+    WidgetTester tester,
+  ) async {
+    final CleanerController controller = await pumpReview(tester);
+    final CleanerState before = controller.state;
+    await tapAndSettle(tester, findButtonLabelled('Delete 10 MB'));
+
+    await tapAndSettle(tester, findButtonLabelled('Cancel'));
+
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.byType(ReviewPage), findsOneWidget);
+    expect(controller.state, same(before));
+    expect(bridge.deleteRequest, isNull);
+  });
+
   testWidgets('Back keeps the selection and sends nothing', (WidgetTester tester) async {
     final CleanerController controller = await pumpReview(tester);
 

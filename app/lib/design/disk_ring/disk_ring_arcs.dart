@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/foundation.dart';
 
 /// What the disk ring shows.
@@ -42,8 +40,8 @@ class DiskRingArcs {
 
   static DiskRingArcs lerp(DiskRingArcs from, DiskRingArcs to, double t) {
     return DiskRingArcs(
-      keptEnd: lerpDouble(from.keptEnd, to.keptEnd, t)!,
-      freeableEnd: lerpDouble(from.freeableEnd, to.freeableEnd, t)!,
+      keptEnd: from.keptEnd * (1 - t) + to.keptEnd * t,
+      freeableEnd: from.freeableEnd * (1 - t) + to.freeableEnd * t,
     );
   }
 

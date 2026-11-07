@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/motion.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 import 'accent_button.dart';
-import 'item_count_words.dart';
+import 'biggest_items.dart';
 
 /// The word the bridge demands for every deletion; the app sends it on the
 /// alert's Delete, and a plan with a careful item asks the user to type it.
@@ -19,15 +14,27 @@ const String deleteConfirmationWord = 'DELETE';
 /// How many of the biggest items the alert names before "and N more".
 const int _namedItemCount = 4;
 
+/// How many careful titles the alert names before "and N more".
+const int _namedCarefulCount = 3;
+
+/// Where the delete alert opens from, which decides what its Cancel leaves.
+enum DeleteAlertOrigin {
+  /// "Clean safe items": the alert stands alone, Cancel drops the plan, and
+  /// "Show list" leaves it for the Review page.
+  cleanSafeItems,
+
+  /// The Review page: Cancel closes the alert and keeps Review.
+  review,
+}
+
 /// Shows the alert that confirms the plan of [state], and acts on
-/// [controller]: Delete deletes the plan, Cancel cancels it, and "Show list",
-/// offered when [canShowList], closes the alert and leaves the plan for the
-/// Review page. Completes once the alert is closed.
+/// [controller]: Delete deletes the plan, and Cancel and "Show list" do what
+/// [origin] says. Completes once the alert is closed.
 Future<void> showDeleteConfirmAlert({
   required BuildContext context,
   required CleanerController controller,
   required ConfirmingState state,
-  required bool canShowList,
+  required DeleteAlertOrigin origin,
 }) async {
   final bool isReduced = MotionScope.of(context).isReduced;
   final _AlertChoice? choice = await showDialog<_AlertChoice>(
@@ -35,8 +42,7 @@ Future<void> showDeleteConfirmAlert({
     barrierDismissible: false,
     barrierColor: StageColors.nightDeep.withValues(alpha: 0.72),
     animationStyle: isReduced ? AnimationStyle.noAnimation : null,
-    builder: (BuildContext _) =>
-        _DeleteConfirmAlert(plan: state.plan, canShowList: canShowList),
+    builder: (BuildContext _) => _DeleteConfirmAlert(plan: state.plan, origin: origin),
   );
   // Delete deletes the plan the alert showed, so a state that moved on
   // while it was open is left alone.
@@ -49,17 +55,35 @@ Future<void> showDeleteConfirmAlert({
     case _AlertChoice.showList:
       return;
     case _AlertChoice.cancel || null:
-      controller.cancelConfirmation();
+      switch (origin) {
+        case DeleteAlertOrigin.cleanSafeItems:
+          controller.cancelConfirmation();
+        case DeleteAlertOrigin.review:
+          return;
+      }
   }
 }
 
 enum _AlertChoice { delete, showList, cancel }
 
+/// Whether an item removed the way [removal] says is gone for good: every
+/// removal but an evict, whose item stays in iCloud and downloads again.
+bool _isRemovalFinal(ItemRemoval removal) {
+  return switch (removal) {
+    ItemRemoval.evict => false,
+    ItemRemoval.delete ||
+    ItemRemoval.tool ||
+    ItemRemoval.engine ||
+    ItemRemoval.advice ||
+    ItemRemoval.unknown => true,
+  };
+}
+
 class _DeleteConfirmAlert extends StatefulWidget {
-  const _DeleteConfirmAlert({required this.plan, required this.canShowList});
+  const _DeleteConfirmAlert({required this.plan, required this.origin});
 
   final PlannedEvent plan;
-  final bool canShowList;
+  final DeleteAlertOrigin origin;
 
   @override
   State<_DeleteConfirmAlert> createState() => _DeleteConfirmAlertState();
@@ -81,15 +105,17 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
   Widget build(BuildContext context) {
     final PlannedEvent plan = widget.plan;
     final String totalText = formatBytes(plan.totalBytes);
-    final List<PlannedItemView> biggestFirst = [...plan.items]
-      ..sort(
-        (PlannedItemView a, PlannedItemView b) =>
-            b.allocatedBytes.compareTo(a.allocatedBytes),
-      );
-    final List<PlannedItemView> namedItems = biggestFirst
-        .take(_namedItemCount)
-        .toList();
-    final int unnamedCount = biggestFirst.length - namedItems.length;
+    final BiggestItems finalItems = buildBiggestItems(
+      [
+        for (final PlannedItemView item in plan.items)
+          if (_isRemovalFinal(item.removal)) item,
+      ],
+      shownCount: _namedItemCount,
+    );
+    final bool canShowList = switch (widget.origin) {
+      DeleteAlertOrigin.cleanSafeItems => true,
+      DeleteAlertOrigin.review => false,
+    };
     return Actions(
       actions: {
         DismissIntent: CallbackAction<DismissIntent>(
@@ -130,29 +156,34 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
                     ),
                   ],
                 ),
-                const SizedBox(height: StageSpacing.large),
-                Text(
-                  'These skip the Trash, so they cannot come back:',
-                  style: TypeRamp.body,
-                ),
-                const SizedBox(height: StageSpacing.small),
-                for (final PlannedItemView item in namedItems)
-                  _NamedItemLine(item: item),
-                if (unnamedCount > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: StageSpacing.tight),
-                    child: Text(
-                      formatMoreItems(unnamedCount),
-                      style: TypeRamp.caption,
-                    ),
+                if (finalItems.shownItems.isNotEmpty) ...[
+                  const SizedBox(height: StageSpacing.large),
+                  Text(
+                    'These skip the Trash, so they cannot come back:',
+                    style: TypeRamp.body,
                   ),
+                  const SizedBox(height: StageSpacing.small),
+                  for (final PlannedItemView item in finalItems.shownItems)
+                    _NamedItemLine(item: item),
+                  if (finalItems.moreCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: StageSpacing.tight),
+                      child: Text(
+                        formatMoreItems(finalItems.moreCount),
+                        style: TypeRamp.caption,
+                      ),
+                    ),
+                ],
                 if (plan.holdsCareful) ...[
                   const SizedBox(height: StageSpacing.large),
                   _CarefulConfirmation(
-                    carefulTitles: [
-                      for (final PlannedItemView item in biggestFirst)
-                        if (item.risk == Risk.careful) item.title,
-                    ],
+                    carefulItems: buildBiggestItems(
+                      [
+                        for (final PlannedItemView item in plan.items)
+                          if (item.risk == Risk.careful) item,
+                      ],
+                      shownCount: _namedCarefulCount,
+                    ),
                     onChanged: (String word) => setState(() => _typedWord = word),
                     onSubmitted: () {
                       if (_canDelete) {
@@ -168,7 +199,7 @@ class _DeleteConfirmAlertState extends State<_DeleteConfirmAlert> {
                   spacing: StageSpacing.small,
                   overflowSpacing: StageSpacing.small,
                   children: [
-                    if (widget.canShowList)
+                    if (canShowList)
                       QuietButton(
                         label: 'Show list',
                         onPressed: () => _close(_AlertChoice.showList),
@@ -229,12 +260,12 @@ class _NamedItemLine extends StatelessWidget {
 /// the typed word.
 class _CarefulConfirmation extends StatelessWidget {
   const _CarefulConfirmation({
-    required this.carefulTitles,
+    required this.carefulItems,
     required this.onChanged,
     required this.onSubmitted,
   });
 
-  final List<String> carefulTitles;
+  final BiggestItems carefulItems;
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmitted;
 
@@ -251,9 +282,9 @@ class _CarefulConfirmation extends StatelessWidget {
             border: Border.all(color: StageColors.careful.withValues(alpha: 0.4)),
           ),
           child: Text(
-            carefulTitles.isEmpty
+            carefulItems.shownItems.isEmpty
                 ? "Some of these can't be undone or downloaded again."
-                : "Can't be undone or downloaded again: ${_formatTitleList(carefulTitles)}.",
+                : "Can't be undone or downloaded again: ${_formatTitleList(carefulItems)}.",
             style: TypeRamp.body.copyWith(color: StageColors.textPrimary),
           ),
         ),
@@ -275,12 +306,13 @@ class _CarefulConfirmation extends StatelessWidget {
   }
 }
 
-/// Names the first three of [titles], and how many more there are.
-String _formatTitleList(List<String> titles) {
-  const int namedCount = 3;
-  if (titles.length <= namedCount) {
-    return titles.join(', ');
+/// The titles of the shown items of [items], and how many more there are.
+String _formatTitleList(BiggestItems items) {
+  final String namedText = items.shownItems
+      .map((PlannedItemView item) => item.title)
+      .join(', ');
+  if (items.moreCount == 0) {
+    return namedText;
   }
-  final int moreCount = titles.length - namedCount;
-  return '${titles.take(namedCount).join(', ')} and $moreCount more';
+  return '$namedText and ${items.moreCount} more';
 }

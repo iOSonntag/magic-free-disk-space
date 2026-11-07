@@ -1,16 +1,12 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../section/section_contents.dart';
-import '../section/section_contents_view.dart';
-import '../section/section_labels.dart';
-import '../section/section_page_header.dart';
-import '../section/section_totals.dart';
-import '../shell/stage_page_scroll.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
+import 'section_contents_view.dart';
+import 'section_page_header.dart';
 import 'settings_place_cards.dart';
 
 /// The space only Apple's own apps can free: a card per place with its
@@ -36,7 +32,7 @@ class HandledElsewherePage extends StatelessWidget {
           children: [
             SectionPageHeader(
               sectionKey: SectionKey.ownApp,
-              title: formatSectionTitle(SectionKey.ownApp),
+              title: SectionLook.ownApp.title,
               total: findSectionTotal(listShownSectionTotals(state), SectionKey.ownApp),
               isScanning: state is ScanningState,
             ),
@@ -82,6 +78,7 @@ class HandledElsewherePage extends StatelessWidget {
       look: sectionKeyToLook(SectionKey.ownApp),
       selectedNumbers: state.selectedNumbers,
       onToggle: state is ScannedState ? controller.toggleCandidate : null,
+      onToggleGroup: state is ScannedState ? controller.toggleCandidateGroup : null,
       revealPaths: state.scan.revealPaths,
       urlOpener: urlOpener,
       adviceTitle: 'In their own apps',

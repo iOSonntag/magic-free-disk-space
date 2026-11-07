@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../design/glass_card.dart';
-import '../design/motion.dart';
-import '../design/tokens.dart';
+import 'glass_card.dart';
+import 'motion.dart';
+import 'tokens.dart';
 
 /// A [GlassCard] that is one button: a tap anywhere on it runs [onPressed],
 /// and assistive tech reads it as [semanticsLabel] alone. It lifts toward
@@ -30,15 +30,15 @@ class _GlassCardButtonState extends State<GlassCardButton> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isReduced = MotionScope.of(context).isReduced;
+    final MotionState motion = MotionScope.of(context);
     final BorderRadius radius = BorderRadius.circular(GlassTokens.cardRadius);
     return Semantics(
       container: true,
       button: true,
       label: widget.semanticsLabel,
       child: AnimatedScale(
-        scale: _isHovered && !isReduced ? 1.018 : 1,
-        duration: isReduced ? Duration.zero : MotionTokens.plainFade,
+        scale: _isHovered && !motion.isReduced ? 1.018 : 1,
+        duration: motion.plainFadeDuration,
         curve: Curves.easeOut,
         child: Stack(
           children: [

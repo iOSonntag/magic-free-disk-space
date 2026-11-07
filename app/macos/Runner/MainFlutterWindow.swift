@@ -38,9 +38,9 @@ class MainFlutterWindow: NSWindow {
     self.contentMinSize = NSSize(width: 960, height: 640)
   }
 
-  /// Flutter reads Reduce Motion on no desktop, and pauses nothing while a
-  /// window is hidden, so the app's MotionScope loads both here and takes
-  /// each change.
+  // Flutter reads Reduce Motion on no desktop, and pauses nothing while a
+  // window is hidden, so the app's MotionScope loads both here and takes
+  // each change.
   private func connectWindowMotionChannel(binaryMessenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
       name: MainFlutterWindow.windowMotionChannelName,

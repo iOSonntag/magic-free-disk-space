@@ -1,18 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/app_icons.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/section_look.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../removal/item_count_words.dart';
-import '../shell/stage_check_mark.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../scan_view/scan_view.dart';
 import 'item_row.dart';
-import 'item_words.dart';
-import 'section_contents.dart';
 
 /// Whether a group's select toggle shows all, none, or some (`null`) of
 /// [numbers] ticked in [selectedNumbers].
@@ -27,17 +19,9 @@ bool? findGroupSelectValue(List<int> numbers, Set<int> selectedNumbers) {
   return null;
 }
 
-/// The numbers a tap on a group's select toggle flips: the unticked ones
-/// while any is unticked, else all of them.
-List<int> listGroupToggleNumbers(List<int> numbers, Set<int> selectedNumbers) {
-  final List<int> unticked = [
-    for (final int number in numbers)
-      if (!selectedNumbers.contains(number)) number,
-  ];
-  if (unticked.isNotEmpty) {
-    return unticked;
-  }
-  return numbers;
+/// The key of the card of the group [value] of a section's page.
+final class ItemGroupCardKey extends ValueKey<ShownItemGroup> {
+  const ItemGroupCardKey(super.value);
 }
 
 /// One group of a section, safe, review or careful, as one glass card: its
@@ -50,6 +34,7 @@ class ItemGroupCard extends StatefulWidget {
     required this.look,
     required this.selectedNumbers,
     required this.onToggle,
+    required this.onToggleGroup,
     required this.revealPaths,
     required this.urlOpener,
     required this.now,
@@ -63,6 +48,10 @@ class ItemGroupCard extends StatefulWidget {
   /// Flips the item numbered by its argument; `null` while the selection
   /// cannot change.
   final void Function(int number)? onToggle;
+
+  /// Ticks every item numbered by its argument while any is unticked, else
+  /// unticks them all; `null` while the selection cannot change.
+  final void Function(List<int> numbers)? onToggleGroup;
   final Set<String> revealPaths;
   final UrlOpener urlOpener;
   final DateTime now;
@@ -81,18 +70,11 @@ class _ItemGroupCardState extends State<ItemGroupCard> {
   }
 
   VoidCallback? _buildGroupToggle(List<int> numbers) {
-    final void Function(int number)? onToggle = widget.onToggle;
-    if (onToggle == null) {
+    final void Function(List<int> numbers)? onToggleGroup = widget.onToggleGroup;
+    if (onToggleGroup == null) {
       return null;
     }
-    return () {
-      for (final int number in listGroupToggleNumbers(
-        numbers,
-        widget.selectedNumbers,
-      )) {
-        onToggle(number);
-      }
-    };
+    return () => onToggleGroup(numbers);
   }
 
   VoidCallback? _buildItemToggle(int number) {
@@ -110,7 +92,7 @@ class _ItemGroupCardState extends State<ItemGroupCard> {
     final List<int> numbers = [
       for (final ItemView item in widget.items) item.number,
     ];
-    final ({int allocatedBytes, bool isComplete}) size = sumItemSizes(widget.items);
+    final ItemSizeSum size = sumItemSizes(widget.items);
     final String sizeText = formatSizeText(
       allocatedBytes: size.allocatedBytes,
       isComplete: size.isComplete,

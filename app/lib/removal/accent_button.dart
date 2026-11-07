@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
+import '../design/design.dart';
 
 /// The main action of a step of the delete flow: a filled button lit in
 /// [accent], dimmed while [onPressed] is null.

@@ -109,6 +109,7 @@ void main() {
             title: 'Cache $number',
             sectionKey: SectionKey.caches,
             risk: Risk.safe,
+            removal: ItemRemoval.delete,
             allocatedBytes: number * 1000000,
           ),
       ],

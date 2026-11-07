@@ -1,65 +1,37 @@
 import 'package:flutter/material.dart';
 
-import '../bridge/bridge_event.dart';
-import '../cleaner/cleaner_controller.dart';
-import '../design/app_icons.dart';
-import '../design/count_up.dart';
-import '../design/disk_ring/disk_ring.dart';
-import '../design/disk_ring/disk_ring_arcs.dart';
-import '../design/format_bytes.dart';
-import '../design/glass_card.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../removal/delete_confirm_alert.dart';
-import '../section/section_totals.dart';
-import '../shell/scan_phase_text.dart';
-import '../shell/stage_button.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../scan_view/scan_view.dart';
 
 const double _ringSide = 248;
 
-/// "Clean safe items": selects the safe items, asks the bridge for their
-/// plan, and opens the short alert on it. "Show list" in the alert leaves
-/// the plan for the Review page behind it. The alert opens from the root
-/// navigator, which outlives the page that asked once the shell shows
-/// Review.
-Future<void> cleanSafeItems(
-  BuildContext context,
-  CleanerController controller,
-) async {
-  final NavigatorState rootNavigator = Navigator.of(context, rootNavigator: true);
-  controller.selectSafeCandidates();
-  await controller.requestPlan();
-  if (!rootNavigator.mounted) {
-    return;
-  }
-  final CleanerState state = controller.state;
-  if (state is! ConfirmingState) {
-    return;
-  }
-  await showDeleteConfirmAlert(
-    context: rootNavigator.context,
-    controller: controller,
-    state: state,
-    canShowList: true,
-  );
-}
-
 /// What the Overview's ring and its words show for one state.
-typedef DiskPanelFacts = ({
-  DiskRingReading reading,
-  int freeableBytes,
-  String ringCaption,
-  String overline,
-  String headline,
-  List<String> lines,
-});
+final class DiskPanelFacts {
+  const DiskPanelFacts({
+    required this.reading,
+    required this.freeableBytes,
+    required this.ringCaption,
+    required this.overline,
+    required this.headline,
+    required this.lines,
+  });
+
+  final DiskRingReading reading;
+  final int freeableBytes;
+  final String ringCaption;
+  final String overline;
+  final String headline;
+  final List<String> lines;
+}
 
 DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
   switch (state) {
     case ListedState(:final ScannedEvent scan):
       final SummaryView summary = scan.summary;
       final DiskSpaceView? disk = summary.disk;
-      return (
+      return DiskPanelFacts(
         reading: disk == null
             ? DiskRingFreeableReading(freeableBytes: summary.totalBytes)
             : DiskRingVolumeReading(
@@ -85,7 +57,7 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
         0,
         (int sum, SectionTotal total) => sum + total.allocatedBytes,
       );
-      return (
+      return DiskPanelFacts(
         reading: DiskRingFreeableReading(freeableBytes: foundBytes),
         freeableBytes: foundBytes,
         ringCaption: 'found so far',
@@ -94,13 +66,13 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
         lines: const ['Each place lands in its section as the scan finds it.'],
       );
     case IdleState() || DeletingState() || DeletedState():
-      return (
-        reading: const DiskRingFreeableReading(freeableBytes: 0),
+      return const DiskPanelFacts(
+        reading: DiskRingFreeableReading(freeableBytes: 0),
         freeableBytes: 0,
         ringCaption: 'nothing scanned',
         overline: 'This Mac',
         headline: 'Not scanned yet',
-        lines: const ['Scan again to find what takes space.'],
+        lines: ['Scan again to find what takes space.'],
       );
   }
 }
@@ -108,9 +80,16 @@ DiskPanelFacts buildDiskPanelFacts(CleanerState state) {
 /// The Overview's lead: the disk ring lit by what can be freed, the words on
 /// it, and "Clean safe items".
 class DiskPanel extends StatelessWidget {
-  const DiskPanel({super.key, required this.controller});
+  const DiskPanel({
+    super.key,
+    required this.controller,
+    required this.onCleanSafeItems,
+  });
 
   final CleanerController controller;
+
+  /// What "Clean safe items" does once the scan holds safe items.
+  final VoidCallback onCleanSafeItems;
 
   @override
   Widget build(BuildContext context) {
@@ -171,9 +150,7 @@ class DiskPanel extends StatelessWidget {
                   icon: AppIcons.cleanSafeItems,
                   tone: StageButtonTone.primary,
                   accent: StageColors.safe,
-                  onPressed: canCleanSafeItems
-                      ? () => cleanSafeItems(context, controller)
-                      : null,
+                  onPressed: canCleanSafeItems ? onCleanSafeItems : null,
                 ),
               ],
             ),

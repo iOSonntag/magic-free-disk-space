@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../cleaner/cleaner_controller.dart';
-import '../design/motion.dart';
-import '../handled_elsewhere/handled_elsewhere_page.dart';
-import '../link/url_opener.dart';
-import '../overview/overview_page.dart';
-import '../section/section_page.dart';
-import '../settings/settings_page.dart';
-import '../update/update_controller.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../design/design.dart';
+import '../link/link.dart';
+import '../overview/overview.dart';
+import '../removal/removal.dart';
+import '../section/section.dart';
+import '../settings/settings.dart';
+import '../update/update.dart';
 import 'app_destination.dart';
 import 'navigation_controller.dart';
 
@@ -50,12 +51,17 @@ class _DestinationNavigatorState extends State<DestinationNavigator> {
     }
   }
 
+  void _showSection(SectionKey sectionKey) {
+    widget.navigation.showDestination(buildSectionDestination(sectionKey));
+  }
+
   StagePage _buildPage(AppDestination destination, {required bool isMotionReduced}) {
     final Widget child = switch (destination) {
       OverviewDestination() => OverviewPage(
         cleanerController: widget.cleanerController,
         updateController: widget.updateController,
-        navigation: widget.navigation,
+        onSectionSelected: _showSection,
+        onCleanSafeItems: () => cleanSafeItems(context, widget.cleanerController),
         urlOpener: widget.urlOpener,
       ),
       SectionDestination(:final sectionKey) => SectionPage(
@@ -134,7 +140,15 @@ final class StagePage extends Page<void> {
 final class _StagePageRoute extends PageRoute<void> {
   _StagePageRoute({required StagePage page}) : super(settings: page);
 
-  StagePage get _page => settings as StagePage;
+  // The navigator swaps in the page of each rebuild as the settings, so the
+  // page is read from them rather than kept from the first build.
+  StagePage get _page {
+    final RouteSettings page = settings;
+    if (page is StagePage) {
+      return page;
+    }
+    throw StateError('A stage route holds its StagePage as its settings.');
+  }
 
   @override
   Color? get barrierColor => null;

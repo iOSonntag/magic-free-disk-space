@@ -1,13 +1,13 @@
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge/openable_url.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
+import 'package:magic_free_disk_space/design/stage_check_mark.dart';
+import 'package:magic_free_disk_space/scan_view/section_contents.dart';
 import 'package:magic_free_disk_space/section/advice_card.dart';
+import 'package:magic_free_disk_space/section/item_group_card.dart';
 import 'package:magic_free_disk_space/section/item_row.dart';
-import 'package:magic_free_disk_space/section/section_contents.dart';
 import 'package:magic_free_disk_space/section/section_page.dart';
-import 'package:magic_free_disk_space/shell/stage_check_mark.dart';
 
 import '../shell/support/stage_harness.dart';
 import '../support/fake_cleaner_bridge.dart';
@@ -72,9 +72,9 @@ void main() {
     await _pumpSectionPage(tester, sectionKey: SectionKey.caches);
 
     expect(find.text('Caches'), findsOneWidget);
-    expect(find.byKey(const ValueKey(ShownItemGroup.safe)), findsOneWidget);
-    expect(find.byKey(const ValueKey(ShownItemGroup.review)), findsOneWidget);
-    expect(find.byKey(const ValueKey(ShownItemGroup.careful)), findsNothing);
+    expect(find.byKey(const ItemGroupCardKey(ShownItemGroup.safe)), findsOneWidget);
+    expect(find.byKey(const ItemGroupCardKey(ShownItemGroup.review)), findsOneWidget);
+    expect(find.byKey(const ItemGroupCardKey(ShownItemGroup.careful)), findsNothing);
     expect(find.text('Safe to remove'), findsOneWidget);
     expect(find.text('Review first'), findsOneWidget);
     expect(find.text('Tool cache'), findsOneWidget);
@@ -92,7 +92,7 @@ void main() {
   ) async {
     await _pumpSectionPage(tester, sectionKey: SectionKey.apps);
 
-    expect(find.byKey(const ValueKey(ShownItemGroup.safe)), findsNothing);
+    expect(find.byKey(const ItemGroupCardKey(ShownItemGroup.safe)), findsNothing);
     expect(find.text('Review first'), findsOneWidget);
     expect(find.text("Can't be undone"), findsOneWidget);
     expect(find.text('Xcode'), findsNothing);

@@ -72,13 +72,13 @@ class _DissolveState extends State<Dissolve> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final Widget child = widget.child;
     return AnimatedBuilder(
       animation: _progress,
-      child: widget.child,
-      builder: (BuildContext context, Widget? child) {
+      builder: (BuildContext context, Widget? _) {
         final double progress = _progress.value;
         if (progress == 0) {
-          return child!;
+          return child;
         }
 
         if (_isPlainFade || progress == 1) {
@@ -160,7 +160,7 @@ class DissolveMotesPainter extends CustomPainter {
     const double lifeShare = 1 - dissolveWipeShare;
     final Paint halo = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
     final Paint core = Paint();
-    final Color hot = Color.lerp(accent, const Color(0xFFFFFFFF), 0.45)!;
+    final Color hot = Color.lerp(accent, const Color(0xFFFFFFFF), 0.45) ?? accent;
     for (final DissolveMote mote in motes) {
       final double bornAt = mote.originX * dissolveWipeShare;
       final double age = (progress - bornAt) / lifeShare;

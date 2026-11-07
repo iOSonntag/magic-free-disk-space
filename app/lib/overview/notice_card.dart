@@ -1,12 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-import '../bridge/bridge_event.dart';
-import '../design/glass_card.dart';
-import '../design/glyph_tile.dart';
-import '../design/tokens.dart';
-import '../design/type_ramp.dart';
-import '../link/url_opener.dart';
-import '../shell/open_url_button.dart';
+import '../bridge/bridge.dart';
+import '../design/design.dart';
+import '../link/link.dart';
 
 /// A notice as a glass card: its glyph, title and lines, and the button of
 /// its link when it has one.

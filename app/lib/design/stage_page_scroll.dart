@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import '../design/tokens.dart';
+import 'tokens.dart';
 
 /// The room a page leaves below its last card, so the floating selection
 /// bar never covers it.
