@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { loadCondaPackageFindings } from '../../src/explore/condaPackages/loadCondaPackageFindings.js';
 import { parseCondaCleanDryRun } from '../../src/explore/condaPackages/parseCondaCleanDryRun.js';
 import { recheckCondaUnit } from '../../src/explore/condaPackages/recheckCondaUnit.js';
@@ -10,17 +9,15 @@ import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { createFakeTool } from '../support/fakeTool.js';
-import type { FixtureRoot } from '../support/fixtureRoot.js';
-import {
-  createFixtureRoot,
-  deleteFixtureRoot,
-  loadTestEnvironment,
-  writeFixtureTextFile,
-} from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import type { FixtureHome } from '../support/probeRunFixtures.js';
+import {
+  buildTestProbeRun,
+  getProbeFindings,
+  withFixtureHome,
+} from '../support/probeRunFixtures.js';
+import { createProbeFakeTool } from './probeFakeTools.js';
 
 const PKGS_DIR = '/Users/example/miniconda3/pkgs';
 
@@ -93,114 +90,111 @@ describeAwaitingWin32Platform('parseCondaCleanDryRun', () => {
 });
 
 describeAwaitingWin32Platform('loadCondaPackageFindings and recheckCondaUnit', () => {
-  let fixtureRoot: FixtureRoot;
-  let environment: Environment;
-  let answerPath: string;
-  let tool: LocatedTool;
-
-  beforeEach(async () => {
-    fixtureRoot = await createFixtureRoot();
-    environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-    const folder = join(fixtureRoot.rootDir, 'bin');
-    answerPath = join(folder, 'dry-run.json');
-    const path = await createFakeTool({
-      folder: folder,
+  /** A fake conda in the fixture's `bin` whose dry run would remove `tarballs` and `packages`. */
+  async function createFakeConda(params: {
+    home: FixtureHome;
+    tarballs: string[];
+    packages: string[];
+  }): Promise<LocatedTool> {
+    const path = await createProbeFakeTool({
+      folder: join(params.home.fixtureRoot.rootDir, 'bin'),
       name: 'conda',
-      body: `import * as fs from 'node:fs';
-
-if (process.argv.slice(2).join(' ') !== 'clean --tarballs --packages --dry-run --json') {
-  process.exit(64);
-}
-
-fs.writeSync(1, fs.readFileSync(${JSON.stringify(answerPath)}));
-process.exit(0);`,
+      answers: [
+        {
+          command: 'condaCleanDryRun',
+          stdoutText: buildDryRunText({ tarballs: params.tarballs, packages: params.packages }),
+          exitCode: 0,
+        },
+      ],
     });
-    tool = { name: 'conda', path: path };
-  });
 
-  afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  });
-
-  function buildRun(): ExploreProbeToolRun {
-    return {
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      processCommands: [],
-      deadlineMs: Date.now() + 10_000,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-      tool: tool,
-    };
+    return { name: 'conda', path: path };
   }
 
-  async function writeAnswer(params: { tarballs: string[]; packages: string[] }) {
-    await writeFixtureTextFile({ path: answerPath, text: buildDryRunText(params) });
+  function buildRun(params: { home: FixtureHome; tool: LocatedTool }): ExploreProbeToolRun {
+    return { ...buildTestProbeRun({ environment: params.home.environment }), tool: params.tool };
   }
 
   testOnPosix('offers the tarballs as safe and the packages as review', async () => {
-    await writeAnswer({ tarballs: ['a-1-0.conda', 'b-2-0.tar.bz2'], packages: ['c-3-0'] });
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        const tool = await createFakeConda({
+          home: home,
+          tarballs: ['a-1-0.conda', 'b-2-0.tar.bz2'],
+          packages: ['c-3-0'],
+        });
 
-    const result = await loadCondaPackageFindings(buildRun());
+        const findings = getProbeFindings(
+          await loadCondaPackageFindings(buildRun({ home: home, tool: tool })),
+        );
 
-    if (result.kind === 'failed') {
-      throw new Error('The conda probe failed.');
-    }
-
-    expect(
-      result.value.findings.map((finding) => ({
-        unit: finding.unit,
-        risk: finding.risk,
-        displayPath: finding.displayPath,
-      })),
-    ).toEqual([
-      {
-        unit: {
-          kind: 'condaTarballs',
-          tool: tool,
-          tarballPaths: [buildPkgsPath('a-1-0.conda'), buildPkgsPath('b-2-0.tar.bz2')],
-        },
-        risk: 'safe',
-        displayPath: PKGS_DIR,
+        expect(
+          findings.findings.map((finding) => ({
+            unit: finding.unit,
+            risk: finding.risk,
+            displayPath: finding.displayPath,
+          })),
+        ).toEqual([
+          {
+            unit: {
+              kind: 'condaTarballs',
+              tool: tool,
+              tarballPaths: [buildPkgsPath('a-1-0.conda'), buildPkgsPath('b-2-0.tar.bz2')],
+            },
+            risk: 'safe',
+            displayPath: PKGS_DIR,
+          },
+          {
+            unit: { kind: 'condaPackages', tool: tool, packagePaths: [buildPkgsPath('c-3-0')] },
+            risk: 'review',
+            displayPath: PKGS_DIR,
+          },
+        ]);
       },
-      {
-        unit: { kind: 'condaPackages', tool: tool, packagePaths: [buildPkgsPath('c-3-0')] },
-        risk: 'review',
-        displayPath: PKGS_DIR,
-      },
-    ]);
+    });
   });
 
   testOnPosix('offers nothing when the clean would remove nothing', async () => {
-    await writeAnswer({ tarballs: [], packages: [] });
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        const tool = await createFakeConda({ home: home, tarballs: [], packages: [] });
 
-    expect(await loadCondaPackageFindings(buildRun())).toEqual({
-      kind: 'succeeded',
-      value: { findings: [], isComplete: true },
+        expect(await loadCondaPackageFindings(buildRun({ home: home, tool: tool }))).toEqual({
+          kind: 'succeeded',
+          value: { findings: [], isComplete: true },
+        });
+      },
     });
   });
 
   testOnPosix('rechecks unchanged on a subset, changed on a new path, busy in a run', async () => {
-    const unit: ExploreToolUnitCondaPackages = {
-      kind: 'condaPackages',
-      tool: tool,
-      packagePaths: [buildPkgsPath('c-3-0'), buildPkgsPath('d-4-0')],
-    };
-    const run = buildRun();
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        const tool = await createFakeConda({ home: home, tarballs: [], packages: ['c-3-0'] });
+        const unit: ExploreToolUnitCondaPackages = {
+          kind: 'condaPackages',
+          tool: tool,
+          packagePaths: [buildPkgsPath('c-3-0'), buildPkgsPath('d-4-0')],
+        };
+        const run = buildRun({ home: home, tool: tool });
 
-    await writeAnswer({ tarballs: [], packages: ['c-3-0'] });
-    expect(await recheckCondaUnit({ unit: unit, run: run })).toEqual({ kind: 'unchanged' });
-    expect(
-      await recheckCondaUnit({
-        unit: unit,
-        run: { ...run, processCommands: ['/Users/example/miniconda3/bin/conda install x'] },
-      }),
-    ).toEqual({ kind: 'busy' });
+        expect(await recheckCondaUnit({ unit: unit, run: run })).toEqual({ kind: 'unchanged' });
+        expect(
+          await recheckCondaUnit({
+            unit: unit,
+            run: { ...run, processCommands: ['/Users/example/miniforge3/bin/mamba install x'] },
+          }),
+        ).toEqual({ kind: 'busy' });
 
-    await writeAnswer({ tarballs: [], packages: ['c-3-0', 'e-5-0'] });
-    expect(await recheckCondaUnit({ unit: unit, run: run })).toEqual({ kind: 'changed' });
+        await createFakeConda({ home: home, tarballs: [], packages: ['c-3-0', 'e-5-0'] });
+        expect(await recheckCondaUnit({ unit: unit, run: run })).toEqual({ kind: 'changed' });
 
-    await writeAnswer({ tarballs: [], packages: [] });
-    expect(await recheckCondaUnit({ unit: unit, run: run })).toEqual({ kind: 'changed' });
+        await createFakeConda({ home: home, tarballs: [], packages: [] });
+        expect(await recheckCondaUnit({ unit: unit, run: run })).toEqual({ kind: 'changed' });
+      },
+    });
   });
 });

@@ -2,6 +2,7 @@ import type { UnitRecheck } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
 import type { ExploreToolUnitCondaPackages, ExploreToolUnitCondaTarballs } from '../exploreUnit.js';
+import { listUnitPaths } from '../exploreUnit.js';
 import { loadProbeOutput } from '../loadProbeOutput.js';
 import type { CondaCleanPlan } from './parseCondaCleanDryRun.js';
 import { CONDA_CLEAN_DRY_RUN_PROBE } from './parseCondaCleanDryRun.js';
@@ -40,8 +41,7 @@ export function isCondaCleanWithinUnit(params: {
   unit: ExploreToolUnitCondaTarballs | ExploreToolUnitCondaPackages;
   plan: CondaCleanPlan;
 }): boolean {
-  const unitPaths: string[] =
-    params.unit.kind === 'condaTarballs' ? params.unit.tarballPaths : params.unit.packagePaths;
+  const unitPaths: string[] = listUnitPaths(params.unit);
   const freshPaths =
     params.unit.kind === 'condaTarballs' ? params.plan.tarballPaths : params.plan.packagePaths;
 

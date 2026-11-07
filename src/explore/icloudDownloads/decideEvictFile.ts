@@ -1,4 +1,4 @@
-import type { EntryTimes } from '../../system/loadEntryTimes.js';
+import type { EntryStats } from '../../system/loadEntryStats.js';
 import type { FileIdentity } from '../../system/loadFileIdentity.js';
 
 const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
@@ -7,7 +7,7 @@ const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
  * A file the cloud also holds that is downloaded and that nobody changed or read since
  * `cutoffMs`. A file whose content only the cloud holds has no blocks on this disk.
  */
-export function isEvictableFile(params: { times: EntryTimes; cutoffMs: number }): boolean {
+export function isEvictableFile(params: { times: EntryStats; cutoffMs: number }): boolean {
   return (
     params.times.kind === 'file' &&
     params.times.allocatedBytes > 0 &&
@@ -20,7 +20,7 @@ export function isEvictableFile(params: { times: EntryTimes; cutoffMs: number })
  * the same inode born at the same time, with the times the scan read.
  */
 export function isEvictFileUnchanged(params: {
-  times: EntryTimes;
+  times: EntryStats;
   identity: FileIdentity;
   modifiedMs: number;
   accessedMs: number;

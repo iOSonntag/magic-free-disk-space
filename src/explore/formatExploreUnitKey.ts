@@ -1,4 +1,4 @@
-import type { ExploreUnit } from './exploreUnit.js';
+import type { ExploreEngineUnit, ExploreUnit } from './exploreUnit.js';
 
 /** Names a unit the same way in every scan, by what its own tool knows it by or by its folder. */
 export function formatExploreUnitKey(params: { unit: ExploreUnit }): string {
@@ -52,12 +52,17 @@ export function formatExploreUnitKey(params: { unit: ExploreUnit }): string {
       return `ideVersionFolder:${params.unit.folderKind}:${params.unit.folderPath}`;
     case 'engineBuildCache':
     case 'engineDanglingImages':
-      return `${params.unit.kind}:${params.unit.engineProbeId}`;
+      return `${params.unit.kind}:${formatEngineKey({ unit: params.unit })}`;
     case 'engineImage':
-      return `engineImage:${params.unit.engineProbeId}:${params.unit.imageId}`;
+      return `engineImage:${formatEngineKey({ unit: params.unit })}:${params.unit.imageId}`;
     case 'engineContainer':
-      return `engineContainer:${params.unit.engineProbeId}:${params.unit.containerId}`;
+      return `engineContainer:${formatEngineKey({ unit: params.unit })}:${params.unit.containerId}`;
     case 'engineVolume':
-      return `engineVolume:${params.unit.engineProbeId}:${params.unit.volumeName}`;
+      return `engineVolume:${formatEngineKey({ unit: params.unit })}:${params.unit.volumeName}`;
   }
+}
+
+/** The engine instance of a unit by its socket, since one engine, such as Colima, runs several. */
+function formatEngineKey(params: { unit: ExploreEngineUnit }): string {
+  return `${params.unit.engineProbeId}:${params.unit.socketPath}`;
 }

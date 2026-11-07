@@ -3,14 +3,37 @@ import type { EngineProbeId } from '../catalog/catalog.js';
 /** The folder names of a place below the home folder, joined by the platform's separator. */
 export type HomeRelativePathNames = string[];
 
-/** A container engine the probe of its id asks over its own socket. */
-export type ContainerEngine = {
+/** An engine at fixed places, with one socket and one disk image. */
+export type ContainerEngineFixed = {
+  kind: 'fixed';
   engineName: string;
   /** In order; the probe takes the first that exists and tries no other. */
   socketPaths: [HomeRelativePathNames, ...HomeRelativePathNames[]];
   /** The one home of the engine's disk image: the engine units' path, and the path of the engine's advice entry. */
   diskImagePath: HomeRelativePathNames;
 };
+
+/**
+ * An engine that runs one instance per profile, each with its own folder below `profilesRoot`,
+ * its socket in that folder, and its own disk image. A name starting with `_` is the engine's own
+ * folder, not a profile's.
+ */
+export type ContainerEngineProfiles = {
+  kind: 'profiles';
+  engineName: string;
+  profilesRoot: HomeRelativePathNames;
+  /** The name of the socket in a profile's folder. */
+  socketName: string;
+  /** The profile probed alone when `profilesRoot` cannot be listed. */
+  defaultProfileName: string;
+  /** The disk image of the profile of a folder name. */
+  buildDiskImagePath: (profileName: string) => HomeRelativePathNames;
+  /** The default profile's disk image, the path of the engine's advice entry. */
+  diskImagePath: HomeRelativePathNames;
+};
+
+/** A container engine the probe of its id asks over its own sockets. */
+export type ContainerEngine = ContainerEngineFixed | ContainerEngineProfiles;
 
 /** The roots of the IDE versions, by their kind; a version's plugins lie inside its settings. */
 export type IdeVersionRoots = Record<'caches' | 'logs' | 'settings', HomeRelativePathNames[]>;

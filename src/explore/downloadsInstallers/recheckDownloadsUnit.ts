@@ -6,7 +6,7 @@ import type {
   ExplorePathUnitDownloadsIncomplete,
   ExplorePathUnitDownloadsInstallers,
 } from '../exploreUnit.js';
-import { buildDownloadsActivityFacts, loadLatestModifiedMs } from './downloadsFiles.js';
+import { buildDownloadsActivityFacts, loadLatestModified } from './downloadsFiles.js';
 
 /**
  * Reads the unit's files again and compares them with the unit: each still there with the newest
@@ -19,16 +19,17 @@ export async function recheckDownloadsUnit(params: {
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
   for (const foundFile of params.unit.foundFiles) {
-    const latestModifiedMs = await loadLatestModifiedMs({
+    const latest = await loadLatestModified({
       path: foundFile.path,
       platform: params.platform,
+      deadlineMs: null,
     });
 
-    if (latestModifiedMs.kind === 'failed') {
-      return latestModifiedMs;
+    if (latest.kind === 'failed') {
+      return latest;
     }
 
-    if (latestModifiedMs.value !== foundFile.modifiedMs) {
+    if (latest.value?.kind !== 'known' || latest.value.modifiedMs !== foundFile.modifiedMs) {
       return { kind: 'changed' };
     }
   }

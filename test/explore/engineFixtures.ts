@@ -1,3 +1,8 @@
+/**
+ * Made-up engine answers in the shape of the Docker Engine API; no value comes from a real
+ * engine, and every socket is one a test serves in its own fixture folder.
+ */
+
 import type { EngineProbeId } from '../../src/catalog/catalog.js';
 import type {
   EngineBuildRecordId,
@@ -7,18 +12,13 @@ import type {
 } from '../../src/explore/engines/engineObjectIds.js';
 import type { ExploreEngineUnitPlace } from '../../src/explore/exploreUnit.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { DAY_MS } from '../support/probeRunFixtures.js';
 
-/**
- * Made-up engine answers in the shape of the Docker Engine API; no value comes from a real
- * engine, and every socket is one a test serves in its own fixture folder.
- */
 export const FAKE_API_VERSION = '1.47';
 
 export const FAKE_VERSION_ANSWER = { ApiVersion: FAKE_API_VERSION, MinAPIVersion: '1.24' };
 
 export const NOW_MS = Date.UTC(2026, 9, 1);
-
-export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type FakeEngineRequest = { method: string; path: string; bodyText: string };
 
@@ -27,7 +27,6 @@ export type FakeEngineAnswer = { status: number; bodyText: string };
 export type FakeEngine = {
   /** Each request as `METHOD path?query`, its query decoded. */
   requests: string[];
-  setUsage: (usage: unknown) => void;
   stop: () => void;
 };
 
@@ -44,7 +43,6 @@ export function startFakeEngine(params: {
   answerRequest?: (request: FakeEngineRequest) => FakeEngineAnswer;
 }): FakeEngine {
   const requests: string[] = [];
-  let usage = params.usage;
   const server = Bun.serve({
     unix: params.socketPath,
     fetch: async (request) => {
@@ -62,7 +60,7 @@ export function startFakeEngine(params: {
       }
 
       if (request.method === 'GET' && url.pathname === `/v${FAKE_API_VERSION}/system/df`) {
-        return Response.json(usage, { status: params.diskUsageStatus ?? 200 });
+        return Response.json(params.usage, { status: params.diskUsageStatus ?? 200 });
       }
 
       const answer = params.answerRequest?.({
@@ -79,9 +77,6 @@ export function startFakeEngine(params: {
 
   return {
     requests: requests,
-    setUsage: (nextUsage) => {
-      usage = nextUsage;
-    },
     stop: () => {
       server.stop(true);
     },
@@ -136,15 +131,20 @@ export function buildContainerRecord(params: {
   writableSizeBytes?: number | null;
 }): Record<string, unknown> {
   const writableSizeBytes = params.writableSizeBytes === undefined ? 0 : params.writableSizeBytes;
-
-  return {
+  const record: Record<string, unknown> = {
     Id: buildContainerId(params.digit),
     Names: [`/${params.name ?? `box-${params.digit}`}`],
     Image: 'example/app:1',
     State: params.state ?? 'exited',
     Status: 'Exited (0) 3 days ago',
-    ...(writableSizeBytes === null ? {} : { SizeRw: writableSizeBytes }),
   };
+
+  // The engine leaves `SizeRw` out of a container it did not measure.
+  if (writableSizeBytes !== null) {
+    record.SizeRw = writableSizeBytes;
+  }
+
+  return record;
 }
 
 export function buildVolumeRecord(params: {

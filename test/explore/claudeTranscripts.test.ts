@@ -1,22 +1,37 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { compareClaudeTranscriptsUnit } from '../../src/explore/claudeTranscripts/compareClaudeTranscriptsUnit.js';
+import {
+  CLAUDE_TRANSCRIPT_UNTOUCHED_MS,
+  decideOldTranscriptPaths,
+} from '../../src/explore/claudeTranscripts/decideOldTranscriptPaths.js';
+import type {
+  ClaudeProjectEntry,
+  ClaudeProjectState,
+} from '../../src/explore/claudeTranscripts/loadClaudeProjectsState.js';
 import { loadClaudeTranscriptFindings } from '../../src/explore/claudeTranscripts/loadClaudeTranscriptFindings.js';
 import { recheckClaudeTranscriptsUnit } from '../../src/explore/claudeTranscripts/recheckClaudeTranscriptsUnit.js';
-import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
-import type { ExploreProbeFindings } from '../../src/explore/exploreUnit.js';
+import type {
+  ExploreFoundPaths,
+  ExplorePathUnitClaudeTranscripts,
+} from '../../src/explore/exploreUnit.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   createFixtureDirectory,
-  createFixtureRoot,
-  deleteFixtureRoot,
-  loadTestEnvironment,
   updateModifiedMs,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import {
+  buildTestProbeRun,
+  DAY_MS,
+  findUnitOfKind,
+  getProbeFindings,
+  withFixtureHome,
+} from '../support/probeRunFixtures.js';
 
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 
@@ -24,7 +39,11 @@ const OLD_MS = NOW_MS - 40 * DAY_MS;
 
 const RECENT_MS = NOW_MS - DAY_MS;
 
+const CUTOFF_MS = NOW_MS - CLAUDE_TRANSCRIPT_UNTOUCHED_MS;
+
 const PROJECT_FOLDER_NAME = '-Users-example-project';
+
+const VALUE_PROJECT_PATH = `/Users/example/.claude/projects/${PROJECT_FOLDER_NAME}`;
 
 type ProjectsFixture = { environment: Environment; projectPath: string };
 
@@ -32,50 +51,15 @@ type ProjectsFixture = { environment: Environment; projectPath: string };
 async function withClaudeHome(params: {
   run: (fixture: ProjectsFixture) => Promise<void>;
 }): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
-
-  try {
-    const environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: NOW_MS });
-
-    await params.run({
-      environment: environment,
-      projectPath: join(environment.homeDir, '.claude', 'projects', PROJECT_FOLDER_NAME),
-    });
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
-}
-
-function buildRun(params: {
-  environment: Environment;
-  processCommands: string[] | null;
-}): ExploreProbeRun {
-  return {
-    environment: params.environment,
-    platform: buildTestProbePlatform(),
-    processCommands: params.processCommands,
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: 0,
-    staleCutoffMs: 0,
-  };
-}
-
-async function loadFindings(params: {
-  environment: Environment;
-  processCommands?: string[] | null;
-}): Promise<ExploreProbeFindings> {
-  const result = await loadClaudeTranscriptFindings(
-    buildRun({
-      environment: params.environment,
-      processCommands: params.processCommands === undefined ? [] : params.processCommands,
-    }),
-  );
-
-  if (result.kind === 'failed') {
-    throw new Error(`The probe failed: ${result.failure.reason}.`);
-  }
-
-  return result.value;
+  await withFixtureHome({
+    nowMs: NOW_MS,
+    run: async (home) => {
+      await params.run({
+        environment: home.environment,
+        projectPath: join(home.environment.homeDir, '.claude', 'projects', PROJECT_FOLDER_NAME),
+      });
+    },
+  });
 }
 
 async function writeEntry(params: { path: string; modifiedMs: number }): Promise<void> {
@@ -119,13 +103,119 @@ async function createProject(fixture: ProjectsFixture): Promise<void> {
   await writeEntry({ path: join(recentProjectPath, 'new.jsonl'), modifiedMs: RECENT_MS });
 }
 
+function buildValuePath(name: string): AbsolutePath {
+  return buildTestAbsolutePath({ text: `${VALUE_PROJECT_PATH}/${name}` });
+}
+
+function buildValueEntry(params: {
+  name: string;
+  kind: 'file' | 'directory';
+  modifiedMs: number;
+}): ClaudeProjectEntry {
+  return {
+    name: params.name,
+    path: buildValuePath(params.name),
+    kind: params.kind,
+    modifiedMs: params.modifiedMs,
+  };
+}
+
+/** The entries `createProject` writes into its project, as values. */
+const VALUE_ENTRIES: ClaudeProjectEntry[] = [
+  buildValueEntry({ name: 'old.jsonl', kind: 'file', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'old', kind: 'directory', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'old.jsonl.superseded-1700000000', kind: 'file', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'lost.orphaned-1700000000-abc.jsonl', kind: 'file', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'resumed.jsonl', kind: 'file', modifiedMs: RECENT_MS }),
+  buildValueEntry({ name: 'half.jsonl', kind: 'file', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'half', kind: 'directory', modifiedMs: RECENT_MS }),
+  buildValueEntry({ name: 'memory', kind: 'directory', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'memory.jsonl', kind: 'file', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'notes.txt', kind: 'file', modifiedMs: OLD_MS }),
+  buildValueEntry({ name: 'unnamed', kind: 'directory', modifiedMs: OLD_MS }),
+];
+
+const OLD_PATHS: ExploreFoundPaths = [
+  buildValuePath('lost.orphaned-1700000000-abc.jsonl'),
+  buildValuePath('old'),
+  buildValuePath('old.jsonl'),
+  buildValuePath('old.jsonl.superseded-1700000000'),
+];
+
+function buildValueProject(entries: ClaudeProjectEntry[]): ClaudeProjectState {
+  return {
+    folderName: PROJECT_FOLDER_NAME,
+    path: buildTestAbsolutePath({ text: VALUE_PROJECT_PATH }),
+    entries: entries,
+  };
+}
+
+describeAwaitingWin32Platform('decideOldTranscriptPaths', () => {
+  test('takes each session whose files and own folder are all older than the cutoff', () => {
+    expect(
+      decideOldTranscriptPaths({ project: buildValueProject(VALUE_ENTRIES), cutoffMs: CUTOFF_MS }),
+    ).toEqual({ sessionCount: 2, paths: OLD_PATHS });
+  });
+
+  test('keeps a session touched right at the cutoff', () => {
+    expect(
+      decideOldTranscriptPaths({
+        project: buildValueProject([
+          buildValueEntry({ name: 'edge.jsonl', kind: 'file', modifiedMs: CUTOFF_MS }),
+        ]),
+        cutoffMs: CUTOFF_MS,
+      }),
+    ).toEqual({ sessionCount: 0, paths: [] });
+  });
+});
+
+describeAwaitingWin32Platform('compareClaudeTranscriptsUnit', () => {
+  const unit: ExplorePathUnitClaudeTranscripts = {
+    kind: 'claudeTranscripts',
+    projectFolderPath: buildTestAbsolutePath({ text: VALUE_PROJECT_PATH }),
+    cutoffMs: CUTOFF_MS,
+    foundPaths: OLD_PATHS,
+  };
+
+  test("is unchanged while the old sessions are exactly the unit's, whatever the processes", () => {
+    for (const processCommands of [[], null]) {
+      expect(
+        compareClaudeTranscriptsUnit({
+          unit: unit,
+          project: buildValueProject(VALUE_ENTRIES),
+          processCommands: processCommands,
+        }),
+      ).toEqual({ kind: 'unchanged' });
+    }
+  });
+
+  test('is changed once a session is resumed, another grows old, or the project is gone', () => {
+    const resumed = VALUE_ENTRIES.map((entry) =>
+      entry.name === 'old.jsonl' ? { ...entry, modifiedMs: NOW_MS } : entry,
+    );
+    const grownOld = VALUE_ENTRIES.map((entry) =>
+      entry.name === 'resumed.jsonl' ? { ...entry, modifiedMs: OLD_MS } : entry,
+    );
+
+    for (const project of [buildValueProject(resumed), buildValueProject(grownOld), null]) {
+      expect(
+        compareClaudeTranscriptsUnit({ unit: unit, project: project, processCommands: [] }),
+      ).toEqual({ kind: 'changed' });
+    }
+  });
+});
+
 describeAwaitingWin32Platform('loadClaudeTranscriptFindings', () => {
   test('offers the files and folders of the sessions untouched for 30 days, as careful', async () => {
     await withClaudeHome({
       run: async (fixture) => {
         await createProject(fixture);
 
-        const probed = await loadFindings({ environment: fixture.environment });
+        const probed = getProbeFindings(
+          await loadClaudeTranscriptFindings(
+            buildTestProbeRun({ environment: fixture.environment }),
+          ),
+        );
         const [finding] = probed.findings;
 
         expect(probed.isComplete).toBe(true);
@@ -135,7 +225,7 @@ describeAwaitingWin32Platform('loadClaudeTranscriptFindings', () => {
         expect<unknown>(finding?.unit).toEqual({
           kind: 'claudeTranscripts',
           projectFolderPath: fixture.projectPath,
-          cutoffMs: NOW_MS - 30 * DAY_MS,
+          cutoffMs: CUTOFF_MS,
           foundPaths: [
             join(fixture.projectPath, 'lost.orphaned-1700000000-abc.jsonl'),
             join(fixture.projectPath, 'old'),
@@ -150,25 +240,18 @@ describeAwaitingWin32Platform('loadClaudeTranscriptFindings', () => {
     });
   });
 
-  test('never offers the memory folder, a resumed session, or what no session names', async () => {
+  test('stays idle when the processes are unknown', async () => {
     await withClaudeHome({
       run: async (fixture) => {
         await createProject(fixture);
 
-        const probed = await loadFindings({
-          environment: fixture.environment,
-          processCommands: null,
-        });
-        const unit = probed.findings[0]?.unit;
-        const names =
-          unit?.kind === 'claudeTranscripts'
-            ? unit.foundPaths.map((path) => path.slice(fixture.projectPath.length + 1))
-            : [];
-
-        expect(names.filter((name) => /^(memory|resumed|half|notes|unnamed)/.test(name))).toEqual(
-          [],
+        const probed = getProbeFindings(
+          await loadClaudeTranscriptFindings(
+            buildTestProbeRun({ environment: fixture.environment, processCommands: null }),
+          ),
         );
-        expect(probed.findings[0]?.activity).toBe('idle');
+
+        expect(probed.findings.map((finding) => finding.activity)).toEqual(['idle']);
       },
     });
   });
@@ -176,63 +259,46 @@ describeAwaitingWin32Platform('loadClaudeTranscriptFindings', () => {
   test('finds nothing and is complete without the projects folder', async () => {
     await withClaudeHome({
       run: async (fixture) => {
-        expect(await loadFindings({ environment: fixture.environment })).toEqual({
-          findings: [],
-          isComplete: true,
-        });
+        expect(
+          await loadClaudeTranscriptFindings(
+            buildTestProbeRun({ environment: fixture.environment }),
+          ),
+        ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
       },
     });
   });
 });
 
 describeAwaitingWin32Platform('recheckClaudeTranscriptsUnit', () => {
-  test('is unchanged while the old sessions stay untouched', async () => {
+  test('is unchanged while the old sessions stay untouched, and changed once one is resumed', async () => {
     await withClaudeHome({
       run: async (fixture) => {
         await createProject(fixture);
 
-        const unit = (await loadFindings({ environment: fixture.environment })).findings[0]?.unit;
-
-        if (unit?.kind !== 'claudeTranscripts') {
-          throw new Error('The project was not offered.');
-        }
-
-        expect(
-          await recheckClaudeTranscriptsUnit({
+        const unit = findUnitOfKind({
+          findings: getProbeFindings(
+            await loadClaudeTranscriptFindings(
+              buildTestProbeRun({ environment: fixture.environment }),
+            ),
+          ),
+          kind: 'claudeTranscripts',
+        });
+        const recheck = () =>
+          recheckClaudeTranscriptsUnit({
             unit: unit,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
             processCommands: [],
-          }),
-        ).toEqual({ kind: 'unchanged' });
-      },
-    });
-  });
+          });
 
-  test('is changed once an old session is resumed', async () => {
-    await withClaudeHome({
-      run: async (fixture) => {
-        await createProject(fixture);
-
-        const unit = (await loadFindings({ environment: fixture.environment })).findings[0]?.unit;
-
-        if (unit?.kind !== 'claudeTranscripts') {
-          throw new Error('The project was not offered.');
-        }
+        expect(await recheck()).toEqual({ kind: 'unchanged' });
 
         await updateModifiedMs({
           path: join(fixture.projectPath, 'old.jsonl'),
           modifiedMs: NOW_MS,
         });
 
-        expect(
-          await recheckClaudeTranscriptsUnit({
-            unit: unit,
-            environment: fixture.environment,
-            platform: buildTestProbePlatform(),
-            processCommands: [],
-          }),
-        ).toEqual({ kind: 'changed' });
+        expect(await recheck()).toEqual({ kind: 'changed' });
       },
     });
   });

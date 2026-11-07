@@ -28,34 +28,64 @@ export type HuggingFaceRepoOfferPartial = {
   paths: ExploreFoundPaths;
 };
 
-export type HuggingFaceRepoOffer =
+/** The offers that follow the refs of a repository. */
+export type HuggingFaceRepoOfferRevisions =
   | HuggingFaceRepoOfferRepository
-  | HuggingFaceRepoOfferDetached
-  | HuggingFaceRepoOfferPartial;
+  | HuggingFaceRepoOfferDetached;
+
+export type HuggingFaceRepoOffer = HuggingFaceRepoOfferRevisions | HuggingFaceRepoOfferPartial;
 
 /** `isJudged` is false when the current revisions are unknown, so only stale partials are offered. */
 export type HuggingFaceRepoOffers = { offers: HuggingFaceRepoOffer[]; isJudged: boolean };
 
-/**
- * Splits a repository into its three disjoint offers. A blob both a current and a detached snapshot
- * link goes with the current revisions, so removing the detached ones never breaks a current one.
- * A link, such as one into Xet's shared store, is never a blob of either.
- */
+/** Splits a repository into its three disjoint offers: its revision offers and its partial one. */
 export function decideHuggingFaceRepoOffers(params: {
   repo: HuggingFaceRepoState;
   partialCutoffMs: number;
 }): HuggingFaceRepoOffers {
-  const partialPaths = params.repo.blobs
-    .filter(
-      (blob) =>
-        blob.name.endsWith(HUGGING_FACE_INCOMPLETE_SUFFIX) &&
-        blob.modifiedMs <= params.partialCutoffMs,
-    )
-    .map((blob) => blob.path);
-  const partialOffers = buildPartialOffers({ paths: partialPaths });
+  const partialOffer = decideHuggingFacePartialOffer({
+    repo: params.repo,
+    partialCutoffMs: params.partialCutoffMs,
+  });
+  const partialOffers = partialOffer === null ? [] : [partialOffer];
+  const revisionOffers = decideHuggingFaceRevisionOffers({ repo: params.repo });
 
-  if (params.repo.currentCommits === null) {
+  if (revisionOffers === null) {
     return { offers: partialOffers, isJudged: false };
+  }
+
+  return { offers: [...revisionOffers, ...partialOffers], isJudged: true };
+}
+
+/** The unfinished blobs untouched since the cutoff; `null` when there are none. */
+export function decideHuggingFacePartialOffer(params: {
+  repo: HuggingFaceRepoState;
+  partialCutoffMs: number;
+}): HuggingFaceRepoOfferPartial | null {
+  const paths = toFoundPaths(
+    params.repo.blobs
+      .filter(
+        (blob) =>
+          blob.name.endsWith(HUGGING_FACE_INCOMPLETE_SUFFIX) &&
+          blob.modifiedMs <= params.partialCutoffMs,
+      )
+      .map((blob) => blob.path),
+  );
+
+  return paths === null ? null : { kind: 'huggingFacePartialDownloads', paths: paths };
+}
+
+/**
+ * The current revisions and the detached ones; `null` when the refs cannot tell the current ones.
+ * A blob both a current and a detached snapshot link goes with the current revisions, so removing
+ * the detached ones never breaks a current one. A link in `blobs`, such as the one `hf_xet` writes
+ * to the copy the hub cache shares across repositories, is no blob, so neither offer reaches it.
+ */
+export function decideHuggingFaceRevisionOffers(params: {
+  repo: HuggingFaceRepoState;
+}): HuggingFaceRepoOfferRevisions[] | null {
+  if (params.repo.currentCommits === null) {
+    return null;
   }
 
   const currentCommits = params.repo.currentCommits;
@@ -76,7 +106,7 @@ export function decideHuggingFaceRepoOffers(params: {
   const detachedBlobPaths = completeBlobs
     .filter((blob) => detachedLinked.has(blob.name) && !currentLinked.has(blob.name))
     .map((blob) => blob.path);
-  const offers: HuggingFaceRepoOffer[] = [];
+  const offers: HuggingFaceRepoOfferRevisions[] = [];
   const repositoryPaths = toFoundPaths([
     ...params.repo.metadataPaths,
     ...currentSnapshots.map((snapshot) => snapshot.path),
@@ -106,13 +136,7 @@ export function decideHuggingFaceRepoOffers(params: {
     });
   }
 
-  return { offers: [...offers, ...partialOffers], isJudged: true };
-}
-
-function buildPartialOffers(params: { paths: AbsolutePath[] }): HuggingFaceRepoOfferPartial[] {
-  const paths = toFoundPaths(params.paths);
-
-  return paths === null ? [] : [{ kind: 'huggingFacePartialDownloads', paths: paths }];
+  return offers;
 }
 
 function collectLinkedBlobNames(params: { snapshots: HuggingFaceSnapshot[] }): Set<string> {

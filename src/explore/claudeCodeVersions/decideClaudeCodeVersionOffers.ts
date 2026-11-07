@@ -4,12 +4,12 @@ import type {
   ClaudeCodeVersionStateInstalled,
 } from './loadClaudeCodeVersionState.js';
 
-/** The installer keeps the two newest versions besides the launcher's. */
-const KEPT_NEWEST_COUNT = 2;
+/** How many of the newest versions the installer keeps besides the launcher's. */
+export const KEPT_NEWEST_COUNT = 2;
 
 /**
- * The versions past the two newest that the launcher does not run, as the installer itself keeps
- * them. `null` without the launcher's version, since a custom launcher may run any of them.
+ * The versions past the `KEPT_NEWEST_COUNT` newest that the launcher does not run, as the installer
+ * itself keeps them. `null` without the launcher's version, since a custom launcher may run any.
  */
 export function decideClaudeCodeVersionOffers(params: {
   state: ClaudeCodeVersionStateInstalled;

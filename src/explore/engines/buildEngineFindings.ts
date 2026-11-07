@@ -1,6 +1,8 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreEngineUnitPlace, ExploreFinding, UnitActivity } from '../exploreUnit.js';
+import { formatDaySpan } from '../formatLimitTexts.js';
 import {
+  BUILD_RECORD_UNUSED_MS,
   isDanglingImage,
   isStoppedContainer,
   isUnusedBuildRecord,
@@ -74,6 +76,8 @@ function buildBuildCacheFindings(
     return [];
   }
 
+  const unusedSpan = formatDaySpan(BUILD_RECORD_UNUSED_MS);
+
   return [
     {
       unit: {
@@ -83,11 +87,11 @@ function buildBuildCacheFindings(
         recordIds: records.map((record) => record.id),
       },
       title: `${params.place.engineName} build cache`,
-      explanation: 'Build steps that earlier builds cached and no build used for 10 days.',
+      explanation: `Build steps that earlier builds cached and no build used for ${unusedSpan}.`,
       regeneration: 'The next build that needs a step runs it again.',
       risk: 'safe',
       evidenceLines: [
-        `${countText({ count: records.length, noun: 'cache record' })} no build used for 10 days, none of them shared with an image.`,
+        `${countText({ count: records.length, noun: 'cache record' })} no build used for ${unusedSpan}, none of them shared with an image.`,
       ],
       displayPath: params.place.diskImagePath,
       activity: params.activity,

@@ -1,28 +1,43 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type {
   ExplorePathUnitOllamaModel,
   ExploreProbeFindings,
 } from '../../src/explore/exploreUnit.js';
 import { formatOllamaModelName } from '../../src/explore/ollamaModels/buildOllamaModelFindings.js';
+import { compareOllamaModelUnit } from '../../src/explore/ollamaModels/compareOllamaModelUnit.js';
+import { decideOllamaModelOffers } from '../../src/explore/ollamaModels/decideOllamaModelOffers.js';
 import { loadOllamaModelFindings } from '../../src/explore/ollamaModels/loadOllamaModelFindings.js';
+import type {
+  OllamaManifest,
+  OllamaModelStateInstalled,
+} from '../../src/explore/ollamaModels/loadOllamaModelState.js';
+import { parseOllamaModelName } from '../../src/explore/ollamaModels/parseOllamaModelName.js';
 import { recheckOllamaModelUnit } from '../../src/explore/ollamaModels/recheckOllamaModelUnit.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   createFixtureDirectory,
   createFixtureFile,
-  createFixtureRoot,
-  deleteFixtureRoot,
-  loadTestEnvironment,
+  updateModifiedMs,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import {
+  buildTestProbeRun,
+  DAY_MS,
+  getProbeFindings,
+  listUnitsOfKind,
+  withFixtureHome,
+} from '../support/probeRunFixtures.js';
 
-const NOW_MS = Date.now();
+const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 
-const BLOB_MODIFIED_MS = NOW_MS - 3 * 24 * 60 * 60 * 1000;
+const BLOB_MODIFIED_MS = NOW_MS - 3 * DAY_MS;
+
+const MANIFEST_MODIFIED_MS = NOW_MS - 2 * DAY_MS;
 
 const LIBRARY_PATH_NAMES = ['manifests', 'registry.ollama.ai', 'library'];
 
@@ -37,49 +52,13 @@ const DIGESTS = {
   extra: 'e'.repeat(64),
 };
 
-/** Builds a temporary home, hands it to `run`, and removes it afterwards, whatever `run` does. */
-async function withOllamaHome(params: {
-  run: (environment: Environment) => Promise<void>;
-}): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
-
-  try {
-    await params.run(await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: NOW_MS }));
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
-}
-
-function buildRun(params: {
-  environment: Environment;
-  processCommands: string[] | null;
-}): ExploreProbeRun {
-  return {
-    environment: params.environment,
-    platform: buildTestProbePlatform(),
-    processCommands: params.processCommands,
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: 0,
-    staleCutoffMs: 0,
-  };
-}
+const VALUE_MODELS_PATH = '/models';
 
 async function loadFindings(params: {
   environment: Environment;
   processCommands?: string[] | null;
 }): Promise<ExploreProbeFindings> {
-  const result = await loadOllamaModelFindings(
-    buildRun({
-      environment: params.environment,
-      processCommands: params.processCommands === undefined ? [] : params.processCommands,
-    }),
-  );
-
-  if (result.kind === 'failed') {
-    throw new Error(`The probe failed: ${result.failure.reason}.`);
-  }
-
-  return result.value;
+  return getProbeFindings(await loadOllamaModelFindings(buildTestProbeRun(params)));
 }
 
 function buildModelsPath(params: { environment: Environment }): string {
@@ -104,16 +83,17 @@ function buildManifestText(params: { configHex: string; layerHexes: string[] }):
   });
 }
 
+/** Writes the manifest of a tag, written at `MANIFEST_MODIFIED_MS`. */
 async function writeManifest(params: {
   environment: Environment;
   tag: string;
   configHex: string;
   layerHexes: string[];
 }): Promise<void> {
-  await writeFixtureTextFile({
-    path: buildManifestPath(params),
-    text: buildManifestText(params),
-  });
+  const path = buildManifestPath(params);
+
+  await writeFixtureTextFile({ path: path, text: buildManifestText(params) });
+  await updateModifiedMs({ path: path, modifiedMs: MANIFEST_MODIFIED_MS });
 }
 
 async function writeBlobs(params: { environment: Environment; hexes: string[] }): Promise<void> {
@@ -154,13 +134,11 @@ function findUnit(params: {
   tag: string;
 }): ExplorePathUnitOllamaModel {
   const manifestPath = buildManifestPath(params);
-  const unit = params.findings.findings
-    .map((finding) => finding.unit)
-    .find(
-      (candidate) => candidate.kind === 'ollamaModel' && candidate.manifestPath === manifestPath,
-    );
+  const unit = listUnitsOfKind({ findings: params.findings, kind: 'ollamaModel' }).find(
+    (candidate) => candidate.manifestPath === manifestPath,
+  );
 
-  if (unit === undefined || unit.kind !== 'ollamaModel') {
+  if (unit === undefined) {
     throw new Error('The model was not offered.');
   }
 
@@ -180,10 +158,259 @@ function recheck(params: {
   });
 }
 
+function buildValueBlobPath(hex: string): AbsolutePath {
+  return buildTestAbsolutePath({ text: `${VALUE_MODELS_PATH}/blobs/sha256-${hex}` });
+}
+
+function buildValueManifest(params: { tag: string; hexes: string[] | null }): OllamaManifest {
+  return {
+    name: { host: 'registry.ollama.ai', namespace: 'library', model: MODEL, tag: params.tag },
+    path: buildTestAbsolutePath({
+      text: `${VALUE_MODELS_PATH}/${LIBRARY_PATH_NAMES.join('/')}/${MODEL}/${params.tag}`,
+    }),
+    modifiedMs: MANIFEST_MODIFIED_MS,
+    digests: params.hexes === null ? null : params.hexes.map((hex) => `sha256:${hex}`),
+  };
+}
+
+function buildValueState(params: {
+  manifests: OllamaManifest[];
+  blobHexes: string[];
+  isEveryEntryKnown?: boolean;
+}): OllamaModelStateInstalled {
+  return {
+    kind: 'installed',
+    manifests: params.manifests,
+    isEveryEntryKnown: params.isEveryEntryKnown ?? true,
+    blobPaths: new Map(params.blobHexes.map((hex) => [`sha256:${hex}`, buildValueBlobPath(hex)])),
+  };
+}
+
+/** The unit the probe builds for the manifest's offer in `state`. */
+function buildValueUnit(params: {
+  state: OllamaModelStateInstalled;
+  manifest: OllamaManifest;
+}): ExplorePathUnitOllamaModel {
+  const offer = decideOllamaModelOffers({ state: params.state })?.find(
+    (candidate) => candidate.manifest.path === params.manifest.path,
+  );
+
+  if (offer === undefined) {
+    throw new Error('The model was not offered.');
+  }
+
+  return {
+    kind: 'ollamaModel',
+    modelName: `${MODEL}:${params.manifest.name.tag}`,
+    manifestPath: offer.manifest.path,
+    downloadedAtMs: offer.manifest.modifiedMs,
+    foundPaths: [offer.manifest.path, ...offer.blobPaths],
+  };
+}
+
+describe('decideOllamaModelOffers', () => {
+  test('offers each model with the blobs present that no other manifest names', () => {
+    const latest = buildValueManifest({
+      tag: 'latest',
+      hexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.shared, DIGESTS.extra],
+    });
+    const small = buildValueManifest({
+      tag: 'small',
+      hexes: [DIGESTS.smallConfig, DIGESTS.shared],
+    });
+    const offers = decideOllamaModelOffers({
+      state: buildValueState({
+        manifests: [latest, small],
+        blobHexes: [
+          DIGESTS.latestConfig,
+          DIGESTS.latestWeights,
+          DIGESTS.smallConfig,
+          DIGESTS.shared,
+        ],
+      }),
+    });
+
+    expect(offers).toEqual([
+      {
+        manifest: latest,
+        digestCount: 4,
+        blobPaths: [
+          buildValueBlobPath(DIGESTS.latestConfig),
+          buildValueBlobPath(DIGESTS.latestWeights),
+        ],
+      },
+      { manifest: small, digestCount: 2, blobPaths: [buildValueBlobPath(DIGESTS.smallConfig)] },
+    ]);
+  });
+
+  test('offers no model whose blobs all belong to other models too', () => {
+    const hexes = [DIGESTS.latestConfig, DIGESTS.shared];
+
+    expect(
+      decideOllamaModelOffers({
+        state: buildValueState({
+          manifests: [
+            buildValueManifest({ tag: 'latest', hexes: hexes }),
+            buildValueManifest({ tag: 'alias', hexes: hexes }),
+          ],
+          blobHexes: hexes,
+        }),
+      }),
+    ).toEqual([]);
+  });
+
+  test('offers nothing while a manifest is unread or a stray entry sits among them', () => {
+    const latest = buildValueManifest({ tag: 'latest', hexes: [DIGESTS.latestConfig] });
+    const blobHexes = [DIGESTS.latestConfig];
+
+    expect(
+      decideOllamaModelOffers({
+        state: buildValueState({
+          manifests: [latest, buildValueManifest({ tag: 'broken', hexes: null })],
+          blobHexes: blobHexes,
+        }),
+      }),
+    ).toBeNull();
+    expect(
+      decideOllamaModelOffers({
+        state: buildValueState({
+          manifests: [latest],
+          blobHexes: blobHexes,
+          isEveryEntryKnown: false,
+        }),
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('compareOllamaModelUnit', () => {
+  const latest = buildValueManifest({
+    tag: 'latest',
+    hexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.shared],
+  });
+  const small = buildValueManifest({ tag: 'small', hexes: [DIGESTS.smallConfig, DIGESTS.shared] });
+  const scanned = buildValueState({
+    manifests: [latest, small],
+    blobHexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.smallConfig, DIGESTS.shared],
+  });
+
+  test('is unchanged once the model it shared a blob with is gone, so the blob is its own', () => {
+    const afterLatest = buildValueState({
+      manifests: [small],
+      blobHexes: [DIGESTS.smallConfig, DIGESTS.shared],
+    });
+
+    expect(
+      compareOllamaModelUnit({
+        unit: buildValueUnit({ state: scanned, manifest: small }),
+        state: afterLatest,
+        processCommands: [],
+      }),
+    ).toEqual({ kind: 'unchanged' });
+  });
+
+  test('is changed once a new manifest names one of its blobs', () => {
+    const copy = buildValueManifest({ tag: 'copy', hexes: [DIGESTS.extra, DIGESTS.latestWeights] });
+
+    expect(
+      compareOllamaModelUnit({
+        unit: buildValueUnit({ state: scanned, manifest: latest }),
+        state: buildValueState({
+          manifests: [latest, small, copy],
+          blobHexes: [
+            DIGESTS.latestConfig,
+            DIGESTS.latestWeights,
+            DIGESTS.smallConfig,
+            DIGESTS.shared,
+            DIGESTS.extra,
+          ],
+        }),
+        processCommands: [],
+      }),
+    ).toEqual({ kind: 'changed' });
+  });
+
+  test('is changed once its manifest is written again, whatever blobs it names', () => {
+    const pulledAgain = { ...latest, modifiedMs: NOW_MS };
+
+    expect(
+      compareOllamaModelUnit({
+        unit: buildValueUnit({ state: scanned, manifest: latest }),
+        state: buildValueState({
+          manifests: [pulledAgain, small],
+          blobHexes: [
+            DIGESTS.latestConfig,
+            DIGESTS.latestWeights,
+            DIGESTS.smallConfig,
+            DIGESTS.shared,
+          ],
+        }),
+        processCommands: [],
+      }),
+    ).toEqual({ kind: 'changed' });
+  });
+
+  test('is busy while Ollama runs', () => {
+    expect(
+      compareOllamaModelUnit({
+        unit: buildValueUnit({ state: scanned, manifest: latest }),
+        state: scanned,
+        processCommands: ['ollama run llama3'],
+      }),
+    ).toEqual({ kind: 'busy' });
+  });
+});
+
+describe('parseOllamaModelName', () => {
+  test("reads the four folder names of a manifest's path, with an escaped colon as a colon", () => {
+    expect(
+      parseOllamaModelName({ pathNames: ['ollama.com', 'library', 'model', 'tag%3Aq4%3aK'] }),
+    ).toEqual({ host: 'ollama.com', namespace: 'library', model: 'model', tag: 'tag:q4:K' });
+  });
+
+  test('reads no name from a path of another depth', () => {
+    expect(parseOllamaModelName({ pathNames: ['ollama.com', 'library', 'model'] })).toBeNull();
+    expect(
+      parseOllamaModelName({ pathNames: ['ollama.com', 'library', 'model', 'tag', 'extra'] }),
+    ).toBeNull();
+  });
+});
+
+describe('formatOllamaModelName', () => {
+  test("names a model of Ollama's own library by its model and tag", () => {
+    expect(
+      formatOllamaModelName({
+        name: { host: 'registry.ollama.ai', namespace: 'library', model: 'llama3', tag: 'latest' },
+      }),
+    ).toBe('llama3:latest');
+    expect(
+      formatOllamaModelName({
+        name: { host: 'ollama.com', namespace: 'library', model: 'qwen3', tag: '8b' },
+      }),
+    ).toBe('qwen3:8b');
+  });
+
+  test('puts the namespace, or the host of another registry, before it', () => {
+    expect(
+      formatOllamaModelName({
+        name: { host: 'registry.ollama.ai', namespace: 'someone', model: 'model', tag: 'v1' },
+      }),
+    ).toBe('someone/model:v1');
+    expect(
+      formatOllamaModelName({
+        name: { host: 'hf.co', namespace: 'org', model: 'repo', tag: 'Q4_K_M' },
+      }),
+    ).toBe('hf.co/org/repo:Q4_K_M');
+  });
+});
+
 describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
   test('offers each model with only the blobs no other manifest names', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const environment = home.environment;
+
         await createTwoModels({ environment: environment });
 
         const probed = await loadFindings({ environment: environment });
@@ -191,8 +418,12 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
         const small = findUnit({ findings: probed, environment: environment, tag: 'small' });
 
         expect(probed.isComplete).toBe(true);
-        expect(probed.findings).toHaveLength(2);
+        expect(probed.findings.map((finding) => [finding.risk, finding.activity])).toEqual([
+          ['review', 'idle'],
+          ['review', 'idle'],
+        ]);
         expect(latest.modelName).toBe('llama3:latest');
+        expect(latest.downloadedAtMs).toBe(MANIFEST_MODIFIED_MS);
         expect<string[]>([...latest.foundPaths].toSorted()).toEqual(
           [
             buildManifestPath({ environment: environment, tag: 'latest' }),
@@ -210,53 +441,12 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
     });
   });
 
-  test('never makes a blob another manifest names a target of either model', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
-        await createTwoModels({ environment: environment });
-
-        const probed = await loadFindings({ environment: environment });
-        const sharedPath = buildBlobPath({ environment: environment, hex: DIGESTS.shared });
-
-        expect(
-          probed.findings.flatMap((finding) =>
-            finding.unit.kind === 'ollamaModel' ? finding.unit.foundPaths : [],
-          ),
-        ).not.toContain(sharedPath);
-        expect(probed.findings.map((finding) => finding.risk)).toEqual(['review', 'review']);
-        expect(probed.findings.map((finding) => finding.activity)).toEqual(['idle', 'idle']);
-      },
-    });
-  });
-
-  test('offers no model whose blobs all belong to other models too', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
-        await writeBlobs({
-          environment: environment,
-          hexes: [DIGESTS.shared, DIGESTS.latestConfig],
-        });
-
-        for (const tag of ['latest', 'alias']) {
-          await writeManifest({
-            environment: environment,
-            tag: tag,
-            configHex: DIGESTS.latestConfig,
-            layerHexes: [DIGESTS.shared],
-          });
-        }
-
-        expect(await loadFindings({ environment: environment })).toEqual({
-          findings: [],
-          isComplete: true,
-        });
-      },
-    });
-  });
-
   test('offers nothing and is incomplete while a manifest does not parse', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const environment = home.environment;
+
         await createTwoModels({ environment: environment });
         await writeFixtureTextFile({
           path: buildManifestPath({ environment: environment, tag: 'broken' }),
@@ -272,8 +462,11 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
   });
 
   test('offers nothing and is incomplete beside a stray file where a folder belongs', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const environment = home.environment;
+
         await createTwoModels({ environment: environment });
         await writeFixtureTextFile({
           path: join(buildModelsPath({ environment: environment }), 'manifests', 'stray'),
@@ -289,8 +482,11 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
   });
 
   test('finds no model and is complete without the manifests folders', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const environment = home.environment;
+
         expect(await loadFindings({ environment: environment })).toEqual({
           findings: [],
           isComplete: true,
@@ -300,8 +496,11 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
   });
 
   test('marks each model busy while Ollama runs', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const environment = home.environment;
+
         await createTwoModels({ environment: environment });
 
         const probed = await loadFindings({
@@ -317,8 +516,11 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
 
 describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
   test('is unchanged while the model keeps its blobs, and busy while Ollama runs', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const environment = home.environment;
+
         await createTwoModels({ environment: environment });
 
         const unit = findUnit({
@@ -331,13 +533,6 @@ describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
           await recheck({ unit: unit, environment: environment, processCommands: [] }),
         ).toEqual({ kind: 'unchanged' });
         expect(
-          await recheck({
-            unit: unit,
-            environment: environment,
-            processCommands: ['ollama run llama3'],
-          }),
-        ).toEqual({ kind: 'busy' });
-        expect(
           await recheck({ unit: unit, environment: environment, processCommands: null }),
         ).toEqual({ kind: 'busy' });
       },
@@ -345,8 +540,11 @@ describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
   });
 
   test('is changed once a new manifest names one of its blobs', async () => {
-    await withOllamaHome({
-      run: async (environment) => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        const environment = home.environment;
+
         await createTwoModels({ environment: environment });
 
         const unit = findUnit({
@@ -368,31 +566,5 @@ describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
         ).toEqual({ kind: 'changed' });
       },
     });
-  });
-});
-
-describeAwaitingWin32Platform('formatOllamaModelName', () => {
-  test("names a model of Ollama's own library by its model and tag", () => {
-    expect(
-      formatOllamaModelName({ nameParts: ['registry.ollama.ai', 'library', 'llama3', 'latest'] }),
-    ).toBe('llama3:latest');
-    expect(formatOllamaModelName({ nameParts: ['ollama.com', 'library', 'qwen3', '8b'] })).toBe(
-      'qwen3:8b',
-    );
-  });
-
-  test('puts the namespace, or the host of another registry, before it', () => {
-    expect(
-      formatOllamaModelName({ nameParts: ['registry.ollama.ai', 'someone', 'model', 'v1'] }),
-    ).toBe('someone/model:v1');
-    expect(formatOllamaModelName({ nameParts: ['hf.co', 'org', 'repo', 'Q4_K_M'] })).toBe(
-      'hf.co/org/repo:Q4_K_M',
-    );
-  });
-
-  test('reads an escaped colon as a colon', () => {
-    expect(
-      formatOllamaModelName({ nameParts: ['ollama.com', 'library', 'model', 'tag%3Aq4'] }),
-    ).toBe('model:tag:q4');
   });
 });

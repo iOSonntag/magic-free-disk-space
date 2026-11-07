@@ -14,17 +14,18 @@ import {
   OLLAMA_MODELS_PATH_NAMES,
 } from './ollamaModelsRoot.js';
 import { parseOllamaManifestDigests } from './parseOllamaManifestDigests.js';
+import type { OllamaModelName } from './parseOllamaModelName.js';
+import { parseOllamaModelName } from './parseOllamaModelName.js';
 
 /** A manifest's path below its manifests folder: `<host>/<namespace>/<model>/<tag>`. */
-const MANIFEST_NAME_PART_COUNT = 4;
+const MANIFEST_PATH_NAME_COUNT = 4;
 
 /** A blob file as Ollama names it, the digest with `-` in place of `:`. */
 const BLOB_FILE_NAME_PATTERN = /^sha256-[0-9a-f]{64}$/;
 
 /** One manifest of a model's tag, with the digests of the blobs it names. */
 export type OllamaManifest = {
-  /** Its host, namespace, model, and tag, the folder names of its path. */
-  nameParts: string[];
+  name: OllamaModelName;
   path: AbsolutePath;
   modifiedMs: number;
   /** `null` when it is too large to read or does not parse, so the blobs it names are unknown. */
@@ -49,7 +50,7 @@ export type OllamaModelStateInstalled = {
 /** What the reads of Ollama's manifests and blobs found. */
 export type OllamaModelState = OllamaModelStateNoModels | OllamaModelStateInstalled;
 
-type ManifestFile = { nameParts: string[]; path: AbsolutePath };
+type ManifestFile = { name: OllamaModelName; path: AbsolutePath };
 
 type ManifestFiles = { files: ManifestFile[]; isEveryEntryKnown: boolean };
 
@@ -79,7 +80,7 @@ export async function loadOllamaModelState(params: {
         parentPath: modelsPath,
         names: [folderName],
       }),
-      nameParts: [],
+      pathNames: [],
       privacyDenialCode: params.privacyDenialCode,
     });
 
@@ -133,13 +134,13 @@ export async function loadOllamaModelState(params: {
 }
 
 /**
- * The manifest files below `folderPath`, which lies `nameParts` deep in a manifests folder; `null`
+ * The manifest files below `folderPath`, which lies `pathNames` deep in a manifests folder; `null`
  * when the folder is absent.
  */
 async function loadManifestFiles(params: {
   pathRules: PathRules;
   folderPath: AbsolutePath;
-  nameParts: string[];
+  pathNames: string[];
   privacyDenialCode: string | null;
 }): Promise<Result<ManifestFiles | null, ExploreFileUnreadable>> {
   const entries = await loadExploreDirectoryEntries({
@@ -155,7 +156,7 @@ async function loadManifestFiles(params: {
     return { kind: 'succeeded', value: null };
   }
 
-  const isTagLevel = params.nameParts.length === MANIFEST_NAME_PART_COUNT - 1;
+  const isTagLevel = params.pathNames.length === MANIFEST_PATH_NAME_COUNT - 1;
   const files: ManifestFile[] = [];
   let isEveryEntryKnown = true;
 
@@ -164,7 +165,7 @@ async function loadManifestFiles(params: {
       continue;
     }
 
-    const nameParts = [...params.nameParts, entry.name];
+    const pathNames = [...params.pathNames, entry.name];
     const path = joinAbsolutePath({
       rules: params.pathRules,
       parentPath: params.folderPath,
@@ -172,8 +173,10 @@ async function loadManifestFiles(params: {
     });
 
     if (isTagLevel) {
-      if (entry.kind === 'file') {
-        files.push({ nameParts: nameParts, path: path });
+      const name = parseOllamaModelName({ pathNames: pathNames });
+
+      if (entry.kind === 'file' && name !== null) {
+        files.push({ name: name, path: path });
       } else {
         isEveryEntryKnown = false;
       }
@@ -190,7 +193,7 @@ async function loadManifestFiles(params: {
     const below = await loadManifestFiles({
       pathRules: params.pathRules,
       folderPath: path,
-      nameParts: nameParts,
+      pathNames: pathNames,
       privacyDenialCode: params.privacyDenialCode,
     });
 
@@ -240,7 +243,7 @@ async function loadManifests(params: {
     }
 
     manifests.push({
-      nameParts: file.nameParts,
+      name: file.name,
       path: file.path,
       modifiedMs: stats.value.modifiedMs,
       digests: read.value.kind === 'text' ? parseDigests({ text: read.value.text }) : null,

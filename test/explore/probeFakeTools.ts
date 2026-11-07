@@ -18,6 +18,10 @@ export const PROBE_ARGUMENT_TEXTS = {
   homebrewCellar: '--cellar',
   homebrewCleanup: 'cleanup -n',
   homebrewAutoremove: 'autoremove -n',
+  condaCleanDryRun: 'clean --tarballs --packages --dry-run --json',
+  rustupToolchainList: 'toolchain list',
+  rustupOverrideList: 'override list',
+  vagrantBoxList: 'box list --machine-readable',
 } as const;
 
 export type ProbeCommandName = keyof typeof PROBE_ARGUMENT_TEXTS;

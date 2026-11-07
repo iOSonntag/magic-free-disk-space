@@ -1,16 +1,11 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
-import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitClaudeTranscripts } from '../exploreUnit.js';
-import { hasSamePaths } from '../hasSamePaths.js';
-import { decideOldTranscriptPaths } from './decideOldTranscriptPaths.js';
+import { compareClaudeTranscriptsUnit } from './compareClaudeTranscriptsUnit.js';
 import { loadClaudeProjectState } from './loadClaudeProjectsState.js';
 
-/**
- * Reads the project folder again and compares its transcripts older than the scan's cutoff with
- * the unit, so a conversation resumed since, or a new one, changes it.
- */
+/** Reads the project folder again and compares its old transcripts with the unit. */
 export async function recheckClaudeTranscriptsUnit(params: {
   unit: ExplorePathUnitClaudeTranscripts;
   environment: Environment;
@@ -27,19 +22,9 @@ export async function recheckClaudeTranscriptsUnit(params: {
     return project;
   }
 
-  if (
-    project.value === null ||
-    !hasSamePaths({
-      left: decideOldTranscriptPaths({ project: project.value, cutoffMs: params.unit.cutoffMs })
-        .paths,
-      right: params.unit.foundPaths,
-    })
-  ) {
-    return { kind: 'changed' };
-  }
-
-  return decideComparisonActivity({
-    facts: { kind: 'untouchedFiles' },
+  return compareClaudeTranscriptsUnit({
+    unit: params.unit,
+    project: project.value,
     processCommands: params.processCommands,
   });
 }

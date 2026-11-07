@@ -11,12 +11,11 @@ import {
   loadExploreFileText,
   loadExploreRealPath,
 } from '../loadExploreRead.js';
+import type { HuggingFaceRepoName } from './parseHuggingFaceRepoFolderName.js';
+import { parseHuggingFaceRepoFolderName } from './parseHuggingFaceRepoFolderName.js';
 
 /** The hub cache of the Hugging Face libraries below the home folder, unless `HF_HOME` moves it. */
 export const HUGGING_FACE_HUB_PATH_NAMES = ['.cache', 'huggingface', 'hub'];
-
-/** A repository folder of the hub cache: `<type>s--<owner>--<name>`. */
-const REPO_FOLDER_NAME_PATTERN = /^(models|datasets|spaces|kernels)--.+$/;
 
 /** A ref's file holds the full commit hash it points at. */
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{40}$/;
@@ -41,13 +40,13 @@ export type HuggingFaceSnapshot = {
   linkedBlobNames: ReadonlySet<string>;
 };
 
-/** A regular file of the repository's `blobs`; a link there, such as Xet's, is none. */
+/** A regular file of the repository's `blobs`; a link there is none. */
 export type HuggingFaceBlob = { name: string; path: AbsolutePath; modifiedMs: number };
 
 /** What one repository folder holds. */
 export type HuggingFaceRepoState = {
   repoPath: AbsolutePath;
-  folderName: string;
+  name: HuggingFaceRepoName;
   /**
    * The commits its refs point at; `null` when a ref does not read as a commit or `snapshots`
    * holds what is no folder, so which revision is current cannot be told.
@@ -55,6 +54,13 @@ export type HuggingFaceRepoState = {
   currentCommits: ReadonlySet<string> | null;
   snapshots: HuggingFaceSnapshot[];
   blobs: HuggingFaceBlob[];
+  /**
+   * The entries of its `blobs` that are links, which no offer takes, nor what they reach. `hf_xet`
+   * stores a file once at the hub cache's own `blobs/<prefix>/<xet_hash>`, which other repositories
+   * may link too, and links the repository's `blobs/<etag>` to it (huggingface_hub, guide "Manage
+   * the cache", section "Shared blobs across repos").
+   */
+  linkedBlobCount: number;
   /** Its `refs`, `.no_exist`, and `trees`, those present. */
   metadataPaths: AbsolutePath[];
 };
@@ -82,7 +88,7 @@ export async function loadHuggingFaceHubState(params: {
   const repos: HuggingFaceRepoState[] = [];
 
   for (const entry of entries.value ?? []) {
-    if (entry.kind !== 'directory' || !REPO_FOLDER_NAME_PATTERN.test(entry.name)) {
+    if (entry.kind !== 'directory') {
       continue;
     }
 
@@ -108,12 +114,21 @@ export async function loadHuggingFaceHubState(params: {
   return { kind: 'succeeded', value: repos };
 }
 
-/** Reads one repository folder; `null` when it is absent or no folder. */
+/**
+ * Reads one repository folder; `null` when it is absent, no folder, or named as no repository, which
+ * the libraries keep beside them, such as `.locks`.
+ */
 export async function loadHuggingFaceRepoState(params: {
   pathRules: PathRules;
   repoPath: AbsolutePath;
   privacyDenialCode: string | null;
 }): Promise<Result<HuggingFaceRepoState | null, ExploreFileUnreadable>> {
+  const name = parseHuggingFaceRepoFolderName(basename(params.repoPath));
+
+  if (name === null) {
+    return { kind: 'succeeded', value: null };
+  }
+
   const entries = await loadExploreDirectoryEntries({
     path: params.repoPath,
     privacyDenialCode: params.privacyDenialCode,
@@ -182,10 +197,11 @@ export async function loadHuggingFaceRepoState(params: {
     kind: 'succeeded',
     value: {
       repoPath: params.repoPath,
-      folderName: basename(params.repoPath),
+      name: name,
       currentCommits: isJudged ? new Set(refCommits.value) : null,
       snapshots: snapshots.value.snapshots,
-      blobs: blobs.value,
+      blobs: blobs.value.blobs,
+      linkedBlobCount: blobs.value.linkedBlobCount,
       metadataPaths: metadataPaths,
     },
   };
@@ -274,11 +290,13 @@ async function loadRefEntryCommits(params: {
   }
 }
 
+type RepoBlobs = { blobs: HuggingFaceBlob[]; linkedBlobCount: number };
+
 async function loadBlobs(params: {
   pathRules: PathRules;
   blobsPath: AbsolutePath;
   privacyDenialCode: string | null;
-}): Promise<Result<HuggingFaceBlob[], ExploreFileUnreadable>> {
+}): Promise<Result<RepoBlobs, ExploreFileUnreadable>> {
   const entries = await loadExploreDirectoryEntries({
     path: params.blobsPath,
     privacyDenialCode: params.privacyDenialCode,
@@ -289,8 +307,15 @@ async function loadBlobs(params: {
   }
 
   const blobs: HuggingFaceBlob[] = [];
+  let linkedBlobCount = 0;
 
   for (const entry of entries.value ?? []) {
+    if (entry.kind === 'symbolicLink') {
+      linkedBlobCount += 1;
+
+      continue;
+    }
+
     if (entry.kind !== 'file') {
       continue;
     }
@@ -314,7 +339,7 @@ async function loadBlobs(params: {
     }
   }
 
-  return { kind: 'succeeded', value: blobs };
+  return { kind: 'succeeded', value: { blobs: blobs, linkedBlobCount: linkedBlobCount } };
 }
 
 type Snapshots = { snapshots: HuggingFaceSnapshot[]; isEveryEntryFolder: boolean };
@@ -368,17 +393,15 @@ async function loadSnapshots(params: {
       return stats;
     }
 
-    const linkedBlobNames = new Set<string>();
-    const linked = await loadLinkedBlobNames({
+    const linkedBlobNames = await loadLinkedBlobNames({
       pathRules: params.pathRules,
       folderPath: path,
       blobsRealPath: blobsRealPath.value,
-      linkedBlobNames: linkedBlobNames,
       privacyDenialCode: params.privacyDenialCode,
     });
 
-    if (linked.kind === 'failed') {
-      return linked;
+    if (linkedBlobNames.kind === 'failed') {
+      return linkedBlobNames;
     }
 
     if (stats.value !== null) {
@@ -386,7 +409,7 @@ async function loadSnapshots(params: {
         commit: entry.name,
         path: path,
         modifiedMs: stats.value.modifiedMs,
-        linkedBlobNames: linkedBlobNames,
+        linkedBlobNames: linkedBlobNames.value,
       });
     }
   }
@@ -398,16 +421,16 @@ async function loadSnapshots(params: {
 }
 
 /**
- * Adds the name of each blob of the repository that a link below the folder resolves to, matched
- * by real paths, so the relative links the libraries write need no parse of their own.
+ * The names of the repository's blobs that the links below the folder resolve to, matched by real
+ * paths, so the relative links the libraries write need no parse of their own. A link that
+ * resolves elsewhere, such as through a linked blob to the hub cache's shared copy, names none.
  */
 async function loadLinkedBlobNames(params: {
   pathRules: PathRules;
   folderPath: AbsolutePath;
   blobsRealPath: AbsolutePath | null;
-  linkedBlobNames: Set<string>;
   privacyDenialCode: string | null;
-}): Promise<Result<null, ExploreFileUnreadable>> {
+}): Promise<Result<Set<string>, ExploreFileUnreadable>> {
   const entries = await loadExploreDirectoryEntries({
     path: params.folderPath,
     privacyDenialCode: params.privacyDenialCode,
@@ -417,6 +440,8 @@ async function loadLinkedBlobNames(params: {
     return entries;
   }
 
+  const linkedBlobNames = new Set<string>();
+
   for (const entry of entries.value ?? []) {
     const path = joinAbsolutePath({
       rules: params.pathRules,
@@ -425,10 +450,19 @@ async function loadLinkedBlobNames(params: {
     });
 
     if (entry.kind === 'directory') {
-      const below = await loadLinkedBlobNames({ ...params, folderPath: path });
+      const below = await loadLinkedBlobNames({
+        pathRules: params.pathRules,
+        folderPath: path,
+        blobsRealPath: params.blobsRealPath,
+        privacyDenialCode: params.privacyDenialCode,
+      });
 
       if (below.kind === 'failed') {
         return below;
+      }
+
+      for (const name of below.value) {
+        linkedBlobNames.add(name);
       }
 
       continue;
@@ -449,9 +483,9 @@ async function loadLinkedBlobNames(params: {
     }
 
     if (realPath.value !== null && dirname(realPath.value) === params.blobsRealPath) {
-      params.linkedBlobNames.add(basename(realPath.value));
+      linkedBlobNames.add(basename(realPath.value));
     }
   }
 
-  return { kind: 'succeeded', value: null };
+  return { kind: 'succeeded', value: linkedBlobNames };
 }

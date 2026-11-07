@@ -538,7 +538,11 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
     'answers unreadable on the platforms folder and leaves the other Android probes judged',
     async () => {
       await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
-      await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+      await writeAndroidSystemImage({
+        sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+        platform: 'android-35',
+        abi: 'arm64-v8a',
+      });
       await writeAndroidEmulator({ homeDir: homeDir });
       await createAndroidAvdHome({ homeDir: homeDir });
       await chmod(buildPlatformsPath(), 0o000);

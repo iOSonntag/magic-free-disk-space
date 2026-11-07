@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildEngineFindings } from '../../src/explore/engines/buildEngineFindings.js';
@@ -9,19 +8,23 @@ import { loadEngineFindings } from '../../src/explore/engines/loadEngineFindings
 import { parseEngineApiVersion } from '../../src/explore/engines/parseEngineApiVersion.js';
 import type { EngineDiskUsage } from '../../src/explore/engines/parseEngineDiskUsage.js';
 import { parseEngineDiskUsage } from '../../src/explore/engines/parseEngineDiskUsage.js';
-import type { ContainerEngine } from '../../src/explore/explorePlatform.js';
-import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
+import type { ContainerEngineFixed } from '../../src/explore/explorePlatform.js';
+import type { ExploreProbeEngineResult, ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreEngineUnit, ExploreEngineUnitPlace } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
+  createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildTestProbeRun, DAY_MS } from '../support/probeRunFixtures.js';
+import type { FakeEngine } from './engineFixtures.js';
 import {
   buildBuildRecord,
   buildBuildRecordId,
@@ -33,7 +36,6 @@ import {
   buildImageRecord,
   buildVolumeName,
   buildVolumeRecord,
-  DAY_MS,
   FAKE_API_VERSION,
   NOW_MS,
   startFakeEngine,
@@ -43,7 +45,8 @@ const TIMEOUT_MS = 5_000;
 
 const ANONYMOUS_VOLUME_NAME = 'a'.repeat(64);
 
-const TEST_ENGINE: ContainerEngine = {
+const TEST_ENGINE: ContainerEngineFixed = {
+  kind: 'fixed',
   engineName: 'Docker Desktop',
   socketPaths: [['engine.sock']],
   diskImagePath: ['disk.img'],
@@ -103,7 +106,7 @@ function buildMixedUsageAnswer(): Record<string, unknown> {
 }
 
 describe('parseEngineApiVersion', () => {
-  test('picks the engine newest version when the parsers read it', () => {
+  test("picks the engine's newest version when the parsers read it", () => {
     expect<unknown>(
       parseEngineApiVersion({ value: { ApiVersion: '1.47', MinAPIVersion: '1.24' } }),
     ).toEqual({ kind: 'succeeded', value: '1.47' });
@@ -158,7 +161,6 @@ describe('parseEngineDiskUsage', () => {
       images: [
         {
           id: buildImageId('1'),
-          parentId: '',
           tags: [],
           digests: [],
           uniqueSizeBytes: 600,
@@ -166,7 +168,6 @@ describe('parseEngineDiskUsage', () => {
         },
         {
           id: buildImageId('2'),
-          parentId: '',
           tags: ['example/web:1'],
           digests: [],
           uniqueSizeBytes: 1000,
@@ -180,7 +181,6 @@ describe('parseEngineDiskUsage', () => {
       buildRecords: [
         {
           id: buildBuildRecordId('1'),
-          recordType: 'regular',
           isInUse: false,
           isShared: false,
           sizeBytes: 2048,
@@ -188,6 +188,17 @@ describe('parseEngineDiskUsage', () => {
         },
       ],
     });
+  });
+
+  test('reads an image without its parent and a build record without its type', () => {
+    const { ParentId: _parentId, ...imageRecord } = buildImageRecord({ digit: '1' });
+    const { Type: _recordType, ...buildRecord } = buildBuildRecord({ digit: '1' });
+    const usage = parseUsage(
+      buildDiskUsageAnswer({ images: [imageRecord], buildRecords: [buildRecord] }),
+    );
+
+    expect(usage.images.map((image) => image.id)).toEqual([buildImageId('1')]);
+    expect(usage.buildRecords.map((record) => record.id)).toEqual([buildBuildRecordId('1')]);
   });
 
   test('reads a list the answer leaves out as empty', () => {
@@ -442,14 +453,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
   });
 
   function buildRun(): ExploreProbeRun {
-    return {
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      processCommands: [],
-      deadlineMs: Date.now() + TIMEOUT_MS,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-    };
+    return buildTestProbeRun({ environment: environment });
   }
 
   function buildPlace(sizeBytes: number): ExploreEngineUnitPlace {
@@ -467,7 +471,10 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
   });
 
   test('asks only the first socket path that exists, and refuses it when it is no socket', async () => {
-    await writeFile(join(environment.homeDir, 'plain.sock'), 'not a socket');
+    await writeFixtureTextFile({
+      path: join(environment.homeDir, 'plain.sock'),
+      text: 'not a socket',
+    });
     const engine = startFakeEngine({ socketPath: socketPath, usage: buildMixedUsageAnswer() });
 
     try {
@@ -613,6 +620,115 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
     }
   });
 
+  describe("Colima's profiles", () => {
+    const colima = CONTAINER_ENGINES.colimaEngine;
+
+    function buildColimaPath(names: string[]): AbsolutePath {
+      return buildTestAbsolutePath({ text: join(environment.homeDir, '.colima', ...names) });
+    }
+
+    /** Serves a fake engine in the profile's folder with one unused volume named after it. */
+    async function startProfileEngine(params: {
+      folderName: string;
+      usage?: unknown;
+    }): Promise<FakeEngine> {
+      await createFixtureDirectory({ path: buildColimaPath([params.folderName]) });
+
+      return startFakeEngine({
+        socketPath: buildColimaPath([params.folderName, 'docker.sock']),
+        usage:
+          params.usage ??
+          buildDiskUsageAnswer({
+            volumes: [buildVolumeRecord({ name: `${params.folderName}-data` })],
+          }),
+      });
+    }
+
+    /** Each volume unit's name, socket and disk image, in the order of the findings. */
+    function listVolumePlaces(findings: ExploreProbeEngineResult): string[][] {
+      if (findings.kind === 'failed') {
+        throw new Error(`The probe failed: ${findings.failure.kind}.`);
+      }
+
+      return findings.value.findings.map((finding) =>
+        finding.unit.kind === 'engineVolume'
+          ? [finding.unit.volumeName, finding.unit.socketPath, finding.unit.diskImagePath]
+          : [],
+      );
+    }
+
+    test("asks each profile's socket with its own disk image, and skips Colima's own folders", async () => {
+      const engines = [
+        await startProfileEngine({ folderName: 'default' }),
+        await startProfileEngine({ folderName: 'work' }),
+        await startProfileEngine({ folderName: '_lima' }),
+      ];
+
+      try {
+        await createFixtureDirectory({ path: buildColimaPath(['stopped']) });
+        await writeFixtureTextFile({ path: buildColimaPath(['ssh_config']), text: '' });
+
+        const findings = await loadEngineFindings({
+          run: buildRun(),
+          engineProbeId: 'colimaEngine',
+          engine: colima,
+        });
+
+        expect(listVolumePlaces(findings)).toEqual([
+          [
+            'default-data',
+            buildColimaPath(['default', 'docker.sock']),
+            buildColimaPath(['_lima', '_disks', 'colima', 'datadisk']),
+          ],
+          [
+            'work-data',
+            buildColimaPath(['work', 'docker.sock']),
+            buildColimaPath(['_lima', '_disks', 'colima-work', 'datadisk']),
+          ],
+        ]);
+        expect(findings.kind === 'succeeded' && findings.value.isComplete).toBe(true);
+        expect(engines[2]?.requests).toEqual([]);
+      } finally {
+        for (const engine of engines) {
+          engine.stop();
+        }
+      }
+    });
+
+    test('keeps the answers of the other profiles, incomplete, when one answers not as asked', async () => {
+      const engines = [
+        await startProfileEngine({ folderName: 'default', usage: { Images: 'none' } }),
+        await startProfileEngine({ folderName: 'work' }),
+      ];
+
+      try {
+        const findings = await loadEngineFindings({
+          run: buildRun(),
+          engineProbeId: 'colimaEngine',
+          engine: colima,
+        });
+
+        expect(listVolumePlaces(findings).map(([volumeName]) => volumeName)).toEqual(['work-data']);
+        expect(findings.kind === 'succeeded' && findings.value.isComplete).toBe(false);
+      } finally {
+        for (const engine of engines) {
+          engine.stop();
+        }
+      }
+    });
+
+    test('answers socketMissing when no profile holds a socket, or Colima has no folder', async () => {
+      const loadColima = () =>
+        loadEngineFindings({ run: buildRun(), engineProbeId: 'colimaEngine', engine: colima });
+
+      expect(await loadColima()).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
+
+      await createFixtureDirectory({ path: buildColimaPath(['default']) });
+
+      expect(await loadColima()).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
+    });
+  });
+
   test('removes a stopped container after reading it again, never with force', async () => {
     const engine = startFakeEngine({
       socketPath: socketPath,
@@ -725,7 +841,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
       await callEngineUnit({ unit: unit, user: environment.user, timeoutMs: TIMEOUT_MS }),
     ).toEqual({ outcome: 'engineNotRunning', freedBytes: 0, status: null, code: null });
 
-    await writeFile(socketPath, 'not a socket');
+    await writeFixtureTextFile({ path: socketPath, text: 'not a socket' });
 
     expect(
       await callEngineUnit({ unit: unit, user: environment.user, timeoutMs: TIMEOUT_MS }),

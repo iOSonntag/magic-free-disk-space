@@ -25,7 +25,6 @@ import type {
   ExploreProbeFindings,
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
-import type { ProjectPins } from '../../src/explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
@@ -54,6 +53,7 @@ import {
   writeAndroidEmulator,
   writeAndroidSystemImage,
 } from './androidFixtures.js';
+import { buildTestProjectPins } from './projectPinsFixtures.js';
 
 const tool: LocatedTool = { name: 'avdmanager', path: '/opt/example/cmdline-tools/bin/avdmanager' };
 
@@ -87,7 +87,7 @@ function buildStateLoad(): Parameters<typeof loadAndroidSdkState>[0] {
   };
 }
 
-const NO_PROJECT_PINS: ProjectPins = { files: [], isWalkComplete: true };
+const NO_PROJECT_PINS = buildTestProjectPins({ files: [] });
 
 type AndroidProbeAnswers = {
   avds: ExploreProbeFindings;
@@ -210,7 +210,11 @@ describeAwaitingWin32Platform('the Android probes without an SDK', () => {
 
 describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   test('without ~/.android/avd judge the AVDs empty and hold back images and the emulator', async () => {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     await writeAndroidEmulator({ homeDir: homeDir });
 
     expect(await loadAndroidProbeAnswers()).toEqual({
@@ -222,7 +226,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('with an empty ~/.android/avd offer every image and the emulator, named by package', async () => {
     const imagePath = await writeAndroidSystemImage({
-      homeDir: homeDir,
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -271,9 +275,13 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('offer an AVD unused since the cutoff with the images no AVD names, not the emulator', async () => {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     const unusedImagePath = await writeAndroidSystemImage({
-      homeDir: homeDir,
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
@@ -326,7 +334,11 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('mark each finding busy while an emulator runs, and unknown without processes', async () => {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     await writeAndroidAvd({
       homeDir: homeDir,
       name: 'Pixel',
@@ -344,7 +356,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
 
   test('leave an image folder with an unparsable package.xml not judged, and skip one without', async () => {
     const imagePath = await writeAndroidSystemImage({
-      homeDir: homeDir,
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
@@ -385,7 +397,11 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose ini names no path not judged, and the images with it', async () => {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     await writeAndroidEmulator({ homeDir: homeDir });
     await createAndroidAvdHome({ homeDir: homeDir });
     await writeFile(
@@ -412,7 +428,11 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('build no unit of an AVD whose folder is gone, and hold back the images', async () => {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     const avd = await writeAndroidAvd({
       homeDir: homeDir,
       name: 'Pixel',
@@ -429,7 +449,11 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('hold back the images while an AVD config.ini names no image, and judge no AVD', async () => {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     await writeAndroidAvd({
       homeDir: homeDir,
       name: 'Pixel',
@@ -444,7 +468,11 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('hold back the images while an AVD has no config.ini', async () => {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     const avd = await writeAndroidAvd({
       homeDir: homeDir,
       name: 'Pixel',
@@ -749,7 +777,11 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     image: ExplorePathUnitAndroidSystemImage;
     emulator: ExplorePathUnitAndroidEmulator;
   }> {
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     await writeAndroidEmulator({ homeDir: homeDir });
     await createAndroidAvdHome({ homeDir: homeDir });
     const answers = await loadAndroidProbeAnswers();

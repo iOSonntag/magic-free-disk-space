@@ -36,10 +36,6 @@ export async function loadRustupToolchainFindings(params: {
     pins: params.projectPins,
     incompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
   });
-  const activity = decideUnitActivity({
-    facts: { kind: 'rustup' },
-    processCommands: params.run.processCommands,
-  });
   const findings = decideRustupToolchainOffers({
     state: state.value,
     toolPins: toolPins.value,
@@ -61,7 +57,10 @@ export async function loadRustupToolchainFindings(params: {
         ...searchEvidenceLines,
       ],
       displayPath: toolchain.toolchainPath,
-      activity: activity,
+      activity: decideUnitActivity({
+        facts: { kind: 'rustup', toolchainPath: toolchain.toolchainPath },
+        processCommands: params.run.processCommands,
+      }),
     };
 
     return finding;

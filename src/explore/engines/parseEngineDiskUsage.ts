@@ -9,8 +9,6 @@ import type {
 
 export type EngineImageRecord = {
   id: EngineImageId;
-  /** The image this one was built on, `''` for none. */
-  parentId: string;
   /** Its `repository:tag` names, without the `<none>:<none>` placeholder. */
   tags: string[];
   /** Its `repository@digest` names, without the `<none>@<none>` placeholder. */
@@ -41,8 +39,6 @@ export type EngineVolumeRecord = {
 
 export type EngineBuildRecord = {
   id: EngineBuildRecordId;
-  /** Such as `regular`, `exec.cachemount` or `internal`. */
-  recordType: string;
   isInUse: boolean;
   /** Shared with an image, so its removal frees nothing of the disk. */
   isShared: boolean;
@@ -151,7 +147,6 @@ function parseImageRecord(value: unknown): EngineImageRecord | null {
   }
 
   const id = value.Id;
-  const parentId = value.ParentId;
   const tags = parseNameList({ value: value.RepoTags, placeholder: NO_TAG });
   const digests = parseNameList({ value: value.RepoDigests, placeholder: NO_DIGEST });
   const sizeBytes = parseCount({ value: value.Size });
@@ -162,23 +157,22 @@ function parseImageRecord(value: unknown): EngineImageRecord | null {
     return null;
   }
 
-  if (typeof parentId !== 'string' || tags === null || digests === null || sizeBytes === null) {
+  if (tags === null || digests === null || sizeBytes === null) {
     return null;
   }
 
-  if (sharedSizeBytes === undefined || containerCount === undefined) {
+  if (sharedSizeBytes.kind === 'invalid' || containerCount.kind === 'invalid') {
     return null;
   }
 
   return {
     // The brand records the pattern check above, which the compiler cannot follow.
     id: id as EngineImageId,
-    parentId: parentId,
     tags: tags,
     digests: digests,
     uniqueSizeBytes:
-      sharedSizeBytes === null ? sizeBytes : Math.max(sizeBytes - sharedSizeBytes, 0),
-    containerCount: containerCount,
+      sharedSizeBytes.kind === 'unset' ? sizeBytes : Math.max(sizeBytes - sharedSizeBytes.count, 0),
+    containerCount: containerCount.kind === 'unset' ? null : containerCount.count,
   };
 }
 
@@ -241,15 +235,15 @@ function parseVolumeRecord(value: unknown): EngineVolumeRecord | null {
   const sizeBytes = parseCountOrUnset({ value: value.UsageData.Size });
   const referenceCount = parseCountOrUnset({ value: value.UsageData.RefCount });
 
-  if (sizeBytes === undefined || referenceCount === undefined) {
+  if (sizeBytes.kind === 'invalid' || referenceCount.kind === 'invalid') {
     return null;
   }
 
   return {
     // The brand records the pattern check above, which the compiler cannot follow.
     name: name as EngineVolumeName,
-    sizeBytes: sizeBytes,
-    referenceCount: referenceCount,
+    sizeBytes: sizeBytes.kind === 'unset' ? null : sizeBytes.count,
+    referenceCount: referenceCount.kind === 'unset' ? null : referenceCount.count,
   };
 }
 
@@ -259,7 +253,6 @@ function parseBuildRecord(value: unknown): EngineBuildRecord | null {
   }
 
   const id = value.ID;
-  const recordType = value.Type;
   const isInUse = value.InUse;
   const isShared = value.Shared;
   const sizeBytes = parseCount({ value: value.Size });
@@ -273,18 +266,17 @@ function parseBuildRecord(value: unknown): EngineBuildRecord | null {
     return null;
   }
 
-  if (typeof recordType !== 'string' || typeof isInUse !== 'boolean') {
+  if (typeof isInUse !== 'boolean' || typeof isShared !== 'boolean') {
     return null;
   }
 
-  if (typeof isShared !== 'boolean' || sizeBytes === null || lastUsedAtMs === null) {
+  if (sizeBytes === null || lastUsedAtMs === null) {
     return null;
   }
 
   return {
     // The brand records the pattern check above, which the compiler cannot follow.
     id: id as EngineBuildRecordId,
-    recordType: recordType,
     isInUse: isInUse,
     isShared: isShared,
     sizeBytes: sizeBytes,
@@ -329,13 +321,24 @@ function parseCount(params: { value: unknown }): number | null {
   return params.value;
 }
 
-/** A count, `null` for the engine's `-1` of "not counted", `undefined` for anything else. */
-function parseCountOrUnset(params: { value: unknown }): number | null | undefined {
+type EngineCountCounted = { kind: 'counted'; count: number };
+
+/** The engine's `-1` of "not counted". */
+type EngineCountUnset = { kind: 'unset' };
+
+type EngineCountInvalid = { kind: 'invalid' };
+
+/** A count the engine may leave uncounted. */
+type EngineCount = EngineCountCounted | EngineCountUnset | EngineCountInvalid;
+
+function parseCountOrUnset(params: { value: unknown }): EngineCount {
   if (params.value === -1) {
-    return null;
+    return { kind: 'unset' };
   }
 
-  return parseCount({ value: params.value }) ?? undefined;
+  const count = parseCount({ value: params.value });
+
+  return count === null ? { kind: 'invalid' } : { kind: 'counted', count: count };
 }
 
 function parseTimestampMs(params: { value: unknown }): number | null {

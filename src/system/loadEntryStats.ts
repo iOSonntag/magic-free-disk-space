@@ -9,11 +9,18 @@ export type EntryStats = {
   kind: FileKind;
   dev: bigint;
   ino: bigint;
-  /** Blocks on disk times 512, which is what a removal can free, unlike the apparent size. */
+  /**
+   * Blocks on disk times 512, which is what a removal can free, unlike the apparent size; 0 for a
+   * file whose content only the cloud holds.
+   */
   allocatedBytes: number;
   /** How many names the entry's inode has, from `nlink`; a folder's count means something else. */
   linkCount: number;
   modifiedMs: number;
+  /** The last read of its content, as the volume records it. */
+  accessedMs: number;
+  /** When the entry was created on this volume. */
+  bornMs: number;
 };
 
 export type EntryStatsResult = Result<EntryStats, FileFailure>;
@@ -32,6 +39,8 @@ export async function loadEntryStats(params: { path: string }): Promise<EntrySta
         allocatedBytes: Number(stats.blocks * 512n),
         linkCount: Number(stats.nlink),
         modifiedMs: Number(stats.mtimeMs),
+        accessedMs: Number(stats.atimeMs),
+        bornMs: Number(stats.birthtimeMs),
       },
     };
   } catch (error) {

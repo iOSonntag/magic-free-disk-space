@@ -1,26 +1,66 @@
-import { expect, test } from 'bun:test';
-import { mkdir, utimes, writeFile } from 'node:fs/promises';
+import { describe, expect, test } from 'bun:test';
 import { dirname, join } from 'node:path';
+import type { Risk } from '../../src/catalog/catalog.js';
 import type {
   ExploreProbeToolResult,
   ExploreProbeToolRun,
 } from '../../src/explore/exploreProbe.js';
-import type { ExploreFinding } from '../../src/explore/exploreUnit.js';
+import type { ExploreFinding, UnitActivity } from '../../src/explore/exploreUnit.js';
+import {
+  isEvictableFile,
+  isEvictFileUnchanged,
+} from '../../src/explore/icloudDownloads/decideEvictFile.js';
 import { loadIcloudDownloadFindings } from '../../src/explore/icloudDownloads/loadIcloudDownloadFindings.js';
+import type { EntryStats } from '../../src/system/loadEntryStats.js';
+import type { FileIdentity } from '../../src/system/loadFileIdentity.js';
+import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
+  createFixtureDirectory,
+  createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import {
+  buildTestProbeRun,
+  DAY_MS,
+  findUnitOfKind,
+  getProbeFindings,
+} from '../support/probeRunFixtures.js';
 
-const DAY_MS = 86_400_000;
-const NOW_MS = Date.now();
+// Whole seconds, which the fixture's times keep exactly.
+const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 const CUTOFF_MS = NOW_MS - 30 * DAY_MS;
 const OLD_MS = NOW_MS - 90 * DAY_MS;
+const FILE_SIZE_BYTES = 8192;
+
+/** The probe reads the disk only; the tool is the one an evict runs later. */
+const BRCTL_TOOL: LocatedTool = { name: 'brctl', path: '/usr/bin/brctl' };
+
+/** A downloaded file, last changed and read long before the cutoff. */
+const VALUE_STATS: EntryStats = {
+  kind: 'file',
+  dev: 1n,
+  ino: 2n,
+  allocatedBytes: FILE_SIZE_BYTES,
+  linkCount: 1,
+  modifiedMs: OLD_MS,
+  accessedMs: OLD_MS,
+  bornMs: OLD_MS,
+};
+
+/** The identity the evict read of the file of `VALUE_STATS`. */
+const VALUE_IDENTITY: FileIdentity = {
+  dev: 1n,
+  ino: 2n,
+  birthtimeNs: BigInt(OLD_MS) * 1_000_000n,
+  kind: 'file',
+  realPath: '/Users/example/Library/Mobile Documents/com~apple~CloudDocs/old.txt',
+};
 
 async function withFixtureRoot(params: {
   run: (fixtureRoot: FixtureRoot) => Promise<void>;
@@ -38,15 +78,20 @@ function getMobileDocumentsPath(params: { fixtureRoot: FixtureRoot }): string {
   return join(params.fixtureRoot.homeDir, 'Library', 'Mobile Documents');
 }
 
-async function createTimedFile(params: {
+/** Writes a file with its missing folders, changed and read at the given times, by default long ago. */
+async function createIcloudFile(params: {
   path: string;
-  sizeBytes: number;
-  modifiedMs: number;
-  accessedMs: number;
+  sizeBytes?: number;
+  modifiedMs?: number;
+  accessedMs?: number;
 }): Promise<void> {
-  await mkdir(dirname(params.path), { recursive: true });
-  await writeFile(params.path, Buffer.alloc(params.sizeBytes, 1));
-  await utimes(params.path, new Date(params.accessedMs), new Date(params.modifiedMs));
+  await createFixtureDirectory({ path: dirname(params.path) });
+  await createFixtureFile({
+    path: params.path,
+    sizeBytes: params.sizeBytes ?? FILE_SIZE_BYTES,
+    modifiedMs: params.modifiedMs ?? OLD_MS,
+    accessedMs: params.accessedMs ?? OLD_MS,
+  });
 }
 
 /** A run over the fixture home; the folders at `evictedPaths` hold only what the cloud holds. */
@@ -59,32 +104,31 @@ async function buildRun(params: {
   const evictedPaths = params.evictedPaths ?? [];
 
   return {
-    environment: await loadTestEnvironment({ fixtureRoot: params.fixtureRoot, nowMs: NOW_MS }),
-    platform: {
-      ...platform,
-      explore: {
-        ...platform.explore,
-        icloudDriveRoot: params.hasIcloudDrive === false ? null : platform.explore.icloudDriveRoot,
+    ...buildTestProbeRun({
+      environment: await loadTestEnvironment({ fixtureRoot: params.fixtureRoot, nowMs: NOW_MS }),
+      platform: {
+        ...platform,
+        explore: {
+          ...platform.explore,
+          icloudDriveRoot:
+            params.hasIcloudDrive === false ? null : platform.explore.icloudDriveRoot,
+        },
+        entryReads: {
+          isEntryEvicted: (entry) =>
+            evictedPaths.includes(entry.path) || platform.entryReads.isEntryEvicted(entry),
+          loadPrivateBytes: platform.entryReads.loadPrivateBytes,
+        },
       },
-      entryReads: {
-        isEntryEvicted: (entry) =>
-          evictedPaths.includes(entry.path) || platform.entryReads.isEntryEvicted(entry),
-        loadPrivateBytes: platform.entryReads.loadPrivateBytes,
-      },
-    },
-    processCommands: [],
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: CUTOFF_MS,
-    staleCutoffMs: CUTOFF_MS,
-    // The probe reads the disk only; the tool is the one an evict runs later.
-    tool: { name: 'brctl', path: '/usr/bin/brctl' },
+      cutoffMs: CUTOFF_MS,
+    }),
+    tool: BRCTL_TOOL,
   };
 }
 
 type FindingSummary = {
   title: string;
-  risk: string;
-  activity: string;
+  risk: Risk;
+  activity: UnitActivity;
   folderPath: string | null;
   filePaths: string[];
 };
@@ -105,53 +149,88 @@ function summarizeFindings(findings: ExploreFinding[]): FindingSummary[] {
     .toSorted((left, right) => left.title.localeCompare(right.title));
 }
 
+describe('isEvictableFile', () => {
+  test('takes a downloaded file untouched before the cutoff, and nothing else', () => {
+    const cases: EntryStats[] = [
+      VALUE_STATS,
+      // Changed at the cutoff itself.
+      { ...VALUE_STATS, modifiedMs: CUTOFF_MS },
+      { ...VALUE_STATS, accessedMs: NOW_MS },
+      // Only the cloud holds its content.
+      { ...VALUE_STATS, allocatedBytes: 0 },
+      { ...VALUE_STATS, kind: 'symbolicLink' },
+    ];
+
+    expect(cases.map((times) => isEvictableFile({ times: times, cutoffMs: CUTOFF_MS }))).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+});
+
+describe('isEvictFileUnchanged', () => {
+  test('holds only for the same file, still downloaded, with the times the scan read', () => {
+    const cases: EntryStats[] = [
+      VALUE_STATS,
+      { ...VALUE_STATS, dev: 9n },
+      { ...VALUE_STATS, ino: 9n },
+      // A file born later that took the inode number of the deleted one.
+      { ...VALUE_STATS, bornMs: OLD_MS + 1000 },
+      { ...VALUE_STATS, allocatedBytes: 0 },
+      { ...VALUE_STATS, modifiedMs: OLD_MS + 1 },
+      { ...VALUE_STATS, accessedMs: OLD_MS + 1 },
+      { ...VALUE_STATS, kind: 'symbolicLink' },
+    ];
+
+    expect(
+      cases.map((times) =>
+        isEvictFileUnchanged({
+          times: times,
+          identity: VALUE_IDENTITY,
+          modifiedMs: OLD_MS,
+          accessedMs: OLD_MS,
+        }),
+      ),
+    ).toEqual([true, false, false, false, false, false, false, false]);
+  });
+});
+
 describeAwaitingWin32Platform('the iCloud Drive probe', () => {
   test('finds downloaded files untouched since the cutoff, one unit per folder', async () => {
     await withFixtureRoot({
       run: async (fixtureRoot) => {
         const root = getMobileDocumentsPath({ fixtureRoot: fixtureRoot });
         const cloudDocs = join(root, 'com~apple~CloudDocs');
-        const oldFile = { sizeBytes: 8192, modifiedMs: OLD_MS, accessedMs: OLD_MS };
 
-        await createTimedFile({ path: join(cloudDocs, 'Projects', 'old.txt'), ...oldFile });
-        await createTimedFile({
-          path: join(cloudDocs, 'Projects', 'Deep', 'older.txt'),
-          ...oldFile,
-        });
-        await createTimedFile({
+        await createIcloudFile({ path: join(cloudDocs, 'Projects', 'old.txt') });
+        await createIcloudFile({ path: join(cloudDocs, 'Projects', 'Deep', 'older.txt') });
+        await createIcloudFile({
           path: join(cloudDocs, 'Projects', 'changed.txt'),
-          sizeBytes: 8192,
           modifiedMs: NOW_MS,
-          accessedMs: OLD_MS,
         });
-        await createTimedFile({
+        await createIcloudFile({
           path: join(cloudDocs, 'Projects', 'read.txt'),
-          sizeBytes: 8192,
-          modifiedMs: OLD_MS,
           accessedMs: NOW_MS,
         });
-        await createTimedFile({ path: join(cloudDocs, 'Projects', '.hidden'), ...oldFile });
-        await createTimedFile({ path: join(cloudDocs, '.Trash', 'gone.txt'), ...oldFile });
-        await createTimedFile({ path: join(cloudDocs, 'loose.pdf'), ...oldFile });
-        await createTimedFile({
-          path: join(root, 'iCloud~md~obsidian', 'Documents', 'note.md'),
-          ...oldFile,
-        });
+        await createIcloudFile({ path: join(cloudDocs, 'Projects', '.hidden') });
+        await createIcloudFile({ path: join(cloudDocs, '.Trash', 'gone.txt') });
+        await createIcloudFile({ path: join(cloudDocs, 'loose.pdf') });
+        await createIcloudFile({ path: join(root, 'iCloud~md~obsidian', 'Documents', 'note.md') });
         // Nothing of it is on this disk: an empty file has no blocks, as an evicted one.
-        await createTimedFile({
+        await createIcloudFile({
           path: join(root, 'iCloud~com~example~app', 'evicted.bin'),
           sizeBytes: 0,
-          modifiedMs: OLD_MS,
-          accessedMs: OLD_MS,
         });
 
-        const result = await loadIcloudDownloadFindings(
-          await buildRun({ fixtureRoot: fixtureRoot }),
+        const probed = getProbeFindings(
+          await loadIcloudDownloadFindings(await buildRun({ fixtureRoot: fixtureRoot })),
         );
 
-        expect(result.kind).toBe('succeeded');
-        expect(result.kind === 'succeeded' && result.value.isComplete).toBe(true);
-        expect(result.kind === 'succeeded' && summarizeFindings(result.value.findings)).toEqual([
+        expect(probed.isComplete).toBe(true);
+        expect(summarizeFindings(probed.findings)).toEqual([
           {
             title: 'Downloaded iCloud Drive files in iCloud Drive',
             risk: 'review',
@@ -192,29 +271,23 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
         );
         const accessedMs = OLD_MS + DAY_MS;
 
-        await createTimedFile({
-          path: filePath,
-          sizeBytes: 8192,
-          modifiedMs: OLD_MS,
-          accessedMs: accessedMs,
+        await createIcloudFile({ path: filePath, accessedMs: accessedMs });
+
+        const unit = findUnitOfKind({
+          findings: getProbeFindings(
+            await loadIcloudDownloadFindings(await buildRun({ fixtureRoot: fixtureRoot })),
+          ),
+          kind: 'icloudFolder',
         });
 
-        const result = await loadIcloudDownloadFindings(
-          await buildRun({ fixtureRoot: fixtureRoot }),
-        );
-        const unit = result.kind === 'succeeded' ? result.value.findings[0]?.unit : undefined;
-
-        expect(unit?.kind === 'icloudFolder' && unit.foundFiles).toEqual([
+        expect(unit.foundFiles).toEqual([
           {
             path: buildTestAbsolutePath({ text: filePath }),
             modifiedMs: OLD_MS,
             accessedMs: accessedMs,
           },
         ]);
-        expect(unit?.kind === 'icloudFolder' && unit.tool).toEqual({
-          name: 'brctl',
-          path: '/usr/bin/brctl',
-        });
+        expect(unit.tool).toEqual(BRCTL_TOOL);
       },
     });
   });
@@ -222,23 +295,23 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
   test('never reads a folder whose content only the cloud holds', async () => {
     await withFixtureRoot({
       run: async (fixtureRoot) => {
-        const root = getMobileDocumentsPath({ fixtureRoot: fixtureRoot });
-        const cloudDocs = join(root, 'com~apple~CloudDocs');
-        const oldFile = { sizeBytes: 8192, modifiedMs: OLD_MS, accessedMs: OLD_MS };
-
-        await createTimedFile({
-          path: join(cloudDocs, 'Projects', 'Archive', 'a.txt'),
-          ...oldFile,
-        });
-        await createTimedFile({ path: join(cloudDocs, 'Projects', 'kept.txt'), ...oldFile });
-        await createTimedFile({ path: join(cloudDocs, 'Photos', 'b.jpg'), ...oldFile });
-
-        const evictedPaths = [join(cloudDocs, 'Projects', 'Archive'), join(cloudDocs, 'Photos')];
-        const result = await loadIcloudDownloadFindings(
-          await buildRun({ fixtureRoot: fixtureRoot, evictedPaths: evictedPaths }),
+        const cloudDocs = join(
+          getMobileDocumentsPath({ fixtureRoot: fixtureRoot }),
+          'com~apple~CloudDocs',
         );
 
-        expect(result.kind === 'succeeded' && summarizeFindings(result.value.findings)).toEqual([
+        await createIcloudFile({ path: join(cloudDocs, 'Projects', 'Archive', 'a.txt') });
+        await createIcloudFile({ path: join(cloudDocs, 'Projects', 'kept.txt') });
+        await createIcloudFile({ path: join(cloudDocs, 'Photos', 'b.jpg') });
+
+        const evictedPaths = [join(cloudDocs, 'Projects', 'Archive'), join(cloudDocs, 'Photos')];
+        const probed = getProbeFindings(
+          await loadIcloudDownloadFindings(
+            await buildRun({ fixtureRoot: fixtureRoot, evictedPaths: evictedPaths }),
+          ),
+        );
+
+        expect(summarizeFindings(probed.findings)).toEqual([
           {
             title: 'Downloaded iCloud Drive files in Projects',
             risk: 'review',
@@ -247,15 +320,11 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
             filePaths: [join(cloudDocs, 'Projects', 'kept.txt')],
           },
         ]);
-
-        const allEvicted = await loadIcloudDownloadFindings(
-          await buildRun({ fixtureRoot: fixtureRoot, evictedPaths: [cloudDocs] }),
-        );
-
-        expect(allEvicted).toEqual({
-          kind: 'succeeded',
-          value: { findings: [], isComplete: true },
-        });
+        expect(
+          await loadIcloudDownloadFindings(
+            await buildRun({ fixtureRoot: fixtureRoot, evictedPaths: [cloudDocs] }),
+          ),
+        ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
       },
     });
   });
@@ -272,7 +341,9 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
           await loadIcloudDownloadFindings(await buildRun({ fixtureRoot: fixtureRoot })),
         ).toEqual(missing);
 
-        await mkdir(getMobileDocumentsPath({ fixtureRoot: fixtureRoot }), { recursive: true });
+        await createFixtureDirectory({
+          path: getMobileDocumentsPath({ fixtureRoot: fixtureRoot }),
+        });
 
         expect(
           await loadIcloudDownloadFindings(

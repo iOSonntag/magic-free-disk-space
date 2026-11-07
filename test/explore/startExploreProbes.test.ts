@@ -117,8 +117,13 @@ function buildMarkerPrelude(params: { name: string }): string {
   return `fs.writeFileSync(${JSON.stringify(buildMarkerPath({ name: params.name }))}, '');`;
 }
 
-/** The start of a probe with no tool, no process, and nothing pinned, within `TIMEOUT_MS`. */
-function buildProbeStart(): Parameters<typeof runExploreProbe>[0]['start'] {
+type ProbeStart = Parameters<typeof runExploreProbe>[0]['start'];
+
+/**
+ * The start of the probes over the fixture home with an active Xcode, within `TIMEOUT_MS`, and
+ * unless `params` says otherwise, with no tool, no process, and nothing pinned.
+ */
+function buildProbeStart(params: Partial<ProbeStart>): ProbeStart {
   return {
     environment: environment,
     platform: buildTestProbePlatform(),
@@ -129,6 +134,7 @@ function buildProbeStart(): Parameters<typeof runExploreProbe>[0]['start'] {
     timeoutMs: TIMEOUT_MS,
     unusedCutoffMs: UNUSED_CUTOFF_MS,
     staleCutoffMs: 0,
+    ...params,
   };
 }
 
@@ -136,17 +142,9 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
   test('finds the units of every tool with the activity of each, all judged', async () => {
     const tools = await createWorkingTools();
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations(tools),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({ toolInstallLocations: buildFixtureToolLocations(tools) }),
+    );
 
     const simulatorDevices = await probes.simulatorDevices;
     const dartPubCache = await probes.dartPubCache;
@@ -177,17 +175,12 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
   test('leaves simulator devices unknown, but Dart and mise idle, when ps failed', async () => {
     const tools = await createWorkingTools();
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations(tools),
-      processCommands: Promise.resolve(null),
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({
+        toolInstallLocations: buildFixtureToolLocations(tools),
+        processCommands: Promise.resolve(null),
+      }),
+    );
 
     const outcomes = [
       await probes.simulatorDevices,
@@ -205,17 +198,12 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
     const tools = await createWorkingTools();
     const processCommands = Promise.withResolvers<string[] | null>();
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations(tools),
-      processCommands: processCommands.promise,
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({
+        toolInstallLocations: buildFixtureToolLocations(tools),
+        processCommands: processCommands.promise,
+      }),
+    );
 
     await Bun.sleep(HELD_WAIT_MS);
 
@@ -234,17 +222,12 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
   test('answers toolMissing for the simulators without an active Xcode and runs no xcrun', async () => {
     const tools = await createWorkingTools();
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations(tools),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(null),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({
+        toolInstallLocations: buildFixtureToolLocations(tools),
+        activeXcodeBundlePath: Promise.resolve(null),
+      }),
+    );
 
     expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
     expect(await probes.simulatorRuntimes).toEqual({ kind: 'toolMissing' });
@@ -266,17 +249,9 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       ],
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({ toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }) }),
+    );
 
     expect(await probes.simulatorDevices).toEqual({
       kind: 'failed',
@@ -295,17 +270,9 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       answers: [{ command: 'miseVersions', stdoutText: 'garbage', exitCode: 0 }],
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({ toolInstallLocations: buildFixtureToolLocations({ mise: mise }) }),
+    );
 
     const outcome = await probes.miseVersions;
 
@@ -320,17 +287,9 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       mode: 0o775,
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ dart: dart }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({ toolInstallLocations: buildFixtureToolLocations({ dart: dart }) }),
+    );
 
     expect(await probes.dartPubCache).toEqual({
       kind: 'toolUntrusted',
@@ -339,19 +298,13 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
   });
 
   test('answers toolMissing for a tool at none of its locations', async () => {
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({
-        xcrun: join(fixtureRoot.rootDir, 'absent', 'xcrun'),
+    const probes = startExploreProbes(
+      buildProbeStart({
+        toolInstallLocations: buildFixtureToolLocations({
+          xcrun: join(fixtureRoot.rootDir, 'absent', 'xcrun'),
+        }),
       }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    );
 
     expect(await probes.simulatorDevices).toEqual({ kind: 'toolMissing' });
     expect(await probes.dartPubCache).toEqual({ kind: 'toolMissing' });
@@ -364,17 +317,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
   test('answers timedOut for a files probe still reading at its deadline', async () => {
     const outcome = await runExploreProbe({
       probe: { kind: 'files', loadFindings: () => new Promise(() => {}) },
-      start: {
-        environment: environment,
-        platform: buildTestProbePlatform(),
-        toolInstallLocations: buildFixtureToolLocations({}),
-        processCommands: Promise.resolve([]),
-        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-        projectPins: buildEmptyProjectPinsLoad(),
-        timeoutMs: 50,
-        unusedCutoffMs: UNUSED_CUTOFF_MS,
-        staleCutoffMs: 0,
-      },
+      start: buildProbeStart({ timeoutMs: 50 }),
     });
 
     expect(outcome).toEqual({ kind: 'timedOut' });
@@ -398,7 +341,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
             failure: { kind: 'answerFailed', socketPath: socketPath, failure: failure },
           }),
       },
-      start: buildProbeStart(),
+      start: buildProbeStart({}),
     });
 
     expect(outcome).toEqual({ kind: 'engineFailed', socketPath: socketPath, failure: failure });
@@ -415,7 +358,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
             kind: 'engine',
             loadFindings: () => Promise.resolve({ kind: 'failed', failure: failure }),
           },
-          start: buildProbeStart(),
+          start: buildProbeStart({}),
         }),
       ),
     );
@@ -430,7 +373,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
         loadFindings: () =>
           Promise.resolve({ kind: 'failed', failure: { reason: 'placeMissing' } }),
       },
-      start: buildProbeStart(),
+      start: buildProbeStart({}),
     });
 
     expect(outcome).toEqual({ kind: 'toolMissing' });
@@ -459,20 +402,13 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
           };
         },
       },
-      start: {
-        environment: environment,
-        platform: buildTestProbePlatform(),
-        toolInstallLocations: buildFixtureToolLocations({}),
-        processCommands: Promise.resolve([]),
-        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      start: buildProbeStart({
         projectPins: {
           walkEnded: walkEnded,
           pins: walkEnded.then(() => ({ kind: 'succeeded', value: pinnedProjectPins })),
         },
         timeoutMs: timeoutMs,
-        unusedCutoffMs: UNUSED_CUTOFF_MS,
-        staleCutoffMs: 0,
-      },
+      }),
     });
 
     expect(outcome).toEqual({ kind: 'probed', findings: [], isComplete: true });
@@ -491,12 +427,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
           return { kind: 'files', loadFindings: () => new Promise(() => {}) };
         },
       },
-      start: {
-        environment: environment,
-        platform: buildTestProbePlatform(),
-        toolInstallLocations: buildFixtureToolLocations({}),
-        processCommands: Promise.resolve([]),
-        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      start: buildProbeStart({
         projectPins: buildSettledProjectPinsLoad({
           pins: {
             kind: 'failed',
@@ -507,10 +438,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
             },
           },
         }),
-        timeoutMs: TIMEOUT_MS,
-        unusedCutoffMs: UNUSED_CUTOFF_MS,
-        staleCutoffMs: 0,
-      },
+      }),
     });
 
     expect(outcome).toEqual({
@@ -531,17 +459,10 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
             Promise.resolve({ kind: 'succeeded', value: { findings: [], isComplete: true } }),
         }),
       },
-      start: {
-        environment: environment,
-        platform: buildTestProbePlatform(),
-        toolInstallLocations: buildFixtureToolLocations({}),
-        processCommands: Promise.resolve([]),
-        activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
+      start: buildProbeStart({
         projectPins: { walkEnded: Promise.resolve(), pins: new Promise(() => {}) },
         timeoutMs: 50,
-        unusedCutoffMs: UNUSED_CUTOFF_MS,
-        staleCutoffMs: 0,
-      },
+      }),
     });
 
     expect(outcome).toEqual({ kind: 'timedOut' });
@@ -555,17 +476,12 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       prelude: 'await Bun.sleep(5_000);',
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(ACTIVE_XCODE_BUNDLE_PATH),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: 100,
-      unusedCutoffMs: UNUSED_CUTOFF_MS,
-      staleCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildProbeStart({
+        toolInstallLocations: buildFixtureToolLocations({ mise: mise }),
+        timeoutMs: 100,
+      }),
+    );
 
     expect(await probes.miseVersions).toEqual({
       kind: 'failed',

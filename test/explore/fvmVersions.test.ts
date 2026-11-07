@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { mkdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExplorePathUnitFvmVersion } from '../../src/explore/exploreUnit.js';
+import { compareFvmVersionUnit } from '../../src/explore/fvmVersions/compareFvmVersionUnit.js';
+import type { FvmState } from '../../src/explore/fvmVersions/loadFvmState.js';
 import { loadFvmVersionFindings } from '../../src/explore/fvmVersions/loadFvmVersionFindings.js';
 import { parseFvmrcPins } from '../../src/explore/fvmVersions/parseFvmrcPins.js';
 import { recheckFvmVersionUnit } from '../../src/explore/fvmVersions/recheckFvmVersionUnit.js';
@@ -11,18 +11,25 @@ import type {
   ProjectPinFile,
   ProjectPinFileText,
 } from '../../src/explore/projectPins/projectPins.js';
+import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import type { FixtureRoot } from '../support/fixtureRoot.js';
-import {
-  createFixtureRoot,
-  deleteFixtureRoot,
-  loadTestEnvironment,
-  writeFixtureTextFile,
-} from '../support/fixtureRoot.js';
+import { writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import type { FixtureHome } from '../support/probeRunFixtures.js';
+import {
+  buildTestProbeRun,
+  getProbeFindings,
+  listUnitsOfKind,
+  withFixtureHome,
+} from '../support/probeRunFixtures.js';
 import { buildTestPinFileText, buildTestProjectPins } from './projectPinsFixtures.js';
+
+const VALUE_VERSIONS_PATH = '/Users/example/fvm/versions';
+
+const UNPINNED: ToolPins = { kind: 'texts', files: [] };
 
 function buildFvmrcText(params: { text: string }): ProjectPinFileText {
   return {
@@ -53,122 +60,192 @@ describeAwaitingWin32Platform('parseFvmrcPins', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadFvmVersionFindings and recheckFvmVersionUnit', () => {
-  let fixtureRoot: FixtureRoot;
-  let environment: Environment;
+describeAwaitingWin32Platform('compareFvmVersionUnit', () => {
+  const unit: ExplorePathUnitFvmVersion = {
+    kind: 'fvmVersion',
+    version: '3.10.0',
+    folderPath: buildTestAbsolutePath({ text: `${VALUE_VERSIONS_PATH}/3.10.0` }),
+    pinFiles: [],
+  };
 
-  beforeEach(async () => {
-    fixtureRoot = await createFixtureRoot();
-    environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  });
-
-  afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  });
-
-  function buildVersionsPath(): string {
-    return join(fixtureRoot.homeDir, 'fvm', 'versions');
+  function buildValueState(params: {
+    folderPath: AbsolutePath;
+    globalVersion: string | null;
+  }): FvmState {
+    return {
+      versions: [{ version: unit.version, folderPath: params.folderPath }],
+      globalVersion: params.globalVersion,
+      hasUnjudgedFolder: false,
+    };
   }
 
-  async function writeFvmVersion(version: string): Promise<void> {
+  test('is unchanged while the version is still offered at its folder and idle', () => {
+    expect(
+      compareFvmVersionUnit({
+        unit: unit,
+        state: buildValueState({ folderPath: unit.folderPath, globalVersion: '3.22.0' }),
+        toolPins: UNPINNED,
+        processCommands: [],
+      }),
+    ).toEqual({ kind: 'unchanged' });
+  });
+
+  test('is changed once the version is global, lies in another folder, or is pinned', () => {
+    const cases: { state: FvmState; toolPins: ToolPins }[] = [
+      {
+        state: buildValueState({ folderPath: unit.folderPath, globalVersion: '3.10.0' }),
+        toolPins: UNPINNED,
+      },
+      {
+        state: buildValueState({
+          folderPath: buildTestAbsolutePath({ text: '/opt/example/fvm/3.10.0' }),
+          globalVersion: null,
+        }),
+        toolPins: UNPINNED,
+      },
+      {
+        state: buildValueState({ folderPath: unit.folderPath, globalVersion: null }),
+        toolPins: { kind: 'texts', files: [buildFvmrcText({ text: '{"flutter": "3.10.0"}' })] },
+      },
+      {
+        state: buildValueState({ folderPath: unit.folderPath, globalVersion: null }),
+        toolPins: { kind: 'everyVersionPinned' },
+      },
+    ];
+
+    for (const entry of cases) {
+      expect(
+        compareFvmVersionUnit({
+          unit: unit,
+          state: entry.state,
+          toolPins: entry.toolPins,
+          processCommands: [],
+        }),
+      ).toEqual({ kind: 'changed' });
+    }
+  });
+
+  test('is busy while a process runs from its folder, or the processes are unknown', () => {
+    for (const processCommands of [[`${unit.folderPath}/bin/cache/dart-sdk/bin/dart run`], null]) {
+      expect(
+        compareFvmVersionUnit({
+          unit: unit,
+          state: buildValueState({ folderPath: unit.folderPath, globalVersion: null }),
+          toolPins: UNPINNED,
+          processCommands: processCommands,
+        }),
+      ).toEqual({ kind: 'busy' });
+    }
+  });
+});
+
+describeAwaitingWin32Platform('loadFvmVersionFindings and recheckFvmVersionUnit', () => {
+  function buildVersionsPath(home: FixtureHome): string {
+    return join(home.fixtureRoot.homeDir, 'fvm', 'versions');
+  }
+
+  async function writeFvmVersion(params: { home: FixtureHome; version: string }): Promise<void> {
     await writeFixtureTextFile({
-      path: join(buildVersionsPath(), version, 'bin', 'flutter'),
+      path: join(buildVersionsPath(params.home), params.version, 'bin', 'flutter'),
       text: '#!/bin/sh\n',
     });
   }
 
-  function buildRun(): ExploreProbeRun {
-    return {
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      processCommands: [],
-      deadlineMs: Date.now() + 10_000,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-    };
-  }
-
-  function buildFvmrc(text: string): ProjectPinFile {
+  function buildFvmrc(params: { home: FixtureHome; text: string }): ProjectPinFile {
     return buildTestPinFileText({
-      path: join(fixtureRoot.homeDir, 'code', 'app', '.fvmrc'),
+      path: join(params.home.fixtureRoot.homeDir, 'code', 'app', '.fvmrc'),
       kind: 'fvmrc',
-      text: text,
+      text: params.text,
     });
   }
 
   testOnPosix('offers the versions neither global nor pinned, complete without forks', async () => {
-    for (const version of ['3.10.0', '3.19.6', '3.22.0']) {
-      await writeFvmVersion(version);
-    }
-    await symlink(join(buildVersionsPath(), '3.22.0'), join(fixtureRoot.homeDir, 'fvm', 'default'));
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        for (const version of ['3.10.0', '3.19.6', '3.22.0']) {
+          await writeFvmVersion({ home: home, version: version });
+        }
+        await symlink(
+          join(buildVersionsPath(home), '3.22.0'),
+          join(home.fixtureRoot.homeDir, 'fvm', 'default'),
+        );
 
-    const result = await loadFvmVersionFindings({
-      run: buildRun(),
-      projectPins: buildTestProjectPins({ files: [buildFvmrc('{"flutter": "3.19.6"}')] }),
-    });
-
-    if (result.kind === 'failed') {
-      throw new Error('The FVM probe failed.');
-    }
-
-    expect(result.value.isComplete).toBe(true);
-    expect(result.value.findings.map((finding) => finding.unit)).toEqual([
-      {
-        kind: 'fvmVersion',
-        version: '3.10.0',
-        folderPath: buildTestAbsolutePath({ text: join(buildVersionsPath(), '3.10.0') }),
-        pinFiles: [
-          {
-            path: buildTestAbsolutePath({
-              text: join(fixtureRoot.homeDir, 'code', 'app', '.fvmrc'),
+        const findings = getProbeFindings(
+          await loadFvmVersionFindings({
+            run: buildTestProbeRun({ environment: home.environment }),
+            projectPins: buildTestProjectPins({
+              files: [buildFvmrc({ home: home, text: '{"flutter": "3.19.6"}' })],
             }),
-            kind: 'fvmrc',
+          }),
+        );
+
+        expect(findings.isComplete).toBe(true);
+        expect(listUnitsOfKind({ findings: findings, kind: 'fvmVersion' })).toEqual([
+          {
+            kind: 'fvmVersion',
+            version: '3.10.0',
+            folderPath: buildTestAbsolutePath({ text: join(buildVersionsPath(home), '3.10.0') }),
+            pinFiles: [
+              {
+                path: buildTestAbsolutePath({
+                  text: join(home.fixtureRoot.homeDir, 'code', 'app', '.fvmrc'),
+                }),
+                kind: 'fvmrc',
+              },
+            ],
           },
-        ],
+        ]);
+        expect(findings.findings[0]).toMatchObject({ risk: 'review', activity: 'idle' });
       },
-    ]);
+    });
   });
 
   testOnPosix('offers nothing for an unread pin and is incomplete with a fork folder', async () => {
-    await writeFvmVersion('3.10.0');
-    await mkdir(join(buildVersionsPath(), 'my-fork'), { recursive: true });
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        await writeFvmVersion({ home: home, version: '3.10.0' });
+        await mkdir(join(buildVersionsPath(home), 'my-fork'), { recursive: true });
 
-    expect(
-      await loadFvmVersionFindings({
-        run: buildRun(),
-        projectPins: buildTestProjectPins({ files: [buildFvmrc('not json')] }),
-      }),
-    ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: false } });
+        expect(
+          await loadFvmVersionFindings({
+            run: buildTestProbeRun({ environment: home.environment }),
+            projectPins: buildTestProjectPins({
+              files: [buildFvmrc({ home: home, text: 'not json' })],
+            }),
+          }),
+        ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: false } });
+      },
+    });
   });
 
-  testOnPosix('rechecks unchanged, busy while flutter runs, changed once pinned', async () => {
-    await writeFvmVersion('3.10.0');
-    const pinPath = join(fixtureRoot.homeDir, 'code', 'app', '.fvmrc');
-    await writeFixtureTextFile({ path: pinPath, text: '{"flutter": "3.22.0"}' });
-    const folderPath = join(buildVersionsPath(), '3.10.0');
-    const unit: ExplorePathUnitFvmVersion = {
-      kind: 'fvmVersion',
-      version: '3.10.0',
-      folderPath: buildTestAbsolutePath({ text: folderPath }),
-      pinFiles: [{ path: buildTestAbsolutePath({ text: pinPath }), kind: 'fvmrc' }],
-    };
-    const recheck = {
-      unit: unit,
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      processCommands: [],
-    };
+  testOnPosix('rechecks unchanged, then changed once pinned', async () => {
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        await writeFvmVersion({ home: home, version: '3.10.0' });
+        const pinPath = join(home.fixtureRoot.homeDir, 'code', 'app', '.fvmrc');
+        await writeFixtureTextFile({ path: pinPath, text: '{"flutter": "3.22.0"}' });
+        const unit: ExplorePathUnitFvmVersion = {
+          kind: 'fvmVersion',
+          version: '3.10.0',
+          folderPath: buildTestAbsolutePath({ text: join(buildVersionsPath(home), '3.10.0') }),
+          pinFiles: [{ path: buildTestAbsolutePath({ text: pinPath }), kind: 'fvmrc' }],
+        };
+        const recheck = {
+          unit: unit,
+          environment: home.environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+        };
 
-    expect(await recheckFvmVersionUnit(recheck)).toEqual({ kind: 'unchanged' });
-    expect(
-      await recheckFvmVersionUnit({
-        ...recheck,
-        processCommands: [`${folderPath}/bin/cache/dart-sdk/bin/dart run`],
-      }),
-    ).toEqual({ kind: 'busy' });
+        expect(await recheckFvmVersionUnit(recheck)).toEqual({ kind: 'unchanged' });
 
-    await writeFixtureTextFile({ path: pinPath, text: '{"flutter": "3.10.0"}' });
+        await writeFixtureTextFile({ path: pinPath, text: '{"flutter": "3.10.0"}' });
 
-    expect(await recheckFvmVersionUnit(recheck)).toEqual({ kind: 'changed' });
+        expect(await recheckFvmVersionUnit(recheck)).toEqual({ kind: 'changed' });
+      },
+    });
   });
 });

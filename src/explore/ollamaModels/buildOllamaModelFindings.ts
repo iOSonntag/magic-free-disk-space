@@ -3,6 +3,7 @@ import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
 import type { OllamaModelOffer } from './decideOllamaModelOffers.js';
 import { decideOllamaModelOffers } from './decideOllamaModelOffers.js';
 import type { OllamaModelState } from './loadOllamaModelState.js';
+import type { OllamaModelName } from './parseOllamaModelName.js';
 
 // The hosts of Ollama's own registry in its first layout and in its v2 names, and its namespace.
 const OLLAMA_DEFAULT_HOSTS = ['registry.ollama.ai', 'ollama.com'];
@@ -36,26 +37,25 @@ export function buildOllamaModelFindings(params: {
 
 /**
  * The name Ollama shows for a manifest: `<model>:<tag>` on its own registry's `library`, with the
- * namespace or the host before it otherwise. The v2 layout writes `:` as `%3A`.
+ * namespace or the host before it otherwise.
  */
-export function formatOllamaModelName(params: { nameParts: string[] }): string {
-  const [host = '', namespace = '', model = '', tag = ''] = params.nameParts.map((part) =>
-    part.replaceAll('%3A', ':').replaceAll('%3a', ':'),
-  );
-  const modelTag = `${model}:${tag}`;
+export function formatOllamaModelName(params: { name: OllamaModelName }): string {
+  const modelTag = `${params.name.model}:${params.name.tag}`;
 
-  if (!OLLAMA_DEFAULT_HOSTS.includes(host)) {
-    return `${host}/${namespace}/${modelTag}`;
+  if (!OLLAMA_DEFAULT_HOSTS.includes(params.name.host)) {
+    return `${params.name.host}/${params.name.namespace}/${modelTag}`;
   }
 
-  return namespace === OLLAMA_DEFAULT_NAMESPACE ? modelTag : `${namespace}/${modelTag}`;
+  return params.name.namespace === OLLAMA_DEFAULT_NAMESPACE
+    ? modelTag
+    : `${params.name.namespace}/${modelTag}`;
 }
 
 function buildOllamaModelFinding(params: {
   offer: OllamaModelOffer;
   processCommands: string[] | null;
 }): ExploreFinding {
-  const modelName = formatOllamaModelName({ nameParts: params.offer.manifest.nameParts });
+  const modelName = formatOllamaModelName({ name: params.offer.manifest.name });
   const sharedCount = params.offer.digestCount - params.offer.blobPaths.length;
 
   return {

@@ -1,6 +1,10 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
-import { decideClaudeCodeVersionOffers } from './decideClaudeCodeVersionOffers.js';
+import { formatCountWord } from '../formatLimitTexts.js';
+import {
+  decideClaudeCodeVersionOffers,
+  KEPT_NEWEST_COUNT,
+} from './decideClaudeCodeVersionOffers.js';
 import type {
   ClaudeCodeVersionEntry,
   ClaudeCodeVersionState,
@@ -45,7 +49,9 @@ function buildClaudeCodeVersionFinding(params: {
     explanation: 'An older version of Claude Code that its installer left beside the newer ones.',
     regeneration: 'Claude Code downloads a version again only if you install that version.',
     risk: 'safe',
-    evidenceLines: ['Two newer versions are installed, and the claude command runs another one.'],
+    evidenceLines: [
+      `At least ${formatCountWord(KEPT_NEWEST_COUNT)} newer versions are installed, and the claude command runs another one.`,
+    ],
     displayPath: params.entry.path,
     activity: decideUnitActivity({
       facts: { kind: 'claudeCodeVersion', versionPath: params.entry.path },

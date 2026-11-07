@@ -295,10 +295,11 @@ export type ExplorePathUnitHuggingFaceDetachedRevisions = {
   foundPaths: ExploreFoundPaths;
 };
 
-/** The unfinished blobs of a Hugging Face repository. */
+/** The unfinished blobs of a Hugging Face repository untouched since `cutoffMs`. */
 export type ExplorePathUnitHuggingFacePartialDownloads = {
   kind: 'huggingFacePartialDownloads';
   repoPath: AbsolutePath;
+  cutoffMs: number;
   foundPaths: ExploreFoundPaths;
 };
 

@@ -58,9 +58,13 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
       name: 'avdmanager',
       answers: [],
     });
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     const unusedImagePath = await writeAndroidSystemImage({
-      homeDir: homeDir,
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
@@ -135,7 +139,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
     emulator: ExplorePathUnitAndroidEmulator;
   }> {
     const imagePath = await writeAndroidSystemImage({
-      homeDir: homeDir,
+      sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
       platform: 'android-35',
       abi: 'arm64-v8a',
     });

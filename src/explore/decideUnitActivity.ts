@@ -26,9 +26,13 @@ export type UnitActivityFactsPnpmStore = { kind: 'pnpmStore' };
 
 export type UnitActivityFactsVagrant = { kind: 'vagrant' };
 
-/** A toolchain is in use while rustup, cargo, or rustc runs. */
-export type UnitActivityFactsRustup = { kind: 'rustup' };
+/**
+ * A toolchain is in use while rustup, cargo, or rustc runs, or a program runs from its own folder,
+ * such as the proc-macro server rust-analyzer starts from the toolchain's `libexec`.
+ */
+export type UnitActivityFactsRustup = { kind: 'rustup'; toolchainPath: AbsolutePath };
 
+/** The package folders are in use while conda, mamba, or micromamba runs. */
 export type UnitActivityFactsConda = { kind: 'conda' };
 
 export type UnitActivityFactsOllama = { kind: 'ollama' };
@@ -112,7 +116,11 @@ const VAGRANT_PROGRAM_PATTERN = /(^|\/)vagrant( |$)/;
 
 const RUSTUP_PROGRAM_PATTERN = /(^|\/)(rustup|cargo|rustc)( |$)/;
 
-const CONDA_PROGRAM_PATTERN = /(^|\/)conda( |$)/;
+// mamba and micromamba download into, and link from, the same package folders as conda.
+const CONDA_PROGRAM_PATTERN = /(^|\/)(conda|mamba|micromamba)( |$)/;
+
+// conda run as a Python module, `python -m conda`.
+const CONDA_MODULE_PATTERN = /(^| )-m conda( |$)/;
 
 const OLLAMA_PROGRAM_PATTERN = /(^|\/)ollama( |$)/;
 
@@ -182,15 +190,21 @@ export function decideUnitActivity(params: {
         processCommands: params.processCommands,
         isOwnerProcess: (command) => VAGRANT_PROGRAM_PATTERN.test(command),
       });
-    case 'rustup':
+    case 'rustup': {
+      const toolchainPath = params.facts.toolchainPath;
+
       return decideProcessActivity({
         processCommands: params.processCommands,
-        isOwnerProcess: (command) => RUSTUP_PROGRAM_PATTERN.test(command),
+        isOwnerProcess: (command) =>
+          RUSTUP_PROGRAM_PATTERN.test(command) ||
+          isPathInCommand({ path: toolchainPath, command: command }),
       });
+    }
     case 'conda':
       return decideProcessActivity({
         processCommands: params.processCommands,
-        isOwnerProcess: (command) => CONDA_PROGRAM_PATTERN.test(command),
+        isOwnerProcess: (command) =>
+          CONDA_PROGRAM_PATTERN.test(command) || CONDA_MODULE_PATTERN.test(command),
       });
     case 'ollama':
       return decideProcessActivity({

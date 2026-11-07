@@ -3,7 +3,7 @@ import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitMailDownloads } from '../exploreUnit.js';
-import { loadExploreEntryTimes } from '../loadExploreRead.js';
+import { loadExploreEntryStats } from '../loadExploreRead.js';
 import { isUntouchedMailDownload } from './mailDownloadFiles.js';
 
 /**
@@ -17,7 +17,7 @@ export async function recheckMailDownloadsUnit(params: {
   processCommands: string[] | null;
 }): Promise<PathUnitRecheck> {
   for (const foundFile of params.unit.foundFiles) {
-    const times = await loadExploreEntryTimes({
+    const times = await loadExploreEntryStats({
       path: foundFile.path,
       privacyDenialCode: params.platform.privacyDenialCode,
     });

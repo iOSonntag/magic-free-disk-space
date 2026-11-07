@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import type { ProjectPinFileKind, ProjectPinFileText } from '../projectPins/projectPins.js';
+import { parseRustupToolchainName } from './rustupToolchainName.js';
 
 export const RUSTUP_PIN_FILE_KINDS: ProjectPinFileKind[] = ['rustToolchain'];
 
@@ -18,9 +19,6 @@ const TOML_CHANNEL_PATTERN = /^\s*channel\s*=\s*["']([^"']+)["']/m;
 const TOML_PATH_PATTERN = /^\s*path\s*=/m;
 
 const TOML_TABLE_PATTERN = /^\s*\[toolchain\]/m;
-
-// The legacy file's one line, a toolchain name.
-const LEGACY_CHANNEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 
 /**
  * The channels of `rust-toolchain.toml` (`[toolchain] channel`) and of the legacy
@@ -88,9 +86,8 @@ function parseRustToolchainFileChannel(params: {
     return TOML_PATH_PATTERN.test(params.text) ? { kind: 'customPath' } : { kind: 'unclear' };
   }
 
-  const line = params.text.trim();
+  // The legacy file's one line, a toolchain name.
+  const name = parseRustupToolchainName({ text: params.text.trim() });
 
-  return LEGACY_CHANNEL_PATTERN.test(line)
-    ? { kind: 'channel', channel: line }
-    : { kind: 'unclear' };
+  return name.kind === 'succeeded' ? { kind: 'channel', channel: name.value } : { kind: 'unclear' };
 }

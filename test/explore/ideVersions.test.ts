@@ -2,23 +2,22 @@ import { expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
-import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
-import type {
-  ExplorePathUnitIdeVersionFolder,
-  ExploreProbeFindings,
-} from '../../src/explore/exploreUnit.js';
+import type { ExploreFoundPaths, ExploreProbeFindings } from '../../src/explore/exploreUnit.js';
+import { decideIdeVersionOffers } from '../../src/explore/ideVersions/decideIdeVersionOffers.js';
 import { loadIdeVersionFindings } from '../../src/explore/ideVersions/loadIdeVersionFindings.js';
 import { recheckIdeVersionUnit } from '../../src/explore/ideVersions/recheckIdeVersionUnit.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import {
-  createFixtureDirectory,
-  createFixtureRoot,
-  deleteFixtureRoot,
-  loadTestEnvironment,
-  writeFixtureTextFile,
-} from '../support/fixtureRoot.js';
+import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import {
+  buildTestProbeRun,
+  getProbeFindings,
+  listUnitsOfKind,
+  withFixtureHome,
+} from '../support/probeRunFixtures.js';
 
 const NOW_MS = Date.now();
 
@@ -30,6 +29,8 @@ const OLD_STUDIO = 'AndroidStudio2024.1';
 
 const NEW_STUDIO = 'AndroidStudio2024.2';
 
+const VALUE_LIBRARY_PATH = '/Users/example/Library';
+
 type IdeFixture = {
   environment: Environment;
   libraryPath: string;
@@ -39,57 +40,41 @@ type IdeFixture = {
 
 /** Builds a temporary home and app folder, hands them to `run`, and removes them afterwards. */
 async function withIdeHome(params: { run: (fixture: IdeFixture) => Promise<void> }): Promise<void> {
-  const fixtureRoot = await createFixtureRoot();
+  await withFixtureHome({
+    nowMs: NOW_MS,
+    run: async (home) => {
+      const bundlePath = join(home.fixtureRoot.applicationDir, 'IntelliJ IDEA.app');
 
-  try {
-    const environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: NOW_MS });
-    const bundlePath = join(fixtureRoot.applicationDir, 'IntelliJ IDEA.app');
-
-    await params.run({
-      environment: environment,
-      libraryPath: join(environment.homeDir, 'Library'),
-      bundlePath: bundlePath,
-      ideCommand: `${bundlePath}/Contents/MacOS/idea`,
-    });
-  } finally {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  }
-}
-
-function buildRun(params: {
-  environment: Environment;
-  processCommands: string[] | null;
-}): ExploreProbeRun {
-  return {
-    environment: params.environment,
-    platform: buildTestProbePlatform(),
-    processCommands: params.processCommands,
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: 0,
-    staleCutoffMs: 0,
-  };
+      await params.run({
+        environment: home.environment,
+        libraryPath: join(home.environment.homeDir, 'Library'),
+        bundlePath: bundlePath,
+        ideCommand: `${bundlePath}/Contents/MacOS/idea`,
+      });
+    },
+  });
 }
 
 async function loadFindings(params: {
-  environment: Environment;
-  processCommands?: string[] | null;
+  fixture: IdeFixture;
+  processCommands: string[] | null;
 }): Promise<ExploreProbeFindings> {
-  const result = await loadIdeVersionFindings(
-    buildRun({
-      environment: params.environment,
-      processCommands: params.processCommands === undefined ? [] : params.processCommands,
-    }),
+  return getProbeFindings(
+    await loadIdeVersionFindings(
+      buildTestProbeRun({
+        environment: params.fixture.environment,
+        processCommands: params.processCommands,
+      }),
+    ),
   );
-
-  if (result.kind === 'failed') {
-    throw new Error(`The probe failed: ${result.failure.reason}.`);
-  }
-
-  return result.value;
 }
 
 async function writeFile(params: { path: string }): Promise<void> {
   await writeFixtureTextFile({ path: params.path, text: 'fixture' });
+}
+
+function buildValuePath(...names: string[]): AbsolutePath {
+  return buildTestAbsolutePath({ text: join(VALUE_LIBRARY_PATH, ...names) });
 }
 
 /**
@@ -133,22 +118,117 @@ async function writeProductInfo(params: { fixture: IdeFixture; text: string }): 
   return path;
 }
 
-function listUnits(findings: ExploreProbeFindings): ExplorePathUnitIdeVersionFolder[] {
-  return findings.findings.flatMap((finding) =>
-    finding.unit.kind === 'ideVersionFolder' ? [finding.unit] : [],
-  );
-}
-
-/** Each unit as `<product><version> <kind>` with its activity. */
-function listActivities(findings: ExploreProbeFindings): string[] {
-  return findings.findings
+/** Each unit as `<product><version> <kind>` with its risk or its activity, sorted. */
+function listFolderLines(params: {
+  findings: ExploreProbeFindings;
+  field: 'risk' | 'activity';
+}): string[] {
+  return params.findings.findings
     .map((finding) =>
       finding.unit.kind === 'ideVersionFolder'
-        ? `${finding.unit.product}${finding.unit.version} ${finding.unit.folderKind} ${finding.activity}`
+        ? `${finding.unit.product}${finding.unit.version} ${finding.unit.folderKind} ${finding[params.field]}`
         : '',
     )
     .toSorted();
 }
+
+describeAwaitingWin32Platform('decideIdeVersionOffers', () => {
+  test('offers each folder of a version older than the newest of its product in any root', () => {
+    const oldCachesPath = buildValuePath('Caches', 'JetBrains', 'IntelliJIdea2023.3');
+
+    expect(
+      decideIdeVersionOffers({
+        folders: [
+          { kind: 'caches', product: 'IntelliJIdea', version: '2023.3', path: oldCachesPath },
+          {
+            kind: 'logs',
+            product: 'IntelliJIdea',
+            version: '2023.10',
+            path: buildValuePath('Logs', 'JetBrains', 'IntelliJIdea2023.10'),
+          },
+          {
+            kind: 'caches',
+            product: 'PyCharm',
+            version: '2022.1',
+            path: buildValuePath('Caches', 'JetBrains', 'PyCharm2022.1'),
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        product: 'IntelliJIdea',
+        version: '2023.3',
+        newestVersion: '2023.10',
+        folderKind: 'caches',
+        folderPath: oldCachesPath,
+        foundPaths: [oldCachesPath],
+      },
+    ]);
+  });
+
+  test("splits an old version's settings into its plugins and its other entries", () => {
+    const settingsPath = buildValuePath('Application Support', 'JetBrains', 'IntelliJIdea2023.3');
+    const pluginsPath = buildValuePath(
+      'Application Support',
+      'JetBrains',
+      'IntelliJIdea2023.3',
+      'plugins',
+    );
+    const otherPaths: ExploreFoundPaths = [
+      buildValuePath('Application Support', 'JetBrains', 'IntelliJIdea2023.3', 'options'),
+      buildValuePath('Application Support', 'JetBrains', 'IntelliJIdea2023.3', 'idea.vmoptions'),
+    ];
+
+    expect(
+      decideIdeVersionOffers({
+        folders: [
+          {
+            kind: 'settings',
+            product: 'IntelliJIdea',
+            version: '2023.3',
+            path: settingsPath,
+            pluginsPath: pluginsPath,
+            otherPaths: otherPaths,
+          },
+          {
+            kind: 'settings',
+            product: 'IntelliJIdea',
+            version: '2024.1',
+            path: buildValuePath('Application Support', 'JetBrains', 'IntelliJIdea2024.1'),
+            pluginsPath: null,
+            otherPaths: [],
+          },
+        ],
+      }).map((offer) => [offer.folderKind, offer.folderPath, offer.foundPaths]),
+    ).toEqual([
+      ['plugins', settingsPath, [pluginsPath]],
+      ['settings', settingsPath, otherPaths],
+    ]);
+  });
+
+  test('offers nothing of an old settings folder without plugins or other entries', () => {
+    expect(
+      decideIdeVersionOffers({
+        folders: [
+          {
+            kind: 'settings',
+            product: 'IntelliJIdea',
+            version: '2023.3',
+            path: buildValuePath('Application Support', 'JetBrains', 'IntelliJIdea2023.3'),
+            pluginsPath: null,
+            otherPaths: [],
+          },
+          {
+            kind: 'caches',
+            product: 'IntelliJIdea',
+            version: '2024.1',
+            path: buildValuePath('Caches', 'JetBrains', 'IntelliJIdea2024.1'),
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+});
 
 describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
   test('offers the caches, logs, plugins, and settings of each version a newer one outdates', async () => {
@@ -156,18 +236,10 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
       run: async (fixture) => {
         await createIdeFolders(fixture);
 
-        const probed = await loadFindings({ environment: fixture.environment });
+        const probed = await loadFindings({ fixture: fixture, processCommands: [] });
 
         expect(probed.isComplete).toBe(true);
-        expect(
-          probed.findings
-            .map((finding) =>
-              finding.unit.kind === 'ideVersionFolder'
-                ? `${finding.unit.product}${finding.unit.version} ${finding.unit.folderKind} ${finding.risk}`
-                : '',
-            )
-            .toSorted(),
-        ).toEqual([
+        expect(listFolderLines({ findings: probed, field: 'risk' })).toEqual([
           `${OLD_STUDIO} caches safe`,
           `${OLD_IDEA} caches safe`,
           `${OLD_IDEA} logs safe`,
@@ -183,7 +255,10 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
       run: async (fixture) => {
         await createIdeFolders(fixture);
 
-        const units = listUnits(await loadFindings({ environment: fixture.environment }));
+        const units = listUnitsOfKind({
+          findings: await loadFindings({ fixture: fixture, processCommands: [] }),
+          kind: 'ideVersionFolder',
+        });
         const settingsPath = join(
           fixture.libraryPath,
           'Application Support',
@@ -214,11 +289,11 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
         });
 
         const busy = await loadFindings({
-          environment: fixture.environment,
+          fixture: fixture,
           processCommands: [fixture.ideCommand],
         });
 
-        expect(listActivities(busy)).toEqual([
+        expect(listFolderLines({ findings: busy, field: 'activity' })).toEqual([
           `${OLD_STUDIO} caches idle`,
           `${OLD_IDEA} caches busy`,
           `${OLD_IDEA} logs busy`,
@@ -232,11 +307,15 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
         });
 
         const idle = await loadFindings({
-          environment: fixture.environment,
+          fixture: fixture,
           processCommands: [fixture.ideCommand],
         });
 
-        expect(listActivities(idle).every((line) => line.endsWith(' idle'))).toBe(true);
+        expect(
+          listFolderLines({ findings: idle, field: 'activity' }).every((line) =>
+            line.endsWith(' idle'),
+          ),
+        ).toBe(true);
       },
     });
   });
@@ -248,11 +327,15 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
         await writeProductInfo({ fixture: fixture, text: '{"dataDirectoryName":' });
 
         const probed = await loadFindings({
-          environment: fixture.environment,
+          fixture: fixture,
           processCommands: [fixture.ideCommand],
         });
 
-        expect(listActivities(probed).every((line) => line.endsWith(' busy'))).toBe(true);
+        expect(
+          listFolderLines({ findings: probed, field: 'activity' }).every((line) =>
+            line.endsWith(' busy'),
+          ),
+        ).toBe(true);
       },
     });
   });
@@ -272,11 +355,15 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
           await chmod(productInfoPath, 0o000);
 
           const probed = await loadFindings({
-            environment: fixture.environment,
+            fixture: fixture,
             processCommands: [fixture.ideCommand],
           });
 
-          expect(listActivities(probed).every((line) => line.endsWith(' busy'))).toBe(true);
+          expect(
+            listFolderLines({ findings: probed, field: 'activity' }).every((line) =>
+              line.endsWith(' busy'),
+            ),
+          ).toBe(true);
         },
       });
     },
@@ -289,16 +376,21 @@ describeAwaitingWin32Platform('loadIdeVersionFindings', () => {
         await createFixtureDirectory({ path: join(fixture.bundlePath, 'Contents', 'MacOS') });
 
         const idle = await loadFindings({
-          environment: fixture.environment,
+          fixture: fixture,
           processCommands: [fixture.ideCommand],
         });
-        const unknown = await loadFindings({
-          environment: fixture.environment,
-          processCommands: null,
-        });
+        const unknown = await loadFindings({ fixture: fixture, processCommands: null });
 
-        expect(listActivities(idle).every((line) => line.endsWith(' idle'))).toBe(true);
-        expect(listActivities(unknown).every((line) => line.endsWith(' unknown'))).toBe(true);
+        expect(
+          listFolderLines({ findings: idle, field: 'activity' }).every((line) =>
+            line.endsWith(' idle'),
+          ),
+        ).toBe(true);
+        expect(
+          listFolderLines({ findings: unknown, field: 'activity' }).every((line) =>
+            line.endsWith(' unknown'),
+          ),
+        ).toBe(true);
       },
     });
   });
@@ -314,7 +406,10 @@ describeAwaitingWin32Platform('recheckIdeVersionUnit', () => {
           text: JSON.stringify({ dataDirectoryName: OLD_IDEA }),
         });
 
-        const units = listUnits(await loadFindings({ environment: fixture.environment }));
+        const units = listUnitsOfKind({
+          findings: await loadFindings({ fixture: fixture, processCommands: [] }),
+          kind: 'ideVersionFolder',
+        });
 
         for (const unit of units) {
           const recheck = (processCommands: string[] | null) =>
@@ -340,7 +435,10 @@ describeAwaitingWin32Platform('recheckIdeVersionUnit', () => {
       run: async (fixture) => {
         await createIdeFolders(fixture);
 
-        const units = listUnits(await loadFindings({ environment: fixture.environment }));
+        const units = listUnitsOfKind({
+          findings: await loadFindings({ fixture: fixture, processCommands: [] }),
+          kind: 'ideVersionFolder',
+        });
         const studio = units.find((unit) => unit.product === 'AndroidStudio');
         const settings = units.find((unit) => unit.folderKind === 'settings');
 

@@ -1,16 +1,15 @@
 import type { UnitRecheck } from '../decideComparisonActivity.js';
-import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
 import type { ExploreToolUnitRustupToolchain } from '../exploreUnit.js';
 import { loadProjectPinFiles } from '../projectPins/loadProjectPins.js';
 import { selectToolPins } from '../projectPins/selectToolPins.js';
-import { decideRustupToolchainOffers } from './decideRustupToolchainOffers.js';
+import { compareRustupToolchainUnit } from './compareRustupToolchainUnit.js';
 import { loadRustupState } from './loadRustupState.js';
 import { RUSTUP_PIN_FILE_KINDS } from './parseRustToolchainPins.js';
 
 /**
  * Lists the toolchains and reads the unit's pin files again, and compares them with the unit,
- * right before its uninstall: unchanged while still offered at the same folder, and idle.
+ * right before its uninstall.
  */
 export async function recheckRustupToolchainUnit(params: {
   unit: ExploreToolUnitRustupToolchain;
@@ -35,20 +34,10 @@ export async function recheckRustupToolchainUnit(params: {
     return toolPins;
   }
 
-  const isStillOffered = decideRustupToolchainOffers({
+  return compareRustupToolchainUnit({
+    unit: params.unit,
     state: state.value,
     toolPins: toolPins.value,
-  }).some(
-    (toolchain) =>
-      toolchain.name === params.unit.name && toolchain.toolchainPath === params.unit.toolchainPath,
-  );
-
-  if (!isStillOffered) {
-    return { kind: 'changed' };
-  }
-
-  return decideComparisonActivity({
-    facts: { kind: 'rustup' },
     processCommands: params.run.processCommands,
   });
 }

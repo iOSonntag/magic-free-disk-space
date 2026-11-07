@@ -79,6 +79,23 @@ describeAwaitingWin32Platform('loadEntryStats', () => {
     expect(Math.abs(stats.modifiedMs - newModifiedMs)).toBeLessThanOrEqual(1000);
   });
 
+  test('reports the access time apart from the modified time, and a birth time', async () => {
+    const filePath = join(fixtureRoot.homeDir, 'read.txt');
+    await createFixtureFile({
+      path: filePath,
+      sizeBytes: 10,
+      modifiedMs: oldModifiedMs,
+      accessedMs: newModifiedMs,
+    });
+
+    const stats = await loadEntryStatsOrThrow({ path: filePath });
+
+    expect(Math.abs(stats.modifiedMs - oldModifiedMs)).toBeLessThanOrEqual(1000);
+    expect(Math.abs(stats.accessedMs - newModifiedMs)).toBeLessThanOrEqual(1000);
+    expect(stats.bornMs).toBeGreaterThan(0);
+    expect(stats.bornMs).toBeLessThanOrEqual(Date.now());
+  });
+
   testOnPosix('reports a symbolic link itself, not the size of its target', async () => {
     const targetPath = join(fixtureRoot.homeDir, 'large.bin');
     const linkPath = join(fixtureRoot.homeDir, 'link-to-large.bin');

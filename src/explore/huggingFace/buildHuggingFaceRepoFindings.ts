@@ -1,16 +1,13 @@
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings, ExploreUnit } from '../exploreUnit.js';
+import { formatDaySpan } from '../formatLimitTexts.js';
 import type { HuggingFaceRepoOffer } from './decideHuggingFaceRepoOffers.js';
-import { decideHuggingFaceRepoOffers } from './decideHuggingFaceRepoOffers.js';
+import {
+  decideHuggingFaceRepoOffers,
+  HUGGING_FACE_PARTIAL_UNTOUCHED_MS,
+} from './decideHuggingFaceRepoOffers.js';
 import type { HuggingFaceRepoState } from './loadHuggingFaceHubState.js';
-
-/** The singular noun of each repository type, the first part of its folder's name. */
-const REPO_TYPE_NOUNS: Record<string, string> = {
-  models: 'model',
-  datasets: 'dataset',
-  spaces: 'space',
-  kernels: 'kernel',
-};
+import type { HuggingFaceRepoName } from './parseHuggingFaceRepoFolderName.js';
 
 /**
  * Offers each repository's current revisions, its detached ones, and its stale partial blobs.
@@ -30,6 +27,7 @@ export function buildHuggingFaceRepoFindings(params: {
       buildHuggingFaceRepoFinding({
         repo: judgedRepo.repo,
         offer: offer,
+        partialCutoffMs: params.partialCutoffMs,
         processCommands: params.processCommands,
       }),
     ),
@@ -41,19 +39,18 @@ export function buildHuggingFaceRepoFindings(params: {
   };
 }
 
-/** `<owner>/<name>` with the type's noun, from a folder named `<type>s--<owner>--<name>`. */
-export function formatHuggingFaceRepoName(params: { folderName: string }): string {
-  const [type = '', ...nameParts] = params.folderName.split('--');
-
-  return `${REPO_TYPE_NOUNS[type] ?? type} ${nameParts.join('/')}`;
+/** The repository's id with its type's noun, such as `model example-org/example-model`. */
+export function formatHuggingFaceRepoName(params: { name: HuggingFaceRepoName }): string {
+  return `${params.name.repoType} ${params.name.repoId}`;
 }
 
 function buildHuggingFaceRepoFinding(params: {
   repo: HuggingFaceRepoState;
   offer: HuggingFaceRepoOffer;
+  partialCutoffMs: number;
   processCommands: string[] | null;
 }): ExploreFinding {
-  const repoName = formatHuggingFaceRepoName({ folderName: params.repo.folderName });
+  const repoName = formatHuggingFaceRepoName({ name: params.repo.name });
   const activity = decideUnitActivity({
     facts: { kind: 'huggingFace' },
     processCommands: params.processCommands,
@@ -62,22 +59,30 @@ function buildHuggingFaceRepoFinding(params: {
   switch (params.offer.kind) {
     case 'huggingFaceRepository':
       return {
-        unit: buildRepoUnit({ repo: params.repo, offer: params.offer }),
+        unit: buildRepoUnit({
+          repo: params.repo,
+          offer: params.offer,
+          partialCutoffMs: params.partialCutoffMs,
+        }),
         title: `Hugging Face ${repoName}`,
         explanation:
           'A repository the Hugging Face libraries downloaded for a program, with the files of its current revisions.',
         regeneration: 'The Hugging Face libraries download it again when a program loads it.',
         risk: 'review',
         evidenceLines: [
-          `Its refs name ${params.offer.revisionCount} downloaded revisions.`,
-          'Files in the shared Xet store stay.',
+          `Its refs name ${params.offer.revisionCount === 1 ? '1 downloaded revision' : `${params.offer.revisionCount} downloaded revisions`}.`,
+          ...formatLinkedBlobLines({ linkedBlobCount: params.repo.linkedBlobCount }),
         ],
         displayPath: params.repo.repoPath,
         activity: activity,
       };
     case 'huggingFaceDetachedRevisions':
       return {
-        unit: buildRepoUnit({ repo: params.repo, offer: params.offer }),
+        unit: buildRepoUnit({
+          repo: params.repo,
+          offer: params.offer,
+          partialCutoffMs: params.partialCutoffMs,
+        }),
         title: `Old revisions of Hugging Face ${repoName}`,
         explanation:
           'Revisions no branch or tag of the repository names any longer, with the files only they use.',
@@ -90,23 +95,47 @@ function buildHuggingFaceRepoFinding(params: {
         displayPath: params.repo.repoPath,
         activity: activity,
       };
-    case 'huggingFacePartialDownloads':
+    case 'huggingFacePartialDownloads': {
+      const untouchedSpan = formatDaySpan(HUGGING_FACE_PARTIAL_UNTOUCHED_MS);
+
       return {
-        unit: buildRepoUnit({ repo: params.repo, offer: params.offer }),
+        unit: buildRepoUnit({
+          repo: params.repo,
+          offer: params.offer,
+          partialCutoffMs: params.partialCutoffMs,
+        }),
         title: `Unfinished downloads of Hugging Face ${repoName}`,
-        explanation: 'Files a download started and left unfinished, untouched for a day.',
+        explanation: `Files a download started and left unfinished, untouched for ${untouchedSpan}.`,
         regeneration: 'A new download of the file starts it again.',
         risk: 'safe',
-        evidenceLines: [`${params.offer.paths.length} unfinished files, untouched for a day.`],
+        evidenceLines: [
+          `${params.offer.paths.length} unfinished files, untouched for ${untouchedSpan}.`,
+        ],
         displayPath: params.repo.repoPath,
         activity: activity,
       };
+    }
   }
+}
+
+/** Says that the files the repository only links stay, so its offer frees less than they take. */
+function formatLinkedBlobLines(params: { linkedBlobCount: number }): string[] {
+  if (params.linkedBlobCount === 0) {
+    return [];
+  }
+
+  const files =
+    params.linkedBlobCount === 1
+      ? '1 of its files is a link to a copy that stays, such as one'
+      : `${params.linkedBlobCount} of its files are links to copies that stay, such as those`;
+
+  return [`${files} the hub cache shares across repositories.`];
 }
 
 function buildRepoUnit(params: {
   repo: HuggingFaceRepoState;
   offer: HuggingFaceRepoOffer;
+  partialCutoffMs: number;
 }): ExploreUnit {
   switch (params.offer.kind) {
     case 'huggingFaceRepository':
@@ -128,6 +157,7 @@ function buildRepoUnit(params: {
       return {
         kind: 'huggingFacePartialDownloads',
         repoPath: params.repo.repoPath,
+        cutoffMs: params.partialCutoffMs,
         foundPaths: params.offer.paths,
       };
   }

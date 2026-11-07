@@ -1,11 +1,9 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
-import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
-import { walkDirectoryTree } from '../../system/walkDirectoryTree.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
 import type { ExploreFoundFile } from '../exploreUnit.js';
-import { loadExploreEntryStats, loadExploreEntryTimes } from '../loadExploreRead.js';
+import { loadExploreEntryStats } from '../loadExploreRead.js';
+import { loadWalkedFiles } from '../loadWalkedFiles.js';
 import { isUntouchedMailDownload } from './mailDownloadFiles.js';
 
 /** Folders read at once, one per message Mail saved attachments of. */
@@ -43,57 +41,19 @@ export async function loadMailDownloadFindings(
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
-  const filePaths: string[] = [];
-  let isComplete = true;
-  const walkEnd = await walkDirectoryTree({
+  const walked = await loadWalkedFiles({
+    run: run,
     rootPath: folderPath,
-    isStatsNeeded: false,
+    isDescending: true,
+    maxFiles: null,
     maxConcurrentDirectories: MAIL_MAX_CONCURRENT_DIRECTORIES,
-    isStopped: () => Date.now() >= run.deadlineMs,
-    entryReads: run.platform.entryReads,
-    visitEntry: (entry) => {
-      if (entry.name.startsWith('.')) {
-        return 'skip';
-      }
-
-      if (entry.kind === 'file') {
-        filePaths.push(entry.path);
-      }
-
-      return 'descend';
-    },
-    onUnreadable: () => {
-      isComplete = false;
-    },
-    onEvictedEntrySkipped: () => {},
+    isKept: (stats) => isUntouchedMailDownload({ times: stats, cutoffMs: run.staleCutoffMs }),
   });
-  const foundFiles: ExploreFoundFile[] = [];
-
-  for (const filePath of filePaths.sort()) {
-    const times = await loadExploreEntryTimes({
-      path: filePath,
-      privacyDenialCode: run.platform.privacyDenialCode,
-    });
-
-    if (times.kind === 'failed') {
-      isComplete = false;
-
-      continue;
-    }
-
-    if (
-      times.value !== null &&
-      isUntouchedMailDownload({ times: times.value, cutoffMs: run.staleCutoffMs })
-    ) {
-      foundFiles.push({
-        path: parseWalkedPath({ run: run, text: filePath }),
-        modifiedMs: times.value.modifiedMs,
-      });
-    }
-  }
-
-  isComplete = isComplete && walkEnd === 'completed';
-
+  const isComplete = walked.isComplete;
+  const foundFiles: ExploreFoundFile[] = walked.files.map((file) => ({
+    path: file.path,
+    modifiedMs: file.stats.modifiedMs,
+  }));
   const [firstFile, ...restFiles] = foundFiles;
 
   if (firstFile === undefined) {
@@ -130,15 +90,4 @@ export async function loadMailDownloadFindings(
       isComplete: isComplete,
     },
   };
-}
-
-/** A path the walk joined below an absolute root; throws for one that is not absolute, a bug. */
-function parseWalkedPath(params: { run: ExploreProbeRun; text: string }): AbsolutePath {
-  const path = parseAbsolutePath({ rules: params.run.environment.pathRules, text: params.text });
-
-  if (path.kind === 'failed') {
-    throw new Error('The walk of Mail Downloads joined a path that is not absolute.');
-  }
-
-  return path.value;
 }

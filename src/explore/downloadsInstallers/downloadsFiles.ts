@@ -71,15 +71,24 @@ export function buildDownloadsActivityFacts(params: {
   }
 }
 
+export type LatestModifiedKnown = { kind: 'known'; modifiedMs: number };
+
+/** A part of the folder could not be read, or the deadline stopped its walk. */
+export type LatestModifiedUnknown = { kind: 'unknown' };
+
+/** The newest change of an entry, or that it is not known. */
+export type LatestModified = LatestModifiedKnown | LatestModifiedUnknown;
+
 /**
  * The newest change of the entry: a file's own, or for a folder, such as Safari's `.download`,
- * the newest of itself and everything in it. `null` when nothing is there or a part could not be
- * read, so its change is not known.
+ * the newest of itself and everything in it, read until `deadlineMs`, or to its end without one.
+ * `null` when nothing is there.
  */
-export async function loadLatestModifiedMs(params: {
+export async function loadLatestModified(params: {
   path: string;
   platform: ExploreProbePlatform;
-}): Promise<Result<number | null, ExploreFileUnreadable>> {
+  deadlineMs: number | null;
+}): Promise<Result<LatestModified | null, ExploreFileUnreadable>> {
   const stats = await loadExploreEntryStats({
     path: params.path,
     privacyDenialCode: params.platform.privacyDenialCode,
@@ -94,17 +103,18 @@ export async function loadLatestModifiedMs(params: {
   }
 
   if (stats.value.kind !== 'directory') {
-    return { kind: 'succeeded', value: stats.value.modifiedMs };
+    return { kind: 'succeeded', value: { kind: 'known', modifiedMs: stats.value.modifiedMs } };
   }
 
+  const deadlineMs = params.deadlineMs;
   let latestModifiedMs = stats.value.modifiedMs;
-  let isKnown = true;
+  let isEveryPartRead = true;
 
-  await walkDirectoryTree({
+  const walkEnd = await walkDirectoryTree({
     rootPath: params.path,
     isStatsNeeded: true,
     maxConcurrentDirectories: DOWNLOADS_MAX_CONCURRENT_DIRECTORIES,
-    isStopped: () => false,
+    isStopped: () => deadlineMs !== null && Date.now() >= deadlineMs,
     entryReads: params.platform.entryReads,
     visitEntry: (entry) => {
       if (entry.stats !== null) {
@@ -114,10 +124,14 @@ export async function loadLatestModifiedMs(params: {
       return 'descend';
     },
     onUnreadable: () => {
-      isKnown = false;
+      isEveryPartRead = false;
     },
     onEvictedEntrySkipped: () => {},
   });
 
-  return { kind: 'succeeded', value: isKnown ? latestModifiedMs : null };
+  if (!isEveryPartRead || walkEnd === 'stopped') {
+    return { kind: 'succeeded', value: { kind: 'unknown' } };
+  }
+
+  return { kind: 'succeeded', value: { kind: 'known', modifiedMs: latestModifiedMs } };
 }

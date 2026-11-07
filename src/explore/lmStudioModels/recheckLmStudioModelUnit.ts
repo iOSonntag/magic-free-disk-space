@@ -1,11 +1,11 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
-import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitLmStudioModel } from '../exploreUnit.js';
+import { compareLmStudioModelUnit } from './compareLmStudioModelUnit.js';
 import { loadLmStudioModelState } from './loadLmStudioModelState.js';
 
-/** Reads the model folders again: unchanged while the unit's folder is still one, and LM Studio idle. */
+/** Reads the model folders again and compares them with the unit. */
 export async function recheckLmStudioModelUnit(params: {
   unit: ExplorePathUnitLmStudioModel;
   environment: Environment;
@@ -22,12 +22,9 @@ export async function recheckLmStudioModelUnit(params: {
     return folders;
   }
 
-  if (!folders.value.some((folder) => folder.path === params.unit.folderPath)) {
-    return { kind: 'changed' };
-  }
-
-  return decideComparisonActivity({
-    facts: { kind: 'lmStudio' },
+  return compareLmStudioModelUnit({
+    unit: params.unit,
+    folders: folders.value,
     processCommands: params.processCommands,
   });
 }

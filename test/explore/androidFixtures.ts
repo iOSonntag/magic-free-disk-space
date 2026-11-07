@@ -77,14 +77,14 @@ export async function writeAndroidAvd(params: {
   };
 }
 
-/** Writes `<sdk>/system-images/<platform>/google_apis/<abi>/package.xml`; returns the folder. */
+/** Writes `<sdkRoot>/system-images/<platform>/google_apis/<abi>/package.xml`; returns the folder. */
 export async function writeAndroidSystemImage(params: {
-  homeDir: string;
+  sdkRoot: string;
   platform: string;
   abi: string;
 }): Promise<AbsolutePath> {
   const folderPath = posix.join(
-    buildAndroidSdkRoot(params),
+    params.sdkRoot,
     'system-images',
     params.platform,
     'google_apis',

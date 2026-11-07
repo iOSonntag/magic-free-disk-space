@@ -7,7 +7,6 @@ import type {
   ExplorePathUnitHuggingFaceRepository,
 } from '../exploreUnit.js';
 import { compareHuggingFaceUnit } from './compareHuggingFaceUnit.js';
-import { HUGGING_FACE_PARTIAL_UNTOUCHED_MS } from './decideHuggingFaceRepoOffers.js';
 import { loadHuggingFaceRepoState } from './loadHuggingFaceHubState.js';
 
 /** Reads the unit's repository again and compares its refs and files with the unit. */
@@ -33,7 +32,6 @@ export async function recheckHuggingFaceUnit(params: {
   return compareHuggingFaceUnit({
     unit: params.unit,
     repo: repo.value,
-    partialCutoffMs: params.environment.nowMs - HUGGING_FACE_PARTIAL_UNTOUCHED_MS,
     processCommands: params.processCommands,
   });
 }

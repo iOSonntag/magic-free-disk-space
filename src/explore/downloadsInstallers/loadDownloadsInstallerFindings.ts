@@ -8,13 +8,14 @@ import type { DownloadsFileKind } from './downloadsFiles.js';
 import {
   buildDownloadsActivityFacts,
   getDownloadsFileKind,
-  loadLatestModifiedMs,
+  loadLatestModified,
 } from './downloadsFiles.js';
 
 /**
  * Finds the installers and the partial downloads at the top of Downloads that nothing changed
- * since the stale cutoff, one unit for each kind. A hidden entry, a symbolic link, and an entry
- * whose newest change could not be read are left alone. `placeMissing` without a Downloads folder.
+ * since the stale cutoff, one unit for each kind. A hidden entry and a symbolic link are left
+ * alone; so is an entry whose newest change is not known by the deadline, which leaves the
+ * findings incomplete. Fails on an entry it cannot read; `placeMissing` without a Downloads folder.
  */
 export async function loadDownloadsInstallerFindings(
   run: ExploreProbeRun,
@@ -57,19 +58,31 @@ export async function loadDownloadsInstallerFindings(
       parentPath: folderPath,
       names: [entry.name],
     });
-    const latestModifiedMs = await loadLatestModifiedMs({ path: path, platform: run.platform });
+    const latest = await loadLatestModified({
+      path: path,
+      platform: run.platform,
+      deadlineMs: run.deadlineMs,
+    });
 
-    if (latestModifiedMs.kind === 'failed') {
+    if (latest.kind === 'failed') {
+      return latest;
+    }
+
+    if (latest.value === null) {
+      continue;
+    }
+
+    if (latest.value.kind === 'unknown') {
       isComplete = false;
 
       continue;
     }
 
-    if (latestModifiedMs.value === null || latestModifiedMs.value >= run.staleCutoffMs) {
+    if (latest.value.modifiedMs >= run.staleCutoffMs) {
       continue;
     }
 
-    const found = { path: path, modifiedMs: latestModifiedMs.value };
+    const found = { path: path, modifiedMs: latest.value.modifiedMs };
 
     switch (fileKind) {
       case 'installer':

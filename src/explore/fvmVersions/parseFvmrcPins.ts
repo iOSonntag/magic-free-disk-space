@@ -1,3 +1,4 @@
+import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import type { ProjectPinFileKind, ProjectPinFileText } from '../projectPins/projectPins.js';
 
 export const FVM_PIN_FILE_KINDS: ProjectPinFileKind[] = ['fvmrc'];
@@ -32,12 +33,13 @@ export function parseFvmrcPins(params: { files: ProjectPinFileText[] }): FvmPins
 }
 
 function parseFvmrcVersions(params: { text: string }): string[] | null {
-  const config = parseJsonObject({ text: params.text });
+  const parsed = parseJsonValue({ text: params.text });
 
-  if (config === null) {
+  if (parsed.kind === 'failed' || !isJsonObject(parsed.value)) {
     return null;
   }
 
+  const config = parsed.value;
   const versions: string[] = [];
   const mainVersion = config.flutterSdkVersion ?? config.flutter;
 
@@ -56,18 +58,4 @@ function parseFvmrcVersions(params: { text: string }): string[] | null {
   }
 
   return versions.length > 0 ? versions : null;
-}
-
-function parseJsonObject(params: { text: string }): Record<string, unknown> | null {
-  try {
-    const value: unknown = JSON.parse(params.text);
-
-    return isJsonObject(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

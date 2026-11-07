@@ -10,8 +10,6 @@ import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
-import type { EntryTimes } from '../system/loadEntryTimes.js';
-import { loadEntryTimes } from '../system/loadEntryTimes.js';
 import type { FileContentFailure } from '../system/loadFileBytes.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
 import { getFileFailure } from '../system/loadFileIdentity.js';
@@ -113,7 +111,7 @@ export async function loadExploreFolderNames(
   };
 }
 
-/** The stats of the entry itself; `null` when nothing is there. */
+/** The stats of the entry itself, its times of change, access, and birth among them; `null` when nothing is there. */
 export async function loadExploreEntryStats(
   params: ExploreRead,
 ): Promise<Result<EntryStats | null, ExploreFileUnreadable>> {
@@ -124,19 +122,6 @@ export async function loadExploreEntryStats(
   }
 
   return toNullWhenNotFound({ read: params, failure: stats.failure });
-}
-
-/** The entry itself with its times of change, access, and birth; `null` when nothing is there. */
-export async function loadExploreEntryTimes(
-  params: ExploreRead,
-): Promise<Result<EntryTimes | null, ExploreFileUnreadable>> {
-  const times = await loadEntryTimes({ path: params.path });
-
-  if (times.kind === 'succeeded') {
-    return times;
-  }
-
-  return toNullWhenNotFound({ read: params, failure: times.failure });
 }
 
 /**

@@ -45,38 +45,42 @@ function buildFolderOffers(params: {
   folder: IdeVersionFolder;
   newestVersion: string;
 }): IdeVersionOffer[] {
-  const folder = params.folder;
   const base = {
-    product: folder.product,
-    version: folder.version,
+    product: params.folder.product,
+    version: params.folder.version,
     newestVersion: params.newestVersion,
   };
 
-  switch (folder.kind) {
+  switch (params.folder.kind) {
     case 'caches':
     case 'logs':
       return [
-        { ...base, folderKind: folder.kind, folderPath: folder.path, foundPaths: [folder.path] },
+        {
+          ...base,
+          folderKind: params.folder.kind,
+          folderPath: params.folder.path,
+          foundPaths: [params.folder.path],
+        },
       ];
     case 'settings': {
       const offers: IdeVersionOffer[] = [];
 
-      if (folder.pluginsPath !== null) {
+      if (params.folder.pluginsPath !== null) {
         offers.push({
           ...base,
           folderKind: 'plugins',
-          folderPath: folder.path,
-          foundPaths: [folder.pluginsPath],
+          folderPath: params.folder.path,
+          foundPaths: [params.folder.pluginsPath],
         });
       }
 
-      const [firstPath, ...otherPaths] = folder.otherPaths;
+      const [firstPath, ...otherPaths] = params.folder.otherPaths;
 
       if (firstPath !== undefined) {
         offers.push({
           ...base,
           folderKind: 'settings',
-          folderPath: folder.path,
+          folderPath: params.folder.path,
           foundPaths: [firstPath, ...otherPaths],
         });
       }

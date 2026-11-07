@@ -3,6 +3,7 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
+import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import type { ExploreProbeDefinition } from '../loadProbeOutput.js';
 
 /** The paths each of the two cleans would remove, across every package folder conda uses. */
@@ -71,17 +72,9 @@ function parseJsonObject(params: { text: string }): Record<string, unknown> | nu
 }
 
 function parseJsonObjectText(params: { text: string }): Record<string, unknown> | null {
-  try {
-    const value: unknown = JSON.parse(params.text);
+  const value = parseJsonValue({ text: params.text });
 
-    return isJsonObject(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return value.kind === 'succeeded' && isJsonObject(value.value) ? value.value : null;
 }
 
 /** `null` for a section that is not `{pkgs_dirs: {<absolute folder>: [<entry name>, …]}}`. */

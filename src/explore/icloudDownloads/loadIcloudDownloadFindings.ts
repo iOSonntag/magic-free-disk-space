@@ -1,8 +1,6 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
-import { walkDirectoryTree } from '../../system/walkDirectoryTree.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeToolResult, ExploreProbeToolRun } from '../exploreProbe.js';
 import type {
@@ -10,7 +8,8 @@ import type {
   ExploreFinding,
   ExploreFoundEvictFile,
 } from '../exploreUnit.js';
-import { loadExploreDirectoryEntries, loadExploreEntryTimes } from '../loadExploreRead.js';
+import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
+import { loadWalkedFiles } from '../loadWalkedFiles.js';
 import { isEvictableFile } from './decideEvictFile.js';
 
 /** The folder of iCloud Drive's own files; the other folders each hold one app's documents. */
@@ -181,71 +180,23 @@ async function loadPlaceFiles(params: {
   place: IcloudPlace;
   maxFiles: number;
 }): Promise<IcloudPlaceFiles> {
-  const filePaths: string[] = [];
-  let isComplete = true;
-  const walkEnd = await walkDirectoryTree({
+  const walked = await loadWalkedFiles({
+    run: params.run,
     rootPath: params.place.folderPath,
-    isStatsNeeded: false,
+    isDescending: params.place.isWalked,
+    maxFiles: params.maxFiles,
     maxConcurrentDirectories: ICLOUD_MAX_CONCURRENT_DIRECTORIES,
-    isStopped: () => Date.now() >= params.run.deadlineMs,
-    entryReads: params.run.platform.entryReads,
-    visitEntry: (entry) => {
-      if (entry.name.startsWith('.')) {
-        return 'skip';
-      }
-
-      if (entry.kind === 'directory') {
-        return params.place.isWalked ? 'descend' : 'skip';
-      }
-
-      if (entry.kind !== 'file') {
-        return 'skip';
-      }
-
-      if (filePaths.length >= params.maxFiles) {
-        return 'stop';
-      }
-
-      filePaths.push(entry.path);
-
-      return 'skip';
-    },
-    onUnreadable: () => {
-      isComplete = false;
-    },
-    onEvictedEntrySkipped: () => {},
+    isKept: (stats) => isEvictableFile({ times: stats, cutoffMs: params.run.unusedCutoffMs }),
   });
-  const files: ExploreFoundEvictFile[] = [];
 
-  for (const filePath of filePaths.sort()) {
-    if (Date.now() >= params.run.deadlineMs) {
-      return { files: files, isComplete: false };
-    }
-
-    const times = await loadExploreEntryTimes({
-      path: filePath,
-      privacyDenialCode: params.run.platform.privacyDenialCode,
-    });
-
-    if (times.kind === 'failed') {
-      isComplete = false;
-
-      continue;
-    }
-
-    if (
-      times.value !== null &&
-      isEvictableFile({ times: times.value, cutoffMs: params.run.unusedCutoffMs })
-    ) {
-      files.push({
-        path: parseWalkedPath({ run: params.run, text: filePath }),
-        modifiedMs: times.value.modifiedMs,
-        accessedMs: times.value.accessedMs,
-      });
-    }
-  }
-
-  return { files: files, isComplete: isComplete && walkEnd === 'completed' };
+  return {
+    files: walked.files.map((file) => ({
+      path: file.path,
+      modifiedMs: file.stats.modifiedMs,
+      accessedMs: file.stats.accessedMs,
+    })),
+    isComplete: walked.isComplete,
+  };
 }
 
 function buildIcloudFinding(params: {
@@ -297,17 +248,6 @@ function joinPath(params: {
     parentPath: params.parentPath,
     names: [params.name],
   });
-}
-
-/** A path the walk joined below an absolute root; throws for one that is not absolute, a bug. */
-function parseWalkedPath(params: { run: ExploreProbeToolRun; text: string }): AbsolutePath {
-  const path = parseAbsolutePath({ rules: params.run.environment.pathRules, text: params.text });
-
-  if (path.kind === 'failed') {
-    throw new Error('The walk of iCloud Drive joined a path that is not absolute.');
-  }
-
-  return path.value;
 }
 
 /** An app's folder by the last part of its name: `iCloud~md~obsidian` is Obsidian's. */

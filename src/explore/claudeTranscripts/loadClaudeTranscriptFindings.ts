@@ -3,7 +3,7 @@ import { buildClaudeTranscriptFindings } from './buildClaudeTranscriptFindings.j
 import { CLAUDE_TRANSCRIPT_UNTOUCHED_MS } from './decideOldTranscriptPaths.js';
 import { loadClaudeProjectsState } from './loadClaudeProjectsState.js';
 
-/** The conversations of each Claude Code project untouched for 30 days. */
+/** The conversations of each Claude Code project untouched for `CLAUDE_TRANSCRIPT_UNTOUCHED_MS`. */
 export async function loadClaudeTranscriptFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {

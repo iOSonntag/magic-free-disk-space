@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { ExploreToolUnitVagrantBoxVersion } from '../../src/explore/exploreUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import { buildVagrantBoxFindings } from '../../src/explore/vagrantBoxes/buildVagrantBoxFindings.js';
@@ -12,15 +11,15 @@ import { compareVagrantBoxVersion } from '../../src/explore/vagrantBoxes/recheck
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { createFakeTool } from '../support/fakeTool.js';
-import type { FixtureRoot } from '../support/fixtureRoot.js';
-import {
-  createFixtureRoot,
-  deleteFixtureRoot,
-  loadTestEnvironment,
-} from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import type { FixtureHome } from '../support/probeRunFixtures.js';
+import {
+  buildTestProbeRun,
+  getProbeFindings,
+  withFixtureHome,
+} from '../support/probeRunFixtures.js';
+import { createProbeFakeTool } from './probeFakeTools.js';
 
 /** Made-up `vagrant box list --machine-readable` output; no line comes from a real machine. */
 const BOX_LIST_TEXT = [
@@ -237,88 +236,78 @@ describe('compareVagrantBoxVersion', () => {
 });
 
 describeAwaitingWin32Platform('the Vagrant box probe with a fake vagrant', () => {
-  let fixtureRoot: FixtureRoot;
-  let environment: Environment;
-
-  beforeEach(async () => {
-    fixtureRoot = await createFixtureRoot();
-    environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  });
-
-  afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  });
-
-  async function createFakeVagrant(params: { exitCode: number }): Promise<LocatedTool> {
-    const path = await createFakeTool({
-      folder: join(fixtureRoot.rootDir, 'tools'),
+  async function createFakeVagrant(params: {
+    home: FixtureHome;
+    exitCode: number;
+  }): Promise<LocatedTool> {
+    const path = await createProbeFakeTool({
+      folder: join(params.home.fixtureRoot.rootDir, 'tools'),
       name: 'vagrant',
-      body: `import * as fs from 'node:fs';
-
-if (process.argv.slice(2).join(' ') === 'box list --machine-readable') {
-  fs.writeSync(1, ${JSON.stringify(BOX_LIST_TEXT)});
-  process.exit(${params.exitCode});
-}
-
-process.exit(64);`,
+      answers: [
+        { command: 'vagrantBoxList', stdoutText: BOX_LIST_TEXT, exitCode: params.exitCode },
+      ],
     });
 
     return { name: 'vagrant', path: await realpath(path) };
   }
 
   test('lists the boxes with the machine-readable list and offers the outdated versions', async () => {
-    const tool = await createFakeVagrant({ exitCode: 0 });
-    const findings = await loadVagrantBoxFindings({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      processCommands: [],
-      deadlineMs: Date.now() + TIMEOUT_MS,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-      tool: tool,
-    });
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        const tool = await createFakeVagrant({ home: home, exitCode: 0 });
+        const findings = getProbeFindings(
+          await loadVagrantBoxFindings({
+            ...buildTestProbeRun({ environment: home.environment }),
+            tool: tool,
+          }),
+        );
 
-    expect(findings.kind).toBe('succeeded');
-    expect(
-      findings.kind === 'succeeded' ? findings.value.findings.map((finding) => finding.unit) : [],
-    ).toEqual([
-      buildOutdatedUnit({ tool: tool, homeDir: environment.homeDir }),
-      expect.objectContaining({ name: 'example/arm', version: '1.0' }),
-    ]);
+        expect(findings.findings.map((finding) => finding.unit)).toEqual([
+          buildOutdatedUnit({ tool: tool, homeDir: home.environment.homeDir }),
+          expect.objectContaining({ name: 'example/arm', version: '1.0' }),
+        ]);
+      },
+    });
   });
 
   test('rechecks a unit by listing the boxes again', async () => {
-    const tool = await createFakeVagrant({ exitCode: 0 });
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        const tool = await createFakeVagrant({ home: home, exitCode: 0 });
 
-    expect(
-      await recheckExploreUnit({
-        unit: buildOutdatedUnit({ tool: tool, homeDir: environment.homeDir }),
-        tool: tool,
-        environment: environment,
-        platform: buildTestProbePlatform(),
-        processCommands: [],
-        timeoutMs: TIMEOUT_MS,
-      }),
-    ).toEqual({ kind: 'unchanged' });
+        expect(
+          await recheckExploreUnit({
+            unit: buildOutdatedUnit({ tool: tool, homeDir: home.environment.homeDir }),
+            tool: tool,
+            environment: home.environment,
+            platform: buildTestProbePlatform(),
+            processCommands: [],
+            timeoutMs: TIMEOUT_MS,
+          }),
+        ).toEqual({ kind: 'unchanged' });
+      },
+    });
   });
 
   test('fails when vagrant exits with an error', async () => {
-    const tool = await createFakeVagrant({ exitCode: 1 });
-    const findings = await loadVagrantBoxFindings({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      processCommands: [],
-      deadlineMs: Date.now() + TIMEOUT_MS,
-      unusedCutoffMs: 0,
-      staleCutoffMs: 0,
-      tool: tool,
-    });
+    await withFixtureHome({
+      nowMs: Date.now(),
+      run: async (home) => {
+        const tool = await createFakeVagrant({ home: home, exitCode: 1 });
+        const findings = await loadVagrantBoxFindings({
+          ...buildTestProbeRun({ environment: home.environment }),
+          tool: tool,
+        });
 
-    expect(findings).toEqual({
-      kind: 'failed',
-      failure: {
-        reason: 'commandFailed',
-        failure: expect.objectContaining({ reason: 'exitedWithError' }),
+        expect(findings).toEqual({
+          kind: 'failed',
+          failure: {
+            reason: 'commandFailed',
+            failure: expect.objectContaining({ reason: 'exitedWithError' }),
+          },
+        });
       },
     });
   });
