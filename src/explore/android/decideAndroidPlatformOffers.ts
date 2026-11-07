@@ -28,23 +28,21 @@ export function decideAndroidPlatformOffers(params: {
   const offers: AndroidPlatformOffer[] = [];
   let isComplete = true;
 
-  for (const platform of params.state.platforms) {
-    const apiLevel =
-      platform.kind === 'parsed'
-        ? parseAndroidPlatformApiLevel({ packagePath: platform.packagePath })
-        : null;
+  for (const sdk of params.state.sdks) {
+    for (const platform of sdk.platforms) {
+      const apiLevel =
+        platform.kind === 'parsed'
+          ? parseAndroidPlatformApiLevel({ packagePath: platform.packagePath })
+          : null;
 
-    if (apiLevel === null) {
-      isComplete = false;
-      continue;
-    }
+      if (apiLevel === null) {
+        isComplete = false;
+        continue;
+      }
 
-    if (!isAndroidPlatformPinned({ compileSdkPins: compileSdkPins, apiLevel: apiLevel })) {
-      offers.push({
-        sdkRoot: params.state.sdkRoot,
-        folderPath: platform.folderPath,
-        apiLevel: apiLevel,
-      });
+      if (!isAndroidPlatformPinned({ compileSdkPins: compileSdkPins, apiLevel: apiLevel })) {
+        offers.push({ sdkRoot: sdk.sdkRoot, folderPath: platform.folderPath, apiLevel: apiLevel });
+      }
     }
   }
 

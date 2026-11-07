@@ -4,7 +4,6 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
-import type { HomeRelativePathNames } from '../explorePlatform.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
   loadExploreDirectoryNames,
@@ -51,7 +50,7 @@ export type AndroidAvdPresent = {
 /** One `*.ini` of `~/.android/avd`, and what its folder told. */
 export type AndroidAvd = AndroidAvdUnlocated | AndroidAvdMissing | AndroidAvdPresent;
 
-/** The SDK at the platform's SDK root below the home folder, with its package folders that hold a `package.xml`. */
+/** An SDK at one of its roots, with its package folders that hold a `package.xml`. */
 export type AndroidSdk = {
   sdkRoot: AbsolutePath;
   systemImages: AndroidPackageFolder[];
@@ -59,10 +58,10 @@ export type AndroidSdk = {
   emulator: AndroidPackageFolder | null;
 };
 
-/** What the reads of the SDK and of `~/.android/avd` found. */
+/** What the reads of the SDKs and of `~/.android/avd` found. */
 export type AndroidSdkState = {
-  /** `null` without an SDK. */
-  sdk: AndroidSdk | null;
+  /** The SDKs of the roots that are folders, in the roots' order; none without an SDK. */
+  sdks: AndroidSdk[];
   /** `null` when `~/.android/avd` is absent, so the AVDs may live elsewhere. */
   avds: AndroidAvd[] | null;
 };
@@ -84,27 +83,31 @@ const IMAGE_SYSDIR_KEY = 'image.sysdir.1';
 const SYSTEM_IMAGE_FOLDER_DEPTH = 3;
 
 /**
- * Reads the SDK and the AVDs, for the three Android probes and the rechecks of their units.
- * A read that is absent or unfit is a fact of the state; only a failed read fails.
+ * Reads the SDKs at `sdkRoots` and the AVDs, for the three Android probes and the rechecks of
+ * their units. A read that is absent or unfit is a fact of the state; only a failed read fails.
  */
 export async function loadAndroidSdkState(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  androidSdkRoot: HomeRelativePathNames;
+  sdkRoots: AbsolutePath[];
   privacyDenialCode: string | null;
 }): Promise<Result<AndroidSdkState, ExploreFileUnreadable>> {
-  const sdk = await loadAndroidSdk({
-    pathRules: params.pathRules,
-    sdkRoot: joinAbsolutePath({
-      rules: params.pathRules,
-      parentPath: params.homeDir,
-      names: params.androidSdkRoot,
-    }),
-    privacyDenialCode: params.privacyDenialCode,
-  });
+  const sdks: AndroidSdk[] = [];
 
-  if (sdk.kind === 'failed') {
-    return sdk;
+  for (const sdkRoot of params.sdkRoots) {
+    const sdk = await loadAndroidSdk({
+      pathRules: params.pathRules,
+      sdkRoot: sdkRoot,
+      privacyDenialCode: params.privacyDenialCode,
+    });
+
+    if (sdk.kind === 'failed') {
+      return sdk;
+    }
+
+    if (sdk.value !== null) {
+      sdks.push(sdk.value);
+    }
   }
 
   const avds = await loadAndroidAvds({
@@ -121,7 +124,7 @@ export async function loadAndroidSdkState(params: {
     return avds;
   }
 
-  return { kind: 'succeeded', value: { sdk: sdk.value, avds: avds.value } };
+  return { kind: 'succeeded', value: { sdks: sdks, avds: avds.value } };
 }
 
 async function loadAndroidSdk(params: {

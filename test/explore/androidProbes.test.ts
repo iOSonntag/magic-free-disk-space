@@ -87,6 +87,7 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
       projectPins: buildEmptyProjectPinsLoad(),
       timeoutMs: 10_000,
       unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+      staleCutoffMs: 0,
     });
 
     expect(await probes.androidAvds).toEqual({

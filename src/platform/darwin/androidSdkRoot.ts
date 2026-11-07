@@ -1,10 +1,13 @@
-import { stubPartNotBuilt } from '../../notBuilt.js';
+import type { HomeRelativePathNames } from '../../explore/explorePlatform.js';
 
 /** The Android SDK below the home folder, `~/Library/Android/sdk`. */
 export const ANDROID_SDK_PATH_NAMES = ['Library', 'Android', 'sdk'];
 
 /**
- * Flutter's settings file below the home folder, whose `android-sdk` may name a second SDK. Part
- * 4b settles it; until then no probe reads it.
+ * Flutter's settings files below the home folder, in Flutter's order: the legacy
+ * `~/.flutter_settings` wins while it exists, else `~/.config/flutter/settings`.
  */
-export const FLUTTER_SETTINGS_PATH_NAMES = stubPartNotBuilt(['.config', 'flutter', 'settings']);
+export const FLUTTER_SETTINGS_PATHS: HomeRelativePathNames[] = [
+  ['.flutter_settings'],
+  ['.config', 'flutter', 'settings'],
+];

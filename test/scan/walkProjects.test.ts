@@ -341,4 +341,83 @@ describeAwaitingWin32Platform('walkProjects', () => {
 
     expect(result.pinFiles).toEqual([]);
   });
+
+  test('finds each new project folder beside its marker file', async () => {
+    const projects: { folder: string; artifact: string; marker: string }[] = [
+      { folder: 'sst-app', artifact: '.sst', marker: 'sst.config.ts' },
+      { folder: 'rust-app', artifact: 'target', marker: 'Cargo.toml' },
+      { folder: 'android-app', artifact: 'build', marker: 'build.gradle.kts' },
+      { folder: 'flutter-app', artifact: 'build', marker: 'pubspec.yaml' },
+      { folder: 'swift-package', artifact: '.build', marker: 'Package.swift' },
+      { folder: 'gradle-app', artifact: '.gradle', marker: 'settings.gradle' },
+      { folder: 'ios-app', artifact: 'Pods', marker: 'Podfile' },
+      { folder: 'php-app', artifact: 'vendor', marker: 'composer.json' },
+      { folder: 'infra', artifact: '.terraform', marker: 'main.tf' },
+      { folder: 'svelte-app', artifact: '.svelte-kit', marker: 'package.json' },
+      { folder: 'nuxt-app', artifact: '.nuxt', marker: 'package.json' },
+      { folder: 'angular-app', artifact: '.angular', marker: 'package.json' },
+    ];
+
+    for (const project of projects) {
+      const projectPath = join(fixtureRoot.homeDir, project.folder);
+      await createFixtureDirectory({ path: join(projectPath, project.artifact) });
+      await createEmptyFile({ path: join(projectPath, project.marker) });
+    }
+
+    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+
+    expect(
+      result.artifacts.map((finding) => [finding.artifactPath, finding.rule.artifactName]),
+    ).toEqual(
+      projects
+        .map((project) => [
+          join(fixtureRoot.homeDir, project.folder, project.artifact),
+          project.artifact,
+        ])
+        .toSorted((left, right) => ((left[0] ?? '') < (right[0] ?? '') ? -1 : 1)),
+    );
+  });
+
+  test('does not report a new project folder without its marker file', async () => {
+    const unmarked: { folder: string; artifact: string; other: string }[] = [
+      { folder: 'docs', artifact: 'build', other: 'Makefile' },
+      { folder: 'notes', artifact: 'target', other: 'README.md' },
+      { folder: 'infra', artifact: '.terraform', other: '.tf' },
+      { folder: 'libs', artifact: 'vendor', other: 'package.json' },
+      { folder: 'gradle-sub', artifact: '.gradle', other: 'build.gradle' },
+    ];
+
+    for (const project of unmarked) {
+      const projectPath = join(fixtureRoot.homeDir, project.folder);
+      await createFixtureDirectory({ path: join(projectPath, project.artifact) });
+      await createEmptyFile({ path: join(projectPath, project.other) });
+    }
+
+    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+
+    expect(result.artifacts).toEqual([]);
+  });
+
+  test('collects rust-toolchain, .fvmrc, and local.properties as pin files', async () => {
+    const projectPath = join(fixtureRoot.homeDir, 'app');
+    const names: { name: string; kind: ProjectPinFileKind }[] = [
+      { name: 'rust-toolchain.toml', kind: 'rustToolchain' },
+      { name: 'rust-toolchain', kind: 'rustToolchain' },
+      { name: '.fvmrc', kind: 'fvmrc' },
+      { name: 'local.properties', kind: 'androidLocalProperties' },
+    ];
+    await createFixtureDirectory({ path: projectPath });
+
+    for (const entry of names) {
+      await createEmptyFile({ path: join(projectPath, entry.name) });
+    }
+
+    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+
+    expect(result.pinFiles.toSorted(comparePinFilePaths)).toEqual(
+      names
+        .map((entry) => buildPinFileRef({ path: join(projectPath, entry.name), kind: entry.kind }))
+        .toSorted(comparePinFilePaths),
+    );
+  });
 });

@@ -38,6 +38,7 @@ export const TOOL_INSTALL_LOCATIONS: ToolInstallLocations = {
   conda: [
     { kind: 'path', root: 'absolute', path: '/opt/homebrew/bin/conda' },
     { kind: 'path', root: 'home', path: 'miniconda3/bin/conda' },
+    { kind: 'path', root: 'home', path: 'miniforge3/bin/conda' },
     { kind: 'path', root: 'home', path: 'anaconda3/bin/conda' },
   ],
   fvm: [

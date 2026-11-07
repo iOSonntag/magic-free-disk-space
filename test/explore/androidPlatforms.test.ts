@@ -6,7 +6,10 @@ import { buildAndroidPlatformFindings } from '../../src/explore/android/buildAnd
 import { compareAndroidPlatformUnit } from '../../src/explore/android/compareAndroidPlatformUnit.js';
 import type { AndroidPlatformOffers } from '../../src/explore/android/decideAndroidPlatformOffers.js';
 import { decideAndroidPlatformOffers } from '../../src/explore/android/decideAndroidPlatformOffers.js';
-import type { AndroidPlatformState } from '../../src/explore/android/loadAndroidPlatformState.js';
+import type {
+  AndroidPlatformSdk,
+  AndroidPlatformState,
+} from '../../src/explore/android/loadAndroidPlatformState.js';
 import type { AndroidCompileSdkPins } from '../../src/explore/android/parseAndroidCompileSdkPins.js';
 import { parseAndroidCompileSdkPins } from '../../src/explore/android/parseAndroidCompileSdkPins.js';
 import type { ExplorePathUnitAndroidPlatform } from '../../src/explore/exploreUnit.js';
@@ -81,6 +84,10 @@ function buildExamplePlatformPath(folderName: string): AbsolutePath {
 }
 
 function buildExampleState(): AndroidPlatformState {
+  return { sdks: [buildExampleSdk()] };
+}
+
+function buildExampleSdk(): AndroidPlatformSdk {
   return {
     sdkRoot: EXAMPLE_SDK_ROOT,
     platforms: [
@@ -224,8 +231,9 @@ describeAwaitingWin32Platform('decideAndroidPlatformOffers', () => {
   });
 
   test('leaves an extension platform not judged when a file pins every platform', () => {
-    const state = buildExampleState();
-    state.platforms.push({
+    const sdk = buildExampleSdk();
+    const state: AndroidPlatformState = { sdks: [sdk] };
+    sdk.platforms.push({
       kind: 'parsed',
       folderPath: buildExamplePlatformPath('android-33-ext5'),
       packagePath: 'platforms;android-33-ext5',
@@ -240,8 +248,9 @@ describeAwaitingWin32Platform('decideAndroidPlatformOffers', () => {
   });
 
   test('leaves an extension platform, a preview, and an unparsed folder not judged', () => {
-    const state = buildExampleState();
-    state.platforms.push(
+    const sdk = buildExampleSdk();
+    const state: AndroidPlatformState = { sdks: [sdk] };
+    sdk.platforms.push(
       {
         kind: 'parsed',
         folderPath: buildExamplePlatformPath('android-33-ext5'),
@@ -366,7 +375,7 @@ describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
     expect(
       compareAndroidPlatformUnit({
         unit: unit,
-        state: { sdkRoot: EXAMPLE_SDK_ROOT, platforms: [] },
+        state: { sdks: [{ sdkRoot: EXAMPLE_SDK_ROOT, platforms: [] }] },
         toolPins: buildTextPins(),
         processCommands: [],
       }),
@@ -423,6 +432,7 @@ async function loadAndroidProbeOutcomes(params: {
     projectPins: buildFoundProjectPinsLoad({ files: params.pinFiles }),
     timeoutMs: 10_000,
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+    staleCutoffMs: 0,
   });
 
   return {

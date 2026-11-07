@@ -25,6 +25,7 @@ import type {
   ExploreProbeFindings,
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
+import type { ProjectPins } from '../../src/explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
@@ -81,10 +82,12 @@ function buildStateLoad(): Parameters<typeof loadAndroidSdkState>[0] {
   return {
     pathRules: DARWIN_PATH_RULES,
     homeDir: homeDir,
-    androidSdkRoot: platform.explore.androidSdkRoot,
+    sdkRoots: [buildAndroidSdkRoot({ homeDir: homeDir })],
     privacyDenialCode: platform.privacyDenialCode,
   };
 }
+
+const NO_PROJECT_PINS: ProjectPins = { files: [], isWalkComplete: true };
 
 type AndroidProbeAnswers = {
   avds: ExploreProbeFindings;
@@ -101,10 +104,17 @@ async function loadAndroidProbeAnswers(
     processCommands: processCommands,
     deadlineMs: Date.now() + 10_000,
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+    staleCutoffMs: 0,
   };
-  const avds = await loadAndroidAvdFindings({ ...run, tool: tool });
-  const systemImages = await loadAndroidSystemImageFindings(run);
-  const emulator = await loadAndroidEmulatorFindings(run);
+  const avds = await loadAndroidAvdFindings({
+    run: { ...run, tool: tool },
+    projectPins: NO_PROJECT_PINS,
+  });
+  const systemImages = await loadAndroidSystemImageFindings({
+    run: run,
+    projectPins: NO_PROJECT_PINS,
+  });
+  const emulator = await loadAndroidEmulatorFindings({ run: run, projectPins: NO_PROJECT_PINS });
 
   if (avds.kind === 'failed' || systemImages.kind === 'failed' || emulator.kind === 'failed') {
     throw new Error('An Android probe failed.');
@@ -523,11 +533,15 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     });
     expect(
       await loadAndroidSystemImageFindings({
-        environment: environment,
-        platform: buildTestProbePlatform(),
-        processCommands: [],
-        deadlineMs: Date.now() + 10_000,
-        unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+        run: {
+          environment: environment,
+          platform: buildTestProbePlatform(),
+          processCommands: [],
+          deadlineMs: Date.now() + 10_000,
+          unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+          staleCutoffMs: 0,
+        },
+        projectPins: NO_PROJECT_PINS,
       }),
     ).toMatchObject({ kind: 'failed', failure: { reason: 'fileUnreadable', path: avd.iniPath } });
   });
@@ -563,7 +577,7 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     avds: AndroidAvd[] | null;
   }): AndroidSdkState {
     return {
-      sdk: { sdkRoot: params.unit.sdkRoot, systemImages: [], emulator: null },
+      sdks: [{ sdkRoot: params.unit.sdkRoot, systemImages: [], emulator: null }],
       avds: params.avds,
     };
   }
@@ -676,8 +690,8 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     const avds = [buildListedAvd({ unit: unit })];
     const otherSdkRoot = buildTestAbsolutePath({ text: '/Users/example/Other/sdk' });
     const states: AndroidSdkState[] = [
-      { sdk: null, avds: avds },
-      { sdk: { sdkRoot: otherSdkRoot, systemImages: [], emulator: null }, avds: avds },
+      { sdks: [], avds: avds },
+      { sdks: [{ sdkRoot: otherSdkRoot, systemImages: [], emulator: null }], avds: avds },
     ];
 
     for (const state of states) {

@@ -3,7 +3,16 @@ import type { ReadFailure } from '../../system/readFailure.js';
 import type { ExploreFileReadText, ExploreFileReadUnfit } from '../loadExploreRead.js';
 
 /** What a pin file pins, decided by its name; each kind of unit selects its pins by these kinds. */
-export type ProjectPinFileKind = 'toolVersions' | 'nvmrc' | 'gradle' | 'packageJson' | 'miseConfig';
+export type ProjectPinFileKind =
+  | 'toolVersions'
+  | 'nvmrc'
+  | 'gradle'
+  | 'packageJson'
+  | 'miseConfig'
+  | 'rustToolchain'
+  | 'fvmrc'
+  /** An Android project's `local.properties`, whose `sdk.dir` names the SDK it builds with. */
+  | 'androidLocalProperties';
 
 /** A pin file the project walk or mise's tracked configs found, with its kind matched once. */
 export type ProjectPinFileRef = { path: AbsolutePath; kind: ProjectPinFileKind };
@@ -32,6 +41,8 @@ const MISE_CONFIG_FILE_NAMES = ['mise.toml', '.mise.toml', 'mise.local.toml', '.
 const GRADLE_BUILD_FILE_NAMES = ['build.gradle', 'build.gradle.kts'];
 
 const PNPM_LOCK_FILE_NAME = 'pnpm-lock.yaml';
+
+const RUST_TOOLCHAIN_FILE_NAMES = ['rust-toolchain.toml', 'rust-toolchain'];
 
 const TOML_SUFFIX = '.toml';
 
@@ -75,6 +86,18 @@ export function matchProjectPinFileName(params: {
 
   if (params.name === 'package.json') {
     return 'packageJson';
+  }
+
+  if (RUST_TOOLCHAIN_FILE_NAMES.includes(params.name)) {
+    return 'rustToolchain';
+  }
+
+  if (params.name === '.fvmrc') {
+    return 'fvmrc';
+  }
+
+  if (params.name === 'local.properties') {
+    return 'androidLocalProperties';
   }
 
   if (MISE_CONFIG_FILE_NAMES.includes(params.name)) {
