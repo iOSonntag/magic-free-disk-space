@@ -22,10 +22,9 @@ const pnpmXdgHome: CatalogLocation = { root: 'home', path: '.local/share/pnpm' }
 const pnpmHomes = [pnpmHome, pnpmXdgHome];
 
 /**
- * Where pnpm is installed on macOS beside Homebrew: its homes, corepack's cache in
- * `~/.cache/node/corepack`, the pnpm and the node versions of asdf, mise and nvm, the launcher
- * `pnpm` that `install.sh` and `pnpm setup` put in a home, and npm's globals in `lib/node_modules`
- * below each prefix.
+ * Where pnpm is installed on macOS beside Homebrew: its homes, corepack's cache, the pnpm and node
+ * versions of asdf, mise and nvm, the launcher `pnpm` in each home, and npm's globals in
+ * `lib/node_modules` below each prefix.
  */
 export const pnpmInstallPlaces: PnpmInstallPlaces = {
   homes: pnpmHomes,

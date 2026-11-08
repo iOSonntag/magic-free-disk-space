@@ -171,8 +171,7 @@ describe('WIN32_CATALOG', () => {
 /**
  * The locations at a fixed root of the catalog: the entries with their install folders, pnpm's
  * places, the Android SDK, VS Code's profiles, and the file roots and guarded folders outside a
- * known folder. It skips the explore fields Windows leaves empty or null, such as
- * `ideVersionRoots`.
+ * known folder. The explore fields Windows leaves empty or null are skipped.
  */
 function listNamedLocations(): NamedLocation[] {
   const entryLocations = WIN32_CATALOG.entries.flatMap((entry) => {

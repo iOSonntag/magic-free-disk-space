@@ -22,10 +22,9 @@ import { buildTestDriveRoot } from './parsedValueFixtures.js';
 const E_FAIL_HRESULT = 0x80004005;
 
 /**
- * The Windows platform for a test, over the real sections of `win32Platform` with what a test
- * answers itself swapped in. Left out, no installed app is listed, every Recycle Bin holds nothing
- * and fails to empty as `E_FAIL` would, and the processes are the real ones, so no test reads the
- * registry or touches a real bin.
+ * The Windows platform for a test: the real sections of `win32Platform` with what a test answers
+ * itself swapped in. Left out, no app is listed, every Recycle Bin is empty and fails to empty,
+ * and the processes are the real ones.
  */
 export function buildTestWin32Platform(params: {
   loadAdvisedApps?: ScanPlatformAppsAdvised['loadAdvisedApps'];

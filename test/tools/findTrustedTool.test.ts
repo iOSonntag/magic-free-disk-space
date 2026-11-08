@@ -12,7 +12,7 @@ import {
   exampleWindowsUser,
   hostPathRules,
 } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -43,8 +43,8 @@ async function createMise(params: { folder: string; mode?: number }): Promise<st
 
 // Trust rests on the POSIX owner and mode of a binary; a Windows user trusts none, as the suite
 // "findTrustedTool for a Windows user" shows.
-describe('findTrustedTool', () => {
-  testOnPosix('returns the real path of a trusted binary', async () => {
+describeOnPosix('findTrustedTool', () => {
+  test('returns the real path of a trusted binary', async () => {
     const path = await createMise({ folder: 'trusted' });
 
     const found = await findTrustedTool({
@@ -61,7 +61,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('follows a symbolic link and returns the real path of its target', async () => {
+  test('follows a symbolic link and returns the real path of its target', async () => {
     const target = await createMise({ folder: 'Cellar/mise/bin' });
     const linkFolder = join(fixtureRoot.rootDir, 'bin');
     const link = join(linkFolder, 'mise');
@@ -83,7 +83,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('distrusts a binary its group can write', async () => {
+  test('distrusts a binary its group can write', async () => {
     const path = await createMise({ folder: 'shared', mode: 0o775 });
 
     const found = await findTrustedTool({
@@ -100,7 +100,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('distrusts a file without an execute bit, and a folder', async () => {
+  test('distrusts a file without an execute bit, and a folder', async () => {
     const path = await createMise({ folder: 'plain', mode: 0o644 });
     const folder = join(fixtureRoot.rootDir, 'folder', 'mise');
 
@@ -119,7 +119,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('distrusts a binary of another user', async () => {
+  test('distrusts a binary of another user', async () => {
     const path = await createMise({ folder: 'mine' });
 
     const loaded = await loadTrustedTool({
@@ -134,7 +134,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('fails as not found when no location has a binary, or a link dangles', async () => {
+  test('fails as not found when no location has a binary, or a link dangles', async () => {
     const link = join(fixtureRoot.rootDir, 'dangling');
 
     await symlink(join(fixtureRoot.rootDir, 'gone'), link);
@@ -153,7 +153,7 @@ describe('findTrustedTool', () => {
     expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
   });
 
-  testOnPosix('takes the first trusted location, past missing and untrusted ones', async () => {
+  test('takes the first trusted location, past missing and untrusted ones', async () => {
     const untrusted = await createMise({ folder: 'first', mode: 0o777 });
     const trusted = await createMise({ folder: 'second' });
     const later = await createMise({ folder: 'third' });
@@ -177,7 +177,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('without a trusted location, names the first binary that exists', async () => {
+  test('without a trusted location, names the first binary that exists', async () => {
     const notExecutable = await createMise({ folder: 'first', mode: 0o644 });
     const writable = await createMise({ folder: 'second', mode: 0o777 });
 
@@ -203,7 +203,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('resolves a home location against the home folder', async () => {
+  test('resolves a home location against the home folder', async () => {
     const path = await createFakeTool({
       folder: join(fixtureRoot.homeDir, '.local', 'bin'),
       name: 'mise',
@@ -224,7 +224,7 @@ describe('findTrustedTool', () => {
     });
   });
 
-  testOnPosix('finds the Dart binary of a Flutter SDK that an active root names', async () => {
+  test('finds the Dart binary of a Flutter SDK that an active root names', async () => {
     const dart = await createActiveFlutterSdk({
       folder: 'flutter',
       activeRootFileName: 'abcdef',
@@ -277,8 +277,8 @@ async function createActiveFlutterSdk(params: {
   return dart;
 }
 
-describe('findTrustedTool with the version of dart', () => {
-  testOnPosix('skips a Dart older than 3.11 whose active root sorts first', async () => {
+describeOnPosix('findTrustedTool with the version of dart', () => {
+  test('skips a Dart older than 3.11 whose active root sorts first', async () => {
     await createActiveFlutterSdk({
       folder: 'flutter-old',
       activeRootFileName: 'aa',
@@ -304,7 +304,7 @@ describe('findTrustedTool with the version of dart', () => {
     });
   });
 
-  testOnPosix('fails as not found when only a Dart older than 3.11 exists', async () => {
+  test('fails as not found when only a Dart older than 3.11 exists', async () => {
     await createActiveFlutterSdk({
       folder: 'flutter-old',
       activeRootFileName: 'aa',
@@ -322,7 +322,7 @@ describe('findTrustedTool with the version of dart', () => {
     expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
   });
 
-  testOnPosix('skips a Dart without a version file and goes on to the next location', async () => {
+  test('skips a Dart without a version file and goes on to the next location', async () => {
     await createActiveFlutterSdk({
       folder: 'flutter-unknown',
       activeRootFileName: 'aa',
@@ -355,7 +355,7 @@ describe('findTrustedTool with the version of dart', () => {
   });
 });
 
-describe("findTrustedTool with Flutter's wrapper of dart", () => {
+describeOnPosix("findTrustedTool with Flutter's wrapper of dart", () => {
   /**
    * A made-up Flutter root with its `bin/dart` wrapper and `bin/flutter` script, the SDK binary
    * when `sdkDartMode` is given, and a link to the wrapper at a fixed location, which it returns.
@@ -396,7 +396,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     return { linkPath: linkPath, sdkDartPath: sdkDartPath };
   }
 
-  testOnPosix('takes the binary of the SDK behind the wrapper', async () => {
+  test('takes the binary of the SDK behind the wrapper', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
 
     const found = await findTrustedTool({
@@ -413,7 +413,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     });
   });
 
-  testOnPosix('takes the SDK binary while the Flutter script is a dangling link', async () => {
+  test('takes the SDK binary while the Flutter script is a dangling link', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
     const flutterScriptPath = join(fixtureRoot.rootDir, 'flutter', 'bin', 'flutter');
 
@@ -434,7 +434,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     });
   });
 
-  testOnPosix('finds nothing while the SDK binary is not there', async () => {
+  test('finds nothing while the SDK binary is not there', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: null });
 
     const found = await findTrustedTool({
@@ -448,7 +448,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     expect(found).toEqual({ kind: 'failed', failure: { reason: 'notFound' } });
   });
 
-  testOnPosix('puts the SDK binary through the trust check', async () => {
+  test('puts the SDK binary through the trust check', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: 0o775 });
 
     const found = await findTrustedTool({
@@ -469,33 +469,30 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     });
   });
 
-  testOnPosix(
-    'keeps the `bin/dart` of a Dart SDK, which has no Flutter script beside it',
-    async () => {
-      const dart = await createFakeTool({
-        folder: join(fixtureRoot.rootDir, 'dart-sdk', 'bin'),
-        name: 'dart',
-        body: 'process.exit(0);',
-      });
+  test('keeps the `bin/dart` of a Dart SDK, which has no Flutter script beside it', async () => {
+    const dart = await createFakeTool({
+      folder: join(fixtureRoot.rootDir, 'dart-sdk', 'bin'),
+      name: 'dart',
+      body: 'process.exit(0);',
+    });
 
-      await writeDartVersionFile({ dartPath: dart, version: '3.11.0' });
+    await writeDartVersionFile({ dartPath: dart, version: '3.11.0' });
 
-      const found = await findTrustedTool({
-        name: 'dart',
-        locations: [buildAbsoluteLocation(dart)],
-        pathRules: hostPathRules,
-        homeDir: fixtureRoot.homeDir,
-        user: user,
-      });
+    const found = await findTrustedTool({
+      name: 'dart',
+      locations: [buildAbsoluteLocation(dart)],
+      pathRules: hostPathRules,
+      homeDir: fixtureRoot.homeDir,
+      user: user,
+    });
 
-      expect(found).toEqual({
-        kind: 'succeeded',
-        value: { name: 'dart', path: await realpath(dart) },
-      });
-    },
-  );
+    expect(found).toEqual({
+      kind: 'succeeded',
+      value: { name: 'dart', path: await realpath(dart) },
+    });
+  });
 
-  testOnPosix('loadTrustedTool reads the wrapper the same way', async () => {
+  test('loadTrustedTool reads the wrapper the same way', async () => {
     const layout = await createFlutterLayout({ sdkDartMode: 0o755 });
 
     expect(await loadTrustedTool({ name: 'dart', path: layout.linkPath, user: user })).toEqual({

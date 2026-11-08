@@ -17,11 +17,9 @@ export const NOT_ABSOLUTE_CODE = 'notAbsolute';
 const win32DriveRootPattern = /^[A-Za-z]:[\\/]/;
 
 /**
- * The one maker of an `AbsolutePath`; fails for a path that is not absolute under `rules`, and for
- * one that holds a NUL character. A POSIX path is taken as it is. A Windows path must start at a
- * drive letter, so a share (`\\server\x`), a device path (`\\?\`, `\\.\`), a path relative to a
- * drive (`C:x`), and one rooted without a drive (`\x`) fail; it is normalized to `\` separators
- * without `.` and `..`, and its drive letter upper-cased.
+ * The one maker of an `AbsolutePath`: fails for a path not absolute under `rules`, or with a NUL.
+ * A POSIX path is kept as it is; a Windows path must start at a drive root, so a share or a device
+ * path fails, and it is normalized to `\` without `.` and `..`, drive upper-cased.
  */
 export function parseAbsolutePath(params: {
   rules: PathRules;

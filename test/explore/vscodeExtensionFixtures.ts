@@ -106,8 +106,12 @@ function buildLocationUriPath(params: { pathRules: PathRules; folderPath: Absolu
   switch (params.pathRules.rootForm) {
     case 'posix':
       return params.folderPath;
-    case 'win32':
-      return `/${params.folderPath.charAt(0).toLowerCase()}${params.folderPath.slice(1).replaceAll('\\', '/')}`;
+    case 'win32': {
+      const driveLetter = params.folderPath.charAt(0).toLowerCase();
+      const pathAfterDrive = params.folderPath.slice(1).replaceAll('\\', '/');
+
+      return `/${driveLetter}${pathAfterDrive}`;
+    }
   }
 }
 

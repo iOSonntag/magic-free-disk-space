@@ -29,15 +29,14 @@ type EngineSocket = { socketPath: AbsolutePath; diskImagePath: AbsolutePath };
 const ENGINE_FOLDER_PREFIX = '_';
 
 /**
- * Asks each instance of the engine over its socket, trusted by `requestUnixSocket`, and judges its
- * images, containers, volumes and build cache. An instance whose socket is missing or untrusted is
- * skipped quietly; one that answers not as asked leaves the findings incomplete, and fails the
- * probe when no instance answered. `socketMissing` where the platform has no such engine, a `null`
- * engine. Never rejects.
+ * Judges each instance's images, containers, volumes and build cache over its socket, trusted by
+ * `requestUnixSocket`. A missing or untrusted socket is skipped quietly; an answer not as asked
+ * leaves the findings incomplete, and fails the probe when none answered. Never rejects.
  */
 export async function loadEngineFindings(params: {
   run: ExploreProbeRun;
   engineProbeId: EngineProbeId;
+  /** The platform's engine; `null` where it has none, so the probe fails as `socketMissing`. */
   engine: ContainerEngine | null;
 }): Promise<ExploreProbeEngineResult> {
   if (params.engine === null) {

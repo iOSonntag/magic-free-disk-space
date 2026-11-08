@@ -98,8 +98,7 @@ const ANDROID_PLATFORM_PACKAGE_PATH = 'platforms;android-33';
 /**
  * Creates a home in `fixtureRoot` laid out as a Windows profile, with the Downloads known folder,
  * an item for each section of the scan, four Explore items, and the files beside them that no
- * section offers.
- * Call it on Windows only.
+ * section offers. Call it on Windows only.
  */
 export async function createWindowsFixtureHome(params: {
   fixtureRoot: FixtureRoot;

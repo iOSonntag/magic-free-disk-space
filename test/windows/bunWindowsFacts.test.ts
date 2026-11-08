@@ -381,11 +381,11 @@ describeOnWindows('Bun and win32Api.ts on Windows', () => {
       });
 
       expect(probeRun).toMatchObject({ exitCode: 0, timedOut: false });
-      expect(Buffer.from(probeRun.stdout.subarray(0, input.byteLength))).toEqual(
+      expect(Buffer.from(probeRun.stdoutBytes.subarray(0, input.byteLength))).toEqual(
         Buffer.from(input),
       );
       expect(
-        parseProbeLines(new TextDecoder().decode(probeRun.stdout.subarray(input.byteLength))),
+        parseProbeLines(new TextDecoder().decode(probeRun.stdoutBytes.subarray(input.byteLength))),
       ).toEqual([
         { finding: 'stdin', echoedLineCount: 2 },
         {
@@ -416,7 +416,7 @@ describeOnWindows('Bun and win32Api.ts on Windows', () => {
 
       expect(run).toMatchObject({ exitCode: 0, timedOut: false });
 
-      const stages = parseProbeLines(new TextDecoder().decode(run.stdout));
+      const stages = parseProbeLines(new TextDecoder().decode(run.stdoutBytes));
 
       expect(stages).toContainEqual(
         expect.objectContaining({

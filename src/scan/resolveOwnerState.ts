@@ -123,8 +123,7 @@ export function buildAppOwner(params: { app: InstalledApp }): CatalogOwner | nul
 /**
  * Whether the installed app is the owner: for a bundle id, the app of that id or one nesting it as
  * a helper; for a family, an app whose own id belongs to it. A family takes no nested helper, so an
- * app that bundles one of its helpers, such as Creative Cloud, never counts as one of its apps. No
- * app bundle is a Windows program.
+ * app that bundles one of its helpers, such as Creative Cloud, never counts as one of its apps.
  */
 function isOwnerApp(params: { owner: CatalogOwner; app: InstalledApp }): boolean {
   switch (params.owner.kind) {
@@ -312,10 +311,9 @@ export function buildRemovalOwner(params: {
 }
 
 /**
- * The one decision whether an owner runs, at the scan and right before the deletion: `stopped`
- * for no owner, `unknown` for any owner while the processes could not be listed, else `running`
- * when a process runs from one of its app bundles or runs its program. An owner whose bundle no
- * app carries owns no process, so it is `stopped` once the processes are known.
+ * Decides whether an owner runs, at the scan and before the deletion: `stopped` for no owner,
+ * `unknown` for an owner while the processes cannot be listed, else `running` when a process runs
+ * from one of its app bundles or runs its program.
  */
 export function resolveRemovalOwnerState(params: {
   owner: RemovalOwner;

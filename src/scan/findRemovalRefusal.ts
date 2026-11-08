@@ -7,10 +7,9 @@ import type { CandidateRemoval, RemovalTarget } from './candidate.js';
 export type RemovalTargetRefusal = { path: string; reason: TargetRefusalReason };
 
 /**
- * The first target of a delete or an evict that `findTargetRefusal` refuses, in target order;
- * `null` when it refuses none, and for a tool or an engine, which removes what it owns itself. A
- * Recycle Bin, which the system empties, is refused at its drive root unless the environment
- * lists that root among its fixed drives.
+ * The first target of a delete or an evict that `findTargetRefusal` refuses, in target order, or
+ * `null` when it refuses none, and for a tool or an engine, which removes what it owns itself.
+ * A Recycle Bin is refused at its drive root unless that root is a fixed drive of the environment.
  */
 export function findRemovalRefusal(params: {
   environment: Environment;

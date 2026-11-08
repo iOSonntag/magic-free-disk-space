@@ -11,11 +11,9 @@ import type { EnvironmentFailure } from './environmentPlatform.js';
 export type TempPlacement = 'apartFromHome' | 'belowHome';
 
 /**
- * Returns why the resolved folders are unsafe to delete in, or `null`. The tool deletes as the
- * user who runs it, inside that user's own home, and treats the whole temporary folder as
- * expendable, so it refuses root, a home of another user, a temporary folder that is the home or
- * holds it, or lies in it where the platform keeps it apart from the home, and a temporary folder
- * that is a drive root, of any drive, or is or holds a protected folder.
+ * Returns why the resolved folders are unsafe to delete in, or `null`: the root user, another
+ * user's home, a temporary folder that is or holds the home, or one that lies in it where the
+ * platform keeps it apart from the home.
  */
 export function checkEnvironmentRoots(params: {
   pathRules: PathRules;
@@ -30,6 +28,8 @@ export function checkEnvironmentRoots(params: {
    */
   protectedRealPaths: string[];
 }): EnvironmentFailure | null {
+  // The tool deletes as its user, inside that user's own home, and treats the whole temporary
+  // folder as expendable.
   const userFailure = checkDeletingUser({
     user: params.user,
     homeRealPath: params.homeRealPath,

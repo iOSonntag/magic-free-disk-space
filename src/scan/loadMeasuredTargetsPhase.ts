@@ -19,15 +19,13 @@ export type FoundTarget = { path: string };
 export type TargetsCarve = { pathRules: PathRules; carvedPaths: string[] };
 
 /**
- * Reads the identity of each found path as `entryReads` place it, so a target that is a link of
- * any kind has the kind of a symbolic link, measures those that are there as one tally, and
- * decides with the measurement. A path that vanished is no target; when none is left, the phase
- * adds nothing. A path that cannot be read adds an issue and the phase no decision, since the offer
- * would not be whole. An offer holding another mounted volume becomes a skip. With a `carve`, a
- * target keeps its identity while the tally leaves out each carved subtree inside it.
+ * Reads each found path as `entryReads` place it, measures those that are there as one tally, and
+ * decides with it. A vanished path is no target, and the phase adds nothing when none is left. An
+ * unreadable path adds an issue and no decision; an offer with another mounted volume is skipped.
  */
 export function loadMeasuredTargetsPhase<TFound extends FoundTarget>(params: {
   found: [TFound, ...TFound[]];
+  /** The tally leaves out each carved subtree inside a target, which keeps its identity. */
   carve: TargetsCarve | null;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;

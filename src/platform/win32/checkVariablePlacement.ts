@@ -24,9 +24,8 @@ export type VariableCheck = {
 
 /**
  * The refusal for the first variable that names another folder than the one Windows keeps for the
- * run, or `null`. A tool started by the user reads these variables, so the run refuses to delete
- * when they disagree with Windows. An unset variable names no folder and passes; one that does not
- * resolve fails. Real paths compare, since Windows often writes a variable with short 8.3 names.
+ * run, or `null`: a tool the user starts reads these variables, so the run refuses when they
+ * disagree. An unset variable passes; one that does not resolve fails.
  */
 export function checkVariablePlacement(params: {
   pathRules: PathRules;
@@ -52,6 +51,7 @@ function isPlacedAsExpected(params: { pathRules: PathRules; check: VariableCheck
     case 'unresolvable':
       return false;
     case 'resolved':
+      // Windows often writes a variable with short 8.3 names, so the real paths compare.
       return isSamePath({
         rules: params.pathRules,
         path: params.check.reading.realPath,

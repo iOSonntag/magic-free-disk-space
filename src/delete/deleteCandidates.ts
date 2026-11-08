@@ -111,13 +111,12 @@ export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
 }
 
 /**
- * Removes each candidate permanently, in order, after recording the intent, and records the
- * outcome entries after it. A target goes only while its identity still matches the scan, its
- * content is still on this computer, and no owner runs in the processes
- * `loadKnownRunningProcesses` read once after the confirmation; `null` withholds every owned item.
- * A tool item, a unit deleted as its paths, an evict, and an engine's unit are checked again first
- * and go only while the unit is still unchanged and idle. A Recycle Bin is emptied only while it
- * holds what the scan counted. A journal failure stops the run.
+ * Removes each candidate permanently, in order, after recording its intent, and records the
+ * outcomes after it. A target goes only while its identity matches the scan, its content is still
+ * on this computer, and no owner runs in the processes `loadKnownRunningProcesses` read once after
+ * the confirmation; `null` withholds every owned item. A tool item, a unit deleted as its paths,
+ * an evict, and an engine's unit go only while checked again unchanged and idle. A Recycle Bin is
+ * emptied only while it holds what the scan counted. A journal failure stops the run.
  */
 export async function deleteCandidates(params: {
   candidates: Candidate[];

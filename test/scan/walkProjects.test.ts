@@ -123,7 +123,7 @@ function walkTestProjects(params: {
 /**
  * The path of each artifact the walk found, in its order, with the name of the rule that found it.
  */
-function listArtifactNamesAndPaths(params: {
+function listFoundArtifacts(params: {
   walk: ProjectWalk;
 }): { artifactPath: string; artifactName: string }[] {
   return params.walk.artifacts.map((finding) => ({
@@ -184,7 +184,7 @@ describe('walkProjects', () => {
       rules: win32Platform.scan.projectArtifactRules,
     });
 
-    expect(listArtifactNamesAndPaths({ walk: result })).toEqual([
+    expect(listFoundArtifacts({ walk: result })).toEqual([
       { artifactPath: join(projectPath, 'bin'), artifactName: 'bin' },
       { artifactPath: join(projectPath, 'obj'), artifactName: 'obj' },
     ]);
@@ -199,7 +199,7 @@ describe('walkProjects', () => {
       rules: win32Platform.scan.projectArtifactRules,
     });
 
-    expect(listArtifactNamesAndPaths({ walk: result })).toEqual([
+    expect(listFoundArtifacts({ walk: result })).toEqual([
       { artifactPath: join(projectPath, 'Bin'), artifactName: 'bin' },
       { artifactPath: join(projectPath, 'OBJ'), artifactName: 'obj' },
     ]);
@@ -559,7 +559,7 @@ describe('walkProjects', () => {
       join(left.folder, left.artifact) < join(right.folder, right.artifact) ? -1 : 1,
     );
 
-    expect(listArtifactNamesAndPaths({ walk: result })).toEqual(
+    expect(listFoundArtifacts({ walk: result })).toEqual(
       projectsInPathOrder.map((project) => ({
         artifactPath: join(fixtureRoot.homeDir, project.folder, project.artifact),
         artifactName: project.artifact,

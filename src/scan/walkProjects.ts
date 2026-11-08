@@ -41,11 +41,9 @@ export type ProjectWalk = {
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
- * Walks the projects under `homeDir` once: the artifact folders whose project folder holds a
- * marker file, and the pin files it passes. An artifact folder beside no marker is skipped or
- * walked as its rule says. Folder names and markers compare as the platform compares names, so
- * `Bin` beside `Foo.CSPROJ` counts on Windows. A link, which on Windows is any reparse point, is
- * never followed; a passed `deadlineMs` stops the walk with one `walkStopped` issue. Never rejects.
+ * Walks the projects under `homeDir` for the artifact folders beside a marker file, and the pin
+ * files it passes. An artifact folder beside no marker is skipped or walked as its rule says.
+ * Never follows a link, which on Windows is any reparse point. Never rejects.
  */
 export async function walkProjects(params: {
   pathRules: PathRules;
@@ -53,6 +51,7 @@ export async function walkProjects(params: {
   excludedTopNames: string[];
   rules: ProjectArtifactRule[];
   maxDepth: number;
+  /** Once passed, the walk ends with one `walkStopped` issue. */
   deadlineMs: number;
   entryReads: EntryReads;
   recordEvictedEntry: EvictedEntryRecorder | null;

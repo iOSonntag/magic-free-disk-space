@@ -14,9 +14,8 @@ import { buildHostRunningProcesses } from './runningProcessesFixtures.js';
 
 /**
  * Scans the fixture home of `environment` through the host's platform with only `catalogEntries`
- * and no tool, the listing of the processes (`runningProcesses`, none listed when left out), the
- * active Xcode, and the system version made up, so the scan starts no command. `entryReads`
- * replaces the platform's.
+ * and no tool, the processes (`runningProcesses`, none when left out), the active Xcode, and the
+ * system version made up, so the scan starts no command. `entryReads` replaces the platform's.
  */
 export function runTestScan(params: {
   environment: Environment;

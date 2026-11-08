@@ -41,14 +41,9 @@ const PROJECT_MARKER_NAME = '.git';
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
- * Walks each root on its own volume without following a link of any kind, and without entering
- * hidden folders, package folders (any folder named with an extension), git working trees, or a
- * project's artifact folder beside its marker, such as `build` beside `build.gradle`, its names
- * compared as `pathRules` compare them.
- * Each file is its own offer, measured as `loadPathMeasurement` measures one: a file whose blocks
- * a clone shares counts less, and a file with another hard link counts nothing, since deleting
- * one link frees nothing. A passed deadline ends the walk with one walkStopped issue. Findings
- * come sorted by path.
+ * Walks each root on its own volume without following a link, and skips hidden folders, package
+ * folders, git working trees, and artifact folders beside markers. Each file is an offer that
+ * `loadPathMeasurement` measures; a file with another hard link counts nothing. Sorted by path.
  */
 export async function findLargeUserFiles(params: {
   pathRules: PathRules;
@@ -56,6 +51,7 @@ export async function findLargeUserFiles(params: {
   /** The artifacts whose files belong to their project, each judged by its marker. */
   artifactRules: ProjectArtifactRule[];
   minAllocatedBytes: number;
+  /** Once passed, the walk ends with one `walkStopped` issue. */
   deadlineMs: number;
   entryReads: EntryReads;
   recordEvictedEntry: EvictedEntryRecorder | null;

@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import type { EntryReads, EntryRef } from './entryReads.js';
+import type { EntryPlacement, EntryReads, EntryRef } from './entryReads.js';
+import { getPlacedFileKind } from './entryReads.js';
 import type { DirectoryEntry } from './loadDirectoryEntries.js';
 import { loadDirectoryEntries } from './loadDirectoryEntries.js';
 import type { DirectoryFailure } from './loadDirectoryNames.js';
@@ -38,21 +39,13 @@ export type EvictedEntryRecorder = (entry: EntryRef) => void;
 type PendingDirectory = { path: string; depth: number };
 
 /**
- * Walks the folders below `rootPath`, reading at most `maxConcurrentDirectories` folders at
- * once, and asks `visitEntry` about every entry. Waiting folders are kept as paths, so a wide
- * tree costs memory for its paths only. Returns `stopped` once `visitEntry` returned `stop` or
- * `isStopped` turned true. A vanished entry is left out; an unreadable one goes to `onUnreadable`.
- * `entryReads.loadEntryPlacement` places each entry before it is visited, and each folder again,
- * the root included, right before its listing, which may come long after its visit:
- * - a link is visited as a `symbolicLink` and never entered, nor is a folder that reads as one
- *   before its listing;
- * - a cloud-only folder, such as an iCloud placeholder, is visited but never listed, and goes to
- *   `onEvictedEntrySkipped` when it reads so before its listing; any other cloud-only entry goes
- *   there and is never visited, so the walk downloads nothing;
- * - an entry that cannot be placed is read as one on disk, and its visit carries the code of the
- *   failed read; a folder that cannot be placed before its listing is listed.
- *
- * A `null` `onEvictedEntrySkipped` records none of them.
+ * Walks the folders below `rootPath`, reading at most `maxConcurrentDirectories` at once, and asks
+ * `visitEntry` about every entry, placed by `entryReads` before each visit or listing. Returns
+ * `stopped` once `visitEntry` returned `stop` or `isStopped` turned true. A vanished entry is left
+ * out; an unreadable one goes to `onUnreadable`. A link is visited as a `symbolicLink` and never
+ * entered, nor is a folder listed that reads as one before its listing; a folder that cannot be
+ * placed is listed. A cloud-only folder is visited but never listed, and any other cloud-only
+ * entry is never visited; each one goes to `onEvictedEntrySkipped`, so the walk downloads nothing.
  */
 export function walkDirectoryTree(params: {
   rootPath: string;
@@ -62,6 +55,7 @@ export function walkDirectoryTree(params: {
   entryReads: EntryReads;
   visitEntry: (entry: TreeEntry) => TreeEntryVisit;
   onUnreadable: (unreadable: TreeUnreadable) => void;
+  /** Takes each cloud-only entry the walk leaves unread; `null` takes none. */
   onEvictedEntrySkipped: EvictedEntryRecorder | null;
 }): Promise<TreeWalkEnd> {
   const pendingDirectories: PendingDirectory[] = [{ path: params.rootPath, depth: 0 }];
@@ -164,7 +158,7 @@ export function walkDirectoryTree(params: {
 
           break;
         case 'link':
-          visitPlacedEntry(toLinkTreeEntry({ entry: treeEntry }));
+          visitPlacedEntry(toLinkTreeEntry({ entry: treeEntry, placement: placement }));
           break;
       }
     }
@@ -202,11 +196,13 @@ export function walkDirectoryTree(params: {
 }
 
 /** The entry as a link, its stats too, so no visitor reads it as the folder or file lstat says. */
-function toLinkTreeEntry(params: { entry: TreeEntry }): TreeEntry {
+function toLinkTreeEntry(params: { entry: TreeEntry; placement: EntryPlacement }): TreeEntry {
+  const placedKind = getPlacedFileKind({ kind: params.entry.kind, placement: params.placement });
+
   return {
     ...params.entry,
-    kind: 'symbolicLink',
-    stats: params.entry.stats === null ? null : { ...params.entry.stats, kind: 'symbolicLink' },
+    kind: placedKind,
+    stats: params.entry.stats === null ? null : { ...params.entry.stats, kind: placedKind },
   };
 }
 

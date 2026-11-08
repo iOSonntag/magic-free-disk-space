@@ -31,11 +31,9 @@ const noFolderErrorCodes = new Set(['ELOOP', 'ENOTDIR', 'ENOENT']);
 export type TreeRemovalUser = { id: number; groupIds: number[] };
 
 /**
- * Removes the path recursively; a symbolic link inside is removed itself, never its target. When
- * that fails, it adds owner write to each read-only folder inside that the user owns and that is
- * no link, such as those of Go's module cache, and tries once more. An entry that still cannot be
- * removed fails the whole removal, which never answers `partlyRemoved`, though the entries removed
- * before it stay gone.
+ * Removes the path recursively; a link inside goes itself, never its target. If that fails, it
+ * adds owner write to each read-only folder the user owns that is no link, and retries once; a
+ * still unremovable entry fails the removal, never `partlyRemoved`, and earlier entries stay gone.
  */
 export async function removeTree(params: { path: string }): Promise<Result<TreeRemoval, string>> {
   return removeTreeAsUser({ path: params.path, user: getProcessUser() });

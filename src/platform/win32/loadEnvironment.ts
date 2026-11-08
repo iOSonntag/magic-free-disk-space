@@ -19,7 +19,12 @@ import type { Result } from '../../result.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parseWindowsSid } from '../../system/userIdentity.js';
 import { WIN32_CATALOG } from './catalog/win32Catalog.js';
-import type { ResolvedFolder, VariableReading } from './checkVariablePlacement.js';
+import type {
+  FolderVariableName,
+  ResolvedFolder,
+  VariableCheck,
+  VariableReading,
+} from './checkVariablePlacement.js';
 import { checkVariablePlacement } from './checkVariablePlacement.js';
 import type { RunKnownFolder } from './knownFolderIds.js';
 import { buildGuidBytes, knownFolderIds } from './knownFolderIds.js';
@@ -176,21 +181,9 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   const variablesFailure = checkVariablePlacement({
     pathRules: WIN32_PATH_RULES,
     checks: [
-      {
-        variableName: 'USERPROFILE',
-        reading: await loadVariableReading({ name: 'USERPROFILE' }),
-        expectedFolder: home.value,
-      },
-      {
-        variableName: 'TMP',
-        reading: await loadVariableReading({ name: 'TMP' }),
-        expectedFolder: tempFolder,
-      },
-      {
-        variableName: 'TEMP',
-        reading: await loadVariableReading({ name: 'TEMP' }),
-        expectedFolder: tempFolder,
-      },
+      await loadVariableCheck({ variableName: 'USERPROFILE', expectedFolder: home.value }),
+      await loadVariableCheck({ variableName: 'TMP', expectedFolder: tempFolder }),
+      await loadVariableCheck({ variableName: 'TEMP', expectedFolder: tempFolder }),
     ],
   });
 
@@ -493,9 +486,22 @@ function loadFixedDriveRoots(): Result<DriveRoot[], EnvironmentFailure> {
   };
 }
 
+async function loadVariableCheck(params: {
+  variableName: FolderVariableName;
+  expectedFolder: ResolvedFolder;
+}): Promise<VariableCheck> {
+  return {
+    variableName: params.variableName,
+    reading: await loadVariableReading({ variableName: params.variableName }),
+    expectedFolder: params.expectedFolder,
+  };
+}
+
 /** What the variable holds: unset, the real path of the folder it names, or a path that fails. */
-async function loadVariableReading(params: { name: string }): Promise<VariableReading> {
-  const value = getSetVariable({ name: params.name });
+async function loadVariableReading(params: {
+  variableName: FolderVariableName;
+}): Promise<VariableReading> {
+  const value = getSetVariable({ name: params.variableName });
 
   if (value === null) {
     return { kind: 'unset' };

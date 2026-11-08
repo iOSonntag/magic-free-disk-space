@@ -59,11 +59,9 @@ const PNPM_PACKAGE_PATH_NAMES = [[PNPM_TOOL_NAME], ['@pnpm', 'exe']];
 const PACKAGE_JSON_FILE_NAME = 'package.json';
 
 /**
- * The pnpm installed in every place of the platform's `places`: pnpm's `.tools` and global folders
- * in each home, the launchers, the folders of pnpm versions (corepack's, a tool manager's, and each
- * of mise's naming pnpm), and the npm globals below each prefix and each node version; and in
- * Homebrew's prefixes. A missing place holds none; a place that cannot be read fails the whole
- * state, so it never reads as no pnpm.
+ * The pnpm installed in each of `places`: homes' `.tools`, global folders and launchers, pnpm
+ * versions of corepack, tool managers and mise, npm globals below each prefix and node version,
+ * and Homebrew prefixes. A missing place holds none; an unreadable one fails the whole state.
  */
 export async function loadPnpmInstallState(params: {
   environment: EnvironmentFolders;

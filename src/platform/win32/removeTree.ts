@@ -16,10 +16,9 @@ const win32EntryAttributes: EntryAttributeAccess = {
 };
 
 /**
- * Removes the tree at `path` entry by entry, never entering a link or a junction, clearing the
- * read-only bit of each file and folder, and leaving a file another program holds open or Windows
- * refuses to delete and an entry kept only online, so the removal can end partly done. Fails with
- * `EINVAL` for a path that is no absolute Windows path. Never throws.
+ * Fails with `EINVAL` for a path that is no absolute Windows path. Removes the tree at `path`
+ * entry by entry, never entering a link or junction, and clears each read-only bit first; a file
+ * held open or refused, or an entry kept online only, stays. Never throws.
  */
 export async function removeTree(params: { path: string }): Promise<Result<TreeRemoval, string>> {
   const rootPath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.path });

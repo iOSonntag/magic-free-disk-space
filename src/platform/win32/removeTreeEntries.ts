@@ -75,15 +75,9 @@ type RemovalPlacement =
   | { kind: 'unread'; code: string };
 
 /**
- * Removes the tree at `rootPath` entry by entry, as Windows needs it: `entryReads` places each
- * entry, the root included, and the walk never enters a link of any kind, which is removed
- * itself, never its target. Right before its removal, each file and folder is placed again by
- * the attributes it reads then: one that reads as a link goes as a link, and one on disk loses its
- * read-only bit for its removal and gets it back when it stays. A file another program holds open
- * or Windows refuses to delete stays, and so does an entry kept online only, the root included,
- * which a removal would delete from its cloud store; the folders that hold them stay with them.
- * Any other failure ends the removal with its code; an unreadable folder, or a root or a folder
- * that cannot be placed at its visit, ends it before anything is removed. Never throws.
+ * Removes the tree entry by entry, a link itself and never its target. A file held open or
+ * refused, or kept online only, stays with its folders; an unreadable or unplaceable folder ends
+ * it before anything goes, other failures with their code. Never throws.
  */
 export async function removeTreeEntries(params: {
   rootPath: AbsolutePath;
@@ -240,12 +234,9 @@ async function removeDirectoryTree(params: {
 }
 
 /**
- * Every entry below the root, as the walk places it, a link of any kind as a link. An entry the
- * walk finds evicted stays; an evicted folder is listed before the walk records it so, and its
- * removal skips it. A folder that cannot be placed at its visit ends the listing with the code of
- * its read, unless it is gone. A file that cannot be placed is listed as any other: its removal
- * places it again by the attributes it reads right before, and a failure of that read ends its
- * removal by its code, the file kept.
+ * Lists every entry below the root as the walk places it, a link of any kind as a link; an evicted
+ * entry stays. A folder that cannot be placed ends the listing with its read's code, unless gone.
+ * An unplaceable file is listed too; its removal ends on a failed read, the file kept.
  */
 async function listRemovalTargets(params: {
   rootPath: AbsolutePath;
@@ -451,10 +442,9 @@ async function removeLeafEntry(params: {
 }
 
 /**
- * Removes a file as the read of its attributes right before places it: when on disk, with its
- * read-only bit cleared for the call and set again when the file stays; as a link when it reads as
- * one; and never when it is kept online only or its read fails, which ends its removal by the code
- * of the read.
+ * Removes a file as the read of its attributes right before places it: on disk, with its read-only
+ * bit cleared for the call and set again if it stays; as a link when it reads as one; never when
+ * kept online only, and a failed read ends it by its code.
  */
 async function removeFileEntry(params: {
   path: AbsolutePath;
@@ -463,6 +453,7 @@ async function removeFileEntry(params: {
   const placement = loadRemovalPlacement({ path: params.path, attributes: params.attributes });
 
   switch (placement.kind) {
+    // A removal would delete the entry from its cloud store, so it stays.
     case 'cloudOnly':
       return { kind: 'cloudOnly' };
     case 'link':
@@ -518,10 +509,9 @@ async function removeLink(params: { path: AbsolutePath }): Promise<EntryRemovalE
 }
 
 /**
- * Removes an emptied folder as the read of its attributes right before places it: when on disk,
- * with its read-only bit cleared for the call and set again when the folder stays; with the bit
- * kept when it reads as a link, which `rmdir` removes itself; and never when it is kept online only
- * or its read fails, which ends its removal by the code of the read.
+ * Removes an emptied folder as the read of its attributes right before places it: on disk, with its
+ * read-only bit cleared for the call and set again if it stays; a link with the bit kept, as
+ * `rmdir` removes it; never when kept online only, and a failed read ends it by its code.
  */
 async function removeDirectoryEntry(params: {
   path: AbsolutePath;
@@ -606,10 +596,9 @@ function loadRemovalPlacement(params: {
 }
 
 /**
- * Runs the removal `call` of a file or a folder on disk, whose `attributeBits` were read right
- * before, with its read-only bit cleared first, and sets those bits again when the entry stays;
- * never for a link, whose target the bits could reach. A failure is the code of the clear or of
- * the call.
+ * Runs the removal `call` of an entry on disk, whose `attributeBits` were read right before, with
+ * its read-only bit cleared first and set again when the entry stays; never for a link, whose
+ * target the bits could reach. A failure is the code of the clear or the call.
  */
 async function runRemovalCallWithReadOnlyCleared(params: {
   path: AbsolutePath;

@@ -267,7 +267,7 @@ describe('the texts of the Android package findings', () => {
 
   for (const avdHomeCase of avdHomeCases) {
     test(`name the folder of the AVDs as ${avdHomeCase.avdHomeText}`, () => {
-      const findingsParams = {
+      const packageFindingsInput = {
         pathRules: avdHomeCase.pathRules,
         homeDir: avdHomeCase.homeDir,
         offers: {
@@ -282,8 +282,8 @@ describe('the texts of the Android package findings', () => {
         },
         runningProcesses: buildRunningCommandLines([]),
       };
-      const [image] = buildAndroidSystemImageFindings(findingsParams).findings;
-      const [emulator] = buildAndroidEmulatorFindings(findingsParams).findings;
+      const [image] = buildAndroidSystemImageFindings(packageFindingsInput).findings;
+      const [emulator] = buildAndroidEmulatorFindings(packageFindingsInput).findings;
 
       expect(image?.explanation).toBe(
         `A system image of the Android SDK that no AVD in ${avdHomeCase.avdHomeText} uses. AVDs moved elsewhere, such as by \`ANDROID_AVD_HOME\`, are not seen here. A deleted image downloads again when an AVD needs it.`,

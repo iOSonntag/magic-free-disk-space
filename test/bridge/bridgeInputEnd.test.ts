@@ -21,7 +21,7 @@ describe('the bridge once its input closes', () => {
       expect({
         timedOut: run.timedOut,
         exitCode: run.exitCode,
-        stdout: new TextDecoder().decode(run.stdout),
+        stdout: new TextDecoder().decode(run.stdoutBytes),
       }).toEqual({
         timedOut: false,
         exitCode: 0,

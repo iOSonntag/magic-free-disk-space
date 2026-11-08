@@ -7,8 +7,8 @@ export type FixtureCommandRun = { exitCode: number; stdoutText: string; stderrTe
 type ChildProcessRun = {
   exitCode: number | null;
   timedOut: boolean;
-  stdout: Uint8Array;
-  stderr: string;
+  stdoutBytes: Uint8Array;
+  stderrText: string;
 };
 
 /**
@@ -94,7 +94,7 @@ export async function runChildProcess(params: {
   return {
     exitCode: child.exitCode,
     timedOut: outcome === 'timedOut',
-    stdout: await stdoutPromise,
-    stderr: await stderrPromise,
+    stdoutBytes: await stdoutPromise,
+    stderrText: await stderrPromise,
   };
 }

@@ -70,10 +70,9 @@ export type ToolCommandResult = Result<ToolCommandOutput, ToolCommandFailure>;
 const runningTools = new Set<StartedTool>();
 
 /**
- * Runs the tool as `processes` starts it, so its end reaches every process it started, in
- * `tempDir` (so no tool reads config from the folder the app started in), with the base
- * environment `processes` builds and the tool's own entries, and the arguments
- * `buildToolArguments` builds. Only exit 0 succeeds.
+ * Runs the tool as `processes` starts it, in `tempDir`, with the base environment `processes`
+ * builds, the tool's own entries, and the arguments `buildToolArguments` builds. Its end reaches
+ * every process it started; only exit 0 succeeds.
  */
 export async function runToolCommand(params: {
   tool: LocatedTool;
@@ -91,6 +90,7 @@ export async function runToolCommand(params: {
   const started = params.processes.startTool({
     path: params.tool.path,
     args: buildToolArguments({ name: params.tool.name, args: params.args }),
+    // The temporary folder, so no tool reads config from the folder the app started in.
     cwd: params.tempDir,
     env: buildToolProcessEnvironment({
       tool: params.tool,
@@ -128,10 +128,9 @@ export function stopRunningTools(): void {
 }
 
 /**
- * Runs `run` while every running tool is stopped when the process exits, and on each signal the
- * process exits with its code: a tool's processes may outlive the app unless they are stopped
- * here. Once the run settled, resolved or rejected, it stops every tool still running and removes
- * these listeners, since a listener of a signal may keep the process running on Windows.
+ * Runs `run` and stops every running tool when the process exits or takes a signal, which then
+ * exits with its code. Once `run` settles, resolved or rejected, it stops the tools still running
+ * and removes these listeners.
  */
 export async function runStoppingToolsOnProcessEnd<TResult>(params: {
   processEndSignals: ProcessEndSignalExit[];
@@ -148,6 +147,7 @@ export async function runStoppingToolsOnProcessEnd<TResult>(params: {
     return { signal: processEnd.signal, listener: onSignal };
   });
 
+  // A tool's processes may outlive the app, so they are stopped here.
   process.on('exit', stopRunningTools);
 
   try {
@@ -156,6 +156,7 @@ export async function runStoppingToolsOnProcessEnd<TResult>(params: {
     stopRunningTools();
     process.off('exit', stopRunningTools);
 
+    // A signal listener may keep the process running on Windows, so it is removed here.
     for (const signalListener of signalListeners) {
       process.off(signalListener.signal, signalListener.listener);
     }

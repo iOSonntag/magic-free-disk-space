@@ -10,10 +10,9 @@ const voltaImage: CatalogLocation = { root: 'localAppData', path: 'Volta/tools/i
 const miseInstalls: CatalogLocation = { root: 'localAppData', path: 'mise/installs' };
 
 /**
- * Where pnpm is installed on Windows, each place at the default of its tool: pnpm's home,
- * corepack's cache, the pnpm that Volta, Scoop and winget install, mise's installs, npm's prefixes
- * of the official installer, of Scoop and of Volta's packages, and the node versions of
- * nvm-windows, fnm, Volta and mise.
+ * Where pnpm is installed on Windows, at each tool's default: pnpm's home, corepack's cache, pnpm
+ * of Volta, Scoop and winget, mise's installs, npm prefixes of the official installer, Scoop and
+ * Volta, and node versions of nvm-windows, fnm, Volta and mise.
  */
 export const pnpmInstallPlaces: PnpmInstallPlaces = {
   homes: [pnpmHome],
