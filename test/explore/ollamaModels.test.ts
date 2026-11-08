@@ -64,14 +64,11 @@ const VALUE_MODELS_PATH = '/models';
  */
 async function loadFindings(params: {
   environment: Environment;
-  runningProcesses?: RunningProcesses | null;
+  runningProcesses?: RunningProcesses;
 }): Promise<ExploreProbeFindings> {
   const probeRun = buildTestProbeRun({
     environment: params.environment,
-    runningProcesses:
-      params.runningProcesses === undefined
-        ? buildRunningCommandLines([])
-        : params.runningProcesses,
+    runningProcesses: params.runningProcesses ?? buildRunningCommandLines([]),
   });
 
   return getProbeFindings(await loadOllamaModelFindings(probeRun));
