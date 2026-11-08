@@ -8,8 +8,7 @@ export async function loadIdeVersionFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {
   const folders = await loadIdeVersionState({
-    pathRules: run.environment.pathRules,
-    homeDir: run.environment.homeDir,
+    environment: run.environment,
     roots: run.platform.explore.ideVersionRoots,
     privacyDenialCode: run.platform.privacyDenialCode,
   });

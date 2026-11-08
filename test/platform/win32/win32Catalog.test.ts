@@ -132,8 +132,12 @@ function listNamedLocations(): NamedLocation[] {
         : [{ name: `${entry.id} install folder`, location: installFolder }]),
     ];
   });
+  const pnpmInstallPlaces = WIN32_CATALOG.explore.pnpmInstallPlaces;
   const exploreLocations = [
-    ...WIN32_CATALOG.explore.pnpmHomes,
+    ...pnpmInstallPlaces.homes,
+    ...pnpmInstallPlaces.corepackRoots,
+    ...pnpmInstallPlaces.launchers,
+    ...pnpmInstallPlaces.npmPrefixes,
     WIN32_CATALOG.explore.pnpmStoreRoot,
     ...(WIN32_CATALOG.explore.pnpmXdgStoreRoot === null
       ? []

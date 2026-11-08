@@ -83,7 +83,22 @@ export const WIN32_CATALOG: Win32Catalog = {
     { kind: 'knownFolder', folder: 'videos' },
   ],
   explore: {
-    pnpmHomes: [{ root: 'localAppData', path: 'pnpm' }],
+    pnpmInstallPlaces: {
+      homes: [{ root: 'localAppData', path: 'pnpm' }],
+      corepackRoots: [
+        { root: 'localAppData', path: 'node/corepack/v1/pnpm' },
+        { root: 'localAppData', path: 'node/corepack/pnpm' },
+      ],
+      // The standalone executable. The `pnpm.cmd` and `pnpm.ps1` shims beside it run the pnpm of
+      // `.tools` or `global`, which the probe reads on its own, as it does a `#!` launcher.
+      launchers: [
+        { root: 'localAppData', path: 'pnpm/pnpm.exe' },
+        { root: 'localAppData', path: 'pnpm/bin/pnpm.exe' },
+      ],
+      npmPrefixes: [{ root: 'roamingAppData', path: 'npm' }],
+      // npm installs a global package in `<prefix>\node_modules` on Windows, with no `lib`.
+      npmGlobalFolderNames: ['node_modules'],
+    },
     pnpmStoreRoot: { root: 'localAppData', path: 'pnpm/store' },
     pnpmXdgStoreRoot: null,
     androidSdkRoot: { root: 'localAppData', path: 'Android/Sdk' },

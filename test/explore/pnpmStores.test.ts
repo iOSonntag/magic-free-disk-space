@@ -3,9 +3,15 @@ import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { CatalogLocation } from '../../src/catalog/catalog.js';
 import { resolveCatalogLocation } from '../../src/catalog/resolveCatalogLocation.js';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type {
+  Environment,
+  WindowsKnownFolderPaths,
+} from '../../src/environment/buildEnvironment.js';
 import type { ExploreProbePlatform } from '../../src/explore/exploreProbe.js';
-import type { ExplorePathUnitPnpmStore } from '../../src/explore/exploreUnit.js';
+import type {
+  ExploreFileUnreadable,
+  ExplorePathUnitPnpmStore,
+} from '../../src/explore/exploreUnit.js';
 import { buildPnpmStoreFindings } from '../../src/explore/pnpmStores/buildPnpmStoreFindings.js';
 import { comparePnpmStoreUnit } from '../../src/explore/pnpmStores/comparePnpmStoreUnit.js';
 import type { PnpmStoreOffers } from '../../src/explore/pnpmStores/decidePnpmStoreOffers.js';
@@ -29,6 +35,8 @@ import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.j
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
+import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
+import type { Result } from '../../src/result.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -66,8 +74,23 @@ const NO_INSTALLS: PnpmInstallState = { installs: [] };
 const PNPM_11_INSTALL_ID = '1375b-1a0a4cad7f8';
 
 // asdf, mise, nvm, corepack's cache, Homebrew, the XDG home, and the launcher script keep pnpm at
-// places of macOS; on Windows pnpm is explored in its own home alone.
+// places of macOS; the places of Windows have tests of their own.
 const testOnDarwin = test.skipIf(process.platform !== 'darwin');
+
+/** The fixture environment of Windows names no known folder, and no place of pnpm lies in one. */
+const NO_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
+  desktop: null,
+  documents: null,
+  downloads: null,
+  videos: null,
+  music: null,
+  pictures: null,
+  localAppDataLow: null,
+  skyDrive: null,
+};
+
+/** A standalone executable of Windows, which starts with `MZ` and is no script. */
+const WINDOWS_EXECUTABLE_TEXT = 'MZ executable';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -87,7 +110,7 @@ afterEach(async () => {
 
 /** pnpm's homes of the probe platform, in the fixture environment. */
 function resolvePnpmHomePaths(): AbsolutePath[] {
-  return probePlatform.explore.pnpmHomes.map((location) =>
+  return probePlatform.explore.pnpmInstallPlaces.homes.map((location) =>
     resolveCatalogLocation({ environment: environment, location: location }),
   );
 }
@@ -101,6 +124,32 @@ function buildPnpmHomePath(...names: string[]): string {
   }
 
   return join(pnpmHomePath, ...names);
+}
+
+/**
+ * The fixture environment with the AppData folders of Windows below its home, where the fixture
+ * environment of Windows keeps them, so the places of Windows resolve and are read on any host.
+ */
+function buildWindowsFolderEnvironment(): Environment {
+  return {
+    ...environment,
+    platformFolders: {
+      kind: 'win32',
+      appDataDirs: {
+        localDir: buildTestHostPath({ text: join(homeDir, 'AppData', 'Local') }),
+        roamingDir: buildTestHostPath({ text: join(homeDir, 'AppData', 'Roaming') }),
+      },
+      knownFolderPaths: NO_KNOWN_FOLDER_PATHS,
+    },
+  };
+}
+
+/** The path of `location` in the environment of `buildWindowsFolderEnvironment`. */
+function buildWindowsPlacePath(params: { location: CatalogLocation }): AbsolutePath {
+  return resolveCatalogLocation({
+    environment: buildWindowsFolderEnvironment(),
+    location: params.location,
+  });
 }
 
 /** A file of the example project at `PROJECT_PATH`, which no probe reads from the disk. */
@@ -650,9 +699,8 @@ describe('loadPnpmInstallState', () => {
 
     expect(
       await loadPnpmInstallState({
-        pathRules: environment.pathRules,
-        homeDir: homeDir,
-        pnpmHomePaths: resolvePnpmHomePaths(),
+        environment: environment,
+        places: probePlatform.explore.pnpmInstallPlaces,
         homebrewPrefixPaths: [prefixPath],
         privacyDenialCode: probePlatform.privacyDenialCode,
       }),
@@ -686,9 +734,8 @@ describe('loadPnpmInstallState', () => {
 
     expect(
       await loadPnpmInstallState({
-        pathRules: environment.pathRules,
-        homeDir: homeDir,
-        pnpmHomePaths: resolvePnpmHomePaths(),
+        environment: environment,
+        places: probePlatform.explore.pnpmInstallPlaces,
         homebrewPrefixPaths: [],
         privacyDenialCode: probePlatform.privacyDenialCode,
       }),
@@ -696,6 +743,152 @@ describe('loadPnpmInstallState', () => {
       kind: 'succeeded',
       value: { installs: [{ kind: 'unparsed', path: buildTestHostPath({ text: packageFolder }) }] },
     });
+  });
+
+  describe("at pnpm's places of Windows", () => {
+    async function loadWindowsInstallState(): Promise<
+      Result<PnpmInstallState, ExploreFileUnreadable>
+    > {
+      return loadPnpmInstallState({
+        environment: buildWindowsFolderEnvironment(),
+        places: WIN32_CATALOG.explore.pnpmInstallPlaces,
+        homebrewPrefixPaths: [],
+        privacyDenialCode: probePlatform.privacyDenialCode,
+      });
+    }
+
+    test('reads the standalone pnpm.exe in pnpm home and in its bin as installs of no known version', async () => {
+      const homeExePath = buildWindowsPlacePath({
+        location: { root: 'localAppData', path: 'pnpm/pnpm.exe' },
+      });
+      const binExePath = buildWindowsPlacePath({
+        location: { root: 'localAppData', path: 'pnpm/bin/pnpm.exe' },
+      });
+      await writeFixtureTextFile({ path: homeExePath, text: WINDOWS_EXECUTABLE_TEXT });
+      await writeFixtureTextFile({ path: binExePath, text: WINDOWS_EXECUTABLE_TEXT });
+
+      expect(await loadWindowsInstallState()).toEqual({
+        kind: 'succeeded',
+        value: {
+          installs: [
+            { kind: 'unparsed', path: homeExePath },
+            { kind: 'unparsed', path: binExePath },
+          ],
+        },
+      });
+    });
+
+    test('counts the pnpm.cmd and pnpm.ps1 shims in pnpm home for nothing', async () => {
+      await writeFixtureTextFile({
+        path: buildWindowsPlacePath({ location: { root: 'localAppData', path: 'pnpm/pnpm.cmd' } }),
+        text: '@SETLOCAL\r\n@"%~dp0\\.tools\\pnpm\\10.14.0\\bin\\pnpm.cmd" %*\r\n',
+      });
+      await writeFixtureTextFile({
+        path: buildWindowsPlacePath({ location: { root: 'localAppData', path: 'pnpm/pnpm.ps1' } }),
+        text: '& "$PSScriptRoot\\.tools\\pnpm\\10.14.0\\bin\\pnpm.ps1" $args\r\n',
+      });
+
+      expect(await loadWindowsInstallState()).toEqual({ kind: 'succeeded', value: NO_INSTALLS });
+    });
+
+    test("reads npm's global pnpm and @pnpm/exe in the roaming AppData by their package.json", async () => {
+      const pnpmPackagePath = buildWindowsPlacePath({
+        location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
+      });
+      const exePackagePath = buildWindowsPlacePath({
+        location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
+      });
+      await writePnpmPackage({ packageFolder: pnpmPackagePath, version: '10.14.0' });
+      await writePnpmPackage({ packageFolder: exePackagePath, version: '9.15.4' });
+
+      expect(await loadWindowsInstallState()).toEqual({
+        kind: 'succeeded',
+        value: {
+          installs: [
+            { kind: 'parsed', path: pnpmPackagePath, versionText: '10.14.0', major: 10 },
+            { kind: 'parsed', path: exePackagePath, versionText: '9.15.4', major: 9 },
+          ],
+        },
+      });
+    });
+
+    test("reads corepack's pnpm versions in the local AppData, in either of its layouts", async () => {
+      const v1VersionPath = buildWindowsPlacePath({
+        location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
+      });
+      const versionPath = buildWindowsPlacePath({
+        location: { root: 'localAppData', path: 'node/corepack/pnpm/9.15.4' },
+      });
+      await createFixtureDirectory({ path: v1VersionPath });
+      await createFixtureDirectory({ path: versionPath });
+
+      expect(await loadWindowsInstallState()).toEqual({
+        kind: 'succeeded',
+        value: {
+          installs: [
+            { kind: 'parsed', path: v1VersionPath, versionText: '10.14.0', major: 10 },
+            { kind: 'parsed', path: versionPath, versionText: '9.15.4', major: 9 },
+          ],
+        },
+      });
+    });
+
+    const unreadablePlaces: { place: string; createUnreadablePlace: () => Promise<string> }[] = [
+      {
+        place: "corepack's folder of pnpm",
+        createUnreadablePlace: async () => {
+          const corepackPnpmPath = buildWindowsPlacePath({
+            location: { root: 'localAppData', path: 'node/corepack/v1/pnpm' },
+          });
+          await createFixtureDirectory({ path: corepackPnpmPath });
+          await chmod(corepackPnpmPath, 0o000);
+
+          return corepackPnpmPath;
+        },
+      },
+      {
+        place: "npm's global pnpm",
+        createUnreadablePlace: async () => {
+          const packagePath = buildWindowsPlacePath({
+            location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
+          });
+          await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
+          await chmod(packagePath, 0o000);
+
+          return join(packagePath, 'package.json');
+        },
+      },
+      {
+        place: 'the standalone pnpm.exe',
+        createUnreadablePlace: async () => {
+          const exePath = buildWindowsPlacePath({
+            location: { root: 'localAppData', path: 'pnpm/pnpm.exe' },
+          });
+          await writeFixtureTextFile({ path: exePath, text: WINDOWS_EXECUTABLE_TEXT });
+          await chmod(exePath, 0o000);
+
+          return exePath;
+        },
+      },
+    ];
+
+    for (const unreadablePlace of unreadablePlaces) {
+      testOnPosix(
+        `fails at ${unreadablePlace.place} it cannot read, never as no pnpm`,
+        async () => {
+          const unreadablePath = await unreadablePlace.createUnreadablePlace();
+
+          expect(await loadWindowsInstallState()).toEqual({
+            kind: 'failed',
+            failure: {
+              reason: 'fileUnreadable',
+              path: unreadablePath,
+              failure: { reason: 'permissionDenied', code: 'EACCES' },
+            },
+          });
+        },
+      );
+    }
   });
 });
 
@@ -1277,6 +1470,171 @@ for (const probeCase of probeCases) {
         failure: { reason: 'permissionDenied', code: 'EACCES' },
       });
     });
+
+    const unreadableInstallPlaces: {
+      place: string;
+      isMacOsPlace: boolean;
+      createUnreadablePlace: () => Promise<string>;
+    }[] = [
+      {
+        place: "corepack's folder of pnpm",
+        isMacOsPlace: true,
+        createUnreadablePlace: async () => {
+          const corepackPnpmPath = join(homeDir, '.cache/node/corepack/v1/pnpm');
+          await createFixtureDirectory({ path: corepackPnpmPath });
+          await chmod(corepackPnpmPath, 0o000);
+
+          return corepackPnpmPath;
+        },
+      },
+      {
+        place: "pnpm's .tools",
+        isMacOsPlace: false,
+        createUnreadablePlace: async () => {
+          const toolsPath = buildPnpmHomePath('.tools/pnpm');
+          await createFixtureDirectory({ path: toolsPath });
+          await chmod(toolsPath, 0o000);
+
+          return toolsPath;
+        },
+      },
+      {
+        place: 'the launcher in pnpm home',
+        isMacOsPlace: true,
+        createUnreadablePlace: async () => {
+          const launcherPath = buildPnpmHomePath('pnpm');
+          await writeFixtureTextFile({ path: launcherPath, text: '#!/bin/sh\n' });
+          await chmod(launcherPath, 0o000);
+
+          return launcherPath;
+        },
+      },
+      {
+        place: "the npm globals' pnpm of an nvm node",
+        isMacOsPlace: true,
+        createUnreadablePlace: async () => {
+          const packagePath = join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/pnpm');
+          await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
+          await chmod(packagePath, 0o000);
+
+          return join(packagePath, 'package.json');
+        },
+      },
+    ];
+
+    for (const unreadablePlace of unreadableInstallPlaces) {
+      const testOfPlace = unreadablePlace.isMacOsPlace ? testOnDarwin : testOnPosix;
+
+      testOfPlace(
+        `answers unreadable, offering nothing, at ${unreadablePlace.place} it cannot read`,
+        async () => {
+          await createStore({ folderNames: ['v3'] });
+          const unreadablePath = await unreadablePlace.createUnreadablePlace();
+
+          expect(await runProbe({ files: [] })).toEqual({
+            kind: 'unreadable',
+            path: unreadablePath,
+            failure: { reason: 'permissionDenied', code: 'EACCES' },
+          });
+        },
+      );
+    }
+
+    describe.skipIf(process.platform !== 'win32')("at pnpm's places of Windows", () => {
+      const windowsInstallPlaces: { place: string; createInstall: () => Promise<void> }[] = [
+        {
+          place: "corepack's v1 folder in the local AppData",
+          createInstall: () =>
+            createFixtureDirectory({
+              path: resolveCatalogLocation({
+                environment: environment,
+                location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
+              }),
+            }),
+        },
+        {
+          place: "corepack's folder in the local AppData",
+          createInstall: () =>
+            createFixtureDirectory({
+              path: resolveCatalogLocation({
+                environment: environment,
+                location: { root: 'localAppData', path: 'node/corepack/pnpm/10.14.0' },
+              }),
+            }),
+        },
+        {
+          place: "npm's globals in the roaming AppData",
+          createInstall: () =>
+            writePnpmPackage({
+              packageFolder: resolveCatalogLocation({
+                environment: environment,
+                location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
+              }),
+              version: '10.14.0',
+            }),
+        },
+        {
+          place: "npm's globals of @pnpm/exe in the roaming AppData",
+          createInstall: () =>
+            writePnpmPackage({
+              packageFolder: resolveCatalogLocation({
+                environment: environment,
+                location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
+              }),
+              version: '10.14.0',
+            }),
+        },
+      ];
+
+      for (const installPlace of windowsInstallPlaces) {
+        test(`keeps a store version a pnpm in ${installPlace.place} uses`, async () => {
+          await createStore({ folderNames: ['v3', 'v10'] });
+          await installPlace.createInstall();
+
+          expect(await loadOfferedVersions({ files: [] })).toEqual({
+            storeVersions: ['v3'],
+            isComplete: false,
+          });
+        });
+      }
+
+      for (const exePath of ['pnpm/pnpm.exe', 'pnpm/bin/pnpm.exe']) {
+        test(`offers nothing and is not judged beside the standalone ${exePath}`, async () => {
+          await createStore({ folderNames: ['v10'] });
+          await writeFixtureTextFile({
+            path: resolveCatalogLocation({
+              environment: environment,
+              location: { root: 'localAppData', path: exePath },
+            }),
+            text: WINDOWS_EXECUTABLE_TEXT,
+          });
+
+          expect(await loadOfferedVersions({ files: [] })).toEqual({
+            storeVersions: [],
+            isComplete: false,
+          });
+        });
+      }
+
+      test('counts the pnpm.cmd and pnpm.ps1 shims in pnpm home for nothing', async () => {
+        await createStore({ folderNames: ['v10'] });
+
+        for (const shimPath of ['pnpm/pnpm.cmd', 'pnpm/pnpm.ps1']) {
+          await writeFixtureTextFile({
+            path: resolveCatalogLocation({
+              environment: environment,
+              location: { root: 'localAppData', path: shimPath },
+            }),
+            text: '@SETLOCAL\r\n',
+          });
+        }
+
+        expect(await loadOfferedVersions({ files: [] })).toEqual({
+          storeVersions: ['v10'],
+          isComplete: true,
+        });
+      });
+    });
   });
 }
 
@@ -1396,6 +1754,28 @@ describe('the recheck of a pnpm store unit', () => {
       failure: {
         reason: 'fileUnreadable',
         path: storeRoot,
+        failure: { reason: 'permissionDenied', code: 'EACCES' },
+      },
+    });
+  });
+
+  testOnPosix('fails at a place of installed pnpm it cannot read, never as no pnpm', async () => {
+    const toolsPath = buildPnpmHomePath('.tools/pnpm');
+    await createFixtureDirectory({ path: toolsPath });
+    await chmod(toolsPath, 0o000);
+
+    expect(
+      await recheckExplorePathUnit({
+        unit: unit,
+        environment: environment,
+        platform: probePlatform,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({
+      kind: 'failed',
+      failure: {
+        reason: 'fileUnreadable',
+        path: buildTestHostPath({ text: toolsPath }),
         failure: { reason: 'permissionDenied', code: 'EACCES' },
       },
     });

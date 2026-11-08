@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { utimes } from 'node:fs/promises';
 import { join } from 'node:path';
+import { resolveCatalogLocation } from '../../src/catalog/resolveCatalogLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadMailDownloadFindings } from '../../src/explore/mailDownloads/loadMailDownloadFindings.js';
 import { recheckMailDownloadsUnit } from '../../src/explore/mailDownloads/recheckMailDownloadsUnit.js';
@@ -25,13 +26,13 @@ const FILE_SIZE_BYTES = 4096;
 const MAIL_COMMAND = '/System/Applications/Mail.app/Contents/MacOS/Mail';
 
 function getMailDownloadsPath(home: FixtureHome): string {
-  const rootNames = buildTestProbePlatform().explore.mailDownloadsRoot;
+  const root = buildTestProbePlatform().explore.mailDownloadsRoot;
 
-  if (rootNames === null) {
+  if (root === null) {
     throw new Error('The platform has no Mail Downloads folder.');
   }
 
-  return join(home.fixtureRoot.homeDir, ...rootNames);
+  return resolveCatalogLocation({ environment: home.environment, location: root });
 }
 
 /**

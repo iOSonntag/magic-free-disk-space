@@ -57,8 +57,8 @@ const ANONYMOUS_VOLUME_NAME = 'a'.repeat(64);
 const TEST_ENGINE: ContainerEngineFixed = {
   kind: 'fixed',
   engineName: 'Docker Desktop',
-  socketPaths: [['engine.sock']],
-  diskImagePath: ['disk.img'],
+  socketPaths: [{ root: 'home', path: 'engine.sock' }],
+  diskImagePath: { root: 'home', path: 'disk.img' },
 };
 
 function parseUsage(answer: unknown): EngineDiskUsage {
@@ -560,7 +560,13 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
     const findings = await loadEngineFindings({
       run: buildRun(),
       engineProbeId: 'dockerDesktopEngine',
-      engine: { ...TEST_ENGINE, socketPaths: [['missing.sock'], ['also-missing.sock']] },
+      engine: {
+        ...TEST_ENGINE,
+        socketPaths: [
+          { root: 'home', path: 'missing.sock' },
+          { root: 'home', path: 'also-missing.sock' },
+        ],
+      },
     });
 
     expect(findings).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
@@ -579,7 +585,11 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
         engineProbeId: 'dockerDesktopEngine',
         engine: {
           ...TEST_ENGINE,
-          socketPaths: [['missing.sock'], ['plain.sock'], ['engine.sock']],
+          socketPaths: [
+            { root: 'home', path: 'missing.sock' },
+            { root: 'home', path: 'plain.sock' },
+            { root: 'home', path: 'engine.sock' },
+          ],
         },
       });
 

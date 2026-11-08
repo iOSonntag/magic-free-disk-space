@@ -15,8 +15,7 @@ export async function recheckIdeVersionUnit(params: {
   runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const folders = await loadIdeVersionState({
-    pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
+    environment: params.environment,
     roots: params.platform.explore.ideVersionRoots,
     privacyDenialCode: params.platform.privacyDenialCode,
   });

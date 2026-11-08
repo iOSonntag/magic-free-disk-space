@@ -1,15 +1,11 @@
 import { PROJECT_ARTIFACT_RULES } from '../../catalog/projectArtifactRules.js';
 import type { Platform } from '../platform.js';
 import { ANDROID_SDK_ROOT, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
-import {
-  DOWNLOADS_ROOT_PATH_NAMES,
-  ICLOUD_DRIVE_ROOT_PATH_NAMES,
-  MAIL_DOWNLOADS_ROOT_PATH_NAMES,
-} from './appleDataRoots.js';
+import { DOWNLOADS_ROOT, ICLOUD_DRIVE_ROOT, MAIL_DOWNLOADS_ROOT } from './appleDataRoots.js';
 import { BROWSER_BUNDLES } from './browserBundles.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
 import { CONTAINER_ENGINES } from './containerEngines.js';
-import { isEntryEvicted } from './hasDatalessFlag.js';
+import { loadEntryPlacement } from './hasDatalessFlag.js';
 import { IDE_VERSION_ROOTS } from './ideVersionRoots.js';
 import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
 import { DARWIN_HOMEBREW_PREFIX_PATHS, loadEnvironment } from './loadEnvironment.js';
@@ -20,7 +16,7 @@ import { loadProcessCommands } from './loadProcessCommands.js';
 import { loadSystemVersion } from './loadSystemVersion.js';
 import { loadVolumeSpace } from './loadVolumeSpace.js';
 import { ORPHAN_LOCATIONS } from './orphanLocations.js';
-import { PNPM_HOMES, PNPM_STORE_ROOT, PNPM_XDG_STORE_ROOT } from './pnpmHomes.js';
+import { PNPM_INSTALL_PLACES, PNPM_STORE_ROOT, PNPM_XDG_STORE_ROOT } from './pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from './projectSearchEvidence.js';
 import { removeTree } from './removeTree.js';
 import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOTS } from './scanHomeFolders.js';
@@ -65,7 +61,7 @@ export const darwinPlatform: Platform = {
   },
   delete: { removeTree: removeTree, trash: { kind: 'catalogFolder' } },
   explore: {
-    pnpmHomes: PNPM_HOMES,
+    pnpmInstallPlaces: PNPM_INSTALL_PLACES,
     pnpmStoreRoot: PNPM_STORE_ROOT,
     pnpmXdgStoreRoot: PNPM_XDG_STORE_ROOT,
     androidSdkRoot: ANDROID_SDK_ROOT,
@@ -74,10 +70,10 @@ export const darwinPlatform: Platform = {
     projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     containerEngines: CONTAINER_ENGINES,
     ideVersionRoots: IDE_VERSION_ROOTS,
-    icloudDriveRoot: ICLOUD_DRIVE_ROOT_PATH_NAMES,
-    mailDownloadsRoot: MAIL_DOWNLOADS_ROOT_PATH_NAMES,
+    icloudDriveRoot: ICLOUD_DRIVE_ROOT,
+    mailDownloadsRoot: MAIL_DOWNLOADS_ROOT,
     mailBundlePaths: MAIL_BUNDLE_PATHS,
-    downloadsRoot: DOWNLOADS_ROOT_PATH_NAMES,
+    downloadsRoot: DOWNLOADS_ROOT,
     browserBundles: BROWSER_BUNDLES,
   },
   report: {
@@ -89,7 +85,7 @@ export const darwinPlatform: Platform = {
       'Download the new version, quit this app, and move the new one into Applications in its place.',
   },
   system: {
-    entryReads: { isEntryEvicted: isEntryEvicted, loadPrivateBytes: loadPrivateBytes },
+    entryReads: { loadEntryPlacement: loadEntryPlacement, loadPrivateBytes: loadPrivateBytes },
     privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE,
     loadFullDiskAccess: loadFullDiskAccess,
     loadRunningProcesses: loadProcessCommands,

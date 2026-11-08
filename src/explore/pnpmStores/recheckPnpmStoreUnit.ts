@@ -1,4 +1,3 @@
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
 import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
@@ -29,11 +28,8 @@ export async function recheckPnpmStoreUnit(params: {
   }
 
   const installState = await loadPnpmInstallState({
-    pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
-    pnpmHomePaths: params.platform.explore.pnpmHomes.map((location) =>
-      resolveCatalogLocation({ environment: params.environment, location: location }),
-    ),
+    environment: params.environment,
+    places: params.platform.explore.pnpmInstallPlaces,
     homebrewPrefixPaths: params.platform.homebrewPrefixPaths,
     privacyDenialCode: params.platform.privacyDenialCode,
   });

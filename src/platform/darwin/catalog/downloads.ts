@@ -1,5 +1,5 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
-import { DOWNLOADS_ROOT_PATH_NAMES } from '../appleDataRoots.js';
+import { DOWNLOADS_ROOT } from '../appleDataRoots.js';
 
 /** The Downloads folder and the installers left in it. */
 export const DOWNLOAD_ENTRIES: CatalogEntry[] = [
@@ -11,8 +11,8 @@ export const DOWNLOAD_ENTRIES: CatalogEntry[] = [
       'Disk images, installer packages, and partial downloads at the top of Downloads that nothing changed for the stale period.',
     regeneration: 'Download it again from its maker, or start the download again in the browser.',
     risk: 'careful',
-    root: 'home',
-    path: DOWNLOADS_ROOT_PATH_NAMES.join('/'),
+    root: DOWNLOADS_ROOT.root,
+    path: DOWNLOADS_ROOT.path,
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,

@@ -1,16 +1,13 @@
 import type { CatalogLocation, EngineProbeId } from '../catalog/catalog.js';
 
-/** The folder names of a place below the home folder, joined by the platform's separator. */
-export type HomeRelativePathNames = string[];
-
 /** An engine at fixed places, with one socket and one disk image. */
 export type ContainerEngineFixed = {
   kind: 'fixed';
   engineName: string;
   /** In order; the probe takes the first that exists and tries no other. */
-  socketPaths: [HomeRelativePathNames, ...HomeRelativePathNames[]];
+  socketPaths: [CatalogLocation, ...CatalogLocation[]];
   /** The one home of the engine's disk image: the engine units' path, and the path of the engine's advice entry. */
-  diskImagePath: HomeRelativePathNames;
+  diskImagePath: CatalogLocation;
 };
 
 /**
@@ -21,27 +18,49 @@ export type ContainerEngineFixed = {
 export type ContainerEngineProfiles = {
   kind: 'profiles';
   engineName: string;
-  profilesRoot: HomeRelativePathNames;
+  profilesRoot: CatalogLocation;
   /** The name of the socket in a profile's folder. */
   socketName: string;
   /** The profile probed alone when `profilesRoot` cannot be listed. */
   defaultProfileName: string;
   /** The disk image of the profile of a folder name. */
-  buildDiskImagePath: (profileName: string) => HomeRelativePathNames;
+  buildDiskImagePath: (profileName: string) => CatalogLocation;
   /** The default profile's disk image, the path of the engine's advice entry. */
-  diskImagePath: HomeRelativePathNames;
+  diskImagePath: CatalogLocation;
 };
 
 /** A container engine the probe of its id asks over its own sockets. */
 export type ContainerEngine = ContainerEngineFixed | ContainerEngineProfiles;
 
 /** The roots of the IDE versions, by their kind; a version's plugins lie inside its settings. */
-export type IdeVersionRoots = Record<'caches' | 'logs' | 'settings', HomeRelativePathNames[]>;
+export type IdeVersionRoots = Record<'caches' | 'logs' | 'settings', CatalogLocation[]>;
+
+/**
+ * The places of the platform where pnpm may be installed. The places of asdf, mise, nvm and
+ * Homebrew are the probe's own, missing where those tools are not.
+ */
+export type PnpmInstallPlaces = {
+  /**
+   * pnpm's homes, the platform's own first, then the XDG data place where it has a default; each
+   * holds pnpm's `.tools` and `global` folders.
+   */
+  homes: CatalogLocation[];
+  /** corepack's folders of pnpm, each with one folder per version. */
+  corepackRoots: CatalogLocation[];
+  /**
+   * The files that start pnpm in its homes: pnpm's executable, an install of no known version, or
+   * a script starting with `#!` that runs a pnpm of a place read on its own.
+   */
+  launchers: CatalogLocation[];
+  /** npm's prefixes at fixed places; Homebrew's prefixes and each node's folder are prefixes too. */
+  npmPrefixes: CatalogLocation[];
+  /** The folder of npm's global packages below a prefix, by its names. */
+  npmGlobalFolderNames: string[];
+};
 
 /** What the explore probes take from the operating system: where the tools keep their data. */
 export type ExplorePlatform = {
-  /** pnpm's homes, the platform's own first, then the XDG data place where it has a default. */
-  pnpmHomes: CatalogLocation[];
+  pnpmInstallPlaces: PnpmInstallPlaces;
   /** pnpm's store at the platform's own place. */
   pnpmStoreRoot: CatalogLocation;
   /** pnpm's store at the XDG data place; `null` where pnpm has no default for it, as on Windows. */
@@ -65,16 +84,16 @@ export type ExplorePlatform = {
   /** The folders of the JetBrains IDEs and Android Studio that hold one folder per version. */
   ideVersionRoots: IdeVersionRoots;
   /** iCloud Drive's local folder; `null` where the platform has none, so its probe cannot run. */
-  icloudDriveRoot: HomeRelativePathNames | null;
+  icloudDriveRoot: CatalogLocation | null;
   /** Mail's folder of saved attachments; `null` where the platform has none, so its probe cannot run. */
-  mailDownloadsRoot: HomeRelativePathNames | null;
+  mailDownloadsRoot: CatalogLocation | null;
   /** The bundles of Mail, whose running process may still open the attachments it saved. */
   mailBundlePaths: string[];
   /**
-   * The person's folder of downloads, the browsers' default target; `null` where it is no fixed
-   * place below the home folder, so its probe cannot run.
+   * The person's folder of downloads, the browsers' default target; `null` where the platform
+   * explores none, so its probe cannot run.
    */
-  downloadsRoot: HomeRelativePathNames | null;
+  downloadsRoot: CatalogLocation | null;
   /** The browsers that write a partial download, which must not run while one of theirs goes. */
   browserBundles: BrowserBundles;
 };

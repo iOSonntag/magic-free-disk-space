@@ -1,4 +1,5 @@
 import type { EngineProbeId } from '../../catalog/catalog.js';
+import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
@@ -9,7 +10,6 @@ import type {
   ContainerEngine,
   ContainerEngineFixed,
   ContainerEngineProfiles,
-  HomeRelativePathNames,
 } from '../explorePlatform.js';
 import type {
   ExploreEngineFailure,
@@ -156,16 +156,19 @@ async function loadFixedEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngineFixed;
 }): Promise<EngineSocket[]> {
-  for (const pathNames of params.engine.socketPaths) {
-    const socketPath = resolveHomePath({ environment: params.environment, pathNames: pathNames });
+  for (const socketLocation of params.engine.socketPaths) {
+    const socketPath = resolveCatalogLocation({
+      environment: params.environment,
+      location: socketLocation,
+    });
 
     if (await isPathPresent({ path: socketPath })) {
       return [
         {
           socketPath: socketPath,
-          diskImagePath: resolveHomePath({
+          diskImagePath: resolveCatalogLocation({
             environment: params.environment,
-            pathNames: params.engine.diskImagePath,
+            location: params.engine.diskImagePath,
           }),
         },
       ];
@@ -183,12 +186,11 @@ async function loadProfileEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngineProfiles;
 }): Promise<EngineSocket[]> {
-  const entries = await loadDirectoryEntries({
-    path: resolveHomePath({
-      environment: params.environment,
-      pathNames: params.engine.profilesRoot,
-    }),
+  const profilesRootPath = resolveCatalogLocation({
+    environment: params.environment,
+    location: params.engine.profilesRoot,
   });
+  const entries = await loadDirectoryEntries({ path: profilesRootPath });
 
   if (entries.kind === 'failed') {
     switch (entries.failure.reason) {
@@ -212,17 +214,18 @@ async function loadProfileEngineSockets(params: {
   const sockets: EngineSocket[] = [];
 
   for (const profileName of profileNames) {
-    const socketPath = resolveHomePath({
-      environment: params.environment,
-      pathNames: [...params.engine.profilesRoot, profileName, params.engine.socketName],
+    const socketPath = joinAbsolutePath({
+      rules: params.environment.pathRules,
+      parentPath: profilesRootPath,
+      names: [profileName, params.engine.socketName],
     });
 
     if (await isPathPresent({ path: socketPath })) {
       sockets.push({
         socketPath: socketPath,
-        diskImagePath: resolveHomePath({
+        diskImagePath: resolveCatalogLocation({
           environment: params.environment,
-          pathNames: params.engine.buildDiskImagePath(profileName),
+          location: params.engine.buildDiskImagePath(profileName),
         }),
       });
     }
@@ -239,15 +242,4 @@ async function isPathPresent(params: { path: AbsolutePath }): Promise<boolean> {
   const stats = await loadEntryStats({ path: params.path });
 
   return stats.kind === 'succeeded' || stats.failure.reason !== 'missing';
-}
-
-function resolveHomePath(params: {
-  environment: Environment;
-  pathNames: HomeRelativePathNames;
-}): AbsolutePath {
-  return joinAbsolutePath({
-    rules: params.environment.pathRules,
-    parentPath: params.environment.homeDir,
-    names: params.pathNames,
-  });
 }

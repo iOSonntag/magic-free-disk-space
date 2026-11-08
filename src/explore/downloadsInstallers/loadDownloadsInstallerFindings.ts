@@ -1,3 +1,4 @@
+import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { toNonEmpty } from '../../system/nonEmptyList.js';
@@ -26,7 +27,7 @@ const INCOMPLETE_DOWNLOADS_TITLES: Record<BrowserFamily, string> = {
  * since the stale cutoff: one unit of the installers, and one of each browser family's partial
  * downloads. A hidden entry and a symbolic link are left alone; so is an entry whose newest change
  * is not known by the deadline, which leaves the findings incomplete. Fails on an entry it cannot
- * read; `placeMissing` without a Downloads folder, or where the platform has no fixed place of it.
+ * read; `placeMissing` without a Downloads folder, or where the platform explores none.
  */
 export async function loadDownloadsInstallerFindings(
   run: ExploreProbeRun,
@@ -35,10 +36,9 @@ export async function loadDownloadsInstallerFindings(
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
-  const folderPath = joinAbsolutePath({
-    rules: run.environment.pathRules,
-    parentPath: run.environment.homeDir,
-    names: run.platform.explore.downloadsRoot,
+  const folderPath = resolveCatalogLocation({
+    environment: run.environment,
+    location: run.platform.explore.downloadsRoot,
   });
   const entries = await loadExploreDirectoryEntries({
     path: folderPath,

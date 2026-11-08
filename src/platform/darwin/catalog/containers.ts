@@ -146,8 +146,8 @@ function buildEngineEntry(params: {
     explanation: params.explanation,
     regeneration: 'Images come back when you download them again, but stored data does not.',
     risk: 'careful',
-    root: 'home',
-    path: CONTAINER_ENGINES[params.engineProbeId].diskImagePath.join('/'),
+    root: CONTAINER_ENGINES[params.engineProbeId].diskImagePath.root,
+    path: CONTAINER_ENGINES[params.engineProbeId].diskImagePath.path,
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner:

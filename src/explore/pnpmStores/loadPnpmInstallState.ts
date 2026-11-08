@@ -1,10 +1,14 @@
 import { basename } from 'node:path';
+import type { CatalogLocation } from '../../catalog/catalog.js';
+import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
+import type { Environment } from '../../environment/buildEnvironment.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
 import { ASDF_INSTALLS_PATH_NAMES } from '../asdfVersions/asdfInstallsRoot.js';
+import type { PnpmInstallPlaces } from '../explorePlatform.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
   loadExploreFileText,
@@ -31,11 +35,6 @@ export type PnpmInstall = PnpmInstallParsed | PnpmInstallUnparsed;
 
 export type PnpmInstallState = { installs: PnpmInstall[] };
 
-const COREPACK_PNPM_PATH_NAMES = [
-  ['.cache', 'node', 'corepack', 'v1', 'pnpm'],
-  ['.cache', 'node', 'corepack', 'pnpm'],
-];
-
 const PNPM_TOOLS_PATH_NAMES = [
   ['.tools', PNPM_TOOL_NAME],
   ['.tools', '@pnpm+exe'],
@@ -59,31 +58,42 @@ const HOMEBREW_VERSIONED_PNPM_PREFIX = `${PNPM_TOOL_NAME}@`;
 
 const NODE_MODULES_FOLDER_NAME = 'node_modules';
 
-const PNPM_PACKAGE_PATH_NAMES = [
-  [NODE_MODULES_FOLDER_NAME, PNPM_TOOL_NAME],
-  [NODE_MODULES_FOLDER_NAME, '@pnpm', 'exe'],
-];
-
-const NPM_GLOBAL_FOLDER_NAME = 'lib';
+/** The packages of pnpm, each by the names of its folder in a `node_modules` folder. */
+const PNPM_PACKAGE_PATH_NAMES = [[PNPM_TOOL_NAME], ['@pnpm', 'exe']];
 
 const PACKAGE_JSON_FILE_NAME = 'package.json';
 
 /**
- * The pnpm installed in every place corepack, asdf, mise (each installs folder naming pnpm),
- * Homebrew, the npm globals of a node, and pnpm in each of its homes keep it (`.tools`, the global
- * folders, the launcher `pnpm`); a missing place holds none.
+ * The pnpm installed in every place of the platform's `places` (corepack, the launchers, npm's
+ * prefixes, and pnpm's `.tools` and global folders in each home), and in those of asdf, mise (each
+ * installs folder naming pnpm), Homebrew, and the npm globals of a node. A missing place holds
+ * none; a place that cannot be read fails the whole state, so it never reads as no pnpm.
  */
 export async function loadPnpmInstallState(params: {
-  pathRules: PathRules;
-  homeDir: AbsolutePath;
-  /** pnpm's homes of the explore slice, resolved. */
-  pnpmHomePaths: AbsolutePath[];
+  environment: Environment;
+  places: PnpmInstallPlaces;
   homebrewPrefixPaths: AbsolutePath[];
   privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstallState, ExploreFileUnreadable>> {
+  const pnpmHomePaths = resolvePlacePaths({
+    environment: params.environment,
+    locations: params.places.homes,
+  });
+  const corepackRootPaths = resolvePlacePaths({
+    environment: params.environment,
+    locations: params.places.corepackRoots,
+  });
+  const npmPrefixPaths = resolvePlacePaths({
+    environment: params.environment,
+    locations: params.places.npmPrefixes,
+  });
+  const launcherPaths = resolvePlacePaths({
+    environment: params.environment,
+    locations: params.places.launchers,
+  });
   const misePnpmRoots = await loadMisePnpmVersionsRoots({
-    pathRules: params.pathRules,
-    homeDir: params.homeDir,
+    pathRules: params.environment.pathRules,
+    homeDir: params.environment.homeDir,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -92,7 +102,7 @@ export async function loadPnpmInstallState(params: {
   }
 
   const cellarRoots = await loadHomebrewCellarPnpmRoots({
-    pathRules: params.pathRules,
+    pathRules: params.environment.pathRules,
     homebrewPrefixPaths: params.homebrewPrefixPaths,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -102,13 +112,14 @@ export async function loadPnpmInstallState(params: {
   }
 
   const homeRoots = listHomePnpmVersionsRoots({
-    pathRules: params.pathRules,
-    homeDir: params.homeDir,
-    pnpmHomePaths: params.pnpmHomePaths,
+    pathRules: params.environment.pathRules,
+    homeDir: params.environment.homeDir,
+    pnpmHomePaths: pnpmHomePaths,
     misePnpmRoots: misePnpmRoots.value,
+    corepackRootPaths: corepackRootPaths,
   });
   const folderInstalls = await loadVersionFolderInstalls({
-    pathRules: params.pathRules,
+    pathRules: params.environment.pathRules,
     versionsRoots: [...homeRoots, ...cellarRoots.value],
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -118,8 +129,8 @@ export async function loadPnpmInstallState(params: {
   }
 
   const globalFolders = await loadPnpmGlobalFolders({
-    pathRules: params.pathRules,
-    pnpmHomePaths: params.pnpmHomePaths,
+    pathRules: params.environment.pathRules,
+    pnpmHomePaths: pnpmHomePaths,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -128,9 +139,10 @@ export async function loadPnpmInstallState(params: {
   }
 
   const packageFolders = await loadPnpmPackageFolders({
-    pathRules: params.pathRules,
-    homeDir: params.homeDir,
-    homebrewPrefixPaths: params.homebrewPrefixPaths,
+    pathRules: params.environment.pathRules,
+    homeDir: params.environment.homeDir,
+    npmPrefixPaths: [...npmPrefixPaths, ...params.homebrewPrefixPaths],
+    npmGlobalFolderNames: params.places.npmGlobalFolderNames,
     globalFolderPaths: globalFolders.value,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -140,7 +152,7 @@ export async function loadPnpmInstallState(params: {
   }
 
   const packageInstalls = await loadPackageJsonInstalls({
-    pathRules: params.pathRules,
+    pathRules: params.environment.pathRules,
     packageFolders: packageFolders.value,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -150,8 +162,7 @@ export async function loadPnpmInstallState(params: {
   }
 
   const standaloneInstalls = await loadStandaloneInstalls({
-    pathRules: params.pathRules,
-    pnpmHomePaths: params.pnpmHomePaths,
+    launcherPaths: launcherPaths,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -167,27 +178,34 @@ export async function loadPnpmInstallState(params: {
   };
 }
 
+function resolvePlacePaths(params: {
+  environment: Environment;
+  locations: CatalogLocation[];
+}): AbsolutePath[] {
+  return params.locations.map((location) =>
+    resolveCatalogLocation({ environment: params.environment, location: location }),
+  );
+}
+
 function listHomePnpmVersionsRoots(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
   pnpmHomePaths: AbsolutePath[];
   misePnpmRoots: AbsolutePath[];
+  corepackRootPaths: AbsolutePath[];
 }): AbsolutePath[] {
   const asdfRoot = joinAbsolutePath({
     rules: params.pathRules,
     parentPath: params.homeDir,
     names: [...ASDF_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME],
   });
-  const corepackRoots = COREPACK_PNPM_PATH_NAMES.map((names) =>
-    joinAbsolutePath({ rules: params.pathRules, parentPath: params.homeDir, names: names }),
-  );
   const pnpmToolsRoots = params.pnpmHomePaths.flatMap((pnpmHomePath) =>
     PNPM_TOOLS_PATH_NAMES.map((names) =>
       joinAbsolutePath({ rules: params.pathRules, parentPath: pnpmHomePath, names: names }),
     ),
   );
 
-  return [asdfRoot, ...params.misePnpmRoots, ...corepackRoots, ...pnpmToolsRoots];
+  return [asdfRoot, ...params.misePnpmRoots, ...params.corepackRootPaths, ...pnpmToolsRoots];
 }
 
 /**
@@ -346,13 +364,16 @@ async function loadVersionsRootInstalls(params: {
 }
 
 /**
- * The `node_modules/pnpm` and `node_modules/@pnpm/exe` folders of pnpm's global folders and of
- * each node's npm globals.
+ * The `node_modules/pnpm` and `node_modules/@pnpm/exe` folders of pnpm's global folders, and the
+ * `pnpm` and `@pnpm/exe` folders of npm's globals below each of `npmPrefixPaths` and each node's
+ * folder.
  */
 async function loadPnpmPackageFolders(params: {
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  homebrewPrefixPaths: AbsolutePath[];
+  npmPrefixPaths: AbsolutePath[];
+  /** The folder of npm's global packages below a prefix, by its names. */
+  npmGlobalFolderNames: string[];
   globalFolderPaths: AbsolutePath[];
   privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
@@ -375,16 +396,20 @@ async function loadPnpmPackageFolders(params: {
 
   const globalPackageFolders = params.globalFolderPaths.flatMap((globalFolder) =>
     PNPM_PACKAGE_PATH_NAMES.map((names) =>
-      joinAbsolutePath({ rules: params.pathRules, parentPath: globalFolder, names: names }),
+      joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: globalFolder,
+        names: [NODE_MODULES_FOLDER_NAME, ...names],
+      }),
     ),
   );
-  const npmGlobalPackageFolders = [...params.homebrewPrefixPaths, ...nodeFolders.value].flatMap(
-    (nodeFolder) =>
+  const npmGlobalPackageFolders = [...params.npmPrefixPaths, ...nodeFolders.value].flatMap(
+    (prefixPath) =>
       PNPM_PACKAGE_PATH_NAMES.map((names) =>
         joinAbsolutePath({
           rules: params.pathRules,
-          parentPath: nodeFolder,
-          names: [NPM_GLOBAL_FOLDER_NAME, ...names],
+          parentPath: prefixPath,
+          names: [...params.npmGlobalFolderNames, ...names],
         }),
       ),
   );
@@ -454,16 +479,14 @@ function isGlobalInstallsFolder(params: { entryPath: AbsolutePath }): boolean {
 }
 
 async function loadStandaloneInstalls(params: {
-  pathRules: PathRules;
-  pnpmHomePaths: AbsolutePath[];
+  launcherPaths: AbsolutePath[];
   privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall[], ExploreFileUnreadable>> {
   const installs: PnpmInstall[] = [];
 
-  for (const pnpmHomePath of params.pnpmHomePaths) {
+  for (const launcherPath of params.launcherPaths) {
     const install = await loadStandaloneInstall({
-      pathRules: params.pathRules,
-      pnpmHomePath: pnpmHomePath,
+      launcherPath: launcherPath,
       privacyDenialCode: params.privacyDenialCode,
     });
 
@@ -480,22 +503,16 @@ async function loadStandaloneInstalls(params: {
 }
 
 /**
- * The executable pnpm's `install.sh` and `pnpm setup` copy to `pnpm` in a pnpm home, an install
- * of no known version; `null` when nothing is there or it is a script, which runs a pnpm of a place
- * read on its own.
+ * The executable at a launcher's place, such as the one `install.sh` and `pnpm setup` copy into a
+ * pnpm home, an install of no known version; `null` when nothing is there or it is a script, which
+ * runs a pnpm of a place read on its own.
  */
 async function loadStandaloneInstall(params: {
-  pathRules: PathRules;
-  pnpmHomePath: AbsolutePath;
+  launcherPath: AbsolutePath;
   privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstall | null, ExploreFileUnreadable>> {
-  const path = joinAbsolutePath({
-    rules: params.pathRules,
-    parentPath: params.pnpmHomePath,
-    names: [PNPM_TOOL_NAME],
-  });
   const file = await loadExploreFileText({
-    path: path,
+    path: params.launcherPath,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -507,13 +524,19 @@ async function loadStandaloneInstall(params: {
     case 'absent':
       return { kind: 'succeeded', value: null };
     case 'unfit':
-      return { kind: 'succeeded', value: buildPnpmInstall({ path: path, versionText: null }) };
+      return {
+        kind: 'succeeded',
+        value: buildPnpmInstall({ path: params.launcherPath, versionText: null }),
+      };
     case 'text': {
       if (file.value.text.startsWith(SCRIPT_SHEBANG)) {
         return { kind: 'succeeded', value: null };
       }
 
-      return { kind: 'succeeded', value: buildPnpmInstall({ path: path, versionText: null }) };
+      return {
+        kind: 'succeeded',
+        value: buildPnpmInstall({ path: params.launcherPath, versionText: null }),
+      };
     }
   }
 }

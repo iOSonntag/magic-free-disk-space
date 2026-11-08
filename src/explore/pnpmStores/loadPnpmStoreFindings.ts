@@ -48,11 +48,8 @@ export async function loadPnpmStoreFindings(params: {
   }
 
   const installState = await loadPnpmInstallState({
-    pathRules: params.run.environment.pathRules,
-    homeDir: params.run.environment.homeDir,
-    pnpmHomePaths: params.run.platform.explore.pnpmHomes.map((location) =>
-      resolveCatalogLocation({ environment: params.run.environment, location: location }),
-    ),
+    environment: params.run.environment,
+    places: params.run.platform.explore.pnpmInstallPlaces,
     homebrewPrefixPaths: params.run.platform.homebrewPrefixPaths,
     privacyDenialCode: params.run.platform.privacyDenialCode,
   });
