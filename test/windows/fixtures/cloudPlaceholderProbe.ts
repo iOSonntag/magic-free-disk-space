@@ -1,13 +1,13 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { join } from 'node:path';
-import { isEntryEvicted } from '../../../src/platform/win32/isEntryEvicted.js';
-import type { EvictionCandidate } from '../../../src/system/entryReads.js';
+import { loadEntryPlacement } from '../../../src/platform/win32/loadEntryPlacement.js';
+import type { EntryRef } from '../../../src/system/entryReads.js';
 import { formatHex, loadAttributesText, loadLstatText, observeSafely } from '../observations.js';
 
 // Registers a sync root in the given empty folder, creates cloud placeholders in it through
 // cldapi, and writes one JSON line per stage, so a crash from a wrong struct layout still leaves
 // the stages before it on stdout. Each placeholder is read as the walk reads it, through
-// win32Api.ts and isEntryEvicted.
+// win32Api.ts and loadEntryPlacement.
 //   cloudPlaceholderProbe.ts <sync root folder>
 
 // The layouts follow learn.microsoft.com/windows/win32/api/cfapi for LLP64, shared by x64 and
@@ -165,13 +165,13 @@ const createCloudOnlyPlaceholders = (cloudFilterApi: CloudFilterApi, syncRoot: s
   return hresult >= 0;
 };
 
-const observeEntry = async (label: string, entry: EvictionCandidate): Promise<void> => {
+const observeEntry = async (label: string, entry: EntryRef): Promise<void> => {
   const lstatText = await observeSafely(() => loadLstatText(entry.path));
 
   writeStage(label, {
     lstat: lstatText,
     attributes: loadAttributesText(entry.path),
-    isEntryEvicted: isEntryEvicted(entry),
+    placement: loadEntryPlacement(entry),
   });
 };
 

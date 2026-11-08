@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
+import type { PathRules } from '../../src/path/pathRules.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { UserFileFinding } from '../../src/scan/findLargeUserFiles.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
-import type { EntryReads } from '../../src/system/entryReads.js';
+import type { EntryReads, EntryRef } from '../../src/system/entryReads.js';
+import type { EvictedEntryRecorder } from '../../src/system/walkDirectoryTree.js';
 import { buildTestEntryReads, loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -14,6 +18,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
 import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
@@ -24,16 +29,20 @@ const TEST_MODIFIED_MS = 1_600_000_000_000;
 const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
 async function findFiles(params: {
+  pathRules?: PathRules;
   rootDirs: string[];
   deadlineMs?: number;
   entryReads?: EntryReads;
+  recordEvictedEntry?: EvictedEntryRecorder;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   return findLargeUserFiles({
+    pathRules: params.pathRules ?? HOST_PATH_RULES,
     rootDirs: params.rootDirs,
     artifactRules: PROJECT_ARTIFACT_RULES,
     minAllocatedBytes: MIN_ALLOCATED_BYTES,
     deadlineMs: params.deadlineMs ?? FAR_FUTURE_DEADLINE_MS,
     entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
     privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
   });
 }
@@ -147,6 +156,84 @@ describe('findLargeUserFiles', () => {
     const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([unmarkedPath]);
+  });
+
+  test('an artifact folder and its marker in another case are skipped under the rules of Windows, and searched under those of POSIX', async () => {
+    const artifactFilePath = join(fixtureRoot.homeDir, 'Documents/app/Build/outputs/app.apk');
+    await createFixtureFile({
+      path: artifactFilePath,
+      sizeBytes: LARGE_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+    await createFixtureFile({
+      path: join(fixtureRoot.homeDir, 'Documents/app/BUILD.GRADLE'),
+      sizeBytes: SMALL_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+    const rootDirs = [join(fixtureRoot.homeDir, 'Documents')];
+
+    const win32Result = await findFiles({ pathRules: WIN32_PATH_RULES, rootDirs: rootDirs });
+    const posixResult = await findFiles({ pathRules: DARWIN_PATH_RULES, rootDirs: rootDirs });
+
+    expect(win32Result.findings).toEqual([]);
+    expect(posixResult.findings.map((finding) => finding.path)).toEqual([artifactFilePath]);
+  });
+
+  test('a folder or file the entry reads call a link is not searched or found, and a root file they call one has the kind of a link', async () => {
+    // As a mounted folder or another reparse point on Windows, which lstat calls a folder or a
+    // file. The decision skips a finding of a link.
+    const mountedDir = join(fixtureRoot.homeDir, 'Documents/mounted');
+    const insidePath = join(mountedDir, 'inside.bin');
+    const reparseFilePath = join(fixtureRoot.homeDir, 'Documents/reparse.bin');
+    const plainPath = join(fixtureRoot.homeDir, 'Documents/plain.bin');
+
+    for (const path of [insidePath, reparseFilePath, plainPath]) {
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents'), reparseFilePath],
+      entryReads: buildTestEntryReads({
+        privateBytes: LARGE_FILE_BYTES,
+        linkPaths: [mountedDir, reparseFilePath],
+      }),
+    });
+
+    expect(result.issues).toEqual([]);
+    expect(
+      result.findings.map((finding) => ({ path: finding.path, kind: finding.identity.kind })),
+    ).toEqual([
+      { path: plainPath, kind: 'file' },
+      { path: reparseFilePath, kind: 'symbolicLink' },
+    ]);
+  });
+
+  test('records each entry its walk leaves unread in the cloud', async () => {
+    const cloudDir = join(fixtureRoot.homeDir, 'Documents/cloud');
+    await createFixtureFile({
+      path: join(cloudDir, 'clip.mov'),
+      sizeBytes: LARGE_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+    const recordedEntries: EntryRef[] = [];
+
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      entryReads: buildTestEntryReads({
+        privateBytes: LARGE_FILE_BYTES,
+        cloudOnlyPaths: [cloudDir],
+      }),
+      recordEvictedEntry: (entry) => {
+        recordedEntries.push(entry);
+      },
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(recordedEntries).toEqual([{ path: cloudDir, kind: 'directory' }]);
   });
 
   test('a file inside a package folder is not found', async () => {

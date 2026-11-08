@@ -158,6 +158,7 @@ function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
     runItemMeasurement: runItemMeasurement,
     entryReads: HOST_PLATFORM.system.entryReads,
+    recordEvictedEntry: () => undefined,
     privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
   });
 }
@@ -214,6 +215,7 @@ describe('loadExplorePhase', () => {
         measureTimeoutMs: MEASURE_TIMEOUT_MS,
         runItemMeasurement: runItemMeasurement,
         entryReads: HOST_PLATFORM.system.entryReads,
+        recordEvictedEntry: () => undefined,
         privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
       });
 
@@ -281,6 +283,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: HOST_PLATFORM.system.entryReads,
+      recordEvictedEntry: () => undefined,
       privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
     });
 
@@ -318,6 +321,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: HOST_PLATFORM.system.entryReads,
+      recordEvictedEntry: () => undefined,
       privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
     });
 
@@ -511,6 +515,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: HOST_PLATFORM.system.entryReads,
+      recordEvictedEntry: () => undefined,
       privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
     });
 
@@ -541,6 +546,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: HOST_PLATFORM.system.entryReads,
+      recordEvictedEntry: () => undefined,
       privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
     });
 

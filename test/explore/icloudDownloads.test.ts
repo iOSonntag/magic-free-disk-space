@@ -101,8 +101,10 @@ function buildRun(params: {
       },
       entryReads: {
         ...platform.entryReads,
-        isEntryEvicted: (entry) =>
-          evictedPaths.includes(entry.path) || platform.entryReads.isEntryEvicted(entry),
+        loadEntryPlacement: (entry) =>
+          evictedPaths.includes(entry.path)
+            ? 'cloudOnly'
+            : platform.entryReads.loadEntryPlacement(entry),
       },
     },
     unusedCutoffMs: params.unusedCutoffMs ?? CUTOFF_MS,

@@ -386,10 +386,10 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
       const stages = parseProbeLines(new TextDecoder().decode(run.stdout));
 
       expect(stages).toContainEqual(
-        expect.objectContaining({ stage: 'cloud-only file', isEntryEvicted: true }),
+        expect.objectContaining({ stage: 'cloud-only file', placement: 'cloudOnly' }),
       );
       expect(stages).toContainEqual(
-        expect.objectContaining({ stage: 'cloud-only folder', isEntryEvicted: false }),
+        expect.objectContaining({ stage: 'cloud-only folder', placement: 'onDisk' }),
       );
     },
     CHILD_TIMEOUT_MS * 2,

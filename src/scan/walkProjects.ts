@@ -1,5 +1,5 @@
 import { basename, dirname } from 'node:path';
-import type { ProjectArtifactRule, ProjectMarker } from '../catalog/projectArtifactRules.js';
+import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
 import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { ProjectPinFileRef } from '../explore/projectPins/projectPins.js';
 import {
@@ -11,7 +11,11 @@ import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { EntryReads } from '../system/entryReads.js';
-import type { TreeEntry, TreeEntryVisit } from '../system/walkDirectoryTree.js';
+import type {
+  EvictedEntryRecorder,
+  TreeEntry,
+  TreeEntryVisit,
+} from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
@@ -34,20 +38,14 @@ export type ProjectWalk = {
   issues: ScanIssue[];
 };
 
-/** A rule of the catalog, and the same rule with its names in the form the platform compares. */
-type ComparableArtifactRule = {
-  catalogRule: ProjectArtifactRule;
-  comparableRule: ProjectArtifactRule;
-};
-
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
  * Walks the projects under `homeDir` once: the artifact folders whose project folder holds a
  * marker file, and the pin files it passes. An artifact folder beside no marker is skipped or
  * walked as its rule says. Folder names and markers compare as the platform compares names, so
- * `Bin` beside `Foo.CSPROJ` counts on Windows. Symbolic links are never followed; a passed
- * `deadlineMs` stops the walk with one `walkStopped` issue. Never rejects.
+ * `Bin` beside `Foo.CSPROJ` counts on Windows. A link, which on Windows is any reparse point, is
+ * never followed; a passed `deadlineMs` stops the walk with one `walkStopped` issue. Never rejects.
  */
 export async function walkProjects(params: {
   pathRules: PathRules;
@@ -57,12 +55,14 @@ export async function walkProjects(params: {
   maxDepth: number;
   deadlineMs: number;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder;
   privacyDenialCode: string | null;
 }): Promise<ProjectWalk> {
-  const comparableRules = params.rules.map((rule) =>
-    buildComparableArtifactRule({ pathRules: params.pathRules, rule: rule }),
+  const artifactNames = new Set(
+    params.rules.map((rule) =>
+      toComparablePathText({ rules: params.pathRules, text: rule.artifactName }),
+    ),
   );
-  const artifactNames = new Set(comparableRules.map((rule) => rule.comparableRule.artifactName));
   const artifacts: ArtifactFinding[] = [];
   const pinFiles: ProjectPinFileRef[] = [];
   const issues: ScanIssue[] = [];
@@ -80,7 +80,7 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
-    // Only real folders count: a symbolic link is never followed.
+    // Only real folders count: a link is never followed.
     if (entry.kind !== 'directory') {
       return 'skip';
     }
@@ -95,29 +95,19 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
-    const comparableName = toComparablePathText({ rules: params.pathRules, text: entry.name });
+    if (artifactNames.has(toComparablePathText({ rules: params.pathRules, text: entry.name }))) {
+      const markedRule = findMarkedArtifactRule({
+        pathRules: params.pathRules,
+        rules: params.rules,
+        name: entry.name,
+        projectEntryNames: entry.siblingNames,
+      });
 
-    if (artifactNames.has(comparableName)) {
-      const comparableEntryNames = new Set(
-        [...entry.siblingNames].map((name) =>
-          toComparablePathText({ rules: params.pathRules, text: name }),
-        ),
-      );
-      // Matched in the compared form, answered as the catalog names it, which its origin carries.
-      const markedRule = comparableRules.find(
-        (rule) =>
-          findMarkedArtifactRule({
-            rules: [rule.comparableRule],
-            name: comparableName,
-            projectEntryNames: comparableEntryNames,
-          }) !== null,
-      );
-
-      if (markedRule !== undefined) {
+      if (markedRule !== null) {
         artifacts.push({
           artifactPath: entry.path,
           projectRoot: dirname(entry.path),
-          rule: markedRule.catalogRule,
+          rule: markedRule,
         });
 
         return 'skip';
@@ -125,10 +115,13 @@ export async function walkProjects(params: {
 
       // An unmarked folder one rule skips is no project to search either, such as `vendor`; any
       // other is an ordinary folder, such as a `bin` beside no project file of .NET.
-      const skippedUnmarked = comparableRules.some(
+      const skippedUnmarked = params.rules.some(
         (rule) =>
-          rule.comparableRule.artifactName === comparableName &&
-          rule.catalogRule.unmarkedFolder === 'skipped',
+          isSameEntryName({
+            rules: params.pathRules,
+            name: rule.artifactName,
+            otherName: entry.name,
+          }) && rule.unmarkedFolder === 'skipped',
       );
 
       if (skippedUnmarked) {
@@ -165,9 +158,15 @@ export async function walkProjects(params: {
     },
     // An evicted entry is no read failure, yet a pin file below it or in it stays unknown.
     onEvictedEntrySkipped: (entry) => {
+      params.recordEvictedEntry(entry);
+
       if (
         entry.kind === 'directory' ||
-        matchProjectPinFileName({ name: basename(entry.path), source: 'walk' }) !== null
+        matchProjectPinFileName({
+          pathRules: params.pathRules,
+          name: basename(entry.path),
+          source: 'walk',
+        }) !== null
       ) {
         hasEvictedPinSource = true;
       }
@@ -188,49 +187,13 @@ export async function walkProjects(params: {
   };
 }
 
-function buildComparableArtifactRule(params: {
-  pathRules: PathRules;
-  rule: ProjectArtifactRule;
-}): ComparableArtifactRule {
-  return {
-    catalogRule: params.rule,
-    comparableRule: {
-      ...params.rule,
-      artifactName: toComparablePathText({
-        rules: params.pathRules,
-        text: params.rule.artifactName,
-      }),
-      markers: params.rule.markers.map((marker) =>
-        toComparableMarker({ pathRules: params.pathRules, marker: marker }),
-      ),
-    },
-  };
-}
-
-function toComparableMarker(params: {
-  pathRules: PathRules;
-  marker: ProjectMarker;
-}): ProjectMarker {
-  switch (params.marker.kind) {
-    case 'fileName':
-      return {
-        kind: 'fileName',
-        name: toComparablePathText({ rules: params.pathRules, text: params.marker.name }),
-      };
-    case 'fileSuffix':
-      return {
-        kind: 'fileSuffix',
-        suffix: toComparablePathText({ rules: params.pathRules, text: params.marker.suffix }),
-      };
-  }
-}
-
 /** The ref of a file or link the walk passed, or `null` when its name is no pin file's. */
 function findWalkedPinFile(params: {
   pathRules: PathRules;
   entry: TreeEntry;
 }): ProjectPinFileRef | null {
   const kind = matchProjectPinFile({
+    pathRules: params.pathRules,
     name: params.entry.name,
     siblingNames: params.entry.siblingNames,
     source: 'walk',

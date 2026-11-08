@@ -2,10 +2,11 @@ import type { Result } from '../result.js';
 import type { EntryReads } from './entryReads.js';
 import type { FullDiskAccess } from './fullDiskAccess.js';
 import type { CommandFailure } from './loadCommandOutput.js';
+import type { SystemCallFailure } from './systemCallFailure.js';
 import type { VolumeSpace } from './volumeSpace.js';
 
 /** A call of the operating system that listed the processes failed, with its error code. */
-export type ProcessListingCallFailure = { reason: 'callFailed'; call: string; code: number };
+export type ProcessListingCallFailure = { reason: 'callFailed' } & SystemCallFailure;
 
 /** Why the processes could not be listed: by the command that lists them, or by a system call. */
 export type RunningProcessesFailure = CommandFailure | ProcessListingCallFailure;

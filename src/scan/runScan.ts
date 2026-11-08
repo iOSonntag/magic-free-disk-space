@@ -10,21 +10,22 @@ import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js'
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
 import { isOverlappingPath } from '../path/isOverlappingPath.js';
-import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
-import type { EntryReads, EvictionCandidate } from '../system/entryReads.js';
+import type { EntryReads, EntryRef } from '../system/entryReads.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
 import { mapNonEmpty } from '../system/nonEmptyList.js';
+import { formatSystemCallFailure } from '../system/systemCallFailure.js';
 import type {
   RunningProcesses,
   RunningProcessesFailure,
   SystemPlatform,
 } from '../system/systemPlatform.js';
+import type { EvictedEntryRecorder } from '../system/walkDirectoryTree.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import { buildScanReport } from './buildScanReport.js';
@@ -73,7 +74,7 @@ import { resolveUserFileRootPaths } from './resolveUserFileRootPaths.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
 import type {
-  AdvisedApp,
+  AppAdvice,
   InstalledApp,
   OrphanLocation,
   ScanPlatform,
@@ -121,9 +122,9 @@ export type ScanReport = {
   advice: Advice[];
   /**
    * The installed apps of a platform whose apps are advice only, for the user to uninstall the way
-   * the system does; empty on a platform that offers its apps.
+   * the system does; `null` on a platform that offers its apps.
    */
-  appAdvice: AdvisedApp[];
+  appAdvice: AppAdvice | null;
   skipped: SkippedItem[];
   /**
    * The entries the scan's walks left unread because their content lives only in the cloud store,
@@ -136,7 +137,7 @@ export type ScanReport = {
 /** The apps the platform's app section lists: offered apps, or apps the scan only advises about. */
 type PlatformApps = {
   installedApps: InstalledApp[];
-  advisedApps: AdvisedApp[];
+  appAdvice: AppAdvice | null;
   issues: ScanIssue[];
 };
 
@@ -159,11 +160,10 @@ type ScanContext = {
    */
   runningProcesses: RunningProcesses | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
-  /**
-   * The system slice's entry reads, asked by every walk and measurement of the scan, whose
-   * eviction check records each entry it answers true for.
-   */
+  /** The system slice's entry reads, asked by every walk and measurement of the scan. */
   entryReads: EntryReads;
+  /** Takes each entry a walk of the scan leaves unread because its content is in the cloud only. */
+  recordEvictedEntry: EvictedEntryRecorder;
   /** The system slice's code of a privacy denial, for every issue of a failed read. */
   privacyDenialCode: string | null;
   /** The folders searched for large files, from the scan slice. */
@@ -233,11 +233,13 @@ export async function runScan(params: {
     probeClaimPaths: knownClaimPaths,
   });
 
+  // A path several walks leave unread counts once.
   const evictedEntryPaths = new Set<string>();
-  const entryReads = recordEvictedEntries({
-    entryReads: params.system.entryReads,
-    evictedPaths: evictedEntryPaths,
-  });
+
+  function recordEvictedEntry(entry: EntryRef): void {
+    evictedEntryPaths.add(entry.path);
+  }
+
   const runningProcessesLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
@@ -257,7 +259,8 @@ export async function runScan(params: {
     rules: params.scan.projectArtifactRules,
     maxDepth: SCAN_LIMITS.projectMaxDepth,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
-    entryReads: entryReads,
+    entryReads: params.system.entryReads,
+    recordEvictedEntry: recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const projectPins: ProjectPinsLoad = {
@@ -308,7 +311,8 @@ export async function runScan(params: {
     systemApps: params.scan.systemApps,
     runningProcesses: await knownRunningProcessesLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
-    entryReads: entryReads,
+    entryReads: params.system.entryReads,
+    recordEvictedEntry: recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
     userFileRootPaths: resolveUserFileRootPaths({
       environment: params.environment,
@@ -399,7 +403,8 @@ export async function runScan(params: {
     catalogEntries: params.catalog.entries,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    entryReads: entryReads,
+    entryReads: params.system.entryReads,
+    recordEvictedEntry: recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const exploreAdvice = await loadCatalogPhase({
@@ -427,7 +432,7 @@ export async function runScan(params: {
       exploreAdvice,
     ],
     incompleteExploreAdvice: incompleteExploreAdvice,
-    appAdvice: decideAppAdvice({ apps: installed.advisedApps }),
+    appAdvice: installed.appAdvice,
     evictedEntryCount: evictedEntryPaths.size,
   });
 }
@@ -444,12 +449,19 @@ async function loadPlatformApps(params: {
         commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
       });
 
-      return { installedApps: installed.apps, advisedApps: [], issues: installed.issues };
+      return { installedApps: installed.apps, appAdvice: null, issues: installed.issues };
     }
     case 'adviseOnly': {
       const advised = await params.apps.loadAdvisedApps();
 
-      return { installedApps: [], advisedApps: advised.apps, issues: advised.issues };
+      return {
+        installedApps: [],
+        appAdvice: {
+          apps: decideAppAdvice({ apps: advised.apps }),
+          installedAppsPageName: params.apps.installedAppsPageName,
+        },
+        issues: advised.issues,
+      };
     }
   }
 }
@@ -488,7 +500,7 @@ function loadOrphanPhaseOfAppSection(params: {
   }
 }
 
-/** The platform's trash: an entry of the catalog phase, or one Recycle Bin per file system root. */
+/** The platform's trash: an entry of the catalog phase, or one Recycle Bin per fixed drive. */
 async function loadTrashPhase(params: {
   trash: ScanPlatformTrash;
   context: ScanContext;
@@ -503,29 +515,33 @@ async function loadTrashPhase(params: {
       // The bins are known storage locations, as the Trash is an entry of the catalog on macOS.
       params.onStep({ message: `Measuring the ${trash.title}…`, phase: 'catalog' });
 
-      const binPhases = params.context.environment.protectedRootPaths.map(
-        (driveRootPath): ScanPhase => {
-          const content = trash.loadRecycleBin({ driveRootPath: driveRootPath });
+      const binPhases = params.context.environment.fixedDriveRoots.map((driveRoot): ScanPhase => {
+        const content = trash.loadRecycleBin({ driveRoot: driveRoot });
 
-          if (content.kind === 'failed') {
-            return {
-              decisions: [],
-              issues: [{ path: driveRootPath, reason: 'unexpected', detail: content.failure }],
-            };
-          }
-
+        if (content.kind === 'failed') {
           return {
-            decisions: decideRecycleBinCandidate({
-              pathRules: params.context.environment.pathRules,
-              trash: trash,
-              driveRootPath: driveRootPath,
-              content: content.value,
-              minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
-            }),
-            issues: [],
+            decisions: [],
+            issues: [
+              {
+                path: driveRoot,
+                reason: 'unexpected',
+                detail: formatSystemCallFailure({ failure: content.failure }),
+              },
+            ],
           };
-        },
-      );
+        }
+
+        return {
+          decisions: decideRecycleBinCandidate({
+            pathRules: params.context.environment.pathRules,
+            trash: trash,
+            driveRoot: driveRoot,
+            content: content.value,
+            minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
+          }),
+          issues: [],
+        };
+      });
 
       return mergeScanPhases({ phases: binPhases });
     }
@@ -581,7 +597,7 @@ export function buildScanReportOfPhases(params: {
   reservedEntryPaths: string[];
   phases: ScanPhase[];
   incompleteExploreAdvice: ScanPhase;
-  appAdvice: AdvisedApp[];
+  appAdvice: AppAdvice | null;
   evictedEntryCount: number;
 }): ScanReport {
   const scan = mergeScanPhases({ phases: params.phases });
@@ -623,17 +639,13 @@ function dedupeScanDecisions(params: {
   });
 }
 
-/** The roots of every IDE version below the home folder, of each kind. */
+/** The roots of every IDE version, of each kind. */
 function listIdeVersionRootPaths(params: {
   environment: Environment;
   roots: IdeVersionRoots;
 }): string[] {
-  return [...params.roots.caches, ...params.roots.logs, ...params.roots.settings].map((names) =>
-    joinAbsolutePath({
-      rules: params.environment.pathRules,
-      parentPath: params.environment.homeDir,
-      names: names,
-    }),
+  return [...params.roots.caches, ...params.roots.logs, ...params.roots.settings].map((location) =>
+    resolveCatalogLocation({ environment: params.environment, location: location }),
   );
 }
 
@@ -652,29 +664,6 @@ function isInProbeClaim(params: {
       isOverlappingPath({ rules: params.pathRules, path: path, otherPath: claimPath }),
     ),
   );
-}
-
-/**
- * The entry reads `entryReads` whose eviction check also adds the path of each entry it answers
- * true for to `evictedPaths`. A walk skips every such entry, so the set holds each entry a walk
- * left unread.
- */
-function recordEvictedEntries(params: {
-  entryReads: EntryReads;
-  evictedPaths: Set<string>;
-}): EntryReads {
-  return {
-    isEntryEvicted: (entry: EvictionCandidate): boolean => {
-      const isEvicted = params.entryReads.isEntryEvicted(entry);
-
-      if (isEvicted) {
-        params.evictedPaths.add(entry.path);
-      }
-
-      return isEvicted;
-    },
-    loadPrivateBytes: params.entryReads.loadPrivateBytes,
-  };
 }
 
 async function loadCatalogPhase(params: {
@@ -744,6 +733,7 @@ async function loadCatalogTargetPhase(params: {
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.context.entryReads,
+    recordEvictedEntry: params.context.recordEvictedEntry,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const activity =
@@ -760,6 +750,7 @@ async function loadCatalogTargetPhase(params: {
               maxEntries: SCAN_LIMITS.probeMaxEntries,
               deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
               entryReads: params.context.entryReads,
+              recordEvictedEntry: params.context.recordEvictedEntry,
             })
           : null;
 
@@ -831,6 +822,7 @@ function loadArtifactFindingPhase(params: {
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.context.entryReads,
+    recordEvictedEntry: params.context.recordEvictedEntry,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const activity = await loadTreeActivity({
@@ -841,6 +833,7 @@ function loadArtifactFindingPhase(params: {
         maxEntries: SCAN_LIMITS.probeMaxEntries,
         deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
         entryReads: params.context.entryReads,
+        recordEvictedEntry: params.context.recordEvictedEntry,
       });
 
       return decideArtifactCandidate({
@@ -878,6 +871,7 @@ function loadAppItemPhase(params: {
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.context.entryReads,
+    recordEvictedEntry: params.context.recordEvictedEntry,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const lastSignOfUseMs =
@@ -925,11 +919,13 @@ async function loadUserFilePhase(params: {
   artifactRules: ProjectArtifactRule[];
 }): Promise<ScanPhase> {
   const found = await findLargeUserFiles({
+    pathRules: params.context.environment.pathRules,
     rootDirs: params.context.userFileRootPaths,
     artifactRules: params.artifactRules,
     minAllocatedBytes: SCAN_LIMITS.minUserFileBytes,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
     entryReads: params.context.entryReads,
+    recordEvictedEntry: params.context.recordEvictedEntry,
     privacyDenialCode: params.context.privacyDenialCode,
   });
   const decisions = found.findings.map((finding) =>
@@ -1012,6 +1008,7 @@ async function loadOrphanLocationPhase(params: {
         measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
         runItemMeasurement: runItemMeasurement,
         entryReads: params.context.entryReads,
+        recordEvictedEntry: params.context.recordEvictedEntry,
         privacyDenialCode: params.context.privacyDenialCode,
         decide: async (measurement) =>
           decideOrphanCandidate({
@@ -1056,7 +1053,7 @@ function buildCommandIssues(params: {
   );
 }
 
-/** A failed command by its name and reason; a failed system call by its name and error code. */
+/** A failed command by its name and reason; a failed system call by its name and code. */
 function buildCommandIssue(params: { failure: RunningProcessesFailure }): ScanIssue {
   switch (params.failure.reason) {
     case 'timedOut':
@@ -1071,7 +1068,7 @@ function buildCommandIssue(params: { failure: RunningProcessesFailure }): ScanIs
       return {
         path: params.failure.call,
         reason: 'commandFailed',
-        detail: `callFailed ${params.failure.code}`,
+        detail: formatSystemCallFailure({ failure: params.failure }),
       };
   }
 }

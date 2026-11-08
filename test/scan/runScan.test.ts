@@ -17,6 +17,7 @@ import {
   buildTestInstallersCandidate,
   buildTestUnitPathsCandidate,
 } from '../support/candidateFixtures.js';
+import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import {
   buildTestPathEnvironment,
   createFixtureFile,
@@ -77,7 +78,7 @@ describe('buildScanReportOfPhases', () => {
         decisions: [{ kind: 'advice', advice: vscodeAdvice }],
         issues: [{ path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' }],
       },
-      appAdvice: [],
+      appAdvice: null,
       evictedEntryCount: 2,
     });
 
@@ -96,7 +97,7 @@ describe('buildScanReportOfPhases', () => {
       reservedEntryPaths: [vscodeAdvice.path],
       phases: [{ decisions: [vscodeOffer, { kind: 'advice', advice: vscodeAdvice }], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
-      appAdvice: [],
+      appAdvice: null,
       evictedEntryCount: 0,
     });
 
@@ -244,12 +245,12 @@ describe('buildScanReportOfPhases', () => {
       reservedEntryPaths: [],
       phases: [{ decisions: [vscodeOffer], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
-      appAdvice: [app],
+      appAdvice: { apps: [app], installedAppsPageName: 'Settings > Apps' },
       evictedEntryCount: 0,
     });
 
     expect(report.candidates).toEqual([vscodeCandidate]);
-    expect(report.appAdvice).toEqual([app]);
+    expect(report.appAdvice).toEqual({ apps: [app], installedAppsPageName: 'Settings > Apps' });
   });
 });
 
@@ -472,6 +473,111 @@ describeOnDarwin('runScan', () => {
       },
     });
   });
+
+  test('counts each entry its walks left in the cloud once, and none a walk passed by', async () => {
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const oldMs = Date.UTC(2025, 0, 1);
+        const homeDir = home.environment.homeDir;
+        const projectPath = join(homeDir, 'Documents/app');
+        // Met by the project walk and the large-file search, so counted once.
+        const cloudFolderPath = join(homeDir, 'Movies/Cloud');
+        const cloudFilePath = join(homeDir, 'Movies/cloud.mov');
+        // Met only by the measurement of the artifact, which the project walk never enters.
+        const cloudArtifactFilePath = join(projectPath, 'node_modules/pkg/cache.bin');
+        // Passed by every walk, which never reads a hidden folder.
+        const hiddenCloudFolderPath = join(homeDir, '.hidden/Cloud');
+
+        await createFixtureFile({
+          path: join(projectPath, 'package.json'),
+          sizeBytes: 64,
+          modifiedMs: oldMs,
+        });
+        await createFixtureFile({
+          path: join(projectPath, 'node_modules/pkg/index.js'),
+          sizeBytes: 2 * SCAN_LIMITS.minOfferedBytes,
+          modifiedMs: oldMs,
+        });
+
+        for (const filePath of [
+          cloudArtifactFilePath,
+          cloudFilePath,
+          join(cloudFolderPath, 'clip.mov'),
+          join(hiddenCloudFolderPath, 'note.txt'),
+        ]) {
+          await createFixtureFile({ path: filePath, sizeBytes: 64, modifiedMs: oldMs });
+        }
+
+        const cloudOnlyPaths = [
+          cloudFolderPath,
+          cloudFilePath,
+          cloudArtifactFilePath,
+          hiddenCloudFolderPath,
+        ];
+        const report = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [],
+          entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: cloudOnlyPaths }),
+        });
+
+        expect(report.evictedEntryCount).toBe(3);
+      },
+    });
+  });
+
+  test('offers no item whose folder the entry reads call a link, and skips it as one', async () => {
+    // As a mounted folder on Windows, which lstat calls a folder and its reparse point a link.
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const denoPath = join(home.fixtureRoot.homeDir, 'Library/Caches/deno');
+        const remotePath = join(denoPath, 'remote');
+        await createFixtureFile({
+          path: join(remotePath, 'https/deno.land/module.ts'),
+          sizeBytes: 2 * SCAN_LIMITS.minOfferedBytes,
+          modifiedMs: Date.UTC(2026, 0, 1),
+        });
+
+        const plainReport = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [getCatalogEntry('deno-cache')],
+          entryReads: buildTestEntryReads({ privateBytes: null }),
+        });
+        const linkReport = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [getCatalogEntry('deno-cache')],
+          entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [remotePath] }),
+        });
+
+        expect(listOfferedPaths(plainReport)).toEqual([denoPath]);
+        expect(listOfferedPaths(linkReport)).toEqual([]);
+        expect(linkReport.skipped).toContainEqual({ path: denoPath, reason: 'symbolicLink' });
+      },
+    });
+  });
+
+  test('names a failed system call of the process listing by its call and its code', async () => {
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const report = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [],
+          runningProcesses: {
+            kind: 'failed',
+            failure: { reason: 'callFailed', call: 'Process32NextW', code: 5 },
+          },
+        });
+
+        expect(report.issues).toContainEqual({
+          path: 'Process32NextW',
+          reason: 'commandFailed',
+          detail: 'Process32NextW failed with 0x00000005',
+        });
+      },
+    });
+  });
 });
 
 /** The report of phases of the given decisions, with no advice of an incomplete probe. */
@@ -484,7 +590,7 @@ function buildReportOfPhases(params: {
     reservedEntryPaths: params.reservedEntryPaths,
     phases: params.phases.map((decisions) => ({ decisions: decisions, issues: [] })),
     incompleteExploreAdvice: { decisions: [], issues: [] },
-    appAdvice: [],
+    appAdvice: null,
     evictedEntryCount: 0,
   });
 }

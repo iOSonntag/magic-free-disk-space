@@ -1,12 +1,13 @@
 import { basename } from 'node:path';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
 import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { EntryReads } from '../system/entryReads.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
-import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import type { TreeEntryVisit } from '../system/walkDirectoryTree.js';
+import { loadPlacedFileIdentity } from '../system/loadPlacedFileIdentity.js';
+import type { EvictedEntryRecorder, TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
@@ -40,21 +41,24 @@ const PROJECT_MARKER_NAME = '.git';
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
- * Walks each root on its own volume without following symbolic links, and without entering
+ * Walks each root on its own volume without following a link of any kind, and without entering
  * hidden folders, package folders (any folder named with an extension), git working trees, or a
- * project's artifact folder beside its marker, such as `build` beside `build.gradle`.
+ * project's artifact folder beside its marker, such as `build` beside `build.gradle`, its names
+ * compared as `pathRules` compare them.
  * Each file is its own offer, measured as `loadPathMeasurement` measures one: a file whose blocks
  * a clone shares counts less, and a file with another hard link counts nothing, since deleting
  * one link frees nothing. A passed deadline ends the walk with one walkStopped issue. Findings
  * come sorted by path.
  */
 export async function findLargeUserFiles(params: {
+  pathRules: PathRules;
   rootDirs: string[];
   /** The artifacts whose files belong to their project, each judged by its marker. */
   artifactRules: ProjectArtifactRule[];
   minAllocatedBytes: number;
   deadlineMs: number;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder;
   privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   const largeFiles: LargeFile[] = [];
@@ -125,6 +129,7 @@ export async function findLargeUserFiles(params: {
           entry.kind === 'directory' &&
           isUserFolderName({ name: entry.name }) &&
           findMarkedArtifactRule({
+            pathRules: params.pathRules,
             rules: params.artifactRules,
             name: entry.name,
             projectEntryNames: entry.siblingNames,
@@ -144,7 +149,7 @@ export async function findLargeUserFiles(params: {
           }),
         );
       },
-      onEvictedEntrySkipped: () => undefined,
+      onEvictedEntrySkipped: params.recordEvictedEntry,
     });
 
     if (walkEnd === 'stopped') {
@@ -159,6 +164,7 @@ export async function findLargeUserFiles(params: {
     minAllocatedBytes: params.minAllocatedBytes,
     deadlineMs: params.deadlineMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry,
     issues: issues,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -169,18 +175,25 @@ export async function findLargeUserFiles(params: {
   };
 }
 
-/** Each large file whose measurement still reaches the minimum, with its identity. */
+/**
+ * Each large file whose measurement still reaches the minimum, with its identity as `entryReads`
+ * place it, so a root that is a link of any kind has the kind of a symbolic link.
+ */
 async function loadUserFileFindings(params: {
   largeFiles: LargeFile[];
   minAllocatedBytes: number;
   deadlineMs: number;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder;
   issues: ScanIssue[];
   privacyDenialCode: string | null;
 }): Promise<UserFileFinding[]> {
   const findings = await Promise.all(
     params.largeFiles.map(async (largeFile): Promise<UserFileFinding | null> => {
-      const identityResult = await loadFileIdentity({ path: largeFile.path });
+      const identityResult = await loadPlacedFileIdentity({
+        path: largeFile.path,
+        entryReads: params.entryReads,
+      });
 
       if (identityResult.kind === 'failed') {
         params.issues.push(
@@ -198,6 +211,7 @@ async function loadUserFileFindings(params: {
         paths: [largeFile.path],
         deadlineMs: params.deadlineMs,
         entryReads: params.entryReads,
+        recordEvictedEntry: params.recordEvictedEntry,
       });
 
       if (

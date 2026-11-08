@@ -28,12 +28,20 @@ export type FileFailure = {
 
 const MISSING_CODES = ['ENOENT', 'ENOTDIR'];
 
-export async function loadFileIdentity(params: {
+export function loadFileIdentity(params: {
   path: string;
+}): Promise<Result<FileIdentity, FileFailure>> {
+  return loadFileIdentityOfKind({ path: params.path, decideKind: (lstatKind) => lstatKind });
+}
+
+/** `loadFileIdentity`, of the kind `decideKind` makes of lstat's; the real path follows that kind. */
+export async function loadFileIdentityOfKind(params: {
+  path: string;
+  decideKind: (lstatKind: FileKind) => FileKind;
 }): Promise<Result<FileIdentity, FileFailure>> {
   try {
     const stats = await runFilesystemCall(() => lstat(params.path, { bigint: true }));
-    const kind = getFileKind({ stats: stats });
+    const kind = params.decideKind(getFileKind({ stats: stats }));
     // A file or folder resolves fully, which also takes the case on disk. A link keeps its own
     // name, and a socket or pipe resolves through its folder: realpath fails on one (EOPNOTSUPP).
     const realPath =

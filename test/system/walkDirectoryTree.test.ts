@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
-import type { EntryEvictionCheck, EvictionCandidate } from '../../src/system/entryReads.js';
+import type { EntryReads, EntryRef } from '../../src/system/entryReads.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
@@ -30,20 +30,25 @@ async function collectEntries(params: {
   isStatsNeeded: boolean;
   visit?: (entry: TreeEntry) => 'descend' | 'skip' | 'stop';
   isStopped?: () => boolean;
-  isEntryEvicted?: EntryEvictionCheck;
+  cloudOnlyPaths?: string[];
+  linkPaths?: string[];
+  entryReads?: EntryReads;
 }) {
   const entries: TreeEntry[] = [];
   const unreadables: TreeUnreadable[] = [];
-  const evictedEntries: EvictionCandidate[] = [];
+  const evictedEntries: EntryRef[] = [];
   const walkEnd = await walkDirectoryTree({
     rootPath: treeRoot,
     isStatsNeeded: params.isStatsNeeded,
     maxConcurrentDirectories: 2,
     isStopped: params.isStopped ?? (() => false),
-    entryReads: buildTestEntryReads({
-      privateBytes: null,
-      isEntryEvicted: params.isEntryEvicted ?? (() => false),
-    }),
+    entryReads:
+      params.entryReads ??
+      buildTestEntryReads({
+        privateBytes: null,
+        cloudOnlyPaths: params.cloudOnlyPaths ?? [],
+        linkPaths: params.linkPaths ?? [],
+      }),
     visitEntry: (entry) => {
       entries.push(entry);
 
@@ -74,10 +79,7 @@ describe('walkDirectoryTree', () => {
   test('visits an evicted folder but never reads it, and reports it as skipped', async () => {
     const evictedPath = join(treeRoot, 'b');
 
-    const walk = await collectEntries({
-      isStatsNeeded: false,
-      isEntryEvicted: (entry) => entry.path === evictedPath,
-    });
+    const walk = await collectEntries({ isStatsNeeded: false, cloudOnlyPaths: [evictedPath] });
 
     expect(walk.walkEnd).toBe('completed');
     expect(walk.relativePaths).toContain('b');
@@ -86,19 +88,104 @@ describe('walkDirectoryTree', () => {
     expect(walk.unreadables).toEqual([]);
   });
 
+  test('does not report an evicted folder the visitor skips', async () => {
+    const evictedPath = join(treeRoot, 'b');
+
+    const walk = await collectEntries({
+      isStatsNeeded: false,
+      cloudOnlyPaths: [evictedPath],
+      visit: (entry) => (entry.name === 'b' ? 'skip' : 'descend'),
+    });
+
+    expect(walk.relativePaths).toContain('b');
+    expect(walk.evictedEntries).toEqual([]);
+  });
+
   test('never visits an evicted file, and reports it as skipped', async () => {
     const evictedPath = join(treeRoot, 'top.txt');
 
-    const walk = await collectEntries({
-      isStatsNeeded: true,
-      isEntryEvicted: (entry) => entry.path === evictedPath,
-    });
+    const walk = await collectEntries({ isStatsNeeded: true, cloudOnlyPaths: [evictedPath] });
 
     expect(walk.walkEnd).toBe('completed');
     expect(walk.relativePaths).not.toContain('top.txt');
     expect(walk.relativePaths).toContain('b/marker.json');
     expect(walk.evictedEntries).toEqual([{ path: evictedPath, kind: 'file' }]);
     expect(walk.unreadables).toEqual([]);
+  });
+
+  test('reads no evicted root, and reports it as skipped', async () => {
+    const walk = await collectEntries({ isStatsNeeded: false, cloudOnlyPaths: [treeRoot] });
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.entries).toEqual([]);
+    expect(walk.evictedEntries).toEqual([{ path: treeRoot, kind: 'directory' }]);
+  });
+
+  test('visits a folder the entry reads call a link as a link, and never enters it', async () => {
+    // As a mounted folder on Windows, which lstat calls a folder and its reparse point a link.
+    const linkPath = join(treeRoot, 'a');
+
+    const walk = await collectEntries({ isStatsNeeded: true, linkPaths: [linkPath] });
+    const linkEntry = walk.entries.find((entry) => entry.path === linkPath);
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.relativePaths).toEqual(['a', 'b', 'b/marker.json', 'top.txt']);
+    expect(linkEntry?.kind).toBe('symbolicLink');
+    expect(linkEntry?.stats?.kind).toBe('symbolicLink');
+    expect(walk.evictedEntries).toEqual([]);
+  });
+
+  test('never enters a root the entry reads call a link', async () => {
+    const walk = await collectEntries({ isStatsNeeded: false, linkPaths: [treeRoot] });
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.entries).toEqual([]);
+    expect(walk.evictedEntries).toEqual([]);
+  });
+
+  test('places the root and each entry with one read', async () => {
+    const placedPaths: string[] = [];
+    const entryReads = buildTestEntryReads({ privateBytes: null });
+
+    const walk = await collectEntries({
+      isStatsNeeded: true,
+      entryReads: {
+        ...entryReads,
+        loadEntryPlacement: (entry) => {
+          placedPaths.push(entry.path);
+
+          return entryReads.loadEntryPlacement(entry);
+        },
+      },
+    });
+
+    expect(placedPaths.toSorted()).toEqual(
+      [treeRoot, ...walk.entries.map((entry) => entry.path)].toSorted(),
+    );
+  });
+
+  test('walks on without a recorder of the evicted entries', async () => {
+    const evictedPath = join(treeRoot, 'b');
+    const visitedPaths: string[] = [];
+
+    const walkEnd = await walkDirectoryTree({
+      rootPath: treeRoot,
+      isStatsNeeded: false,
+      maxConcurrentDirectories: 2,
+      isStopped: () => false,
+      entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [evictedPath] }),
+      visitEntry: (entry) => {
+        visitedPaths.push(entry.path);
+
+        return 'descend';
+      },
+      onUnreadable: () => undefined,
+      onEvictedEntrySkipped: null,
+    });
+
+    expect(walkEnd).toBe('completed');
+    expect(visitedPaths).toContain(evictedPath);
+    expect(visitedPaths).not.toContain(join(evictedPath, 'marker.json'));
   });
 
   testOnPosix(

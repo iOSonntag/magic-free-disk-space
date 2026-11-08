@@ -7,6 +7,7 @@ import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { createConcurrencyLimit } from '../../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../../system/entryReads.js';
+import { getPlacedFileKind } from '../../system/entryReads.js';
 import {
   getErrorCode,
   isInUseErrorCode,
@@ -18,9 +19,6 @@ import { walkDirectoryTree } from '../../system/walkDirectoryTree.js';
 
 /** The entry cannot be deleted until this bit is cleared. */
 const FILE_ATTRIBUTE_READONLY = 0x1;
-
-/** The folder is a link or another program's placeholder, whose content is not its own. */
-const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
 
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
@@ -60,13 +58,13 @@ type RemovalTargets = { leaves: LeafTarget[]; directories: DirectoryTarget[] };
 type DirectoryRemovalEnd = EntryRemovalEnd | { kind: 'notEmpty' };
 
 /**
- * Removes the tree at `rootPath` entry by entry, as Windows needs it: the walk never enters a
- * link, a junction, or any other folder with a reparse point, and each is removed itself, never
- * its target. Each file and folder loses its read-only bit right before its removal. A file
- * another program holds open or Windows refuses to delete stays, and so does an entry
- * `entryReads.isEntryEvicted` finds online only, the root included, which a removal would delete
- * from its cloud store; the folders that hold them stay with them. Any other failure ends the
- * removal with its code; an unreadable folder ends it before anything is removed. Never throws.
+ * Removes the tree at `rootPath` entry by entry, as Windows needs it: `entryReads` places each
+ * entry, the root included, and the walk never enters a link of any kind, which is removed
+ * itself, never its target. Each file and folder loses its read-only bit right before its
+ * removal. A file another program holds open or Windows refuses to delete stays, and so does an
+ * entry kept online only, the root included, which a removal would delete from its cloud store;
+ * the folders that hold them stay with them. Any other failure ends the removal with its code; an
+ * unreadable folder ends it before anything is removed. Never throws.
  */
 export async function removeTreeEntries(params: {
   rootPath: AbsolutePath;
@@ -80,13 +78,18 @@ export async function removeTreeEntries(params: {
     return { kind: 'failed', failure: rootStats.failure.code };
   }
 
-  switch (rootStats.value.kind) {
+  const rootPlacement = params.entryReads.loadEntryPlacement({
+    path: params.rootPath,
+    kind: rootStats.value.kind,
+  });
+
+  if (rootPlacement === 'cloudOnly') {
+    return { kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } };
+  }
+
+  switch (getPlacedFileKind({ kind: rootStats.value.kind, placement: rootPlacement })) {
     case 'file':
     case 'other':
-      if (params.entryReads.isEntryEvicted({ path: params.rootPath, kind: rootStats.value.kind })) {
-        return { kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } };
-      }
-
       return removeRootLeaf({
         target: { path: params.rootPath, kind: 'file' },
         attributes: params.attributes,
@@ -96,27 +99,13 @@ export async function removeTreeEntries(params: {
         target: { path: params.rootPath, kind: 'link' },
         attributes: params.attributes,
       });
-    case 'directory': {
-      const rootAttributes = params.attributes.load({ path: params.rootPath });
-
-      if (rootAttributes.kind === 'failed') {
-        return { kind: 'failed', failure: rootAttributes.failure };
-      }
-
-      if (isReparsePoint({ attributes: rootAttributes.value })) {
-        return removeRootLeaf({
-          target: { path: params.rootPath, kind: 'link' },
-          attributes: params.attributes,
-        });
-      }
-
+    case 'directory':
       return removeDirectoryTree({
         rootPath: params.rootPath,
         rules: params.rules,
         attributes: params.attributes,
         entryReads: params.entryReads,
       });
-    }
   }
 }
 
@@ -179,7 +168,6 @@ async function removeDirectoryTree(params: {
   const listing = await listRemovalTargets({
     rootPath: params.rootPath,
     rules: params.rules,
-    attributes: params.attributes,
     entryReads: params.entryReads,
     tally: tally,
   });
@@ -221,13 +209,13 @@ async function removeDirectoryTree(params: {
 }
 
 /**
- * Every entry below the root, a folder with a reparse point as a link. An entry the walk finds
- * evicted stays; an evicted folder is listed before its read finds it so, and its removal skips it.
+ * Every entry below the root, as the walk places it, a link of any kind as a link. An entry the
+ * walk finds evicted stays; an evicted folder is listed before the walk records it so, and its
+ * removal skips it.
  */
 async function listRemovalTargets(params: {
   rootPath: AbsolutePath;
   rules: PathRules;
-  attributes: EntryAttributeAccess;
   entryReads: EntryReads;
   tally: StayedTally;
 }): Promise<Result<RemovalTargets, string>> {
@@ -271,33 +259,11 @@ async function listRemovalTargets(params: {
         leaves.push({ path: entryPath, kind: 'link' });
 
         return 'skip';
-      case 'directory': {
-        const attributes = params.attributes.load({ path: entryPath });
-
-        if (attributes.kind === 'failed') {
-          if (
-            decideEntryRemovalEnd({ code: attributes.failure, entryKind: 'directory' }).kind ===
-            'gone'
-          ) {
-            return 'skip';
-          }
-
-          failure ??= attributes.failure;
-
-          return 'stop';
-        }
-
-        if (isReparsePoint({ attributes: attributes.value })) {
-          leaves.push({ path: entryPath, kind: 'link' });
-
-          return 'skip';
-        }
-
+      case 'directory':
         directoryPaths.set(entry.path, entryPath);
         directories.push({ path: entryPath, depth: entry.depth });
 
         return 'descend';
-      }
     }
   }
 
@@ -538,10 +504,6 @@ function clearReadOnly(params: {
     path: params.path,
     attributes: attributes.value & ~FILE_ATTRIBUTE_READONLY,
   });
-}
-
-function isReparsePoint(params: { attributes: number }): boolean {
-  return (params.attributes & FILE_ATTRIBUTE_REPARSE_POINT) !== 0;
 }
 
 /** Counts the entries that stayed, and knows each folder that holds one of them. */

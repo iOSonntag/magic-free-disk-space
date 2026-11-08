@@ -149,7 +149,8 @@ export async function loadLatestModified(params: {
     onUnreadable: () => {
       isEveryPartRead = false;
     },
-    onEvictedEntrySkipped: () => {},
+    // The scan counts the entries its own phases leave unread, never a probe's.
+    onEvictedEntrySkipped: null,
   });
 
   if (!isEveryPartRead || walkEnd === 'stopped') {

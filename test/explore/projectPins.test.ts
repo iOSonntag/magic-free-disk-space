@@ -7,10 +7,15 @@ import {
   loadProjectPins,
 } from '../../src/explore/projectPins/loadProjectPins.js';
 import type { ProjectPinFileKind } from '../../src/explore/projectPins/projectPins.js';
-import { matchProjectPinFile } from '../../src/explore/projectPins/projectPins.js';
+import {
+  matchProjectPinFile,
+  matchProjectPinFileName,
+} from '../../src/explore/projectPins/projectPins.js';
 import { buildProjectSearchEvidence } from '../../src/explore/projectPins/projectSearchEvidence.js';
 import { selectToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -58,15 +63,21 @@ describe('matchProjectPinFile', () => {
   for (const source of ['walk', 'miseTrackedConfig'] as const) {
     test(`matches every pin file name, found by ${source}`, () => {
       for (const [name, kind] of sharedNameKinds) {
-        expect(matchProjectPinFile({ name: name, siblingNames: NO_SIBLINGS, source: source })).toBe(
-          kind,
-        );
+        expect(
+          matchProjectPinFile({
+            pathRules: DARWIN_PATH_RULES,
+            name: name,
+            siblingNames: NO_SIBLINGS,
+            source: source,
+          }),
+        ).toBe(kind);
       }
     });
 
     test(`matches a package.json only beside a pnpm-lock.yaml, found by ${source}`, () => {
       expect(
         matchProjectPinFile({
+          pathRules: DARWIN_PATH_RULES,
           name: 'package.json',
           siblingNames: PNPM_LOCK_SIBLINGS,
           source: source,
@@ -74,6 +85,7 @@ describe('matchProjectPinFile', () => {
       ).toBe('packageJson');
       expect(
         matchProjectPinFile({
+          pathRules: DARWIN_PATH_RULES,
           name: 'package.json',
           siblingNames: new Set(['package.json', 'package-lock.json']),
           source: source,
@@ -84,7 +96,12 @@ describe('matchProjectPinFile', () => {
     test(`matches no other name, found by ${source}`, () => {
       for (const name of ['.node-version', 'settings.gradle', 'pnpm-lock.yaml', 'tool-versions']) {
         expect(
-          matchProjectPinFile({ name: name, siblingNames: NO_SIBLINGS, source: source }),
+          matchProjectPinFile({
+            pathRules: DARWIN_PATH_RULES,
+            name: name,
+            siblingNames: NO_SIBLINGS,
+            source: source,
+          }),
         ).toBeNull();
       }
     });
@@ -93,13 +110,87 @@ describe('matchProjectPinFile', () => {
   test('matches any other *.toml only as a tracked config of mise', () => {
     expect(
       matchProjectPinFile({
+        pathRules: DARWIN_PATH_RULES,
         name: 'config.toml',
         siblingNames: NO_SIBLINGS,
         source: 'miseTrackedConfig',
       }),
     ).toBe('miseConfig');
     expect(
-      matchProjectPinFile({ name: 'config.toml', siblingNames: NO_SIBLINGS, source: 'walk' }),
+      matchProjectPinFile({
+        pathRules: DARWIN_PATH_RULES,
+        name: 'config.toml',
+        siblingNames: NO_SIBLINGS,
+        source: 'walk',
+      }),
+    ).toBeNull();
+  });
+
+  test('matches names in another case under the rules of Windows, which ignore case', () => {
+    expect(
+      matchProjectPinFile({
+        pathRules: WIN32_PATH_RULES,
+        name: '.NVMRC',
+        siblingNames: NO_SIBLINGS,
+        source: 'walk',
+      }),
+    ).toBe('nvmrc');
+    expect(
+      matchProjectPinFile({
+        pathRules: WIN32_PATH_RULES,
+        name: 'Package.json',
+        siblingNames: new Set(['Package.json', 'PNPM-LOCK.YAML']),
+        source: 'walk',
+      }),
+    ).toBe('packageJson');
+    expect(
+      matchProjectPinFile({
+        pathRules: WIN32_PATH_RULES,
+        name: 'Config.TOML',
+        siblingNames: NO_SIBLINGS,
+        source: 'miseTrackedConfig',
+      }),
+    ).toBe('miseConfig');
+    expect(
+      matchProjectPinFileName({
+        pathRules: WIN32_PATH_RULES,
+        name: 'Build.Gradle',
+        source: 'walk',
+      }),
+    ).toBe('gradle');
+  });
+
+  test('matches no name in another case under the rules of POSIX, which match names exactly', () => {
+    expect(
+      matchProjectPinFile({
+        pathRules: DARWIN_PATH_RULES,
+        name: '.NVMRC',
+        siblingNames: NO_SIBLINGS,
+        source: 'walk',
+      }),
+    ).toBeNull();
+    expect(
+      matchProjectPinFile({
+        pathRules: DARWIN_PATH_RULES,
+        name: 'package.json',
+        siblingNames: new Set(['package.json', 'PNPM-LOCK.YAML']),
+        source: 'walk',
+      }),
+    ).toBeNull();
+    expect(
+      matchProjectPinFile({
+        pathRules: DARWIN_PATH_RULES,
+        name: 'Config.TOML',
+        siblingNames: NO_SIBLINGS,
+        source: 'miseTrackedConfig',
+      }),
+    ).toBeNull();
+    expect(
+      matchProjectPinFileName({
+        pathRules: DARWIN_PATH_RULES,
+        name: 'Build.Gradle',
+        source: 'walk',
+      }),
     ).toBeNull();
   });
 });

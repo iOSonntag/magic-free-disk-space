@@ -17,14 +17,7 @@ export async function loadRunningProcesses(_params: {
   const processes = listProcesses();
 
   if (processes.kind === 'failed') {
-    return {
-      kind: 'failed',
-      failure: {
-        reason: 'callFailed',
-        call: processes.failure.call,
-        code: processes.failure.code,
-      },
-    };
+    return { kind: 'failed', failure: { reason: 'callFailed', ...processes.failure } };
   }
 
   const imagePaths = listProcessImagePaths({

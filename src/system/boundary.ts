@@ -18,6 +18,7 @@ export const moduleBoundary = {
     'loadFileBytes.ts',
     'loadFileIdentity.ts',
     'loadFileText.ts',
+    'loadPlacedFileIdentity.ts',
     'loadRealPath.ts',
     'nonEmptyList.ts',
     'parseJsonValue.ts',

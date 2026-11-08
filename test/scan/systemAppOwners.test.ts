@@ -50,7 +50,10 @@ describeOnDarwin('the data of a system app', () => {
         const report = await runTestScan({
           environment: home.environment,
           catalogEntries: [getCatalogEntry('messages-attachment-previews')],
-          runningProcesses: buildRunningCommandLines(['/sbin/launchd', MESSAGES_COMMAND]),
+          runningProcesses: {
+            kind: 'succeeded',
+            value: buildRunningCommandLines(['/sbin/launchd', MESSAGES_COMMAND]),
+          },
         });
 
         expect(report.candidates).toEqual([]);

@@ -1,5 +1,6 @@
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
+import type { EvictedEntryRecorder } from '../system/walkDirectoryTree.js';
 import type { CandidateDecision } from './candidate.js';
 import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import type { Measurement } from './loadPathMeasurement.js';
@@ -15,6 +16,7 @@ export function loadMeasuredPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder;
   privacyDenialCode: string | null;
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {
@@ -24,6 +26,7 @@ export function loadMeasuredPhase(params: {
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry,
     privacyDenialCode: params.privacyDenialCode,
     decide: (measurement) => {
       const { targets, ...tally } = measurement;

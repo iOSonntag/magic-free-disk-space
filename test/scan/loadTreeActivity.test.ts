@@ -3,7 +3,8 @@ import { chmod, lutimes, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import { loadTreeActivity } from '../../src/scan/loadTreeActivity.js';
-import type { EntryReads } from '../../src/system/entryReads.js';
+import type { EntryReads, EntryRef } from '../../src/system/entryReads.js';
+import type { EvictedEntryRecorder } from '../../src/system/walkDirectoryTree.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -43,6 +44,7 @@ async function loadActivity(params: {
   maxEntries?: number;
   deadlineMs?: number;
   entryReads?: EntryReads;
+  recordEvictedEntry?: EvictedEntryRecorder;
 }): Promise<ActivityProbe> {
   return loadTreeActivity({
     path: params.path,
@@ -52,6 +54,7 @@ async function loadActivity(params: {
     maxEntries: params.maxEntries ?? 10_000,
     deadlineMs: params.deadlineMs ?? Date.now() + TEST_WALK_DURATION_MS,
     entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
   });
 }
 
@@ -200,15 +203,18 @@ describe('loadTreeActivity', () => {
       modifiedMs: probeTimes.oldModifiedMs,
     });
 
+    const recordedEntries: EntryRef[] = [];
+
     const activity = await loadActivity({
       path: homeDir,
-      entryReads: buildTestEntryReads({
-        privateBytes: null,
-        isEntryEvicted: (entry) => entry.path === evictedDirPath,
-      }),
+      entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [evictedDirPath] }),
+      recordEvictedEntry: (entry) => {
+        recordedEntries.push(entry);
+      },
     });
 
     expect(activity).toBe('quiet');
+    expect(recordedEntries).toEqual([{ path: evictedDirPath, kind: 'directory' }]);
   });
 
   test('reports recent for a new file in the root folder', async () => {

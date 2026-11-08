@@ -1,3 +1,5 @@
+import { toComparablePathText } from '../path/isSameOrInsidePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { Risk } from './catalog.js';
 
 /** A file of the project folder named exactly `name`, such as `Cargo.toml`. */
@@ -240,18 +242,31 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
 
 /**
  * The rule a folder named `name` is the artifact of, when its project folder, by the names of
- * its entries, holds one of the rule's markers; `null` when it is no artifact.
+ * its entries, holds one of the rule's markers; `null` when it is no artifact. Names compare as
+ * `pathRules` compare them, so `Bin` beside `Foo.CSPROJ` is an artifact on Windows.
  */
 export function findMarkedArtifactRule(params: {
+  pathRules: PathRules;
   rules: ProjectArtifactRule[];
   name: string;
   projectEntryNames: ReadonlySet<string>;
 }): ProjectArtifactRule | null {
+  const comparableName = toComparablePathText({ rules: params.pathRules, text: params.name });
+  const comparableEntryNames = new Set(
+    [...params.projectEntryNames].map((entryName) =>
+      toComparablePathText({ rules: params.pathRules, text: entryName }),
+    ),
+  );
   const markedRule = params.rules.find(
     (rule) =>
-      rule.artifactName === params.name &&
+      toComparablePathText({ rules: params.pathRules, text: rule.artifactName }) ===
+        comparableName &&
       rule.markers.some((marker) =>
-        isProjectMarkerPresent({ marker: marker, entryNames: params.projectEntryNames }),
+        isProjectMarkerPresent({
+          pathRules: params.pathRules,
+          marker: marker,
+          comparableEntryNames: comparableEntryNames,
+        }),
       ),
   );
 
@@ -260,16 +275,19 @@ export function findMarkedArtifactRule(params: {
 
 /** Whether the project folder, by the names of its entries, holds one the marker matches. */
 function isProjectMarkerPresent(params: {
+  pathRules: PathRules;
   marker: ProjectMarker;
-  entryNames: ReadonlySet<string>;
+  comparableEntryNames: ReadonlySet<string>;
 }): boolean {
   switch (params.marker.kind) {
     case 'fileName':
-      return params.entryNames.has(params.marker.name);
+      return params.comparableEntryNames.has(
+        toComparablePathText({ rules: params.pathRules, text: params.marker.name }),
+      );
     case 'fileSuffix': {
-      const suffix = params.marker.suffix;
+      const suffix = toComparablePathText({ rules: params.pathRules, text: params.marker.suffix });
 
-      return [...params.entryNames].some(
+      return [...params.comparableEntryNames].some(
         (name) => name.length > suffix.length && name.endsWith(suffix),
       );
     }

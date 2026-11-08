@@ -1,18 +1,34 @@
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
-import type { EntryEvictionCheck, EntryReads } from '../../src/system/entryReads.js';
+import type { EntryReads } from '../../src/system/entryReads.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
 import { HOST_PLATFORM } from './platformFixtures.js';
 
 /**
  * Entry reads that answer from the test: `privateBytes` as the private size of every file, `null`
- * being a failed read, and no entry evicted unless `isEntryEvicted` says so.
+ * being a failed read. An entry at one of `cloudOnlyPaths` is kept in the cloud only, one at one
+ * of `linkPaths` is a link whatever lstat says, and any other is placed as lstat names it, as on
+ * macOS.
  */
 export function buildTestEntryReads(params: {
   privateBytes: number | null;
-  isEntryEvicted?: EntryEvictionCheck;
+  cloudOnlyPaths?: string[];
+  linkPaths?: string[];
 }): EntryReads {
+  const cloudOnlyPaths = params.cloudOnlyPaths ?? [];
+  const linkPaths = params.linkPaths ?? [];
+
   return {
-    isEntryEvicted: params.isEntryEvicted ?? (() => false),
+    loadEntryPlacement: (entry) => {
+      if (cloudOnlyPaths.includes(entry.path)) {
+        return 'cloudOnly';
+      }
+
+      if (linkPaths.includes(entry.path) || entry.kind === 'symbolicLink') {
+        return 'link';
+      }
+
+      return 'onDisk';
+    },
     loadPrivateBytes: () => params.privateBytes,
   };
 }
@@ -37,6 +53,7 @@ export async function loadMeasuredAllocatedBytes(params: { paths: string[] }): P
     paths: params.paths,
     deadlineMs: Date.now() + 60_000,
     entryReads: HOST_PLATFORM.system.entryReads,
+    recordEvictedEntry: null,
   });
 
   return measurement.allocatedBytes;

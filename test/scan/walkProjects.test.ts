@@ -16,7 +16,8 @@ import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js'
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
-import type { EntryEvictionCheck } from '../../src/system/entryReads.js';
+import type { EntryRef } from '../../src/system/entryReads.js';
+import type { EvictedEntryRecorder } from '../../src/system/walkDirectoryTree.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -97,7 +98,9 @@ function walkTestProjects(params: {
   rules?: ProjectArtifactRule[];
   maxDepth?: number;
   deadlineMs?: number;
-  isEntryEvicted?: EntryEvictionCheck;
+  cloudOnlyPaths?: string[];
+  linkPaths?: string[];
+  recordEvictedEntry?: EvictedEntryRecorder;
 }): Promise<ProjectWalk> {
   return walkProjects({
     pathRules: params.pathRules ?? HOST_PATH_RULES,
@@ -108,8 +111,10 @@ function walkTestProjects(params: {
     deadlineMs: params.deadlineMs ?? NO_DEADLINE_MS,
     entryReads: buildTestEntryReads({
       privateBytes: null,
-      isEntryEvicted: params.isEntryEvicted ?? (() => false),
+      cloudOnlyPaths: params.cloudOnlyPaths ?? [],
+      linkPaths: params.linkPaths ?? [],
     }),
+    recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
     privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
   });
 }
@@ -380,14 +385,35 @@ describe('walkProjects', () => {
     await createFixtureDirectory({ path: evictedProjectPath });
     await createEmptyFile({ path: join(evictedProjectPath, '.nvmrc') });
 
+    const recordedEntries: EntryRef[] = [];
+
     const evictedWalk = await walkTestProjects({
       homeDir: fixtureRoot.homeDir,
-      isEntryEvicted: (entry) => entry.path === evictedProjectPath,
+      cloudOnlyPaths: [evictedProjectPath],
+      recordEvictedEntry: (entry) => {
+        recordedEntries.push(entry);
+      },
     });
     const residentWalk = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
 
     expect(evictedWalk).toEqual({ artifacts: [], pinFiles: [], isComplete: false, issues: [] });
+    expect(recordedEntries).toEqual([{ path: evictedProjectPath, kind: 'directory' }]);
     expect(residentWalk.isComplete).toBe(true);
+  });
+
+  test('never enters a project folder the entry reads call a link', async () => {
+    // As a mounted folder on Windows, which lstat calls a folder and its reparse point a link.
+    const linkedProjectPath = join(fixtureRoot.homeDir, 'mounted');
+    await createFixtureDirectory({ path: join(linkedProjectPath, 'node_modules') });
+    await createEmptyFile({ path: join(linkedProjectPath, 'package.json') });
+    await createEmptyFile({ path: join(linkedProjectPath, '.nvmrc') });
+
+    const result = await walkTestProjects({
+      homeDir: fixtureRoot.homeDir,
+      linkPaths: [linkedProjectPath],
+    });
+
+    expect(result).toEqual({ artifacts: [], pinFiles: [], isComplete: true, issues: [] });
   });
 
   test('is not complete for an evicted pin file, and complete for an evicted file of another name', async () => {
@@ -400,11 +426,11 @@ describe('walkProjects', () => {
 
     const pinFileWalk = await walkTestProjects({
       homeDir: fixtureRoot.homeDir,
-      isEntryEvicted: (entry) => entry.path === pinFilePath,
+      cloudOnlyPaths: [pinFilePath],
     });
     const notesWalk = await walkTestProjects({
       homeDir: fixtureRoot.homeDir,
-      isEntryEvicted: (entry) => entry.path === notesPath,
+      cloudOnlyPaths: [notesPath],
     });
 
     expect(pinFileWalk).toEqual({ artifacts: [], pinFiles: [], isComplete: false, issues: [] });

@@ -19,8 +19,6 @@ const ENTRY_READS = buildTestEntryReads({ privateBytes: null });
 
 const FILE_ATTRIBUTE_READONLY = 0x1;
 
-const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
-
 const MAX_CONCURRENT_REMOVALS = 16;
 
 /**
@@ -129,18 +127,36 @@ describe('removeTreeEntries', () => {
     ]);
   });
 
-  test('never enters a folder with a reparse point, and leaves one that holds entries', async () => {
+  test('never enters a folder the entry reads call a link, and leaves one that holds entries', async () => {
+    // As a folder with a reparse point on Windows, which a link removal takes without its entries.
     const junctionPath = join(treePath, 'a');
-    const { access } = buildFakeAttributes({
-      attributesByPath: new Map([[junctionPath, FILE_ATTRIBUTE_REPARSE_POINT | 0x10]]),
-    });
+    const { access } = buildFakeAttributes({});
 
-    expect(await removeTestTree({ path: treePath, attributes: access })).toEqual({
-      kind: 'succeeded',
-      value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
-    });
+    expect(
+      await removeTestTree({
+        path: treePath,
+        attributes: access,
+        entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [junctionPath] }),
+      }),
+    ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     expect(await readFile(join(junctionPath, 'b', 'leaf.bin'), 'utf8')).toBe('leaf');
     expect(await isPresent(join(treePath, 'top.bin'))).toBe(false);
+  });
+
+  test('removes a root the entry reads call a link as a link, never entering it', async () => {
+    const junctionPath = join(treePath, 'a');
+    const { access, loadedPaths } = buildFakeAttributes({});
+
+    // A plain folder here, so its removal as a link, which never empties it, fails on its entries.
+    expect(
+      await removeTestTree({
+        path: junctionPath,
+        attributes: access,
+        entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [junctionPath] }),
+      }),
+    ).toEqual({ kind: 'failed', failure: 'ENOTEMPTY' });
+    expect(await readFile(join(junctionPath, 'mid.bin'), 'utf8')).toBe('mid');
+    expect(loadedPaths).toEqual([]);
   });
 
   test('leaves an entry kept only online, with the folders that hold it, and counts the entry alone', async () => {
@@ -151,30 +167,27 @@ describe('removeTreeEntries', () => {
       await removeTestTree({
         path: treePath,
         attributes: access,
-        entryReads: buildTestEntryReads({
-          privateBytes: null,
-          isEntryEvicted: (entry) => entry.path === evictedPath,
-        }),
+        entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [evictedPath] }),
       }),
     ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     expect(await readFile(evictedPath, 'utf8')).toBe('leaf');
     expect(await isPresent(join(treePath, 'a', 'mid.bin'))).toBe(false);
   });
 
-  test('leaves a root file kept only online, which nothing removes', async () => {
+  test('leaves a root kept only online, file or folder, which nothing removes', async () => {
     const filePath = join(treePath, 'top.bin');
     const { access } = buildFakeAttributes({});
 
-    expect(
-      await removeTestTree({
-        path: filePath,
-        attributes: access,
-        entryReads: buildTestEntryReads({
-          privateBytes: null,
-          isEntryEvicted: (entry) => entry.path === filePath && entry.kind === 'file',
+    for (const rootPath of [filePath, treePath]) {
+      expect(
+        await removeTestTree({
+          path: rootPath,
+          attributes: access,
+          entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [rootPath] }),
         }),
-      }),
-    ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
+      ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
+    }
+
     expect(await readFile(filePath, 'utf8')).toBe('top');
   });
 

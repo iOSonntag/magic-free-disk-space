@@ -1,5 +1,5 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
-import type { EvictionCandidate } from '../../system/entryReads.js';
+import type { EntryPlacement, EntryRef } from '../../system/entryReads.js';
 
 // macOS `struct stat` with 64-bit inodes: 144 bytes, `st_flags` at byte 116. Checked against
 // `ls -lO` on Apple silicon. Intel Macs name this variant `lstat$INODE64`.
@@ -22,17 +22,19 @@ function openLibSystem() {
 }
 
 /**
- * True for a folder whose content iCloud evicted from this Mac, by its dataless flag. Any other
- * entry is `false`, so a walk visits every file, link, and other entry it meets.
+ * `cloudOnly` for a folder whose content iCloud evicted from this Mac, by its dataless flag; a
+ * link is the link lstat names, and any other entry is `onDisk`, so a walk visits every file and
+ * other entry it meets.
  */
-export function isEntryEvicted(params: EvictionCandidate): boolean {
+export function loadEntryPlacement(params: EntryRef): EntryPlacement {
   switch (params.kind) {
     case 'directory':
-      return hasDatalessFlag({ path: params.path });
-    case 'file':
+      return hasDatalessFlag({ path: params.path }) ? 'cloudOnly' : 'onDisk';
     case 'symbolicLink':
+      return 'link';
+    case 'file':
     case 'other':
-      return false;
+      return 'onDisk';
   }
 }
 

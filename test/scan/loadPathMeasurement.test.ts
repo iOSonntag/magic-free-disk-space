@@ -27,6 +27,7 @@ async function loadMeasurement(params: {
     paths: params.paths,
     deadlineMs: params.deadlineMs ?? FAR_DEADLINE_MS,
     entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    recordEvictedEntry: null,
   });
 }
 
