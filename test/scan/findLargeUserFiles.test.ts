@@ -133,7 +133,10 @@ describe('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([loosePath]);
   });
