@@ -9,9 +9,10 @@ import type {
   ExploreToolUnitMiseVersion,
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
+import { listUnitPaths } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
+import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import type { ProbeCommandName } from '../explore/probeFakeTools.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
@@ -25,6 +26,7 @@ import {
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -79,6 +81,11 @@ function buildToolPath(name: ToolName): string {
     case 'brewIntel':
     case 'avdmanager':
     case 'asdf':
+    case 'brctl':
+    case 'vagrant':
+    case 'rustup':
+    case 'conda':
+    case 'fvm':
       return join(fixtureRoot.rootDir, 'tools', name);
   }
 }
@@ -97,6 +104,10 @@ function getRecheckCommand(unit: ExploreToolUnit): ProbeCommandName {
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
     case 'asdfVersion':
+    case 'vagrantBoxVersion':
+    case 'rustupToolchain':
+    case 'condaTarballs':
+    case 'condaPackages':
       throw new Error(`These tests run no ${unit.kind} unit.`);
   }
 }
@@ -180,16 +191,6 @@ function buildRemoveCommands(paths: AbsolutePath[]): string {
   return paths.map((path) => buildRemoveFolderBody(path)).join('\n');
 }
 
-async function measureAllocatedBytes(unit: ExploreToolUnit): Promise<number> {
-  const measurement = await loadUnitMeasurement({
-    unit: unit,
-    deadlineMs: Date.now() + 60_000,
-    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-  });
-
-  return measurement.allocatedBytes;
-}
-
 async function loadNoProcessCommands(): Promise<string[] | null> {
   return [];
 }
@@ -206,13 +207,13 @@ fs.writeSync(2, 'uninstalled node@20.1.0\\n');
 process.exit(0);`,
     });
 
-    const allocatedBytes = await measureAllocatedBytes(unit);
+    const allocatedBytes = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -239,13 +240,13 @@ process.exit(0);`,
 process.exit(0);`,
     });
 
-    const allocatedBytes = await measureAllocatedBytes(unit);
+    const allocatedBytes = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -277,13 +278,13 @@ process.exit(0);`,
 process.exit(0);`,
     });
 
-    const allocatedBytesBefore = await measureAllocatedBytes(unit);
+    const allocatedBytesBefore = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -300,7 +301,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -324,7 +325,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -352,7 +353,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -379,7 +380,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -403,7 +404,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: async () => [SIMULATOR_APP_COMMAND],
       timeoutMs: TIMEOUT_MS,
     });
@@ -411,7 +412,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: async () => null,
       timeoutMs: TIMEOUT_MS,
     });
@@ -436,7 +437,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -465,7 +466,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
@@ -487,17 +488,17 @@ fs.writeSync(2, 'cannot remove bin\\n');
 process.exit(3);`,
     });
 
-    const allocatedBytesBefore = await measureAllocatedBytes(unit);
+    const allocatedBytesBefore = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     const run = await runToolCandidate({
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: TIMEOUT_MS,
     });
-    const allocatedBytesAfter = await measureAllocatedBytes(unit);
+    const allocatedBytesAfter = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
 
     expect(allocatedBytesAfter).toBeGreaterThan(0);
     expect(allocatedBytesAfter).toBeLessThan(allocatedBytesBefore);
@@ -530,14 +531,14 @@ process.exit(0);`,
         unit: unit,
         environment: environment,
         probePlatform: buildTestProbePlatform(),
-        isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+        entryReads: darwinPlatform.system.entryReads,
         loadProcessCommands: loadNoProcessCommands,
         timeoutMs: TIMEOUT_MS,
       });
-      const measurementAfter = await loadUnitMeasurement({
-        unit: unit,
+      const measurementAfter = await loadPathMeasurement({
+        paths: listUnitPaths(unit),
         deadlineMs: Date.now() + 60_000,
-        isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+        entryReads: darwinPlatform.system.entryReads,
       });
 
       expect(measurementAfter.isComplete).toBe(false);
@@ -560,7 +561,7 @@ process.exit(0);`,
       unit: unit,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       loadProcessCommands: loadNoProcessCommands,
       timeoutMs: 300,
     });

@@ -31,13 +31,22 @@ export function decideUserFileCandidate(params: {
       title: basename(path),
       category: 'userFiles',
       risk: 'careful',
-      origin: 'userFile',
+      origin: { kind: 'userFile' },
       explanation: `A large file of yours, unchanged since ${modifiedDate}.`,
       regeneration: 'Not regenerated: only a backup or a new download brings it back.',
       allocatedBytes: params.finding.allocatedBytes,
       entryCount: 1,
       isComplete: true,
-      removal: { kind: 'deletePath', identity: params.finding.identity, ownerBundlePaths: [] },
+      privateSizeFallbackCount: params.finding.privateSizeFallbackCount,
+      // The last change, which the scan judges a file of yours by.
+      lastUsedAtMs: params.finding.modifiedMs,
+      downloadedAtMs: null,
+      appName: null,
+      removal: {
+        kind: 'deletePaths',
+        targets: [{ path: path, identity: params.finding.identity }],
+        ownerBundlePaths: [],
+      },
     },
   };
 }

@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import { runCli } from '../../src/cli/runCli.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
@@ -18,6 +19,7 @@ import {
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
 import { buildTestPlatform } from '../support/platformFixtures.js';
+import { PROTOCOL_FIXTURE_DISK } from '../support/protocolFixtureScan.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 
 const MIB = 1_048_576;
@@ -37,13 +39,18 @@ const TEST_CATALOG: CatalogEntry[] = [
     title: 'Tool store',
     path: 'Library/ToolStore',
     risk: 'review',
-    removal: { kind: 'advice', advice: 'Run the tool prune command.' },
+    removal: {
+      kind: 'advice',
+      advice: 'Run the tool prune command.',
+      carvedPaths: [],
+      opener: null,
+    },
   }),
   buildTestCatalogEntry({
     id: 'user-caches',
     title: 'App cache',
     path: 'Library/Caches',
-    scope: 'children',
+    selection: { kind: 'children' },
     risk: 'review',
   }),
   buildTestCatalogEntry({
@@ -52,8 +59,8 @@ const TEST_CATALOG: CatalogEntry[] = [
     title: 'Temporary files',
     root: 'temp',
     path: '',
-    scope: 'children',
-    ageRule: 'staleDays',
+    selection: { kind: 'children' },
+    ageRule: { kind: 'unchangedDays', days: SCAN_LIMITS.defaultStaleDays },
     risk: 'safe',
   }),
 ];
@@ -127,7 +134,11 @@ async function runWithInput(params: {
     catalog: platform.catalog,
     tools: platform.tools,
     scan: platform.scan,
-    system: platform.system,
+    // A fixed disk, so no test reads the volume it runs on.
+    system: {
+      ...platform.system,
+      loadVolumeSpace: async () => PROTOCOL_FIXTURE_DISK,
+    },
     delete: platform.delete,
     explore: platform.explore,
     texts: platform.report,
@@ -146,11 +157,11 @@ describeAwaitingWin32Platform('runCli safety', () => {
     expect(
       out.split('\n').filter((line) => /^(\d+\. |Caches|Check before deleting)/.test(line)),
     ).toEqual([
-      'Caches (9.0 MiB):',
-      '1. 4.0 MiB [safe] Tool cache',
-      '2. 2.0 MiB [safe] Temporary files',
+      'Caches (9.4 MB):',
+      '1. 4.2 MB [safe] Tool cache',
+      '2. 2.1 MB [safe] Temporary files',
       'Check before deleting:',
-      '3. 3.0 MiB [review] App cache',
+      '3. 3.1 MB [review] App cache',
     ]);
     expect(out).toContain('Run the tool prune command.');
     expect(out).not.toContain('com.apple.system');
@@ -198,12 +209,16 @@ describeAwaitingWin32Platform('runCli safety', () => {
 
   test('deletes exactly the selected item after DELETE, and logs it', async () => {
     const before = await listFixturePaths();
-    const { exitCode } = await runWithInput({ argv: [], inputLines: ['3', 'DELETE'] });
+    const { exitCode, io } = await runWithInput({ argv: [], inputLines: ['3', 'DELETE'] });
     const after = await listFixturePaths();
     const removedPaths = before.filter((path) => !after.includes(path));
     const log = await readFile(environment.deletionLogPath, 'utf8');
+    const outLines = io.outText().split('\n');
+    const spaceLineIndex = outLines.indexOf('52 GB is free on this disk now.');
 
     expect(exitCode).toBe(0);
+    expect(spaceLineIndex).toBeGreaterThan(-1);
+    expect(outLines[spaceLineIndex + 1]).toStartWith('The deletion log is at ');
     expect(removedPaths).toEqual([
       'home/Library/Caches/com.example.other',
       'home/Library/Caches/com.example.other/blob.bin',

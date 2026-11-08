@@ -10,6 +10,8 @@ export type Environment = {
   pathRules: PathRules;
   homeDir: AbsolutePath;
   tempDir: AbsolutePath;
+  /** The per-user folder of the system's own caches, such as macOS's Metal shader caches. */
+  userCacheDir: AbsolutePath;
   /** The folders the platform's apps are installed in, whether they exist or not. */
   applicationDirs: AbsolutePath[];
   /** The roots of the file system, which are refused as a whole. */
@@ -20,6 +22,16 @@ export type Environment = {
   protectedRealPaths: string[];
   /** Real paths that are refused whole and in every part, such as keys and the deletion log. */
   sensitiveRealPaths: string[];
+  /**
+   * Real paths inside a sensitive path that may go whole and in every part, such as an app's
+   * preview caches; a path that holds one is still refused.
+   */
+  sensitiveExceptionRealPaths: string[];
+  /**
+   * Real paths of the cloud folders whose files only an evict may take off this Mac: never
+   * deleted, neither whole nor in part, since a delete there deletes the file on every device.
+   */
+  evictRealRoots: string[];
   deletionLogPath: string;
   /** The folder of the bridge's preference file. */
   preferencesDir: AbsolutePath;
@@ -33,6 +45,8 @@ export function buildEnvironment(params: {
   homeRealPath: AbsolutePath;
   tempDir: AbsolutePath;
   tempRealPath: AbsolutePath;
+  userCacheDir: AbsolutePath;
+  userCacheRealPath: AbsolutePath;
   /** The folders the platform's apps are installed in, whether they exist or not. */
   applicationDirs: AbsolutePath[];
   /** The real paths of the platform's app folders that exist. */
@@ -48,50 +62,51 @@ export function buildEnvironment(params: {
    * level.
    */
   sensitiveHomeDirNames: string[][];
+  /** Folders inside a sensitive folder that may still go, whole and in part, one name per level. */
+  sensitiveExceptionHomeDirNames: string[][];
+  /** The cloud folders below the home folder where only an evict is allowed, one name per level. */
+  evictHomeDirNames: string[][];
   /** The folder of the deletion log below the home folder, one name per level. */
   deletionLogHomeDirNames: string[];
   /** The folder of the bridge's preference file below the home folder, one name per level. */
   preferencesHomeDirNames: string[];
 }): Environment {
+  function joinHomeRealPath(names: string[]): string {
+    return joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.homeRealPath,
+      names: names,
+    });
+  }
+
   return {
     nowMs: params.nowMs,
     user: params.user,
     pathRules: params.pathRules,
     homeDir: params.homeDir,
     tempDir: params.tempDir,
+    userCacheDir: params.userCacheDir,
     applicationDirs: params.applicationDirs,
     protectedRootPaths: params.protectedRootPaths,
-    allowedRealRoots: [params.homeRealPath, params.tempRealPath, ...params.applicationRealPaths],
-    protectedRealPaths: [
-      ...params.protectedHomeDirNames.map((names) =>
-        joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: params.homeRealPath,
-          names: names,
-        }),
-      ),
+    allowedRealRoots: [
+      params.homeRealPath,
       params.tempRealPath,
+      params.userCacheRealPath,
+      ...params.applicationRealPaths,
+    ],
+    protectedRealPaths: [
+      ...params.protectedHomeDirNames.map(joinHomeRealPath),
+      params.tempRealPath,
+      params.userCacheRealPath,
       ...params.protectedRootPaths,
     ],
     sensitiveRealPaths: [
-      ...params.sensitiveHomeDirNames.map((names) =>
-        joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: params.homeRealPath,
-          names: names,
-        }),
-      ),
-      joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeRealPath,
-        names: params.deletionLogHomeDirNames,
-      }),
-      joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeRealPath,
-        names: params.preferencesHomeDirNames,
-      }),
+      ...params.sensitiveHomeDirNames.map(joinHomeRealPath),
+      joinHomeRealPath(params.deletionLogHomeDirNames),
+      joinHomeRealPath(params.preferencesHomeDirNames),
     ],
+    sensitiveExceptionRealPaths: params.sensitiveExceptionHomeDirNames.map(joinHomeRealPath),
+    evictRealRoots: params.evictHomeDirNames.map(joinHomeRealPath),
     deletionLogPath: joinAbsolutePath({
       rules: params.pathRules,
       parentPath: params.homeDir,

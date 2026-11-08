@@ -1,0 +1,17 @@
+[
+  { "bytes": 0, "text": "0 B" },
+  { "bytes": 999, "text": "999 B" },
+  { "bytes": 1000, "text": "1.0 KB" },
+  { "bytes": 1024, "text": "1.0 KB" },
+  { "bytes": 1500, "text": "1.5 KB" },
+  { "bytes": 9500, "text": "9.5 KB" },
+  { "bytes": 10000, "text": "10 KB" },
+  { "bytes": 999600, "text": "1.0 MB" },
+  { "bytes": 1048576, "text": "1.0 MB" },
+  { "bytes": 10000000, "text": "10 MB" },
+  { "bytes": 1000000000, "text": "1.0 GB" },
+  { "bytes": 1073741824, "text": "1.1 GB" },
+  { "bytes": 2254857830, "text": "2.3 GB" },
+  { "bytes": 2000000000000, "text": "2.0 TB" },
+  { "bytes": 1000000000000000, "text": "1000 TB" }
+]

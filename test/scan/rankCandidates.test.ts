@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import type { CandidateCategory } from '../../src/catalog/catalog.js';
 import { rankByPlace, rankBySize } from '../../src/scan/rankCandidates.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
@@ -39,45 +40,33 @@ describeAwaitingWin32Platform('rankBySize', () => {
 });
 
 describeAwaitingWin32Platform('rankByPlace', () => {
-  test('orders the sections Caches, Developer tools, Apps, Large files, Trash, whatever the sizes', () => {
-    const trash = buildTestCandidate({
-      path: '/a/trash',
-      category: 'trash',
-      risk: 'safe',
-      allocatedBytes: 900,
-    });
-    const movie = buildTestCandidate({
-      path: '/a/movie',
-      category: 'userFiles',
-      risk: 'safe',
-      allocatedBytes: 800,
-    });
-    const container = buildTestCandidate({
-      path: '/a/container',
-      category: 'containers',
-      risk: 'safe',
-      allocatedBytes: 700,
-    });
-    const buildFolder = buildTestCandidate({
-      path: '/a/build',
-      category: 'projects',
-      risk: 'safe',
-      allocatedBytes: 600,
-    });
-    const temporary = buildTestCandidate({
-      path: '/a/temporary',
-      category: 'temporary',
-      risk: 'safe',
-      allocatedBytes: 10,
-    });
+  test('orders every section top to bottom, whatever the sizes', () => {
+    const categoriesTopToBottom: CandidateCategory[] = [
+      'temporary',
+      'packages',
+      'projects',
+      'containerEngines',
+      'aiModels',
+      'appContainers',
+      'installers',
+      'userFiles',
+      'cloudCopies',
+      'trash',
+      'appManaged',
+    ];
+    // Each lower section holds a larger item, so only the section order can rank them so.
+    const candidatesTopToBottom = categoriesTopToBottom.map((category, index) =>
+      buildTestCandidate({
+        path: `/a/${category}`,
+        category: category,
+        risk: 'safe',
+        allocatedBytes: (index + 1) * 100,
+      }),
+    );
 
-    expect(rankByPlace({ candidates: [trash, movie, container, buildFolder, temporary] })).toEqual([
-      temporary,
-      buildFolder,
-      container,
-      movie,
-      trash,
-    ]);
+    expect(rankByPlace({ candidates: candidatesTopToBottom.toReversed() })).toEqual(
+      candidatesTopToBottom,
+    );
   });
 
   test('puts the safe items of a section before the others, each group by size', () => {

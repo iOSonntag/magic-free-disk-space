@@ -10,6 +10,7 @@ import type { PreferencesSaveFailure } from '../../src/preferences/preferencesFi
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
 import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
+import type { VolumeSpace } from '../../src/system/volumeSpace.js';
 import type { LatestReleaseFetchResult } from '../../src/update/fetchLatestReleaseVersion.js';
 import type { ReleaseVersion } from '../../src/update/releaseVersion.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
@@ -59,7 +60,12 @@ const BRIDGE_CATALOG: CatalogEntry[] = [
     title: 'Tool store',
     path: 'Library/ToolStore',
     risk: 'review',
-    removal: { kind: 'advice', advice: 'Run the tool prune command.' },
+    removal: {
+      kind: 'advice',
+      advice: 'Run the tool prune command.',
+      carvedPaths: [],
+      opener: null,
+    },
   }),
   buildTestCatalogEntry({
     id: 'tiny-cache',
@@ -78,6 +84,9 @@ const CHECK_UPDATE_LINE = '{"kind":"checkUpdate"}';
 const RELEASE_1_2_0: ReleaseVersion = { major: 1, minor: 2, patch: 0 };
 
 const RELEASE_1_3_0: ReleaseVersion = { major: 1, minor: 3, patch: 0 };
+
+/** The disk every run of the bridge reads, so no test reads the volume it runs on. */
+const TEST_DISK: VolumeSpace = { capacityBytes: 500_000_000_000, availableBytes: 52_000_000_000 };
 
 function buildSetUpdateCheckLine(params: { isEnabled: boolean }): string {
   return JSON.stringify({ kind: 'setUpdateCheck', isEnabled: params.isEnabled });
@@ -186,6 +195,7 @@ async function runBridgeWithLines(params: {
 
         return params.fullDiskAccess ?? 'unknown';
       },
+      loadVolumeSpace: async () => TEST_DISK,
     },
     delete: platform.delete,
     explore: platform.explore,
@@ -383,33 +393,66 @@ describeAwaitingWin32Platform('runBridge', () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
 
+    const progressEvents = events.flatMap((event) => (event.kind === 'progress' ? [event] : []));
+
     expect(end).toBe('inputEnded');
-    expect(events.some((event) => event.kind === 'progress')).toBe(true);
+    expect(progressEvents[0]).toMatchObject({ phase: 'apps', found: [] });
+    expect(progressEvents.find((event) => event.phase === 'projects')?.found).toEqual([
+      {
+        sectionKey: 'caches',
+        allocatedBytes: 9 * MIB,
+        isComplete: true,
+        removableBytes: 7 * MIB,
+        isRemovableComplete: true,
+        itemCount: 3,
+        safeBytes: 4 * MIB,
+        adviceCount: 1,
+        titleText: 'Caches',
+      },
+    ]);
+    expect(progressEvents.at(-1)?.phase).toBe('tools');
     expect(answers).toHaveLength(1);
     expect(answers[0]).toMatchObject({
       kind: 'scanned',
       summary: {
-        titleText: 'Found 3 items, 9.0 MiB in total',
-        lines: ['4.0 MiB safe to free', '3.0 MiB to check before deleting'],
+        titleText: 'Found 3 items, 9.4 MB in total',
+        lines: ['4.2 MB safe to free', '3.1 MB to check before deleting'],
+        // The 2 MiB never item counts in the title alone: the plan refuses it.
+        totalBytes: 7 * MIB,
+        isTotalComplete: true,
+        safeBytes: 4 * MIB,
+        isSafeComplete: true,
+        disk: TEST_DISK,
       },
       sections: [
         {
+          key: 'caches',
           titleText: 'Caches',
-          sizeText: '9.0 MiB',
+          sizeText: '9.4 MB',
           isInitiallyExpanded: true,
-          items: [{ number: 1, title: 'Tool cache', riskText: 'safe', sizeText: '4.0 MiB' }],
+          items: [
+            {
+              number: 1,
+              key: `catalog:tool-cache:${environment.homeDir}/Library/Caches/ToolCache`,
+              title: 'Tool cache',
+              riskText: 'safe',
+              sizeText: '4.2 MB',
+              group: 'safe',
+              displayPath: '~/Library/Caches/ToolCache',
+            },
+          ],
           checkGroup: {
             titleText: 'Check before deleting',
             items: [
-              { number: 2, title: 'App cache', riskText: 'review', sizeText: '3.0 MiB' },
-              { number: 3, title: 'Kept store', riskText: 'never', sizeText: '2.0 MiB' },
+              { number: 2, title: 'App cache', riskText: 'review', sizeText: '3.1 MB' },
+              { number: 3, title: 'Kept store', riskText: 'never', sizeText: '2.1 MB' },
             ],
           },
         },
       ],
       explore: {
         items: [],
-        adviceGroup: { items: [{ title: 'Tool store', sizeText: '5.0 MiB' }] },
+        adviceGroup: { items: [{ title: 'Tool store', sizeText: '5.2 MB', removal: 'advice' }] },
       },
       safeNumbers: [1],
       skipped: { titleText: 'Skipped 1 item', lines: ['too small to matter: 1'] },
@@ -507,6 +550,8 @@ describeAwaitingWin32Platform('runBridge', () => {
       'deleted',
       'failed',
     ]);
+    const appCacheKey = `catalog:app-cache:${environment.homeDir}/Library/Caches/AppCache`;
+
     expect(answers[1]).toMatchObject({
       planId: 1,
       warningLines: [
@@ -514,6 +559,27 @@ describeAwaitingWin32Platform('runBridge', () => {
         'Type DELETE to delete them permanently.',
         'Anything else cancels.',
       ],
+      items: [
+        {
+          number: 2,
+          key: appCacheKey,
+          title: 'App cache',
+          sectionKey: 'caches',
+          risk: 'review',
+          allocatedBytes: 3 * MIB,
+        },
+      ],
+      totalBytes: 3 * MIB,
+      holdsCareful: false,
+    });
+    expect(answers[2]).toMatchObject({
+      outcomes: [
+        { number: 2, key: appCacheKey, outcome: 'removed', reasonKey: null, freedBytes: 3 * MIB },
+      ],
+      freedBytes: 3 * MIB,
+      returnsLaterBytes: 0,
+      availableBytesAfter: TEST_DISK.availableBytes,
+      logPath: environment.deletionLogPath,
     });
     expect(answers[3]).toMatchObject({ effect: 'scanDropped' });
     expect(before.filter((path) => !after.includes(path))).toEqual([

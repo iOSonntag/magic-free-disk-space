@@ -1,18 +1,30 @@
-import 'package:magic_free_disk_space/bridge/bridge_event.dart';
-import 'package:magic_free_disk_space/cleaner/cleaner_bridge.dart';
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
 
 const StatusEvent grantedStatus = StatusEvent(
   fullDiskAccess: FullDiskAccess.granted,
   notices: [],
 );
 
+/// The progress the fake bridge sends before each scan answer, unless the
+/// test sets another.
+const ProgressEvent appsProgress = ProgressEvent(
+  message: 'Measuring apps…',
+  phase: ScanPhase.apps,
+  found: [],
+);
+
 /// A bridge that answers with what the test set on it and records the kind
 /// of each request when it is sent; like the process client, it sends each
-/// request only after the answer of the one before.
+/// request only after the answer of the one before, a held one included.
 final class FakeCleanerBridge implements CleanerBridge {
   FakeCleanerBridge({required this.scanAnswer});
 
   ScanAnswer scanAnswer;
+  ProgressEvent scanProgress = appsProgress;
   Future<StatusAnswer> Function() answerStatus = () async => grantedStatus;
   late PlanAnswer planAnswer;
   late DeleteAnswer deleteAnswer;
@@ -22,6 +34,24 @@ final class FakeCleanerBridge implements CleanerBridge {
   ({int planId, String confirmation})? deleteRequest;
   final List<String> requestKinds = [];
   Future<void>? _previousRequest;
+  Completer<ScanAnswer>? _heldScan;
+  Completer<DeleteAnswer>? _heldDelete;
+
+  /// Holds the next scan after its progress until the test completes the
+  /// returned answer; the scan after it answers [scanAnswer] again.
+  Completer<ScanAnswer> holdNextScan() {
+    final Completer<ScanAnswer> heldScan = Completer<ScanAnswer>();
+    _heldScan = heldScan;
+    return heldScan;
+  }
+
+  /// Holds the next delete, once it is recorded in [deleteRequest], until
+  /// the test completes the returned answer.
+  Completer<DeleteAnswer> holdNextDelete() {
+    final Completer<DeleteAnswer> heldDelete = Completer<DeleteAnswer>();
+    _heldDelete = heldDelete;
+    return heldDelete;
+  }
 
   @override
   Future<StatusAnswer> status() {
@@ -29,13 +59,20 @@ final class FakeCleanerBridge implements CleanerBridge {
   }
 
   @override
-  Future<ScanAnswer> scan({required void Function(String message) onProgress}) {
+  Future<ScanAnswer> scan({
+    required void Function(ProgressEvent progress) onProgress,
+  }) {
     return _answerRequest('scan', () async {
       final Object? error = scanError;
       if (error != null) {
         throw error;
       }
-      onProgress('Measuring apps…');
+      onProgress(scanProgress);
+      final Completer<ScanAnswer>? heldScan = _heldScan;
+      if (heldScan != null) {
+        _heldScan = null;
+        return heldScan.future;
+      }
       return scanAnswer;
     });
   }
@@ -55,6 +92,11 @@ final class FakeCleanerBridge implements CleanerBridge {
   }) {
     return _answerRequest('delete', () async {
       deleteRequest = (planId: planId, confirmation: confirmation);
+      final Completer<DeleteAnswer>? heldDelete = _heldDelete;
+      if (heldDelete != null) {
+        _heldDelete = null;
+        return heldDelete.future;
+      }
       final Object? error = deleteError;
       if (error != null) {
         throw error;
@@ -82,4 +124,13 @@ final class FakeCleanerBridge implements CleanerBridge {
     _previousRequest = result.then<void>((TAnswer _) {}, onError: (_) {});
     return result;
   }
+}
+
+/// A cleaner on [bridge] that starts its scan at once, as the app's does;
+/// disposed at tear-down.
+CleanerController startScanningCleaner(FakeCleanerBridge bridge) {
+  final CleanerController controller = CleanerController(bridge: bridge);
+  addTearDown(controller.dispose);
+  unawaited(controller.scan());
+  return controller;
 }

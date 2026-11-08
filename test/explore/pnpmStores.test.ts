@@ -47,7 +47,7 @@ import {
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
-import { buildFixtureToolLocations } from './probeFakeTools.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildFoundProjectPinsLoad,
   buildTestPinFileText,
@@ -685,18 +685,15 @@ const probeCases: { probeId: 'pnpmStores' | 'pnpmStoresXdg'; rootNames: string[]
 for (const probeCase of probeCases) {
   describeAwaitingWin32Platform(`the probe ${probeCase.probeId}`, () => {
     async function runProbe(params: { files: ProjectPinFile[] }): Promise<ExploreProbeOutcome> {
-      const probes = startExploreProbes({
-        environment: environment,
-        platform: probePlatform,
-        toolInstallLocations: buildFixtureToolLocations({}),
-        processCommands: Promise.resolve([]),
-        activeXcodeBundlePath: Promise.resolve(null),
-        projectPins: buildFoundProjectPinsLoad({ files: params.files }),
-        timeoutMs: 10_000,
-        unusedCutoffMs: 0,
-      });
+      const probes = startExploreProbes(
+        buildTestProbeStart({
+          environment: environment,
+          platform: probePlatform,
+          projectPins: buildFoundProjectPinsLoad({ files: params.files }),
+        }),
+      );
 
-      return probes[probeCase.probeId];
+      return probes.outcomes[probeCase.probeId];
     }
 
     async function loadOfferedVersions(params: {

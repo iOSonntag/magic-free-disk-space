@@ -45,6 +45,7 @@ import {
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildFoundProjectPinsLoad,
   buildTestPinFileText,
@@ -450,20 +451,17 @@ describeAwaitingWin32Platform('the asdf probe and recheck against a fixture home
   }
 
   async function runAsdfProbe(params: { files: ProjectPinFile[]; asdfPath: string | null }) {
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations(
-        params.asdfPath === null ? {} : { asdf: params.asdfPath },
-      ),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(null),
-      projectPins: buildFoundProjectPinsLoad({ files: params.files }),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations(
+          params.asdfPath === null ? {} : { asdf: params.asdfPath },
+        ),
+        projectPins: buildFoundProjectPinsLoad({ files: params.files }),
+      }),
+    );
 
-    return probes.asdfVersions;
+    return probes.outcomes.asdfVersions;
   }
 
   async function probeOfferedUnit(): Promise<ExploreToolUnitAsdfVersion> {

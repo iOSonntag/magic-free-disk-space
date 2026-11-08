@@ -38,7 +38,7 @@ import {
 import { buildTestAbsolutePath, buildTestNvmNodeVersion } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
-import { buildFixtureToolLocations } from './probeFakeTools.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildEmptyProjectPinsLoad,
   buildFoundProjectPinsLoad,
@@ -588,18 +588,11 @@ describeAwaitingWin32Platform('the nvm probe and recheck against a fixture home'
   }
 
   async function probeNvmVersions(projectPins: ProjectPinsLoad): Promise<unknown> {
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({}),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(null),
-      projectPins: projectPins,
-      timeoutMs: 10_000,
-      unusedCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildTestProbeStart({ environment: environment, projectPins: projectPins }),
+    );
 
-    return probes.nvmVersions;
+    return probes.outcomes.nvmVersions;
   }
 
   function buildVersionFolderPath(folderName: string): AbsolutePath {

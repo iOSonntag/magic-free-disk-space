@@ -1,0 +1,61 @@
+import type { EngineUnitCall } from '../explore/engines/callEngineUnit.js';
+import { callEngineUnit } from '../explore/engines/callEngineUnit.js';
+import { listEngineUnitIds } from '../explore/exploreUnit.js';
+import type { Candidate, CandidateRemovalCallEngine } from '../scan/candidate.js';
+import type { UserIdentity } from '../system/userIdentity.js';
+import type { RecordedRemoval } from './deleteCandidates.js';
+
+/** How long the engine has for each read of the recheck, and for each removal request. */
+export const ENGINE_CALL_TIMEOUT_MS = 120_000;
+
+/**
+ * Checks the unit again over its engine's API at the socket its probe trusted, then removes it
+ * there, never with `force`; one `engineCall` entry. A refusal of the engine keeps the item as
+ * `engineInUse`, a gone socket as `engineNotRunning`. Never rejects.
+ */
+export async function callEngineCandidate(params: {
+  candidate: Candidate;
+  removal: CandidateRemovalCallEngine;
+  user: UserIdentity;
+  clock: () => number;
+}): Promise<RecordedRemoval> {
+  const call = await callEngineUnit({
+    unit: params.removal.unit,
+    user: params.user,
+    timeoutMs: ENGINE_CALL_TIMEOUT_MS,
+  });
+
+  return {
+    outcome: {
+      candidate: params.candidate,
+      freedBytes: call.freedBytes,
+      outcome: call.outcome,
+      code: call.outcome === 'failed' ? call.code : null,
+    },
+    outcomeEntries: [
+      {
+        kind: 'engineCall',
+        atMs: params.clock(),
+        engineName: params.removal.unit.engineName,
+        unitKind: params.removal.unit.kind,
+        unitIds: listEngineUnitIds(params.removal.unit),
+        outcome: call.outcome,
+        status: getEngineCallStatus(call),
+      },
+    ],
+  };
+}
+
+/** The HTTP status of the answer that decided the call; `null` when none did. */
+function getEngineCallStatus(call: EngineUnitCall): number | null {
+  switch (call.outcome) {
+    case 'removed':
+    case 'alreadyGone':
+    case 'engineInUse':
+    case 'failed':
+      return call.status;
+    case 'changedSinceScan':
+    case 'engineNotRunning':
+      return null;
+  }
+}

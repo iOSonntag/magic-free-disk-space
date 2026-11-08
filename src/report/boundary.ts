@@ -7,6 +7,7 @@ export const moduleBoundary = {
     'delete',
     'environment',
     'explore',
+    'path',
     'preferences',
     'scan',
     'system',
@@ -15,7 +16,9 @@ export const moduleBoundary = {
   ],
   readsTablesOf: [],
   exposes: [
+    'buildDeletedFacts.ts',
     'buildFullDiskAccessNotices.ts',
+    'buildPlannedFacts.ts',
     'buildScanView.ts',
     'buildUpdateNotice.ts',
     'formatDeletionConfirmation.ts',

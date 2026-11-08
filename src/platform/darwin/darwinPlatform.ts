@@ -1,12 +1,24 @@
 import type { Platform } from '../platform.js';
-import { ANDROID_SDK_PATH_NAMES } from './androidSdkRoot.js';
+import { ANDROID_SDK_PATH_NAMES, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
+import {
+  DOWNLOADS_ROOT_PATH_NAMES,
+  ICLOUD_DRIVE_ROOT_PATH_NAMES,
+  MAIL_DOWNLOADS_ROOT_PATH_NAMES,
+} from './appleDataRoots.js';
+import { BROWSER_BUNDLES } from './browserBundles.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
+import { CONTAINER_ENGINES } from './containerEngines.js';
 import { isEntryEvicted } from './hasDatalessFlag.js';
+import { IDE_VERSION_ROOTS } from './ideVersionRoots.js';
 import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
 import { DARWIN_HOMEBREW_PREFIX_PATHS, loadEnvironment } from './loadEnvironment.js';
 import { DARWIN_PRIVACY_DENIAL_CODE, loadFullDiskAccess } from './loadFullDiskAccess.js';
 import { loadInstalledApps } from './loadInstalledApps.js';
+import { loadPrivateBytes } from './loadPrivateSize.js';
 import { loadProcessCommands } from './loadProcessCommands.js';
+import { loadSystemVersion } from './loadSystemVersion.js';
+import { loadVolumeSpace } from './loadVolumeSpace.js';
+import { ORPHAN_LOCATIONS } from './orphanLocations.js';
 import {
   PNPM_HOMES_PATH_NAMES,
   PNPM_STORE_ROOT_PATH_NAMES,
@@ -15,6 +27,7 @@ import {
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from './projectSearchEvidence.js';
 import { removeTree } from './removeTree.js';
 import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOT_RELATIVE_PATHS } from './scanHomeFolders.js';
+import { DARWIN_SYSTEM_APPS, MAIL_BUNDLE_PATHS } from './systemApps.js';
 import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
 
 /** Everything the app takes from macOS; the entry points hand each module its slice. */
@@ -36,7 +49,12 @@ export const darwinPlatform: Platform = {
     ],
   },
   scan: {
-    apps: { appSection: 'offerUnusedApps', loadInstalledApps: loadInstalledApps },
+    apps: {
+      appSection: 'offerUnusedApps',
+      loadInstalledApps: loadInstalledApps,
+      orphanLocations: ORPHAN_LOCATIONS,
+    },
+    systemApps: DARWIN_SYSTEM_APPS,
     loadActiveXcodeBundlePath: loadActiveXcodeBundlePath,
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     userFileRootRelativePaths: USER_FILE_ROOT_RELATIVE_PATHS,
@@ -47,7 +65,15 @@ export const darwinPlatform: Platform = {
     pnpmStoreRoot: PNPM_STORE_ROOT_PATH_NAMES,
     pnpmXdgStoreRoot: PNPM_XDG_STORE_ROOT_PATH_NAMES,
     androidSdkRoot: ANDROID_SDK_PATH_NAMES,
+    flutterSettingsPaths: FLUTTER_SETTINGS_PATHS,
     projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
+    containerEngines: CONTAINER_ENGINES,
+    ideVersionRoots: IDE_VERSION_ROOTS,
+    icloudDriveRoot: ICLOUD_DRIVE_ROOT_PATH_NAMES,
+    mailDownloadsRoot: MAIL_DOWNLOADS_ROOT_PATH_NAMES,
+    mailBundlePaths: MAIL_BUNDLE_PATHS,
+    downloadsRoot: DOWNLOADS_ROOT_PATH_NAMES,
+    browserBundles: BROWSER_BUNDLES,
   },
   report: {
     computerPhrase: 'this Mac',
@@ -57,9 +83,11 @@ export const darwinPlatform: Platform = {
       'Download the new version, quit this app, and move the new one into Applications in its place.',
   },
   system: {
-    isEntryEvicted: isEntryEvicted,
+    entryReads: { isEntryEvicted: isEntryEvicted, loadPrivateBytes: loadPrivateBytes },
     privacyDenialCode: DARWIN_PRIVACY_DENIAL_CODE,
     loadFullDiskAccess: loadFullDiskAccess,
     loadRunningProcesses: loadProcessCommands,
+    loadVolumeSpace: loadVolumeSpace,
+    loadSystemVersion: loadSystemVersion,
   },
 };

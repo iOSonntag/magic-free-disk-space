@@ -1,4 +1,5 @@
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
+import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
 import type { UnitActivity } from './exploreUnit.js';
 
 /** What a probe saw of a simulator device; `state` as `simctl` reports it, such as `Shutdown`. */
@@ -23,6 +24,52 @@ export type UnitActivityFactsVersionFolder = { kind: 'versionFolder'; folderPath
 
 export type UnitActivityFactsPnpmStore = { kind: 'pnpmStore' };
 
+export type UnitActivityFactsVagrant = { kind: 'vagrant' };
+
+/**
+ * A toolchain is in use while rustup, cargo, or rustc runs, or a program runs from its own folder,
+ * such as the proc-macro server rust-analyzer starts from the toolchain's `libexec`.
+ */
+export type UnitActivityFactsRustup = { kind: 'rustup'; toolchainPath: AbsolutePath };
+
+/** The package folders are in use while conda, mamba, or micromamba runs. */
+export type UnitActivityFactsConda = { kind: 'conda' };
+
+export type UnitActivityFactsOllama = { kind: 'ollama' };
+
+/**
+ * A unit of the Hugging Face hub cache, in use while its CLI runs. Any Python program may read the
+ * cache too, which no command shows; the recheck's exact paths guard a download that changes it.
+ */
+export type UnitActivityFactsHuggingFace = { kind: 'huggingFace' };
+
+/** A model of LM Studio, in use while the app, its `llmster` daemon, or its `lms` CLI runs. */
+export type UnitActivityFactsLmStudio = { kind: 'lmStudio' };
+
+/**
+ * A Claude Code version's entry of the versions folder. A session runs through the launcher's
+ * link, so its command names no version: every version counts in use while any `claude` runs.
+ */
+export type UnitActivityFactsClaudeCodeVersion = {
+  kind: 'claudeCodeVersion';
+  versionPath: AbsolutePath;
+};
+
+/**
+ * The app bundles whose running process writes the unit's files, such as Mail for its downloads,
+ * the browsers for a partial download, or an IDE for the folders of its old versions.
+ */
+export type UnitActivityFactsAppBundles = { kind: 'appBundles'; bundlePaths: string[] };
+
+/**
+ * Files the probe offers only once each is untouched past its cutoff, such as a stale installer or
+ * a Claude transcript; their times are the rule, so no process is read.
+ */
+export type UnitActivityFactsUntouchedFiles = { kind: 'untouchedFiles' };
+
+/** An engine object: the engine itself refuses to remove one in use, which the call reports. */
+export type UnitActivityFactsEngine = { kind: 'engine' };
+
 /** The facts of a probe that the busy rule of each unit kind reads. */
 export type UnitActivityFacts =
   | UnitActivityFactsSimulatorDevice
@@ -33,7 +80,17 @@ export type UnitActivityFacts =
   | UnitActivityFactsHomebrew
   | UnitActivityFactsVscodeExtension
   | UnitActivityFactsVersionFolder
-  | UnitActivityFactsPnpmStore;
+  | UnitActivityFactsPnpmStore
+  | UnitActivityFactsVagrant
+  | UnitActivityFactsRustup
+  | UnitActivityFactsConda
+  | UnitActivityFactsOllama
+  | UnitActivityFactsHuggingFace
+  | UnitActivityFactsLmStudio
+  | UnitActivityFactsClaudeCodeVersion
+  | UnitActivityFactsAppBundles
+  | UnitActivityFactsUntouchedFiles
+  | UnitActivityFactsEngine;
 
 const SIMULATOR_APP_EXECUTABLE_PATH_PART = '/Simulator.app/Contents/MacOS/Simulator';
 
@@ -53,6 +110,31 @@ const VSCODE_BUNDLE_PATH_PART = '/Visual Studio Code.app/Contents/';
 
 // pnpm or pnpx as the last segment of a path or the whole program, its launcher or its script.
 const PNPM_PROGRAM_PATTERN = /(^|\/)pnp[mx](\.[cm]?js)?( |$)/;
+
+// Each program as the last segment of a path or the whole executable.
+const VAGRANT_PROGRAM_PATTERN = /(^|\/)vagrant( |$)/;
+
+const RUSTUP_PROGRAM_PATTERN = /(^|\/)(rustup|cargo|rustc)( |$)/;
+
+// mamba and micromamba download into, and link from, the same package folders as conda.
+const CONDA_PROGRAM_PATTERN = /(^|\/)(conda|mamba|micromamba)( |$)/;
+
+// conda run as a Python module, `python -m conda`.
+const CONDA_MODULE_PATTERN = /(^| )-m conda( |$)/;
+
+const OLLAMA_PROGRAM_PATTERN = /(^|\/)ollama( |$)/;
+
+const HUGGING_FACE_PROGRAM_PATTERN = /(^|\/)(hf|huggingface-cli)( |$)/;
+
+// The app and its helpers run from inside its bundle; its daemon and CLI by their names, or from
+// LM Studio's home folder, where its docs place `bin/lms`.
+const LM_STUDIO_BUNDLE_PATH_PART = '/LM Studio.app/Contents/';
+
+const LM_STUDIO_HOME_PATH_PART = '/.lmstudio/';
+
+const LM_STUDIO_PROGRAM_PATTERN = /(^|\/)(llmster|lms)( |$)/;
+
+const CLAUDE_PROGRAM_PATTERN = /(^|\/)claude( |$)/;
 
 /**
  * The one busy rule of the explore units, at the scan and right before a run. `unknown` only for
@@ -103,6 +185,67 @@ export function decideUnitActivity(params: {
         processCommands: params.processCommands,
         isOwnerProcess: (command) => PNPM_PROGRAM_PATTERN.test(command),
       });
+    case 'vagrant':
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) => VAGRANT_PROGRAM_PATTERN.test(command),
+      });
+    case 'rustup': {
+      const toolchainPath = params.facts.toolchainPath;
+
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) =>
+          RUSTUP_PROGRAM_PATTERN.test(command) ||
+          isPathInCommand({ path: toolchainPath, command: command }),
+      });
+    }
+    case 'conda':
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) =>
+          CONDA_PROGRAM_PATTERN.test(command) || CONDA_MODULE_PATTERN.test(command),
+      });
+    case 'ollama':
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) => OLLAMA_PROGRAM_PATTERN.test(command),
+      });
+    case 'huggingFace':
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) => HUGGING_FACE_PROGRAM_PATTERN.test(command),
+      });
+    case 'lmStudio':
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) =>
+          command.includes(LM_STUDIO_BUNDLE_PATH_PART) ||
+          command.includes(LM_STUDIO_HOME_PATH_PART) ||
+          LM_STUDIO_PROGRAM_PATTERN.test(command),
+      });
+    case 'claudeCodeVersion': {
+      const versionPath = params.facts.versionPath;
+
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) =>
+          CLAUDE_PROGRAM_PATTERN.test(command) ||
+          isPathInCommand({ path: versionPath, command: command }),
+      });
+    }
+    case 'appBundles': {
+      const bundlePaths = params.facts.bundlePaths;
+
+      return decideProcessActivity({
+        processCommands: params.processCommands,
+        isOwnerProcess: (command) =>
+          isAnyBundleRunning({ bundlePaths: bundlePaths, processCommands: [command] }),
+      });
+    }
+    case 'untouchedFiles':
+    case 'engine':
+      return 'idle';
   }
 }
 
@@ -124,6 +267,26 @@ function decideSimulatorAppActivity(params: { processCommands: string[] | null }
     processCommands: params.processCommands,
     isOwnerProcess: (command) => command.includes(SIMULATOR_APP_EXECUTABLE_PATH_PART),
   });
+}
+
+/**
+ * Whether the command names the path whole, followed by its end, a space, or a separator, so the
+ * path of version `2.1.3` never matches the one of `2.1.30`.
+ */
+function isPathInCommand(params: { path: string; command: string }): boolean {
+  let index = params.command.indexOf(params.path);
+
+  while (index !== -1) {
+    const next = params.command.charAt(index + params.path.length);
+
+    if (next === '' || next === ' ' || next === '/') {
+      return true;
+    }
+
+    index = params.command.indexOf(params.path, index + 1);
+  }
+
+  return false;
 }
 
 /** Busy while a process of the unit's owner runs; `unknown` when the processes were not read. */

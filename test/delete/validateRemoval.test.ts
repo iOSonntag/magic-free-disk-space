@@ -1,22 +1,24 @@
 import { expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
-import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
+import type { CandidateProbed } from '../../src/scan/candidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
-import { buildTestAbsolutePath, buildTestUserIdentity } from '../support/parsedValueFixtures.js';
+import {
+  buildTestCandidate,
+  buildTestEngineCandidate,
+  buildTestToolCandidate,
+  buildTestUnitPathsCandidate,
+} from '../support/candidateFixtures.js';
+import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
-const ENVIRONMENT = buildDarwinEnvironment({
-  nowMs: 0,
-  user: buildTestUserIdentity({ uid: 501 }),
-  homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
-  homeRealPath: buildTestAbsolutePath({ text: '/Users/tester' }),
-  tempDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/T' }),
-  tempRealPath: buildTestAbsolutePath({ text: '/private/var/folders/xy/abc/T' }),
-  applicationDirs: [buildTestAbsolutePath({ text: '/Applications' })],
-  applicationRealPaths: [buildTestAbsolutePath({ text: '/Applications' })],
-});
+const ENVIRONMENT = buildTestMacEnvironment();
+
+/** The path `relativePath` names below the test Mac's home. */
+function buildHomePath(relativePath: string): string {
+  return `${TEST_MAC_HOME_DIR}/${relativePath}`;
+}
 
 function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
   return validateRemoval({
@@ -31,10 +33,10 @@ function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
 
 describeAwaitingWin32Platform('validateRemoval', () => {
   test('approves files and folders strictly inside an allowed root', () => {
-    expect(validate({ path: '/Users/tester/Library/Caches/com.example.app' }).kind).toBe(
+    expect(validate({ path: buildHomePath('Library/Caches/com.example.app') }).kind).toBe(
       'approved',
     );
-    expect(validate({ path: '/Users/tester/Downloads/old.dmg', kind: 'file' }).kind).toBe(
+    expect(validate({ path: buildHomePath('Downloads/old.dmg'), kind: 'file' }).kind).toBe(
       'approved',
     );
     expect(validate({ path: '/private/var/folders/xy/abc/T/build-123' }).kind).toBe('approved');
@@ -49,10 +51,10 @@ describeAwaitingWin32Platform('validateRemoval', () => {
   });
 
   test('refuses a symbolic link and anything that is neither file nor folder', () => {
-    expect(validate({ path: '/Users/tester/link', kind: 'symbolicLink' })).toMatchObject({
+    expect(validate({ path: buildHomePath('link'), kind: 'symbolicLink' })).toMatchObject({
       reason: 'symbolicLink',
     });
-    expect(validate({ path: '/Users/tester/socket', kind: 'other' })).toMatchObject({
+    expect(validate({ path: buildHomePath('socket'), kind: 'other' })).toMatchObject({
       reason: 'unsupportedKind',
     });
   });
@@ -64,30 +66,34 @@ describeAwaitingWin32Platform('validateRemoval', () => {
   });
 
   test('refuses keys, keychains, the deletion log, and the preferences, whole and in every part', () => {
-    for (const path of [
-      '/Users/tester/.ssh',
-      '/Users/tester/.ssh/id_ed25519',
-      '/Users/tester/.gnupg/private-keys-v1.d',
-      '/Users/tester/Library/Keychains/login.keychain-db',
-      '/Users/tester/Library/Logs/magic-free-disk-space',
-      '/Users/tester/Library/Logs/magic-free-disk-space/deletions.jsonl',
-      '/Users/tester/Library/Logs',
-      '/Users/tester/Library/Application Support/magic-free-disk-space',
-      '/Users/tester/Library/Application Support/magic-free-disk-space/preferences.json',
-      '/Users/tester/Library/Application Support',
+    for (const relativePath of [
+      '.ssh',
+      '.ssh/id_ed25519',
+      '.gnupg/private-keys-v1.d',
+      'Library/Keychains/login.keychain-db',
+      'Library/Logs/magic-free-disk-space',
+      'Library/Logs/magic-free-disk-space/deletions.jsonl',
+      'Library/Logs',
+      'Library/Application Support/magic-free-disk-space',
+      'Library/Application Support/magic-free-disk-space/preferences.json',
+      'Library/Application Support',
     ]) {
-      expect(validate({ path: path, kind: 'file' })).toMatchObject({ reason: 'protectedRoot' });
+      expect(validate({ path: buildHomePath(relativePath), kind: 'file' })).toMatchObject({
+        reason: 'protectedRoot',
+      });
     }
 
-    expect(validate({ path: '/Users/tester/Library/Logs/OtherApp' }).kind).toBe('approved');
-    expect(validate({ path: '/Users/tester/Library/Application Support/OtherApp' }).kind).toBe(
+    expect(validate({ path: buildHomePath('Library/Logs/OtherApp') }).kind).toBe('approved');
+    expect(validate({ path: buildHomePath('Library/Application Support/OtherApp') }).kind).toBe(
       'approved',
     );
   });
 
   test('refuses a protected folder written in another letter case', () => {
-    expect(validate({ path: '/Users/tester/library' })).toMatchObject({ reason: 'protectedRoot' });
-    expect(validate({ path: '/Users/tester/LIBRARY/caches' })).toMatchObject({
+    expect(validate({ path: buildHomePath('library') })).toMatchObject({
+      reason: 'protectedRoot',
+    });
+    expect(validate({ path: buildHomePath('LIBRARY/caches') })).toMatchObject({
       reason: 'protectedRoot',
     });
   });
@@ -103,20 +109,20 @@ describeAwaitingWin32Platform('validateRemoval', () => {
     expect(validate({ path: '/etc/hosts', kind: 'file' })).toMatchObject({
       reason: 'outsideAllowedRoot',
     });
-    expect(validate({ path: '/Users/testerX/Library' })).toMatchObject({
+    expect(validate({ path: `${TEST_MAC_HOME_DIR}X/Library` })).toMatchObject({
       reason: 'outsideAllowedRoot',
     });
     expect(validate({ path: '/Applications' })).toMatchObject({ reason: 'outsideAllowedRoot' });
-    expect(validate({ path: 'Users/tester/Library/Caches/x' })).toMatchObject({
+    expect(validate({ path: buildHomePath('Library/Caches/x').slice(1) })).toMatchObject({
       reason: 'outsideAllowedRoot',
     });
   });
 
   test('approves the children of a protected folder', () => {
-    expect(validate({ path: '/Users/tester/.Trash/old-photo.jpg', kind: 'file' }).kind).toBe(
+    expect(validate({ path: buildHomePath('.Trash/old-photo.jpg'), kind: 'file' }).kind).toBe(
       'approved',
     );
-    expect(validate({ path: '/Users/tester/Library/Containers/com.example.gone' }).kind).toBe(
+    expect(validate({ path: buildHomePath('Library/Containers/com.example.gone') }).kind).toBe(
       'approved',
     );
   });
@@ -124,7 +130,7 @@ describeAwaitingWin32Platform('validateRemoval', () => {
   test('approves a tool item of any other risk, and refuses one marked never', () => {
     for (const risk of ['safe', 'careful', 'review'] as const) {
       const candidate = buildTestToolCandidate({
-        homeDir: '/Users/tester',
+        homeDir: TEST_MAC_HOME_DIR,
         version: '20.1.0',
         risk: risk,
       });
@@ -136,7 +142,7 @@ describeAwaitingWin32Platform('validateRemoval', () => {
     }
 
     const neverCandidate = buildTestToolCandidate({
-      homeDir: '/Users/tester',
+      homeDir: TEST_MAC_HOME_DIR,
       version: '20.1.0',
       risk: 'never',
     });
@@ -145,6 +151,46 @@ describeAwaitingWin32Platform('validateRemoval', () => {
       kind: 'refused',
       path: neverCandidate.path,
       reason: 'neverRisk',
+    });
+  });
+
+  test('judges each target of a unit, and refuses the item at the first target refused', () => {
+    const repoPath = buildHomePath('.cache/huggingface/hub');
+    const allowedPath = `${repoPath}/models--example--model/blobs/a`;
+    function buildUnitCandidate(targetPaths: [string, ...string[]]): CandidateProbed {
+      return buildTestUnitPathsCandidate({
+        probe: 'huggingFaceRepos',
+        unit: {
+          kind: 'huggingFaceRepository',
+          repoPath: buildTestAbsolutePath({ text: repoPath }),
+          downloadedAtMs: null,
+          foundPaths: [buildTestAbsolutePath({ text: allowedPath })],
+        },
+        path: `${repoPath}/models--example--model`,
+        targetPaths: targetPaths,
+      });
+    }
+
+    const allowed = buildUnitCandidate([allowedPath, `${allowedPath}-other`]);
+
+    expect(validateRemoval({ candidate: allowed, environment: ENVIRONMENT })).toEqual({
+      kind: 'approved',
+      candidate: allowed,
+    });
+    expect(
+      validateRemoval({
+        candidate: buildUnitCandidate([allowedPath, buildHomePath('.ssh'), '/etc/hosts']),
+        environment: ENVIRONMENT,
+      }),
+    ).toEqual({ kind: 'refused', path: buildHomePath('.ssh'), reason: 'protectedRoot' });
+  });
+
+  test('approves an engine item, since its engine removes it after a recheck', () => {
+    const candidate = buildTestEngineCandidate({ homeDir: TEST_MAC_HOME_DIR });
+
+    expect(validateRemoval({ candidate: candidate, environment: ENVIRONMENT })).toEqual({
+      kind: 'approved',
+      candidate: candidate,
     });
   });
 });

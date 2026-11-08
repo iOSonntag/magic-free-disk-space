@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Risk } from '../../src/catalog/catalog.js';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
 import type {
   ProjectPinFileKind,
@@ -9,24 +10,59 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
-import type { EntryEvictionCheck } from '../../src/system/systemPlatform.js';
+import type { EntryEvictionCheck } from '../../src/system/entryReads.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
+  loadTestEnvironment,
+  updateModifiedMs,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { runTestScan } from '../support/scanRunFixtures.js';
 
 const NO_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
+const MINUTE_MS = 60_000;
+
 async function createEmptyFile(params: { path: string }): Promise<void> {
   await createFixtureFile({ path: params.path, sizeBytes: 0, modifiedMs: Date.now() });
+}
+
+/**
+ * A Rust project in `folder` whose `target` holds enough to offer, and whose folder and
+ * `Cargo.toml`, all its activity probe reads, changed at `modifiedMs`. Returns the `target` path.
+ */
+async function createDatedRustProject(params: {
+  fixtureRoot: FixtureRoot;
+  folder: string;
+  modifiedMs: number;
+}): Promise<string> {
+  const projectPath = join(params.fixtureRoot.homeDir, params.folder);
+  const targetPath = join(projectPath, 'target');
+
+  await createFixtureFile({
+    path: join(targetPath, 'app.rlib'),
+    sizeBytes: SCAN_LIMITS.minOfferedBytes,
+    modifiedMs: params.modifiedMs,
+  });
+  await createFixtureFile({
+    path: join(projectPath, 'Cargo.toml'),
+    sizeBytes: 0,
+    modifiedMs: params.modifiedMs,
+  });
+  // Creating its entries changed the folder itself, which the probe reads as well.
+  await updateModifiedMs({ path: projectPath, modifiedMs: params.modifiedMs });
+
+  return targetPath;
 }
 
 function buildPinFileRef(params: { path: string; kind: ProjectPinFileKind }): ProjectPinFileRef {
@@ -51,7 +87,10 @@ function walkTestProjects(params: {
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: params.maxDepth ?? 4,
     deadlineMs: params.deadlineMs ?? NO_DEADLINE_MS,
-    isEntryEvicted: params.isEntryEvicted ?? (() => false),
+    entryReads: buildTestEntryReads({
+      privateBytes: null,
+      isEntryEvicted: params.isEntryEvicted ?? (() => false),
+    }),
     privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }
@@ -337,5 +376,114 @@ describeAwaitingWin32Platform('walkProjects', () => {
     const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
 
     expect(result.pinFiles).toEqual([]);
+  });
+
+  test('finds each new project folder beside its marker file, with the risk of its rule', async () => {
+    // Dependencies that a reinstall must download again are for review; build output is safe.
+    const projects: { folder: string; artifact: string; marker: string; risk: Risk }[] = [
+      { folder: 'sst-app', artifact: '.sst', marker: 'sst.config.ts', risk: 'safe' },
+      { folder: 'rust-app', artifact: 'target', marker: 'Cargo.toml', risk: 'safe' },
+      { folder: 'android-app', artifact: 'build', marker: 'build.gradle.kts', risk: 'safe' },
+      { folder: 'flutter-app', artifact: 'build', marker: 'pubspec.yaml', risk: 'safe' },
+      { folder: 'swift-package', artifact: '.build', marker: 'Package.swift', risk: 'safe' },
+      { folder: 'gradle-app', artifact: '.gradle', marker: 'settings.gradle', risk: 'safe' },
+      { folder: 'ios-app', artifact: 'Pods', marker: 'Podfile', risk: 'review' },
+      { folder: 'php-app', artifact: 'vendor', marker: 'composer.json', risk: 'review' },
+      { folder: 'infra', artifact: '.terraform', marker: 'main.tf', risk: 'review' },
+      { folder: 'svelte-app', artifact: '.svelte-kit', marker: 'package.json', risk: 'safe' },
+      { folder: 'nuxt-app', artifact: '.nuxt', marker: 'package.json', risk: 'safe' },
+      { folder: 'angular-app', artifact: '.angular', marker: 'package.json', risk: 'safe' },
+    ];
+
+    for (const project of projects) {
+      const projectPath = join(fixtureRoot.homeDir, project.folder);
+      await createFixtureDirectory({ path: join(projectPath, project.artifact) });
+      await createEmptyFile({ path: join(projectPath, project.marker) });
+    }
+
+    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+
+    expect(
+      result.artifacts.map((finding) => [
+        finding.artifactPath,
+        finding.rule.artifactName,
+        finding.rule.risk,
+      ]),
+    ).toEqual(
+      projects
+        .map((project) => [
+          join(fixtureRoot.homeDir, project.folder, project.artifact),
+          project.artifact,
+          project.risk,
+        ])
+        .toSorted((left, right) => ((left[0] ?? '') < (right[0] ?? '') ? -1 : 1)),
+    );
+  });
+
+  test('offers a build folder of a project unchanged for the stale days, and keeps a newer one', async () => {
+    const nowMs = Date.UTC(2026, 6, 1);
+    const cutoffMs = nowMs - SCAN_LIMITS.defaultStaleDays * DAY_MS;
+    const stalePath = await createDatedRustProject({
+      fixtureRoot: fixtureRoot,
+      folder: 'stale-app',
+      modifiedMs: cutoffMs - MINUTE_MS,
+    });
+    const recentPath = await createDatedRustProject({
+      fixtureRoot: fixtureRoot,
+      folder: 'recent-app',
+      modifiedMs: cutoffMs + MINUTE_MS,
+    });
+
+    const report = await runTestScan({
+      environment: await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: nowMs }),
+      catalogEntries: [],
+    });
+
+    expect(report.candidates.map((candidate) => candidate.path)).toContain(stalePath);
+    expect(report.candidates.map((candidate) => candidate.path)).not.toContain(recentPath);
+    expect(report.skipped).toContainEqual({ path: recentPath, reason: 'recentActivity' });
+  });
+
+  test('does not report a new project folder without its marker file', async () => {
+    const unmarked: { folder: string; artifact: string; other: string }[] = [
+      { folder: 'docs', artifact: 'build', other: 'Makefile' },
+      { folder: 'notes', artifact: 'target', other: 'README.md' },
+      { folder: 'infra', artifact: '.terraform', other: '.tf' },
+      { folder: 'libs', artifact: 'vendor', other: 'package.json' },
+      { folder: 'gradle-sub', artifact: '.gradle', other: 'build.gradle' },
+    ];
+
+    for (const project of unmarked) {
+      const projectPath = join(fixtureRoot.homeDir, project.folder);
+      await createFixtureDirectory({ path: join(projectPath, project.artifact) });
+      await createEmptyFile({ path: join(projectPath, project.other) });
+    }
+
+    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+
+    expect(result.artifacts).toEqual([]);
+  });
+
+  test('collects rust-toolchain, .fvmrc, and local.properties as pin files', async () => {
+    const projectPath = join(fixtureRoot.homeDir, 'app');
+    const names: { name: string; kind: ProjectPinFileKind }[] = [
+      { name: 'rust-toolchain.toml', kind: 'rustToolchain' },
+      { name: 'rust-toolchain', kind: 'rustToolchain' },
+      { name: '.fvmrc', kind: 'fvmrc' },
+      { name: 'local.properties', kind: 'androidLocalProperties' },
+    ];
+    await createFixtureDirectory({ path: projectPath });
+
+    for (const entry of names) {
+      await createEmptyFile({ path: join(projectPath, entry.name) });
+    }
+
+    const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+
+    expect(result.pinFiles.toSorted(comparePinFilePaths)).toEqual(
+      names
+        .map((entry) => buildPinFileRef({ path: join(projectPath, entry.name), kind: entry.kind }))
+        .toSorted(comparePinFilePaths),
+    );
   });
 });

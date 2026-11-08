@@ -1,16 +1,10 @@
-import { isAbsolute } from 'node:path';
-import type { Risk } from '../catalog/catalog.js';
+import { isRemovableRisk } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import type { TargetRefusalReason } from '../environment/findTargetRefusal.js';
 import type { Candidate } from '../scan/candidate.js';
-import type { FileIdentity } from '../system/loadFileIdentity.js';
+import { findRemovalRefusal } from '../scan/findRemovalRefusal.js';
 
-export type RefusalReason =
-  | 'neverRisk'
-  | 'protectedRoot'
-  | 'outsideAllowedRoot'
-  | 'symbolicLink'
-  | 'unsupportedKind';
+export type RefusalReason = 'neverRisk' | TargetRefusalReason;
 
 export type RemovalDecisionApproved = { kind: 'approved'; candidate: Candidate };
 
@@ -18,22 +12,9 @@ export type RemovalDecisionRefused = { kind: 'refused'; path: string; reason: Re
 
 export type RemovalDecision = RemovalDecisionApproved | RemovalDecisionRefused;
 
-/** Whether the tool may ever remove an item of this risk; a `never` item it refuses. */
-export function isRemovableRisk(risk: Risk): boolean {
-  switch (risk) {
-    case 'safe':
-    case 'review':
-    case 'careful':
-      return true;
-    case 'never':
-      return false;
-  }
-}
-
 /**
- * Refuses a candidate marked `never`. Approves a path item or a unit's folder only when it is a
- * plain file or folder strictly inside an allowed root, is no protected folder and holds none, and
- * lies in no sensitive folder; a tool item passes, since its own tool removes it after a recheck.
+ * Refuses a candidate marked `never`, then one at the first target `findRemovalRefusal` refuses.
+ * A tool item and an engine item pass, since their own tool or engine removes them after a recheck.
  */
 export function validateRemoval(params: {
   candidate: Candidate;
@@ -43,76 +24,13 @@ export function validateRemoval(params: {
     return { kind: 'refused', path: params.candidate.path, reason: 'neverRisk' };
   }
 
-  switch (params.candidate.removal.kind) {
-    case 'deletePath':
-    case 'deleteUnitFolder':
-      return validatePathRemoval({
-        candidate: params.candidate,
-        identity: params.candidate.removal.identity,
-        environment: params.environment,
-      });
-    case 'runTool':
-      return { kind: 'approved', candidate: params.candidate };
-  }
-}
+  const refusal = findRemovalRefusal({
+    environment: params.environment,
+    removal: params.candidate.removal,
+  });
 
-function validatePathRemoval(params: {
-  candidate: Candidate;
-  identity: FileIdentity;
-  environment: Environment;
-}): RemovalDecision {
-  const path = params.candidate.path;
-  const realPath = params.identity.realPath;
-  const kind = params.identity.kind;
-
-  if (kind === 'symbolicLink') {
-    return { kind: 'refused', path: path, reason: 'symbolicLink' };
-  }
-
-  if (kind !== 'file' && kind !== 'directory') {
-    return { kind: 'refused', path: path, reason: 'unsupportedKind' };
-  }
-
-  if (!isAbsolute(realPath)) {
-    return { kind: 'refused', path: path, reason: 'outsideAllowedRoot' };
-  }
-
-  // Compared without case: macOS disks usually ignore it, and the looser match only refuses more.
-  const lowerCaseRealPath = realPath.toLowerCase();
-  const holdsProtectedPath = [
-    ...params.environment.protectedRealPaths,
-    ...params.environment.sensitiveRealPaths,
-  ].some((protectedPath) =>
-    isSameOrInsidePath({
-      rules: params.environment.pathRules,
-      path: protectedPath.toLowerCase(),
-      parentPath: lowerCaseRealPath,
-    }),
-  );
-  const isInsideSensitivePath = params.environment.sensitiveRealPaths.some((sensitivePath) =>
-    isSameOrInsidePath({
-      rules: params.environment.pathRules,
-      path: lowerCaseRealPath,
-      parentPath: sensitivePath.toLowerCase(),
-    }),
-  );
-
-  if (holdsProtectedPath || isInsideSensitivePath) {
-    return { kind: 'refused', path: path, reason: 'protectedRoot' };
-  }
-
-  const isInsideAllowedRoot = params.environment.allowedRealRoots.some(
-    (allowedRoot) =>
-      realPath !== allowedRoot &&
-      isSameOrInsidePath({
-        rules: params.environment.pathRules,
-        path: realPath,
-        parentPath: allowedRoot,
-      }),
-  );
-
-  if (!isInsideAllowedRoot) {
-    return { kind: 'refused', path: path, reason: 'outsideAllowedRoot' };
+  if (refusal !== null) {
+    return { kind: 'refused', path: refusal.path, reason: refusal.reason };
   }
 
   return { kind: 'approved', candidate: params.candidate };

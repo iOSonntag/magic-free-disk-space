@@ -24,10 +24,22 @@ import type { NvmNodeVersion } from '../../src/explore/nvmVersions/parseNvmNodeV
 import { parseNvmNodeVersion } from '../../src/explore/nvmVersions/parseNvmNodeVersion.js';
 import type { PnpmStoreVersion } from '../../src/explore/pnpmStores/parsePnpmStoreVersion.js';
 import { parsePnpmStoreVersion } from '../../src/explore/pnpmStores/parsePnpmStoreVersion.js';
+import type { RustupToolchainName } from '../../src/explore/rustupToolchains/rustupToolchainName.js';
+import { parseRustupToolchainName } from '../../src/explore/rustupToolchains/rustupToolchainName.js';
 import type { SimulatorDeviceUdid } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import { parseSimulatorDeviceUdid } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import type { SimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeId.js';
 import { parseSimulatorRuntimeId } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeId.js';
+import {
+  parseVagrantBoxName,
+  parseVagrantBoxProvider,
+  parseVagrantBoxVersion,
+} from '../../src/explore/vagrantBoxes/parseVagrantBoxNames.js';
+import type {
+  VagrantBoxName,
+  VagrantBoxProvider,
+  VagrantBoxVersion,
+} from '../../src/explore/vagrantBoxes/vagrantBoxNames.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
@@ -117,6 +129,22 @@ export function buildTestPnpmStoreVersion(params: { text: string }): PnpmStoreVe
     parsed: parsePnpmStoreVersion({ folderName: params.text }),
     text: params.text,
   });
+}
+
+export function buildTestRustupToolchainName(params: { text: string }): RustupToolchainName {
+  return unwrapFixtureValue({ parsed: parseRustupToolchainName(params), text: params.text });
+}
+
+export function buildTestVagrantBoxName(params: { text: string }): VagrantBoxName {
+  return unwrapFixtureValue({ parsed: parseVagrantBoxName(params), text: params.text });
+}
+
+export function buildTestVagrantBoxProvider(params: { text: string }): VagrantBoxProvider {
+  return unwrapFixtureValue({ parsed: parseVagrantBoxProvider(params), text: params.text });
+}
+
+export function buildTestVagrantBoxVersion(params: { text: string }): VagrantBoxVersion {
+  return unwrapFixtureValue({ parsed: parseVagrantBoxVersion(params), text: params.text });
 }
 
 function unwrapFixtureValue<T>(params: { parsed: Result<T, string>; text: string }): T {

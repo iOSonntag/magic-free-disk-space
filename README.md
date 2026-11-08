@@ -1,30 +1,49 @@
 # magic-free-disk-space
 
 Finds the storage leftovers on a Mac, sorts them into sections, and permanently deletes the ones
-you select. Nothing is deleted unless you pick it and then type `DELETE`.
+you select. Nothing is deleted unless you pick it and confirm, as
+[How it keeps you safe](#how-it-keeps-you-safe) describes.
 
-It looks where space hides from people who are not storage experts:
+It looks where space hides, for developers and for everyone else, in these sections:
 
-- **Temporary files** of apps that have not changed for 10 days.
-- **Developer caches**: Xcode build data and device support files, simulator logs, Gradle,
-  Dart, Playwright and Puppeteer browsers.
-- **Package manager caches**: npm, Bun, pnpm, Homebrew, CocoaPods, Swift Package Manager,
-  Composer, pip, uv, Bundler, Hex.
-- **App caches**: every folder in `~/Library/Caches` and `~/.cache`, plus the caches of Slack,
-  Discord, Chrome, Brave, Visual Studio Code, Spotify, and Zoom.
-- **Project build folders** such as `node_modules`, `.next`, `.venv`, or `_build` of projects
-  that have not changed for 10 days.
-- **Apps** of 256 MiB or more with no sign of use for 180 days.
-- **Large files** of 100 MiB or more in Desktop, Documents, Downloads, and Movies, unchanged for
-  180 days.
-- **Data of removed apps**: sandbox containers whose app is in no Applications folder and that
+- **Caches**: every folder in `~/Library/Caches` and `~/.cache`, and temporary files of apps
+  that have not changed for 10 days. The caches of every profile of Chrome, Edge, Brave, Arc,
+  Opera, Vivaldi, and Firefox, never their cookies, local storage, or databases, and Chrome's
+  built-in AI model. The caches of Slack, Discord, Microsoft Teams, Spotify, Zoom, Steam, Adobe's
+  video apps, and Visual Studio Code. Messages' previews, the graphics caches of macOS, and app
+  logs and crash reports that have not changed for 10 days.
+- **Developer tools**: Xcode build data, device support files, previews, archives, test
+  simulators, and documentation; simulator logs and caches; Gradle and the Java versions it
+  downloaded. The caches of npm, npx, Yarn, Bun, pnpm, Homebrew, CocoaPods, Swift Package
+  Manager, Maven, NuGet, Composer, pip, uv, Poetry, Bundler, Hex, Go, Cargo, Dart, Bazel, Deno,
+  Terraform, Unity, Unreal Engine, SST, Cypress, Electron, Playwright, and Puppeteer.
+- **Projects**: build folders such as `node_modules`, `.next`, `.venv`, `target`, `build`,
+  `Pods`, or `.terraform` of projects that have not changed for 10 days, each only beside the file
+  that marks its kind of project, such as `Cargo.toml` beside `target`.
+- **Containers and VMs**: Docker's unused images, stopped containers, unused volumes, and build
+  cache unused for 10 days, in Docker Desktop, OrbStack, or Colima while its engine runs; old
+  Vagrant boxes; the downloads of Lima and Colima, and the caches of Rancher Desktop and Tart.
+- **Local AI models**: each model of Ollama and LM Studio, and each Hugging Face repository, with
+  its size and the date it was downloaded.
+- **Apps** of 268 MB (256 MiB) or more with no sign of use for 180 days, and the data of removed
+  apps: the folders an app keeps in `~/Library` whose app is in no Applications folder and that
   have not changed for 180 days.
+- **Downloads and installers**: installers and unfinished downloads in Downloads, macOS
+  installers in Applications, and the iPhone and iPad system downloads of Finder.
+- **Large files** of 105 MB (100 MiB) or more in Desktop, Documents, Downloads, and Movies,
+  unchanged for 180 days.
+- **iCloud Drive**: downloaded files untouched for 180 days, removed from this Mac only. They
+  stay in iCloud and download again when you open them.
 - **The Trash**.
+- **Handled by its own app**: Photos, the photos and files in Messages, Music and TV downloads,
+  iPhone and iPad backups, GarageBand and Logic sounds, Apple Loops, iMovie, Time Machine
+  snapshots, and iCloud's Optimize Mac Storage. Each shows the step in that app and a button that
+  opens it or its pane of System Settings. The tool never deletes them.
 
-Under **Explore**, items a developer tool owns are offered with the reasons for each, and removed
-by the tool's own command where it has one. An item the scan cannot judge, such as a tool version
-a project may pin in a file the scan does not read, is not offered, and the tool's advice shows
-instead. Explore offers:
+Items a developer tool owns are offered with the reasons for each, under **Explore** in the
+command line tool and in their section in the app, and removed by the tool's own command where it
+has one. An item the scan cannot judge, such as a tool version a project may pin in a file the
+scan does not read, is not offered, and the tool's advice shows instead. They are:
 
 - Simulators whose runtime is gone, with `xcrun simctl delete`, and simulator runtimes no
   available simulator uses and not used for 180 days, with `xcrun simctl runtime delete`.
@@ -34,16 +53,28 @@ instead. Explore offers:
 - Old versions of Homebrew packages, with `brew cleanup <package>`, and packages that nothing
   needs any more, with `brew autoremove`.
 - Unused Dart and Flutter packages, with `dart pub cache gc`.
-- Tool versions no project pins: mise versions, with `mise uninstall`, and asdf versions, with
-  `asdf uninstall`. Node.js versions of nvm that neither its default alias nor any `.nvmrc`
-  resolves to are deleted as their folder.
+- Tool versions no project pins: mise versions, with `mise uninstall`, asdf versions, with
+  `asdf uninstall`, and rustup toolchains, with `rustup toolchain uninstall`. Node.js versions of
+  nvm that neither its default alias nor any `.nvmrc` resolves to, and Flutter versions of FVM
+  that are neither its global version nor named by a project's `.fvmrc`, are deleted as their
+  folder.
 - pnpm store versions that neither an installed pnpm nor a pnpm pinned by a project uses, and that
   hold no global virtual store, deleted as their folder.
+- conda's unused packages and downloads, with `conda clean`.
+- Old Vagrant box versions, with `vagrant box remove`.
+- Docker's images, containers, volumes, and build cache, through the engine's own API.
 - Visual Studio Code extensions that VS Code marked for removal or that a newer version of them
   replaced, deleted as their folder.
+- Versions of JetBrains IDEs and Android Studio that a newer version replaced: their caches,
+  logs, plugins, and settings, each as its own item.
+- Old Claude Code versions, keeping the two newest and the one its launcher runs, and Claude Code
+  conversations older than 30 days, one item per project, which do not come back.
+- Local AI models, iCloud Drive files, old installers, unfinished downloads, and the copies of
+  attachments Mail saved when you opened them and that nobody changed since.
 
-Other places are only shown, under Explore with advice, because the tool that owns them must
-clean them: Docker images, Homebrew apps, iPhone backups, Spotify offline music, and more.
+Other places are only shown, with advice, because the tool that owns them must clean them:
+Docker's disk image while no engine runs, Homebrew apps, macOS updates, Spotify downloaded music,
+and the places of Apple's own apps.
 
 ## Download
 
@@ -72,9 +103,14 @@ Explore, or `none`. Pressing Enter alone cancels.
 | `--list`               | Show what could be freed, then exit.                                           |
 | `--dry-run`            | Scan and show the removal plan.                                                |
 | `--select <selection>` | With `--dry-run`: the items to plan.                                           |
-| `--stale-days <days>`  | Days without changes before temporary and project folders count (10).          |
+| `--stale-days <days>`  | Days without changes before an item counts as stale (10).                      |
 | `--unused-days <days>` | Days without use before an item counts as unused (180).                        |
 | `-h`, `--help`         | Show the help.                                                                 |
+
+The stale days decide temporary files, app logs and crash reports, project build folders, the
+installers and unfinished downloads in Downloads, and Mail's attachment copies. The unused days
+decide apps, large files, the data of removed apps, iCloud Drive files, simulator runtimes, and
+Android emulators.
 
 | Exit code          | Meaning                                                                           |
 | ------------------ | --------------------------------------------------------------------------------- |
@@ -91,11 +127,17 @@ The list starts with a summary: how many items the scan found and their total si
 much is safe to free, how much to check before deleting, and how much is in Explore. Items marked
 `never` count in the total only.
 
-The items follow in sections: Caches, Developer tools, Apps, Large files, and Trash, each with
-its size. A section lists its `safe` items first and its other items under "Check before
-deleting". Explore comes last, with the places to handle yourself after its items. The numbers
-count from top to bottom across the sections and Explore. Last come the skipped items, the places
-the scan could not read, and the tools it could not ask.
+The items follow in the sections listed above, each with its size. A section lists its `safe`
+items first and its other items under "Check before deleting". Explore comes last, with the
+places to handle yourself after its items. The numbers count from top to bottom across the
+sections and Explore. Last come the skipped items, the places the scan could not read, and the
+tools it could not ask. After a deletion the tool names what it freed and the space now
+available on the disk.
+
+Sizes are in decimal units, as Finder shows them: 1 GB is 1,000,000,000 bytes. A size counts
+each block of the disk once: a file shares blocks with its APFS clones, such as the
+`node_modules` that pnpm cloned from its store, and counts only the blocks it alone holds. A
+file with several hard links counts once, and only when every link of it lies in the item.
 
 ### Full Disk Access
 
@@ -108,8 +150,8 @@ Security > Full Disk Access.
 
 ## App
 
-A Mac app with the same scan and the same guards: tick the items, review the plan, type `DELETE`.
-It runs on macOS 13 or later. A release, under [Download](#download), is signed with Developer ID
+A Mac app with the same scan and the same guards, in an always-dark window with a sidebar of
+pages. It runs on macOS 13 or later. A release, under [Download](#download), is signed with Developer ID
 and notarized by Apple. A local build needs Bun, [Flutter](https://flutter.dev), and Xcode, and no
 developer certificate: it is signed ad hoc, for this Mac only.
 
@@ -118,20 +160,31 @@ bun run app:install    # build the app and replace it in /Applications; quit the
 bun run app:run        # build and start a debug version
 ```
 
-- The app scans with the default days: 10 without changes, 180 without use.
-- It shows the same summary, sections, and Explore as the CLI. "Select safe" ticks the items
-  `safe` selects.
+- The app scans at start, with the default days: 10 without changes, 180 without use. "Scan
+  again" in the toolbar scans anew.
+- The Overview shows the disk as a ring, with its space, what is available, and what can be
+  freed, and a card for each section with its size and its number of items. Each section that
+  holds anything has a page of its own. It groups its items as "Safe to remove", "Review first",
+  and "Can't be undone", and each item shows its size, its last use, and its path, its
+  explanation, and "Reveal in Finder".
+- "Clean safe items" on the Overview ticks the items `safe` selects and opens the confirmation at
+  once. It never holds an item that does not come back.
+- The selection holds across the pages. Its plan opens a Review page, and Delete asks for the
+  confirmation [How it keeps you safe](#how-it-keeps-you-safe) describes. The result names the
+  space freed and each item that stayed, whole or in part, with its reason.
+- "Handled by its own app" has a page too, with the places the sections above name.
 - A scan older than an hour must be redone before anything is deleted, since the app may stay
   open for days.
 - Full Disk Access goes to the app, not the terminal. At start the app checks whether it has it;
-  without it, a banner says what a scan misses, and its Open System Settings button opens the
-  Full Disk Access pane. Turn the app on there, then quit the app and open it again: macOS applies
-  the grant from the next start.
+  without it, a card says what a scan misses, and its Open System Settings button opens the Full
+  Disk Access pane. Turn the app on there, then quit the app and open it again: macOS applies the
+  grant from the next start.
 - A local build needs Full Disk Access again after each install: its ad hoc signature changes
   with every build, and macOS knows the app by it. A release keeps the grant across updates.
-- At start the app looks for a newer release on GitHub. When there is one, a banner names it, and
-  its download link opens the release's page. "Look for updates at start" in the app's menu turns
-  the check off.
+- At start the app looks for a newer release on GitHub. When there is one, a card names it, and
+  its download link opens the release's page. "Look for updates at start" on the Settings page
+  turns the check off.
+- Reduce Motion in System Settings turns the app's motion off.
 - The app runs `magic-free-disk-space-bridge` from inside its bundle, a build of
   `src/bridgeMain.ts` that answers the app over a pipe. It is part of the app, not a tool to run
   yourself.
@@ -139,7 +192,10 @@ bun run app:run        # build and start a debug version
 ## How it keeps you safe
 
 - **Deletion is permanent.** Items do not go to the Trash. That is the point of the tool, so
-  every deletion asks you to type `DELETE` first, whatever the risk of the items.
+  every deletion asks first. The CLI asks you to type `DELETE`, whatever the risk of the items.
+  The app asks in an alert that names what goes, and asks for the typed `DELETE` too when the
+  plan holds a `careful` item; it then sends `DELETE` to its bridge, which refuses a plan without
+  it.
 - **Only what you select.** The tool deletes exactly the numbers you chose. A test checks this
   for every one of the 64 possible selections of six items.
 - **Risk labels.** Each item is `safe` (comes back by itself), `review` (comes back, but costs a
@@ -148,7 +204,22 @@ bun run app:run        # build and start a debug version
 - **Guards before every deletion.** An item is refused when it is a symbolic link, a protected
   folder such as your home, Library, Documents, or Downloads folder itself, a folder that holds a
   protected folder, anything in `~/.ssh`, `~/.gnupg`, your keychains, or the deletion log, or
-  anything outside your home, temporary, and Applications folders.
+  anything outside your home, temporary, user cache, and Applications folders. Mail, Messages,
+  the Photos library, and the iPhone and iPad backups hold what may be your only copy of them, so
+  nothing in them is offered or deleted, except the previews Messages makes again. The scan holds
+  back an offer that touches any of these, so the list never shows what a deletion would refuse.
+- **iCloud Drive is only evicted.** Nothing in `~/Library/Mobile Documents` is deleted, since a
+  deletion there deletes on your other devices too. A downloaded file is removed from this Mac
+  with `brctl evict`, one file at a time, and stays in iCloud. Right before each file, it is
+  checked again: the same file, still downloaded, still untouched.
+- **Docker through its engine.** The tool talks to a running Docker Desktop, OrbStack, or Colima
+  over the engine's own socket, owned by you, and runs no `docker` command, so no context or
+  setting can point it at another engine. It never starts an engine, never forces a removal, and
+  never deletes a disk image. Right before each removal the item is asked for again: the same id,
+  still unused. An image the engine refuses as in use is kept.
+- **macOS installers by their identity.** An `Install macOS` app counts only when its bundle id
+  is Apple's installer, it is not running, it installs another major version than the one this
+  Mac runs, and it is older than 14 days. One owned by root is only shown, with the advice to drag it to the Trash.
 - **A safe starting point.** The tool refuses to run as root or with `sudo`, with a home folder
   that is not yours, or when the temporary folder overlaps your home. It asks macOS for your
   temporary folder instead of trusting `TMPDIR`, because everything in it may count as temporary.
@@ -156,14 +227,14 @@ bun run app:run        # build and start a debug version
   the same file or folder it measured (same disk, inode, creation time, kind, and path). If it
   was replaced, the tool leaves it alone.
 - **Running apps are left alone.** The cache of an app that is running is not offered, and no
-  folder that holds such a cache is offered whole. After you type `DELETE`, the running programs
-  are read again, so an app opened during the scan keeps its data. If they cannot be read, every
+  folder that holds such a cache is offered whole. After you confirm, the running programs are
+  read again, so an app opened during the scan keeps its data. If they cannot be read, every
   app-owned item is held back.
 - **Tools remove what they own.** Items that a developer tool owns, such as a simulator, an
-  Android emulator, or an old Homebrew version, are listed under Explore with the reasons the
-  tool gave, and the plan names the command that removes each. An item whose tool has no command
-  for it, such as an Android system image or an old VS Code extension, is deleted as its folder,
-  under the same guards as every other folder. They are never selected for you, not even by
+  Android emulator, or an old Homebrew version, are listed with the reasons the tool gave, and
+  the plan names the command that removes each. An item whose tool has no command for it, such as
+  an Android system image or an old VS Code extension, is deleted as its folder, under the same
+  guards as every other folder. They are never selected for you, not even by
   "safe". A tool counts only from a known install location, never from `PATH`, and only when it
   is owned by you or root and nobody else can change it. Right before its command runs or its
   folder is deleted, the item is checked again: a changed item, or one whose app or tool is busy,
@@ -175,16 +246,20 @@ bun run app:run        # build and start a debug version
 - **Documents stay whole.** The search for large files never enters a folder named with an
   extension, such as a photo or iMovie library or a virtual machine, so it never offers a part
   of one.
-- **Left-behind app data is double-checked.** A sandbox container counts as left behind only when every
-  installed app could be read and nothing in the container changed for the unused period. An
-  app that still runs from another folder keeps writing to its container.
+- **Left-behind app data is double-checked.** An app's folder in `~/Library` counts as left
+  behind only when every installed app could be read, no installed app has its bundle id, and
+  nothing in it changed for the unused period. An app that still runs from another folder keeps
+  writing to it. In `Application Support` a folder may also match by the app's name; such an item
+  says so, and a name that is Apple's, a vendor's, or a common word, or that shares a word with
+  an installed app, is never matched. These items do not come back, so they are never selected
+  for you.
 - **A log of every deletion.** Before each deletion the tool writes what it is about to delete
   to `~/Library/Logs/magic-free-disk-space/deletions.jsonl`, and the outcome after it; for a tool
   item, the command before it runs, and its exit code, the end of its error output, and the space
   it freed after. If the log cannot be written, the run stops.
 - **Interactive only.** The CLI deletes only in a terminal; a piped or scripted run is refused
-  before the scan. `--list` and `--dry-run` never delete. The app asks for `DELETE` on its
-  confirmation screen and deletes exactly the plan that screen showed.
+  before the scan. `--list` and `--dry-run` never delete. The app deletes exactly the plan you
+  confirmed.
 
 ## Privacy
 
@@ -193,30 +268,39 @@ GitHub at start unless you turn that off; it sends nothing else. For that check 
 GitHub's API for the latest release of this repository,
 `https://api.github.com/repos/iOSonntag/magic-free-disk-space/releases/latest`, reads only the
 release's version tag from the answer, and builds the link to the release's page from it. GitHub
-sees the request as it sees any visit, with your IP address. "Look for updates at start" in the
-app's menu turns the check off. Neither has telemetry.
+sees the request as it sees any visit, with your IP address. "Look for updates at start" on the
+app's Settings page turns the check off. Neither has telemetry.
 
 The tool reads file sizes, dates, and app identifiers, and runs `ps`, `plutil`, `xcode-select`,
-and `getconf`. To judge Android and VS Code items, it also reads their own records: the SDK's
-`package.xml` files, each emulator's `.ini` and `config.ini`, and VS Code's `extensions.json`
-and `.obsolete` files. To learn which tool versions your projects pin, it reads their
-`.tool-versions`, `.nvmrc`, `build.gradle`, `build.gradle.kts`, and mise config files, the
-`package.json` files that have a `pnpm-lock.yaml` beside them, those of the configs mise tracks,
-nvm's alias files, and asdf's `~/.asdfrc`. To learn which pnpm versions are installed, it reads
-the `package.json` of each pnpm installed as a global package of pnpm or npm, and pnpm's
-launchers in `~/Library/pnpm` and `~/.local/share/pnpm`. It only reads them.
+and `getconf`. To judge an app, it reads the bundle id and the macOS version of the app's
+`Info.plist`. To judge Android,
+VS Code, and IDE items, it reads their own records: the SDK's `package.xml` files, each
+emulator's `.ini` and `config.ini`, VS Code's `extensions.json` and `.obsolete` files, and the
+`product-info.json` of each running JetBrains IDE. To size the local AI models, it reads
+Ollama's model manifests and the `refs` files of Hugging Face, which name each model's current
+revision. To learn which tool
+versions your projects pin, it reads their `.tool-versions`, `.nvmrc`, `.fvmrc`,
+`rust-toolchain`, `rust-toolchain.toml`, `build.gradle`, `build.gradle.kts`, and mise config
+files, the `package.json` files that have a `pnpm-lock.yaml` beside them, those of the configs
+mise tracks, nvm's alias files, and asdf's `~/.asdfrc`. To learn which pnpm versions are
+installed, it reads the `package.json` of each pnpm installed as a global package of pnpm or npm,
+and pnpm's launchers in `~/Library/pnpm` and `~/.local/share/pnpm`. It only reads them, and it
+never opens a Claude Code conversation, a mail, or a document.
 
 During a scan it also runs the list and dry-run forms of the developer tools it finds, `xcrun
-simctl`, `brew`, `dart`, and `mise`, to learn which of their items are unused; these forms
-change nothing. Only after you type `DELETE` does it run their cleanup commands, such as
-`brew cleanup` or `avdmanager delete avd`, one for each item you selected. A tool runs with a
-fixed environment that keeps it offline where the tool allows that.
+simctl`, `brew`, `dart`, `mise`, `rustup`, `conda`, and `vagrant`, to learn which of their items
+are unused; these forms change nothing. It asks a running Docker engine over its socket for its
+version and its disk use, which changes nothing either. Only after you confirm does it run their
+cleanup commands, such as `brew cleanup` or `avdmanager delete avd`, ask the engine to remove an
+image, a container, a volume, or build cache, or run `brctl evict`, one for each item you
+selected. A tool runs with a fixed environment that keeps it offline where the tool allows that.
 
 At start the app asks its bridge whether it has Full Disk Access. The bridge opens
 `~/Library/Application Support/com.apple.TCC/TCC.db`, or else `~/Library/Safari`, and closes it
 at once, reading no byte and listing no name: macOS refuses the open itself while the app lacks
-the access. The banner's Open System Settings button runs `open` with the link of the Full Disk
-Access pane, and the update banner's download link runs it with the release's page.
+the access. The app's buttons run `open`: with the link of a System Settings pane, such as Full
+Disk Access or Storage, with the release's page, with `-b` and the bundle id of an Apple app,
+such as Photos, or with `-R` and an item's path to show it in Finder.
 
 ## Limits
 
@@ -229,9 +313,16 @@ Access pane, and the update banner's download link runs it with the release's pa
   Another cache folder is offered even while its app runs.
 - The data of an app that lives outside the Applications folders, such as on an external disk,
   looks left behind once that app has not run for the unused period.
-- Sizes are the space on disk. Files that share their data, such as APFS clones and hard links
-  shared with other folders, may free less than shown.
+- Sizes count the blocks each item alone holds. Where a file's private size cannot be read, it
+  counts all its blocks, and the scan says so; such an item may free less than shown.
 - Deleting a file in a folder that iCloud Drive syncs deletes it on your other devices as well.
+  The tool deletes nothing in iCloud Drive's own folder, but a folder such as Desktop or
+  Documents may sync to it too.
+- Space Docker frees lies inside its disk image, which macOS gets back within minutes, not at
+  once; the result of a deletion says so. While no engine runs, the scan shows only the disk
+  image's size, with advice.
+- Docker's images used by more than one name, and volumes whose size or use the engine does not
+  report, are not offered.
 - A disk mounted inside a folder after the scan, or in a part of it the scan could not read,
   would be deleted with that folder.
 - An app's last use is read from the files the app writes, not from Spotlight, which does not

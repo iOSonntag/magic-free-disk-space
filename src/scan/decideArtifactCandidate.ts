@@ -36,13 +36,21 @@ export function decideArtifactCandidate(params: {
       title: `${params.finding.rule.title} of ${basename(params.finding.projectRoot)}`,
       category: 'projects',
       risk: params.finding.rule.risk,
-      origin: 'artifact',
+      origin: { kind: 'artifact', artifactName: params.finding.rule.artifactName },
       explanation: `${params.finding.rule.explanation} Nothing else in the project changed during the stale period.`,
       regeneration: params.finding.rule.regeneration,
       allocatedBytes: params.measurement.allocatedBytes,
       entryCount: params.measurement.entryCount,
       isComplete: params.measurement.isComplete,
-      removal: { kind: 'deletePath', identity: params.measurement.identity, ownerBundlePaths: [] },
+      privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
+      lastUsedAtMs: null,
+      downloadedAtMs: null,
+      appName: null,
+      removal: {
+        kind: 'deletePaths',
+        targets: [{ path: path, identity: params.measurement.identity }],
+        ownerBundlePaths: [],
+      },
     },
   };
 }

@@ -111,7 +111,7 @@ export async function loadExploreFolderNames(
   };
 }
 
-/** The stats of the entry itself; `null` when nothing is there. */
+/** The stats of the entry itself, its times of change, access, and birth among them; `null` when nothing is there. */
 export async function loadExploreEntryStats(
   params: ExploreRead,
 ): Promise<Result<EntryStats | null, ExploreFileUnreadable>> {

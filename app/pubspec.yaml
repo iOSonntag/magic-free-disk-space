@@ -17,3 +17,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Both fonts are variable, so each is one file for every weight.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: MaterialSymbolsRounded
+      fonts:
+        - asset: assets/fonts/MaterialSymbolsRounded.ttf
+
+  shaders:
+    - shaders/backdrop.frag
+    - shaders/ring_glow.frag
+
+  # The fonts' licence texts, which the licence page loads.
+  assets:
+    - assets/fonts/OFL.txt
+    - assets/fonts/Apache-2.0.txt

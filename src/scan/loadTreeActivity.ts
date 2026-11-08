@@ -1,5 +1,5 @@
+import type { EntryReads } from '../system/entryReads.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type ActivityProbe = 'recent' | 'quiet' | 'unknown';
@@ -8,16 +8,18 @@ const MAX_CONCURRENT_DIRECTORIES = 8;
 
 /**
  * Returns `recent` when any entry, the root included, changed at or after `cutoffMs`, skipping
- * entries named in `excludedNames` at every depth. Returns `unknown` when `maxEntries`, the
- * deadline, or an unreadable entry keeps the walk from deciding.
+ * entries named in `excludedNames` at every depth and the entries at `excludedPaths`. Returns
+ * `unknown` when `maxEntries`, the deadline, or an unreadable entry keeps the walk from deciding.
  */
 export async function loadTreeActivity(params: {
   path: string;
   cutoffMs: number;
   excludedNames: string[];
+  /** Paths as the walk joins them below `path`, such as a project's artifact folders. */
+  excludedPaths: ReadonlySet<string>;
   maxEntries: number;
   deadlineMs: number;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
 }): Promise<ActivityProbe> {
   const rootStats = await loadEntryStats({ path: params.path });
 
@@ -42,9 +44,13 @@ export async function loadTreeActivity(params: {
     isStatsNeeded: true,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
     visitEntry: (entry) => {
-      if (entry.stats === null || params.excludedNames.includes(entry.name)) {
+      if (
+        entry.stats === null ||
+        params.excludedNames.includes(entry.name) ||
+        params.excludedPaths.has(entry.path)
+      ) {
         return 'skip';
       }
 

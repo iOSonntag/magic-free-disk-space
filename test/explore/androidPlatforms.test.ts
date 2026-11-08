@@ -6,7 +6,10 @@ import { buildAndroidPlatformFindings } from '../../src/explore/android/buildAnd
 import { compareAndroidPlatformUnit } from '../../src/explore/android/compareAndroidPlatformUnit.js';
 import type { AndroidPlatformOffers } from '../../src/explore/android/decideAndroidPlatformOffers.js';
 import { decideAndroidPlatformOffers } from '../../src/explore/android/decideAndroidPlatformOffers.js';
-import type { AndroidPlatformState } from '../../src/explore/android/loadAndroidPlatformState.js';
+import type {
+  AndroidPlatformSdk,
+  AndroidPlatformState,
+} from '../../src/explore/android/loadAndroidPlatformState.js';
 import type { AndroidCompileSdkPins } from '../../src/explore/android/parseAndroidCompileSdkPins.js';
 import { parseAndroidCompileSdkPins } from '../../src/explore/android/parseAndroidCompileSdkPins.js';
 import type { ExplorePathUnitAndroidPlatform } from '../../src/explore/exploreUnit.js';
@@ -43,7 +46,7 @@ import {
   writeAndroidPlatform,
   writeAndroidSystemImage,
 } from './androidFixtures.js';
-import { buildFixtureToolLocations } from './probeFakeTools.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildFoundProjectPinsLoad,
   buildTestPinFileText,
@@ -81,6 +84,10 @@ function buildExamplePlatformPath(folderName: string): AbsolutePath {
 }
 
 function buildExampleState(): AndroidPlatformState {
+  return { sdks: [buildExampleSdk()] };
+}
+
+function buildExampleSdk(): AndroidPlatformSdk {
   return {
     sdkRoot: EXAMPLE_SDK_ROOT,
     platforms: [
@@ -224,8 +231,9 @@ describeAwaitingWin32Platform('decideAndroidPlatformOffers', () => {
   });
 
   test('leaves an extension platform not judged when a file pins every platform', () => {
-    const state = buildExampleState();
-    state.platforms.push({
+    const sdk = buildExampleSdk();
+    const state: AndroidPlatformState = { sdks: [sdk] };
+    sdk.platforms.push({
       kind: 'parsed',
       folderPath: buildExamplePlatformPath('android-33-ext5'),
       packagePath: 'platforms;android-33-ext5',
@@ -240,8 +248,9 @@ describeAwaitingWin32Platform('decideAndroidPlatformOffers', () => {
   });
 
   test('leaves an extension platform, a preview, and an unparsed folder not judged', () => {
-    const state = buildExampleState();
-    state.platforms.push(
+    const sdk = buildExampleSdk();
+    const state: AndroidPlatformState = { sdks: [sdk] };
+    sdk.platforms.push(
       {
         kind: 'parsed',
         folderPath: buildExamplePlatformPath('android-33-ext5'),
@@ -366,7 +375,7 @@ describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
     expect(
       compareAndroidPlatformUnit({
         unit: unit,
-        state: { sdkRoot: EXAMPLE_SDK_ROOT, platforms: [] },
+        state: { sdks: [{ sdkRoot: EXAMPLE_SDK_ROOT, platforms: [] }] },
         toolPins: buildTextPins(),
         processCommands: [],
       }),
@@ -414,21 +423,18 @@ type AndroidProbeOutcomes = {
 async function loadAndroidProbeOutcomes(params: {
   pinFiles: ProjectPinFile[];
 }): Promise<AndroidProbeOutcomes> {
-  const probes = startExploreProbes({
-    environment: environment,
-    platform: buildTestProbePlatform(),
-    toolInstallLocations: buildFixtureToolLocations({}),
-    processCommands: Promise.resolve([]),
-    activeXcodeBundlePath: Promise.resolve(null),
-    projectPins: buildFoundProjectPinsLoad({ files: params.pinFiles }),
-    timeoutMs: 10_000,
-    unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
-  });
+  const probes = startExploreProbes(
+    buildTestProbeStart({
+      environment: environment,
+      projectPins: buildFoundProjectPinsLoad({ files: params.pinFiles }),
+      unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+    }),
+  );
 
   return {
-    platforms: await probes.androidPlatforms,
-    systemImages: await probes.androidSystemImages,
-    emulator: await probes.androidEmulator,
+    platforms: await probes.outcomes.androidPlatforms,
+    systemImages: await probes.outcomes.androidSystemImages,
+    emulator: await probes.outcomes.androidEmulator,
   };
 }
 
@@ -528,7 +534,11 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
     'answers unreadable on the platforms folder and leaves the other Android probes judged',
     async () => {
       await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
-      await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+      await writeAndroidSystemImage({
+        sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+        platform: 'android-35',
+        abi: 'arm64-v8a',
+      });
       await writeAndroidEmulator({ homeDir: homeDir });
       await createAndroidAvdHome({ homeDir: homeDir });
       await chmod(buildPlatformsPath(), 0o000);

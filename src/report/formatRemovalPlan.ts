@@ -2,7 +2,8 @@ import type { RefusedRemoval, RemovalPlan } from '../delete/planRemoval.js';
 import type { RefusalReason } from '../delete/validateRemoval.js';
 import type { Candidate } from '../scan/candidate.js';
 import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
-import { formatCandidateCommandText } from './formatCandidateCommandText.js';
+import { formatToolCommandText } from './formatCandidateCommandText.js';
+import { formatCandidateItemText } from './formatCandidateItemText.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
 
@@ -29,25 +30,65 @@ function formatApprovedLines(params: { approved: Candidate[] }): string[] {
   const totalSizeText = formatTotalSizeText({ items: params.approved });
   const subjectText =
     params.approved.length === 1 ? 'This item' : `These ${params.approved.length} items`;
+  const evictCount = params.approved.filter(
+    (candidate) => candidate.removal.kind === 'evictUnitFiles',
+  ).length;
 
   return [
-    `${subjectText} will be deleted permanently, ${totalSizeText} in total:`,
+    formatApprovedHeader({
+      subjectText: subjectText,
+      totalSizeText: totalSizeText,
+      evictCount: evictCount,
+      approvedCount: params.approved.length,
+    }),
     ...params.approved.flatMap((candidate) => formatApprovedItemLines({ candidate: candidate })),
   ];
 }
 
-/** A tool item names the command that removes it below its path. */
-function formatApprovedItemLines(params: { candidate: Candidate }): string[] {
-  const lines = [
-    `- ${formatSizeText(params.candidate)} ${formatDisplayText({ text: params.candidate.path })}`,
-  ];
-  const commandText = formatCandidateCommandText({ candidate: params.candidate });
-
-  if (commandText !== null) {
-    lines.push(`   by running: ${commandText}`);
+/** An evicted file leaves only this Mac, so a plan that evicts never calls it deleted. */
+function formatApprovedHeader(params: {
+  subjectText: string;
+  totalSizeText: string;
+  evictCount: number;
+  approvedCount: number;
+}): string {
+  if (params.evictCount === 0) {
+    return `${params.subjectText} will be deleted permanently, ${params.totalSizeText} in total:`;
   }
 
-  return lines;
+  if (params.evictCount === params.approvedCount) {
+    return `${params.subjectText} will be removed from this Mac, ${params.totalSizeText} in total; iCloud Drive keeps the files:`;
+  }
+
+  return `${params.subjectText} will be removed from this Mac, ${params.totalSizeText} in total; iCloud Drive keeps the evicted files, and the rest is deleted permanently:`;
+}
+
+/** An item that goes other than as a plain delete says how below its line. */
+function formatApprovedItemLines(params: { candidate: Candidate }): string[] {
+  return [
+    `- ${formatSizeText(params.candidate)} ${formatCandidateItemText({ candidate: params.candidate })}`,
+    ...formatRemovalWayLines({ candidate: params.candidate }),
+  ];
+}
+
+/**
+ * A tool item names its command; an engine item its engine, whose disk image gives the space back
+ * only later; an evict item that iCloud Drive keeps its files.
+ */
+function formatRemovalWayLines(params: { candidate: Candidate }): string[] {
+  switch (params.candidate.removal.kind) {
+    case 'deletePaths':
+    case 'deleteUnitPaths':
+      return [];
+    case 'runTool':
+      return [`   by running: ${formatToolCommandText({ unit: params.candidate.removal.unit })}`];
+    case 'callEngine':
+      return [
+        `   by ${formatDisplayText({ text: params.candidate.removal.unit.engineName })}, whose disk image gives the space back later`,
+      ];
+    case 'evictUnitFiles':
+      return ['   evicted from this Mac; iCloud Drive keeps the files'];
+  }
 }
 
 function formatRefusedBlock(params: { refused: RefusedRemoval[] }): string[] {

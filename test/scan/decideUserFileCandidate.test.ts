@@ -14,6 +14,7 @@ function decide(params: { allocatedBytes?: number; modifiedMs?: number; kind?: F
       path: PATH,
       identity: buildTestIdentity({ realPath: PATH, kind: params.kind ?? 'file' }),
       allocatedBytes: params.allocatedBytes ?? 300 * MIB,
+      privateSizeFallbackCount: 0,
       modifiedMs: params.modifiedMs ?? Date.UTC(2024, 5, 1),
     },
     unusedCutoffMs: CUTOFF_MS,
@@ -30,9 +31,11 @@ describeAwaitingWin32Platform('decideUserFileCandidate', () => {
       title: 'installer.dmg',
       risk: 'careful',
       category: 'userFiles',
-      origin: 'userFile',
+      origin: { kind: 'userFile' },
       entryCount: 1,
       isComplete: true,
+      lastUsedAtMs: Date.UTC(2024, 5, 1),
+      appName: null,
     });
     expect(decision.kind === 'offer' && decision.candidate.explanation).toContain('2024-06-01');
   });

@@ -1,18 +1,24 @@
 import { basename } from 'node:path';
+import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
+import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadFileIdentity } from '../system/loadFileIdentity.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
 import type { TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
+import { loadPathMeasurement } from './loadPathMeasurement.js';
 
 export type UserFileFinding = {
   path: string;
   identity: FileIdentity;
+  /** What deleting the file frees, as `loadPathMeasurement` counts it. */
   allocatedBytes: number;
+  /** 1 when the file's private size could not be read, so its allocated blocks count instead. */
+  privateSizeFallbackCount: number;
   modifiedMs: number;
 };
 
@@ -35,21 +41,28 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
  * Walks each root on its own volume without following symbolic links, and without entering
- * hidden folders, package folders (any folder named with an extension), or git working trees.
- * A passed deadline ends the walk with one walkStopped issue. Findings come sorted by path.
+ * hidden folders, package folders (any folder named with an extension), git working trees, or a
+ * project's artifact folder beside its marker, such as `build` beside `build.gradle`.
+ * Each file is its own offer, measured as `loadPathMeasurement` measures one: a file whose blocks
+ * a clone shares counts less, and a file with another hard link counts nothing, since deleting
+ * one link frees nothing. A passed deadline ends the walk with one walkStopped issue. Findings
+ * come sorted by path.
  */
 export async function findLargeUserFiles(params: {
   rootDirs: string[];
+  /** The artifacts whose files belong to their project, each judged by its marker. */
+  artifactRules: ProjectArtifactRule[];
   minAllocatedBytes: number;
   deadlineMs: number;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   const largeFiles: LargeFile[] = [];
   const issues: ScanIssue[] = [];
-  // Keys `dev:ino` of the files already found, so a hard link is reported once.
+  // Keys `dev:ino` of the files already collected, so a file met twice is measured once.
   const foundFileKeys = new Set<string>();
 
+  // A file's private size never exceeds its allocated blocks, so a smaller one cannot qualify.
   function collectLargeFile(largeFile: LargeFile): void {
     const fileKey = `${largeFile.stats.dev}:${largeFile.stats.ino}`;
 
@@ -92,7 +105,7 @@ export async function findLargeUserFiles(params: {
       isStatsNeeded: true,
       maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
       isStopped: () => Date.now() >= params.deadlineMs,
-      isEntryEvicted: params.isEntryEvicted,
+      entryReads: params.entryReads,
       visitEntry: (entry): TreeEntryVisit => {
         if (
           entry.stats === null ||
@@ -108,7 +121,15 @@ export async function findLargeUserFiles(params: {
           return 'skip';
         }
 
-        if (entry.kind === 'directory' && isUserFolderName({ name: entry.name })) {
+        if (
+          entry.kind === 'directory' &&
+          isUserFolderName({ name: entry.name }) &&
+          findMarkedArtifactRule({
+            rules: params.artifactRules,
+            name: entry.name,
+            projectEntryNames: entry.siblingNames,
+          }) === null
+        ) {
           return 'descend';
         }
 
@@ -135,6 +156,9 @@ export async function findLargeUserFiles(params: {
 
   const findings = await loadUserFileFindings({
     largeFiles: largeFiles,
+    minAllocatedBytes: params.minAllocatedBytes,
+    deadlineMs: params.deadlineMs,
+    entryReads: params.entryReads,
     issues: issues,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -145,8 +169,12 @@ export async function findLargeUserFiles(params: {
   };
 }
 
+/** Each large file whose measurement still reaches the minimum, with its identity. */
 async function loadUserFileFindings(params: {
   largeFiles: LargeFile[];
+  minAllocatedBytes: number;
+  deadlineMs: number;
+  entryReads: EntryReads;
   issues: ScanIssue[];
   privacyDenialCode: string | null;
 }): Promise<UserFileFinding[]> {
@@ -166,11 +194,25 @@ async function loadUserFileFindings(params: {
         return null;
       }
 
+      const measured = await loadPathMeasurement({
+        paths: [largeFile.path],
+        deadlineMs: params.deadlineMs,
+        entryReads: params.entryReads,
+      });
+
+      if (
+        measured.latestModifiedMs === null ||
+        measured.allocatedBytes < params.minAllocatedBytes
+      ) {
+        return null;
+      }
+
       return {
         path: largeFile.path,
         identity: identityResult.value,
-        allocatedBytes: largeFile.stats.allocatedBytes,
-        modifiedMs: largeFile.stats.modifiedMs,
+        allocatedBytes: measured.allocatedBytes,
+        privateSizeFallbackCount: measured.privateSizeFallbackCount,
+        modifiedMs: measured.latestModifiedMs,
       };
     }),
   );

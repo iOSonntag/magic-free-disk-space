@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import type { UserFileFinding } from '../../src/scan/findLargeUserFiles.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
+import type { ScanIssue } from '../../src/scan/issue.js';
+import type { EntryReads } from '../../src/system/entryReads.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestEntryReads, loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -18,6 +23,21 @@ const LARGE_FILE_BYTES = 2 * 1024 * 1024;
 const SMALL_FILE_BYTES = 1024;
 const TEST_MODIFIED_MS = 1_600_000_000_000;
 const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
+
+async function findFiles(params: {
+  rootDirs: string[];
+  deadlineMs?: number;
+  entryReads?: EntryReads;
+}): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
+  return findLargeUserFiles({
+    rootDirs: params.rootDirs,
+    artifactRules: PROJECT_ARTIFACT_RULES,
+    minAllocatedBytes: MIN_ALLOCATED_BYTES,
+    deadlineMs: params.deadlineMs ?? FAR_FUTURE_DEADLINE_MS,
+    entryReads: params.entryReads ?? darwinPlatform.system.entryReads,
+    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+  });
+}
 
 describeAwaitingWin32Platform('findLargeUserFiles', () => {
   let fixtureRoot: FixtureRoot;
@@ -51,13 +71,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findLargeUserFiles({
-      rootDirs: [fixtureRoot.homeDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
 
     expect(result.issues).toEqual([]);
     expect(result.findings.map((finding) => finding.path).toSorted()).toEqual(
@@ -73,13 +87,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findLargeUserFiles({
-      rootDirs: [fixtureRoot.homeDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
 
     const [finding] = result.findings;
 
@@ -101,11 +109,8 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     const loosePath = join(fixtureRoot.homeDir, 'Documents/recording.mov');
 
     for (const relativePath of hiddenPaths) {
-      const path = join(fixtureRoot.homeDir, relativePath);
-
-      await createFixtureDirectory({ path: join(path, '..') });
       await createFixtureFile({
-        path: path,
+        path: join(fixtureRoot.homeDir, relativePath),
         sizeBytes: LARGE_FILE_BYTES,
         modifiedMs: TEST_MODIFIED_MS,
       });
@@ -117,15 +122,32 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findLargeUserFiles({
-      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([loosePath]);
+  });
+
+  test('an artifact folder is skipped beside its marker and searched without it', async () => {
+    const markedPath = join(fixtureRoot.homeDir, 'Documents/app/build/outputs/app.apk');
+    const unmarkedPath = join(fixtureRoot.homeDir, 'Documents/clips/build/final.mov');
+
+    for (const path of [markedPath, unmarkedPath]) {
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    await createFixtureFile({
+      path: join(fixtureRoot.homeDir, 'Documents/app/build.gradle'),
+      sizeBytes: SMALL_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+
+    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
+
+    expect(result.findings.map((finding) => finding.path)).toEqual([unmarkedPath]);
   });
 
   test('a file inside a package folder is not found', async () => {
@@ -137,13 +159,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findLargeUserFiles({
-      rootDirs: [fixtureRoot.homeDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
@@ -157,13 +173,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findLargeUserFiles({
-      rootDirs: [fixtureRoot.homeDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
@@ -177,22 +187,15 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     ];
 
     for (const relativePath of packagedPaths) {
-      const path = join(fixtureRoot.homeDir, relativePath);
-
-      await createFixtureDirectory({ path: join(path, '..') });
       await createFixtureFile({
-        path: path,
+        path: join(fixtureRoot.homeDir, relativePath),
         sizeBytes: LARGE_FILE_BYTES,
         modifiedMs: TEST_MODIFIED_MS,
       });
     }
 
-    const result = await findLargeUserFiles({
+    const result = await findFiles({
       rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -203,7 +206,6 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     const versionPath = join(fixtureRoot.homeDir, 'Documents/Release 2.0/installer.dmg');
 
     for (const path of [localizedPath, versionPath]) {
-      await createFixtureDirectory({ path: join(path, '..') });
       await createFixtureFile({
         path: path,
         sizeBytes: LARGE_FILE_BYTES,
@@ -211,13 +213,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       });
     }
 
-    const result = await findLargeUserFiles({
-      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([localizedPath, versionPath]);
   });
@@ -232,13 +228,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     });
     await symlink(join(outsideDir, 'large.bin'), join(fixtureRoot.homeDir, 'link.bin'));
 
-    const result = await findLargeUserFiles({
-      rootDirs: [fixtureRoot.homeDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
@@ -254,18 +244,12 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     const linkedRootDir = join(fixtureRoot.rootDir, 'linked-root');
     await symlink(outsideDir, linkedRootDir);
 
-    const result = await findLargeUserFiles({
-      rootDirs: [linkedRootDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [linkedRootDir] });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
 
-  test('a hard link to a large file is reported once', async () => {
+  test('a hard-linked large file is not found, since deleting one link frees nothing', async () => {
     const firstPath = join(fixtureRoot.homeDir, 'first.bin');
     await createFixtureFile({
       path: firstPath,
@@ -274,15 +258,53 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     });
     await link(firstPath, join(fixtureRoot.homeDir, 'second.bin'));
 
-    const result = await findLargeUserFiles({
-      rootDirs: [fixtureRoot.homeDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
+
+    expect(result).toEqual({ findings: [], issues: [] });
+  });
+
+  test('a large file whose private size stays below the minimum is not found', async () => {
+    await createFixtureFile({
+      path: join(fixtureRoot.homeDir, 'mostly-shared.bin'),
+      sizeBytes: LARGE_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
     });
 
-    expect(result.findings.map((finding) => finding.path)).toEqual([firstPath]);
+    const result = await findFiles({
+      rootDirs: [fixtureRoot.homeDir],
+      entryReads: buildTestEntryReads({ privateBytes: SMALL_FILE_BYTES }),
+    });
+
+    expect(result).toEqual({ findings: [], issues: [] });
+  });
+
+  test('a finding counts its private size, or its blocks and the fallback when unread', async () => {
+    const largePath = join(fixtureRoot.homeDir, 'large.bin');
+    await createFixtureFile({
+      path: largePath,
+      sizeBytes: LARGE_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+
+    const read = await findFiles({
+      rootDirs: [fixtureRoot.homeDir],
+      entryReads: buildTestEntryReads({ privateBytes: MIN_ALLOCATED_BYTES + 4096 }),
+    });
+    const unread = await findFiles({
+      rootDirs: [fixtureRoot.homeDir],
+      entryReads: buildTestEntryReads({ privateBytes: null }),
+    });
+
+    expect(read.findings).toMatchObject([
+      { path: largePath, allocatedBytes: MIN_ALLOCATED_BYTES + 4096, privateSizeFallbackCount: 0 },
+    ]);
+    expect(unread.findings).toMatchObject([
+      {
+        path: largePath,
+        allocatedBytes: await loadEntryAllocatedBytes({ path: largePath }),
+        privateSizeFallbackCount: 1,
+      },
+    ]);
   });
 
   testOnPosix('an unreadable folder gives an issue while its siblings are searched', async () => {
@@ -303,13 +325,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findLargeUserFiles({
-      rootDirs: [fixtureRoot.homeDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([visiblePath]);
     expect(result.issues).toEqual([
@@ -324,12 +340,9 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findLargeUserFiles({
+    const result = await findFiles({
       rootDirs: [fixtureRoot.homeDir, fixtureRoot.tempDir],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
       deadlineMs: 0,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
     expect(result).toEqual({
@@ -339,13 +352,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
   });
 
   test('a missing root adds nothing', async () => {
-    const result = await findLargeUserFiles({
-      rootDirs: [join(fixtureRoot.homeDir, 'absent')],
-      minAllocatedBytes: MIN_ALLOCATED_BYTES,
-      deadlineMs: FAR_FUTURE_DEADLINE_MS,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
-      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
-    });
+    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'absent')] });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });

@@ -1,11 +1,15 @@
+import type { UserIdentity } from '../system/userIdentity.js';
 import type { CandidateDecision } from './candidate.js';
+import { decideInstallerCandidate } from './decideInstallerCandidate.js';
 import type { Measurement } from './loadPathMeasurement.js';
 import type { OwnerState } from './resolveOwnerState.js';
 import type { InstalledApp } from './scanPlatform.js';
 
 /**
- * Offers an app unused since `unusedCutoffMs`. An app without a bundle id is skipped, because
- * whether it runs cannot be checked; a protected developer app is offered as `never`.
+ * Offers an app unused since `unusedCutoffMs`, and a macOS installer as
+ * `decideInstallerCandidate` judges it, either one only while it does not run. An app without a
+ * bundle id is skipped, because whether it runs cannot be checked; a protected developer app is
+ * offered as `never`.
  */
 export function decideAppCandidate(params: {
   app: InstalledApp;
@@ -15,6 +19,10 @@ export function decideAppCandidate(params: {
   ownerState: OwnerState;
   isProtectedDeveloperApp: boolean;
   minAppBytes: number;
+  /** The running system's version; `null` when it could not be read. */
+  systemVersion: string | null;
+  nowMs: number;
+  user: UserIdentity;
 }): CandidateDecision {
   const path = params.app.bundlePath;
 
@@ -32,6 +40,18 @@ export function decideAppCandidate(params: {
 
   if (params.ownerState === 'unknown') {
     return { kind: 'skip', path: path, reason: 'runningUnknown' };
+  }
+
+  if (params.app.systemInstaller !== null) {
+    return decideInstallerCandidate({
+      app: params.app,
+      installer: params.app.systemInstaller,
+      bundleId: params.app.bundleId,
+      measurement: params.measurement,
+      systemVersion: params.systemVersion,
+      nowMs: params.nowMs,
+      user: params.user,
+    });
   }
 
   if (params.measurement.allocatedBytes < params.minAppBytes) {
@@ -55,15 +75,19 @@ export function decideAppCandidate(params: {
       title: params.app.displayName,
       category: 'applications',
       risk: params.isProtectedDeveloperApp ? 'never' : 'review',
-      origin: 'application',
+      origin: { kind: 'application', bundleId: params.app.bundleId },
       explanation: `An app with no sign of use since ${lastUsedDate}. Its settings and data in your Library stay behind.`,
       regeneration: 'Install it again from the App Store or from its maker.',
       allocatedBytes: params.measurement.allocatedBytes,
       entryCount: params.measurement.entryCount,
       isComplete: params.measurement.isComplete,
+      privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
+      lastUsedAtMs: params.lastSignOfUseMs,
+      downloadedAtMs: null,
+      appName: params.app.displayName,
       removal: {
-        kind: 'deletePath',
-        identity: params.measurement.identity,
+        kind: 'deletePaths',
+        targets: [{ path: path, identity: params.measurement.identity }],
         ownerBundlePaths: [path],
       },
     },

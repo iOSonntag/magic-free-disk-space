@@ -13,9 +13,7 @@ Future<void> waitForAnswers() {
 }
 
 void main() {
-  final UpdateCheckedEvent sampleCheck = loadSampleEvents()
-      .whereType<UpdateCheckedEvent>()
-      .single;
+  final UpdateCheckedEvent sampleCheck = loadSampleEvent<UpdateCheckedEvent>();
   const FailedEvent unknownRequest = FailedEvent(
     message: 'The bridge does not know the request.',
     effect: FailureEffect.scanKept,

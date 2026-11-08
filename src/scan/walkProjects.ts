@@ -1,5 +1,6 @@
 import { basename, dirname } from 'node:path';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
+import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { ProjectPinFileRef } from '../explore/projectPins/projectPins.js';
 import {
   matchProjectPinFile,
@@ -8,7 +9,7 @@ import {
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { TreeEntry, TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
@@ -46,7 +47,7 @@ export async function walkProjects(params: {
   rules: ProjectArtifactRule[];
   maxDepth: number;
   deadlineMs: number;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ProjectWalk> {
   const artifactNames = new Set(params.rules.map((rule) => rule.artifactName));
@@ -76,14 +77,15 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
+    // An unmarked folder of an artifact's name is no project to search either, such as `vendor`.
     if (artifactNames.has(entry.name)) {
-      const markedRule = params.rules.find(
-        (rule) =>
-          rule.artifactName === entry.name &&
-          rule.markerNames.some((markerName) => entry.siblingNames.has(markerName)),
-      );
+      const markedRule = findMarkedArtifactRule({
+        rules: params.rules,
+        name: entry.name,
+        projectEntryNames: entry.siblingNames,
+      });
 
-      if (markedRule !== undefined) {
+      if (markedRule !== null) {
         artifacts.push({
           artifactPath: entry.path,
           projectRoot: dirname(entry.path),
@@ -106,7 +108,7 @@ export async function walkProjects(params: {
     isStatsNeeded: false,
     maxConcurrentDirectories: MAX_CONCURRENT_DIRECTORIES,
     isStopped: () => Date.now() >= params.deadlineMs,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
     visitEntry: visitProjectEntry,
     onUnreadable: (unreadable) => {
       const readIssues = buildFailureIssues({

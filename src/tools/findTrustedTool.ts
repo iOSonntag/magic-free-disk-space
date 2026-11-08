@@ -121,6 +121,11 @@ async function isLocatedToolAccepted(params: { tool: LocatedTool }): Promise<boo
     case 'brewIntel':
     case 'avdmanager':
     case 'asdf':
+    case 'brctl':
+    case 'vagrant':
+    case 'rustup':
+    case 'conda':
+    case 'fvm':
       return true;
   }
 }
@@ -162,6 +167,11 @@ async function loadToolBinaryPath(params: {
     case 'brewIntel':
     case 'avdmanager':
     case 'asdf':
+    case 'brctl':
+    case 'vagrant':
+    case 'rustup':
+    case 'conda':
+    case 'fvm':
       return realPath;
   }
 }

@@ -1,6 +1,7 @@
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding } from '../exploreUnit.js';
+import { formatIsoDay } from '../formatLimitTexts.js';
 import { formatSimulatorRuntimeName } from '../simulatorDevices/formatSimulatorRuntimeName.js';
 import type { SimulatorDevice } from '../simulatorDevices/parseSimulatorDeviceList.js';
 import type { SimulatorRuntimeState } from './loadSimulatorRuntimeState.js';
@@ -62,8 +63,6 @@ export function buildSimulatorRuntimeFindings(params: {
     const runtimeName = formatSimulatorRuntimeName({
       runtimeIdentifier: runtime.runtimeIdentifier,
     });
-    const lastUsedDate = new Date(runtime.lastUsedAtMs).toISOString().slice(0, 10);
-
     findings.push({
       unit: {
         kind: 'simulatorRuntime',
@@ -77,7 +76,10 @@ export function buildSimulatorRuntimeFindings(params: {
       explanation: 'A simulator runtime Xcode downloaded: the system image its simulators run on.',
       regeneration: 'Xcode downloads it again when you add a simulator of this version.',
       risk: 'review',
-      evidenceLines: [`Last used on ${lastUsedDate}.`, 'No available simulator runs on it.'],
+      evidenceLines: [
+        `Last used on ${formatIsoDay(runtime.lastUsedAtMs)}.`,
+        'No available simulator runs on it.',
+      ],
       displayPath: runtime.imagePath,
       activity: decideUnitActivity({
         facts: { kind: 'simulatorRuntime' },

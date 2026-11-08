@@ -1,66 +1,34 @@
-import type { Result } from '../result.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
-import type { FileFailure } from '../system/loadFileIdentity.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
-import { buildFailureIssues } from './buildReadIssue.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { CandidateDecision } from './candidate.js';
+import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import type { Measurement } from './loadPathMeasurement.js';
-import { loadPathMeasurement } from './loadPathMeasurement.js';
 import type { ScanPhase } from './scanPhase.js';
-import { skipOfferHoldingOtherVolume } from './skipOfferHoldingOtherVolume.js';
 
 /**
- * Measures the path within the limit and decides with the measurement. A path that vanished adds
- * nothing; one that cannot be read adds an issue instead of a decision. An offer holding another
- * mounted volume becomes a skip.
+ * `loadMeasuredTargetsPhase` for one path, decided with the path's own identity: a path that
+ * vanished adds nothing, one that cannot be read an issue, and an offer holding another mounted
+ * volume becomes a skip.
  */
 export function loadMeasuredPhase(params: {
   path: string;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {
-  return params.runItemMeasurement(async () => {
-    const measured = await loadPathMeasurement({
-      path: params.path,
-      deadlineMs: Date.now() + params.measureTimeoutMs,
-      isEntryEvicted: params.isEntryEvicted,
-    });
+  return loadMeasuredTargetsPhase({
+    found: [{ path: params.path }],
+    carve: null,
+    measureTimeoutMs: params.measureTimeoutMs,
+    runItemMeasurement: params.runItemMeasurement,
+    entryReads: params.entryReads,
+    privacyDenialCode: params.privacyDenialCode,
+    decide: (measurement) => {
+      const { targets, ...tally } = measurement;
 
-    return buildMeasuredPhase({
-      path: params.path,
-      measured: measured,
-      privacyDenialCode: params.privacyDenialCode,
-      decide: params.decide,
-    });
+      return params.decide({ ...tally, identity: targets[0].identity });
+    },
   });
-}
-
-async function buildMeasuredPhase(params: {
-  path: string;
-  measured: Result<Measurement, FileFailure>;
-  privacyDenialCode: string | null;
-  decide: (measurement: Measurement) => Promise<CandidateDecision>;
-}): Promise<ScanPhase> {
-  const measured = params.measured;
-
-  if (measured.kind === 'succeeded') {
-    const decision = skipOfferHoldingOtherVolume({
-      decision: await params.decide(measured.value),
-      measurement: measured.value,
-    });
-
-    return { decisions: [decision], issues: [] };
-  }
-
-  return {
-    decisions: [],
-    issues: buildFailureIssues({
-      path: params.path,
-      failure: measured.failure,
-      privacyDenialCode: params.privacyDenialCode,
-    }),
-  };
 }

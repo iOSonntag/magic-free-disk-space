@@ -1,4 +1,4 @@
-import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isOverlappingPath } from '../path/isOverlappingPath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
 import type { EnvironmentFailure } from './environmentPlatform.js';
@@ -27,19 +27,11 @@ export function checkEnvironmentRoots(params: {
   }
 
   // Compared without case: macOS disks usually ignore it, and the looser match only refuses more.
-  const lowerCaseHomePath = params.homeRealPath.toLowerCase();
-  const lowerCaseTempPath = params.tempRealPath.toLowerCase();
-
   if (
-    isSameOrInsidePath({
+    isOverlappingPath({
       rules: params.pathRules,
-      path: lowerCaseHomePath,
-      parentPath: lowerCaseTempPath,
-    }) ||
-    isSameOrInsidePath({
-      rules: params.pathRules,
-      path: lowerCaseTempPath,
-      parentPath: lowerCaseHomePath,
+      path: params.homeRealPath.toLowerCase(),
+      otherPath: params.tempRealPath.toLowerCase(),
     })
   ) {
     return { reason: 'tempOverlapsHome', path: params.tempRealPath };

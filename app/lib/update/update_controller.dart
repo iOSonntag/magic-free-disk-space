@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../bridge/bridge_event.dart';
+import '../bridge/bridge.dart';
 import 'update_bridge.dart';
 
 /// The switch "Look for updates at start" as the menu shows it.

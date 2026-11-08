@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { symlink } from 'node:fs/promises';
+import { link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EntryStats } from '../../src/system/loadEntryStats.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
@@ -54,6 +54,21 @@ describeAwaitingWin32Platform('loadEntryStats', () => {
     expect(stats.allocatedBytes % diskBlockBytes).toBe(0);
   });
 
+  test('reports the link count of a file, one more for each hard link', async () => {
+    const filePath = join(fixtureRoot.homeDir, 'linked.bin');
+    await createFixtureFile({ path: filePath, sizeBytes: 10, modifiedMs: oldModifiedMs });
+
+    const unlinked = await loadEntryStatsOrThrow({ path: filePath });
+
+    await link(filePath, join(fixtureRoot.homeDir, 'second-name.bin'));
+
+    const linked = await loadEntryStatsOrThrow({ path: filePath });
+
+    expect(unlinked.linkCount).toBe(1);
+    expect(linked.linkCount).toBe(2);
+    expect(linked.ino).toBe(unlinked.ino);
+  });
+
   test('reports the modified time that updateModifiedMs set', async () => {
     const filePath = join(fixtureRoot.homeDir, 'notes.txt');
     await createFixtureFile({ path: filePath, sizeBytes: 10, modifiedMs: oldModifiedMs });
@@ -62,6 +77,33 @@ describeAwaitingWin32Platform('loadEntryStats', () => {
     const stats = await loadEntryStatsOrThrow({ path: filePath });
 
     expect(Math.abs(stats.modifiedMs - newModifiedMs)).toBeLessThanOrEqual(1000);
+  });
+
+  test('reports the access time apart from the modified time, and a birth time', async () => {
+    const filePath = join(fixtureRoot.homeDir, 'read.txt');
+    await createFixtureFile({
+      path: filePath,
+      sizeBytes: 10,
+      modifiedMs: oldModifiedMs,
+      accessedMs: newModifiedMs,
+    });
+
+    const stats = await loadEntryStatsOrThrow({ path: filePath });
+
+    expect(Math.abs(stats.modifiedMs - oldModifiedMs)).toBeLessThanOrEqual(1000);
+    expect(Math.abs(stats.accessedMs - newModifiedMs)).toBeLessThanOrEqual(1000);
+    expect(stats.bornMs).toBeGreaterThan(0);
+    expect(stats.bornMs).toBeLessThanOrEqual(Date.now());
+  });
+
+  testOnPosix('reports the user that owns the entry', async () => {
+    const filePath = join(fixtureRoot.homeDir, 'owned.txt');
+    await createFixtureFile({ path: filePath, sizeBytes: 10, modifiedMs: oldModifiedMs });
+
+    const stats = await loadEntryStatsOrThrow({ path: filePath });
+
+    // A file a process creates belongs to its effective user.
+    expect(stats.ownerUid).toBe(process.geteuid?.() ?? -1);
   });
 
   testOnPosix('reports a symbolic link itself, not the size of its target', async () => {

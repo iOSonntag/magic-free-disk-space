@@ -46,6 +46,10 @@ describeAwaitingWin32Platform('matchProjectPinFile', () => {
     ['.mise.toml', 'miseConfig'],
     ['mise.local.toml', 'miseConfig'],
     ['.mise.local.toml', 'miseConfig'],
+    ['rust-toolchain.toml', 'rustToolchain'],
+    ['rust-toolchain', 'rustToolchain'],
+    ['.fvmrc', 'fvmrc'],
+    ['local.properties', 'androidLocalProperties'],
   ];
 
   for (const source of ['walk', 'miseTrackedConfig'] as const) {

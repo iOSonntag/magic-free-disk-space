@@ -8,9 +8,10 @@ import type {
 import { isUnremovedOutcome } from '../delete/deleteCandidates.js';
 import type { JournalFailure } from '../delete/deletionJournal.js';
 import { formatBytes } from './formatBytes.js';
+import { formatCandidateItemText } from './formatCandidateItemText.js';
 import { formatCount } from './formatCount.js';
-import { formatDisplayText } from './formatDisplayText.js';
 import { formatToolFailureStderrLines, formatToolFailureSummary } from './formatToolFailure.js';
+import { isEngineOutcome, sumFreedSpace } from './sumFreedSpace.js';
 
 const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   removed: 'deleted',
@@ -21,15 +22,28 @@ const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   failed: 'failed',
   notAttempted: 'not attempted',
   toolFailed: 'its tool failed',
+  engineInUse: 'its engine still uses it, left alone',
+  engineNotRunning: 'its engine is not running, left alone',
 };
 
 export function formatRemovalRun(params: { run: RemovalRun }): string[] {
+  const freedSpace = sumFreedSpace(params.run.outcomes);
+
   return [
     ...params.run.outcomes.flatMap((outcome) => formatOutcomeLines({ outcome: outcome })),
-    formatFreedSummaryLine({ outcomes: params.run.outcomes }),
+    formatFreedSummaryLine({
+      outcomes: params.run.outcomes,
+      freedBytes: freedSpace.freedBytes,
+    }),
+    ...formatReturnsLaterLines({ returnsLaterBytes: freedSpace.returnsLaterBytes }),
     ...formatUnremovedSummaryLines({ outcomes: params.run.outcomes }),
     ...formatJournalFailureLines({ journalFailure: params.run.journalFailure }),
   ];
+}
+
+/** The free space of the home folder's volume after a run. */
+export function formatAvailableSpaceLine(params: { availableBytes: number }): string {
+  return `${formatBytes(params.availableBytes)} is free on this disk now.`;
 }
 
 function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
@@ -43,7 +57,7 @@ function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
 function formatCodedOutcomeLine(params: { outcome: RemovalOutcomeCoded }): string {
   const codeText = params.outcome.code === null ? '' : ` (${params.outcome.code})`;
 
-  return `- ${outcomeTexts[params.outcome.outcome]}: ${formatDisplayText({ text: params.outcome.path })}${codeText}`;
+  return `- ${outcomeTexts[params.outcome.outcome]}: ${formatCandidateItemText({ candidate: params.outcome.candidate })}${codeText}`;
 }
 
 /** The failure in short, then the end of what the tool wrote to stderr when it wrote any. */
@@ -52,17 +66,37 @@ function formatToolFailedLines(params: { outcome: RemovalOutcomeToolFailed }): s
   const stderrLines = formatToolFailureStderrLines({ failure: params.outcome.failure });
 
   return [
-    `- ${outcomeTexts.toolFailed}: ${formatDisplayText({ text: params.outcome.path })} (${failureText})`,
+    `- ${outcomeTexts.toolFailed}: ${formatCandidateItemText({ candidate: params.outcome.candidate })} (${failureText})`,
     ...stderrLines.map((line) => `   ${line}`),
   ];
 }
 
-/** Counts the space every outcome gave back, which a failed tool run may have partly freed. */
-function formatFreedSummaryLine(params: { outcomes: RemovalOutcome[] }): string {
-  const removedCount = countOutcomesOfKind({ outcomes: params.outcomes, kind: 'removed' });
-  const freedBytes = params.outcomes.reduce((sum, outcome) => sum + outcome.freedBytes, 0);
+/**
+ * Counts the space the disk got back, which a failed tool run may have partly freed, and the items
+ * that gave it; an engine's space comes back only later, so `formatReturnsLaterLines` counts it
+ * apart.
+ */
+function formatFreedSummaryLine(params: {
+  outcomes: RemovalOutcome[];
+  freedBytes: number;
+}): string {
+  const removedCount = countOutcomesOfKind({
+    outcomes: params.outcomes.filter((outcome) => !isEngineOutcome(outcome)),
+    kind: 'removed',
+  });
 
-  return `Freed about ${formatBytes(freedBytes)} in ${formatCount({ count: removedCount, singular: 'item', plural: 'items' })}.`;
+  return `Freed about ${formatBytes(params.freedBytes)} in ${formatCount({ count: removedCount, singular: 'item', plural: 'items' })}.`;
+}
+
+/** What the engines freed inside their disk images, only when they freed any. */
+function formatReturnsLaterLines(params: { returnsLaterBytes: number }): string[] {
+  if (params.returnsLaterBytes === 0) {
+    return [];
+  }
+
+  return [
+    `About ${formatBytes(params.returnsLaterBytes)} more comes back within minutes, once the container engines give up the space of their disk images.`,
+  ];
 }
 
 function formatUnremovedSummaryLines(params: { outcomes: RemovalOutcome[] }): string[] {

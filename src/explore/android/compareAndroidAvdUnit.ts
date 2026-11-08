@@ -15,7 +15,7 @@ export function compareAndroidAvdUnit(params: {
   processCommands: string[] | null;
 }): UnitComparison {
   const isStillListed =
-    params.state.sdk?.sdkRoot === params.unit.sdkRoot &&
+    params.state.sdks.some((sdk) => sdk.sdkRoot === params.unit.sdkRoot) &&
     (params.state.avds ?? []).some(
       (avd) =>
         avd.kind === 'present' &&

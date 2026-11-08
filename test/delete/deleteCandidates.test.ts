@@ -7,16 +7,16 @@ import {
   isUnremovedOutcome,
   toolCandidateRunToRemoval,
 } from '../../src/delete/deleteCandidates.js';
+import type { DeletePlatform } from '../../src/delete/deletePlatform.js';
 import type { DeletionJournal, JournalEntry } from '../../src/delete/deletionJournal.js';
-import { createDeletionJournal } from '../../src/delete/deletionJournal.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type {
   ExploreToolUnit,
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
+import { listUnitPaths } from '../../src/explore/exploreUnit.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import type { Candidate } from '../../src/scan/candidate.js';
-import { loadUnitMeasurement } from '../../src/scan/loadUnitMeasurement.js';
+import type { Candidate, RemovalTarget } from '../../src/scan/candidate.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
@@ -40,9 +40,13 @@ import {
 } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
+  buildTestCandidate,
   buildTestDartToolCandidate,
+  buildTestProbedCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { createTestJournal } from '../support/deletionJournalFixtures.js';
+import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -64,7 +68,7 @@ const SIMULATOR_APP_COMMAND =
 const DELETION_PLATFORM = {
   delete: darwinPlatform.delete,
   probePlatform: buildTestProbePlatform(),
-  isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+  entryReads: darwinPlatform.system.entryReads,
 };
 
 let fixtureRoot: FixtureRoot;
@@ -88,40 +92,63 @@ function buildProcessCommandsLoader(
   return async () => processCommands;
 }
 
-/** Scans a fixture path the way the scanner does, so the candidate carries its real identity. */
-async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Promise<Candidate> {
+/** The target at `path` with the identity it has now, as the scanner reads it. */
+async function scanTarget(path: string): Promise<RemovalTarget> {
   const identity = await loadFileIdentity({ path: path });
 
   if (identity.kind === 'failed') {
     throw new Error(`Cannot scan ${path}: ${identity.failure.reason}`);
   }
 
-  return {
+  return { path: path, identity: identity.value };
+}
+
+/** Scans a fixture path the way the scanner does, so the candidate carries its real identity. */
+async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Promise<Candidate> {
+  return buildTestCandidate({
     path: path,
     title: 'Fixture item',
-    category: 'caches',
-    risk: 'safe',
-    origin: 'catalog',
-    explanation: 'A fixture.',
-    regeneration: 'None.',
-    allocatedBytes: 4096,
-    entryCount: 1,
-    isComplete: true,
-    removal: { kind: 'deletePath', identity: identity.value, ownerBundlePaths: ownerBundlePaths },
+    removal: {
+      kind: 'deletePaths',
+      targets: [await scanTarget(path)],
+      ownerBundlePaths: ownerBundlePaths,
+    },
+  });
+}
+
+/** Scans a fixture path with its identity and its size as the scanner measures it. */
+async function scanMeasuredCandidate(path: string): Promise<Candidate> {
+  return {
+    ...(await scanCandidate(path)),
+    allocatedBytes: await loadMeasuredAllocatedBytes({ paths: [path] }),
   };
 }
 
-async function createTestJournal(): Promise<DeletionJournal> {
-  const journal = await createDeletionJournal({
+/**
+ * A removal that takes `removedPath` with everything below it, or nothing for `null`, and then
+ * fails with `failure`, as a removal stopped partway by a locked entry does.
+ */
+function buildFailingRemoval(params: {
+  removedPath: string | null;
+  failure: string;
+}): DeletePlatform {
+  return {
+    removeTree: async () => {
+      if (params.removedPath !== null) {
+        await rm(params.removedPath, { recursive: true });
+      }
+
+      return { kind: 'failed', failure: params.failure };
+    },
+  };
+}
+
+/** A journal of the deletions in the fixture root's own log. */
+function createFixtureRootJournal(): Promise<DeletionJournal> {
+  return createTestJournal({
     logPath: join(fixtureRoot.rootDir, 'deletions.jsonl'),
     nowMs: NOW_MS,
   });
-
-  if (journal.kind === 'failed') {
-    throw new Error(`Journal failed: ${journal.failure.reason}`);
-  }
-
-  return journal.value;
 }
 
 async function loadJournalLines(journal: DeletionJournal): Promise<unknown[]> {
@@ -256,30 +283,15 @@ ${buildRemoveFolderBody(dataPath)}
 process.exit(0);`,
   });
 
-  return {
+  return buildTestProbedCandidate({
     path: dirname(dataPath),
     title: 'Simulator iPhone 15',
     category: 'developer',
     risk: 'review',
-    origin: 'explore',
-    explanation: 'A simulator device.',
-    regeneration: 'It does not come back.',
     allocatedBytes: 8192,
-    entryCount: 1,
-    isComplete: true,
+    probe: 'simulatorDevices',
     removal: { kind: 'runTool', unit: unit },
-    evidenceLines: [],
-  };
-}
-
-async function measureAllocatedBytes(candidate: Candidate): Promise<number> {
-  const measurement = await loadUnitMeasurement({
-    unit: readToolUnit(candidate),
-    deadlineMs: Date.now() + 60_000,
-    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
   });
-
-  return measurement.allocatedBytes;
 }
 
 function buildExpectedToolIntent(params: { candidate: Candidate; version: string }): unknown {
@@ -297,10 +309,12 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
   test('deletes exactly the given items and records intent before outcome', async () => {
     const selected = await createCacheFolder('selected');
     const sibling = await createCacheFolder('sibling');
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
+
+    const selectedCandidate = await scanCandidate(selected);
 
     const run = await deleteCandidates({
-      candidates: [await scanCandidate(selected)],
+      candidates: [selectedCandidate],
       journal: journal,
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
@@ -311,7 +325,12 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     expect(run).toEqual({
       outcomes: [
-        { path: selected, allocatedBytes: 4096, freedBytes: 4096, outcome: 'removed', code: null },
+        {
+          candidate: selectedCandidate,
+          freedBytes: 4096,
+          outcome: 'removed',
+          code: null,
+        },
       ],
       journalFailure: null,
     });
@@ -338,7 +357,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
       const run = await deleteCandidates({
         candidates: [await scanCandidate(selected)],
-        journal: await createTestJournal(),
+        journal: await createFixtureRootJournal(),
         loadProcessCommands: buildProcessCommandsLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
@@ -360,7 +379,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: [scanned],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -383,7 +402,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
       const run = await deleteCandidates({
         candidates: [scanned],
-        journal: await createTestJournal(),
+        journal: await createFixtureRootJournal(),
         loadProcessCommands: buildProcessCommandsLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
@@ -405,7 +424,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -429,7 +448,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -441,10 +460,83 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     expect(await isPresent(lockedFile)).toBe(true);
   });
 
+  test('a removal that fails partway frees the scanned size less what is left', async () => {
+    const selected = await createCacheFolder('partly');
+    const keptFile = join(selected, 'kept.bin');
+
+    await createFixtureFile({ path: keptFile, sizeBytes: 4096, modifiedMs: NOW_MS });
+
+    const candidate = await scanMeasuredCandidate(selected);
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: await createFixtureRootJournal(),
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: buildFailingRemoval({
+        removedPath: join(selected, 'nested/blob.bin'),
+        failure: 'EACCES',
+      }),
+      clock: () => NOW_MS,
+    });
+    const leftBytes = await loadMeasuredAllocatedBytes({ paths: [selected] });
+
+    expect(leftBytes).toBeGreaterThan(0);
+    expect(candidate.allocatedBytes - leftBytes).toBeGreaterThanOrEqual(8192);
+    expect(run.outcomes).toEqual([
+      {
+        candidate: candidate,
+        freedBytes: candidate.allocatedBytes - leftBytes,
+        outcome: 'permissionDenied',
+        code: 'EACCES',
+      },
+    ]);
+    expect(await isPresent(keptFile)).toBe(true);
+  });
+
+  test('a removal that fails before removing anything frees nothing', async () => {
+    const selected = await createCacheFolder('untouched');
+    const candidate = await scanMeasuredCandidate(selected);
+
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: await createFixtureRootJournal(),
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: buildFailingRemoval({ removedPath: null, failure: 'EBUSY' }),
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'EBUSY', freedBytes: 0 });
+  });
+
+  test('a removal that fails once the path is gone frees the whole scanned size', async () => {
+    const selected = await createCacheFolder('gone-at-failure');
+    const candidate = await scanMeasuredCandidate(selected);
+
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: await createFixtureRootJournal(),
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: buildFailingRemoval({ removedPath: selected, failure: 'EIO' }),
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes[0]).toMatchObject({
+      outcome: 'failed',
+      code: 'EIO',
+      freedBytes: candidate.allocatedBytes,
+    });
+    expect(candidate.allocatedBytes).toBeGreaterThanOrEqual(8192);
+  });
+
   testOnPosix('deletes nothing when the intent cannot be recorded', async () => {
     const first = await createCacheFolder('first');
     const second = await createCacheFolder('second');
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
     const candidates = [await scanCandidate(first), await scanCandidate(second)];
 
     await chmod(journal.logPath, 0o400);
@@ -471,7 +563,10 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const first = await createCacheFolder('first');
     const second = await createCacheFolder('second');
     const candidates = [await scanCandidate(first), await scanCandidate(second)];
-    const journal = buildFailingJournal({ inner: await createTestJournal(), successCount: 1 });
+    const journal = buildFailingJournal({
+      inner: await createFixtureRootJournal(),
+      successCount: 1,
+    });
 
     const run = await deleteCandidates({
       candidates: candidates,
@@ -498,7 +593,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([
         '/Applications/Example.app/Contents/MacOS/Example',
       ]),
@@ -521,7 +616,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
 
     const run = await deleteCandidates({
       candidates: candidates,
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader(null),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -538,10 +633,11 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       homeDir: fixtureRoot.homeDir,
       version: '20.1.0',
     });
+    const pathCandidate = await scanCandidate(pathItem);
     const entries: JournalEntry[] = [];
 
     const run = await deleteCandidates({
-      candidates: [toolCandidate, await scanCandidate(pathItem)],
+      candidates: [toolCandidate, pathCandidate],
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -561,13 +657,17 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     ]);
     expect(run.outcomes).toEqual([
       {
-        path: toolCandidate.path,
-        allocatedBytes: toolCandidate.allocatedBytes,
+        candidate: toolCandidate,
         freedBytes: 0,
         outcome: 'notAttempted',
         code: null,
       },
-      { path: pathItem, allocatedBytes: 4096, freedBytes: 0, outcome: 'notAttempted', code: null },
+      {
+        candidate: pathCandidate,
+        freedBytes: 0,
+        outcome: 'notAttempted',
+        code: null,
+      },
     ]);
     expect(await isPresent(pathItem)).toBe(true);
   });
@@ -592,7 +692,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
   test('does nothing for an empty list', async () => {
     const run = await deleteCandidates({
       candidates: [],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: buildProcessCommandsLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
@@ -611,8 +711,10 @@ describeAwaitingWin32Platform('deleteCandidates with a tool item', () => {
 fs.writeSync(2, 'uninstalled node@20.1.0\\n');
 process.exit(0);`,
     });
-    const allocatedBytes = await measureAllocatedBytes(candidate);
-    const journal = await createTestJournal();
+    const allocatedBytes = await loadMeasuredAllocatedBytes({
+      paths: listUnitPaths(readToolUnit(candidate)),
+    });
+    const journal = await createFixtureRootJournal();
 
     const run = await deleteCandidates({
       candidates: [candidate],
@@ -627,8 +729,7 @@ process.exit(0);`,
     expect(run).toEqual({
       outcomes: [
         {
-          path: candidate.path,
-          allocatedBytes: candidate.allocatedBytes,
+          candidate: candidate,
           freedBytes: allocatedBytes,
           outcome: 'removed',
           code: null,
@@ -657,7 +758,7 @@ process.exit(0);`,
       buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
 process.exit(0);`,
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
 
     const run = await deleteCandidates({
       candidates: [candidate],
@@ -671,8 +772,7 @@ process.exit(0);`,
     expect(run).toEqual({
       outcomes: [
         {
-          path: candidate.path,
-          allocatedBytes: candidate.allocatedBytes,
+          candidate: candidate,
           freedBytes: 0,
           outcome: 'changedSinceScan',
           code: null,
@@ -693,7 +793,7 @@ process.exit(0);`,
       buildCommandBody: () => `fs.writeSync(2, 'node@20.1.0 is in use\\n');
 process.exit(1);`,
     });
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
     const failure = {
       reason: 'commandFailed',
       failure: { reason: 'exitedWithError', exitCode: 1, stderrTail: 'node@20.1.0 is in use\n' },
@@ -711,8 +811,7 @@ process.exit(1);`,
     expect(run).toEqual({
       outcomes: [
         {
-          path: candidate.path,
-          allocatedBytes: candidate.allocatedBytes,
+          candidate: candidate,
           freedBytes: 0,
           outcome: 'toolFailed',
           failure: failure,
@@ -744,11 +843,14 @@ process.exit(1);`,
       buildCommandBody: (installPath) => `${buildRemoveFolderBody(installPath)}
 process.exit(0);`,
     });
-    const toolAllocatedBytes = await measureAllocatedBytes(toolCandidate);
-    const journal = await createTestJournal();
+    const toolAllocatedBytes = await loadMeasuredAllocatedBytes({
+      paths: listUnitPaths(readToolUnit(toolCandidate)),
+    });
+    const pathCandidate = await scanCandidate(pathItem);
+    const journal = await createFixtureRootJournal();
 
     const run = await deleteCandidates({
-      candidates: [await scanCandidate(pathItem), toolCandidate],
+      candidates: [pathCandidate, toolCandidate],
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
@@ -759,10 +861,14 @@ process.exit(0);`,
 
     expect(run).toEqual({
       outcomes: [
-        { path: pathItem, allocatedBytes: 4096, freedBytes: 4096, outcome: 'removed', code: null },
         {
-          path: toolCandidate.path,
-          allocatedBytes: toolCandidate.allocatedBytes,
+          candidate: pathCandidate,
+          freedBytes: 4096,
+          outcome: 'removed',
+          code: null,
+        },
+        {
+          candidate: toolCandidate,
           freedBytes: toolAllocatedBytes,
           outcome: 'removed',
           code: null,
@@ -789,7 +895,7 @@ process.exit(0);`,
 
     const run = await deleteCandidates({
       candidates: [await scanCandidate(pathItem), simulatorCandidate],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       environment: environment,
       ...DELETION_PLATFORM,
       loadProcessCommands: async () => {
@@ -814,14 +920,15 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     await createVscodeInstallation({ homeDir: environment.homeDir });
 
     const candidate = buildTestVscodeExtensionCandidate({ homeDir: environment.homeDir });
-    const removal = candidate.removal;
-    const identity = await loadFileIdentity({ path: candidate.path });
 
-    if (identity.kind === 'failed' || removal.kind !== 'deleteUnitFolder') {
-      throw new Error('The obsolete folder should be scanned as a unit folder.');
+    if (candidate.removal.kind !== 'deleteUnitPaths') {
+      throw new Error('The obsolete folder should be scanned as the paths of a unit.');
     }
 
-    return { ...candidate, removal: { ...removal, identity: identity.value } };
+    return {
+      ...candidate,
+      removal: { ...candidate.removal, targets: [await scanTarget(candidate.path)] },
+    };
   }
 
   async function deleteVscodeCandidate(params: {
@@ -830,7 +937,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
   }): Promise<RemovalRun> {
     return deleteCandidates({
       candidates: [params.candidate],
-      journal: await createTestJournal(),
+      journal: await createFixtureRootJournal(),
       loadProcessCommands: params.loadProcessCommands,
       environment: environment,
       ...DELETION_PLATFORM,
@@ -840,7 +947,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 
   test('deletes the folder as a path and records a path intent and outcome', async () => {
     const candidate = await scanVscodeCandidate();
-    const journal = await createTestJournal();
+    const journal = await createFixtureRootJournal();
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: journal,
@@ -853,8 +960,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     expect(run).toEqual({
       outcomes: [
         {
-          path: candidate.path,
-          allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
+          candidate: candidate,
           freedBytes: VSCODE_FOLDER_SIZE_BYTES,
           outcome: 'removed',
           code: null,
@@ -869,6 +975,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
         atMs: NOW_MS,
         path: candidate.path,
         allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
+        targetPaths: [candidate.path],
       },
       expect.objectContaining({ kind: 'outcome', path: candidate.path, outcome: 'removed' }),
     ]);
@@ -986,6 +1093,151 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
   });
 });
 
+describeAwaitingWin32Platform('deleteCandidates with an item of several targets', () => {
+  /** An item shown at the caches folder that goes as two of its folders, each scanned as it is. */
+  async function scanTwoTargetsCandidate(params: {
+    firstPath: string;
+    secondPath: string;
+  }): Promise<Candidate> {
+    const allocatedBytes = await loadMeasuredAllocatedBytes({
+      paths: [params.firstPath, params.secondPath],
+    });
+
+    return buildTestCandidate({
+      path: join(fixtureRoot.homeDir, 'Library/Caches'),
+      allocatedBytes: allocatedBytes,
+      removal: {
+        kind: 'deletePaths',
+        targets: [await scanTarget(params.firstPath), await scanTarget(params.secondPath)],
+        ownerBundlePaths: [],
+      },
+    });
+  }
+
+  async function deleteTargetsCandidate(params: {
+    candidate: Candidate;
+    journal: DeletionJournal;
+  }): Promise<RemovalRun> {
+    return deleteCandidates({
+      candidates: [params.candidate],
+      journal: params.journal,
+      loadProcessCommands: buildProcessCommandsLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      clock: () => NOW_MS,
+    });
+  }
+
+  test('deletes every target and records the intent with its targets, then an outcome for each', async () => {
+    const firstPath = await createCacheFolder('first');
+    const secondPath = await createCacheFolder('second');
+    const sibling = await createCacheFolder('sibling');
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createFixtureRootJournal();
+
+    const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
+
+    expect(run.outcomes).toEqual([
+      {
+        candidate: candidate,
+        freedBytes: candidate.allocatedBytes,
+        outcome: 'removed',
+        code: null,
+      },
+    ]);
+    expect(await loadJournalLines(journal)).toEqual([
+      expect.objectContaining({ kind: 'sessionStart' }),
+      {
+        kind: 'intent',
+        atMs: NOW_MS,
+        path: candidate.path,
+        allocatedBytes: candidate.allocatedBytes,
+        targetPaths: [firstPath, secondPath],
+      },
+      { kind: 'outcome', atMs: NOW_MS, path: firstPath, outcome: 'removed', code: null },
+      { kind: 'outcome', atMs: NOW_MS, path: secondPath, outcome: 'removed', code: null },
+    ]);
+    expect(await isPresent(firstPath)).toBe(false);
+    expect(await isPresent(secondPath)).toBe(false);
+    expect(await isPresent(join(sibling, 'nested/blob.bin'))).toBe(true);
+  });
+
+  test('deletes the other targets when one changed since the scan, and counts what went', async () => {
+    const firstPath = await createCacheFolder('replaced');
+    const secondPath = await createCacheFolder('kept-identity');
+    const secondBytes = await loadMeasuredAllocatedBytes({ paths: [secondPath] });
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createFixtureRootJournal();
+
+    await rm(firstPath, { recursive: true });
+    await createCacheFolder('replaced');
+
+    const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
+
+    expect(run.outcomes[0]).toMatchObject({
+      outcome: 'changedSinceScan',
+      freedBytes: secondBytes,
+    });
+    expect(await loadJournalLines(journal)).toMatchObject([
+      { kind: 'sessionStart' },
+      { kind: 'intent', targetPaths: [firstPath, secondPath] },
+      { kind: 'outcome', path: firstPath, outcome: 'changedSinceScan' },
+      { kind: 'outcome', path: secondPath, outcome: 'removed' },
+    ]);
+    expect(await isPresent(join(firstPath, 'nested/blob.bin'))).toBe(true);
+    expect(await isPresent(secondPath)).toBe(false);
+  });
+
+  test('is removed when a target was gone already and the other deleted, counting only what this run deleted', async () => {
+    const firstPath = await createCacheFolder('gone');
+    const secondPath = await createCacheFolder('deleted');
+    const secondBytes = await loadMeasuredAllocatedBytes({ paths: [secondPath] });
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createFixtureRootJournal();
+
+    await rm(firstPath, { recursive: true });
+
+    const run = await deleteTargetsCandidate({ candidate: candidate, journal: journal });
+
+    expect(secondBytes).toBeLessThan(candidate.allocatedBytes);
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'removed', freedBytes: secondBytes });
+    expect(await loadJournalLines(journal)).toMatchObject([
+      { kind: 'sessionStart' },
+      { kind: 'intent' },
+      { kind: 'outcome', path: firstPath, outcome: 'alreadyGone' },
+      { kind: 'outcome', path: secondPath, outcome: 'removed' },
+    ]);
+  });
+
+  test('is already gone and frees nothing when every target is gone', async () => {
+    const firstPath = await createCacheFolder('gone-first');
+    const secondPath = await createCacheFolder('gone-second');
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+
+    await rm(firstPath, { recursive: true });
+    await rm(secondPath, { recursive: true });
+
+    const run = await deleteTargetsCandidate({
+      candidate: candidate,
+      journal: await createFixtureRootJournal(),
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'alreadyGone', freedBytes: 0 });
+  });
+});
+
 describeAwaitingWin32Platform('isUnremovedOutcome', () => {
   test('is true only for the outcomes that left their item through a failure', () => {
     const kinds: RemovalOutcomeKind[] = [
@@ -997,6 +1249,8 @@ describeAwaitingWin32Platform('isUnremovedOutcome', () => {
       'failed',
       'notAttempted',
       'toolFailed',
+      'engineInUse',
+      'engineNotRunning',
     ];
 
     expect(kinds.filter(isUnremovedOutcome)).toEqual(['permissionDenied', 'failed', 'toolFailed']);
@@ -1005,52 +1259,57 @@ describeAwaitingWin32Platform('isUnremovedOutcome', () => {
 
 describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
   const TOOL_PATH = '/Users/tester/.local/share/mise/installs/node/20.1.0';
+  const toolCandidate = buildTestToolCandidate({
+    homeDir: '/Users/tester',
+    version: '20.1.0',
+    allocatedBytes: 8192,
+  });
 
   test('a completed run is removed with its measured drop and the stderr tail', () => {
     expect(
       toolCandidateRunToRemoval({
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         run: { kind: 'completed', freedBytes: 6144, stderrTail: 'removed node@20.1.0' },
         atMs: NOW_MS,
       }),
     ).toEqual({
       outcome: {
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         freedBytes: 6144,
         outcome: 'removed',
         code: null,
       },
-      outcomeEntry: {
-        kind: 'toolOutcome',
-        atMs: NOW_MS,
-        path: TOOL_PATH,
-        outcome: 'removed',
-        exitCode: 0,
-        stderrTail: 'removed node@20.1.0',
-        freedBytes: 6144,
-      },
+      outcomeEntries: [
+        {
+          kind: 'toolOutcome',
+          atMs: NOW_MS,
+          path: TOOL_PATH,
+          outcome: 'removed',
+          exitCode: 0,
+          stderrTail: 'removed node@20.1.0',
+          freedBytes: 6144,
+        },
+      ],
     });
   });
 
   test('a skipped run frees nothing and records its reason', () => {
     expect(
       toolCandidateRunToRemoval({
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         run: { kind: 'skipped', reason: 'ownerRunning' },
         atMs: NOW_MS,
       }),
     ).toEqual({
       outcome: {
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         freedBytes: 0,
         outcome: 'ownerRunning',
         code: null,
       },
-      outcomeEntry: { kind: 'toolOutcome', atMs: NOW_MS, path: TOOL_PATH, outcome: 'ownerRunning' },
+      outcomeEntries: [
+        { kind: 'toolOutcome', atMs: NOW_MS, path: TOOL_PATH, outcome: 'ownerRunning' },
+      ],
     });
   });
 
@@ -1062,27 +1321,27 @@ describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
 
     expect(
       toolCandidateRunToRemoval({
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         run: { kind: 'failed', freedBytes: 1024, failure: failure },
         atMs: NOW_MS,
       }),
     ).toEqual({
       outcome: {
-        path: TOOL_PATH,
-        allocatedBytes: 8192,
+        candidate: toolCandidate,
         freedBytes: 1024,
         outcome: 'toolFailed',
         failure: failure,
       },
-      outcomeEntry: {
-        kind: 'toolOutcome',
-        atMs: NOW_MS,
-        path: TOOL_PATH,
-        outcome: 'toolFailed',
-        freedBytes: 1024,
-        failure: failure,
-      },
+      outcomeEntries: [
+        {
+          kind: 'toolOutcome',
+          atMs: NOW_MS,
+          path: TOOL_PATH,
+          outcome: 'toolFailed',
+          freedBytes: 1024,
+          failure: failure,
+        },
+      ],
     });
   });
 });

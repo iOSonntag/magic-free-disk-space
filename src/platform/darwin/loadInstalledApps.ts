@@ -4,12 +4,13 @@ import { parseMacBundleId } from '../../catalog/catalogOwner.js';
 import type { Result } from '../../result.js';
 import { buildFailureIssues } from '../../scan/buildReadIssue.js';
 import type { ScanIssue } from '../../scan/issue.js';
-import type { InstalledApp } from '../../scan/scanPlatform.js';
+import type { InstalledApp, SystemInstaller } from '../../scan/scanPlatform.js';
 import type { CommandFailure } from '../../system/loadCommandOutput.js';
-import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../../system/loadDirectoryNames.js';
 import { loadEntryStats } from '../../system/loadEntryStats.js';
 import { DARWIN_PRIVACY_DENIAL_CODE } from './loadFullDiskAccess.js';
+import { loadPlistValue } from './loadPlistValue.js';
+import { loadPlistVersion } from './loadSystemVersion.js';
 
 type AppBundleSearch = {
   bundlePaths: string[];
@@ -33,6 +34,12 @@ const FALLBACK_INFO_PLIST_RELATIVE_PATHS = [`${WRAPPED_BUNDLE_NAME}/Info.plist`,
  * `Frameworks/X.framework/Versions/A/XPCServices/Y.xpc`, whose container must not look orphaned.
  */
 const NESTED_BUNDLE_MAX_DEPTH = 6;
+
+/**
+ * The bundle id every "Install macOS" app carries, whose name changes with each release; the one
+ * sign an app is an installer.
+ */
+const MACOS_INSTALLER_BUNDLE_ID_TEXT = 'com.apple.InstallAssistant';
 
 /**
  * Lists the apps in the app folders and in the vendor folders one level down. Failures are
@@ -66,11 +73,22 @@ export async function loadInstalledApps(params: {
 
     issues.push(...nested.issues);
 
+    const bundleId = bundleIdResult.kind === 'succeeded' ? bundleIdResult.value : null;
+    const bundleStats = await loadEntryStats({ path: bundlePath });
+
     apps.push({
       bundlePath: bundlePath,
       displayName: basename(bundlePath).slice(0, -APP_BUNDLE_SUFFIX.length),
-      bundleId: bundleIdResult.kind === 'succeeded' ? bundleIdResult.value : null,
+      bundleId: bundleId,
       nestedBundleIds: nested.bundleIds,
+      systemInstaller:
+        bundleId === MACOS_INSTALLER_BUNDLE_ID_TEXT
+          ? await loadSystemInstaller({
+              bundlePath: bundlePath,
+              commandTimeoutMs: params.commandTimeoutMs,
+            })
+          : null,
+      ownerUid: bundleStats.kind === 'succeeded' ? bundleStats.value.ownerUid : null,
     });
   }
 
@@ -155,6 +173,24 @@ function isAppBundleName(params: { name: string }): boolean {
   return params.name.toLowerCase().endsWith(APP_BUNDLE_SUFFIX);
 }
 
+/**
+ * A macOS installer, with the macOS it installs from the SDK platform version its Info.plist
+ * names; `null` when it names none.
+ */
+async function loadSystemInstaller(params: {
+  bundlePath: string;
+  commandTimeoutMs: number;
+}): Promise<SystemInstaller> {
+  return {
+    builtForSystemVersion: await loadPlistVersion({
+      plistPath: join(params.bundlePath, MAC_INFO_PLIST_RELATIVE_PATH),
+      // Apple documents no key for it; Mole's `lib/clean/system.sh` reads this one too.
+      key: 'DTPlatformVersion',
+      timeoutMs: params.commandTimeoutMs,
+    }),
+  };
+}
+
 /** Reads the id from the first Info.plist that holds one; the failure is the macOS layout's. */
 async function loadBundleId(params: {
   bundlePath: string;
@@ -187,17 +223,17 @@ async function loadInfoPlistBundleId(params: {
   infoPlistPath: string;
   commandTimeoutMs: number;
 }): Promise<Result<MacBundleId, CommandFailure>> {
-  const plutilResult = await loadCommandOutput({
-    command: 'plutil',
-    args: ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', params.infoPlistPath],
+  const bundleId = await loadPlistValue({
+    plistPath: params.infoPlistPath,
+    key: 'CFBundleIdentifier',
     timeoutMs: params.commandTimeoutMs,
   });
 
-  if (plutilResult.kind === 'failed') {
-    return plutilResult;
+  if (bundleId.kind === 'failed') {
+    return bundleId;
   }
 
-  return { kind: 'succeeded', value: parseMacBundleId({ text: plutilResult.value.trim() }) };
+  return { kind: 'succeeded', value: parseMacBundleId({ text: bundleId.value }) };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
-import type { EvictionCandidate } from '../../system/systemPlatform.js';
+import type { EvictionCandidate } from '../../system/entryReads.js';
 
 // macOS `struct stat` with 64-bit inodes: 144 bytes, `st_flags` at byte 116. Checked against
 // `ls -lO` on Apple silicon. Intel Macs name this variant `lstat$INODE64`.

@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import type { CatalogEntry, CatalogRoot } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import type { CatalogTarget } from '../../src/scan/findCatalogTargets.js';
 import { findCatalogTargets } from '../../src/scan/findCatalogTargets.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -26,36 +28,40 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
 
   beforeEach(async () => {
     fixtureRoot = await createFixtureRoot();
-    environment = await loadTestEnvironment({ fixtureRoot, nowMs: TEST_NOW_MS });
+    environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: TEST_NOW_MS });
   });
 
   afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot });
+    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
-  test('a self entry gives its target only when the path exists', async () => {
+  test('a path entry gives its target only when the path exists', async () => {
     const cacheDir = join(fixtureRoot.homeDir, 'Library/Caches/example');
     await createFixtureDirectory({ path: cacheDir });
     const presentEntry = buildCatalogEntry({
       id: 'present-cache',
       root: 'home',
       path: 'Library/Caches/example',
-      scope: 'self',
+      selection: 'path',
     });
     const missingEntry = buildCatalogEntry({
       id: 'missing-cache',
       root: 'home',
       path: 'Library/Caches/absent',
-      scope: 'self',
+      selection: 'path',
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [presentEntry, missingEntry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
-    expect(result).toEqual({ targets: [{ entry: presentEntry, path: cacheDir }], issues: [] });
+    expect(result).toEqual({
+      targets: [buildTarget({ entry: presentEntry, path: cacheDir })],
+      overlappingTargets: [],
+      issues: [],
+    });
   });
 
   test('a children entry gives one target per name in sorted order', async () => {
@@ -71,21 +77,22 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       id: 'derived-data',
       root: 'home',
       path: 'Library/Developer/Xcode/DerivedData',
-      scope: 'children',
+      selection: 'children',
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
     expect(result).toEqual({
       targets: [
-        { entry, path: join(derivedDataDir, 'Alpha') },
-        { entry, path: join(derivedDataDir, 'Zeta') },
-        { entry, path: join(derivedDataDir, 'middle.log') },
+        buildTarget({ entry: entry, path: join(derivedDataDir, 'Alpha') }),
+        buildTarget({ entry: entry, path: join(derivedDataDir, 'Zeta') }),
+        buildTarget({ entry: entry, path: join(derivedDataDir, 'middle.log') }),
       ],
+      overlappingTargets: [],
       issues: [],
     });
   });
@@ -100,34 +107,61 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       id: 'missing-folder',
       root: 'home',
       path: 'absent',
-      scope: 'children',
+      selection: 'children',
     });
     const fileEntry = buildCatalogEntry({
       id: 'file-entry',
       root: 'home',
       path: 'plain-file',
-      scope: 'children',
+      selection: 'children',
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [missingEntry, fileEntry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
-    expect(result).toEqual({ targets: [], issues: [] });
+    expect(result).toEqual({ targets: [], overlappingTargets: [], issues: [] });
   });
 
   test('a temp entry with an empty path is the temp folder itself', async () => {
-    const entry = buildCatalogEntry({ id: 'temp-root', root: 'temp', path: '', scope: 'self' });
+    const entry = buildCatalogEntry({ id: 'temp-root', root: 'temp', path: '', selection: 'path' });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
-    expect(result).toEqual({ targets: [{ entry, path: fixtureRoot.tempDir }], issues: [] });
+    expect(result).toEqual({
+      targets: [buildTarget({ entry: entry, path: fixtureRoot.tempDir })],
+      overlappingTargets: [],
+      issues: [],
+    });
+  });
+
+  test('a user cache entry lies below the user cache folder', async () => {
+    const metalDir = join(fixtureRoot.userCacheDir, 'com.example.app', 'com.apple.metal');
+    await createFixtureDirectory({ path: metalDir });
+    const entry = buildCatalogEntry({
+      id: 'metal-cache',
+      root: 'userCache',
+      path: 'com.example.app/com.apple.metal',
+      selection: 'path',
+    });
+
+    const result = await findCatalogTargets({
+      environment: environment,
+      entries: [entry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [buildTarget({ entry: entry, path: metalDir })],
+      overlappingTargets: [],
+      issues: [],
+    });
   });
 
   test('an absolute entry takes its path as given', async () => {
@@ -137,16 +171,115 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       id: 'system-logs',
       root: 'absolute',
       path: systemLogsDir,
-      scope: 'self',
+      selection: 'path',
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
-    expect(result).toEqual({ targets: [{ entry, path: systemLogsDir }], issues: [] });
+    expect(result).toEqual({
+      targets: [buildTarget({ entry: entry, path: systemLogsDir })],
+      overlappingTargets: [],
+      issues: [],
+    });
+  });
+
+  test('a later item that equals or holds a read earlier path is overlapping', async () => {
+    const cachesDir = join(fixtureRoot.homeDir, 'Library/Caches');
+    await createFixtureDirectory({ path: join(cachesDir, 'tool/data') });
+    await createFixtureDirectory({ path: join(cachesDir, 'other') });
+    const toolEntry = buildCatalogEntry({
+      id: 'tool-data',
+      root: 'home',
+      path: 'Library/Caches/tool/data',
+      selection: 'path',
+    });
+    const cachesEntry = buildCatalogEntry({
+      id: 'caches',
+      root: 'home',
+      path: 'Library/Caches',
+      selection: 'children',
+    });
+
+    const result = await findCatalogTargets({
+      environment: environment,
+      entries: [toolEntry, cachesEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [
+        buildTarget({ entry: toolEntry, path: join(cachesDir, 'tool/data') }),
+        buildTarget({ entry: cachesEntry, path: join(cachesDir, 'other') }),
+      ],
+      overlappingTargets: [buildTarget({ entry: cachesEntry, path: join(cachesDir, 'tool') })],
+      issues: [],
+    });
+  });
+
+  test('a later advice item that holds a read earlier path stays a target', async () => {
+    const userDataDir = join(fixtureRoot.homeDir, 'Library/Developer/Example/UserData');
+    await createFixtureDirectory({ path: join(userDataDir, 'Previews') });
+    const previewsEntry = buildCatalogEntry({
+      id: 'previews',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData/Previews',
+      selection: 'path',
+    });
+    const userDataEntry = buildTestCatalogEntry({
+      id: 'user-data',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData',
+      selection: { kind: 'path' },
+      removal: { kind: 'advice', advice: 'Tidy it.', carvedPaths: ['Previews'], opener: null },
+    });
+
+    const result = await findCatalogTargets({
+      environment: environment,
+      entries: [previewsEntry, userDataEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [
+        buildTarget({ entry: previewsEntry, path: join(userDataDir, 'Previews') }),
+        buildTarget({ entry: userDataEntry, path: userDataDir }),
+      ],
+      overlappingTargets: [],
+      issues: [],
+    });
+  });
+
+  test('a later item that holds a missing earlier path stays a target', async () => {
+    const userDataDir = join(fixtureRoot.homeDir, 'Library/Developer/Example/UserData');
+    await createFixtureDirectory({ path: userDataDir });
+    const previewsEntry = buildCatalogEntry({
+      id: 'previews',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData/Previews',
+      selection: 'path',
+    });
+    const userDataEntry = buildCatalogEntry({
+      id: 'user-data',
+      root: 'home',
+      path: 'Library/Developer/Example/UserData',
+      selection: 'path',
+    });
+
+    const result = await findCatalogTargets({
+      environment: environment,
+      entries: [previewsEntry, userDataEntry],
+      privacyDenialCode: PRIVACY_DENIAL_CODE,
+    });
+
+    expect(result).toEqual({
+      targets: [buildTarget({ entry: userDataEntry, path: userDataDir })],
+      overlappingTargets: [],
+      issues: [],
+    });
   });
 
   testOnPosix('an unreadable children folder gives a permissionDenied issue', async () => {
@@ -157,23 +290,24 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
       id: 'locked-folder',
       root: 'home',
       path: 'Locked',
-      scope: 'children',
+      selection: 'children',
     });
 
     const result = await findCatalogTargets({
-      environment,
+      environment: environment,
       entries: [entry],
       privacyDenialCode: PRIVACY_DENIAL_CODE,
     });
 
     expect(result).toEqual({
       targets: [],
+      overlappingTargets: [],
       issues: [{ path: lockedDir, reason: 'permissionDenied', detail: 'EACCES' }],
     });
   });
 
   testOnPosix(
-    'a self entry behind an unreadable folder gives a permissionDenied issue',
+    'a path entry behind an unreadable folder gives a permissionDenied issue',
     async () => {
       const lockedDir = join(fixtureRoot.homeDir, 'Locked');
       await createFixtureDirectory({ path: lockedDir });
@@ -182,24 +316,25 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
         id: 'inside-locked',
         root: 'home',
         path: 'Locked/inside',
-        scope: 'self',
+        selection: 'path',
       });
 
       const result = await findCatalogTargets({
-        environment,
+        environment: environment,
         entries: [entry],
         privacyDenialCode: PRIVACY_DENIAL_CODE,
       });
 
       expect(result).toEqual({
         targets: [],
+        overlappingTargets: [],
         issues: [{ path: join(lockedDir, 'inside'), reason: 'permissionDenied', detail: 'EACCES' }],
       });
     },
   );
 
   testOnPosix(
-    'a self entry behind a symbolic link loop gives an unexpected issue with its code',
+    'a path entry behind a symbolic link loop gives an unexpected issue with its code',
     async () => {
       const loopPath = join(fixtureRoot.homeDir, 'Loop');
       await symlink(loopPath, loopPath);
@@ -207,17 +342,18 @@ describeAwaitingWin32Platform('findCatalogTargets', () => {
         id: 'inside-loop',
         root: 'home',
         path: 'Loop/inside',
-        scope: 'self',
+        selection: 'path',
       });
 
       const result = await findCatalogTargets({
-        environment,
+        environment: environment,
         entries: [entry],
         privacyDenialCode: PRIVACY_DENIAL_CODE,
       });
 
       expect(result).toEqual({
         targets: [],
+        overlappingTargets: [],
         issues: [{ path: join(loopPath, 'inside'), reason: 'unexpected', detail: 'ELOOP' }],
       });
     },
@@ -228,20 +364,17 @@ function buildCatalogEntry(params: {
   id: string;
   root: CatalogRoot;
   path: string;
-  scope: 'self' | 'children';
+  selection: 'path' | 'children';
 }): CatalogEntry {
-  return {
+  return buildTestCatalogEntry({
     id: params.id,
-    category: 'developer',
-    title: 'Fixture entry',
-    explanation: 'A fixture entry.',
-    regeneration: 'Fixture regeneration.',
-    risk: 'safe',
     root: params.root,
     path: params.path,
-    scope: params.scope,
-    ageRule: 'none',
-    owner: null,
-    removal: { kind: 'delete' },
-  };
+    selection: { kind: params.selection },
+  });
+}
+
+/** A path or a children selection gives one target per item, which is its item path. */
+function buildTarget(params: { entry: CatalogEntry; path: string }): CatalogTarget {
+  return { entry: params.entry, path: params.path, targetPaths: [params.path] };
 }

@@ -1,21 +1,37 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { ExploreFinding, ExplorePathUnit, ExploreToolUnit } from '../explore/exploreUnit.js';
+import type {
+  ExploreEngineUnit,
+  ExploreEvictUnit,
+  ExploreFinding,
+  ExplorePathUnit,
+  ExploreToolUnit,
+  ExploreUnit,
+} from '../explore/exploreUnit.js';
+import { listUnitPaths } from '../explore/exploreUnit.js';
 import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
-import type { EntryEvictionCheck } from '../system/systemPlatform.js';
+import type { EntryReads } from '../system/entryReads.js';
+import { mapNonEmpty, toNonEmpty } from '../system/nonEmptyList.js';
 import { buildReadIssue } from './buildReadIssue.js';
 import type {
   CandidateDecision,
   CandidateProbed,
-  CandidateRemovalDeleteUnitFolder,
+  CandidateRemovalCallEngine,
+  CandidateRemovalDeleteUnitPaths,
+  CandidateRemovalEvictUnitFiles,
+  CandidateRemovalProbed,
   CandidateRemovalRunTool,
+  RemovalTarget,
+  RemovalTargets,
 } from './candidate.js';
+import { hasSymbolicLinkTarget } from './candidate.js';
 import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
-import { loadMeasuredPhase } from './loadMeasuredPhase.js';
-import type { UnitMeasurement } from './loadUnitMeasurement.js';
-import { loadUnitMeasurement } from './loadUnitMeasurement.js';
+import type { FoundTarget } from './loadMeasuredTargetsPhase.js';
+import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
+import type { PathMeasurement } from './loadPathMeasurement.js';
+import { loadPathMeasurement } from './loadPathMeasurement.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
 
@@ -42,7 +58,7 @@ export async function loadExplorePhase(params: {
   catalogEntries: CatalogEntry[];
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const entryPhases = await Promise.all(
@@ -55,10 +71,11 @@ export async function loadExplorePhase(params: {
         loadExploreEntryPhase({
           environment: params.environment,
           entry: entry,
+          probe: entry.removal.probe,
           outcome: params.probes[entry.removal.probe],
           measureTimeoutMs: params.measureTimeoutMs,
           runItemMeasurement: params.runItemMeasurement,
-          isEntryEvicted: params.isEntryEvicted,
+          entryReads: params.entryReads,
           privacyDenialCode: params.privacyDenialCode,
         }),
       ];
@@ -76,10 +93,11 @@ export async function loadExplorePhase(params: {
 async function loadExploreEntryPhase(params: {
   environment: Environment;
   entry: CatalogEntry;
+  probe: ExploreProbeId;
   outcome: Promise<ExploreProbeOutcome>;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const outcome = await params.outcome;
@@ -90,10 +108,11 @@ async function loadExploreEntryPhase(params: {
         outcome.findings.map((finding) =>
           loadExploreFindingPhase({
             finding: finding,
+            probe: params.probe,
             category: params.entry.category,
             measureTimeoutMs: params.measureTimeoutMs,
             runItemMeasurement: params.runItemMeasurement,
-            isEntryEvicted: params.isEntryEvicted,
+            entryReads: params.entryReads,
             privacyDenialCode: params.privacyDenialCode,
           }),
         ),
@@ -151,6 +170,13 @@ async function loadExploreEntryPhase(params: {
         incompleteEntries: [],
       };
     }
+    case 'engineFailed':
+      return {
+        decisions: [],
+        issues: [{ path: outcome.socketPath, reason: 'engineFailed', failure: outcome.failure }],
+        fallbackEntries: [params.entry],
+        incompleteEntries: [],
+      };
   }
 }
 
@@ -160,10 +186,11 @@ async function loadExploreEntryPhase(params: {
  */
 async function loadExploreFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   switch (params.finding.activity) {
@@ -184,10 +211,11 @@ async function loadExploreFindingPhase(params: {
 
 async function loadIdleFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   const unit = params.finding.unit;
@@ -201,6 +229,10 @@ async function loadIdleFindingPhase(params: {
     case 'homebrewOldVersions':
     case 'homebrewOrphans':
     case 'asdfVersion':
+    case 'vagrantBoxVersion':
+    case 'rustupToolchain':
+    case 'condaTarballs':
+    case 'condaPackages':
       return loadToolFindingPhase({ ...params, unit: unit });
     case 'androidSystemImage':
     case 'androidEmulator':
@@ -208,7 +240,27 @@ async function loadIdleFindingPhase(params: {
     case 'nvmVersion':
     case 'androidPlatform':
     case 'pnpmStore':
+    case 'downloadsInstallers':
+    case 'downloadsIncomplete':
+    case 'mailDownloads':
+    case 'ollamaModel':
+    case 'huggingFaceRepository':
+    case 'huggingFaceDetachedRevisions':
+    case 'huggingFacePartialDownloads':
+    case 'claudeTranscripts':
+    case 'claudeCodeVersion':
+    case 'ideVersionFolder':
+    case 'lmStudioModel':
+    case 'fvmVersion':
       return loadPathFindingPhase({ ...params, unit: unit });
+    case 'icloudFolder':
+      return loadEvictFindingPhase({ ...params, unit: unit });
+    case 'engineBuildCache':
+    case 'engineDanglingImages':
+    case 'engineImage':
+    case 'engineContainer':
+    case 'engineVolume':
+      return loadEngineFindingPhase({ ...params, unit: unit });
   }
 }
 
@@ -218,22 +270,24 @@ async function loadIdleFindingPhase(params: {
  */
 async function loadToolFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   unit: ExploreToolUnit;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
 }): Promise<ScanPhase> {
   const measurement = await params.runItemMeasurement(() =>
-    loadUnitMeasurement({
-      unit: params.unit,
+    loadPathMeasurement({
+      paths: listUnitPaths(params.unit),
       deadlineMs: Date.now() + params.measureTimeoutMs,
-      isEntryEvicted: params.isEntryEvicted,
+      entryReads: params.entryReads,
     }),
   );
   const removal: CandidateRemovalRunTool = { kind: 'runTool', unit: params.unit };
   const candidate = buildExploreCandidate({
     finding: params.finding,
+    probe: params.probe,
     path: params.finding.displayPath,
     removal: removal,
     category: params.category,
@@ -243,43 +297,110 @@ async function loadToolFindingPhase(params: {
   return { decisions: [{ kind: 'offer', candidate: candidate }], issues: [] };
 }
 
-/**
- * Offers the unit's folder at any size with the identity it has now, which the deletion checks
- * again. A symbolic link is skipped, since only the folder itself may be deleted. A vanished,
- * unreadable, or mounted folder is handled by `loadMeasuredPhase`, as every folder offer is.
- */
+/** Offers the unit's paths as its delete targets, as `loadTargetsFindingPhase` offers them. */
 function loadPathFindingPhase(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   unit: ExplorePathUnit;
   category: CandidateCategory;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
-  isEntryEvicted: EntryEvictionCheck;
+  entryReads: EntryReads;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
-  return loadMeasuredPhase({
-    path: params.unit.folderPath,
+  const unitPaths = toNonEmpty(listUnitPaths(params.unit));
+
+  // Every path unit names at least one path; one that names none has nothing to offer.
+  if (unitPaths === null) {
+    return Promise.resolve({ decisions: [], issues: [] });
+  }
+
+  return loadTargetsFindingPhase({
+    finding: params.finding,
+    probe: params.probe,
+    found: mapNonEmpty(unitPaths, (unitPath) => ({ path: unitPath })),
+    buildRemoval: (targets): CandidateRemovalDeleteUnitPaths => ({
+      kind: 'deleteUnitPaths',
+      targets: targets,
+      unit: params.unit,
+    }),
+    category: params.category,
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
-    isEntryEvicted: params.isEntryEvicted,
+    entryReads: params.entryReads,
+    privacyDenialCode: params.privacyDenialCode,
+  });
+}
+
+/**
+ * Offers the unit's downloaded files as its evict targets, with the times its probe read, which
+ * the evict checks again, as `loadTargetsFindingPhase` offers them.
+ */
+function loadEvictFindingPhase(params: {
+  finding: ExploreFinding;
+  probe: ExploreProbeId;
+  unit: ExploreEvictUnit;
+  category: CandidateCategory;
+  measureTimeoutMs: number;
+  runItemMeasurement: ConcurrencyLimit;
+  entryReads: EntryReads;
+  privacyDenialCode: string | null;
+}): Promise<ScanPhase> {
+  return loadTargetsFindingPhase({
+    finding: params.finding,
+    probe: params.probe,
+    found: params.unit.foundFiles,
+    buildRemoval: (targets): CandidateRemovalEvictUnitFiles => ({
+      kind: 'evictUnitFiles',
+      targets: targets,
+      unit: params.unit,
+    }),
+    category: params.category,
+    measureTimeoutMs: params.measureTimeoutMs,
+    runItemMeasurement: params.runItemMeasurement,
+    entryReads: params.entryReads,
+    privacyDenialCode: params.privacyDenialCode,
+  });
+}
+
+/**
+ * Offers the found paths at any size as the removal's targets, each with the identity it has now,
+ * which the removal checks again, shown at the finding's place; a symbolic link among them skips
+ * the finding. A vanished, unreadable, or mounted path is handled by `loadMeasuredTargetsPhase`.
+ */
+function loadTargetsFindingPhase<TFound extends FoundTarget>(params: {
+  finding: ExploreFinding;
+  probe: ExploreProbeId;
+  found: [TFound, ...TFound[]];
+  buildRemoval: (
+    targets: RemovalTargets<TFound & RemovalTarget>,
+  ) => CandidateRemovalDeleteUnitPaths | CandidateRemovalEvictUnitFiles;
+  category: CandidateCategory;
+  measureTimeoutMs: number;
+  runItemMeasurement: ConcurrencyLimit;
+  entryReads: EntryReads;
+  privacyDenialCode: string | null;
+}): Promise<ScanPhase> {
+  return loadMeasuredTargetsPhase({
+    found: params.found,
+    carve: null,
+    measureTimeoutMs: params.measureTimeoutMs,
+    runItemMeasurement: params.runItemMeasurement,
+    entryReads: params.entryReads,
     privacyDenialCode: params.privacyDenialCode,
     decide: async (measurement) => {
-      if (measurement.identity.kind === 'symbolicLink') {
-        return { kind: 'skip', path: params.unit.folderPath, reason: 'symbolicLink' };
+      // A delete takes only the link itself, and the system evicts only a file.
+      if (hasSymbolicLinkTarget(measurement)) {
+        return { kind: 'skip', path: params.finding.displayPath, reason: 'symbolicLink' };
       }
-
-      const removal: CandidateRemovalDeleteUnitFolder = {
-        kind: 'deleteUnitFolder',
-        identity: measurement.identity,
-        unit: params.unit,
-      };
 
       return {
         kind: 'offer',
         candidate: buildExploreCandidate({
           finding: params.finding,
-          path: params.unit.folderPath,
-          removal: removal,
+          probe: params.probe,
+          path: params.finding.displayPath,
+          removal: params.buildRemoval(measurement.targets),
           category: params.category,
           measurement: measurement,
         }),
@@ -288,25 +409,149 @@ function loadPathFindingPhase(params: {
   });
 }
 
+/**
+ * Offers an engine's unit at the size its engine reports, shown at the engine's disk image, the
+ * one place on the host it takes space in. Nothing on the host is measured: the engine frees it.
+ */
+function loadEngineFindingPhase(params: {
+  finding: ExploreFinding;
+  probe: ExploreProbeId;
+  unit: ExploreEngineUnit;
+  category: CandidateCategory;
+}): ScanPhase {
+  const removal: CandidateRemovalCallEngine = { kind: 'callEngine', unit: params.unit };
+  const candidate = buildExploreCandidate({
+    finding: params.finding,
+    probe: params.probe,
+    path: params.unit.diskImagePath,
+    removal: removal,
+    category: params.category,
+    measurement: {
+      allocatedBytes: params.unit.sizeBytes,
+      entryCount: 0,
+      isComplete: true,
+      privateSizeFallbackCount: 0,
+    },
+  });
+
+  return { decisions: [{ kind: 'offer', candidate: candidate }], issues: [] };
+}
+
 function buildExploreCandidate(params: {
   finding: ExploreFinding;
+  probe: ExploreProbeId;
   path: string;
-  removal: CandidateRemovalRunTool | CandidateRemovalDeleteUnitFolder;
+  removal: CandidateRemovalProbed;
   category: CandidateCategory;
-  measurement: UnitMeasurement;
+  measurement: Pick<
+    PathMeasurement,
+    'allocatedBytes' | 'entryCount' | 'isComplete' | 'privateSizeFallbackCount'
+  >;
 }): CandidateProbed {
   return {
     path: params.path,
     title: params.finding.title,
     category: params.category,
     risk: params.finding.risk,
-    origin: 'explore',
+    origin: { kind: 'explore', probe: params.probe },
     explanation: params.finding.explanation,
     regeneration: params.finding.regeneration,
     allocatedBytes: params.measurement.allocatedBytes,
     entryCount: params.measurement.entryCount,
     isComplete: params.measurement.isComplete,
+    privateSizeFallbackCount: params.measurement.privateSizeFallbackCount,
+    lastUsedAtMs: getUnitLastUsedAtMs({ unit: params.finding.unit }),
+    downloadedAtMs: getUnitDownloadedAtMs({ unit: params.finding.unit }),
+    appName: null,
     removal: params.removal,
     evidenceLines: params.finding.evidenceLines,
   };
+}
+
+/** When the unit's tool finished its download; `null` for a unit whose probe reads none. */
+function getUnitDownloadedAtMs(params: { unit: ExploreUnit }): number | null {
+  switch (params.unit.kind) {
+    case 'ollamaModel':
+    case 'huggingFaceRepository':
+    case 'huggingFaceDetachedRevisions':
+    case 'lmStudioModel':
+      return params.unit.downloadedAtMs;
+    case 'simulatorRuntime':
+    case 'androidAvd':
+    case 'simulatorDevice':
+    case 'dartPubCache':
+    case 'miseVersion':
+    case 'homebrewOldVersions':
+    case 'homebrewOrphans':
+    case 'asdfVersion':
+    case 'androidSystemImage':
+    case 'androidEmulator':
+    case 'vscodeExtension':
+    case 'nvmVersion':
+    case 'androidPlatform':
+    case 'pnpmStore':
+    case 'vagrantBoxVersion':
+    case 'rustupToolchain':
+    case 'condaTarballs':
+    case 'condaPackages':
+    case 'downloadsInstallers':
+    case 'downloadsIncomplete':
+    case 'mailDownloads':
+    case 'huggingFacePartialDownloads':
+    case 'claudeTranscripts':
+    case 'claudeCodeVersion':
+    case 'ideVersionFolder':
+    case 'fvmVersion':
+    case 'icloudFolder':
+    case 'engineBuildCache':
+    case 'engineDanglingImages':
+    case 'engineImage':
+    case 'engineContainer':
+    case 'engineVolume':
+      return null;
+  }
+}
+
+/** The last use its own tool records for a unit; `null` for a unit whose tool records none. */
+function getUnitLastUsedAtMs(params: { unit: ExploreUnit }): number | null {
+  switch (params.unit.kind) {
+    case 'simulatorRuntime':
+    case 'androidAvd':
+      return params.unit.lastUsedAtMs;
+    case 'simulatorDevice':
+    case 'dartPubCache':
+    case 'miseVersion':
+    case 'homebrewOldVersions':
+    case 'homebrewOrphans':
+    case 'asdfVersion':
+    case 'androidSystemImage':
+    case 'androidEmulator':
+    case 'vscodeExtension':
+    case 'nvmVersion':
+    case 'androidPlatform':
+    case 'pnpmStore':
+    case 'vagrantBoxVersion':
+    case 'rustupToolchain':
+    case 'condaTarballs':
+    case 'condaPackages':
+    case 'downloadsInstallers':
+    case 'downloadsIncomplete':
+    case 'mailDownloads':
+    case 'ollamaModel':
+    case 'huggingFaceRepository':
+    case 'huggingFaceDetachedRevisions':
+    case 'huggingFacePartialDownloads':
+    case 'claudeTranscripts':
+    case 'claudeCodeVersion':
+    case 'ideVersionFolder':
+    case 'lmStudioModel':
+    case 'fvmVersion':
+    case 'icloudFolder':
+    case 'engineBuildCache':
+    case 'engineDanglingImages':
+    case 'engineImage':
+    case 'engineContainer':
+    case 'engineVolume':
+      return null;
+  }
 }

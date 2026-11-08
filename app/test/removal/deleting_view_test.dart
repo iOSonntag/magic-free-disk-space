@@ -1,0 +1,132 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:magic_free_disk_space/bridge/bridge.dart';
+import 'package:magic_free_disk_space/cleaner/cleaner.dart';
+import 'package:magic_free_disk_space/design/design.dart';
+import 'package:magic_free_disk_space/removal/deleting_view.dart';
+
+import '../support/semantics_labels.dart';
+import '../support/stage_harness.dart';
+import '../support/test_items.dart';
+import '../support/window_motion.dart';
+import 'support/removal_harness.dart';
+
+void main() {
+  /// Pumps the first frame of the Deleting view of [plan] over a window
+  /// motion the test turns.
+  Future<ValueNotifier<MotionState>> pumpDeleting(
+    WidgetTester tester, {
+    required PlannedEvent plan,
+    required MotionState motion,
+  }) async {
+    final ValueNotifier<MotionState> windowMotion = createWindowMotion(motion);
+    await tester.pumpWidget(
+      buildStagePage(
+        DeletingView(state: DeletingState(plan: plan)),
+        windowMotion: windowMotion,
+      ),
+    );
+    return windowMotion;
+  }
+
+  int countDissolvedRows(WidgetTester tester) {
+    return tester
+        .widgetList<Dissolve>(find.byType(Dissolve))
+        .where((Dissolve dissolve) => dissolve.isDissolved)
+        .length;
+  }
+
+  testWidgets('under reduced motion, every item of the plan fades at once', (
+    WidgetTester tester,
+  ) async {
+    await pumpDeleting(tester, plan: samplePlan, motion: MotionState.reduced);
+
+    expect(find.text('Deleting at least 15 MB'), findsOneWidget);
+    for (final PlannedItemView item in samplePlan.items) {
+      expect(find.text(item.title), findsOneWidget);
+    }
+    expect(find.text('at least 4.0 MB'), findsOneWidget);
+    expect(countDissolvedRows(tester), 0);
+    await tester.pump();
+    expect(countDissolvedRows(tester), samplePlan.items.length);
+    expectEveryTappableNodeLabelled();
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tool cache'), findsNothing);
+    expect(find.text('Still deleting. This can take a minute.'), findsOneWidget);
+  });
+
+  testWidgets(
+    'with motion on, the items dissolve one after another, and Reduce Motion ends it at once',
+    (WidgetTester tester) async {
+      final ValueNotifier<MotionState> windowMotion = await pumpDeleting(
+        tester,
+        plan: samplePlan,
+        motion: MotionState.allowed,
+      );
+
+      expect(countDissolvedRows(tester), 0);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(countDissolvedRows(tester), 1);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(countDissolvedRows(tester), 2);
+      expectEveryTappableNodeLabelled();
+
+      windowMotion.value = MotionState.reduced;
+      await tester.pumpAndSettle();
+      expect(find.text('Still deleting. This can take a minute.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Reduce Motion turned on mid-way dissolves the rest and stops the stagger', (
+    WidgetTester tester,
+  ) async {
+    final ValueNotifier<MotionState> windowMotion = await pumpDeleting(
+      tester,
+      plan: samplePlan,
+      motion: MotionState.allowed,
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(countDissolvedRows(tester), 0);
+
+    windowMotion.value = MotionState.reduced;
+    await tester.pump();
+    await tester.pump();
+
+    expect(countDissolvedRows(tester), samplePlan.items.length);
+    await tester.pumpAndSettle();
+    expect(find.text('Still deleting. This can take a minute.'), findsOneWidget);
+  });
+
+  testWidgets('a long plan shows its six biggest items and the count of the rest', (
+    WidgetTester tester,
+  ) async {
+    final PlannedEvent longPlan = buildSamplePlan(
+      [
+        for (int number = 1; number <= 8; number++)
+          planItem(
+            buildTestItemView(
+              number: number,
+              title: 'Cache $number',
+              risk: Risk.safe,
+              group: ItemGroup.safe,
+              sectionKey: SectionKey.caches,
+              allocatedBytes: number * 1000000,
+            ),
+          ),
+      ],
+      planId: 4,
+      holdsCareful: false,
+    );
+
+    await pumpDeleting(tester, plan: longPlan, motion: MotionState.reduced);
+
+    expect(find.text('Cache 8'), findsOneWidget);
+    expect(find.text('Cache 3'), findsOneWidget);
+    expect(find.text('Cache 2'), findsNothing);
+    expect(find.text('and 2 more items'), findsOneWidget);
+    await tester.pump();
+    expect(countDissolvedRows(tester), 7);
+  });
+}

@@ -10,8 +10,16 @@ import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart';
 
 const String _scannedLine =
-    '{"kind":"scanned","summary":{"titleText":"%s","lines":[]},"sections":[],'
+    '{"kind":"scanned","summary":{"titleText":"","lines":[],"totalBytes":%d,'
+    '"isTotalComplete":true,"safeBytes":0,"isSafeComplete":true,"disk":null},"sections":[],"sectionTotals":[],'
     '"explore":null,"safeNumbers":[],"skipped":null,"notices":[]}';
+
+// Each total marks which answer of the fake bridge a scan is.
+const int staleTotalBytes = 1;
+const int freshTotalBytes = 2;
+const int doneTotalBytes = 3;
+
+void ignoreProgress(ProgressEvent _) {}
 
 void main() {
   late Directory directory;
@@ -40,8 +48,8 @@ $body
     return ProcessBridgeClient(executablePath: script.path);
   }
 
-  String buildScannedLine(String summaryTitleText) {
-    return _scannedLine.replaceFirst('%s', summaryTitleText);
+  String buildScannedLine(int totalBytes) {
+    return _scannedLine.replaceFirst('%d', '$totalBytes');
   }
 
   test('a line that is no event fails the request, and its bridge answers no later one', () async {
@@ -50,20 +58,22 @@ while read -r request; do
   if [ "\$start" = 1 ]; then
     echo 'not json'
     sleep 0.3
-    echo '${buildScannedLine('stale')}'
+    echo '${buildScannedLine(staleTotalBytes)}'
   else
-    echo '${buildScannedLine('fresh')}'
+    echo '${buildScannedLine(freshTotalBytes)}'
   fi
 done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (String _) {}),
+      client.scan(onProgress: ignoreProgress),
       throwsFormatException,
     );
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer answer = await client.scan(
+      onProgress: ignoreProgress,
+    );
 
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 
   test('a bridge that exits fails the request with its stderr, and the next request starts it again', () async {
@@ -78,7 +88,7 @@ done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (String _) {}),
+      client.scan(onProgress: ignoreProgress),
       throwsA(
         isA<BridgeStoppedException>()
             .having((error) => error.exitCode, 'exitCode', 3)
@@ -114,7 +124,9 @@ sleep 0.2
 exit 1
 ''');
 
-      final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+      final Future<ScanAnswer> scan = client.scan(
+        onProgress: ignoreProgress,
+      );
       final Future<StatusAnswer> status = client.status();
 
       await expectLater(scan, throwsFormatException);
@@ -139,30 +151,32 @@ while read -r request; do
   if [ "\$start" = 1 ]; then
     echo '{"kind":"cancelled","message":"Cancelled. Nothing was deleted."}'
   else
-    echo '${buildScannedLine('fresh')}'
+    echo '${buildScannedLine(freshTotalBytes)}'
   fi
 done
 ''');
 
     await expectLater(
-      client.scan(onProgress: (String _) {}),
+      client.scan(onProgress: ignoreProgress),
       throwsFormatException,
     );
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer answer = await client.scan(
+      onProgress: ignoreProgress,
+    );
 
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 
   test('dispose fails the pending request', () async {
     client = await createClientOverScript('''
 while read -r request; do
-  echo '{"kind":"progress","message":"Measuring apps…"}'
+  echo '{"kind":"progress","message":"Measuring apps…","phase":"apps","found":[]}'
   sleep 5
 done
 ''');
     final Completer<void> progressSeen = Completer<void>();
     final Future<ScanAnswer> answer = client.scan(
-      onProgress: (String _) => progressSeen.complete(),
+      onProgress: (ProgressEvent _) => progressSeen.complete(),
     );
     await progressSeen.future;
 
@@ -179,7 +193,9 @@ while read -r request; do
   sleep 5
 done
 ''');
-      final Future<ScanAnswer> answer = client.scan(onProgress: (String _) {});
+      final Future<ScanAnswer> answer = client.scan(
+        onProgress: ignoreProgress,
+      );
 
       client.dispose();
 
@@ -237,7 +253,9 @@ while read -r request; do
 done
 ''');
 
-    final Future<ScanAnswer> scan = client.scan(onProgress: (String _) {});
+    final Future<ScanAnswer> scan = client.scan(
+      onProgress: ignoreProgress,
+    );
     final Future<UpdateCheckSetAnswer> save = client.setUpdateCheck(false);
 
     await expectLater(scan, throwsFormatException);
@@ -269,16 +287,19 @@ done
   test('passes the progress on and answers with the final event', () async {
     client = await createClientOverScript('''
 while read -r request; do
-  echo '{"kind":"progress","message":"Measuring apps…"}'
-  echo '${buildScannedLine('done')}'
+  echo '{"kind":"progress","message":"Measuring apps…","phase":"apps","found":[]}'
+  echo '${buildScannedLine(doneTotalBytes)}'
 done
 ''');
-    final List<String> progress = [];
+    final List<ProgressEvent> progress = [];
 
     final ScanAnswer answer = await client.scan(onProgress: progress.add);
 
-    expect(progress, ['Measuring apps…']);
-    expect((answer as ScannedEvent).summary.titleText, 'done');
+    expect(progress.map((ProgressEvent event) => event.message), [
+      'Measuring apps…',
+    ]);
+    expect(progress.single.phase, ScanPhase.apps);
+    expect((answer as ScannedEvent).summary.totalBytes, doneTotalBytes);
   });
 
   test('sends the status request and answers with the status event', () async {
@@ -309,7 +330,7 @@ if [ "\$start" = 1 ]; then
   exit 2
 fi
 while read -r request; do
-  echo '${buildScannedLine('fresh')}'
+  echo '${buildScannedLine(freshTotalBytes)}'
 done
 ''';
 
@@ -317,7 +338,9 @@ done
     client = await createClientOverScript(failingFirstStartScript);
 
     final StatusAnswer status = await client.status();
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer answer = await client.scan(
+      onProgress: ignoreProgress,
+    );
 
     expect(
       status,
@@ -327,16 +350,20 @@ done
         FailureEffect.bridgeStopping,
       ),
     );
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 
   test('a failed scan whose bridge stops leads the next request to a new bridge that answers', () async {
     client = await createClientOverScript(failingFirstStartScript);
 
-    final ScanAnswer failed = await client.scan(onProgress: (String _) {});
-    final ScanAnswer answer = await client.scan(onProgress: (String _) {});
+    final ScanAnswer failed = await client.scan(
+      onProgress: ignoreProgress,
+    );
+    final ScanAnswer answer = await client.scan(
+      onProgress: ignoreProgress,
+    );
 
     expect(failed, isA<FailedEvent>());
-    expect((answer as ScannedEvent).summary.titleText, 'fresh');
+    expect((answer as ScannedEvent).summary.totalBytes, freshTotalBytes);
   });
 }

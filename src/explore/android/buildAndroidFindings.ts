@@ -6,6 +6,7 @@ import type {
   ExplorePathUnitAndroidPackage,
   ExploreProbeFindings,
 } from '../exploreUnit.js';
+import { formatIsoDay } from '../formatLimitTexts.js';
 import type { AndroidPackageOffer, AndroidPackageOffers } from './decideAndroidPackageOffers.js';
 import type { AndroidAvdPresent, AndroidSdkState } from './loadAndroidSdkState.js';
 
@@ -26,7 +27,7 @@ export function isAndroidAvdFolder(
 
 /**
  * One finding for each AVD last used before the cutoff whose folder is named `*.avd` and whose
- * `config.ini` names an image; any other AVD is not judged. Without the SDK no unit is built, so
+ * `config.ini` names an image; any other AVD is not judged. Without an SDK no unit is built, so
  * the probe judges nothing while `~/.android/avd` holds any `*.ini`.
  */
 export function buildAndroidAvdFindings(params: {
@@ -37,11 +38,14 @@ export function buildAndroidAvdFindings(params: {
 }): ExploreProbeFindings {
   const avds = params.state.avds ?? [];
 
-  if (params.state.sdk === null) {
+  const firstSdk = params.state.sdks[0];
+
+  if (firstSdk === undefined) {
     return { findings: [], isComplete: avds.length === 0 };
   }
 
-  const sdkRoot = params.state.sdk.sdkRoot;
+  // `avdmanager` takes any SDK to delete an AVD; the first is the platform's when it exists.
+  const sdkRoot = firstSdk.sdkRoot;
   const findings: ExploreFinding[] = [];
   let isComplete = true;
 
@@ -160,10 +164,10 @@ function buildAndroidAvdEvidenceLines(params: {
   imageSysdir: string;
   lastUsedAtMs: number;
 }): string[] {
-  const lastUsedDate = new Date(params.lastUsedAtMs).toISOString().slice(0, 10);
-  const lastUseLine = `Last used on ${lastUsedDate}, by the dates of its emulator files.`;
-
-  return [lastUseLine, `It runs the system image ${params.imageSysdir}.`];
+  return [
+    `Last used on ${formatIsoDay(params.lastUsedAtMs)}, by the dates of its emulator files.`,
+    `It runs the system image ${params.imageSysdir}.`,
+  ];
 }
 
 function buildAndroidPackageRegeneration(params: { offer: AndroidPackageOffer }): string {

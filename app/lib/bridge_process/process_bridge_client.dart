@@ -3,10 +3,9 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
-import '../bridge/bridge_event.dart';
-import '../bridge/bridge_request.dart';
-import '../cleaner/cleaner_bridge.dart';
-import '../update/update_bridge.dart';
+import '../bridge/bridge.dart';
+import '../cleaner/cleaner.dart';
+import '../update/update.dart';
 
 const String bridgeExecutableName = 'magic-free-disk-space-bridge';
 const int _stderrTailLength = 5;
@@ -20,7 +19,7 @@ final class _QueuedRequest<TAnswer extends BridgeEvent> {
   }
 
   final Map<String, Object> request;
-  final void Function(String message) onProgress;
+  final void Function(ProgressEvent progress) onProgress;
   final Completer<TAnswer> completer = Completer<TAnswer>();
 
   /// Completes the request with [event] when it is a [TAnswer]; answers
@@ -82,7 +81,9 @@ class ProcessBridgeClient implements CleanerBridge, UpdateBridge {
   final List<String> _stderrTail = [];
 
   @override
-  Future<ScanAnswer> scan({required void Function(String message) onProgress}) {
+  Future<ScanAnswer> scan({
+    required void Function(ProgressEvent progress) onProgress,
+  }) {
     return _send<ScanAnswer>(buildScanRequest(), onProgress: onProgress);
   }
 
@@ -144,14 +145,14 @@ class ProcessBridgeClient implements CleanerBridge, UpdateBridge {
   /// order they were made.
   Future<TAnswer> _send<TAnswer extends BridgeEvent>(
     Map<String, Object> request, {
-    void Function(String message)? onProgress,
+    void Function(ProgressEvent progress)? onProgress,
   }) async {
     if (_isDisposed) {
       throw StateError('The bridge client is disposed.');
     }
     final _QueuedRequest<TAnswer> queued = _QueuedRequest<TAnswer>(
       request: request,
-      onProgress: onProgress ?? (String _) {},
+      onProgress: onProgress ?? (ProgressEvent _) {},
     );
     _waiting.add(queued);
     _sendNextRequest();
@@ -228,7 +229,7 @@ class ProcessBridgeClient implements CleanerBridge, UpdateBridge {
       return;
     }
     if (event is ProgressEvent) {
-      pending.onProgress(event.message);
+      pending.onProgress(event);
       return;
     }
     if (event case FailedEvent(effect: FailureEffect.bridgeStopping)) {

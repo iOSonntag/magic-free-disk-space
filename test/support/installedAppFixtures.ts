@@ -7,6 +7,7 @@ type InstalledAppOverrides = Partial<Omit<InstalledApp, 'bundleId' | 'nestedBund
   nestedBundleIds?: string[];
 };
 
+/** An installed app with the overrides given, else no installer of the system and no owner read. */
 export function buildTestInstalledApp(overrides: InstalledAppOverrides): InstalledApp {
   const bundleId = overrides.bundleId === undefined ? 'com.example.app' : overrides.bundleId;
 
@@ -17,5 +18,7 @@ export function buildTestInstalledApp(overrides: InstalledAppOverrides): Install
     nestedBundleIds: (overrides.nestedBundleIds ?? []).map((text) =>
       buildTestMacBundleId({ text: text }),
     ),
+    systemInstaller: overrides.systemInstaller === undefined ? null : overrides.systemInstaller,
+    ownerUid: overrides.ownerUid === undefined ? null : overrides.ownerUid,
   };
 }

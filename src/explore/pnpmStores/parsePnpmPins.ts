@@ -101,6 +101,9 @@ function parsePnpmPinTexts(params: { file: ProjectPinFileText }): PnpmPinTexts {
       return parseMiseConfigPins({ text: params.file.text });
     case 'nvmrc':
     case 'gradle':
+    case 'rustToolchain':
+    case 'fvmrc':
+    case 'androidLocalProperties':
       return NO_PIN_TEXTS;
   }
 }

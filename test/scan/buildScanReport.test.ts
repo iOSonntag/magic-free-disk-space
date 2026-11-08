@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import type { Candidate, CandidateDecision } from '../../src/scan/candidate.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestAdvice,
+  buildTestCandidate,
+  buildTestToolCandidate,
+} from '../support/candidateFixtures.js';
 
 function buildOffers(candidates: Candidate[]): CandidateDecision[] {
   return candidates.map(
@@ -20,16 +24,13 @@ describeAwaitingWin32Platform('buildScanReport', () => {
       { kind: 'offer', candidate: large },
       {
         kind: 'advice',
-        advice: {
+        advice: buildTestAdvice({
           path: '/opt/tool',
           title: 'Tool',
           category: 'packages',
           risk: 'careful',
-          explanation: 'Packages of a tool.',
-          advice: 'Run the tool cleanup.',
           allocatedBytes: 500,
-          isComplete: true,
-        },
+        }),
       },
     ];
     const issue = { path: '/home/locked', reason: 'permissionDenied' as const, detail: 'EACCES' };
@@ -85,11 +86,11 @@ describeAwaitingWin32Platform('buildScanReport', () => {
     });
     const appSafe = buildTestCandidate({
       path: '/home/Library/Containers/gone',
-      category: 'containers',
+      category: 'appContainers',
       risk: 'safe',
       allocatedBytes: 10,
     });
-    const developerReview = buildTestCandidate({
+    const projectReview = buildTestCandidate({
       path: '/home/project/node_modules',
       category: 'projects',
       risk: 'review',
@@ -108,13 +109,13 @@ describeAwaitingWin32Platform('buildScanReport', () => {
     });
 
     const report = buildScanReport({
-      decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, developerReview, cacheSafe]),
+      decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, projectReview, cacheSafe]),
       issues: [],
     });
 
     expect(report.candidates).toEqual([
       cacheSafe,
-      developerReview,
+      projectReview,
       appSafe,
       appNever,
       trashSafe,

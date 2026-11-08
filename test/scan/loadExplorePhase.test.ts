@@ -18,7 +18,7 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
-import { buildEmptyProjectPinsLoad } from '../explore/projectPinsFixtures.js';
+import { buildTestProbeStart } from '../explore/probeStartFixtures.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -27,6 +27,7 @@ import {
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -41,27 +42,21 @@ import {
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 
 const MEASURE_TIMEOUT_MS = 10_000;
 
 const runItemMeasurement = createConcurrencyLimit({ maxConcurrent: 4 });
 
 function buildExploreEntry(params: { id: string; probe: ExploreProbeId }): CatalogEntry {
-  return {
+  return buildTestCatalogEntry({
     id: params.id,
     category: 'developer',
     title: `Entry ${params.id}`,
-    explanation: 'An example entry.',
-    regeneration: 'It comes back.',
     risk: 'review',
-    root: 'home',
     path: params.id,
-    scope: 'self',
-    ageRule: 'none',
-    owner: null,
     removal: { kind: 'explore', probe: params.probe, advice: `Advice of ${params.id}.` },
-  };
+  });
 }
 
 const simulatorEntry = buildExploreEntry({ id: 'devices', probe: 'simulatorDevices' });
@@ -96,6 +91,22 @@ function buildProbes(
     androidPlatforms: Promise.resolve(outcomes.androidPlatforms ?? toolMissing),
     pnpmStores: Promise.resolve(outcomes.pnpmStores ?? toolMissing),
     pnpmStoresXdg: Promise.resolve(outcomes.pnpmStoresXdg ?? toolMissing),
+    dockerDesktopEngine: Promise.resolve(outcomes.dockerDesktopEngine ?? toolMissing),
+    orbStackEngine: Promise.resolve(outcomes.orbStackEngine ?? toolMissing),
+    colimaEngine: Promise.resolve(outcomes.colimaEngine ?? toolMissing),
+    vagrantBoxes: Promise.resolve(outcomes.vagrantBoxes ?? toolMissing),
+    icloudDownloads: Promise.resolve(outcomes.icloudDownloads ?? toolMissing),
+    downloadsInstallers: Promise.resolve(outcomes.downloadsInstallers ?? toolMissing),
+    mailDownloads: Promise.resolve(outcomes.mailDownloads ?? toolMissing),
+    ollamaModels: Promise.resolve(outcomes.ollamaModels ?? toolMissing),
+    lmStudioModels: Promise.resolve(outcomes.lmStudioModels ?? toolMissing),
+    huggingFaceRepos: Promise.resolve(outcomes.huggingFaceRepos ?? toolMissing),
+    claudeTranscripts: Promise.resolve(outcomes.claudeTranscripts ?? toolMissing),
+    claudeCodeVersions: Promise.resolve(outcomes.claudeCodeVersions ?? toolMissing),
+    ideVersions: Promise.resolve(outcomes.ideVersions ?? toolMissing),
+    rustupToolchains: Promise.resolve(outcomes.rustupToolchains ?? toolMissing),
+    condaPackages: Promise.resolve(outcomes.condaPackages ?? toolMissing),
+    fvmVersions: Promise.resolve(outcomes.fvmVersions ?? toolMissing),
   };
 }
 
@@ -128,16 +139,12 @@ let environment: Environment;
 async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
   await createVscodeInstallation({ homeDir: environment.homeDir });
 
-  const findings = await loadVscodeExtensionFindings({
-    environment: environment,
-    platform: buildTestProbePlatform(),
-    processCommands: [],
-    deadlineMs: Date.now() + 10_000,
-    unusedCutoffMs: 0,
-  });
+  const findings = await loadVscodeExtensionFindings(
+    buildTestProbeRun({ environment: environment }),
+  );
 
   if (findings.kind === 'failed') {
-    throw new Error(`The VS Code probe failed at ${findings.failure.path}.`);
+    throw new Error(`The VS Code probe failed: ${findings.failure.reason}.`);
   }
 
   return { kind: 'probed', findings: findings.value.findings, isComplete: true };
@@ -150,7 +157,7 @@ function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
     catalogEntries: [vscodeEntry],
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+    entryReads: darwinPlatform.system.entryReads,
     privacyDenialCode: darwinPlatform.system.privacyDenialCode,
   });
 }
@@ -189,24 +196,21 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
         },
       ],
     });
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: 10_000,
-      unusedCutoffMs: 0,
-    });
+    const probes = startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun }),
+        activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
+      }),
+    );
 
     const phase = await loadExplorePhase({
       environment: environment,
-      probes: probes,
+      probes: probes.outcomes,
       catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -229,9 +233,10 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       ),
       category: 'developer',
       risk: 'review',
-      origin: 'explore',
+      origin: { kind: 'explore', probe: 'simulatorDevices' },
       entryCount: 2,
       isComplete: true,
+      lastUsedAtMs: null,
       removal: {
         kind: 'runTool',
         unit: {
@@ -271,7 +276,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -308,7 +313,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -370,14 +375,22 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
         title: 'VS Code extension example.alpha 1.0.0',
         category: 'developer',
         risk: 'review',
-        origin: 'explore',
+        origin: { kind: 'explore', probe: 'vscodeExtensions' },
         explanation:
           'An extension folder VS Code marked for removal after an uninstall or an update.',
         regeneration: 'VS Code downloads it again only if you install this version again.',
         allocatedBytes: VSCODE_FOLDER_SIZE_BYTES,
         entryCount: 2,
         isComplete: true,
-        removal: { kind: 'deleteUnitFolder', identity: identity.value, unit: unit },
+        privateSizeFallbackCount: 0,
+        lastUsedAtMs: null,
+        downloadedAtMs: null,
+        appName: null,
+        removal: {
+          kind: 'deleteUnitPaths',
+          targets: [{ path: unit.folderPath, identity: identity.value }],
+          unit: unit,
+        },
         evidenceLines: [
           "Neither VS Code's default registry nor any profile's lists this folder.",
           "VS Code's .obsolete file marks it for removal.",
@@ -466,6 +479,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
     const mountedFinding: ExploreFinding = {
       ...finding,
       unit: { ...finding.unit, folderPath: buildTestAbsolutePath({ text: '/dev' }) },
+      displayPath: '/dev',
       activity: 'idle',
     };
     const phase = await loadVscodePhase({
@@ -491,7 +505,7 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      isEntryEvicted: darwinPlatform.system.isEntryEvicted,
+      entryReads: darwinPlatform.system.entryReads,
       privacyDenialCode: darwinPlatform.system.privacyDenialCode,
     });
 
@@ -502,5 +516,40 @@ describeAwaitingWin32Platform('loadExplorePhase', () => {
         failure: { reason: 'outputUnreadable', detail: 'no JSON' },
       },
     ]);
+  });
+
+  test('raises an engine that did not answer as asked at its socket and falls back to the advice', async () => {
+    const engineEntry = buildExploreEntry({ id: 'docker', probe: 'dockerDesktopEngine' });
+    const socketPath = buildTestAbsolutePath({
+      text: join(environment.homeDir, '.docker/run/docker.sock'),
+    });
+    const phase = await loadExplorePhase({
+      environment: environment,
+      probes: buildProbes({
+        dockerDesktopEngine: {
+          kind: 'engineFailed',
+          socketPath: socketPath,
+          failure: { kind: 'badAnswer', endpoint: '/system/df' },
+        },
+      }),
+      catalogEntries: [engineEntry],
+      measureTimeoutMs: MEASURE_TIMEOUT_MS,
+      runItemMeasurement: runItemMeasurement,
+      entryReads: darwinPlatform.system.entryReads,
+      privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    });
+
+    expect(phase).toEqual({
+      decisions: [],
+      issues: [
+        {
+          path: socketPath,
+          reason: 'engineFailed',
+          failure: { kind: 'badAnswer', endpoint: '/system/df' },
+        },
+      ],
+      fallbackEntries: [engineEntry],
+      incompleteEntries: [],
+    });
   });
 });

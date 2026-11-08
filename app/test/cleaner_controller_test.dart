@@ -6,86 +6,127 @@ import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart'
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
 
 import 'support/fake_cleaner_bridge.dart';
+import 'support/test_items.dart';
 
-const ItemView toolCacheItem = ItemView(
+final ItemView toolCacheItem = buildTestItemView(
   number: 1,
   title: 'Tool cache',
   risk: Risk.safe,
-  riskText: 'safe',
-  sizeText: '6.0 MiB',
-  detailLines: [
-    ItemDetailLine(
-      kind: ItemDetailLineKind.path,
-      text: '/Users/me/Library/Caches/ToolCache',
-    ),
-  ],
+  group: ItemGroup.safe,
+  sectionKey: SectionKey.caches,
+  allocatedBytes: 6000000,
 );
 
-const ItemView oldVideoItem = ItemView(
+final ItemView oldVideoItem = buildTestItemView(
   number: 2,
   title: 'Old video',
   risk: Risk.careful,
-  riskText: 'careful',
-  sizeText: '3.0 MiB',
-  detailLines: [
-    ItemDetailLine(
-      kind: ItemDetailLineKind.path,
-      text: '/Users/me/Movies/holiday.mov',
-    ),
-  ],
+  group: ItemGroup.careful,
+  sectionKey: SectionKey.largeFiles,
+  origin: ItemOrigin.largeFile,
+  allocatedBytes: 3000000,
 );
 
 /// Safe by risk, yet in Explore, so "Select safe" leaves it out.
-const ItemView simulatorItem = ItemView(
+final ItemView simulatorItem = buildTestItemView(
   number: 3,
   title: 'Simulator iPhone 15',
   risk: Risk.safe,
-  riskText: 'safe',
-  sizeText: '1.0 MiB',
-  detailLines: [
-    ItemDetailLine(
-      kind: ItemDetailLineKind.command,
-      text: 'xcrun simctl delete 0A1B2C3D',
-    ),
-  ],
+  group: ItemGroup.review,
+  sectionKey: SectionKey.developerTools,
+  origin: ItemOrigin.explore,
+  removal: ItemRemoval.tool,
+  allocatedBytes: 1000000,
 );
 
-const ScannedEvent scannedEvent = ScannedEvent(
-  summary: SummaryView(titleText: 'Found 3 items', lines: []),
-  sections: [
-    SectionView(
-      titleText: 'Caches',
-      sizeText: '6.0 MiB',
-      isInitiallyExpanded: true,
-      items: [toolCacheItem],
-      checkGroup: null,
-    ),
-    SectionView(
-      titleText: 'Large files',
-      sizeText: '3.0 MiB',
-      isInitiallyExpanded: false,
-      items: [],
-      checkGroup: CheckGroupView(
-        titleText: 'Check before deleting',
-        items: [oldVideoItem],
-      ),
-    ),
-  ],
-  explore: ExploreView(
-    titleText: 'Explore',
-    introText: 'They are never selected for you.',
-    items: [simulatorItem],
-    adviceGroup: null,
+final ScannedEvent scannedEvent = ScannedEvent(
+  summary: const SummaryView(
+    totalBytes: 10000000,
+    isTotalComplete: true,
+    safeBytes: 6000000,
+    isSafeComplete: true,
+    disk: null,
   ),
-  safeNumbers: [1],
+  sections: [
+    SectionView(key: SectionKey.caches, items: [toolCacheItem], checkGroup: null),
+    SectionView(
+      key: SectionKey.largeFiles,
+      items: const [],
+      checkGroup: CheckGroupView(items: [oldVideoItem]),
+    ),
+  ],
+  explore: ExploreView(items: [simulatorItem], adviceGroup: null),
+  safeNumbers: const [1],
   skipped: null,
-  notices: [],
+  notices: const [],
+  sectionTotals: const [
+    SectionTotal(
+      sectionKey: SectionKey.caches,
+      titleText: 'Caches',
+      allocatedBytes: 6000000,
+      isComplete: true,
+      removableBytes: 6000000,
+      isRemovableComplete: true,
+      itemCount: 1,
+      safeBytes: 6000000,
+      adviceCount: 0,
+    ),
+    SectionTotal(
+      sectionKey: SectionKey.developerTools,
+      titleText: 'Developer tools',
+      allocatedBytes: 1000000,
+      isComplete: true,
+      removableBytes: 1000000,
+      isRemovableComplete: true,
+      itemCount: 1,
+      safeBytes: 0,
+      adviceCount: 0,
+    ),
+    SectionTotal(
+      sectionKey: SectionKey.largeFiles,
+      titleText: 'Large files',
+      allocatedBytes: 3000000,
+      isComplete: true,
+      removableBytes: 3000000,
+      isRemovableComplete: true,
+      itemCount: 1,
+      safeBytes: 0,
+      adviceCount: 0,
+    ),
+  ],
 );
 
-const PlannedEvent plannedEvent = PlannedEvent(
+final PlannedItemView plannedToolCache = planItem(toolCacheItem);
+
+final PlannedEvent plannedEvent = buildSamplePlan(
+  [plannedToolCache],
   planId: 7,
-  lines: ['- 6.0 MiB /Users/me/Library/Caches/ToolCache'],
-  warningLines: ['Type DELETE to delete them permanently.'],
+  holdsCareful: false,
+);
+
+/// The plan of the safe item and the careful video together.
+final PlannedEvent twoItemPlan = buildSamplePlan(
+  [plannedToolCache, planItem(oldVideoItem)],
+  planId: 8,
+  holdsCareful: true,
+);
+
+/// The run of [plannedEvent], which removed its one item.
+final DeletedEvent deletedEvent = DeletedEvent(
+  lines: const ['Freed 6.0 MB.'],
+  outcomes: [
+    DeletedOutcomeView(
+      number: 1,
+      key: toolCacheItem.key,
+      outcome: DeletedOutcome.removed,
+      reasonKey: null,
+      freedBytes: 6000000,
+    ),
+  ],
+  freedBytes: 6000000,
+  returnsLaterBytes: 0,
+  availableBytesAfter: null,
+  logPath: '/Users/me/Library/Logs/magic-free-disk-space/deletions.jsonl',
 );
 
 const StatusEvent deniedStatus = StatusEvent(
@@ -104,6 +145,21 @@ Future<void> waitForAnswers() {
   return Future<void>.delayed(Duration.zero);
 }
 
+/// Each state of type [TState] that [controller] takes from now on, in
+/// order.
+List<TState> recordStates<TState extends CleanerState>(
+  CleanerController controller,
+) {
+  final List<TState> states = [];
+  controller.addListener(() {
+    final CleanerState state = controller.state;
+    if (state is TState) {
+      states.add(state);
+    }
+  });
+  return states;
+}
+
 void main() {
   late FakeCleanerBridge bridge;
   late CleanerController controller;
@@ -111,7 +167,7 @@ void main() {
   setUp(() {
     bridge = FakeCleanerBridge(scanAnswer: scannedEvent)
       ..planAnswer = plannedEvent
-      ..deleteAnswer = const DeletedEvent(lines: ['Freed 6.0 MiB.']);
+      ..deleteAnswer = deletedEvent;
   });
 
   group('the status at start', () {
@@ -221,17 +277,16 @@ void main() {
     }
 
     test('a scan reaches the scanned state through its progress', () async {
-      final List<String> progressMessages = [];
-      controller.addListener(() {
-        final CleanerState state = controller.state;
-        if (state is ScanningState) {
-          progressMessages.add(state.progressMessage);
-        }
-      });
+      final List<ScanningState> scanningStates = recordStates<ScanningState>(
+        controller,
+      );
 
       await controller.scan();
 
-      expect(progressMessages, contains('Measuring apps…'));
+      expect(
+        [for (final ScanningState state in scanningStates) state.progress],
+        [null, same(appsProgress)],
+      );
       final ScannedState state = controller.state as ScannedState;
       expect(state.scan, same(scannedEvent));
       expect(state.selectedNumbers, isEmpty);
@@ -255,8 +310,185 @@ void main() {
       await controller.confirmDeletion('DELETE');
 
       expect(bridge.deleteRequest, (planId: 7, confirmation: 'DELETE'));
-      expect((controller.state as DeletedState).lines, ['Freed 6.0 MiB.']);
+      expect((controller.state as DeletedState).result, same(deletedEvent));
       expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete']);
+    });
+
+    test(
+      'a deletion runs through a state that holds its plan, and its result keeps the plan and its scan',
+      () async {
+        final List<DeletingState> deletingStates = recordStates<DeletingState>(
+          controller,
+        );
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+
+        await controller.confirmDeletion('DELETE');
+
+        expect(deletingStates, hasLength(1));
+        expect(deletingStates.single.plan, same(plannedEvent));
+        final DeletedState state = controller.state as DeletedState;
+        expect(state.plan, same(plannedEvent));
+        expect(state.scan, same(scannedEvent));
+      },
+    );
+
+    group('taking an item out of the plan under review', () {
+      Future<void> planSafeItemAndVideo() async {
+        await scanAndSelectSafe();
+        controller.toggleCandidate(2);
+        bridge.planAnswer = twoItemPlan;
+        await controller.requestPlan();
+        bridge.planAnswer = plannedEvent;
+      }
+
+      test(
+        'plans the rest again, and holds the old plan as replanning meanwhile',
+        () async {
+          await planSafeItemAndVideo();
+          final List<ConfirmingState> confirmingStates =
+              recordStates<ConfirmingState>(controller);
+
+          await controller.removeCandidateFromPlan(2);
+
+          expect(bridge.plannedNumbers, [1]);
+          expect(confirmingStates, hasLength(2));
+          expect(confirmingStates.first.isReplanning, isTrue);
+          expect(confirmingStates.first.plan, same(twoItemPlan));
+          expect(confirmingStates.first.selectedNumbers, {1});
+          final ConfirmingState state = controller.state as ConfirmingState;
+          expect(state.isReplanning, isFalse);
+          expect(state.plan, same(plannedEvent));
+          expect(state.selectedNumbers, {1});
+        },
+      );
+
+      test('never confirms the old plan while the new one is on its way', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        await controller.confirmDeletion('DELETE');
+        await replan;
+
+        expect(bridge.deleteRequest, isNull);
+        expect(controller.state, isA<ConfirmingState>());
+      });
+
+      test('with its last item shows the list with nothing selected and plans nothing', () async {
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+
+        await controller.removeCandidateFromPlan(1);
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, isEmpty);
+        expect(bridge.requestKinds, ['status', 'scan', 'plan']);
+      });
+
+      test('a number outside the selection changes nothing', () async {
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+        final CleanerState before = controller.state;
+
+        await controller.removeCandidateFromPlan(3);
+
+        expect(controller.state, same(before));
+        expect(bridge.requestKinds, ['status', 'scan', 'plan']);
+      });
+
+      test('cancelled while the new plan is on its way keeps the list', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        controller.cancelConfirmation();
+        await replan;
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, {1});
+      });
+
+      test('cancelled while the new plan is on its way takes a tick at once', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        controller.cancelConfirmation();
+        controller.toggleCandidate(2);
+        await replan;
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, {1, 2});
+      });
+
+      test('cancelled while the new plan is on its way scans again at once', () async {
+        await planSafeItemAndVideo();
+
+        final Future<void> replan = controller.removeCandidateFromPlan(2);
+        controller.cancelConfirmation();
+        final Future<void> rescan = controller.scan();
+        await replan;
+        await rescan;
+
+        expect(bridge.requestKinds.last, 'scan');
+        expect(controller.state, isA<ScannedState>());
+      });
+
+      test('a new plan that approves nothing shows the list with its lines', () async {
+        await planSafeItemAndVideo();
+        bridge.planAnswer = const NothingApprovedEvent(
+          lines: ['Nothing of the selection can be deleted.'],
+        );
+
+        await controller.removeCandidateFromPlan(2);
+
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.selectedNumbers, {1});
+        expect(state.notice, 'Nothing of the selection can be deleted.');
+      });
+    });
+
+    test('done after a run scans again', () async {
+      await scanAndSelectSafe();
+      await controller.requestPlan();
+      await controller.confirmDeletion('DELETE');
+
+      await controller.finishDeletion();
+
+      expect(bridge.requestKinds, ['status', 'scan', 'plan', 'delete', 'scan']);
+      final ScannedState state = controller.state as ScannedState;
+      expect(state.selectedNumbers, isEmpty);
+    });
+
+    test('done outside a result scans nothing', () async {
+      await scanAndSelectSafe();
+
+      await controller.finishDeletion();
+
+      expect(bridge.requestKinds, ['status', 'scan']);
+    });
+
+    group('a group tap', () {
+      test('ticks the whole group while any of it is unticked, in one change', () async {
+        await scanAndSelectSafe();
+        int notificationCount = 0;
+        controller.addListener(() => notificationCount += 1);
+
+        controller.toggleCandidateGroup([1, 2, 3]);
+
+        expect(notificationCount, 1);
+        expect((controller.state as ScannedState).selectedNumbers, {1, 2, 3});
+      });
+
+      test('unticks the whole group once all of it is ticked, in one change', () async {
+        await controller.scan();
+        controller.toggleCandidateGroup([2, 3]);
+        int notificationCount = 0;
+        controller.addListener(() => notificationCount += 1);
+
+        controller.toggleCandidateGroup([2, 3]);
+
+        expect(notificationCount, 1);
+        expect((controller.state as ScannedState).selectedNumbers, isEmpty);
+      });
     });
 
     test('a tick while the plan request is pending changes nothing', () async {

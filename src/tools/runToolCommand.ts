@@ -22,6 +22,11 @@ const TOOL_LEADING_ARGUMENTS: Record<ToolName, string[]> = {
   brewIntel: [],
   avdmanager: [],
   asdf: [],
+  brctl: [],
+  vagrant: [],
+  rustup: [],
+  conda: [],
+  fvm: [],
 };
 
 /** The output of a run that exited with 0. */

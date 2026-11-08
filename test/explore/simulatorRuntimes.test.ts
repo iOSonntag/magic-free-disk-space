@@ -22,6 +22,7 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -29,7 +30,7 @@ import {
   buildSimulatorDeviceListJson,
   FIXTURE_HOME_DIR,
 } from './probeOutputFixtures.js';
-import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildRuntimeEntry,
   buildRuntimeImagePath,
@@ -338,18 +339,16 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       answers: buildWorkingAnswers({ homeDir: environment.homeDir }),
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun.path }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: TIMEOUT_MS,
-      unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-    });
+    const probes = startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({ xcrun: xcrun.path }),
+        activeXcodeBundlePath: Promise.resolve('/Applications/Xcode.app'),
+        unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
+      }),
+    );
 
-    const outcome = await probes.simulatorRuntimes;
+    const outcome = await probes.outcomes.simulatorRuntimes;
 
     if (outcome.kind !== 'probed') {
       throw new Error(`The runtime probe should have run, not ${outcome.kind}.`);
@@ -369,15 +368,15 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
         answer.command === 'simulatorDevices' ? { ...answer, exitCode: 3 } : answer,
       ),
     });
-    const run = {
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      processCommands: [],
-      deadlineMs: Date.now() + TIMEOUT_MS,
-      unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-    };
-
-    expect(await loadSimulatorRuntimeFindings({ ...run, tool: failing })).toEqual({
+    expect(
+      await loadSimulatorRuntimeFindings(
+        buildTestProbeToolRun({
+          environment: environment,
+          tool: failing,
+          unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
+        }),
+      ),
+    ).toEqual({
       kind: 'failed',
       failure: {
         reason: 'commandFailed',
@@ -390,7 +389,13 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
         answer.command === 'simulatorRuntimes' ? { ...answer, stdoutText: 'garbage' } : answer,
       ),
     });
-    const findings = await loadSimulatorRuntimeFindings({ ...run, tool: garbled });
+    const findings = await loadSimulatorRuntimeFindings(
+      buildTestProbeToolRun({
+        environment: environment,
+        tool: garbled,
+        unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
+      }),
+    );
 
     expect(findings.kind === 'failed' && findings.failure.reason).toBe('outputUnreadable');
   });

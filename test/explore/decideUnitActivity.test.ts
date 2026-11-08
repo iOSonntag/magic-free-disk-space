@@ -49,6 +49,49 @@ const NVM_VERSION_FOLDER_PATH = buildTestAbsolutePath({
   text: '/Users/example/.nvm/versions/node/v20.11.1',
 });
 
+/**
+ * Each local model unit, with the commands of its tool and commands that only look alike, which
+ * leave it idle.
+ */
+const MODEL_PROCESS_RULES: {
+  facts: UnitActivityFacts;
+  ownerCommands: string[];
+  otherCommands: string[];
+}[] = [
+  {
+    facts: { kind: 'ollama' },
+    ownerCommands: [
+      '/Applications/Ollama.app/Contents/Resources/ollama serve',
+      'ollama run llama3',
+    ],
+    otherCommands: ['/usr/local/bin/ollama-proxy'],
+  },
+  {
+    facts: { kind: 'huggingFace' },
+    ownerCommands: ['/opt/homebrew/bin/hf download org/name', 'huggingface-cli scan-cache'],
+    otherCommands: ['/usr/local/bin/hfs mount', '/opt/example/hf-tools/run'],
+  },
+  {
+    facts: { kind: 'lmStudio' },
+    ownerCommands: [
+      '/Applications/LM Studio.app/Contents/MacOS/LM Studio',
+      '/Users/example/.lmstudio/bin/lms server start',
+      'llmster',
+    ],
+    otherCommands: ['/usr/local/bin/lmserve'],
+  },
+];
+
+const CLAUDE_CODE_VERSION_PATH = buildTestAbsolutePath({
+  text: '/Users/example/.local/share/claude/versions/2.1.3',
+});
+
+const RUSTUP_TOOLCHAINS_PATH = '/Users/example/.rustup/toolchains';
+
+const RUSTUP_TOOLCHAIN_PATH = buildTestAbsolutePath({
+  text: `${RUSTUP_TOOLCHAINS_PATH}/nightly-aarch64-apple-darwin`,
+});
+
 describeAwaitingWin32Platform('decideUnitActivity', () => {
   test('a shut-down device is idle while Simulator.app does not run', () => {
     expect(
@@ -162,5 +205,120 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
         processCommands: null,
       }),
     ).toBe('unknown');
+  });
+
+  test('a local model unit is busy while its tool runs, idle without it, and unknown without processes', () => {
+    for (const rule of MODEL_PROCESS_RULES) {
+      for (const ownerCommand of rule.ownerCommands) {
+        expect(
+          decideUnitActivity({
+            facts: rule.facts,
+            processCommands: [UNRELATED_COMMAND, ownerCommand],
+          }),
+        ).toBe('busy');
+      }
+
+      expect(
+        decideUnitActivity({
+          facts: rule.facts,
+          processCommands: [UNRELATED_COMMAND, ...rule.otherCommands],
+        }),
+      ).toBe('idle');
+      expect(decideUnitActivity({ facts: rule.facts, processCommands: null })).toBe('unknown');
+    }
+  });
+
+  test('every Claude Code version is busy while a claude session runs through the launcher', () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+        processCommands: [UNRELATED_COMMAND, 'claude --resume'],
+      }),
+    ).toBe('busy');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+        processCommands: [`${CLAUDE_CODE_VERSION_PATH} --print`],
+      }),
+    ).toBe('busy');
+  });
+
+  test('a Claude Code version stays idle beside a version whose number only starts with its own', () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+        processCommands: [`${CLAUDE_CODE_VERSION_PATH}0 --print`, '/usr/local/bin/claude-monitor'],
+      }),
+    ).toBe('idle');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+        processCommands: null,
+      }),
+    ).toBe('unknown');
+  });
+
+  test('a Rust toolchain is busy while rustup, cargo, rustc, or a program of its own folder runs', () => {
+    for (const ownerCommand of [
+      '/Users/example/.cargo/bin/cargo build',
+      'rustc --version',
+      '/Users/example/.cargo/bin/rustup update',
+      `${RUSTUP_TOOLCHAIN_PATH}/libexec/rust-analyzer-proc-macro-srv`,
+    ]) {
+      expect(
+        decideUnitActivity({
+          facts: { kind: 'rustup', toolchainPath: RUSTUP_TOOLCHAIN_PATH },
+          processCommands: [UNRELATED_COMMAND, ownerCommand],
+        }),
+      ).toBe('busy');
+    }
+  });
+
+  test("a Rust toolchain stays idle beside another toolchain's program and a cargo plugin", () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'rustup', toolchainPath: RUSTUP_TOOLCHAIN_PATH },
+        processCommands: [
+          `${RUSTUP_TOOLCHAINS_PATH}/stable-aarch64-apple-darwin/libexec/rust-analyzer-proc-macro-srv`,
+          '/Users/example/.cargo/bin/cargo-watch',
+        ],
+      }),
+    ).toBe('idle');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'rustup', toolchainPath: RUSTUP_TOOLCHAIN_PATH },
+        processCommands: null,
+      }),
+    ).toBe('unknown');
+  });
+
+  test('the conda packages are busy while conda, mamba, micromamba, or conda as a module runs', () => {
+    for (const ownerCommand of [
+      '/Users/example/miniconda3/bin/conda install numpy',
+      '/Users/example/miniforge3/bin/mamba install numpy',
+      'micromamba create -n tools',
+      '/Users/example/miniconda3/bin/python -m conda update conda',
+    ]) {
+      expect(
+        decideUnitActivity({
+          facts: { kind: 'conda' },
+          processCommands: [UNRELATED_COMMAND, ownerCommand],
+        }),
+      ).toBe('busy');
+    }
+  });
+
+  test('the conda packages stay idle beside a program whose name only starts with conda or mamba', () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'conda' },
+        processCommands: [
+          '/usr/local/bin/condax run black',
+          '/opt/example/mambaforge-tools/run',
+          'python -m condastats',
+        ],
+      }),
+    ).toBe('idle');
+    expect(decideUnitActivity({ facts: { kind: 'conda' }, processCommands: null })).toBe('unknown');
   });
 });

@@ -1,50 +1,78 @@
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import { PROJECT_ARTIFACT_RULES } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
-import type { ExplorePlatform } from '../explore/explorePlatform.js';
+import type { ExplorePlatform, IdeVersionRoots } from '../explore/explorePlatform.js';
 import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js';
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
+import { isOverlappingPath } from '../path/isOverlappingPath.js';
+import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { createConcurrencyLimit } from '../system/createConcurrencyLimit.js';
+import type { EntryReads } from '../system/entryReads.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import type { EntryEvictionCheck, SystemPlatform } from '../system/systemPlatform.js';
+import { mapNonEmpty } from '../system/nonEmptyList.js';
+import type { SystemPlatform } from '../system/systemPlatform.js';
 import type { ToolsPlatform } from '../tools/toolsPlatform.js';
-import { buildInstalledBundleIds } from './buildInstalledBundleIds.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import { buildScanReport } from './buildScanReport.js';
-import type { Advice, Candidate, SkipReason } from './candidate.js';
+import type { SectionTotal } from './buildSectionTotals.js';
+import { buildSectionTotals } from './buildSectionTotals.js';
+import type { Advice, Candidate, CandidateDecision, SkipReason } from './candidate.js';
+import { isProbedCandidate } from './candidate.js';
 import { decideAppCandidate } from './decideAppCandidate.js';
 import { decideArtifactCandidate } from './decideArtifactCandidate.js';
-import { decideCatalogCandidate, isSystemOwnedTarget } from './decideCatalogCandidate.js';
-import { decideOrphanCandidate, getOrphanNameSkipReason } from './decideOrphanCandidate.js';
+import {
+  buildCarvedPaths,
+  decideCatalogCandidate,
+  isSystemOwnedTarget,
+} from './decideCatalogCandidate.js';
+import type { OrphanInstalledFacts } from './decideOrphanCandidate.js';
+import {
+  buildOrphanInstalledFacts,
+  decideOrphanCandidate,
+  isOrphanNameSkipReported,
+  matchOrphanName,
+} from './decideOrphanCandidate.js';
 import { decideUserFileCandidate } from './decideUserFileCandidate.js';
 import { dedupeCandidates } from './dedupeCandidates.js';
 import type { CatalogTarget } from './findCatalogTargets.js';
 import { findCatalogTargets } from './findCatalogTargets.js';
 import { findLargeUserFiles } from './findLargeUserFiles.js';
 import { findLastSignOfUse } from './findLastSignOfUse.js';
+import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 import { DAY_MS, SCAN_LIMITS } from './limits.js';
+import { listCandidateFootprint } from './listCandidateFootprint.js';
 import { loadExplorePhase } from './loadExplorePhase.js';
 import { loadMeasuredPhase } from './loadMeasuredPhase.js';
+import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
   buildAppOwner,
+  findOwnerAppName,
   findOwnerBundlePaths,
+  isOwnerUninstalled,
   resolveOwnerState,
   resolveTargetOwner,
 } from './resolveOwnerState.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
-import type { InstalledApp, ScanPlatform, ScanPlatformApps } from './scanPlatform.js';
+import type {
+  InstalledApp,
+  OrphanLocation,
+  ScanPlatform,
+  ScanPlatformApps,
+  SystemApp,
+} from './scanPlatform.js';
+import { skipOffersTheRemovalRefuses } from './skipOffersTheRemovalRefuses.js';
 import type { ArtifactFinding, ProjectWalk } from './walkProjects.js';
 import { walkProjects } from './walkProjects.js';
 
@@ -57,6 +85,20 @@ export type SkippedItem = {
   path: string;
   reason: SkipReason;
 };
+
+/** The part of the scan running now, as a client names it. */
+export type ScanProgressPhase =
+  | 'apps'
+  | 'catalog'
+  | 'projects'
+  | 'largeFiles'
+  | 'leftovers'
+  | 'tools';
+
+type ScanProgressStep = { message: string; phase: ScanProgressPhase };
+
+/** The step starting now, with what the steps before it found, deduped as the report will be. */
+export type ScanProgress = ScanProgressStep & { found: SectionTotal[] };
 
 export type ScanReport = {
   /**
@@ -73,16 +115,22 @@ export type ScanReport = {
 
 type ScanContext = {
   environment: Environment;
+  /** The scan's stale window, which scales each catalog entry's `unchangedDays`. */
+  staleDays: number;
   staleCutoffMs: number;
   unusedCutoffMs: number;
+  /** The running system's version, which an installer of the same release never goes for. */
+  systemVersion: string | null;
   installedApps: InstalledApp[];
   /** False when an app folder or a bundle id could not be read: no container counts as orphaned. */
   isInstalledAppListComplete: boolean;
+  /** Asked only for the bundles of an owner, never listed or judged as apps. */
+  systemApps: SystemApp[];
   /** `null` when `ps` failed: every item with an owner app is then withheld. */
   processCommands: string[] | null;
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
-  /** The system slice's eviction check, asked by every walk and measurement of the scan. */
-  isEntryEvicted: EntryEvictionCheck;
+  /** The system slice's entry reads, asked by every walk and measurement of the scan. */
+  entryReads: EntryReads;
   /** The system slice's code of a privacy denial, for every issue of a failed read. */
   privacyDenialCode: string | null;
   /** Home folders searched for large files, from the scan slice. */
@@ -97,10 +145,11 @@ const XCODE_BUNDLE_ID_PREFIX = 'com.apple.dt.Xcode';
  */
 const runItemMeasurement = createConcurrencyLimit({ maxConcurrent: 4 });
 
-/** Names whose changes say nothing about whether a project is in use. */
-const PROJECT_ACTIVITY_EXCLUDED_NAMES = [
-  ...new Set([...PROJECT_ARTIFACT_RULES.map((rule) => rule.artifactName), '.git']),
-];
+/**
+ * Names whose changes at any depth say nothing about whether a project is in use; its artifact
+ * folders are left out by the paths the project walk found.
+ */
+const PROJECT_ACTIVITY_EXCLUDED_NAMES = ['.git'];
 
 /**
  * Scans every source of leftovers and decides about each item. Reads only; it deletes nothing.
@@ -114,9 +163,44 @@ export async function runScan(params: {
   system: SystemPlatform;
   explore: ExplorePlatform;
   options: ScanOptions;
-  onProgress: (message: string) => void;
+  onProgress: (progress: ScanProgress) => void;
 }): Promise<ScanReport> {
-  params.onProgress('Checking installed apps and running processes…');
+  // Known from the start, so the first `found` already leaves out what a probe reserves.
+  const reservedEntryPaths = params.catalog.entries.flatMap((entry) =>
+    entry.removal.kind === 'explore'
+      ? [getCatalogEntryPath({ environment: params.environment, entry: entry })]
+      : [],
+  );
+  // The probe of the IDE versions takes folders outside its entry, in the roots of every version.
+  const knownClaimPaths = [
+    ...reservedEntryPaths,
+    ...listIdeVersionRootPaths({
+      environment: params.environment,
+      roots: params.explore.ideVersionRoots,
+    }),
+  ];
+
+  function reportProgress(progress: {
+    step: ScanProgressStep;
+    finishedPhases: ScanPhase[];
+    probeClaimPaths: string[];
+  }): void {
+    params.onProgress(
+      buildScanProgress({
+        step: progress.step,
+        environment: params.environment,
+        reservedEntryPaths: reservedEntryPaths,
+        probeClaimPaths: progress.probeClaimPaths,
+        finishedPhases: progress.finishedPhases,
+      }),
+    );
+  }
+
+  reportProgress({
+    step: { message: 'Checking installed apps and running processes…', phase: 'apps' },
+    finishedPhases: [],
+    probeClaimPaths: knownClaimPaths,
+  });
 
   const processCommandsLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
@@ -128,6 +212,7 @@ export async function runScan(params: {
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
   const unusedCutoffMs = params.environment.nowMs - params.options.unusedDays * DAY_MS;
+  const staleCutoffMs = params.environment.nowMs - params.options.staleDays * DAY_MS;
   // One walk serves the artifact phase and the pinned probes, its deadline counted from scan start.
   const projectWalk = walkProjects({
     pathRules: params.environment.pathRules,
@@ -136,7 +221,7 @@ export async function runScan(params: {
     rules: PROJECT_ARTIFACT_RULES,
     maxDepth: SCAN_LIMITS.projectMaxDepth,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
-    isEntryEvicted: params.system.isEntryEvicted,
+    entryReads: params.system.entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const projectPins: ProjectPinsLoad = {
@@ -167,22 +252,27 @@ export async function runScan(params: {
     ),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
     unusedCutoffMs: unusedCutoffMs,
+    staleCutoffMs: staleCutoffMs,
     projectPins: projectPins,
   });
-  const [processCommands, installed, activeXcodeBundlePath] = await Promise.all([
+  const [processCommands, installed, activeXcodeBundlePath, systemVersion] = await Promise.all([
     processCommandsLoad,
     loadPlatformApps({ apps: params.scan.apps, appDirs: params.environment.applicationDirs }),
     activeXcodeBundlePathLoad,
+    params.system.loadSystemVersion(),
   ]);
   const context: ScanContext = {
     environment: params.environment,
-    staleCutoffMs: params.environment.nowMs - params.options.staleDays * DAY_MS,
+    staleDays: params.options.staleDays,
+    staleCutoffMs: staleCutoffMs,
     unusedCutoffMs: unusedCutoffMs,
+    systemVersion: systemVersion,
     installedApps: installed.apps,
     isInstalledAppListComplete: installed.issues.length === 0,
+    systemApps: params.scan.systemApps,
     processCommands: await knownProcessCommandsLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
-    isEntryEvicted: params.system.isEntryEvicted,
+    entryReads: params.system.entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
     userFileRootRelativePaths: params.scan.userFileRootRelativePaths,
   };
@@ -194,38 +284,70 @@ export async function runScan(params: {
     ],
   };
 
-  params.onProgress('Measuring known storage locations…');
+  reportProgress({
+    step: { message: 'Measuring known storage locations…', phase: 'catalog' },
+    finishedPhases: [setup],
+    probeClaimPaths: knownClaimPaths,
+  });
   const catalog = await loadCatalogPhase({
     context: context,
     entries: params.catalog.entries.filter((entry) => entry.removal.kind !== 'explore'),
   });
 
-  params.onProgress('Searching your projects for old build folders…');
-  const artifacts = await loadArtifactPhase({ context: context, projectWalk: projectWalk });
+  reportProgress({
+    step: { message: 'Searching your projects for old build folders…', phase: 'projects' },
+    finishedPhases: [setup, catalog],
+    probeClaimPaths: knownClaimPaths,
+  });
+  // The roots the probes name, such as a project's `sdk.dir`, are known once the project walk
+  // ends; they claim before the large files, which may lie in one, can count.
+  const [artifacts, exploreClaimRoots] = await Promise.all([
+    loadArtifactPhase({ context: context, projectWalk: projectWalk }),
+    probes.claimRootsLoad,
+  ]);
+  const probeClaimPaths = [...knownClaimPaths, ...exploreClaimRoots];
 
   const apps = await loadAppPhaseOfAppSection({
     apps: params.scan.apps,
     context: context,
-    onProgress: params.onProgress,
+    onStep: (step) =>
+      reportProgress({
+        step: step,
+        finishedPhases: [setup, catalog, artifacts],
+        probeClaimPaths: probeClaimPaths,
+      }),
   });
 
-  params.onProgress('Looking for large old files…');
+  reportProgress({
+    step: { message: 'Looking for large old files…', phase: 'largeFiles' },
+    finishedPhases: [setup, catalog, artifacts, apps],
+    probeClaimPaths: probeClaimPaths,
+  });
   const userFiles = await loadUserFilePhase({ context: context });
 
   const orphans = await loadOrphanPhaseOfAppSection({
     apps: params.scan.apps,
     context: context,
-    onProgress: params.onProgress,
+    onStep: (step) =>
+      reportProgress({
+        step: step,
+        finishedPhases: [setup, catalog, artifacts, apps, userFiles],
+        probeClaimPaths: probeClaimPaths,
+      }),
   });
 
-  params.onProgress('Asking developer tools what they can clean…');
+  reportProgress({
+    step: { message: 'Asking developer tools what they can clean…', phase: 'tools' },
+    finishedPhases: [setup, catalog, artifacts, apps, userFiles, orphans],
+    probeClaimPaths: probeClaimPaths,
+  });
   const explore = await loadExplorePhase({
     environment: params.environment,
-    probes: probes,
+    probes: probes.outcomes,
     catalogEntries: params.catalog.entries,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.system.isEntryEvicted,
+    entryReads: params.system.entryReads,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const exploreAdvice = await loadCatalogPhase({
@@ -238,7 +360,8 @@ export async function runScan(params: {
   });
 
   return buildScanReportOfPhases({
-    pathRules: params.environment.pathRules,
+    environment: params.environment,
+    reservedEntryPaths: reservedEntryPaths,
     // Explore comes last, so an item an earlier source found wins the overlap.
     phases: [
       setup,
@@ -272,11 +395,11 @@ function loadPlatformApps(params: {
 function loadAppPhaseOfAppSection(params: {
   apps: ScanPlatformApps;
   context: ScanContext;
-  onProgress: (message: string) => void;
+  onStep: (step: ScanProgressStep) => void;
 }): Promise<ScanPhase> {
   switch (params.apps.appSection) {
     case 'offerUnusedApps':
-      params.onProgress('Measuring apps…');
+      params.onStep({ message: 'Measuring apps…', phase: 'apps' });
 
       return loadAppPhase({ context: params.context });
   }
@@ -286,22 +409,63 @@ function loadAppPhaseOfAppSection(params: {
 function loadOrphanPhaseOfAppSection(params: {
   apps: ScanPlatformApps;
   context: ScanContext;
-  onProgress: (message: string) => void;
+  onStep: (step: ScanProgressStep) => void;
 }): Promise<ScanPhase> {
   switch (params.apps.appSection) {
     case 'offerUnusedApps':
-      params.onProgress('Looking for data of removed apps…');
+      params.onStep({ message: 'Looking for data of removed apps…', phase: 'leftovers' });
 
-      return loadOrphanPhase({ context: params.context });
+      return loadOrphanPhase({ context: params.context, locations: params.apps.orphanLocations });
   }
 }
 
 /**
- * Dedupes the decisions of the phases, in their order, then adds the advice of the Explore entries
- * whose probe judged only part of their units, and builds the report.
+ * Dedupes what the finished phases found the same way the report does, and leaves out each offer
+ * that is, holds, or lies in a place a probe still running may claim, so a total grows to the
+ * report's and never shrinks for a claim. An offer the report holds back for a skip or an advice
+ * of the Explore phase inside it can still count here.
+ */
+function buildScanProgress(params: {
+  step: ScanProgressStep;
+  environment: Environment;
+  reservedEntryPaths: string[];
+  probeClaimPaths: string[];
+  finishedPhases: ScanPhase[];
+}): ScanProgress {
+  const decisions = dedupeScanDecisions({
+    environment: params.environment,
+    reservedEntryPaths: params.reservedEntryPaths,
+    decisions: mergeScanPhases({ phases: params.finishedPhases }).decisions,
+  });
+
+  return {
+    message: params.step.message,
+    phase: params.step.phase,
+    found: buildSectionTotals({
+      candidates: decisions.flatMap((decision) =>
+        decision.kind === 'offer' &&
+        !isInProbeClaim({
+          pathRules: params.environment.pathRules,
+          candidate: decision.candidate,
+          probeClaimPaths: params.probeClaimPaths,
+        })
+          ? [decision.candidate]
+          : [],
+      ),
+      advice: decisions.flatMap((decision) =>
+        decision.kind === 'advice' ? [decision.advice] : [],
+      ),
+    }),
+  };
+}
+
+/**
+ * Dedupes the decisions of the phases as `dedupeScanDecisions` does, then adds the advice of the
+ * Explore entries whose probe judged only part of their units, and builds the report.
  */
 export function buildScanReportOfPhases(params: {
-  pathRules: PathRules;
+  environment: Environment;
+  reservedEntryPaths: string[];
   phases: ScanPhase[];
   incompleteExploreAdvice: ScanPhase;
 }): ScanReport {
@@ -309,13 +473,68 @@ export function buildScanReportOfPhases(params: {
 
   return buildScanReport({
     decisions: [
-      ...dedupeCandidates({ pathRules: params.pathRules, decisions: scan.decisions }),
+      ...dedupeScanDecisions({
+        environment: params.environment,
+        reservedEntryPaths: params.reservedEntryPaths,
+        decisions: scan.decisions,
+      }),
       // Added after the dedupe, so this advice holds back no offer of its own entry, whose units
       // lie inside its path. Moved before it, the advice would skip every finding of its probe.
       ...params.incompleteExploreAdvice.decisions,
     ],
     issues: [...scan.issues, ...params.incompleteExploreAdvice.issues],
   });
+}
+
+/**
+ * Skips the offers the removal plan would refuse, then dedupes the decisions in their order, with
+ * the paths of the Explore entries reserved for their probes: the one chain of the progress and
+ * the report.
+ */
+function dedupeScanDecisions(params: {
+  environment: Environment;
+  reservedEntryPaths: string[];
+  decisions: CandidateDecision[];
+}): CandidateDecision[] {
+  return dedupeCandidates({
+    pathRules: params.environment.pathRules,
+    decisions: skipOffersTheRemovalRefuses({
+      environment: params.environment,
+      decisions: params.decisions,
+    }),
+    reservedEntryPaths: params.reservedEntryPaths,
+  });
+}
+
+/** The roots of every IDE version below the home folder, of each kind. */
+function listIdeVersionRootPaths(params: {
+  environment: Environment;
+  roots: IdeVersionRoots;
+}): string[] {
+  return [...params.roots.caches, ...params.roots.logs, ...params.roots.settings].map((names) =>
+    joinAbsolutePath({
+      rules: params.environment.pathRules,
+      parentPath: params.environment.homeDir,
+      names: names,
+    }),
+  );
+}
+
+/** Whether an offer no probe made is, holds, or lies in one of `probeClaimPaths`. */
+function isInProbeClaim(params: {
+  pathRules: PathRules;
+  candidate: Candidate;
+  probeClaimPaths: string[];
+}): boolean {
+  if (isProbedCandidate(params.candidate)) {
+    return false;
+  }
+
+  return listCandidateFootprint(params.candidate).some((path) =>
+    params.probeClaimPaths.some((claimPath) =>
+      isOverlappingPath({ rules: params.pathRules, path: path, otherPath: claimPath }),
+    ),
+  );
 }
 
 async function loadCatalogPhase(params: {
@@ -332,8 +551,19 @@ async function loadCatalogPhase(params: {
       loadCatalogTargetPhase({ context: params.context, target: target }),
     ),
   );
+  // After the targets, so a skip holds back no earlier entry's offer of the same path.
+  const overlapping: ScanPhase = {
+    decisions: found.overlappingTargets.map((target) => ({
+      kind: 'skip',
+      path: target.path,
+      reason: 'overlapsEarlierCandidate',
+    })),
+    issues: [],
+  };
 
-  return mergeScanPhases({ phases: [{ decisions: [], issues: found.issues }, ...targetPhases] });
+  return mergeScanPhases({
+    phases: [{ decisions: [], issues: found.issues }, ...targetPhases, overlapping],
+  });
 }
 
 async function loadCatalogTargetPhase(params: {
@@ -353,22 +583,37 @@ async function loadCatalogTargetPhase(params: {
     return { decisions: [{ kind: 'skip', path: path, reason: 'systemOwned' }], issues: [] };
   }
 
-  return loadMeasuredPhase({
+  const carvedPaths = buildCarvedPaths({
+    pathRules: params.context.environment.pathRules,
+    entry: entry,
     path: path,
+  });
+
+  return loadMeasuredTargetsPhase({
+    found: mapNonEmpty(params.target.targetPaths, (targetPath) => ({ path: targetPath })),
+    carve:
+      carvedPaths.length === 0
+        ? null
+        : { pathRules: params.context.environment.pathRules, carvedPaths: carvedPaths },
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const activity =
-        entry.ageRule === 'staleDays'
+        entry.ageRule.kind === 'unchangedDays'
           ? await loadTreeActivity({
               path: path,
-              cutoffMs: params.context.staleCutoffMs,
+              cutoffMs: getUnchangedCutoffMs({
+                nowMs: params.context.environment.nowMs,
+                days: entry.ageRule.days,
+                staleDays: params.context.staleDays,
+              }),
               excludedNames: [],
+              excludedPaths: new Set(),
               maxEntries: SCAN_LIMITS.probeMaxEntries,
               deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
-              isEntryEvicted: params.context.isEntryEvicted,
+              entryReads: params.context.entryReads,
             })
           : null;
 
@@ -380,17 +625,39 @@ async function loadCatalogTargetPhase(params: {
         ownerBundlePaths: findOwnerBundlePaths({
           owner: owner,
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
         }),
         ownerState: resolveOwnerState({
           owner: owner,
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
           processCommands: params.context.processCommands,
+        }),
+        ownerAppName: findOwnerAppName({
+          owner: owner,
+          installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
+        }),
+        isOwnerUninstalled: isOwnerUninstalled({
+          owner: owner,
+          installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
+          isInstalledAppListComplete: params.context.isInstalledAppListComplete,
         }),
         activity: activity,
         minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
+        carvedPaths: carvedPaths,
       });
     },
   });
+}
+
+/**
+ * The cutoff of an `unchangedDays` entry: its `days` under the default stale window, scaled by the
+ * scan's own, so an entry of the default window keeps exactly the scan's stale cutoff.
+ */
+function getUnchangedCutoffMs(params: { nowMs: number; days: number; staleDays: number }): number {
+  return params.nowMs - (params.days * params.staleDays * DAY_MS) / SCAN_LIMITS.defaultStaleDays;
 }
 
 async function loadArtifactPhase(params: {
@@ -398,33 +665,41 @@ async function loadArtifactPhase(params: {
   projectWalk: Promise<ProjectWalk>;
 }): Promise<ScanPhase> {
   const found = await params.projectWalk;
+  const artifactPaths = new Set(found.artifacts.map((finding) => finding.artifactPath));
   const findingPhases = await Promise.all(
     found.artifacts.map((finding) =>
-      loadArtifactFindingPhase({ context: params.context, finding: finding }),
+      loadArtifactFindingPhase({
+        context: params.context,
+        finding: finding,
+        artifactPaths: artifactPaths,
+      }),
     ),
   );
 
   return mergeScanPhases({ phases: [{ decisions: [], issues: found.issues }, ...findingPhases] });
 }
 
+/** One artifact, judged by the activity of its project less every artifact the walk found. */
 function loadArtifactFindingPhase(params: {
   context: ScanContext;
   finding: ArtifactFinding;
+  artifactPaths: ReadonlySet<string>;
 }): Promise<ScanPhase> {
   return loadMeasuredPhase({
     path: params.finding.artifactPath,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const activity = await loadTreeActivity({
         path: params.finding.projectRoot,
         cutoffMs: params.context.staleCutoffMs,
         excludedNames: PROJECT_ACTIVITY_EXCLUDED_NAMES,
+        excludedPaths: params.artifactPaths,
         maxEntries: SCAN_LIMITS.probeMaxEntries,
         deadlineMs: Date.now() + SCAN_LIMITS.probeTimeoutMs,
-        isEntryEvicted: params.context.isEntryEvicted,
+        entryReads: params.context.entryReads,
       });
 
       return decideArtifactCandidate({
@@ -454,7 +729,7 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
     path: app.bundlePath,
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
     decide: async (measurement) => {
       const lastSignOfUseMs =
@@ -474,6 +749,7 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
         ownerState: resolveOwnerState({
           owner: buildAppOwner({ app: app }),
           installedApps: params.context.installedApps,
+          systemApps: params.context.systemApps,
           processCommands: params.context.processCommands,
         }),
         isProtectedDeveloperApp: isProtectedDeveloperApp({
@@ -482,6 +758,9 @@ function loadAppItemPhase(params: { context: ScanContext; app: InstalledApp }): 
           activeXcodeBundlePath: params.context.activeXcodeBundlePath,
         }),
         minAppBytes: SCAN_LIMITS.minAppBytes,
+        systemVersion: params.context.systemVersion,
+        nowMs: params.context.environment.nowMs,
+        user: params.context.environment.user,
       });
     },
   });
@@ -492,53 +771,81 @@ async function loadUserFilePhase(params: { context: ScanContext }): Promise<Scan
     rootDirs: params.context.userFileRootRelativePaths.map((relativePath) =>
       join(params.context.environment.homeDir, relativePath),
     ),
+    artifactRules: PROJECT_ARTIFACT_RULES,
     minAllocatedBytes: SCAN_LIMITS.minUserFileBytes,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
-    isEntryEvicted: params.context.isEntryEvicted,
+    entryReads: params.context.entryReads,
     privacyDenialCode: params.context.privacyDenialCode,
   });
-  // A large file inside a dependency or git folder belongs to its project, not to the user.
-  const decisions = found.findings
-    .filter((finding) => !isInsideProjectMachinery({ path: finding.path }))
-    .map((finding) =>
-      decideUserFileCandidate({
-        finding: finding,
-        unusedCutoffMs: params.context.unusedCutoffMs,
-        minUserFileBytes: SCAN_LIMITS.minUserFileBytes,
-      }),
-    );
+  const decisions = found.findings.map((finding) =>
+    decideUserFileCandidate({
+      finding: finding,
+      unusedCutoffMs: params.context.unusedCutoffMs,
+      minUserFileBytes: SCAN_LIMITS.minUserFileBytes,
+    }),
+  );
 
   return { decisions: decisions, issues: found.issues };
 }
 
-async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPhase> {
-  const containersPath = join(params.context.environment.homeDir, 'Library/Containers');
-  const names = await loadDirectoryNames({ path: containersPath });
+async function loadOrphanPhase(params: {
+  context: ScanContext;
+  locations: OrphanLocation[];
+}): Promise<ScanPhase> {
+  const installed = buildOrphanInstalledFacts({
+    apps: params.context.installedApps,
+    applicationDirs: params.context.environment.applicationDirs,
+    isComplete: params.context.isInstalledAppListComplete,
+  });
+  const locationPhases = await Promise.all(
+    params.locations.map((location) =>
+      loadOrphanLocationPhase({
+        context: params.context,
+        location: location,
+        installed: installed,
+      }),
+    ),
+  );
+
+  return mergeScanPhases({ phases: locationPhases });
+}
+
+/** The folders of one location that may be the data of a removed app; a missing one has none. */
+async function loadOrphanLocationPhase(params: {
+  context: ScanContext;
+  location: OrphanLocation;
+  installed: OrphanInstalledFacts;
+}): Promise<ScanPhase> {
+  const locationPath = join(params.context.environment.homeDir, ...params.location.pathNames);
+  const names = await loadDirectoryNames({ path: locationPath });
 
   if (names.kind === 'failed') {
     return {
       decisions: [],
       issues: buildFailureIssues({
-        path: containersPath,
+        path: locationPath,
         failure: names.failure,
         privacyDenialCode: params.context.privacyDenialCode,
       }),
     };
   }
 
-  const installedBundleIds = buildInstalledBundleIds({ apps: params.context.installedApps });
   const namePhases = await Promise.all(
     names.value.map((name) => {
-      const path = join(containersPath, name);
-      const nameSkipReason = getOrphanNameSkipReason({
+      const path = join(locationPath, name);
+      const nameMatch = matchOrphanName({
         name: name,
-        installedBundleIds: installedBundleIds,
-        isInstalledAppListComplete: params.context.isInstalledAppListComplete,
+        location: params.location,
+        installed: params.installed,
       });
 
-      if (nameSkipReason !== null) {
+      if (nameMatch.kind === 'skip') {
+        const isReported = isOrphanNameSkipReported({
+          reason: nameMatch.reason,
+          location: params.location,
+        });
         const skipPhase: ScanPhase = {
-          decisions: [{ kind: 'skip', path: path, reason: nameSkipReason }],
+          decisions: isReported ? [{ kind: 'skip', path: path, reason: nameMatch.reason }] : [],
           issues: [],
         };
 
@@ -549,15 +856,15 @@ async function loadOrphanPhase(params: { context: ScanContext }): Promise<ScanPh
         path: path,
         measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
         runItemMeasurement: runItemMeasurement,
-        isEntryEvicted: params.context.isEntryEvicted,
+        entryReads: params.context.entryReads,
         privacyDenialCode: params.context.privacyDenialCode,
         decide: async (measurement) =>
           decideOrphanCandidate({
             path: path,
             name: name,
+            matchedBy: nameMatch.matchedBy,
+            location: params.location,
             measurement: measurement,
-            installedBundleIds: installedBundleIds,
-            isInstalledAppListComplete: params.context.isInstalledAppListComplete,
             unusedCutoffMs: params.context.unusedCutoffMs,
             minOfferedBytes: SCAN_LIMITS.minOfferedBytes,
           }),
@@ -583,12 +890,6 @@ function isProtectedDeveloperApp(params: {
   }
 
   return params.appRealPath === params.activeXcodeBundlePath.value;
-}
-
-function isInsideProjectMachinery(params: { path: string }): boolean {
-  const segments = params.path.split(sep);
-
-  return segments.some((segment) => PROJECT_ACTIVITY_EXCLUDED_NAMES.includes(segment));
 }
 
 function buildCommandIssues(params: { results: Result<unknown, CommandFailure>[] }): ScanIssue[] {

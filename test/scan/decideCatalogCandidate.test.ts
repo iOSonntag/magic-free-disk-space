@@ -1,38 +1,49 @@
 import { expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import { decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
-import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
+import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import type { TargetsMeasurement } from '../../src/scan/candidate.js';
+import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestCatalogEntry, buildTestMeasurement } from '../support/candidateFixtures.js';
-import { buildTestCatalogOwner } from '../support/parsedValueFixtures.js';
+import {
+  buildTestCatalogEntry,
+  buildTestTargetsMeasurement,
+} from '../support/candidateFixtures.js';
+import { buildTestCatalogOwner, buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 const PATH = '/home/Library/Caches/com.example.app';
 
+const UNCHANGED_30_DAYS = { kind: 'unchangedDays', days: 30 } as const;
+
 function decide(params: {
   entry?: CatalogEntry;
-  measurement?: Measurement;
+  measurement?: TargetsMeasurement;
   ownerBundleId?: string | null;
   ownerState?: OwnerState;
+  isOwnerUninstalled?: boolean;
   activity?: ActivityProbe | null;
+  carvedPaths?: string[];
 }) {
   return decideCatalogCandidate({
     entry: params.entry ?? buildTestCatalogEntry({}),
     path: PATH,
     measurement:
-      params.measurement ?? buildTestMeasurement({ realPath: PATH, allocatedBytes: 5 * MIB }),
+      params.measurement ?? buildTestTargetsMeasurement({ path: PATH, allocatedBytes: 5 * MIB }),
     owner: buildTestCatalogOwner({ bundleId: params.ownerBundleId ?? null }),
     ownerBundlePaths: ['/Applications/Example.app'],
     ownerState: params.ownerState ?? 'stopped',
+    ownerAppName: 'Example',
+    isOwnerUninstalled: params.isOwnerUninstalled ?? false,
     activity: params.activity === undefined ? null : params.activity,
     minOfferedBytes: MIB,
+    carvedPaths: params.carvedPaths ?? [],
   });
 }
 
 describeAwaitingWin32Platform('decideCatalogCandidate', () => {
-  test('offers a large entry with its catalog texts', () => {
+  test('offers a large entry with its catalog texts, its entry id, and its owner app', () => {
     const decision = decide({});
 
     expect(decision).toEqual({
@@ -42,15 +53,19 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
         title: 'Test cache',
         category: 'caches',
         risk: 'safe',
-        origin: 'catalog',
+        origin: { kind: 'catalog', entryId: 'test-entry' },
         explanation: 'A cache for tests.',
         regeneration: 'Rebuilt by the test.',
         allocatedBytes: 5 * MIB,
         entryCount: 3,
         isComplete: true,
+        privateSizeFallbackCount: 0,
+        lastUsedAtMs: null,
+        downloadedAtMs: null,
+        appName: 'Example',
         removal: {
-          kind: 'deletePath',
-          identity: expect.any(Object),
+          kind: 'deletePaths',
+          targets: [{ path: PATH, identity: expect.any(Object) }],
           ownerBundlePaths: ['/Applications/Example.app'],
         },
       },
@@ -59,8 +74,8 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('carries an incomplete measurement into the candidate', () => {
     const decision = decide({
-      measurement: buildTestMeasurement({
-        realPath: PATH,
+      measurement: buildTestTargetsMeasurement({
+        path: PATH,
         allocatedBytes: 5 * MIB,
         isComplete: false,
       }),
@@ -71,20 +86,29 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('turns an advice entry into advice, never an offer', () => {
     const decision = decide({
-      entry: buildTestCatalogEntry({ removal: { kind: 'advice', advice: 'Run the tool.' } }),
+      entry: buildTestCatalogEntry({
+        removal: { kind: 'advice', advice: 'Run the tool.', carvedPaths: [], opener: null },
+      }),
     });
 
     expect(decision).toEqual({
       kind: 'advice',
       advice: {
+        origin: { kind: 'catalog', entryId: 'test-entry' },
         path: PATH,
         title: 'Test cache',
         category: 'caches',
         risk: 'safe',
         explanation: 'A cache for tests.',
         advice: 'Run the tool.',
+        opener: null,
+        carvedPaths: [],
         allocatedBytes: 5 * MIB,
         isComplete: true,
+        privateSizeFallbackCount: 0,
+        lastUsedAtMs: null,
+        downloadedAtMs: null,
+        appName: 'Example',
       },
     });
   });
@@ -97,12 +121,136 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
     });
 
     expect(decision.kind === 'advice' && decision.advice.advice).toBe('Run mise prune.');
+    expect(decision.kind === 'advice' && decision.advice.opener).toBeNull();
+  });
+
+  test('gives an explore entry its uninstalled-owner advice only for an uninstalled owner', () => {
+    const entry = buildTestCatalogEntry({
+      owner: {
+        app: { kind: 'bundleId', bundleId: buildTestMacBundleId({ text: 'com.example.engine' }) },
+        uninstalledAdvice: 'Delete the folder of the removed engine.',
+      },
+      removal: {
+        kind: 'explore',
+        probe: 'dockerDesktopEngine',
+        advice: 'Start the engine, then prune it.',
+      },
+    });
+    const installed = decide({ entry: entry, ownerBundleId: 'com.example.engine' });
+    const uninstalled = decide({
+      entry: entry,
+      ownerBundleId: 'com.example.engine',
+      isOwnerUninstalled: true,
+    });
+
+    expect(installed.kind === 'advice' && installed.advice.advice).toBe(
+      'Start the engine, then prune it.',
+    );
+    expect(uninstalled.kind === 'advice' && uninstalled.advice.advice).toBe(
+      'Delete the folder of the removed engine.',
+    );
+  });
+
+  test('keeps the advice of an advice entry for an uninstalled owner that words none', () => {
+    const decision = decide({
+      entry: buildTestCatalogEntry({
+        removal: { kind: 'advice', advice: 'Run the tool.', carvedPaths: [], opener: null },
+      }),
+      ownerBundleId: 'com.example.app',
+      isOwnerUninstalled: true,
+    });
+
+    expect(decision.kind === 'advice' && decision.advice.advice).toBe('Run the tool.');
+  });
+
+  test('holds back an explore entry of no engine while its owner runs or cannot be checked', () => {
+    const entry = buildTestCatalogEntry({
+      removal: { kind: 'explore', probe: 'mailDownloads', advice: 'Quit Mail, then delete them.' },
+    });
+
+    expect(
+      decide({ entry: entry, ownerBundleId: 'com.example.mail', ownerState: 'running' }),
+    ).toEqual({ kind: 'skip', path: PATH, reason: 'ownerRunning' });
+    expect(
+      decide({ entry: entry, ownerBundleId: 'com.example.mail', ownerState: 'unknown' }),
+    ).toEqual({ kind: 'skip', path: PATH, reason: 'runningUnknown' });
+  });
+
+  test('gives advice and engine entries their advice while their owner runs or is unknown', () => {
+    const entries = [
+      buildTestCatalogEntry({
+        removal: { kind: 'advice', advice: 'Run the tool.', carvedPaths: [], opener: null },
+      }),
+      buildTestCatalogEntry({
+        removal: { kind: 'explore', probe: 'dockerDesktopEngine', advice: 'Prune the engine.' },
+      }),
+    ];
+
+    for (const entry of entries) {
+      for (const ownerState of ['running', 'unknown'] as const) {
+        const decision = decide({
+          entry: entry,
+          ownerBundleId: 'com.example.app',
+          ownerState: ownerState,
+        });
+
+        expect(decision.kind).toBe('advice');
+      }
+    }
+  });
+
+  test('gives the advice its carved paths, joined below its path', () => {
+    const entry = buildTestCatalogEntry({
+      removal: {
+        kind: 'advice',
+        advice: 'Tidy it.',
+        carvedPaths: ['Previews', 'a/b'],
+        opener: null,
+      },
+    });
+    const carvedPaths = buildCarvedPaths({
+      pathRules: DARWIN_PATH_RULES,
+      entry: entry,
+      path: PATH,
+    });
+    const decision = decide({ entry: entry, carvedPaths: carvedPaths });
+
+    expect(carvedPaths).toEqual([`${PATH}/Previews`, `${PATH}/a/b`]);
+    expect(decision.kind === 'advice' && decision.advice.carvedPaths).toEqual(carvedPaths);
+  });
+
+  test('carves nothing for an entry that is no advice', () => {
+    expect(
+      buildCarvedPaths({
+        pathRules: DARWIN_PATH_RULES,
+        entry: buildTestCatalogEntry({}),
+        path: PATH,
+      }),
+    ).toEqual([]);
+  });
+
+  test("gives an advice entry's opener to its advice", () => {
+    const decision = decide({
+      entry: buildTestCatalogEntry({
+        removal: {
+          kind: 'advice',
+          advice: 'Remove the photos in Photos.',
+          carvedPaths: [],
+          opener: { kind: 'app', app: 'photos' },
+        },
+      }),
+    });
+
+    expect(decision.kind === 'advice' && decision.advice.opener).toEqual({
+      kind: 'app',
+      app: 'photos',
+    });
   });
 
   test('skips a symbolic link before anything else', () => {
     const decision = decide({
-      measurement: buildTestMeasurement({
-        realPath: PATH,
+      measurement: buildTestTargetsMeasurement({
+        path: PATH,
         allocatedBytes: 0,
         kind: 'symbolicLink',
       }),
@@ -114,7 +262,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('skips an Apple-owned child of a children entry', () => {
     const decision = decide({
-      entry: buildTestCatalogEntry({ scope: 'children' }),
+      entry: buildTestCatalogEntry({ selection: { kind: 'children' } }),
       ownerBundleId: 'com.apple.Safari',
     });
 
@@ -136,14 +284,17 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('skips an entry below the size threshold', () => {
     const decision = decide({
-      measurement: buildTestMeasurement({ realPath: PATH, allocatedBytes: MIB - 1 }),
+      measurement: buildTestTargetsMeasurement({ path: PATH, allocatedBytes: MIB - 1 }),
     });
 
     expect(decision).toEqual({ kind: 'skip', path: PATH, reason: 'belowSizeThreshold' });
   });
 
-  test('applies the stale rule only to staleDays entries', () => {
-    const staleEntry = buildTestCatalogEntry({ scope: 'children', ageRule: 'staleDays' });
+  test('applies the age rule only to unchangedDays entries', () => {
+    const staleEntry = buildTestCatalogEntry({
+      selection: { kind: 'children' },
+      ageRule: UNCHANGED_30_DAYS,
+    });
 
     expect(decide({ entry: staleEntry, activity: 'recent' })).toEqual({
       kind: 'skip',
@@ -160,10 +311,10 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
 
   test('throws when the probe and the age rule disagree', () => {
     expect(() =>
-      decide({ entry: buildTestCatalogEntry({ ageRule: 'staleDays' }), activity: null }),
+      decide({ entry: buildTestCatalogEntry({ ageRule: UNCHANGED_30_DAYS }), activity: null }),
     ).toThrow();
     expect(() =>
-      decide({ entry: buildTestCatalogEntry({ ageRule: 'none' }), activity: 'quiet' }),
+      decide({ entry: buildTestCatalogEntry({ ageRule: { kind: 'none' } }), activity: 'quiet' }),
     ).toThrow();
   });
 });

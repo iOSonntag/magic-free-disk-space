@@ -31,7 +31,7 @@ import {
   writeAndroidSystemImage,
 } from './androidFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
-import { buildEmptyProjectPinsLoad } from './projectPinsFixtures.js';
+import { buildTestProbeStart } from './probeStartFixtures.js';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
@@ -58,9 +58,13 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
       name: 'avdmanager',
       answers: [],
     });
-    await writeAndroidSystemImage({ homeDir: homeDir, platform: 'android-35', abi: 'arm64-v8a' });
+    await writeAndroidSystemImage({
+      sdkRoot: buildSdkRoot(),
+      platform: 'android-35',
+      abi: 'arm64-v8a',
+    });
     const unusedImagePath = await writeAndroidSystemImage({
-      homeDir: homeDir,
+      sdkRoot: buildSdkRoot(),
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
@@ -78,18 +82,15 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
     });
 
-    const probes = startExploreProbes({
-      environment: environment,
-      platform: buildTestProbePlatform(),
-      toolInstallLocations: buildFixtureToolLocations({ avdmanager: avdmanager }),
-      processCommands: Promise.resolve([]),
-      activeXcodeBundlePath: Promise.resolve(null),
-      projectPins: buildEmptyProjectPinsLoad(),
-      timeoutMs: 10_000,
-      unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
-    });
+    const probes = startExploreProbes(
+      buildTestProbeStart({
+        environment: environment,
+        toolInstallLocations: buildFixtureToolLocations({ avdmanager: avdmanager }),
+        unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
+      }),
+    );
 
-    expect(await probes.androidAvds).toEqual({
+    expect(await probes.outcomes.androidAvds).toEqual({
       kind: 'probed',
       findings: [
         expect.objectContaining({
@@ -107,7 +108,7 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
       ],
       isComplete: true,
     });
-    expect(await probes.androidSystemImages).toEqual({
+    expect(await probes.outcomes.androidSystemImages).toEqual({
       kind: 'probed',
       findings: [
         expect.objectContaining({
@@ -120,7 +121,7 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
       ],
       isComplete: true,
     });
-    expect(await probes.androidEmulator).toEqual({
+    expect(await probes.outcomes.androidEmulator).toEqual({
       kind: 'probed',
       findings: [],
       isComplete: true,
@@ -134,7 +135,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
     emulator: ExplorePathUnitAndroidEmulator;
   }> {
     const imagePath = await writeAndroidSystemImage({
-      homeDir: homeDir,
+      sdkRoot: buildSdkRoot(),
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
