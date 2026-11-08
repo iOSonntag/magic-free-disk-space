@@ -11,7 +11,7 @@ const fixtureBaseEnvironment = {
 describe('buildToolProcessEnvironment', () => {
   test('adds nothing for dart, so the base environment is the whole environment', () => {
     const environment = buildToolProcessEnvironment({
-      tool: { name: 'dart', path: '/sdk/flutter/bin/cache/dart-sdk/bin/dart' },
+      toolName: 'dart',
       baseEnvironment: fixtureBaseEnvironment,
     });
 
@@ -20,7 +20,7 @@ describe('buildToolProcessEnvironment', () => {
 
   test('adds the offline switch for mise after the base environment', () => {
     const environment = buildToolProcessEnvironment({
-      tool: { name: 'mise', path: '/opt/homebrew/Cellar/mise/1.0.0/bin/mise' },
+      toolName: 'mise',
       baseEnvironment: fixtureBaseEnvironment,
     });
 
@@ -29,11 +29,11 @@ describe('buildToolProcessEnvironment', () => {
 
   test('turns colour off for both brews, whatever their brew.env files say', () => {
     const appleSilicon = buildToolProcessEnvironment({
-      tool: { name: 'brewAppleSilicon', path: '/opt/homebrew/bin/brew' },
+      toolName: 'brewAppleSilicon',
       baseEnvironment: fixtureBaseEnvironment,
     });
     const intel = buildToolProcessEnvironment({
-      tool: { name: 'brewIntel', path: '/usr/local/bin/brew' },
+      toolName: 'brewIntel',
       baseEnvironment: fixtureBaseEnvironment,
     });
 

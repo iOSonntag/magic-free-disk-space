@@ -93,7 +93,7 @@ export async function runToolCommand(params: {
     // The temporary folder, so no tool reads config from the folder the app started in.
     cwd: params.tempDir,
     env: buildToolProcessEnvironment({
-      tool: params.tool,
+      toolName: params.tool.name,
       baseEnvironment: baseEnvironment,
     }),
   });

@@ -13,6 +13,7 @@ import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js'
 import { loadProjectPins } from '../explore/projectPins/loadProjectPins.js';
 import { startExploreProbes } from '../explore/startExploreProbes.js';
 import { isOverlappingPath } from '../path/isOverlappingPath.js';
+import { toComparablePathText } from '../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
@@ -56,6 +57,7 @@ import { decideUserFileCandidate } from './decideUserFileCandidate.js';
 import { dedupeCandidates } from './dedupeCandidates.js';
 import type { CatalogTarget } from './findCatalogTargets.js';
 import { findCatalogTargets } from './findCatalogTargets.js';
+import type { UserFilePackageFolders } from './findLargeUserFiles.js';
 import { findLargeUserFiles } from './findLargeUserFiles.js';
 import { findLastSignOfUse } from './findLastSignOfUse.js';
 import type { ScanIssue } from './issue.js';
@@ -188,6 +190,7 @@ type ScanContext = {
   privacyDenialCode: string | null;
   /** The folders searched for large files, from the scan slice. */
   userFileRootPaths: AbsolutePath[];
+  userFilePackageFolders: UserFilePackageFolders;
 };
 
 /**
@@ -253,6 +256,7 @@ export async function runScan(params: {
   });
 
   const cloudOnlyEntryTally = createCloudOnlyEntryTally({
+    pathRules: params.environment.pathRules,
     cloudOnlyEntries: params.scan.cloudOnlyEntries,
   });
   const recordEvictedEntry =
@@ -335,6 +339,7 @@ export async function runScan(params: {
       folders: params.environment,
       locations: params.scan.userFileRoots,
     }),
+    userFilePackageFolders: params.scan.userFilePackageFolders,
   };
   const setup: ScanPhase = {
     decisions: [],
@@ -457,9 +462,10 @@ export async function runScan(params: {
 
 /**
  * The tally of the entries a scan's walks leave unread because their content lives only in the
- * cloud store, each path once; `null` on a platform that counts none.
+ * cloud store, each path once as `pathRules` compare paths; `null` on a platform that counts none.
  */
 export function createCloudOnlyEntryTally(params: {
+  pathRules: PathRules;
   cloudOnlyEntries: ScanPlatformCloudOnlyEntries;
 }): CloudOnlyEntryTally | null {
   switch (params.cloudOnlyEntries.kind) {
@@ -467,13 +473,16 @@ export function createCloudOnlyEntryTally(params: {
       return null;
     case 'counted': {
       const cloudStoreName = params.cloudOnlyEntries.cloudStoreName;
-      const entryPaths = new Set<string>();
+      const entryPathKeys = new Set<string>();
 
       return {
         recordEvictedEntry: (entry: EntryRef) => {
-          entryPaths.add(entry.path);
+          entryPathKeys.add(toComparablePathText({ rules: params.pathRules, text: entry.path }));
         },
-        getCloudOnlyEntryCount: () => ({ cloudStoreName: cloudStoreName, count: entryPaths.size }),
+        getCloudOnlyEntryCount: () => ({
+          cloudStoreName: cloudStoreName,
+          count: entryPathKeys.size,
+        }),
       };
     }
   }
@@ -964,6 +973,7 @@ async function loadUserFilePhase(params: {
   const found = await findLargeUserFiles({
     pathRules: params.context.environment.pathRules,
     rootDirs: params.context.userFileRootPaths,
+    packageFolders: params.context.userFilePackageFolders,
     artifactRules: params.artifactRules,
     minAllocatedBytes: SCAN_LIMITS.minUserFileBytes,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,

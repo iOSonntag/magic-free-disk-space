@@ -23,6 +23,12 @@ export type UserFileFinding = {
   modifiedMs: number;
 };
 
+/**
+ * Which folders the search counts as packages, whose large files belong to the package: each
+ * folder named with an extension, or none.
+ */
+export type UserFilePackageFolders = 'extensionNamed' | 'none';
+
 type LargeFile = { path: string; stats: EntryStats };
 
 /**
@@ -48,6 +54,7 @@ const MAX_CONCURRENT_DIRECTORIES = 16;
 export async function findLargeUserFiles(params: {
   pathRules: PathRules;
   rootDirs: string[];
+  packageFolders: UserFilePackageFolders;
   /** The artifacts whose files belong to their project, each judged by its marker. */
   artifactRules: ProjectArtifactRule[];
   minAllocatedBytes: number;
@@ -99,7 +106,10 @@ export async function findLargeUserFiles(params: {
       continue;
     }
 
-    if (rootStats.value.kind !== 'directory' || !isUserFolderName({ name: basename(rootDir) })) {
+    if (
+      rootStats.value.kind !== 'directory' ||
+      !isUserFolderName({ name: basename(rootDir), packageFolders: params.packageFolders })
+    ) {
       continue;
     }
 
@@ -125,7 +135,10 @@ export async function findLargeUserFiles(params: {
           return 'skip';
         }
 
-        if (entry.kind !== 'directory' || !isUserFolderName({ name: entry.name })) {
+        if (
+          entry.kind !== 'directory' ||
+          !isUserFolderName({ name: entry.name, packageFolders: params.packageFolders })
+        ) {
           return 'skip';
         }
 
@@ -238,14 +251,22 @@ async function loadUserFileFindings(params: {
   return findings.filter((finding) => finding !== null);
 }
 
-function isUserFolderName(params: { name: string }): boolean {
+function isUserFolderName(params: {
+  name: string;
+  packageFolders: UserFilePackageFolders;
+}): boolean {
   if (params.name.startsWith('.')) {
     return false;
   }
 
-  if (params.name.toLowerCase().endsWith(LOCALIZED_DIRECTORY_SUFFIX)) {
-    return true;
-  }
+  switch (params.packageFolders) {
+    case 'none':
+      return true;
+    case 'extensionNamed':
+      if (params.name.toLowerCase().endsWith(LOCALIZED_DIRECTORY_SUFFIX)) {
+        return true;
+      }
 
-  return !PACKAGE_DIRECTORY_NAME_PATTERN.test(params.name);
+      return !PACKAGE_DIRECTORY_NAME_PATTERN.test(params.name);
+  }
 }

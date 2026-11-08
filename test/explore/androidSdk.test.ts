@@ -213,7 +213,7 @@ describe('parseAndroidImageSysdir', () => {
 
 describe('decideAndroidSystemImageOffers', () => {
   test('keeps an image whose folder an AVD names in another case on Windows', () => {
-    const sdkRoot = buildTestWindowsPath({
+    const windowsSdkRoot = buildTestWindowsPath({
       text: 'C:\\Users\\tester\\AppData\\Local\\Android\\Sdk',
     });
     const avd: AndroidAvdPresent = {
@@ -231,12 +231,12 @@ describe('decideAndroidSystemImageOffers', () => {
       pathRules: WIN32_PATH_RULES,
       sdks: [
         {
-          sdkRoot: sdkRoot,
+          sdkRoot: windowsSdkRoot,
           systemImages: [
             {
               kind: 'parsed',
               folderPath: buildTestWindowsPath({
-                text: `${sdkRoot}\\system-images\\android-35\\google_apis\\x86_64`,
+                text: `${windowsSdkRoot}\\system-images\\android-35\\google_apis\\x86_64`,
               }),
               packagePath: 'system-images;android-35;google_apis;x86_64',
             },

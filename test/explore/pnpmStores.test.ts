@@ -1072,23 +1072,20 @@ describe('loadPnpmInstallState', () => {
       });
     });
 
-    const nodeVersionPackagePlaces: { manager: string; installPlace: WindowsPnpmInstallPlace }[] = [
-      { manager: 'nvm-windows 2', installPlace: windowsPnpmInstallPlaces.nvmWindows2Node },
-      { manager: 'nvm-windows 1.2', installPlace: windowsPnpmInstallPlaces.nvmWindows12Node },
-      {
-        manager: 'nvm-windows before 1.2',
-        installPlace: windowsPnpmInstallPlaces.nvmWindowsBefore12Node,
-      },
-      { manager: 'fnm', installPlace: windowsPnpmInstallPlaces.fnmNode },
-      { manager: "fnm's legacy folder", installPlace: windowsPnpmInstallPlaces.fnmLegacyNode },
-      { manager: 'Volta', installPlace: windowsPnpmInstallPlaces.voltaNode },
-      { manager: 'mise', installPlace: windowsPnpmInstallPlaces.miseNode },
+    const nodeVersionPackagePlaces: WindowsPnpmInstallPlace[] = [
+      windowsPnpmInstallPlaces.nvmWindows2Node,
+      windowsPnpmInstallPlaces.nvmWindows12Node,
+      windowsPnpmInstallPlaces.nvmWindowsBefore12Node,
+      windowsPnpmInstallPlaces.fnmNode,
+      windowsPnpmInstallPlaces.fnmLegacyNode,
+      windowsPnpmInstallPlaces.voltaNode,
+      windowsPnpmInstallPlaces.miseNode,
     ];
 
-    for (const packagePlace of nodeVersionPackagePlaces) {
-      test(`reads npm's global pnpm of a node version of ${packagePlace.manager}`, async () => {
+    for (const installPlace of nodeVersionPackagePlaces) {
+      test(`reads the pnpm in ${installPlace.place}`, async () => {
         const packageFolder = await createFixtureInstall({
-          installPlace: packagePlace.installPlace,
+          installPlace: installPlace,
           version: '10.14.0',
         });
 

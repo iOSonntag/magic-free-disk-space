@@ -8,6 +8,7 @@ import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import type { SystemCallFailure } from '../system/systemCallFailure.js';
 import type { RecycleBinContent } from './candidate.js';
+import type { UserFilePackageFolders } from './findLargeUserFiles.js';
 import type { ScanIssue } from './issue.js';
 
 /** An app that installs the operating system, such as `Install macOS Sequoia.app`. */
@@ -197,4 +198,5 @@ export type ScanPlatform = {
    * a known folder of Windows itself (`path` `''`) wherever the user moved it.
    */
   userFileRoots: EnvironmentLocation[];
+  userFilePackageFolders: UserFilePackageFolders;
 };

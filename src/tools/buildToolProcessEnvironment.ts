@@ -1,4 +1,3 @@
-import type { LocatedTool } from './findTrustedTool.js';
 import type { ToolName } from './toolInstallLocations.js';
 
 // Keeps Homebrew from updating itself, reporting home, and printing hints or colour codes into its
@@ -32,11 +31,11 @@ const TOOL_ENVIRONMENT_ENTRIES: Record<ToolName, Record<string, string>> = {
  * Nothing else is inherited.
  */
 export function buildToolProcessEnvironment(params: {
-  tool: LocatedTool;
+  toolName: ToolName;
   baseEnvironment: Record<string, string>;
 }): Record<string, string> {
   return {
     ...params.baseEnvironment,
-    ...TOOL_ENVIRONMENT_ENTRIES[params.tool.name],
+    ...TOOL_ENVIRONMENT_ENTRIES[params.toolName],
   };
 }

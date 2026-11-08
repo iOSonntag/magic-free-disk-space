@@ -1,9 +1,7 @@
-import { realpath } from 'node:fs/promises';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { NOT_ABSOLUTE_CODE, parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
-import { getErrorCode } from '../system/getErrorCode.js';
 import type { DirectoryEntry } from '../system/loadDirectoryEntries.js';
 import { loadDirectoryEntries } from '../system/loadDirectoryEntries.js';
 import type { DirectoryFailure } from '../system/loadDirectoryNames.js';
@@ -12,11 +10,10 @@ import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileContentFailure } from '../system/loadFileBytes.js';
 import type { FileFailure } from '../system/loadFileIdentity.js';
-import { getFileFailure } from '../system/loadFileIdentity.js';
+import { loadRealPathResult } from '../system/loadFileIdentity.js';
 import { loadFileText } from '../system/loadFileText.js';
 import type { ReadFailureVerdictAbsent, ReadFailureVerdictUnfit } from '../system/readFailure.js';
 import { decideReadFailure } from '../system/readFailure.js';
-import { runFilesystemCall } from '../system/runFilesystemCall.js';
 import type { ExploreFileUnreadable } from './exploreUnit.js';
 import { EXPLORE_FILE_MAX_BYTES } from './limits.js';
 
@@ -131,7 +128,7 @@ export async function loadExploreEntryStats(
 export async function loadExploreRealPath(
   params: ExploreRead & { pathRules: PathRules },
 ): Promise<Result<AbsolutePath | null, ExploreFileUnreadable>> {
-  const text = await loadRealPathText({ path: params.path });
+  const text = await loadRealPathResult({ path: params.path });
 
   if (text.kind === 'failed') {
     return toNullWhenNotFound({ read: params, failure: text.failure });
@@ -151,16 +148,6 @@ export async function loadExploreRealPath(
   }
 
   return realPath;
-}
-
-async function loadRealPathText(params: { path: string }): Promise<Result<string, FileFailure>> {
-  try {
-    const text = await runFilesystemCall(() => realpath(params.path));
-
-    return { kind: 'succeeded', value: text };
-  } catch (error) {
-    return { kind: 'failed', failure: getFileFailure({ code: getErrorCode(error) }) };
-  }
 }
 
 function toNullWhenNotFound(params: {

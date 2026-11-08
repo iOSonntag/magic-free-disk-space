@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
 import type { PathRules } from '../../src/path/pathRules.js';
 import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import type { UserFileFinding } from '../../src/scan/findLargeUserFiles.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
+import type { UserFileFinding, UserFilePackageFolders } from '../../src/scan/findLargeUserFiles.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
 import type { EntryReads, EntryRef } from '../../src/system/entryReads.js';
@@ -30,6 +32,7 @@ const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 async function findFiles(params: {
   pathRules?: PathRules;
   rootDirs: string[];
+  packageFolders?: UserFilePackageFolders;
   deadlineMs?: number;
   entryReads?: EntryReads;
   recordEvictedEntry?: EvictedEntryRecorder;
@@ -37,6 +40,7 @@ async function findFiles(params: {
   return findLargeUserFiles({
     pathRules: params.pathRules ?? hostPathRules,
     rootDirs: params.rootDirs,
+    packageFolders: params.packageFolders ?? hostPlatform.scan.userFilePackageFolders,
     artifactRules: PROJECT_ARTIFACT_RULES,
     minAllocatedBytes: MIN_ALLOCATED_BYTES,
     deadlineMs: params.deadlineMs ?? FAR_FUTURE_DEADLINE_MS,
@@ -244,7 +248,10 @@ describe('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
+    const result = await findFiles({
+      rootDirs: [fixtureRoot.homeDir],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
@@ -258,7 +265,10 @@ describe('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
+    const result = await findFiles({
+      rootDirs: [fixtureRoot.homeDir],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
@@ -281,6 +291,7 @@ describe('findLargeUserFiles', () => {
 
     const result = await findFiles({
       rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -298,9 +309,42 @@ describe('findLargeUserFiles', () => {
       });
     }
 
-    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([localizedPath, versionPath]);
+  });
+
+  test('a folder named with an extension is searched, as a root too, on Windows', async () => {
+    const releasePath = join(fixtureRoot.homeDir, 'Downloads/Movie.2023.x264-GROUP/movie.mkv');
+    const archivePath = join(fixtureRoot.homeDir, 'Documents/Archive.old/disk.vhdx');
+    const movedRootDir = join(fixtureRoot.homeDir, 'Media.Videos');
+    const movedRootPath = join(movedRootDir, 'clip.mp4');
+
+    for (const path of [releasePath, archivePath, movedRootPath]) {
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    const result = await findFiles({
+      rootDirs: [
+        join(fixtureRoot.homeDir, 'Documents'),
+        join(fixtureRoot.homeDir, 'Downloads'),
+        movedRootDir,
+      ],
+      packageFolders: win32Platform.scan.userFilePackageFolders,
+    });
+
+    expect(result.findings.map((finding) => finding.path)).toEqual([
+      archivePath,
+      releasePath,
+      movedRootPath,
+    ]);
   });
 
   testOnPosix('a symbolic link to a large file is not followed', async () => {

@@ -12,8 +12,9 @@ export type TempPlacement = 'apartFromHome' | 'belowHome';
 
 /**
  * Returns why the resolved folders are unsafe to delete in, or `null`: the root user, another
- * user's home, a temporary folder that is or holds the home, or one that lies in it where the
- * platform keeps it apart from the home.
+ * user's home, a temporary folder that is or holds the home, one that lies in it where the
+ * platform keeps it apart from the home, and one that is a drive root or is or holds a protected
+ * folder.
  */
 export function checkEnvironmentRoots(params: {
   pathRules: PathRules;

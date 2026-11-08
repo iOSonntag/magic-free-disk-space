@@ -7,8 +7,8 @@ import type { RecycleBinContent } from '../scan/candidate.js';
 type RecycleBinRecheck = 'alreadyGone' | 'changedSinceScan' | 'unchanged';
 
 /**
- * Whether the bin may still be emptied: only while it holds what the scan counted, since emptying
- * a bin that gained items would delete files the user never saw.
+ * Judges a fresh count of the bin against the scan's: only an `unchanged` bin may be emptied, since
+ * one that gained items holds files the user never saw.
  */
 export function decideRecycleBinRecheck(params: {
   scanned: RecycleBinContent;

@@ -61,6 +61,8 @@ export const darwinPlatform: Platform = {
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     projectArtifactRules: PROJECT_ARTIFACT_RULES,
     userFileRoots: userFileRoots,
+    // Launch Services shows many folders named with an extension as one document.
+    userFilePackageFolders: 'extensionNamed',
   },
   delete: { removeTree: removeTree, trash: { kind: 'catalogFolder' } },
   explore: {

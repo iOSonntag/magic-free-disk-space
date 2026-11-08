@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
 import type {
   FolderVariableName,
   VariableCheck,
@@ -38,7 +37,6 @@ describe('checkVariablePlacement', () => {
   test('passes an unset variable and one that names the expected folder in another case', () => {
     expect(
       checkVariablePlacement({
-        pathRules: WIN32_PATH_RULES,
         checks: [
           buildTempCheck({ variableName: 'TMP', reading: { kind: 'unset' } }),
           buildTempCheck({
@@ -53,7 +51,6 @@ describe('checkVariablePlacement', () => {
   test('refuses the first variable that names another folder, naming it and the expected one', () => {
     expect(
       checkVariablePlacement({
-        pathRules: WIN32_PATH_RULES,
         checks: [
           buildTempCheck({
             variableName: 'TMP',
@@ -72,7 +69,6 @@ describe('checkVariablePlacement', () => {
     ]) {
       expect(
         checkVariablePlacement({
-          pathRules: WIN32_PATH_RULES,
           checks: [
             buildTempCheck({ variableName: 'TEMP', reading: buildResolvedReading({ text: text }) }),
           ],
@@ -84,13 +80,11 @@ describe('checkVariablePlacement', () => {
   test('compares the real path of the expected folder and names the path Windows gives it', () => {
     expect(
       checkVariablePlacement({
-        pathRules: WIN32_PATH_RULES,
         checks: [buildLinkedTempCheck({ readingText: 'd:\\scratch' })],
       }),
     ).toBeNull();
     expect(
       checkVariablePlacement({
-        pathRules: WIN32_PATH_RULES,
         checks: [buildLinkedTempCheck({ readingText: tempPath })],
       }),
     ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: tempPath });
@@ -99,7 +93,6 @@ describe('checkVariablePlacement', () => {
   test('refuses a variable whose folder does not resolve', () => {
     expect(
       checkVariablePlacement({
-        pathRules: WIN32_PATH_RULES,
         checks: [buildTempCheck({ variableName: 'TEMP', reading: { kind: 'unresolvable' } })],
       }),
     ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: tempPath });

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
@@ -534,6 +535,7 @@ describe('formatScanReport', () => {
         appAdvice: null,
         skipped: [{ path: '/fixture/b', reason: 'ownerRunning' }],
         cloudOnlyEntries: countTestCloudOnlyEntries({
+          pathRules: POSIX_PATH_RULES,
           cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
           entryPaths: ['/fixture/home/cloud-a', '/fixture/home/cloud-b'],
         }),

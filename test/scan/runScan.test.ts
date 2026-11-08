@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
@@ -256,6 +257,7 @@ describe('buildScanReportOfPhases', () => {
 describe('createCloudOnlyEntryTally', () => {
   test('counts each path once on Windows, whose scan counts the entries left in OneDrive', () => {
     const tally = createCloudOnlyEntryTally({
+      pathRules: WIN32_PATH_RULES,
       cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
     });
 
@@ -270,8 +272,25 @@ describe('createCloudOnlyEntryTally', () => {
     expect(tally.getCloudOnlyEntryCount()).toEqual({ cloudStoreName: 'OneDrive', count: 2 });
   });
 
+  test('counts a path once on Windows in whatever case each walk spells it', () => {
+    const tally = createCloudOnlyEntryTally({
+      pathRules: WIN32_PATH_RULES,
+      cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
+    });
+
+    if (tally === null) {
+      throw new Error('The tally of Windows records no cloud-only entry.');
+    }
+
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Documents\\a.docx', kind: 'file' });
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\onedrive\\documents\\a.docx', kind: 'file' });
+
+    expect(tally.getCloudOnlyEntryCount()).toEqual({ cloudStoreName: 'OneDrive', count: 1 });
+  });
+
   test('counts no entry on macOS, whose scan never counted the entries left in iCloud', () => {
     const tally = createCloudOnlyEntryTally({
+      pathRules: POSIX_PATH_RULES,
       cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
     });
 

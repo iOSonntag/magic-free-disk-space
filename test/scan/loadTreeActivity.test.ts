@@ -188,7 +188,7 @@ describe('loadTreeActivity', () => {
     expect(sameNameActivity).toBe('recent');
   });
 
-  test('skips a folder the eviction predicate marks as evicted', async () => {
+  test('skips a folder the entry reads place in the cloud, and records it', async () => {
     const homeDir = fixtureRoot.homeDir;
     const evictedDirPath = join(homeDir, 'a', 'b', 'c');
 

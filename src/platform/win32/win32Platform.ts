@@ -68,6 +68,8 @@ export const win32Platform: Platform = {
     projectSearchExcludedNames: WIN32_CATALOG.projectSearchExcludedNames,
     projectArtifactRules: WIN32_CATALOG.projectArtifactRules,
     userFileRoots: WIN32_CATALOG.userFileRoots,
+    // Explorer shows every folder as a folder, whatever its name ends in.
+    userFilePackageFolders: 'none',
   },
   delete: {
     removeTree: removeTree,

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
+import type {
+  ToolCommandFailureEndedBySignal,
+  ToolCommandFailureExitedWithError,
+} from '../../src/tools/runToolCommand.js';
 import {
   buildToolArguments,
   runToolCommand,
@@ -13,7 +17,6 @@ import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, waitUntilPresent } from '../support/fixtureRoot.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
-import { testOnWindows } from '../support/windowsOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -118,6 +121,22 @@ function buildExpectedMiseEnvironmentLines(params: {
     `PATH=${params.toolFolderPath};${params.systemRoot}\\System32;${params.systemRoot}`,
     'MISE_OFFLINE=1',
   ];
+}
+
+/**
+ * How a run that `stopRunningTools` ended fails on `platformName`: Windows ends the processes of a
+ * tool's job with an exit code, never a signal.
+ */
+function buildExpectedStopFailure(params: {
+  platformName: NodeJS.Platform;
+}):
+  | Pick<ToolCommandFailureEndedBySignal, 'reason' | 'signal'>
+  | Pick<ToolCommandFailureExitedWithError, 'reason'> {
+  if (params.platformName === 'win32') {
+    return { reason: 'exitedWithError' };
+  }
+
+  return { reason: 'endedBySignal', signal: 'SIGKILL' };
 }
 
 describe('runToolCommand', () => {
@@ -267,64 +286,33 @@ for (;;) {
     });
   });
 
-  testOnPosix(
-    'stopRunningTools kills a running tool and what it started, and the run settles',
-    async () => {
-      const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
-      const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
-      // The tool's pid file is written last and moved into place whole, so it marks both as ready.
-      const run = runFakeTool({
-        name: 'xcrun',
-        body: `import { spawn } from 'node:child_process';
+  test('stopRunningTools kills a running tool and what it started, and the run settles', async () => {
+    const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
+    const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
+    // The tool's pid file is written last and moved into place whole, so it marks both as ready.
+    const run = runFakeTool({
+      name: 'xcrun',
+      body: `import { spawn } from 'node:child_process';
 import { renameSync, writeFileSync } from 'node:fs';
 ${buildStartGrandchildBody(grandchildPidFile)}
 writeFileSync(${JSON.stringify(`${toolPidFile}.partial`)}, String(process.pid));
 renameSync(${JSON.stringify(`${toolPidFile}.partial`)}, ${JSON.stringify(toolPidFile)});
 await Bun.sleep(60_000);`,
-        timeoutMs: 60_000,
-      });
+      timeoutMs: 60_000,
+    });
 
-      await waitUntilPresent(toolPidFile);
-      stopRunningTools();
+    await waitUntilPresent(toolPidFile);
+    stopRunningTools();
 
-      const result = await run;
+    const result = await run;
 
-      expect(result).toMatchObject({
-        kind: 'failed',
-        failure: { reason: 'endedBySignal', signal: 'SIGKILL' },
-      });
-      expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
-      expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
-    },
-  );
-
-  // Windows ends the processes of a tool's job with an exit code, never a signal.
-  testOnWindows(
-    'stopRunningTools ends the job of a running tool with all it started, and the run settles',
-    async () => {
-      const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
-      const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
-      const run = runFakeTool({
-        name: 'xcrun',
-        body: `import { spawn } from 'node:child_process';
-import { renameSync, writeFileSync } from 'node:fs';
-${buildStartGrandchildBody(grandchildPidFile)}
-writeFileSync(${JSON.stringify(`${toolPidFile}.partial`)}, String(process.pid));
-renameSync(${JSON.stringify(`${toolPidFile}.partial`)}, ${JSON.stringify(toolPidFile)});
-await Bun.sleep(60_000);`,
-        timeoutMs: 60_000,
-      });
-
-      await waitUntilPresent(toolPidFile);
-      stopRunningTools();
-
-      const result = await run;
-
-      expect(result).toMatchObject({ kind: 'failed', failure: { reason: 'exitedWithError' } });
-      expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
-      expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
-    },
-  );
+    expect(result).toMatchObject({
+      kind: 'failed',
+      failure: buildExpectedStopFailure({ platformName: process.platform }),
+    });
+    expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
+    expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
+  });
 
   test('puts the leading argument of dart before the arguments', async () => {
     const result = await runFakeTool({

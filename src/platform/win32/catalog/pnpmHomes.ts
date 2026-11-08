@@ -9,6 +9,8 @@ const voltaImage: CatalogLocation = { root: 'localAppData', path: 'Volta/tools/i
 
 const miseInstalls: CatalogLocation = { root: 'localAppData', path: 'mise/installs' };
 
+const scoopHome: CatalogLocation = { root: 'home', path: 'scoop' };
+
 /**
  * Where pnpm is installed on Windows, at each tool's default: pnpm's home, corepack's cache, pnpm
  * of Volta, Scoop and winget, mise's installs, npm prefixes of the official installer, Scoop and
@@ -24,7 +26,7 @@ export const pnpmInstallPlaces: PnpmInstallPlaces = {
     // `volta install pnpm` unpacks each version with its `package.json` at the version's folder.
     buildLocationBelow({ location: voltaImage, path: 'pnpm' }),
     // Scoop keeps each version's folder until `scoop cleanup`, and the junction `current`.
-    { root: 'home', path: 'scoop/apps/pnpm' },
+    buildLocationBelow({ location: scoopHome, path: 'apps/pnpm' }),
   ],
   miseInstallsRoots: [miseInstalls],
   // The standalone executable. The `pnpm.cmd` and `pnpm.ps1` shims beside it run the pnpm of
@@ -42,8 +44,8 @@ export const pnpmInstallPlaces: PnpmInstallPlaces = {
   npmPrefixes: [
     { root: 'roamingAppData', path: 'npm' },
     // Scoop's node sets npm's prefix to its persisted `bin`, which outlives each version.
-    { root: 'home', path: 'scoop/persist/nodejs/bin' },
-    { root: 'home', path: 'scoop/persist/nodejs-lts/bin' },
+    buildLocationBelow({ location: scoopHome, path: 'persist/nodejs/bin' }),
+    buildLocationBelow({ location: scoopHome, path: 'persist/nodejs-lts/bin' }),
     // Volta installs each global package below a prefix of its own.
     buildLocationBelow({ location: voltaImage, path: 'packages/pnpm' }),
     buildLocationBelow({ location: voltaImage, path: 'packages/@pnpm/exe' }),

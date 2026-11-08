@@ -179,7 +179,6 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   }
 
   const variablesFailure = checkVariablePlacement({
-    pathRules: WIN32_PATH_RULES,
     checks: [
       await loadVariableCheck({ variableName: 'USERPROFILE', expectedFolder: home.value }),
       await loadVariableCheck({ variableName: 'TMP', expectedFolder: tempFolder }),

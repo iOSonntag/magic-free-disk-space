@@ -135,10 +135,8 @@ export function walkDirectoryTree(params: {
         return;
       }
 
-      const placement = params.entryReads.loadEntryPlacement({
-        path: treeEntry.path,
-        kind: treeEntry.kind,
-      });
+      const entryRef: EntryRef = { path: treeEntry.path, kind: treeEntry.kind };
+      const placement = params.entryReads.loadEntryPlacement(entryRef);
 
       switch (placement.kind) {
         case 'onDisk':
@@ -153,7 +151,7 @@ export function walkDirectoryTree(params: {
           if (treeEntry.kind === 'directory') {
             visitPlacedEntry(treeEntry);
           } else {
-            recordEvictedEntry({ path: treeEntry.path, kind: treeEntry.kind });
+            recordEvictedEntry(entryRef);
           }
 
           break;

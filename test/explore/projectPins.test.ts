@@ -433,14 +433,8 @@ describe('loading the pins', () => {
       await writeFixtureTextFile({ path: join(pnpmProjectPath, 'pnpm-lock.yaml'), text: '' });
       await writeFixtureTextFile({ path: join(npmProjectPath, 'package.json'), text: '{}' });
       await writeFixtureTextFile({ path: join(npmProjectPath, 'notes.txt'), text: '' });
-      await createTrackedConfigLink({
-        name: 'a1',
-        targetPath: join(worktreePath, 'mise.toml'),
-      });
-      await createTrackedConfigLink({
-        name: 'b2',
-        targetPath: globalConfigPath,
-      });
+      await createTrackedConfigLink({ name: 'a1', targetPath: join(worktreePath, 'mise.toml') });
+      await createTrackedConfigLink({ name: 'b2', targetPath: globalConfigPath });
       await createTrackedConfigLink({
         name: 'c3',
         targetPath: join(pnpmProjectPath, 'package.json'),
@@ -449,10 +443,7 @@ describe('loading the pins', () => {
         name: 'd4',
         targetPath: join(npmProjectPath, 'package.json'),
       });
-      await createTrackedConfigLink({
-        name: 'e5',
-        targetPath: join(npmProjectPath, 'notes.txt'),
-      });
+      await createTrackedConfigLink({ name: 'e5', targetPath: join(npmProjectPath, 'notes.txt') });
       await createTrackedConfigLink({
         name: 'f6',
         targetPath: join(fixtureRoot.homeDir, 'gone', 'mise.toml'),
@@ -499,10 +490,7 @@ describe('loading the pins', () => {
     testOnPosix('reads a file both sources found once', async () => {
       const miseConfigPath = buildTestHostPath({ text: join(homeRealPath, 'app', 'mise.toml') });
       await writeFixtureTextFile({ path: miseConfigPath, text: '[tools]\n' });
-      await createTrackedConfigLink({
-        name: 'a1',
-        targetPath: miseConfigPath,
-      });
+      await createTrackedConfigLink({ name: 'a1', targetPath: miseConfigPath });
 
       const pins = await loadProjectPins({
         pathRules: hostPathRules,
@@ -582,10 +570,7 @@ describe('loading the pins', () => {
     testOnPosix('fails at the folder of a target it cannot list', async () => {
       const projectPath = join(fixtureRoot.homeDir, 'app');
       await writeFixtureTextFile({ path: join(projectPath, 'package.json'), text: '{}' });
-      await createTrackedConfigLink({
-        name: 'a1',
-        targetPath: join(projectPath, 'package.json'),
-      });
+      await createTrackedConfigLink({ name: 'a1', targetPath: join(projectPath, 'package.json') });
       // Searchable but not listable: the link resolves, the folder's names cannot be read.
       await chmod(projectPath, 0o100);
 

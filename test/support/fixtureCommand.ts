@@ -73,7 +73,7 @@ export async function runChildProcess(params: {
     stderr: 'pipe',
   });
 
-  if (params.stdin !== null && typeof child.stdin !== 'number' && child.stdin !== undefined) {
+  if (params.stdin !== null && child.stdin !== undefined) {
     child.stdin.write(params.stdin);
     await child.stdin.end();
   }

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
@@ -232,6 +233,7 @@ describe('buildScanView', () => {
         ...EMPTY_REPORT,
         skipped: [{ path: '/Users/me/busy', reason: 'ownerRunning' }],
         cloudOnlyEntries: countTestCloudOnlyEntries({
+          pathRules: POSIX_PATH_RULES,
           cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
           entryPaths: ['/Users/me/a', '/Users/me/b', '/Users/me/c', '/Users/me/d'],
         }),
@@ -251,6 +253,7 @@ describe('buildScanView', () => {
         ...EMPTY_REPORT,
         skipped: [{ path: 'C:\\Users\\me\\busy', reason: 'ownerRunning' }],
         cloudOnlyEntries: countTestCloudOnlyEntries({
+          pathRules: WIN32_PATH_RULES,
           cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
           entryPaths: ['C:\\Users\\me\\OneDrive\\a', 'C:\\Users\\me\\OneDrive\\b'],
         }),
@@ -614,10 +617,7 @@ describe('buildScanView', () => {
   });
 
   test('shows an engine item with nothing to reveal and the paths of a unit as deleted', () => {
-    const engineCandidate = buildTestEngineCandidate({
-      homeDir: HOME_DIR,
-      allocatedBytes: 2 * MB,
-    });
+    const engineCandidate = buildTestEngineCandidate({ homeDir: HOME_DIR, allocatedBytes: 2 * MB });
     const unitCandidate = buildTestVscodeExtensionCandidate({ home: home });
     const view = buildView({
       report: buildRankedReport({ candidates: [engineCandidate, unitCandidate] }),

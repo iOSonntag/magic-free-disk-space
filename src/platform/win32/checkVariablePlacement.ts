@@ -1,7 +1,7 @@
 import type { EnvironmentFailure } from '../../environment/environmentPlatform.js';
 import { isSamePath } from '../../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import type { PathRules } from '../../path/pathRules.js';
+import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 
 /** A folder of the run by the path Windows names for it and by its real path. */
 export type ResolvedFolder = { path: AbsolutePath; realPath: AbsolutePath };
@@ -28,11 +28,10 @@ export type VariableCheck = {
  * disagree. An unset variable passes; one that does not resolve fails.
  */
 export function checkVariablePlacement(params: {
-  pathRules: PathRules;
   checks: VariableCheck[];
 }): EnvironmentFailure | null {
   for (const check of params.checks) {
-    if (!isPlacedAsExpected({ pathRules: params.pathRules, check: check })) {
+    if (!isPlacedAsExpected({ check: check })) {
       return {
         reason: 'variableElsewhere',
         variableName: check.variableName,
@@ -44,7 +43,7 @@ export function checkVariablePlacement(params: {
   return null;
 }
 
-function isPlacedAsExpected(params: { pathRules: PathRules; check: VariableCheck }): boolean {
+function isPlacedAsExpected(params: { check: VariableCheck }): boolean {
   switch (params.check.reading.kind) {
     case 'unset':
       return true;
@@ -53,7 +52,7 @@ function isPlacedAsExpected(params: { pathRules: PathRules; check: VariableCheck
     case 'resolved':
       // Windows often writes a variable with short 8.3 names, so the real paths compare.
       return isSamePath({
-        rules: params.pathRules,
+        rules: WIN32_PATH_RULES,
         path: params.check.reading.realPath,
         otherPath: params.check.expectedFolder.realPath,
       });

@@ -50,10 +50,7 @@ describe('the place of the preferences', () => {
     expect(preferencesPath).toBe(
       join(
         fixtureRoot.homeDir,
-        'Library',
-        'Application Support',
-        'magic-free-disk-space',
-        'preferences.json',
+        'Library/Application Support/magic-free-disk-space/preferences.json',
       ),
     );
   });

@@ -556,7 +556,8 @@ describe('runBridge', () => {
       'deleted',
       'failed',
     ]);
-    const appCacheKey = `catalog:app-cache:${joinBelowHome({ home: environment, path: 'Library/Caches/AppCache' })}`;
+    const appCachePath = joinBelowHome({ home: environment, path: 'Library/Caches/AppCache' });
+    const appCacheKey = `catalog:app-cache:${appCachePath}`;
 
     expect(answers[1]).toMatchObject({
       planId: 1,
