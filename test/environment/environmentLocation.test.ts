@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
   findEnvironmentLocationPath,
+  findEnvironmentLocationPaths,
   resolveEnvironmentLocation,
   resolveEnvironmentLocations,
 } from '../../src/environment/environmentLocation.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import {
   exampleDarwinEnvironment,
   exampleWin32Environment,
@@ -186,6 +189,47 @@ describe('findEnvironmentLocationPath', () => {
       findEnvironmentLocationPath({
         folders: exampleDarwinEnvironment,
         location: { root: 'knownFolder', folder: 'documents', path: '' },
+      }),
+    ).toThrow('A location lies below a folder of Windows on macOS.');
+  });
+});
+
+describe('findEnvironmentLocationPaths', () => {
+  test('resolves the user-file roots of macOS below the home, in their order', () => {
+    expect<string[]>(
+      findEnvironmentLocationPaths({
+        folders: exampleDarwinEnvironment,
+        locations: darwinPlatform.scan.userFileRoots,
+      }),
+    ).toEqual([
+      '/Users/tester/Desktop',
+      '/Users/tester/Documents',
+      '/Users/tester/Downloads',
+      '/Users/tester/Movies',
+    ]);
+  });
+
+  test('takes the known folders of Windows where they moved, and leaves out a missing one', () => {
+    expect<string[]>(
+      findEnvironmentLocationPaths({
+        folders: exampleWin32Environment,
+        locations: win32Platform.scan.userFileRoots,
+      }),
+    ).toEqual([
+      'C:\\Users\\tester\\Desktop',
+      'C:\\Users\\tester\\OneDrive\\Documents',
+      'C:\\Users\\tester\\Downloads',
+    ]);
+  });
+
+  test('throws as findEnvironmentLocationPath does for a known folder on macOS', () => {
+    expect(() =>
+      findEnvironmentLocationPaths({
+        folders: exampleDarwinEnvironment,
+        locations: [
+          { root: 'home', path: 'Desktop' },
+          { root: 'knownFolder', folder: 'desktop', path: '' },
+        ],
       }),
     ).toThrow('A location lies below a folder of Windows on macOS.');
   });

@@ -5,7 +5,7 @@ import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
 import type { EnvironmentLocation, EnvironmentLocationAtRoot } from './environmentLocation.js';
 import {
-  findEnvironmentLocationPath,
+  findEnvironmentLocationPaths,
   resolveEnvironmentLocation,
   resolveEnvironmentLocations,
 } from './environmentLocation.js';
@@ -155,10 +155,9 @@ export function buildEnvironment(params: {
   const platformBaseRealPaths = listPlatformBaseDirs({
     platformFolders: params.platformRealFolders,
   });
-  const protectedLocationRealPaths = params.protectedLocations.flatMap((location) => {
-    const realPath = findEnvironmentLocationPath({ folders: realFolders, location: location });
-
-    return realPath === null ? [] : [realPath];
+  const protectedLocationRealPaths = findEnvironmentLocationPaths({
+    folders: realFolders,
+    locations: params.protectedLocations,
   });
 
   return {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildWin32BaseEnvironment,
-  WIN32_TOOL_PROCESSES,
+  win32ToolProcesses,
 } from '../../../src/platform/win32/toolProcesses.js';
 
 describe('buildWin32BaseEnvironment', () => {
@@ -42,11 +42,11 @@ describe('buildWin32BaseEnvironment', () => {
 describe.skipIf(process.platform !== 'win32')('a Windows tool in its job', () => {
   /** Starts a Bun child that runs until something ends it, in a job of its own. */
   function startIdleTool() {
-    const started = WIN32_TOOL_PROCESSES.startTool({
+    const started = win32ToolProcesses.startTool({
       path: process.execPath,
       args: ['-e', 'setInterval(() => {}, 1_000)'],
       cwd: process.cwd(),
-      env: WIN32_TOOL_PROCESSES.buildBaseEnvironment({
+      env: win32ToolProcesses.buildBaseEnvironment({
         toolFolderPath: process.cwd(),
         homeDir: process.cwd(),
         tempDir: process.cwd(),

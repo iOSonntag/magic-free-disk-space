@@ -62,6 +62,8 @@ export type AndroidSdk = {
 
 /** What the reads of the SDKs and of `~/.android/avd` found. */
 export type AndroidSdkState = {
+  /** The rules of the paths read, by which the image an AVD names matches a folder of an SDK. */
+  pathRules: PathRules;
   /** The SDKs of the roots that are folders, in the roots' order; none without an SDK. */
   sdks: AndroidSdk[];
   /** `null` when `~/.android/avd` is absent, so the AVDs may live elsewhere. */
@@ -111,11 +113,7 @@ export async function loadAndroidSdkState(params: {
 
   const avds = await loadAndroidAvds({
     pathRules: params.pathRules,
-    avdHomePath: joinAbsolutePath({
-      rules: params.pathRules,
-      parentPath: params.homeDir,
-      names: AVD_HOME_FOLDER_NAMES,
-    }),
+    avdHomePath: buildAndroidAvdHomePath({ pathRules: params.pathRules, homeDir: params.homeDir }),
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -123,7 +121,22 @@ export async function loadAndroidSdkState(params: {
     return avds;
   }
 
-  return { kind: 'succeeded', value: { sdks: sdks.value, avds: avds.value } };
+  return {
+    kind: 'succeeded',
+    value: { pathRules: params.pathRules, sdks: sdks.value, avds: avds.value },
+  };
+}
+
+/** The folder of the AVDs the probes read, `~/.android/avd`. */
+export function buildAndroidAvdHomePath(params: {
+  pathRules: PathRules;
+  homeDir: AbsolutePath;
+}): AbsolutePath {
+  return joinAbsolutePath({
+    rules: params.pathRules,
+    parentPath: params.homeDir,
+    names: AVD_HOME_FOLDER_NAMES,
+  });
 }
 
 async function loadAndroidSdk(params: {

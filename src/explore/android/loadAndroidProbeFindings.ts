@@ -55,6 +55,8 @@ export async function loadAndroidSystemImageFindings(params: {
   return {
     kind: 'succeeded',
     value: buildAndroidSystemImageFindings({
+      pathRules: params.run.environment.pathRules,
+      homeDir: params.run.environment.homeDir,
       offers: decideAndroidSystemImageOffers(state.value),
       runningProcesses: params.run.runningProcesses,
     }),
@@ -75,6 +77,8 @@ export async function loadAndroidEmulatorFindings(params: {
   return {
     kind: 'succeeded',
     value: buildAndroidEmulatorFindings({
+      pathRules: params.run.environment.pathRules,
+      homeDir: params.run.environment.homeDir,
       offers: decideAndroidEmulatorOffers(state.value),
       runningProcesses: params.run.runningProcesses,
     }),

@@ -11,7 +11,7 @@ import { assignProcessToJob, closeHandle, createKillOnCloseJob, terminateJob } f
  * run settles, and when the app ends in any way, since Windows then closes its handles. The tool
  * joins its job right after its start, so a process it starts in that first moment escapes it.
  */
-export const WIN32_TOOL_PROCESSES: ToolProcessPlatform = {
+export const win32ToolProcesses: ToolProcessPlatform = {
   buildBaseEnvironment: buildBaseEnvironment,
   startTool: startTool,
 };

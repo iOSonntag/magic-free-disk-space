@@ -20,7 +20,6 @@ export const WIN32_PROTECTED_LOCATIONS: EnvironmentLocation[] = [
   { root: 'knownFolder', folder: 'music', path: '' },
   { root: 'knownFolder', folder: 'pictures', path: '' },
   { root: 'knownFolder', folder: 'localAppDataLow', path: '' },
-  { root: 'knownFolder', folder: 'skyDrive', path: '' },
   // Known folders the environment does not resolve, at the place Windows creates them.
   { root: 'home', path: '3D Objects' },
   { root: 'home', path: 'Contacts' },
@@ -41,9 +40,9 @@ export const WIN32_PROTECTED_LOCATIONS: EnvironmentLocation[] = [
 ];
 
 /**
- * Folders of keys, credentials, and certificates below the profile and the AppData folders, never
- * removed, neither whole nor in part. The folders of the deletion log and of the preference file
- * join them in the environment.
+ * Folders of keys, credentials, and certificates below the profile and the AppData folders, and
+ * folders of files the user made inside a cache, never removed, neither whole nor in part. The
+ * folders of the deletion log and of the preference file join them in the environment.
  */
 export const WIN32_SENSITIVE_LOCATIONS: EnvironmentLocationAtRoot[] = [
   { root: 'home', path: '.ssh' },
@@ -62,4 +61,11 @@ export const WIN32_SENSITIVE_LOCATIONS: EnvironmentLocationAtRoot[] = [
   { root: 'roamingAppData', path: 'Microsoft/Vault' },
   { root: 'localAppData', path: 'Microsoft/Credentials' },
   { root: 'localAppData', path: 'Microsoft/Vault' },
+  // The backgrounds the user uploaded to Teams lie among the folders of its cache, which the
+  // catalog offers one by one.
+  {
+    root: 'localAppData',
+    path: 'Packages/MSTeams_8wekyb3d8bbwe/LocalCache/Microsoft/MSTeams/Backgrounds',
+  },
+  { root: 'roamingAppData', path: 'Microsoft/Teams/Backgrounds' },
 ];

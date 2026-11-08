@@ -1,6 +1,6 @@
 import type { Test } from 'bun:test';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, symlink, writeFile } from 'node:fs/promises';
+import { chmod, realpath, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { CatalogLocation } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -96,26 +96,11 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** pnpm's homes of the probe platform, in the fixture environment. */
-function resolvePnpmHomePaths(params: {
-  environment: Environment;
-  probePlatform: ExploreProbePlatform;
-}): AbsolutePath[] {
-  return resolveEnvironmentLocations({
-    folders: params.environment,
-    locations: params.probePlatform.explore.pnpmInstallPlaces.homes,
-  });
-}
-
 /** A path below pnpm's own home of the host, the first of its homes, in the fixture environment. */
-function buildPnpmHomePath(params: {
-  environment: Environment;
-  probePlatform: ExploreProbePlatform;
-  names: string[];
-}): string {
-  const [pnpmHomePath] = resolvePnpmHomePaths({
-    environment: params.environment,
-    probePlatform: params.probePlatform,
+function buildPnpmHomePath(params: { environment: Environment; names: string[] }): string {
+  const [pnpmHomePath] = resolveEnvironmentLocations({
+    folders: params.environment,
+    locations: hostPlatform.explore.pnpmInstallPlaces.homes,
   });
 
   if (pnpmHomePath === undefined) {
@@ -723,7 +708,6 @@ describe('loadPnpmInstallState', () => {
   test('keeps a global package.json with no version as an install without a version', async () => {
     const packageFolder = buildPnpmHomePath({
       environment: environment,
-      probePlatform: probePlatform,
       names: ['global/5/node_modules/pnpm'],
     });
     await writeFixtureTextFile({
@@ -740,7 +724,11 @@ describe('loadPnpmInstallState', () => {
       }),
     ).toEqual({
       kind: 'succeeded',
-      value: { installs: [{ kind: 'unparsed', path: buildTestHostPath({ text: packageFolder }) }] },
+      value: {
+        installs: [
+          { kind: 'unparsed', path: buildTestHostPath({ text: await realpath(packageFolder) }) },
+        ],
+      },
     });
   });
 
@@ -843,6 +831,138 @@ describe('loadPnpmInstallState', () => {
         },
       });
     });
+
+    test("reads the pnpm versions of Volta's, Scoop's and mise's folders of pnpm", async () => {
+      const voltaVersionPath = buildWindowsPlacePath({
+        environment: environment,
+        location: { root: 'localAppData', path: 'Volta/tools/image/pnpm/10.14.0' },
+      });
+      const scoopVersionPath = buildWindowsPlacePath({
+        environment: environment,
+        location: { root: 'home', path: 'scoop/apps/pnpm/9.15.4' },
+      });
+      const miseVersionPath = buildWindowsPlacePath({
+        environment: environment,
+        location: { root: 'localAppData', path: 'mise/installs/pnpm/8.15.9' },
+      });
+      await createFixtureDirectory({ path: voltaVersionPath });
+      await createFixtureDirectory({ path: scoopVersionPath });
+      await createFixtureDirectory({ path: miseVersionPath });
+
+      expect(await loadWindowsInstallState()).toEqual({
+        kind: 'succeeded',
+        value: {
+          installs: [
+            { kind: 'parsed', path: voltaVersionPath, versionText: '10.14.0', major: 10 },
+            { kind: 'parsed', path: scoopVersionPath, versionText: '9.15.4', major: 9 },
+            { kind: 'parsed', path: miseVersionPath, versionText: '8.15.9', major: 8 },
+          ],
+        },
+      });
+    });
+
+    test("reads npm's global pnpm below Scoop's persisted prefixes and Volta's package prefixes", async () => {
+      const packageLocations: CatalogLocation[] = [
+        { root: 'home', path: 'scoop/persist/nodejs/bin/node_modules/pnpm' },
+        { root: 'home', path: 'scoop/persist/nodejs-lts/bin/node_modules/pnpm' },
+        { root: 'localAppData', path: 'Volta/tools/image/packages/pnpm/node_modules/pnpm' },
+        {
+          root: 'localAppData',
+          path: 'Volta/tools/image/packages/@pnpm/exe/node_modules/@pnpm/exe',
+        },
+      ];
+      const packagePaths = packageLocations.map((location) =>
+        buildWindowsPlacePath({ environment: environment, location: location }),
+      );
+
+      for (const packagePath of packagePaths) {
+        await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
+      }
+
+      expect(await loadWindowsInstallState()).toEqual({
+        kind: 'succeeded',
+        value: {
+          installs: packagePaths.map((packagePath) => ({
+            kind: 'parsed',
+            path: packagePath,
+            versionText: '10.14.0',
+            major: 10,
+          })),
+        },
+      });
+    });
+
+    const nodeVersionPackagePlaces: { manager: string; packageFolder: CatalogLocation }[] = [
+      {
+        manager: 'nvm-windows 2',
+        packageFolder: {
+          root: 'localAppData',
+          path: 'Author Software/nvm/installs/v22.1.0/node_modules/pnpm',
+        },
+      },
+      {
+        manager: 'nvm-windows 1.2',
+        packageFolder: { root: 'localAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
+      },
+      {
+        manager: 'nvm-windows before 1.2',
+        packageFolder: { root: 'roamingAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
+      },
+      {
+        manager: 'fnm',
+        packageFolder: {
+          root: 'roamingAppData',
+          path: 'fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
+        },
+      },
+      {
+        manager: "fnm's legacy folder",
+        packageFolder: {
+          root: 'home',
+          path: '.fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
+        },
+      },
+      {
+        manager: 'Volta',
+        packageFolder: {
+          root: 'localAppData',
+          path: 'Volta/tools/image/node/22.1.0/node_modules/pnpm',
+        },
+      },
+      {
+        manager: 'mise',
+        packageFolder: {
+          root: 'localAppData',
+          path: 'mise/installs/node/22.1.0/node_modules/pnpm',
+        },
+      },
+    ];
+
+    for (const packagePlace of nodeVersionPackagePlaces) {
+      test(`reads npm's global pnpm of a node version of ${packagePlace.manager}`, async () => {
+        const packageFolder = buildWindowsPlacePath({
+          environment: environment,
+          location: packagePlace.packageFolder,
+        });
+        await writePnpmPackage({ packageFolder: packageFolder, version: '10.14.0' });
+
+        expect(await loadWindowsInstallState()).toEqual({
+          kind: 'succeeded',
+          value: {
+            installs: [
+              {
+                kind: 'parsed',
+                // The probe reads each node's folder at its real path, as the fixture root may lie
+                // below a link.
+                path: buildTestHostPath({ text: await realpath(packageFolder) }),
+                versionText: '10.14.0',
+                major: 10,
+              },
+            ],
+          },
+        });
+      });
+    }
 
     const unreadablePlaces: { place: string; createUnreadablePlace: () => Promise<string> }[] = [
       {
@@ -1024,7 +1144,6 @@ for (const probeCase of probeCases) {
           createFixtureDirectory({
             path: buildPnpmHomePath({
               environment: environment,
-              probePlatform: probePlatform,
               names: ['.tools/pnpm/10.22.0'],
             }),
           }),
@@ -1036,7 +1155,6 @@ for (const probeCase of probeCases) {
           createFixtureDirectory({
             path: buildPnpmHomePath({
               environment: environment,
-              probePlatform: probePlatform,
               names: ['.tools/@pnpm+exe/10.22.0'],
             }),
           }),
@@ -1048,7 +1166,6 @@ for (const probeCase of probeCases) {
           writePnpmPackage({
             packageFolder: buildPnpmHomePath({
               environment: environment,
-              probePlatform: probePlatform,
               names: ['global/5/node_modules/pnpm'],
             }),
             version: '10.14.0',
@@ -1162,7 +1279,6 @@ for (const probeCase of probeCases) {
         buildPackageFolder: () =>
           buildPnpmHomePath({
             environment: environment,
-            probePlatform: probePlatform,
             names: ['global/5/node_modules/@pnpm/exe'],
           }),
       },
@@ -1196,7 +1312,6 @@ for (const probeCase of probeCases) {
         await writeFixtureTextFile({
           path: buildPnpmHomePath({
             environment: environment,
-            probePlatform: probePlatform,
             names: ['pnpm'],
           }),
           text: 'Ïúíþ executable',
@@ -1214,7 +1329,6 @@ for (const probeCase of probeCases) {
       await writeFixtureTextFile({
         path: buildPnpmHomePath({
           environment: environment,
-          probePlatform: probePlatform,
           names: ['pnpm'],
         }),
         text: '#!/bin/sh\nexec "$basedir/.tools/pnpm/10.14.0/bin/pnpm" "$@"\n',
@@ -1250,7 +1364,6 @@ for (const probeCase of probeCases) {
           await writeFixtureTextFile({
             path: buildPnpmHomePath({
               environment: environment,
-              probePlatform: probePlatform,
               names: ['.tools/pnpm-exe/10.22.0/pnpm'],
             }),
             text: 'Ïúíþ executable',
@@ -1258,7 +1371,6 @@ for (const probeCase of probeCases) {
           await writeFixtureTextFile({
             path: buildPnpmHomePath({
               environment: environment,
-              probePlatform: probePlatform,
               names: ['pnpm'],
             }),
             text: '#!/bin/sh\nexec "$basedir/.tools/pnpm-exe/10.22.0/pnpm" "$@"\n',
@@ -1273,7 +1385,6 @@ for (const probeCase of probeCases) {
           writePnpmPackage({
             packageFolder: buildPnpmHomePath({
               environment: environment,
-              probePlatform: probePlatform,
               names: ['global/v11', PNPM_11_INSTALL_ID, 'node_modules/pnpm'],
             }),
             version: '11.1.2',
@@ -1287,7 +1398,6 @@ for (const probeCase of probeCases) {
           writePnpmPackage({
             packageFolder: buildPnpmHomePath({
               environment: environment,
-              probePlatform: probePlatform,
               names: ['global/v11', PNPM_11_INSTALL_ID, 'node_modules/@pnpm/exe'],
             }),
             version: '11.1.2',
@@ -1317,7 +1427,6 @@ for (const probeCase of probeCases) {
           const storeRoot = await createStore({ folderNames: ['v11'] });
           const globalInstallsPath = buildPnpmHomePath({
             environment: environment,
-            probePlatform: probePlatform,
             names: ['global/v11'],
           });
           const installFolderPath = join(globalInstallsPath, PNPM_11_INSTALL_ID);
@@ -1348,7 +1457,6 @@ for (const probeCase of probeCases) {
             linkPath: join(
               buildPnpmHomePath({
                 environment: environment,
-                probePlatform: probePlatform,
                 names: ['global/5/node_modules'],
               }),
               packageName,
@@ -1491,7 +1599,6 @@ for (const probeCase of probeCases) {
       await createFixtureDirectory({
         path: buildPnpmHomePath({
           environment: environment,
-          probePlatform: probePlatform,
           names: ['.tools/pnpm/13.0.0'],
         }),
       });
@@ -1571,7 +1678,6 @@ for (const probeCase of probeCases) {
         createUnreadablePlace: async () => {
           const toolsPath = buildPnpmHomePath({
             environment: environment,
-            probePlatform: probePlatform,
             names: ['.tools/pnpm'],
           });
           await createFixtureDirectory({ path: toolsPath });
@@ -1586,7 +1692,6 @@ for (const probeCase of probeCases) {
         createUnreadablePlace: async () => {
           const launcherPath = buildPnpmHomePath({
             environment: environment,
-            probePlatform: probePlatform,
             names: ['pnpm'],
           });
           await writeFixtureTextFile({ path: launcherPath, text: '#!/bin/sh\n' });
@@ -1601,9 +1706,11 @@ for (const probeCase of probeCases) {
         createUnreadablePlace: async () => {
           const packagePath = join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/pnpm');
           await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
+          // The probe reads each node's folder at its real path, as the fixture root may lie below a link.
+          const packageRealPath = await realpath(packagePath);
           await chmod(packagePath, 0o000);
 
-          return join(packagePath, 'package.json');
+          return join(packageRealPath, 'package.json');
         },
       },
     ];
@@ -1625,6 +1732,24 @@ for (const probeCase of probeCases) {
     }
 
     describe.skipIf(process.platform !== 'win32')("at pnpm's places of Windows", () => {
+      /** The folder of pnpm 10 at `location`, in a folder of pnpm versions. */
+      function createPnpmVersionFolder(params: { location: CatalogLocation }): Promise<void> {
+        return createFixtureDirectory({
+          path: resolveEnvironmentLocation({ folders: environment, location: params.location }),
+        });
+      }
+
+      /** The package of pnpm 10 at `location`, in a folder of npm's globals. */
+      function writePnpm10Package(params: { location: CatalogLocation }): Promise<void> {
+        return writePnpmPackage({
+          packageFolder: resolveEnvironmentLocation({
+            folders: environment,
+            location: params.location,
+          }),
+          version: '10.14.0',
+        });
+      }
+
       const windowsInstallPlaces: { place: string; createInstall: () => Promise<void> }[] = [
         {
           place: "corepack's v1 folder in the local AppData",
@@ -1666,6 +1791,108 @@ for (const probeCase of probeCases) {
                 location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
               }),
               version: '10.14.0',
+            }),
+        },
+        {
+          place: "npm's globals of a node version of nvm-windows 2",
+          createInstall: () =>
+            writePnpm10Package({
+              location: {
+                root: 'localAppData',
+                path: 'Author Software/nvm/installs/v22.1.0/node_modules/pnpm',
+              },
+            }),
+        },
+        {
+          place: "npm's globals of a node version of nvm-windows 1.2",
+          createInstall: () =>
+            writePnpm10Package({
+              location: { root: 'localAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
+            }),
+        },
+        {
+          place: "npm's globals of a node version of nvm-windows before 1.2",
+          createInstall: () =>
+            writePnpm10Package({
+              location: { root: 'roamingAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
+            }),
+        },
+        {
+          place: "npm's globals of a node version of fnm",
+          createInstall: () =>
+            writePnpm10Package({
+              location: {
+                root: 'roamingAppData',
+                path: 'fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
+              },
+            }),
+        },
+        {
+          place: "npm's globals of a node version in fnm's legacy folder",
+          createInstall: () =>
+            writePnpm10Package({
+              location: {
+                root: 'home',
+                path: '.fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
+              },
+            }),
+        },
+        {
+          place: "npm's globals of a node version of Volta",
+          createInstall: () =>
+            writePnpm10Package({
+              location: {
+                root: 'localAppData',
+                path: 'Volta/tools/image/node/22.1.0/node_modules/pnpm',
+              },
+            }),
+        },
+        {
+          place: "Volta's package prefix of pnpm",
+          createInstall: () =>
+            writePnpm10Package({
+              location: {
+                root: 'localAppData',
+                path: 'Volta/tools/image/packages/pnpm/node_modules/pnpm',
+              },
+            }),
+        },
+        {
+          place: "Volta's folder of pnpm versions",
+          createInstall: () =>
+            createPnpmVersionFolder({
+              location: { root: 'localAppData', path: 'Volta/tools/image/pnpm/10.14.0' },
+            }),
+        },
+        {
+          place: "npm's globals of Scoop's persisted node prefix",
+          createInstall: () =>
+            writePnpm10Package({
+              location: { root: 'home', path: 'scoop/persist/nodejs/bin/node_modules/pnpm' },
+            }),
+        },
+        {
+          place: "Scoop's folder of pnpm versions",
+          createInstall: () =>
+            createPnpmVersionFolder({
+              location: { root: 'home', path: 'scoop/apps/pnpm/10.14.0' },
+            }),
+        },
+        {
+          place: "npm's globals of a node version of mise",
+          createInstall: () =>
+            writePnpm10Package({
+              location: {
+                root: 'localAppData',
+                path: 'mise/installs/node/22.1.0/node_modules/pnpm',
+              },
+            }),
+        },
+        {
+          place: "mise's folder of pnpm versions",
+          createInstall: () =>
+            createPnpmVersionFolder({
+              location: { root: 'localAppData', path: 'mise/installs/pnpm/10.14.0' },
             }),
         },
       ];
@@ -1796,7 +2023,6 @@ describe('the recheck of a pnpm store unit', () => {
     await createFixtureDirectory({
       path: buildPnpmHomePath({
         environment: environment,
-        probePlatform: probePlatform,
         names: ['.tools/pnpm/10.14.0'],
       }),
     });
@@ -1858,7 +2084,6 @@ describe('the recheck of a pnpm store unit', () => {
   testOnPosix('fails at a place of installed pnpm it cannot read, never as no pnpm', async () => {
     const toolsPath = buildPnpmHomePath({
       environment: environment,
-      probePlatform: probePlatform,
       names: ['.tools/pnpm'],
     });
     await createFixtureDirectory({ path: toolsPath });

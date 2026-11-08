@@ -7,8 +7,7 @@ import { buildTestMacEnvironment } from './fixtureRoot.js';
 import {
   buildTestDriveRoot,
   buildTestWindowsPath,
-  buildTestWindowsUser,
-  EXAMPLE_WINDOWS_SID_TEXT,
+  exampleWindowsUser,
 } from './parsedValueFixtures.js';
 
 /** The values a Windows environment is built of, for a test that varies one of them. */
@@ -35,7 +34,7 @@ const exampleWin32KnownFolderPaths: WindowsKnownFolderPaths = {
  */
 export const exampleWin32EnvironmentParams: Win32EnvironmentParams = {
   nowMs: 0,
-  user: buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT }),
+  user: exampleWindowsUser,
   home: {
     path: buildTestWindowsPath({ text: 'C:\\Users\\tester' }),
     realPath: buildTestWindowsPath({ text: 'C:\\Users\\tester' }),

@@ -18,7 +18,6 @@ import {
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbeRun, getProbeFindings } from '../support/probeRunFixtures.js';
-import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   buildObsoleteVscodeUnit,
   buildOlderVscodeUnit,
@@ -54,14 +53,15 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-function buildRun(runningProcesses: RunningProcesses | null): ExploreProbeRun {
-  return buildTestProbeRun({ environment: environment, runningProcesses: runningProcesses });
+/** A probe run over the fixture environment, where no process runs unless `runningProcesses` names one. */
+function buildRun(params: { runningProcesses?: RunningProcesses | null } = {}): ExploreProbeRun {
+  return buildTestProbeRun({ environment: environment, ...params });
 }
 
 async function loadFindings(
-  runningProcesses: RunningProcesses | null = buildRunningCommandLines([]),
+  params: { runningProcesses?: RunningProcesses | null } = {},
 ): Promise<ExploreProbeFindings> {
-  return getProbeFindings(await loadVscodeExtensionFindings(buildRun(runningProcesses)));
+  return getProbeFindings(await loadVscodeExtensionFindings(buildRun(params)));
 }
 
 /**
@@ -195,8 +195,8 @@ describe('loadVscodeExtensionFindings', () => {
   test('marks an offer busy while VS Code runs and unknown when the processes are unknown', async () => {
     await createVscodeInstallation({ environment: environment });
 
-    const running = await loadFindings(runningVscodeProcesses);
-    const unknown = await loadFindings(null);
+    const running = await loadFindings({ runningProcesses: runningVscodeProcesses });
+    const unknown = await loadFindings({ runningProcesses: null });
 
     expect(running.findings.map((finding) => finding.activity)).toEqual(['busy', 'busy']);
     expect(unknown.findings.map((finding) => finding.activity)).toEqual(['unknown', 'unknown']);
@@ -369,7 +369,7 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
     await createVscodeInstallation({ environment: environment });
     await chmod(join(extensionsPath, 'extensions.json'), 0o000);
 
-    expect(await loadVscodeExtensionFindings(buildRun(buildRunningCommandLines([])))).toEqual({
+    expect(await loadVscodeExtensionFindings(buildRun())).toEqual({
       kind: 'failed',
       failure: {
         reason: 'fileUnreadable',
@@ -389,9 +389,7 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
       try {
         await chmod(profilesPath, 0o000);
 
-        expect(
-          await loadVscodeExtensionFindings(buildRun(buildRunningCommandLines([]))),
-        ).toMatchObject({
+        expect(await loadVscodeExtensionFindings(buildRun())).toMatchObject({
           kind: 'failed',
           failure: { reason: 'fileUnreadable', path: profilesPath },
         });
@@ -399,9 +397,7 @@ describe('loadVscodeExtensionFindings by what each read finds', () => {
         await chmod(profilesPath, 0o700);
         await chmod(extensionsPath, 0o000);
 
-        expect(
-          await loadVscodeExtensionFindings(buildRun(buildRunningCommandLines([]))),
-        ).toMatchObject({
+        expect(await loadVscodeExtensionFindings(buildRun())).toMatchObject({
           kind: 'failed',
           failure: { reason: 'fileUnreadable', path: extensionsPath },
         });

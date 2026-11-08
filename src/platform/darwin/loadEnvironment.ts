@@ -139,6 +139,8 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     homeOwner: buildPosixUser({ uid: homeOwnerId.value }),
     tempRealPath: tempRealPath.value,
     tempPlacement: 'apartFromHome',
+    // The protected folders of macOS are resolved with the environment, after this check.
+    protectedRealPaths: [],
   });
 
   if (rootsFailure !== null) {

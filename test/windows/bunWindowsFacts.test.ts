@@ -371,7 +371,7 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
   );
 
   test.skipIf(!isCloudProbeOptedIn)(
-    'a cloud-only file of the Cloud Files API reads as evicted, a populated folder as on this PC',
+    'a cloud-only file of the Cloud Files API reads as evicted, a populated folder and a hydrated file as on this PC',
     async () => {
       const syncRoot = join(folder, 'syncRoot');
 
@@ -392,6 +392,9 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
       );
       expect(stages).toContainEqual(
         expect.objectContaining({ stage: 'cloud-only folder', placement: { kind: 'onDisk' } }),
+      );
+      expect(stages).toContainEqual(
+        expect.objectContaining({ stage: 'hydrated file', placement: { kind: 'onDisk' } }),
       );
     },
     CHILD_TIMEOUT_MS * 2,

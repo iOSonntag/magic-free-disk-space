@@ -25,6 +25,8 @@ export function formatEnvironmentFailure(params: { failure: EnvironmentFailure }
       return `The user folder ${formatDisplayText({ text: failure.path })} does not belong to your Windows account.`;
     case 'tempOverlapsHome':
       return `The temporary folder ${formatDisplayText({ text: failure.path })} overlaps the home folder, so nothing in it can count as temporary.`;
+    case 'tempHoldsProtectedFolder':
+      return `The temporary folder ${formatDisplayText({ text: failure.path })} is or holds a drive root or a folder this tool never deletes, so nothing in it can count as temporary.`;
     case 'variableElsewhere':
       return `The environment variable ${formatDisplayText({ text: failure.variableName })} does not point to ${formatDisplayText({ text: failure.path })}, the folder Windows keeps for your account. Start this tool from a normal session of your account.`;
   }

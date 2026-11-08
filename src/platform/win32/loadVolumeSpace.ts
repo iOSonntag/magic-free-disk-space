@@ -20,5 +20,5 @@ export async function loadVolumeSpace(path: string): Promise<VolumeSpace | null>
     return null;
   }
 
-  return { capacityBytes: space.value.totalBytes, availableBytes: space.value.availableBytes };
+  return space.value;
 }

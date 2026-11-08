@@ -12,8 +12,9 @@ export type TempPlacement = 'apartFromHome' | 'belowHome';
 /**
  * Returns why the resolved folders are unsafe to delete in, or `null`. The tool deletes as the
  * user who runs it, inside that user's own home, and treats the whole temporary folder as
- * expendable, so it refuses root, a home of another user, and a temporary folder that is the home
- * or holds it, or lies in it where the platform keeps it apart from the home.
+ * expendable, so it refuses root, a home of another user, a temporary folder that is the home or
+ * holds it, or lies in it where the platform keeps it apart from the home, and a temporary folder
+ * that is or holds a protected folder.
  */
 export function checkEnvironmentRoots(params: {
   pathRules: PathRules;
@@ -22,6 +23,11 @@ export function checkEnvironmentRoots(params: {
   homeOwner: UserIdentity;
   tempRealPath: string;
   tempPlacement: TempPlacement;
+  /**
+   * The real paths of the protected folders known before the check, such as the drive roots,
+   * without the entry of the temporary folder itself.
+   */
+  protectedRealPaths: string[];
 }): EnvironmentFailure | null {
   const userFailure = checkDeletingUser({
     user: params.user,
@@ -47,6 +53,18 @@ export function checkEnvironmentRoots(params: {
     })
   ) {
     return { reason: 'tempOverlapsHome', path: params.tempRealPath };
+  }
+
+  if (
+    params.protectedRealPaths.some((protectedRealPath) =>
+      isPossiblySameOrInsidePath({
+        rules: params.pathRules,
+        path: protectedRealPath,
+        parentPath: params.tempRealPath,
+      }),
+    )
+  ) {
+    return { reason: 'tempHoldsProtectedFolder', path: params.tempRealPath };
   }
 
   return null;

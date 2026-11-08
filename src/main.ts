@@ -10,7 +10,7 @@ import {
   formatEnvironmentFailure,
   formatUnsupportedPlatform,
 } from './report/formatEnvironmentFailure.js';
-import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
+import { runStoppingToolsOnProcessEnd } from './tools/runToolCommand.js';
 
 async function main(): Promise<number> {
   const io = createTerminalIo();
@@ -28,20 +28,12 @@ async function main(): Promise<number> {
   }
 }
 
-/**
- * Runs the CLI with the platform's slices, its tools stopped on every end of the process until
- * the run ended, so no listener keeps the process from ending.
- */
-async function runCliOnPlatform(params: { io: TerminalIo; platform: Platform }): Promise<number> {
-  const releaseProcessEnd = stopRunningToolsOnProcessEnd({
+/** Runs the CLI with the platform's slices, its tools stopped on every end of the process. */
+function runCliOnPlatform(params: { io: TerminalIo; platform: Platform }): Promise<number> {
+  return runStoppingToolsOnProcessEnd({
     processEndSignals: params.platform.tools.processEndSignals,
+    run: () => runCliWithEnvironment({ io: params.io, platform: params.platform }),
   });
-
-  try {
-    return await runCliWithEnvironment({ io: params.io, platform: params.platform });
-  } finally {
-    releaseProcessEnd();
-  }
 }
 
 async function runCliWithEnvironment(params: {

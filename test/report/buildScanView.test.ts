@@ -26,7 +26,7 @@ import {
   PROTOCOL_FIXTURE_DISK,
   PROTOCOL_FIXTURE_HOME_DIR,
 } from '../support/protocolFixtureScan.js';
-import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
+import { countTestCloudOnlyEntries, EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const MB = 1_000_000;
 
@@ -70,7 +70,7 @@ function buildRankedReport(params: {
   return buildScanReport({
     decisions: [...offers, ...advice],
     appAdvice: null,
-    evictedEntryCount: 0,
+    cloudOnlyEntries: null,
     issues: params.issues ?? [],
   });
 }
@@ -236,30 +236,40 @@ describe('buildScanView', () => {
     expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
   });
 
-  test('counts the entries left in iCloud into the skipped items, on a line of their own', () => {
+  test('counts only the skipped items on macOS, whose scan counts no entry left in iCloud', () => {
     const view = buildView({
       report: {
         ...EMPTY_REPORT,
         skipped: [{ path: '/Users/me/busy', reason: 'ownerRunning' }],
-        evictedEntryCount: 4,
+        cloudOnlyEntries: countTestCloudOnlyEntries({
+          cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
+          entryPaths: ['/Users/me/a', '/Users/me/b', '/Users/me/c', '/Users/me/d'],
+        }),
       },
     });
 
     expect(view.skipped).toEqual({
-      titleText: 'Skipped 5 items',
-      lines: ['its app or tool is running: 1', 'in iCloud, not on this Mac: 4'],
+      titleText: 'Skipped 1 item',
+      lines: ['its app or tool is running: 1'],
     });
   });
 
-  test('names OneDrive and this PC for the entries left in the cloud store on Windows', () => {
+  test('counts the entries left in OneDrive into the skipped items on Windows, on a line of their own', () => {
     const view = buildView({
       texts: win32Platform.report,
-      report: { ...EMPTY_REPORT, evictedEntryCount: 1 },
+      report: {
+        ...EMPTY_REPORT,
+        skipped: [{ path: 'C:\\Users\\me\\busy', reason: 'ownerRunning' }],
+        cloudOnlyEntries: countTestCloudOnlyEntries({
+          cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
+          entryPaths: ['C:\\Users\\me\\OneDrive\\a', 'C:\\Users\\me\\OneDrive\\b'],
+        }),
+      },
     });
 
     expect(view.skipped).toEqual({
-      titleText: 'Skipped 1 item',
-      lines: ['in OneDrive, not on this PC: 1'],
+      titleText: 'Skipped 3 items',
+      lines: ['its app or tool is running: 1', 'in OneDrive, not on this PC: 2'],
     });
   });
 

@@ -10,7 +10,10 @@ import { isStrictlyInsidePath } from '../../../src/path/isStrictlyInsidePath.js'
 import { joinAbsolutePath } from '../../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../../src/path/parseAbsolutePath.js';
 import { WIN32_CATALOG } from '../../../src/platform/win32/catalog/win32Catalog.js';
-import { isLocationUnderRoot } from '../../support/catalogLocationFixtures.js';
+import {
+  isLocationUnderRoot,
+  listMisnamedCatalogIds,
+} from '../../support/catalogLocationFixtures.js';
 import { exampleWin32Environment } from '../../support/environmentFixtures.js';
 
 /** Programs whose image names other apps share, so none may hold an entry back. */
@@ -22,15 +25,21 @@ const chromiumBrowserImageNames = ['brave.exe', 'chrome.exe', 'msedge.exe'];
 /** A backslash or a colon, so also a drive letter, which no name of a catalog path may hold. */
 const forbiddenPathCharacterPattern = /[\\:]/;
 
+/**
+ * The backgrounds the user uploaded to Teams, which lie among the folders of its caches; the scan
+ * refuses each as sensitive, so the catalog may name the caches around them.
+ */
+const teamsBackgroundRealPaths = [
+  'C:\\Users\\tester\\AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\Backgrounds',
+  'C:\\Users\\tester\\AppData\\Roaming\\Microsoft\\Teams\\Backgrounds',
+];
+
 /** A location the catalog names, with what names it for a failure message. */
 type NamedLocation = { name: string; location: EnvironmentLocation };
 
 describe('WIN32_CATALOG', () => {
   test('gives every entry its own id in kebab case', () => {
-    const ids = WIN32_CATALOG.entries.map((entry) => entry.id);
-
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.filter((id) => !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(id))).toEqual([]);
+    expect(listMisnamedCatalogIds({ entries: WIN32_CATALOG.entries })).toEqual([]);
   });
 
   test('owns every entry by no program or by images of its own program', () => {
@@ -79,7 +88,9 @@ describe('WIN32_CATALOG', () => {
   test('offers no guarded folder whole and nothing inside a sensitive folder', () => {
     const guardedPaths = [
       ...exampleWin32Environment.protectedRealPaths,
-      ...exampleWin32Environment.sensitiveRealPaths,
+      ...exampleWin32Environment.sensitiveRealPaths.filter(
+        (sensitivePath) => !teamsBackgroundRealPaths.includes(sensitivePath),
+      ),
     ];
     const insideSensitiveIds = WIN32_CATALOG.entries
       .filter((entry) =>
@@ -100,9 +111,25 @@ describe('WIN32_CATALOG', () => {
       )
       .map((entry) => entry.id);
 
-    expect(exampleWin32Environment.sensitiveRealPaths.length).toBeGreaterThan(2);
     expect(insideSensitiveIds).toEqual([]);
     expect(offeringGuardedIds).toEqual([]);
+  });
+
+  test("guards the user's Teams backgrounds among the cache folders it offers one by one", () => {
+    const holdingIds = WIN32_CATALOG.entries
+      .filter((entry) =>
+        teamsBackgroundRealPaths.some((backgroundPath) =>
+          isOfferingGuardedPath({ entry: entry, guardedPath: backgroundPath }),
+        ),
+      )
+      .map((entry) => entry.id);
+
+    expect(holdingIds).toEqual(['teams-cache', 'teams-classic-cache']);
+    expect(
+      teamsBackgroundRealPaths.filter(
+        (backgroundPath) => !exampleWin32Environment.sensitiveRealPaths.includes(backgroundPath),
+      ),
+    ).toEqual([]);
   });
 
   test('keeps every browser cache inside the first profile, which stays guarded with its folder of profiles', () => {
@@ -148,6 +175,9 @@ function listNamedLocations(): NamedLocation[] {
     ...pnpmInstallPlaces.corepackRoots,
     ...pnpmInstallPlaces.launchers,
     ...pnpmInstallPlaces.npmPrefixes,
+    ...pnpmInstallPlaces.pnpmVersionsRoots,
+    ...pnpmInstallPlaces.miseInstallsRoots,
+    ...pnpmInstallPlaces.nodeVersionsRoots.map((nodeVersionsRoot) => nodeVersionsRoot.location),
     WIN32_CATALOG.explore.pnpmStoreRoot,
     ...(WIN32_CATALOG.explore.pnpmXdgStoreRoot === null
       ? []

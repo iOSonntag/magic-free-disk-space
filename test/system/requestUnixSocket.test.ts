@@ -4,11 +4,7 @@ import { join } from 'node:path';
 import { requestUnixSocket } from '../../src/system/requestUnixSocket.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import {
-  buildTestUserIdentity,
-  buildTestWindowsUser,
-  EXAMPLE_WINDOWS_SID_TEXT,
-} from '../support/parsedValueFixtures.js';
+import { buildTestUserIdentity, exampleWindowsUser } from '../support/parsedValueFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 
 const USER = buildTestUserIdentity({ uid: process.getuid?.() ?? 0 });
@@ -159,7 +155,7 @@ describeOnPosix('requestUnixSocket', () => {
     try {
       const result = await requestUnixSocket({
         socketPath: socketPath,
-        user: buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT }),
+        user: exampleWindowsUser,
         method: 'GET',
         requestPath: '/_ping',
         timeoutMs: TIMEOUT_MS,

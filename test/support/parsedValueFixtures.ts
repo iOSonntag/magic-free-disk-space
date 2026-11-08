@@ -128,12 +128,16 @@ export function buildTestWindowsSid(params: { text: string }): WindowsSid {
 }
 
 /** A Windows user by its SID, such as `S-1-5-21-1-2-3-1001`. */
-/** The SID of the example user of the Windows fixtures. */
-export const EXAMPLE_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
-
 export function buildTestWindowsUser(params: { sidText: string }): UserIdentity {
   return { kind: 'windows', sid: buildTestWindowsSid({ text: params.sidText }) };
 }
+
+const EXAMPLE_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
+
+/** The example user of the Windows fixtures. */
+export const exampleWindowsUser: UserIdentity = buildTestWindowsUser({
+  sidText: EXAMPLE_WINDOWS_SID_TEXT,
+});
 
 export function buildTestWindowsImageName(params: { text: string }): WindowsImageName {
   return unwrapFixtureValue({ parsed: parseWindowsImageName(params), text: params.text });

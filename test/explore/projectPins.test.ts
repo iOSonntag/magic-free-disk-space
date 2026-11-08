@@ -326,27 +326,26 @@ describe('loading the pins', () => {
     await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
   });
 
-  /** A path below the fixture home under the rules of the host. */
-  function buildHomePath(...names: string[]): AbsolutePath {
-    return buildTestHostPath({ text: join(fixtureRoot.homeDir, ...names) });
-  }
-
-  /** A path below the real path of the fixture home, as a resolved link names it. */
-  function buildHomeRealPath(...names: string[]): AbsolutePath {
-    return buildTestHostPath({ text: join(homeRealPath, ...names) });
+  /**
+   * A path below `folderPath` under the rules of the host: the fixture home, or its real path as a
+   * resolved link names it.
+   */
+  function buildHostPathBelow(params: { folderPath: string; names: string[] }): AbsolutePath {
+    return buildTestHostPath({ text: join(params.folderPath, ...params.names) });
   }
 
   async function createTrackedConfigLink(params: {
+    trackedConfigsPath: string;
     name: string;
     targetPath: string;
   }): Promise<void> {
-    await createFixtureDirectory({ path: trackedConfigsPath });
-    await symlink(params.targetPath, join(trackedConfigsPath, params.name));
+    await createFixtureDirectory({ path: params.trackedConfigsPath });
+    await symlink(params.targetPath, join(params.trackedConfigsPath, params.name));
   }
 
   describe('loadProjectPinFiles', () => {
     test('reads each path once with its first kind, and drops a file that is gone', async () => {
-      const nvmrcPath = buildHomePath('.nvmrc');
+      const nvmrcPath = buildHostPathBelow({ folderPath: fixtureRoot.homeDir, names: ['.nvmrc'] });
       await writeFile(nvmrcPath, '22\n');
 
       const files = await loadProjectPinFiles({
@@ -354,7 +353,13 @@ describe('loading the pins', () => {
         files: [
           { path: nvmrcPath, kind: 'nvmrc' },
           { path: nvmrcPath, kind: 'toolVersions' },
-          { path: buildHomePath('gone', '.nvmrc'), kind: 'nvmrc' },
+          {
+            path: buildHostPathBelow({
+              folderPath: fixtureRoot.homeDir,
+              names: ['gone', '.nvmrc'],
+            }),
+            kind: 'nvmrc',
+          },
         ],
       });
 
@@ -364,8 +369,14 @@ describe('loading the pins', () => {
     });
 
     test('keeps a folder and a file over the read limit as unfit', async () => {
-      const folderPath = buildHomePath('a', '.tool-versions');
-      const largePath = buildHomePath('.tool-versions');
+      const folderPath = buildHostPathBelow({
+        folderPath: fixtureRoot.homeDir,
+        names: ['a', '.tool-versions'],
+      });
+      const largePath = buildHostPathBelow({
+        folderPath: fixtureRoot.homeDir,
+        names: ['.tool-versions'],
+      });
       await createFixtureDirectory({ path: folderPath });
       await writeFile(largePath, '');
       await truncate(largePath, EXPLORE_FILE_MAX_BYTES + 1);
@@ -385,7 +396,10 @@ describe('loading the pins', () => {
     });
 
     testOnPosix('keeps a file it cannot read as unreadable', async () => {
-      const gradlePath = buildHomePath('build.gradle');
+      const gradlePath = buildHostPathBelow({
+        folderPath: fixtureRoot.homeDir,
+        names: ['build.gradle'],
+      });
       await writeFile(gradlePath, 'android {}\n');
       await chmod(gradlePath, 0o000);
 
@@ -404,7 +418,7 @@ describe('loading the pins', () => {
 
   describe('loadProjectPins', () => {
     test('reads only the walked files when mise tracks no configs', async () => {
-      const nvmrcPath = buildHomePath('.nvmrc');
+      const nvmrcPath = buildHostPathBelow({ folderPath: fixtureRoot.homeDir, names: ['.nvmrc'] });
       await writeFile(nvmrcPath, '22\n');
 
       const pins = await loadProjectPins({
@@ -438,18 +452,33 @@ describe('loading the pins', () => {
       await writeFixtureTextFile({ path: join(pnpmProjectPath, 'pnpm-lock.yaml'), text: '' });
       await writeFixtureTextFile({ path: join(npmProjectPath, 'package.json'), text: '{}' });
       await writeFixtureTextFile({ path: join(npmProjectPath, 'notes.txt'), text: '' });
-      await createTrackedConfigLink({ name: 'a1', targetPath: join(worktreePath, 'mise.toml') });
-      await createTrackedConfigLink({ name: 'b2', targetPath: globalConfigPath });
       await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
+        name: 'a1',
+        targetPath: join(worktreePath, 'mise.toml'),
+      });
+      await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
+        name: 'b2',
+        targetPath: globalConfigPath,
+      });
+      await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
         name: 'c3',
         targetPath: join(pnpmProjectPath, 'package.json'),
       });
       await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
         name: 'd4',
         targetPath: join(npmProjectPath, 'package.json'),
       });
-      await createTrackedConfigLink({ name: 'e5', targetPath: join(npmProjectPath, 'notes.txt') });
       await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
+        name: 'e5',
+        targetPath: join(npmProjectPath, 'notes.txt'),
+      });
+      await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
         name: 'f6',
         targetPath: join(fixtureRoot.homeDir, 'gone', 'mise.toml'),
       });
@@ -468,17 +497,26 @@ describe('loading the pins', () => {
         value: buildTestProjectPins({
           files: [
             buildTestPinFileText({
-              path: buildHomeRealPath('.claude', 'worktrees', 'one', 'mise.toml'),
+              path: buildHostPathBelow({
+                folderPath: homeRealPath,
+                names: ['.claude', 'worktrees', 'one', 'mise.toml'],
+              }),
               kind: 'miseConfig',
               text: '[tools]\nnode = "22"\n',
             }),
             buildTestPinFileText({
-              path: buildHomeRealPath('.config', 'mise', 'config.toml'),
+              path: buildHostPathBelow({
+                folderPath: homeRealPath,
+                names: ['.config', 'mise', 'config.toml'],
+              }),
               kind: 'miseConfig',
               text: '[tools]\npnpm = "12"\n',
             }),
             buildTestPinFileText({
-              path: buildHomeRealPath('web', 'package.json'),
+              path: buildHostPathBelow({
+                folderPath: homeRealPath,
+                names: ['web', 'package.json'],
+              }),
               kind: 'packageJson',
               text: '{}',
             }),
@@ -489,9 +527,16 @@ describe('loading the pins', () => {
     });
 
     testOnPosix('reads a file both sources found once', async () => {
-      const miseConfigPath = buildHomeRealPath('app', 'mise.toml');
+      const miseConfigPath = buildHostPathBelow({
+        folderPath: homeRealPath,
+        names: ['app', 'mise.toml'],
+      });
       await writeFixtureTextFile({ path: miseConfigPath, text: '[tools]\n' });
-      await createTrackedConfigLink({ name: 'a1', targetPath: miseConfigPath });
+      await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
+        name: 'a1',
+        targetPath: miseConfigPath,
+      });
 
       const pins = await loadProjectPins({
         pathRules: hostPathRules,
@@ -541,6 +586,7 @@ describe('loading the pins', () => {
       const lockedPath = join(fixtureRoot.homeDir, 'locked');
       await writeFixtureTextFile({ path: join(lockedPath, 'app', 'mise.toml'), text: '[tools]\n' });
       await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
         name: 'a1',
         targetPath: join(lockedPath, 'app', 'mise.toml'),
       });
@@ -571,7 +617,11 @@ describe('loading the pins', () => {
     testOnPosix('fails at the folder of a target it cannot list', async () => {
       const projectPath = join(fixtureRoot.homeDir, 'app');
       await writeFixtureTextFile({ path: join(projectPath, 'package.json'), text: '{}' });
-      await createTrackedConfigLink({ name: 'a1', targetPath: join(projectPath, 'package.json') });
+      await createTrackedConfigLink({
+        trackedConfigsPath: trackedConfigsPath,
+        name: 'a1',
+        targetPath: join(projectPath, 'package.json'),
+      });
       // Searchable but not listable: the link resolves, the folder's names cannot be read.
       await chmod(projectPath, 0o100);
 

@@ -5,6 +5,7 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import type { RecycleBinContent } from '../../scan/candidate.js';
 import type { SystemCallFailure } from '../../system/systemCallFailure.js';
+import type { VolumeSpace } from '../../system/volumeSpace.js';
 import type { ProcessEntry } from './processEntry.js';
 import { createProcessEntryBuffer, parseProcessEntry } from './processEntry.js';
 
@@ -136,9 +137,6 @@ export type UninstallKeyValues = {
 
 /** One subkey of an open key, by its name, which the value reads below take beside the key. */
 type RegistrySubkey = { key: bigint; subkeyName: string };
-
-/** What `GetDiskFreeSpaceExW` reads of one volume for the calling user. */
-export type DiskFreeSpace = { totalBytes: number; availableBytes: number };
 
 type Kernel32 = ReturnType<typeof openKernel32>;
 type Advapi32 = ReturnType<typeof openAdvapi32>;
@@ -295,11 +293,11 @@ export function loadDriveType(params: { rootPath: AbsolutePath }): number {
  */
 export function loadDiskFreeSpace(params: {
   folderPath: AbsolutePath;
-}): Result<DiskFreeSpace, Win32CallFailure> {
+}): Result<VolumeSpace, Win32CallFailure> {
   kernel32 ??= openKernel32();
 
   const availableBytes = new BigUint64Array(1);
-  const totalBytes = new BigUint64Array(1);
+  const capacityBytes = new BigUint64Array(1);
   // A UNC folder must end with a backslash; a drive folder may.
   const folderText = params.folderPath.endsWith('\\')
     ? params.folderPath
@@ -308,7 +306,7 @@ export function loadDiskFreeSpace(params: {
   const isRead = kernel32.symbols.GetDiskFreeSpaceExW(
     toWideString({ text: folderText }),
     availableBytes,
-    totalBytes,
+    capacityBytes,
     null,
   );
 
@@ -319,7 +317,7 @@ export function loadDiskFreeSpace(params: {
   return {
     kind: 'succeeded',
     value: {
-      totalBytes: Number(totalBytes[0] ?? 0n),
+      capacityBytes: Number(capacityBytes[0] ?? 0n),
       availableBytes: Number(availableBytes[0] ?? 0n),
     },
   };

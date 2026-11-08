@@ -7,6 +7,7 @@ import type {
 } from '../../../environment/environmentLocation.js';
 import type { ExplorePlatform } from '../../../explore/explorePlatform.js';
 import { WIN32_CATALOG_ENTRIES } from './catalogEntries.js';
+import { PNPM_INSTALL_PLACES, PNPM_STORE_ROOT } from './pnpmHomes.js';
 import { WIN32_PROTECTED_LOCATIONS, WIN32_SENSITIVE_LOCATIONS } from './protectedPaths.js';
 
 /** The data of Windows the run takes beside what it reads from the system. */
@@ -82,23 +83,8 @@ export const WIN32_CATALOG: Win32Catalog = {
     { root: 'knownFolder', folder: 'videos', path: '' },
   ],
   explore: {
-    pnpmInstallPlaces: {
-      homes: [{ root: 'localAppData', path: 'pnpm' }],
-      corepackRoots: [
-        { root: 'localAppData', path: 'node/corepack/v1/pnpm' },
-        { root: 'localAppData', path: 'node/corepack/pnpm' },
-      ],
-      // The standalone executable. The `pnpm.cmd` and `pnpm.ps1` shims beside it run the pnpm of
-      // `.tools` or `global`, which the probe reads on its own, as it does a `#!` launcher.
-      launchers: [
-        { root: 'localAppData', path: 'pnpm/pnpm.exe' },
-        { root: 'localAppData', path: 'pnpm/bin/pnpm.exe' },
-      ],
-      npmPrefixes: [{ root: 'roamingAppData', path: 'npm' }],
-      // npm installs a global package in `<prefix>\node_modules` on Windows, with no `lib`.
-      npmGlobalFolderNames: ['node_modules'],
-    },
-    pnpmStoreRoot: { root: 'localAppData', path: 'pnpm/store' },
+    pnpmInstallPlaces: PNPM_INSTALL_PLACES,
+    pnpmStoreRoot: PNPM_STORE_ROOT,
     pnpmXdgStoreRoot: null,
     androidSdkRoot: { root: 'localAppData', path: 'Android/Sdk' },
     // A second Android SDK that Flutter's settings name is not read on Windows yet.

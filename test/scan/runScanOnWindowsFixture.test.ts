@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { sep } from 'node:path';
 import { buildScanView } from '../../src/report/buildScanView.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import { placeCandidate } from '../../src/scan/placeCandidate.js';
@@ -46,7 +47,7 @@ describe.skipIf(process.platform !== 'win32')(
 
     test('reads every place of the fixture without an issue', () => {
       expect(report.issues).toEqual([]);
-      expect(report.evictedEntryCount).toBe(0);
+      expect(report.cloudOnlyEntries).toEqual({ cloudStoreName: 'OneDrive', count: 0 });
     });
 
     test('lists items in exactly the sections the fixture fills', () => {
@@ -78,11 +79,12 @@ describe.skipIf(process.platform !== 'win32')(
       });
     });
 
-    test('lists the app caches of Chrome and Edge and the temporary files under Caches', () => {
+    test('lists the app caches of Chrome, Edge and classic Teams and the temporary files under Caches', () => {
       expect(listSectionPaths({ report: report, section: 'caches' })).toEqual(
         [
           home.paths.chromeCachePath,
           home.paths.edgeCachePath,
+          home.paths.teamsClassicLogsPath,
           home.paths.staleTempFilePath,
           home.paths.staleTempFolderPath,
         ].toSorted(),
@@ -102,9 +104,32 @@ describe.skipIf(process.platform !== 'win32')(
       });
     });
 
+    test('offers the logs of classic Teams beside its uploaded backgrounds, and holds back the backgrounds as sensitive', () => {
+      expect(report.candidates.map((candidate) => candidate.path)).toContain(
+        home.paths.teamsClassicLogsPath,
+      );
+      expect(
+        report.candidates.filter((candidate) => candidate.path.split(sep).includes('Backgrounds')),
+      ).toEqual([]);
+      expect(report.skipped).toContainEqual({
+        path: home.paths.teamsClassicBackgroundsPath,
+        reason: 'protectedPath',
+      });
+    });
+
     test('lists bin and obj beside a .csproj in any case, and node_modules beside a package.json, under Projects', () => {
       expect(listSectionPaths({ report: report, section: 'projects' })).toEqual(
         [home.paths.dotnetBinPath, home.paths.dotnetObjPath, home.paths.nodeModulesPath].toSorted(),
+      );
+    });
+
+    test('lists an obsolete VS Code extension, a pnpm store no pnpm uses, and an Android system image no device uses under Explore', () => {
+      expect(listExplorePaths({ report: report })).toEqual(
+        [
+          home.paths.vscodeExtensionPath,
+          home.paths.pnpmStorePath,
+          home.paths.androidSystemImagePath,
+        ].toSorted(),
       );
     });
 
@@ -168,9 +193,21 @@ describe.skipIf(process.platform !== 'win32')(
   },
 );
 
+/** The paths of the items listed in `section` itself, without the Explore items of its categories. */
 function listSectionPaths(params: { report: ScanReport; section: ConsumerSection }): string[] {
   return params.report.candidates
-    .filter((candidate) => placeCandidate(candidate).section === params.section)
+    .filter((candidate) => {
+      const place = placeCandidate(candidate);
+
+      return place.kind === 'section' && place.section === params.section;
+    })
+    .map((candidate) => candidate.path)
+    .toSorted();
+}
+
+function listExplorePaths(params: { report: ScanReport }): string[] {
+  return params.report.candidates
+    .filter((candidate) => placeCandidate(candidate).kind === 'explore')
     .map((candidate) => candidate.path)
     .toSorted();
 }

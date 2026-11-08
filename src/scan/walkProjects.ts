@@ -1,12 +1,16 @@
 import { basename, dirname } from 'node:path';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
+import {
+  findArtifactRulesOfName,
+  findMarkedArtifactRule,
+  groupArtifactRulesByName,
+} from '../catalog/projectArtifactRules.js';
 import type { ProjectPinFileRef } from '../explore/projectPins/projectPins.js';
 import {
   matchProjectPinFile,
   matchProjectPinFileName,
 } from '../explore/projectPins/projectPins.js';
-import { isSameEntryName, toComparablePathText } from '../path/isSameOrInsidePath.js';
+import { isSameEntryName } from '../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -58,11 +62,10 @@ export async function walkProjects(params: {
   recordEvictedEntry: EvictedEntryRecorder;
   privacyDenialCode: string | null;
 }): Promise<ProjectWalk> {
-  const artifactNames = new Set(
-    params.rules.map((rule) =>
-      toComparablePathText({ rules: params.pathRules, text: rule.artifactName }),
-    ),
-  );
+  const artifactRulesByName = groupArtifactRulesByName({
+    pathRules: params.pathRules,
+    rules: params.rules,
+  });
   const artifacts: ArtifactFinding[] = [];
   const pinFiles: ProjectPinFileRef[] = [];
   const issues: ScanIssue[] = [];
@@ -95,11 +98,16 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
-    if (artifactNames.has(toComparablePathText({ rules: params.pathRules, text: entry.name }))) {
+    const nameRules = findArtifactRulesOfName({
+      pathRules: params.pathRules,
+      rulesByName: artifactRulesByName,
+      name: entry.name,
+    });
+
+    if (nameRules !== null) {
       const markedRule = findMarkedArtifactRule({
         pathRules: params.pathRules,
-        rules: params.rules,
-        name: entry.name,
+        nameRules: nameRules,
         projectEntryNames: entry.siblingNames,
       });
 
@@ -115,16 +123,7 @@ export async function walkProjects(params: {
 
       // An unmarked folder one rule skips is no project to search either, such as `vendor`; any
       // other is an ordinary folder, such as a `bin` beside no project file of .NET.
-      const skippedUnmarked = params.rules.some(
-        (rule) =>
-          isSameEntryName({
-            rules: params.pathRules,
-            name: rule.artifactName,
-            otherName: entry.name,
-          }) && rule.unmarkedFolder === 'skipped',
-      );
-
-      if (skippedUnmarked) {
+      if (nameRules.some((rule) => rule.unmarkedFolder === 'skipped')) {
         return 'skip';
       }
     }

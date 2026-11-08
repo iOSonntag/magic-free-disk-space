@@ -35,9 +35,16 @@ export type ContainerEngine = ContainerEngineFixed | ContainerEngineProfiles;
 /** The roots of the IDE versions, by their kind; a version's plugins lie inside its settings. */
 export type IdeVersionRoots = Record<'caches' | 'logs' | 'settings', CatalogLocation[]>;
 
+/** A folder of a node version manager with one folder per node version. */
+export type NodeVersionsRoot = {
+  location: CatalogLocation;
+  /** The names from a version's folder to its npm prefix, such as fnm's `installation`. */
+  prefixNames: string[];
+};
+
 /**
- * The places of the platform where pnpm may be installed. The places of asdf, mise, nvm and
- * Homebrew are the probe's own, missing where those tools are not.
+ * The places of the platform where pnpm may be installed, each missing where its tool is not.
+ * Homebrew's prefixes are the probe's own.
  */
 export type PnpmInstallPlaces = {
   /**
@@ -47,15 +54,21 @@ export type PnpmInstallPlaces = {
   homes: CatalogLocation[];
   /** corepack's folders of pnpm, each with one folder per version. */
   corepackRoots: CatalogLocation[];
+  /** The folders of pnpm a tool manager installs itself, such as asdf's, one folder per version. */
+  pnpmVersionsRoots: CatalogLocation[];
+  /** mise's installs folders, whose folders naming pnpm hold one folder per version. */
+  miseInstallsRoots: CatalogLocation[];
   /**
    * The files that start pnpm in its homes: pnpm's executable, an install of no known version, or
    * a script starting with `#!` that runs a pnpm of a place read on its own.
    */
   launchers: CatalogLocation[];
-  /** npm's prefixes at fixed places; Homebrew's prefixes and each node's folder are prefixes too. */
+  /** npm's prefixes at fixed places; Homebrew's prefixes and each node version's are prefixes too. */
   npmPrefixes: CatalogLocation[];
   /** The folder of npm's global packages below a prefix, by its names. */
   npmGlobalFolderNames: string[];
+  /** The node version managers' folders of versions, whose npm globals may hold pnpm. */
+  nodeVersionsRoots: NodeVersionsRoot[];
 };
 
 /** What the explore probes take from the operating system: where the tools keep their data. */

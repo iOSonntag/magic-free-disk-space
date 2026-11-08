@@ -64,7 +64,7 @@ export type ToolCommandFailure =
   | ToolCommandFailureSpawnFailed
   | ToolCommandFailureOutputTooLarge;
 
-type ToolCommandResult = Result<ToolCommandOutput, ToolCommandFailure>;
+export type ToolCommandResult = Result<ToolCommandOutput, ToolCommandFailure>;
 
 /** Each tool whose run has not settled yet, so `stopRunningTools` can reach its processes. */
 const runningTools = new Set<StartedTool>();
@@ -128,14 +128,15 @@ export function stopRunningTools(): void {
 }
 
 /**
- * Stops every running tool when the process exits, and on each signal exits with its code: a
- * tool's processes may outlive the app unless they are stopped here. The returned function
- * removes these listeners again, as an app does that ends once its input ended, since a listener
- * of a signal may keep the process running on Windows.
+ * Runs `run` while every running tool is stopped when the process exits, and on each signal the
+ * process exits with its code: a tool's processes may outlive the app unless they are stopped
+ * here. Once the run settled, resolved or rejected, it stops every tool still running and removes
+ * these listeners, since a listener of a signal may keep the process running on Windows.
  */
-export function stopRunningToolsOnProcessEnd(params: {
+export async function runStoppingToolsOnProcessEnd<TResult>(params: {
   processEndSignals: ProcessEndSignalExit[];
-}): () => void {
+  run: () => Promise<TResult>;
+}): Promise<TResult> {
   const signalListeners = params.processEndSignals.map((processEnd) => {
     function onSignal(): void {
       stopRunningTools();
@@ -149,13 +150,16 @@ export function stopRunningToolsOnProcessEnd(params: {
 
   process.on('exit', stopRunningTools);
 
-  return () => {
+  try {
+    return await params.run();
+  } finally {
+    stopRunningTools();
     process.off('exit', stopRunningTools);
 
     for (const signalListener of signalListeners) {
       process.off(signalListener.signal, signalListener.listener);
     }
-  };
+  }
 }
 
 /**

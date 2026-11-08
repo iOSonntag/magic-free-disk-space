@@ -8,7 +8,7 @@ import { loadVolumeSpace } from './loadVolumeSpace.js';
 import { loadFullDiskAccess, WIN32_PRIVACY_DENIAL_CODE } from './readRules.js';
 import { removeTree, win32EntryReads } from './removeTree.js';
 import { WIN32_REPORT_TEXTS } from './reportTexts.js';
-import { WIN32_TOOL_PROCESSES } from './toolProcesses.js';
+import { win32ToolProcesses } from './toolProcesses.js';
 import { emptyRecycleBin, loadRecycleBinCount } from './win32Api.js';
 
 /** `E_UNEXPECTED`, what `SHEmptyRecycleBinW` answers for a bin that holds nothing to empty. */
@@ -41,7 +41,7 @@ export const win32Platform: Platform = {
       { signal: 'SIGINT', exitCode: 130 },
       { signal: 'SIGTERM', exitCode: 143 },
     ],
-    processes: WIN32_TOOL_PROCESSES,
+    processes: win32ToolProcesses,
   },
   scan: {
     apps: {
@@ -61,6 +61,7 @@ export const win32Platform: Platform = {
       binFolderName: '$Recycle.Bin',
       loadRecycleBin: loadRecycleBinCount,
     },
+    cloudOnlyEntries: { kind: 'counted', cloudStoreName: 'OneDrive' },
     // Xcode exists only on macOS.
     loadActiveXcodeBundlePath: async () => ({ kind: 'succeeded', value: null }),
     projectSearchExcludedNames: WIN32_CATALOG.projectSearchExcludedNames,

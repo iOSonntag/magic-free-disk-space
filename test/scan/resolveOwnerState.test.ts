@@ -330,6 +330,13 @@ describe('resolveRemovalOwnerState', () => {
         ]),
       }),
     ).toBe('stopped');
+    expect(
+      resolveRemovalOwnerState({
+        owner: unbundledOwner,
+        pathRules: exampleWin32Environment.pathRules,
+        runningProcesses: buildRunningImagePaths(['C:\\Windows\\explorer.exe']),
+      }),
+    ).toBe('stopped');
   });
 
   test('runs a bundle owner while a process runs from its bundle, and stops it otherwise', () => {
@@ -851,6 +858,26 @@ describe('the state of a Windows program owner', () => {
           'C:\\Windows\\explorer.exe',
           'C:\\Users\\tester\\AppData\\Local\\Programs\\Microsoft VS Code Insiders\\helper.exe',
         ],
+      }),
+    ).toBe('stopped');
+  });
+});
+
+describe.skipIf(process.platform !== 'win32')('a bundle-id-shaped child on Windows', () => {
+  test('is stopped, since no app carries the bundle its name reads as', () => {
+    const owner = resolveTargetOwner({
+      entry: getCatalogEntry('gradle-wrapper-distributions', win32Platform.catalog),
+      path: 'C:\\Users\\tester\\.gradle\\wrapper\\dists\\gradle-8.10.2-bin',
+      installedApps: [],
+    });
+
+    expect(
+      resolveOwnerStateOf({
+        owner: owner,
+        environment: exampleWin32Environment,
+        installedApps: [],
+        systemApps: [],
+        runningProcesses: buildRunningImagePaths(['C:\\Windows\\explorer.exe']),
       }),
     ).toBe('stopped');
   });

@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { decideToolTrust } from '../../src/tools/decideToolTrust.js';
-import {
-  buildTestUserIdentity,
-  buildTestWindowsUser,
-  EXAMPLE_WINDOWS_SID_TEXT,
-} from '../support/parsedValueFixtures.js';
+import { buildTestUserIdentity, exampleWindowsUser } from '../support/parsedValueFixtures.js';
 
 const USER_ID = 501;
 
@@ -61,7 +57,7 @@ describe('decideToolTrust', () => {
   test('trusts no binary of a Windows user, whose owner and rights it does not read', () => {
     const trust = decideToolTrust({
       stats: { isRegularFile: true, mode: 0o100755, ownerUserId: 0 },
-      user: buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT }),
+      user: exampleWindowsUser,
     });
 
     expect(trust).toEqual({ isTrusted: false, detail: 'ownerUnchecked' });

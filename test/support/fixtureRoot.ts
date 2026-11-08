@@ -25,8 +25,7 @@ import {
   buildTestDriveRoot,
   buildTestHostPath,
   buildTestUserIdentity,
-  buildTestWindowsUser,
-  EXAMPLE_WINDOWS_SID_TEXT,
+  exampleWindowsUser,
 } from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
@@ -56,9 +55,7 @@ export const noKnownFolderPaths: WindowsKnownFolderPaths = {
 };
 
 export async function createFixtureRoot(): Promise<FixtureRoot> {
-  // Below the real path of the temp folder, so each fixture path reads as its own real path, which
-  // a short name of Windows such as `RUNNER~1` in the variable TEMP would not.
-  const rootDir = await mkdtemp(join(await realpath(tmpdir()), 'magic-free-disk-space-test-'));
+  const rootDir = await mkdtemp(join(await loadFixtureParentDir(), 'magic-free-disk-space-test-'));
   const fixtureRoot: FixtureRoot = {
     rootDir: rootDir,
     homeDir: buildTestHostPath({ text: join(rootDir, 'home') }),
@@ -149,7 +146,7 @@ export async function loadTestWin32Environment(params: {
   return buildWin32Environment({
     nowMs: params.nowMs,
     // A made-up user serves: the owner of a fixture is never read on Windows, where no tool is trusted.
-    user: buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT }),
+    user: exampleWindowsUser,
     home: home,
     temp: temp,
     localAppData: await createTestFolder({ path: appDataDirs.localDir }),
@@ -306,6 +303,18 @@ export async function updateModifiedMs(params: {
   const modifiedSeconds = params.modifiedMs / 1000;
 
   await utimes(params.path, modifiedSeconds, modifiedSeconds);
+}
+
+/**
+ * The temp folder of the host as it names it, so a test on macOS reaches its fixtures through the
+ * link `/var`; on Windows its real path, which a short name such as `RUNNER~1` in TEMP would hide.
+ */
+async function loadFixtureParentDir(): Promise<string> {
+  if (process.platform === 'win32') {
+    return realpath(tmpdir());
+  }
+
+  return tmpdir();
 }
 
 async function loadTestFolder(params: { path: AbsolutePath }): Promise<TestFolder> {

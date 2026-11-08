@@ -1,14 +1,23 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getErrorCode } from '../../src/system/getErrorCode.js';
 import type { ProcessEndSignal } from '../../src/tools/toolsPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { describeOnPosix } from '../support/posixOnly.js';
-import { FIXTURE_SIGNAL_EXIT_CODES } from './stopRunningToolsOnProcessEndFixture.js';
+import {
+  FIXTURE_SIGNAL_EXIT_CODES,
+  waitUntilPresent,
+} from './runStoppingToolsOnProcessEndFixture.js';
+import { RUN_REJECTION_MESSAGE } from './runStoppingToolsOnProcessEndRejectionFixture.js';
 
-const FIXTURE_SCRIPT_PATH = join(import.meta.dir, 'stopRunningToolsOnProcessEndFixture.ts');
+const FIXTURE_SCRIPT_PATH = join(import.meta.dir, 'runStoppingToolsOnProcessEndFixture.ts');
+
+const REJECTION_FIXTURE_SCRIPT_PATH = join(
+  import.meta.dir,
+  'runStoppingToolsOnProcessEndRejectionFixture.ts',
+);
 
 let fixtureRoot: FixtureRoot;
 let survivingPids: number[];
@@ -59,21 +68,38 @@ async function waitUntilProcessGone(pid: number): Promise<boolean> {
   return false;
 }
 
-async function waitUntilPresent(path: string): Promise<void> {
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    if (await isPresent(path)) {
-      return;
-    }
-
-    await Bun.sleep(20);
-  }
-
-  throw new Error(`${path} did not appear.`);
-}
-
 const signals: ProcessEndSignal[] = ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGTERM'];
 
-describeOnPosix('stopRunningToolsOnProcessEnd', () => {
+describe('runStoppingToolsOnProcessEnd', () => {
+  test('stops the running tool when the run rejects', async () => {
+    const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
+    const script = Bun.spawn(
+      [
+        process.execPath,
+        REJECTION_FIXTURE_SCRIPT_PATH,
+        fixtureRoot.rootDir,
+        fixtureRoot.homeDir,
+        fixtureRoot.tempDir,
+        toolPidFile,
+      ],
+      { stdio: ['ignore', 'ignore', 'pipe'] },
+    );
+
+    survivingPids.push(script.pid);
+
+    await waitUntilPresent(toolPidFile);
+
+    const toolPid = Number.parseInt(await readFile(toolPidFile, 'utf8'), 10);
+
+    survivingPids.push(toolPid);
+
+    expect(await script.exited).not.toBe(0);
+    expect(await new Response(script.stderr).text()).toContain(RUN_REJECTION_MESSAGE);
+    expect(await waitUntilProcessGone(toolPid)).toBe(true);
+  });
+});
+
+describeOnPosix('runStoppingToolsOnProcessEnd on a signal', () => {
   test.each(signals)('on %s stops the running tool and exits with its code', async (signal) => {
     const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
     const script = Bun.spawn(

@@ -1,16 +1,16 @@
+import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
+import type { DeletePlatformTrashRecycleBins } from '../../src/delete/deletePlatform.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { DriveRoot } from '../../src/path/driveRoot.js';
 import { isSameOrInsidePath } from '../../src/path/isSameOrInsidePath.js';
 import type { Platform } from '../../src/platform/platform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
-import type { Result } from '../../src/result.js';
 import type { RecycleBinContent } from '../../src/scan/candidate.js';
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { AdvisedApp, RecycleBinLoad } from '../../src/scan/scanPlatform.js';
-import type { SystemCallFailure } from '../../src/system/systemCallFailure.js';
 import type { FixtureRoot } from './fixtureRoot.js';
 import {
   createFixtureFile,
@@ -19,7 +19,7 @@ import {
   writeFixtureTextFile,
 } from './fixtureRoot.js';
 import { buildTestWindowsPath } from './parsedValueFixtures.js';
-import { buildTestWin32Platform } from './platformFixtures.js';
+import { buildTestWin32Platform, loadEmptyRecycleBin } from './platformFixtures.js';
 import { buildRunningImagePaths } from './runningProcessesFixtures.js';
 
 /** The paths of the items a Windows fixture home holds, each named for what the scan makes of it. */
@@ -31,9 +31,14 @@ export type WindowsFixturePaths = {
   chromeCachePath: string;
   edgeCachePath: string;
   teamsCacheChildPath: string;
+  teamsClassicLogsPath: string;
+  teamsClassicBackgroundsPath: string;
   dotnetBinPath: string;
   dotnetObjPath: string;
   nodeModulesPath: string;
+  vscodeExtensionPath: string;
+  pnpmStorePath: string;
+  androidSystemImagePath: string;
   largeFilePath: string;
 };
 
@@ -50,7 +55,7 @@ export type WindowsFixturePlatform = {
 type FakeRecycleBins = {
   emptiedDriveRoots: DriveRoot[];
   loadRecycleBin: RecycleBinLoad;
-  emptyRecycleBin: (params: { driveRoot: DriveRoot }) => Result<null, SystemCallFailure>;
+  emptyRecycleBin: DeletePlatformTrashRecycleBins['emptyRecycleBin'];
 };
 
 /** The apps the Uninstall keys list, as the fake listing answers them, the largest first. */
@@ -63,7 +68,7 @@ export const windowsFixtureAdvisedApps: AdvisedApp[] = [
   { displayName: 'Fabrikam Notes', installFolderPath: null, estimatedBytes: null },
 ];
 
-/** The image paths of the running processes: new Teams runs, Chrome and Edge do not. */
+/** The image paths of the running processes: new Teams runs; classic Teams, Chrome and Edge do not. */
 export const windowsFixtureRunningImagePaths = [
   'C:\\Windows\\explorer.exe',
   'C:\\Program Files\\WindowsApps\\MSTeams_25031.805.3440.5290_x64__8wekyb3d8bbwe\\ms-teams.exe',
@@ -77,10 +82,13 @@ export const windowsFixtureRecycleBinContent: RecycleBinContent = {
 
 const fixtureItemBytes = 2 * SCAN_LIMITS.minOfferedBytes;
 const FIXTURE_AGE_DAYS = 400;
+const VSCODE_EXTENSION_FOLDER_NAME = 'contoso.formatter-1.2.0';
+const ANDROID_SYSTEM_IMAGE_PACKAGE_PATH = 'system-images;android-34;google_apis;x86_64';
 
 /**
  * Creates a home in `fixtureRoot` laid out as a Windows profile, with the Downloads known folder,
- * an item for each section of the scan, and the files beside them that no section offers.
+ * an item for each section of the scan, three Explore items, and the files beside them that no
+ * section offers.
  * Call it on Windows only.
  */
 export async function createWindowsFixtureHome(params: {
@@ -92,12 +100,14 @@ export async function createWindowsFixtureHome(params: {
     nowMs: params.nowMs,
     knownFolders: [{ folder: 'downloads', pathBelowHome: 'Downloads' }],
   });
+
   if (environment.platformFolders.kind !== 'win32') {
     throw new Error('The Windows fixture home has the folders of Windows.');
   }
 
   const homeDir = environment.homeDir;
   const localAppDataDir = environment.platformFolders.appDataDirs.localDir;
+  const roamingAppDataDir = environment.platformFolders.appDataDirs.roamingDir;
   const dotnetProjectPath = join(homeDir, 'source', 'repos', 'ContosoApp');
   const paths: WindowsFixturePaths = {
     staleTempFilePath: join(environment.tempDir, 'wct3F2A.tmp'),
@@ -115,9 +125,19 @@ export async function createWindowsFixtureHome(params: {
       'MSTeams',
       'EBWebView',
     ),
+    teamsClassicLogsPath: join(roamingAppDataDir, 'Microsoft', 'Teams', 'Logs'),
+    teamsClassicBackgroundsPath: join(roamingAppDataDir, 'Microsoft', 'Teams', 'Backgrounds'),
     dotnetBinPath: join(dotnetProjectPath, 'Bin'),
     dotnetObjPath: join(dotnetProjectPath, 'obj'),
     nodeModulesPath: join(homeDir, 'code', 'web-shop', 'node_modules'),
+    vscodeExtensionPath: join(homeDir, '.vscode', 'extensions', VSCODE_EXTENSION_FOLDER_NAME),
+    pnpmStorePath: join(localAppDataDir, 'pnpm', 'store', 'v3'),
+    androidSystemImagePath: join(
+      localAppDataDir,
+      'Android',
+      'Sdk',
+      ...ANDROID_SYSTEM_IMAGE_PACKAGE_PATH.split(';'),
+    ),
     largeFilePath: join(homeDir, 'Downloads', 'recording-2024.mp4'),
   };
   const oldMs = params.nowMs - FIXTURE_AGE_DAYS * DAY_MS;
@@ -142,6 +162,12 @@ export async function createWindowsFixtureHome(params: {
     path: join(paths.teamsCacheChildPath, 'Default', 'Cache', 'Cache_Data', 'data_1'),
     oldMs: oldMs,
   });
+  // Classic Teams does not run, so only the sensitive list keeps its uploaded backgrounds.
+  await createOldFile({ path: join(paths.teamsClassicLogsPath, 'teams-2024.log'), oldMs: oldMs });
+  await createOldFile({
+    path: join(paths.teamsClassicBackgroundsPath, 'Uploads', 'holiday-2024.png'),
+    oldMs: oldMs,
+  });
 
   await createOldFile({ path: join(paths.dotnetBinPath, 'Debug', 'ContosoApp.dll'), oldMs: oldMs });
   await createOldFile({ path: join(paths.dotnetObjPath, 'Debug', 'ContosoApp.dll'), oldMs: oldMs });
@@ -163,6 +189,28 @@ export async function createWindowsFixtureHome(params: {
     oldMs: oldMs,
   });
   await createOldFile({ path: join(homeDir, 'tools', 'bin', 'helper.exe'), oldMs: oldMs });
+
+  // VS Code lists no extension and marks this one obsolete, as an uninstall leaves it.
+  await writeFixtureTextFile({
+    path: join(dirname(paths.vscodeExtensionPath), 'extensions.json'),
+    text: '[]\n',
+  });
+  await writeFixtureTextFile({
+    path: join(dirname(paths.vscodeExtensionPath), '.obsolete'),
+    text: `${JSON.stringify({ [VSCODE_EXTENSION_FOLDER_NAME]: true })}\n`,
+  });
+  await writeFixtureTextFile({
+    path: join(paths.vscodeExtensionPath, 'package.json'),
+    text: '{ "name": "formatter", "publisher": "contoso", "version": "1.2.0" }\n',
+  });
+  // No pnpm is installed or pinned, so no pnpm uses the store.
+  await createOldFile({ path: join(paths.pnpmStorePath, 'files', '9f', '86d0'), oldMs: oldMs });
+  await writeFixtureTextFile({
+    path: join(paths.androidSystemImagePath, 'package.xml'),
+    text: `<localPackage path="${ANDROID_SYSTEM_IMAGE_PACKAGE_PATH}" obsolete="false"/>\n`,
+  });
+  // The emulator has no virtual device, so none uses the image.
+  await mkdir(join(homeDir, '.android', 'avd'), { recursive: true });
 
   await createFixtureFile({
     path: paths.largeFilePath,
@@ -256,7 +304,7 @@ function createFakeRecycleBins(content: RecycleBinContent): FakeRecycleBins {
     emptiedDriveRoots: emptiedDriveRoots,
     loadRecycleBin(params) {
       if (emptiedDriveRoots.includes(params.driveRoot)) {
-        return { kind: 'succeeded', value: { sizeBytes: 0, itemCount: 0 } };
+        return loadEmptyRecycleBin();
       }
 
       return { kind: 'succeeded', value: content };

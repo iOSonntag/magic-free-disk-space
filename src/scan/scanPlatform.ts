@@ -149,12 +149,31 @@ export type RecycleBinLoad = (params: {
 /** Where the platform keeps the files its user deleted. */
 export type ScanPlatformTrash = ScanPlatformTrashCatalogFolder | ScanPlatformTrashRecycleBins;
 
+/** The scan counts no entry whose content lives only in the cloud store, as on macOS. */
+export type ScanPlatformCloudOnlyEntriesNotCounted = { kind: 'notCounted' };
+
+/**
+ * The scan counts each entry its walks leave unread because its content lives only in the cloud
+ * store among the skipped items, as on Windows.
+ */
+export type ScanPlatformCloudOnlyEntriesCounted = {
+  kind: 'counted';
+  /** The cloud store, as in "in OneDrive, not on this PC". */
+  cloudStoreName: string;
+};
+
+/** Whether the scan counts the entries it leaves unread because their content is in the cloud only. */
+export type ScanPlatformCloudOnlyEntries =
+  | ScanPlatformCloudOnlyEntriesNotCounted
+  | ScanPlatformCloudOnlyEntriesCounted;
+
 /** What the scan takes from the operating system. */
 export type ScanPlatform = {
   apps: ScanPlatformApps;
   /** The system's own apps that own catalog data, which no app folder holds. */
   systemApps: SystemApp[];
   trash: ScanPlatformTrash;
+  cloudOnlyEntries: ScanPlatformCloudOnlyEntries;
   /** The real path of the active Xcode bundle, `null` for none. Never throws. */
   loadActiveXcodeBundlePath: (params: {
     commandTimeoutMs: number;

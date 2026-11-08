@@ -122,6 +122,50 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     return homeOwner;
   }
 
+  const fixedDriveRoots = loadFixedDriveRoots();
+
+  if (fixedDriveRoots.kind === 'failed') {
+    return fixedDriveRoots;
+  }
+
+  // Each fixed drive's root is refused as a whole; a home on no listed drive would leave its own
+  // drive root unguarded.
+  if (
+    !fixedDriveRoots.value.some((driveRoot) =>
+      isSameOrInsidePath({
+        rules: WIN32_PATH_RULES,
+        path: home.value.realPath,
+        parentPath: driveRoot,
+      }),
+    )
+  ) {
+    return {
+      kind: 'failed',
+      failure: { reason: 'unresolvable', path: home.value.realPath, code: 'notOnFixedDrive' },
+    };
+  }
+
+  const knownFolderPaths = loadKnownFolderPaths();
+  const knownFolderRealPaths = await loadKnownFolderRealPaths({ paths: knownFolderPaths });
+  const oneDriveRealPaths = await loadExistingRealPaths({
+    pathRules: WIN32_PATH_RULES,
+    paths: listOneDriveRootPaths({ skyDrivePath: knownFolderPaths.skyDrive }),
+  });
+  const environment = buildWin32Environment({
+    nowMs: Date.now(),
+    user: token.value.user,
+    home: home.value,
+    temp: { path: tempDir, realPath: tempRealPath.value },
+    localAppData: localAppData.value,
+    roamingAppData: roamingAppData.value,
+    knownFolderPaths: knownFolderPaths,
+    knownFolderRealPaths: knownFolderRealPaths,
+    fixedDriveRoots: fixedDriveRoots.value,
+    oneDriveRealPaths: oneDriveRealPaths,
+  });
+
+  // The whole temporary folder counts as expendable, so it is checked against every protected
+  // folder of the environment, which only exists once all of them are resolved.
   const rootsFailure = checkEnvironmentRoots({
     pathRules: WIN32_PATH_RULES,
     user: token.value.user,
@@ -129,6 +173,10 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     homeOwner: homeOwner.value,
     tempRealPath: tempRealPath.value,
     tempPlacement: 'belowHome',
+    protectedRealPaths: listProtectedRealPathsBesideTemp({
+      protectedRealPaths: environment.protectedRealPaths,
+      tempRealPath: tempRealPath.value,
+    }),
   });
 
   if (rootsFailure !== null) {
@@ -163,51 +211,24 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     return { kind: 'failed', failure: variablesFailure };
   }
 
-  const fixedDriveRoots = loadFixedDriveRoots();
+  return { kind: 'succeeded', value: environment };
+}
 
-  if (fixedDriveRoots.kind === 'failed') {
-    return fixedDriveRoots;
+/**
+ * The protected real paths without the one entry the temporary folder adds for itself. A protected
+ * folder that is the temporary folder too keeps its entry, so the check refuses it.
+ */
+export function listProtectedRealPathsBesideTemp(params: {
+  protectedRealPaths: string[];
+  tempRealPath: string;
+}): string[] {
+  const tempEntryIndex = params.protectedRealPaths.indexOf(params.tempRealPath);
+
+  if (tempEntryIndex === -1) {
+    return params.protectedRealPaths;
   }
 
-  // Each fixed drive's root is refused as a whole; a home on no listed drive would leave its own
-  // drive root unguarded.
-  if (
-    !fixedDriveRoots.value.some((driveRoot) =>
-      isSameOrInsidePath({
-        rules: WIN32_PATH_RULES,
-        path: home.value.realPath,
-        parentPath: driveRoot,
-      }),
-    )
-  ) {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: home.value.realPath, code: 'notOnFixedDrive' },
-    };
-  }
-
-  const knownFolderPaths = loadKnownFolderPaths();
-  const knownFolderRealPaths = await loadKnownFolderRealPaths({ paths: knownFolderPaths });
-  const oneDriveRealPaths = await loadExistingRealPaths({
-    pathRules: WIN32_PATH_RULES,
-    paths: listOneDriveRootPaths({ skyDrivePath: knownFolderPaths.skyDrive }),
-  });
-
-  return {
-    kind: 'succeeded',
-    value: buildWin32Environment({
-      nowMs: Date.now(),
-      user: token.value.user,
-      home: home.value,
-      temp: { path: tempDir, realPath: tempRealPath.value },
-      localAppData: localAppData.value,
-      roamingAppData: roamingAppData.value,
-      knownFolderPaths: knownFolderPaths,
-      knownFolderRealPaths: knownFolderRealPaths,
-      fixedDriveRoots: fixedDriveRoots.value,
-      oneDriveRealPaths: oneDriveRealPaths,
-    }),
-  };
+  return params.protectedRealPaths.toSpliced(tempEntryIndex, 1);
 }
 
 /** The environment of a run on Windows: the values read for the run, with the facts of Windows. */
@@ -431,9 +452,9 @@ function listOneDriveRootPaths(params: { skyDrivePath: AbsolutePath | null }): A
   });
   const rootTexts = [
     ...ONE_DRIVE_VARIABLE_NAMES.flatMap((name) => {
-      const value = process.env[name];
+      const value = readSetVariable({ name: name });
 
-      return value === undefined || value === '' ? [] : [value];
+      return value === null ? [] : [value];
     }),
     ...(accountFolders.kind === 'succeeded' ? accountFolders.value : []),
   ];
@@ -472,9 +493,9 @@ function loadFixedDriveRoots(): Result<DriveRoot[], EnvironmentFailure> {
 
 /** What the variable holds: unset, the real path of the folder it names, or a path that fails. */
 async function loadVariableReading(params: { name: string }): Promise<VariableReading> {
-  const value = process.env[params.name];
+  const value = readSetVariable({ name: params.name });
 
-  if (value === undefined || value === '') {
+  if (value === null) {
     return { kind: 'unset' };
   }
 
@@ -491,6 +512,13 @@ async function loadVariableReading(params: { name: string }): Promise<VariableRe
   }
 
   return { kind: 'resolved', realPath: realPath.value };
+}
+
+/** The value of the environment variable; `null` when it is unset or empty, which Windows treats alike. */
+function readSetVariable(params: { name: string }): string | null {
+  const value = process.env[params.name];
+
+  return value === undefined || value === '' ? null : value;
 }
 
 /** A failed call of Windows as the environment's failure. */

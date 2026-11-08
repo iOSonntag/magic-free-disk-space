@@ -90,6 +90,26 @@ describe('loadFileIdentity', () => {
     });
   });
 
+  // Windows links a folder only with a privilege the runner lacks or as a junction, a reparse point
+  // of its own kind.
+  testOnPosix('resolves a linked parent folder in realPath', async () => {
+    const folderPath = join(fixtureRoot.homeDir, 'folder');
+    const linkedFolderPath = join(fixtureRoot.homeDir, 'linked-folder');
+    await createFixtureFile({
+      path: join(folderPath, 'notes.txt'),
+      sizeBytes: 10,
+      modifiedMs: fixtureModifiedMs,
+    });
+    await symlink(folderPath, linkedFolderPath);
+
+    const result = await loadFileIdentity({ path: join(linkedFolderPath, 'notes.txt') });
+
+    expect(result).toMatchObject({
+      kind: 'succeeded',
+      value: { kind: 'file', realPath: join(await realpath(folderPath), 'notes.txt') },
+    });
+  });
+
   testOnPosix('reports a symbolic link as itself, with its own name in realPath', async () => {
     const targetPath = join(fixtureRoot.homeDir, 'target.txt');
     const linkPath = join(fixtureRoot.homeDir, 'link-to-target');

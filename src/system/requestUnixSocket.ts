@@ -2,7 +2,7 @@ import type { Stats } from 'node:fs';
 import { lstat, readlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import type { Result } from '../result.js';
-import { getErrorCode } from './getErrorCode.js';
+import { getErrorCode, isMissingErrorCode } from './getErrorCode.js';
 import type { UserIdentity } from './userIdentity.js';
 
 export type UnixSocketMethod = 'GET' | 'POST' | 'DELETE';
@@ -33,8 +33,6 @@ export type UnixSocketRequestFailure =
   | UnixSocketRequestFailureRequestFailed;
 
 export type UnixSocketRequestResult = Result<UnixSocketAnswer, UnixSocketRequestFailure>;
-
-const MISSING_CODES = ['ENOENT', 'ENOTDIR'];
 
 const REFUSED_CODES = ['ENOENT', 'ECONNREFUSED'];
 
@@ -146,7 +144,7 @@ async function loadLinkTargetPath(params: {
 }
 
 function toEntryFailure(params: { code: string }): UnixSocketRequestFailure {
-  if (MISSING_CODES.includes(params.code)) {
+  if (isMissingErrorCode(params.code)) {
     return { kind: 'socketMissing' };
   }
 

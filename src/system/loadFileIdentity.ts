@@ -2,7 +2,12 @@ import type { BigIntStats } from 'node:fs';
 import { lstat, realpath } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { Result } from '../result.js';
-import { getErrorCode, isInUseErrorCode, isPermissionDeniedErrorCode } from './getErrorCode.js';
+import {
+  getErrorCode,
+  isInUseErrorCode,
+  isMissingErrorCode,
+  isPermissionDeniedErrorCode,
+} from './getErrorCode.js';
 import { runFilesystemCall } from './runFilesystemCall.js';
 
 export type FileKind = 'file' | 'directory' | 'symbolicLink' | 'other';
@@ -25,8 +30,6 @@ export type FileFailure = {
   reason: 'missing' | 'permissionDenied' | 'inUse' | 'unexpected';
   code: string;
 };
-
-const MISSING_CODES = ['ENOENT', 'ENOTDIR'];
 
 export function loadFileIdentity(params: {
   path: string;
@@ -84,7 +87,7 @@ export function getFileKind(params: { stats: BigIntStats }): FileKind {
 }
 
 export function getFileFailure(params: { code: string }): FileFailure {
-  if (MISSING_CODES.includes(params.code)) {
+  if (isMissingErrorCode(params.code)) {
     return { reason: 'missing', code: params.code };
   }
 

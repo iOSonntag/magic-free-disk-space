@@ -240,34 +240,58 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   },
 ];
 
+/** The rules by their artifact name in the form `pathRules` compare names in, each in its order. */
+export type ArtifactRulesByName = Map<string, ProjectArtifactRule[]>;
+
+/** The rules grouped once for a walk, so `findArtifactRulesOfName` matches a folder's name once. */
+export function groupArtifactRulesByName(params: {
+  pathRules: PathRules;
+  rules: ProjectArtifactRule[];
+}): ArtifactRulesByName {
+  return Map.groupBy(params.rules, (rule) =>
+    toComparablePathText({ rules: params.pathRules, text: rule.artifactName }),
+  );
+}
+
 /**
- * The rule a folder named `name` is the artifact of, when its project folder, by the names of
- * its entries, holds one of the rule's markers; `null` when it is no artifact. Names compare as
- * `pathRules` compare them, so `Bin` beside `Foo.CSPROJ` is an artifact on Windows.
+ * The rules whose artifact a folder named `name` may be, its name compared as `pathRules` compare
+ * names, so `Bin` finds the rules of `bin` on Windows; `null` when no rule names it.
+ */
+export function findArtifactRulesOfName(params: {
+  pathRules: PathRules;
+  rulesByName: ArtifactRulesByName;
+  name: string;
+}): ProjectArtifactRule[] | null {
+  return (
+    params.rulesByName.get(toComparablePathText({ rules: params.pathRules, text: params.name })) ??
+    null
+  );
+}
+
+/**
+ * The first of the rules of a folder's name whose marker its project folder holds, by the names
+ * of its entries; `null` when the folder is no artifact. Names compare as `pathRules` compare
+ * them, so `Foo.CSPROJ` marks `Bin` on Windows.
  */
 export function findMarkedArtifactRule(params: {
   pathRules: PathRules;
-  rules: ProjectArtifactRule[];
-  name: string;
+  /** The rules of the folder's name, as `findArtifactRulesOfName` finds them. */
+  nameRules: ProjectArtifactRule[];
   projectEntryNames: ReadonlySet<string>;
 }): ProjectArtifactRule | null {
-  const comparableName = toComparablePathText({ rules: params.pathRules, text: params.name });
   const comparableEntryNames = new Set(
     [...params.projectEntryNames].map((entryName) =>
       toComparablePathText({ rules: params.pathRules, text: entryName }),
     ),
   );
-  const markedRule = params.rules.find(
-    (rule) =>
-      toComparablePathText({ rules: params.pathRules, text: rule.artifactName }) ===
-        comparableName &&
-      rule.markers.some((marker) =>
-        isProjectMarkerPresent({
-          pathRules: params.pathRules,
-          marker: marker,
-          comparableEntryNames: comparableEntryNames,
-        }),
-      ),
+  const markedRule = params.nameRules.find((rule) =>
+    rule.markers.some((marker) =>
+      isProjectMarkerPresent({
+        pathRules: params.pathRules,
+        marker: marker,
+        comparableEntryNames: comparableEntryNames,
+      }),
+    ),
   );
 
   return markedRule ?? null;

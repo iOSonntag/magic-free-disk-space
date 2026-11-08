@@ -1,13 +1,21 @@
 import { basename } from 'node:path';
-import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
+import type { ArtifactRulesByName, ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
+import {
+  findArtifactRulesOfName,
+  findMarkedArtifactRule,
+  groupArtifactRulesByName,
+} from '../catalog/projectArtifactRules.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { EntryReads } from '../system/entryReads.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadPlacedFileIdentity } from '../system/loadPlacedFileIdentity.js';
-import type { EvictedEntryRecorder, TreeEntryVisit } from '../system/walkDirectoryTree.js';
+import type {
+  EvictedEntryRecorder,
+  TreeEntry,
+  TreeEntryVisit,
+} from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
@@ -61,6 +69,10 @@ export async function findLargeUserFiles(params: {
   recordEvictedEntry: EvictedEntryRecorder;
   privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
+  const artifactRulesByName = groupArtifactRulesByName({
+    pathRules: params.pathRules,
+    rules: params.artifactRules,
+  });
   const largeFiles: LargeFile[] = [];
   const issues: ScanIssue[] = [];
   // Keys `dev:ino` of the files already collected, so a file met twice is measured once.
@@ -128,12 +140,11 @@ export async function findLargeUserFiles(params: {
         if (
           entry.kind === 'directory' &&
           isUserFolderName({ name: entry.name }) &&
-          findMarkedArtifactRule({
+          !isMarkedArtifactFolder({
             pathRules: params.pathRules,
-            rules: params.artifactRules,
-            name: entry.name,
-            projectEntryNames: entry.siblingNames,
-          }) === null
+            artifactRulesByName: artifactRulesByName,
+            entry: entry,
+          })
         ) {
           return 'descend';
         }
@@ -232,6 +243,31 @@ async function loadUserFileFindings(params: {
   );
 
   return findings.filter((finding) => finding !== null);
+}
+
+/** Whether the folder is a project's artifact by a rule of its name and a marker beside it. */
+function isMarkedArtifactFolder(params: {
+  pathRules: PathRules;
+  artifactRulesByName: ArtifactRulesByName;
+  entry: TreeEntry;
+}): boolean {
+  const nameRules = findArtifactRulesOfName({
+    pathRules: params.pathRules,
+    rulesByName: params.artifactRulesByName,
+    name: params.entry.name,
+  });
+
+  if (nameRules === null) {
+    return false;
+  }
+
+  return (
+    findMarkedArtifactRule({
+      pathRules: params.pathRules,
+      nameRules: nameRules,
+      projectEntryNames: params.entry.siblingNames,
+    }) !== null
+  );
 }
 
 function isUserFolderName(params: { name: string }): boolean {

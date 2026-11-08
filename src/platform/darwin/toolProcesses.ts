@@ -10,7 +10,7 @@ const SYSTEM_PATH_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
  * A tool runs in a process group of its own, which a kill of the group ends with every process the
  * tool started; the group needs no hold to let go of.
  */
-export const DARWIN_TOOL_PROCESSES: ToolProcessPlatform = {
+export const darwinToolProcesses: ToolProcessPlatform = {
   buildBaseEnvironment: buildBaseEnvironment,
   startTool: startTool,
 };

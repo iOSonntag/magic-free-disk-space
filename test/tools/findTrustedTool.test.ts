@@ -9,7 +9,7 @@ import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js'
 import { createActiveProject, writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import {
   buildTestUserIdentity,
-  buildTestWindowsUser,
+  exampleWindowsUser,
   hostPathRules,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -515,7 +515,7 @@ describe('findTrustedTool for a Windows user', () => {
       locations: [buildAbsoluteLocation(path), buildAbsoluteLocation(later)],
       pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
-      user: buildTestWindowsUser({ sidText: 'S-1-5-21-1-2-3-1001' }),
+      user: exampleWindowsUser,
     });
 
     expect(found).toEqual({

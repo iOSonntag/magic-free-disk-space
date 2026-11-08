@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
+import type { ReportTexts } from '../../src/report/reportTexts.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
@@ -13,7 +13,7 @@ import {
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
 import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
-import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
+import { countTestCloudOnlyEntries, EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const TEXTS = darwinPlatform.report;
 
@@ -44,11 +44,14 @@ function buildAdvice(params: {
   });
 }
 
-/** The lines the CLI prints for `report`, with no disk read, as when its volume cannot be read. */
-function formatReport(params: { report: ScanReport }): string[] {
+/**
+ * The lines the CLI prints for `report`, worded by `texts` or those of macOS, with no disk read, as
+ * when its volume cannot be read.
+ */
+function formatReport(params: { report: ScanReport; texts?: ReportTexts }): string[] {
   return formatScanReport({
     report: params.report,
-    texts: TEXTS,
+    texts: params.texts ?? TEXTS,
     pathRules: fixtureHome.pathRules,
     homeDir: fixtureHome.homeDir,
     disk: null,
@@ -180,7 +183,7 @@ describe('formatScanReport', () => {
   });
 
   test('lists the installed apps of advice unnumbered after Explore, each with its size or none', () => {
-    const lines = formatScanReport({
+    const lines = formatReport({
       texts: win32Platform.report,
       report: {
         ...EMPTY_REPORT,
@@ -199,9 +202,6 @@ describe('formatScanReport', () => {
         },
         skipped: [{ path: 'C:\\fixture\\a', reason: 'belowSizeThreshold' }],
       },
-      pathRules: WIN32_PATH_RULES,
-      homeDir: 'C:\\Users\\fixture',
-      disk: null,
     });
 
     expect(lines).toEqual([
@@ -533,7 +533,10 @@ describe('formatScanReport', () => {
         ],
         appAdvice: null,
         skipped: [{ path: '/fixture/b', reason: 'ownerRunning' }],
-        evictedEntryCount: 2,
+        cloudOnlyEntries: countTestCloudOnlyEntries({
+          cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
+          entryPaths: ['/fixture/home/cloud-a', '/fixture/home/cloud-b'],
+        }),
         issues: [
           { path: '/fixture/c', reason: 'unexpected', detail: 'EIO' },
           { path: '/fixture/bin/mise', reason: 'toolUntrusted', detail: 'foreignOwner' },
@@ -559,9 +562,8 @@ describe('formatScanReport', () => {
       '   Installed simulator runtimes.',
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
       '',
-      'Skipped 3 items:',
+      'Skipped 1 item:',
       '- its app or tool is running: 1',
-      '- in iCloud, not on this Mac: 2',
       '',
       'Could not read 1 place:',
       '- /fixture/c: unexpected error (EIO)',

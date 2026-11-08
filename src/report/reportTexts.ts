@@ -9,8 +9,6 @@ export type ReportTexts = {
   systemName: string;
   /** Where deleted files wait, as in "the items do not go to the Trash". */
   trashName: string;
-  /** The cloud store that keeps files off the disk, as in "in iCloud, not on this Mac". */
-  cloudStoreName: string;
   /** The step that replaces the installed app with a downloaded release. */
   updateInstallText: string;
 };

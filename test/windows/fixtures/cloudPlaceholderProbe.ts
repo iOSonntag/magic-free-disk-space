@@ -1,14 +1,19 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { win32Platform } from '../../../src/platform/win32/win32Platform.js';
 import type { EntryRef } from '../../../src/system/entryReads.js';
 import { formatSystemCallCode } from '../../../src/system/systemCallFailure.js';
+import {
+  FILE_ATTRIBUTE_DIRECTORY,
+  FILE_ATTRIBUTE_NORMAL,
+} from '../../support/windowsFileAttributes.js';
 import { loadAttributesText, loadLstatText, observeSafely } from '../observations.js';
 
-// Registers a sync root in the given empty folder, creates cloud placeholders in it through
-// cldapi, and writes one JSON line per stage, so a crash from a wrong struct layout still leaves
-// the stages before it on stdout. Each placeholder is read as the walk reads it, through
-// win32Api.ts and loadEntryPlacement.
+// Registers a sync root in the given empty folder, creates cloud placeholders in it and converts
+// an ordinary file into a full, in-sync one through cldapi, and writes one JSON line per stage,
+// so a crash from a wrong struct layout still leaves the stages before it on stdout. Each
+// placeholder is read as the walk reads it, through win32Api.ts and loadEntryPlacement.
 //   cloudPlaceholderProbe.ts <sync root folder>
 
 // The layouts follow learn.microsoft.com/windows/win32/api/cfapi for LLP64, shared by x64 and
@@ -30,15 +35,20 @@ const CF_POPULATION_POLICY_ALWAYS_FULL = 3;
 const PLACEHOLDER_CREATE_INFO_BYTES = 88;
 const CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION = 0x1;
 const CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC = 0x2;
+const CF_CONVERT_FLAG_MARK_IN_SYNC = 0x1;
 
-const FILE_ATTRIBUTE_DIRECTORY = 0x10;
-const FILE_ATTRIBUTE_NORMAL = 0x80;
+const GENERIC_READ_WRITE = 0xc0000000;
+const FILE_SHARE_READ_WRITE_DELETE = 0x7;
+const OPEN_EXISTING = 3;
+const INVALID_HANDLE_VALUE = 0xffffffffffffffffn;
+
 const PLACEHOLDER_FILE_SIZE_BYTES = 1048576n;
 // The seconds from 1601-01-01, the FILETIME epoch, to the Unix epoch.
 const FILETIME_UNIX_EPOCH_SECONDS = 11644473600n;
 
 const CLOUD_ONLY_FILE_NAME = 'cloudOnlyFile.txt';
 const CLOUD_ONLY_FOLDER_NAME = 'cloudOnlyFolder';
+const HYDRATED_FILE_NAME = 'hydratedFile.txt';
 
 function openCloudFilterApi() {
   return dlopen('cldapi.dll', {
@@ -51,6 +61,33 @@ function openCloudFilterApi() {
       args: [FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr],
       returns: FFIType.i32,
     },
+    CfConvertToPlaceholder: {
+      args: [FFIType.u64, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.ptr],
+      returns: FFIType.i32,
+    },
+  });
+}
+
+/**
+ * The handle calls of kernel32, bound here since win32Api.ts keeps its own private, each handle
+ * a u64 as win32Api.ts holds it.
+ */
+function openKernel32Handles() {
+  return dlopen('kernel32.dll', {
+    CreateFileW: {
+      args: [
+        FFIType.ptr,
+        FFIType.u32,
+        FFIType.u32,
+        FFIType.ptr,
+        FFIType.u32,
+        FFIType.u32,
+        FFIType.ptr,
+      ],
+      returns: FFIType.u64,
+    },
+    CloseHandle: { args: [FFIType.u64], returns: FFIType.i32 },
+    GetLastError: { args: [], returns: FFIType.u32 },
   });
 }
 
@@ -168,6 +205,50 @@ function createCloudOnlyPlaceholders(cloudFilterApi: CloudFilterApi, syncRoot: s
   return hresult >= 0;
 }
 
+async function convertToHydratedPlaceholder(
+  cloudFilterApi: CloudFilterApi,
+  path: string,
+): Promise<boolean> {
+  await writeFile(path, 'A fully local file in a sync root.\n');
+
+  const kernel32 = openKernel32Handles();
+  const handle = kernel32.symbols.CreateFileW(
+    toWideString(path),
+    GENERIC_READ_WRITE,
+    FILE_SHARE_READ_WRITE_DELETE,
+    null,
+    OPEN_EXISTING,
+    FILE_ATTRIBUTE_NORMAL,
+    null,
+  );
+
+  if (handle === INVALID_HANDLE_VALUE) {
+    writeStage('CreateFileW', {
+      lastError: formatSystemCallCode({ code: kernel32.symbols.GetLastError() }),
+    });
+
+    return false;
+  }
+
+  try {
+    const identity = new TextEncoder().encode('hydrated-file');
+    const hresult = cloudFilterApi.symbols.CfConvertToPlaceholder(
+      handle,
+      identity,
+      identity.byteLength,
+      CF_CONVERT_FLAG_MARK_IN_SYNC,
+      null,
+      null,
+    );
+
+    writeStage('CfConvertToPlaceholder', { hresult: formatSystemCallCode({ code: hresult }) });
+
+    return hresult >= 0;
+  } finally {
+    kernel32.symbols.CloseHandle(handle);
+  }
+}
+
 async function observeEntry(label: string, entry: EntryRef): Promise<void> {
   const lstatText = await observeSafely(() => loadLstatText(entry.path));
 
@@ -214,6 +295,12 @@ async function runCloudPlaceholderProbe(syncRoot: string): Promise<void> {
         path: join(syncRoot, CLOUD_ONLY_FOLDER_NAME),
         kind: 'directory',
       });
+    }
+
+    const hydratedPath = join(syncRoot, HYDRATED_FILE_NAME);
+
+    if (await convertToHydratedPlaceholder(cloudFilterApi, hydratedPath)) {
+      await observeEntry('hydrated file', { path: hydratedPath, kind: 'file' });
     }
   } finally {
     const unregisterHresult = cloudFilterApi.symbols.CfUnregisterSyncRoot(toWideString(syncRoot));

@@ -45,11 +45,12 @@ describe('buildScanReport', () => {
     };
 
     const appAdvice = { apps: [app], installedAppsPageName: 'Settings > Apps' };
+    const cloudOnlyEntries = { cloudStoreName: 'OneDrive', count: 3 };
 
     const report = buildScanReport({
       decisions: decisions,
       appAdvice: appAdvice,
-      evictedEntryCount: 3,
+      cloudOnlyEntries: cloudOnlyEntries,
       issues: [issue],
     });
 
@@ -57,7 +58,7 @@ describe('buildScanReport', () => {
     expect(report.advice.map((item) => item.path)).toEqual(['/opt/tool']);
     expect(report.appAdvice).toEqual(appAdvice);
     expect(report.skipped).toEqual([{ path: '/home/held', reason: 'ownerRunning' }]);
-    expect(report.evictedEntryCount).toBe(3);
+    expect(report.cloudOnlyEntries).toEqual(cloudOnlyEntries);
     expect(report.issues).toEqual([issue]);
   });
 
@@ -83,7 +84,7 @@ describe('buildScanReport', () => {
     const report = buildScanReport({
       decisions: buildOffers([toolSmall, safeSmall, toolLarge, careful, safeLarge]),
       appAdvice: null,
-      evictedEntryCount: 0,
+      cloudOnlyEntries: null,
       issues: [],
     });
 
@@ -131,7 +132,7 @@ describe('buildScanReport', () => {
     const report = buildScanReport({
       decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, projectReview, cacheSafe]),
       appAdvice: null,
-      evictedEntryCount: 0,
+      cloudOnlyEntries: null,
       issues: [],
     });
 

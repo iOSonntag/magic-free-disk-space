@@ -79,12 +79,7 @@ function resolveUnderRules(params: {
   basePath: AbsolutePath;
   text: string;
 }): string {
-  switch (params.rules.rootForm) {
-    case 'posix':
-      return posix.resolve(params.basePath, params.text);
-    case 'win32':
-      return win32.resolve(params.basePath, params.text);
-  }
+  return selectPathModule(params.rules).resolve(params.basePath, params.text);
 }
 
 function joinUnderRules(params: {
@@ -92,10 +87,15 @@ function joinUnderRules(params: {
   parentPath: AbsolutePath;
   names: string[];
 }): string {
-  switch (params.rules.rootForm) {
+  return selectPathModule(params.rules).join(params.parentPath, ...params.names);
+}
+
+/** The path functions of the platform the rules are of, never the host's. */
+function selectPathModule(rules: PathRules): typeof posix {
+  switch (rules.rootForm) {
     case 'posix':
-      return posix.join(params.parentPath, ...params.names);
+      return posix;
     case 'win32':
-      return win32.join(params.parentPath, ...params.names);
+      return win32;
   }
 }

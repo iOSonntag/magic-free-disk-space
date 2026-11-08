@@ -34,7 +34,8 @@ export type TreeRemovalUser = { id: number; groupIds: number[] };
  * Removes the path recursively; a symbolic link inside is removed itself, never its target. When
  * that fails, it adds owner write to each read-only folder inside that the user owns and that is
  * no link, such as those of Go's module cache, and tries once more. An entry that still cannot be
- * removed fails the whole removal, so it never ends partly removed.
+ * removed fails the whole removal, which never answers `partlyRemoved`, though the entries removed
+ * before it stay gone.
  */
 export async function removeTree(params: { path: string }): Promise<Result<TreeRemoval, string>> {
   return removeTreeAsUser({ path: params.path, user: getProcessUser() });

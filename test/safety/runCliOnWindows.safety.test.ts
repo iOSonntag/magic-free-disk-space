@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isSamePath } from '../../src/path/isSameOrInsidePath.js';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanView } from '../../src/report/buildScanView.js';
 import { runTestCli } from '../support/cliRunFixtures.js';
+import { loadTestJournalLines } from '../support/deletionJournalFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   buildPathBelowRoot,
@@ -51,6 +51,7 @@ describe.skipIf(process.platform !== 'win32')(
           home.paths.npmCachePath,
           home.paths.chromeCachePath,
           home.paths.dotnetBinPath,
+          home.paths.vscodeExtensionPath,
         ];
         const approvedBinPaths = home.environment.fixedDriveRoots.map((driveRoot) =>
           join(driveRoot, getWin32RecycleBinScanTrash().binFolderName),
@@ -87,7 +88,7 @@ describe.skipIf(process.platform !== 'win32')(
         });
 
         const after = await listFixturePaths();
-        const logLines = await loadDeletionLogLines({ logPath: home.environment.deletionLogPath });
+        const logLines = await loadTestJournalLines({ logPath: home.environment.deletionLogPath });
         const intentLines = filterLogLinesOfKind({ lines: logLines, kind: 'intent' });
         const outcomeLines = filterLogLinesOfKind({ lines: logLines, kind: 'outcome' });
 
@@ -149,16 +150,6 @@ function findItemNumber(params: { view: ScanView; path: string }): number {
   }
 
   return item.number;
-}
-
-/** The lines of the deletion log at `logPath`, each read back as JSON nobody checked yet. */
-async function loadDeletionLogLines(params: { logPath: string }): Promise<unknown[]> {
-  const text = await readFile(params.logPath, 'utf8');
-
-  return text
-    .trim()
-    .split('\n')
-    .map((line): unknown => JSON.parse(line));
 }
 
 /** The lines of the log that are records of `kind`, their fields still unchecked. */

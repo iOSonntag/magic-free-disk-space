@@ -4,7 +4,7 @@ import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js'
 
 const HOME_DIR = '/Users/me';
 
-const WINDOWS_HOME_DIR = 'C:\\Users\\Oli';
+const WINDOWS_HOME_DIR = 'C:\\Users\\tester';
 
 describe('formatHomeRelativePath', () => {
   test('shows the home folder and a path inside it from ~ on POSIX', () => {
@@ -39,28 +39,28 @@ describe('formatHomeRelativePath', () => {
     expect(
       formatHomeRelativePath({
         rules: WIN32_PATH_RULES,
-        path: 'c:\\users\\oli',
+        path: 'c:\\users\\TESTER',
         homeDir: WINDOWS_HOME_DIR,
       }),
     ).toBe('~');
     expect(
       formatHomeRelativePath({
         rules: WIN32_PATH_RULES,
-        path: 'C:\\Users\\Oli\\Videos\\a.mp4',
+        path: 'C:\\Users\\tester\\Videos\\a.mp4',
         homeDir: WINDOWS_HOME_DIR,
       }),
     ).toBe('~\\Videos\\a.mp4');
     expect(
       formatHomeRelativePath({
         rules: WIN32_PATH_RULES,
-        path: 'c:\\USERS\\oli\\AppData\\Local\\Temp',
+        path: 'c:\\USERS\\Tester\\AppData\\Local\\Temp',
         homeDir: WINDOWS_HOME_DIR,
       }),
     ).toBe('~\\AppData\\Local\\Temp');
     expect(
       formatHomeRelativePath({
         rules: WIN32_PATH_RULES,
-        path: 'C:\\Users\\Oli\\Videos',
+        path: 'C:\\Users\\tester\\Videos',
         homeDir: `${WINDOWS_HOME_DIR}\\`,
       }),
     ).toBe('~\\Videos');
@@ -78,8 +78,8 @@ describe('formatHomeRelativePath', () => {
   test('keeps a Windows path outside the home folder and one in a neighbour folder', () => {
     for (const path of [
       'C:\\Program Files\\Example',
-      'C:\\Users\\Oliver\\a',
-      'D:\\Users\\Oli\\a',
+      'C:\\Users\\testers\\a',
+      'D:\\Users\\tester\\a',
     ]) {
       expect(
         formatHomeRelativePath({ rules: WIN32_PATH_RULES, path: path, homeDir: WINDOWS_HOME_DIR }),

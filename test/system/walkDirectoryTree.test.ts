@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { EntryReads, EntryRef } from '../../src/system/entryReads.js';
+import type { EntryPlacement, EntryReads, EntryRef } from '../../src/system/entryReads.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
@@ -69,6 +69,30 @@ async function collectEntries(params: {
     unreadables: unreadables,
     evictedEntries: evictedEntries,
   };
+}
+
+/**
+ * The reads of `buildTestEntryReads` with none of its options, which place the folder at `path`
+ * on disk at its first read, at its parent's listing, and as `placementBeforeListing` after.
+ */
+function buildEntryReadsChangedBeforeListing(params: {
+  path: string;
+  placementBeforeListing: EntryPlacement;
+}): EntryReads {
+  const entryReads = buildTestEntryReads({ privateBytes: null });
+  let readCount = 0;
+
+  function loadEntryPlacement(entry: EntryRef): EntryPlacement {
+    if (entry.path !== params.path) {
+      return entryReads.loadEntryPlacement(entry);
+    }
+
+    readCount += 1;
+
+    return readCount === 1 ? { kind: 'onDisk' } : params.placementBeforeListing;
+  }
+
+  return { ...entryReads, loadEntryPlacement: loadEntryPlacement };
 }
 
 describe('walkDirectoryTree', () => {
@@ -189,7 +213,7 @@ describe('walkDirectoryTree', () => {
     expect(walk.relativePaths).toContain('a/deep/deeper/leaf.txt');
   });
 
-  test('places the root and each entry with one read', async () => {
+  test('places each entry before its visit, and each folder again before its listing, the root once', async () => {
     const placedPaths: string[] = [];
     const entryReads = buildTestEntryReads({ privateBytes: null });
 
@@ -204,10 +228,50 @@ describe('walkDirectoryTree', () => {
         },
       },
     });
+    const visitedPaths = walk.entries.map((entry) => entry.path);
+    const listedFolderPaths = walk.entries
+      .filter((entry) => entry.kind === 'directory')
+      .map((entry) => entry.path);
 
     expect(placedPaths.toSorted()).toEqual(
-      [treeRoot, ...walk.entries.map((entry) => entry.path)].toSorted(),
+      [treeRoot, ...visitedPaths, ...listedFolderPaths].toSorted(),
     );
+  });
+
+  test('never lists a folder evicted after its visit, and reports it as skipped', async () => {
+    const folderPath = join(treeRoot, 'b');
+
+    const walk = await collectEntries({
+      isStatsNeeded: false,
+      entryReads: buildEntryReadsChangedBeforeListing({
+        path: folderPath,
+        placementBeforeListing: { kind: 'cloudOnly' },
+      }),
+    });
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.relativePaths).toContain('b');
+    expect(walk.relativePaths).not.toContain('b/marker.json');
+    expect(walk.evictedEntries).toEqual([{ path: folderPath, kind: 'directory' }]);
+  });
+
+  test('never lists a folder swapped for a link after its visit', async () => {
+    // As a folder replaced by a junction on Windows, whose listing would walk the junction's target.
+    const folderPath = join(treeRoot, 'b');
+
+    const walk = await collectEntries({
+      isStatsNeeded: true,
+      entryReads: buildEntryReadsChangedBeforeListing({
+        path: folderPath,
+        placementBeforeListing: { kind: 'link' },
+      }),
+    });
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.relativePaths).toContain('b');
+    expect(walk.relativePaths).not.toContain('b/marker.json');
+    expect(walk.evictedEntries).toEqual([]);
+    expect(walk.unreadables).toEqual([]);
   });
 
   test('walks on without a recorder of the evicted entries', async () => {

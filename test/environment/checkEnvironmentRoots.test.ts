@@ -6,16 +6,23 @@ import type { UserIdentity } from '../../src/system/userIdentity.js';
 import {
   buildTestUserIdentity,
   buildTestWindowsUser,
-  EXAMPLE_WINDOWS_SID_TEXT,
+  exampleWindowsUser,
 } from '../support/parsedValueFixtures.js';
 
 const user = buildTestUserIdentity({ uid: 501 });
 const HOME = '/Users/tester';
 const TEMP = '/private/var/folders/xy/abc/T';
 
-const windowsUser = buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT });
 const WINDOWS_HOME = 'C:\\Users\\tester';
 const WINDOWS_TEMP = 'C:\\Users\\tester\\AppData\\Local\\Temp';
+const WINDOWS_DOCUMENTS = 'D:\\Documents';
+const windowsProtectedRealPaths = [
+  'C:\\',
+  'D:\\',
+  WINDOWS_HOME,
+  'C:\\Users\\tester\\AppData\\Local',
+  WINDOWS_DOCUMENTS,
+];
 
 function check(params: {
   user?: UserIdentity;
@@ -30,6 +37,7 @@ function check(params: {
     homeOwner: params.homeOwner ?? user,
     tempRealPath: params.tempRealPath ?? TEMP,
     tempPlacement: 'apartFromHome',
+    protectedRealPaths: [],
   });
 }
 
@@ -39,11 +47,12 @@ function checkOnWindows(params: {
 }): EnvironmentFailure | null {
   return checkEnvironmentRoots({
     pathRules: WIN32_PATH_RULES,
-    user: windowsUser,
+    user: exampleWindowsUser,
     homeRealPath: WINDOWS_HOME,
-    homeOwner: params.homeOwner ?? windowsUser,
+    homeOwner: params.homeOwner ?? exampleWindowsUser,
     tempRealPath: params.tempRealPath ?? WINDOWS_TEMP,
     tempPlacement: 'belowHome',
+    protectedRealPaths: windowsProtectedRealPaths,
   });
 }
 
@@ -103,5 +112,25 @@ describe('checkEnvironmentRoots on Windows', () => {
         path: tempRealPath,
       });
     }
+  });
+
+  test('refuses a temporary folder that is a fixed drive root', () => {
+    expect(checkOnWindows({ tempRealPath: 'd:\\' })).toEqual({
+      reason: 'tempHoldsProtectedFolder',
+      path: 'd:\\',
+    });
+  });
+
+  test('refuses a temporary folder that is a protected folder or holds one', () => {
+    for (const tempRealPath of [WINDOWS_DOCUMENTS, 'd:\\documents', 'C:\\Users\\tester\\AppData']) {
+      expect(checkOnWindows({ tempRealPath: tempRealPath })).toEqual({
+        reason: 'tempHoldsProtectedFolder',
+        path: tempRealPath,
+      });
+    }
+  });
+
+  test('accepts a temporary folder below a protected folder', () => {
+    expect(checkOnWindows({ tempRealPath: 'D:\\Documents\\Temp' })).toBeNull();
   });
 });

@@ -2,8 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { CatalogEntry, ExploreProbeId } from '../../../src/catalog/catalog.js';
 import { CATCH_ALL_ENTRIES } from '../../../src/platform/darwin/catalog/catchAlls.js';
 import { CATALOG_ENTRIES } from '../../../src/platform/darwin/catalogEntries.js';
-
-const KEBAB_CASE_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+import { listMisnamedCatalogIds } from '../../support/catalogLocationFixtures.js';
 
 /** A version such as `17.2` or `v3`, or a path character. */
 const TITLE_VERSION_OR_PATH_PATTERN = /\d+\.\d+|\bv\d+\b|[/~]/i;
@@ -71,10 +70,7 @@ function listEntriesInsideCatchAlls(): { entry: CatalogEntry; catchAll: CatalogE
 
 describe('CATALOG_ENTRIES', () => {
   test('ids are unique and kebab-case', () => {
-    const ids = CATALOG_ENTRIES.map((entry) => entry.id);
-
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.filter((id) => !KEBAB_CASE_ID_PATTERN.test(id))).toEqual([]);
+    expect(listMisnamedCatalogIds({ entries: CATALOG_ENTRIES })).toEqual([]);
   });
 
   test('every entry has a title, an explanation, and a regeneration text', () => {

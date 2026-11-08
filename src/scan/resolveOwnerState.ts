@@ -73,13 +73,15 @@ export function resolveTargetOwner(params: {
   path: string;
   installedApps: InstalledApp[];
 }): CatalogOwner | null {
+  const entryOwnerApp = params.entry.owner === null ? null : params.entry.owner.app;
+
   switch (params.entry.selection.kind) {
     case 'path':
     case 'profileFolders':
-      return params.entry.owner === null ? null : params.entry.owner.app;
+      return entryOwnerApp;
     case 'children':
-      if (params.entry.owner !== null) {
-        return params.entry.owner.app;
+      if (entryOwnerApp !== null) {
+        return entryOwnerApp;
       }
 
       return resolveChildOwner({ path: params.path, installedApps: params.installedApps });
@@ -347,6 +349,11 @@ function resolveBundlesOwnerState(params: {
   owner: RemovalOwnerBundles;
   runningProcesses: RunningProcesses;
 }): OwnerState {
+  // A bundle-id-shaped child name names a bundle owner on Windows too, where no app carries it.
+  if (params.owner.bundlePaths.length === 0) {
+    return 'stopped';
+  }
+
   switch (params.runningProcesses.kind) {
     case 'commandLines':
       return isAnyBundleRunning({
@@ -355,7 +362,7 @@ function resolveBundlesOwnerState(params: {
       })
         ? 'running'
         : 'stopped';
-    // Only macOS names a bundle owner, so no list of Windows processes meets one.
+    // Only macOS has an app bundle, so no list of Windows processes can tell whether one runs.
     case 'imagePaths':
       return 'unknown';
   }

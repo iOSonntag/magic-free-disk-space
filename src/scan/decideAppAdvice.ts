@@ -6,7 +6,7 @@ import type { AdvisedApp } from './scanPlatform.js';
  * last, each group by name. The tool deletes none of them.
  */
 export function decideAppAdvice(params: { apps: AdvisedApp[] }): AdvisedApp[] {
-  return [...params.apps].sort(
+  return params.apps.toSorted(
     (left, right) =>
       (right.estimatedBytes ?? -1) - (left.estimatedBytes ?? -1) ||
       left.displayName.localeCompare(right.displayName, 'en'),

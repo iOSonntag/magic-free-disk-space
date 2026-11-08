@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   getErrorCode,
   isInUseErrorCode,
+  isMissingErrorCode,
   isPermissionDeniedErrorCode,
 } from '../../src/system/getErrorCode.js';
 
@@ -10,6 +11,15 @@ describe('getErrorCode', () => {
     expect(getErrorCode(Object.assign(new Error('busy'), { code: 'EBUSY' }))).toBe('EBUSY');
     expect(getErrorCode(new Error('plain'))).toBe('unknown');
     expect(getErrorCode('text')).toBe('unknown');
+  });
+});
+
+describe('isMissingErrorCode', () => {
+  test('is true for an entry or a folder that is not there, and only for them', () => {
+    expect(isMissingErrorCode('ENOENT')).toBe(true);
+    expect(isMissingErrorCode('ENOTDIR')).toBe(true);
+    expect(isMissingErrorCode('EBUSY')).toBe(false);
+    expect(isMissingErrorCode('EPERM')).toBe(false);
   });
 });
 

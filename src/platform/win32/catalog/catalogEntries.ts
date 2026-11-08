@@ -3,6 +3,7 @@ import type { WindowsImageName } from '../../../catalog/catalogOwner.js';
 import { parseWindowsImageName } from '../../../catalog/catalogOwner.js';
 import { SCAN_LIMITS } from '../../../scan/limits.js';
 import { mapNonEmpty } from '../../../system/nonEmptyList.js';
+import { PNPM_STORE_ROOT } from './pnpmHomes.js';
 
 /** Brave, installed for the user or for every user of this PC. */
 const braveOwner = buildExecutableOwner({ imageNames: ['brave.exe'], installFolder: null });
@@ -176,8 +177,8 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
       'The store of pnpm, into which projects link their packages; do not delete it by hand.',
     regeneration: 'Projects download their packages again on their next install.',
     risk: 'review',
-    root: 'localAppData',
-    path: 'pnpm/store',
+    root: PNPM_STORE_ROOT.root,
+    path: PNPM_STORE_ROOT.path,
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,

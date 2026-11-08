@@ -118,7 +118,8 @@ async function loadNoAdvisedApps(): Promise<{ apps: AdvisedApp[]; issues: ScanIs
   return { apps: [], issues: [] };
 }
 
-function loadEmptyRecycleBin(): Result<RecycleBinContent, SystemCallFailure> {
+/** The load of a Recycle Bin that holds nothing. */
+export function loadEmptyRecycleBin(): Result<RecycleBinContent, SystemCallFailure> {
   return { kind: 'succeeded', value: { sizeBytes: 0, itemCount: 0 } };
 }
 

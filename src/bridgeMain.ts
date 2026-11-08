@@ -6,7 +6,7 @@ import { parsePlatformId } from './platform/platform.js';
 import { win32Platform } from './platform/win32/win32Platform.js';
 import { loadPreferences, saveIsUpdateCheckEnabled } from './preferences/preferencesFile.js';
 import { formatUnsupportedPlatform } from './report/formatEnvironmentFailure.js';
-import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
+import { runStoppingToolsOnProcessEnd } from './tools/runToolCommand.js';
 import { fetchLatestReleaseVersion } from './update/fetchLatestReleaseVersion.js';
 import { LATEST_RELEASE_API_URL, LATEST_RELEASE_FETCH_TIMEOUT_MS } from './update/githubRelease.js';
 import type { ReleaseVersion } from './update/releaseVersion.js';
@@ -52,19 +52,14 @@ async function main(): Promise<number> {
 }
 
 /**
- * Runs the bridge with the platform's slices, its tools stopped on every end of the process until
- * the bridge ended: once its input closed it ends, and no listener left keeps the process running.
+ * Runs the bridge with the platform's slices, its tools stopped on every end of the process: once
+ * its input closed it ends, and no listener left keeps the process running.
  */
-async function runBridgeOnPlatform(params: { platform: Platform }): Promise<number> {
-  const releaseProcessEnd = stopRunningToolsOnProcessEnd({
+function runBridgeOnPlatform(params: { platform: Platform }): Promise<number> {
+  return runStoppingToolsOnProcessEnd({
     processEndSignals: params.platform.tools.processEndSignals,
+    run: () => runBridgeToEnd({ platform: params.platform }),
   });
-
-  try {
-    return await runBridgeToEnd({ platform: params.platform });
-  } finally {
-    releaseProcessEnd();
-  }
 }
 
 async function runBridgeToEnd(params: { platform: Platform }): Promise<number> {

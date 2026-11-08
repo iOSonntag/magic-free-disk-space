@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
-import { buildWin32Environment } from '../../../src/platform/win32/loadEnvironment.js';
+import {
+  buildWin32Environment,
+  listProtectedRealPathsBesideTemp,
+} from '../../../src/platform/win32/loadEnvironment.js';
 import {
   exampleWin32Environment,
   exampleWin32EnvironmentParams,
@@ -15,7 +18,28 @@ describe('buildWin32Environment', () => {
     expect<string>(exampleWin32Environment.preferencesDir).toBe(
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space',
     );
-    expect<string[]>(exampleWin32Environment.sensitiveRealPaths.slice(-2)).toEqual([
+  });
+
+  test('refuses whole and in every part the keys, the credentials, the Teams backgrounds, and the run folders', () => {
+    expect<string[]>(exampleWin32Environment.sensitiveRealPaths).toEqual([
+      'C:\\Users\\tester\\.ssh',
+      'C:\\Users\\tester\\.gnupg',
+      'C:\\Users\\tester\\.aws',
+      'C:\\Users\\tester\\.azure',
+      'C:\\Users\\tester\\.docker',
+      'C:\\Users\\tester\\.kube',
+      'C:\\Users\\tester\\.config\\gh',
+      'C:\\Users\\tester\\AppData\\Roaming\\gnupg',
+      'C:\\Users\\tester\\AppData\\Roaming\\GitHub CLI',
+      'C:\\Users\\tester\\AppData\\Roaming\\Microsoft\\Credentials',
+      'C:\\Users\\tester\\AppData\\Roaming\\Microsoft\\Crypto',
+      'C:\\Users\\tester\\AppData\\Roaming\\Microsoft\\Protect',
+      'C:\\Users\\tester\\AppData\\Roaming\\Microsoft\\SystemCertificates',
+      'C:\\Users\\tester\\AppData\\Roaming\\Microsoft\\Vault',
+      'C:\\Users\\tester\\AppData\\Local\\Microsoft\\Credentials',
+      'C:\\Users\\tester\\AppData\\Local\\Microsoft\\Vault',
+      'C:\\Users\\tester\\AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\Backgrounds',
+      'C:\\Users\\tester\\AppData\\Roaming\\Microsoft\\Teams\\Backgrounds',
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space\\Logs',
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space',
     ]);
@@ -72,7 +96,6 @@ describe('buildWin32Environment', () => {
       'C:\\Users\\tester\\Music',
       'C:\\Users\\tester\\Pictures',
       'C:\\Users\\tester\\AppData\\LocalLow',
-      'C:\\Users\\tester\\OneDrive',
       'C:\\Users\\tester\\3D Objects',
       'C:\\Users\\tester\\Contacts',
       'C:\\Users\\tester\\Favorites',
@@ -117,5 +140,29 @@ describe('buildWin32Environment', () => {
     expect<string[]>(environment.protectedRealPaths).not.toContain('C:\\Users\\tester\\Desktop');
     expect<string[]>(environment.protectedRealPaths).not.toContain('C:\\Users\\tester\\Downloads');
     expect<unknown>(environment.platformFolders).toEqual(exampleWin32Environment.platformFolders);
+  });
+});
+
+describe('listProtectedRealPathsBesideTemp', () => {
+  test('leaves out the entry of the temporary folder and keeps every other folder', () => {
+    expect(
+      listProtectedRealPathsBesideTemp({
+        protectedRealPaths: exampleWin32Environment.protectedRealPaths,
+        tempRealPath: exampleWin32EnvironmentParams.temp.realPath,
+      }),
+    ).toEqual(
+      exampleWin32Environment.protectedRealPaths.filter(
+        (path) => path !== 'C:\\Users\\tester\\AppData\\Local\\Temp',
+      ),
+    );
+  });
+
+  test('keeps a protected folder that is the temporary folder too', () => {
+    expect(
+      listProtectedRealPathsBesideTemp({
+        protectedRealPaths: ['D:\\Documents', 'C:\\', 'D:\\Documents'],
+        tempRealPath: 'D:\\Documents',
+      }),
+    ).toEqual(['C:\\', 'D:\\Documents']);
   });
 });

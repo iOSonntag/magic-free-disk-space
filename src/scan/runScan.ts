@@ -4,6 +4,7 @@ import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import {
+  findEnvironmentLocationPaths,
   resolveEnvironmentLocation,
   resolveEnvironmentLocations,
 } from '../environment/environmentLocation.js';
@@ -73,7 +74,6 @@ import {
   resolveRemovalOwnerState,
   resolveTargetOwner,
 } from './resolveOwnerState.js';
-import { resolveUserFileRootPaths } from './resolveUserFileRootPaths.js';
 import type { ScanPhase } from './scanPhase.js';
 import { mergeScanPhases } from './scanPhase.js';
 import type {
@@ -83,6 +83,7 @@ import type {
   ScanPlatform,
   ScanPlatformApps,
   ScanPlatformAppsOffered,
+  ScanPlatformCloudOnlyEntries,
   ScanPlatformTrash,
   SystemApp,
 } from './scanPlatform.js';
@@ -129,12 +130,24 @@ export type ScanReport = {
    */
   appAdvice: AppAdvice | null;
   skipped: SkippedItem[];
-  /**
-   * The entries the scan's walks left unread because their content lives only in the cloud store,
-   * each path counted once.
-   */
-  evictedEntryCount: number;
+  /** `null` on a platform whose scan counts no entry whose content lives only in the cloud store. */
+  cloudOnlyEntries: CloudOnlyEntryCount | null;
   issues: ScanIssue[];
+};
+
+/** The entries the scan's walks left unread because their content lives only in the cloud store. */
+export type CloudOnlyEntryCount = {
+  /** The cloud store, as in "in OneDrive, not on this PC". */
+  cloudStoreName: string;
+  /** Each path counted once, however many walks left it unread. */
+  count: number;
+};
+
+/** Takes the entries the scan's walks leave unread in the cloud store, and counts them. */
+export type CloudOnlyEntryTally = {
+  recordEvictedEntry: EvictedEntryRecorder;
+  /** The count of the entries recorded so far; `null` on a platform that counts none. */
+  getCloudOnlyEntryCount: () => CloudOnlyEntryCount | null;
 };
 
 /** The apps the platform's app section lists: offered apps, or apps the scan only advises about. */
@@ -236,13 +249,9 @@ export async function runScan(params: {
     probeClaimPaths: knownClaimPaths,
   });
 
-  // A path several walks leave unread counts once.
-  const evictedEntryPaths = new Set<string>();
-
-  function recordEvictedEntry(entry: EntryRef): void {
-    evictedEntryPaths.add(entry.path);
-  }
-
+  const cloudOnlyEntryTally = buildCloudOnlyEntryTally({
+    cloudOnlyEntries: params.scan.cloudOnlyEntries,
+  });
   const runningProcessesLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
@@ -263,7 +272,7 @@ export async function runScan(params: {
     maxDepth: SCAN_LIMITS.projectMaxDepth,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
     entryReads: params.system.entryReads,
-    recordEvictedEntry: recordEvictedEntry,
+    recordEvictedEntry: cloudOnlyEntryTally.recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const projectPins: ProjectPinsLoad = {
@@ -315,11 +324,11 @@ export async function runScan(params: {
     runningProcesses: await knownRunningProcessesLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
     entryReads: params.system.entryReads,
-    recordEvictedEntry: recordEvictedEntry,
+    recordEvictedEntry: cloudOnlyEntryTally.recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
-    userFileRootPaths: resolveUserFileRootPaths({
-      environment: params.environment,
-      roots: params.scan.userFileRoots,
+    userFileRootPaths: findEnvironmentLocationPaths({
+      folders: params.environment,
+      locations: params.scan.userFileRoots,
     }),
   };
   const setup: ScanPhase = {
@@ -407,7 +416,7 @@ export async function runScan(params: {
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.system.entryReads,
-    recordEvictedEntry: recordEvictedEntry,
+    recordEvictedEntry: cloudOnlyEntryTally.recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const exploreAdvice = await loadCatalogPhase({
@@ -436,8 +445,32 @@ export async function runScan(params: {
     ],
     incompleteExploreAdvice: incompleteExploreAdvice,
     appAdvice: installed.appAdvice,
-    evictedEntryCount: evictedEntryPaths.size,
+    cloudOnlyEntries: cloudOnlyEntryTally.getCloudOnlyEntryCount(),
   });
+}
+
+/**
+ * The tally of the entries a scan's walks leave unread because their content lives only in the
+ * cloud store: on a platform that counts them, each path once; on any other, none.
+ */
+export function buildCloudOnlyEntryTally(params: {
+  cloudOnlyEntries: ScanPlatformCloudOnlyEntries;
+}): CloudOnlyEntryTally {
+  switch (params.cloudOnlyEntries.kind) {
+    case 'notCounted':
+      return { recordEvictedEntry: () => undefined, getCloudOnlyEntryCount: () => null };
+    case 'counted': {
+      const cloudStoreName = params.cloudOnlyEntries.cloudStoreName;
+      const entryPaths = new Set<string>();
+
+      return {
+        recordEvictedEntry: (entry: EntryRef) => {
+          entryPaths.add(entry.path);
+        },
+        getCloudOnlyEntryCount: () => ({ cloudStoreName: cloudStoreName, count: entryPaths.size }),
+      };
+    }
+  }
 }
 
 /** The platform's installed apps, read from the environment's app folders as its app section says. */
@@ -601,7 +634,7 @@ export function buildScanReportOfPhases(params: {
   phases: ScanPhase[];
   incompleteExploreAdvice: ScanPhase;
   appAdvice: AppAdvice | null;
-  evictedEntryCount: number;
+  cloudOnlyEntries: CloudOnlyEntryCount | null;
 }): ScanReport {
   const scan = mergeScanPhases({ phases: params.phases });
 
@@ -617,7 +650,7 @@ export function buildScanReportOfPhases(params: {
       ...params.incompleteExploreAdvice.decisions,
     ],
     appAdvice: params.appAdvice,
-    evictedEntryCount: params.evictedEntryCount,
+    cloudOnlyEntries: params.cloudOnlyEntries,
     issues: [...scan.issues, ...params.incompleteExploreAdvice.issues],
   });
 }

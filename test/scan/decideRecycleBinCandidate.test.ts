@@ -2,18 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { decideRecycleBinCandidate } from '../../src/scan/decideRecycleBinCandidate.js';
-import type { ScanPlatformTrashRecycleBins } from '../../src/scan/scanPlatform.js';
 import { buildTestRecycleBinCandidate } from '../support/candidateFixtures.js';
 import { buildTestDriveRoot } from '../support/parsedValueFixtures.js';
 import { getWin32RecycleBinScanTrash } from '../support/platformFixtures.js';
 
 const MB = 1_000_000;
 
-const recycleBinTrash: ScanPlatformTrashRecycleBins = {
-  ...getWin32RecycleBinScanTrash(),
-  // The decision reads no bin; the count is the scan's.
-  loadRecycleBin: () => ({ kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: 0 } }),
-};
+const recycleBinTrash = getWin32RecycleBinScanTrash();
 
 const driveRoot = buildTestDriveRoot({ text: 'D:\\' });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { BridgeEnd, BridgeEvent } from '../../src/bridge/runBridge.js';
 import { runBridge } from '../../src/bridge/runBridge.js';
@@ -25,6 +25,7 @@ import {
   deleteFixtureRoot,
   listFixturePathsBesideLog,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -715,8 +716,7 @@ describe('runBridge', () => {
   test('a log that cannot be created deletes nothing and keeps the scan', async () => {
     const logFolderPath = dirname(environment.deletionLogPath);
 
-    await mkdir(dirname(logFolderPath), { recursive: true });
-    await writeFile(logFolderPath, 'a file where the folder belongs');
+    await writeFixtureTextFile({ path: logFolderPath, text: 'a file where the folder belongs' });
 
     const before = await listFixturePaths();
     const { events } = await runBridgeWithLines({

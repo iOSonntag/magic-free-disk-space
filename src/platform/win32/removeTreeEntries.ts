@@ -11,6 +11,7 @@ import { getPlacedFileKind } from '../../system/entryReads.js';
 import {
   getErrorCode,
   isInUseErrorCode,
+  isMissingErrorCode,
   isPermissionDeniedErrorCode,
 } from '../../system/getErrorCode.js';
 import { loadEntryStats } from '../../system/loadEntryStats.js';
@@ -24,9 +25,6 @@ const FILE_ATTRIBUTE_READONLY = 0x1;
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 export const MAX_CONCURRENT_REMOVALS = 16;
-
-/** The codes of an entry that is gone already, or whose folder is. */
-const GONE_CODES = ['ENOENT', 'ENOTDIR'];
 
 const runLimitedRemoval = createConcurrencyLimit({ maxConcurrent: MAX_CONCURRENT_REMOVALS });
 
@@ -79,11 +77,11 @@ type RemovalPlacement =
  * entry, the root included, and the walk never enters a link of any kind, which is removed
  * itself, never its target. Right before its removal, each file and folder is placed again by
  * the attributes it reads then: one that reads as a link goes as a link, and one on disk loses its
- * read-only bit. A file another program holds open or Windows refuses to delete stays, and so
- * does an entry kept online only, the root included, which a removal would delete from its cloud
- * store; the folders that hold them stay with them. Any other failure ends the removal with its
- * code; an unreadable folder, or a root or a folder that cannot be placed, ends it before
- * anything is removed. Never throws.
+ * read-only bit for its removal and gets it back when it stays. A file another program holds open
+ * or Windows refuses to delete stays, and so does an entry kept online only, the root included,
+ * which a removal would delete from its cloud store; the folders that hold them stay with them.
+ * Any other failure ends the removal with its code; an unreadable folder, or a root or a folder
+ * that cannot be placed, ends it before anything is removed. Never throws.
  */
 export async function removeTreeEntries(params: {
   rootPath: AbsolutePath;
@@ -143,7 +141,7 @@ export function decideEntryRemovalEnd(params: {
   code: string;
   entryKind: RemovalEntryKind;
 }): EntryRemovalEnd {
-  if (GONE_CODES.includes(params.code)) {
+  if (isMissingErrorCode(params.code)) {
     return { kind: 'gone' };
   }
 
@@ -385,7 +383,7 @@ async function removeDirectoryTargets(params: {
   tally: StayedTally;
 }): Promise<string | null> {
   const directoriesByDepth = Map.groupBy(params.directories, (directory) => directory.depth);
-  const depths = [...directoriesByDepth.keys()].sort((first, second) => second - first);
+  const depths = Array.from(directoriesByDepth.keys()).toSorted((first, second) => second - first);
   let failure: string | null = null;
 
   async function removeTarget(directory: DirectoryTarget): Promise<void> {
@@ -406,16 +404,14 @@ async function removeDirectoryTargets(params: {
     switch (end.kind) {
       case 'gone':
         return;
+      // A folder that holds an entry known to stay is counted by that entry alone; a folder that
+      // holds none and is not empty holds one the walk did not see.
       case 'notEmpty':
-        // A folder that holds no entry known to stay holds one the walk did not see.
+      case 'cloudOnly':
+      case 'stayed':
         if (!params.tally.hasStayedEntry({ path: directory.path })) {
           params.tally.recordStayed({ path: directory.path });
         }
-
-        return;
-      case 'cloudOnly':
-      case 'stayed':
-        params.tally.recordStayed({ path: directory.path });
 
         return;
       case 'failed':
@@ -453,9 +449,10 @@ async function removeLeafEntry(params: {
 }
 
 /**
- * Removes a file as the read of its attributes right before places it: after clearing its
- * read-only bit when on disk, as a link when it reads as one, and never when it is kept online
- * only or its read fails, which ends its removal by the code of the read.
+ * Removes a file as the read of its attributes right before places it: when on disk, with its
+ * read-only bit cleared for the call and set again when the file stays; as a link when it reads as
+ * one; and never when it is kept online only or its read fails, which ends its removal by the code
+ * of the read.
  */
 async function removeFileEntry(params: {
   path: AbsolutePath;
@@ -474,17 +471,12 @@ async function removeFileEntry(params: {
       break;
   }
 
-  const cleared = clearReadOnly({
+  const removed = await runRemovalCallWithReadOnlyCleared({
     path: params.path,
     attributeBits: placement.attributeBits,
     attributes: params.attributes,
+    call: () => unlink(params.path),
   });
-
-  if (cleared.kind === 'failed') {
-    return decideEntryRemovalEnd({ code: cleared.failure, entryKind: 'file' });
-  }
-
-  const removed = await runRemovalCall({ call: () => unlink(params.path) });
 
   return toEntryRemovalEnd({ removed: removed, entryKind: 'file' });
 }
@@ -524,10 +516,10 @@ async function removeLink(params: { path: AbsolutePath }): Promise<EntryRemovalE
 }
 
 /**
- * Removes an emptied folder as the read of its attributes right before places it: after clearing
- * its read-only bit when on disk, with the bit kept when it reads as a link, which `rmdir` removes
- * itself, and never when it is kept online only or its read fails, which ends its removal by the
- * code of the read.
+ * Removes an emptied folder as the read of its attributes right before places it: when on disk,
+ * with its read-only bit cleared for the call and set again when the folder stays; with the bit
+ * kept when it reads as a link, which `rmdir` removes itself; and never when it is kept online only
+ * or its read fails, which ends its removal by the code of the read.
  */
 async function removeDirectoryEntry(params: {
   path: AbsolutePath;
@@ -540,30 +532,30 @@ async function removeDirectoryEntry(params: {
       return { kind: 'cloudOnly' };
     case 'unread':
       return decideEntryRemovalEnd({ code: placement.code, entryKind: 'directory' });
-    case 'link':
-      break;
+    case 'link': {
+      const removed = await runRemovalCall({ call: () => rmdir(params.path) });
+
+      return toDirectoryRemovalEnd({ removed: removed });
+    }
     case 'onDisk': {
-      const cleared = clearReadOnly({
+      const removed = await runRemovalCallWithReadOnlyCleared({
         path: params.path,
         attributeBits: placement.attributeBits,
         attributes: params.attributes,
+        call: () => rmdir(params.path),
       });
 
-      if (cleared.kind === 'failed') {
-        return decideEntryRemovalEnd({ code: cleared.failure, entryKind: 'directory' });
-      }
-
-      break;
+      return toDirectoryRemovalEnd({ removed: removed });
     }
   }
+}
 
-  const removed = await runRemovalCall({ call: () => rmdir(params.path) });
-
-  if (removed.kind === 'failed' && removed.failure === 'ENOTEMPTY') {
+function toDirectoryRemovalEnd(params: { removed: Result<null, string> }): DirectoryRemovalEnd {
+  if (params.removed.kind === 'failed' && params.removed.failure === 'ENOTEMPTY') {
     return { kind: 'notEmpty' };
   }
 
-  return toEntryRemovalEnd({ removed: removed, entryKind: 'directory' });
+  return toEntryRemovalEnd({ removed: params.removed, entryKind: 'directory' });
 }
 
 /** Runs one removal call; a failure is its error code. */
@@ -613,22 +605,38 @@ function loadRemovalPlacement(params: {
 }
 
 /**
- * Clears the read-only bit of a file or a folder on disk, whose `attributeBits` were read right
- * before; never of a link, whose target it could reach.
+ * Runs the removal `call` of a file or a folder on disk, whose `attributeBits` were read right
+ * before, with its read-only bit cleared first, and sets those bits again when the entry stays;
+ * never for a link, whose target the bits could reach. A failure is the code of the clear or of
+ * the call.
  */
-function clearReadOnly(params: {
+async function runRemovalCallWithReadOnlyCleared(params: {
   path: AbsolutePath;
   attributeBits: number;
   attributes: EntryAttributeAccess;
-}): Result<null, string> {
+  call: () => Promise<void>;
+}): Promise<Result<null, string>> {
   if ((params.attributeBits & FILE_ATTRIBUTE_READONLY) === 0) {
-    return { kind: 'succeeded', value: null };
+    return runRemovalCall({ call: params.call });
   }
 
-  return params.attributes.save({
+  const cleared = params.attributes.save({
     path: params.path,
     attributes: params.attributeBits & ~FILE_ATTRIBUTE_READONLY,
   });
+
+  if (cleared.kind === 'failed') {
+    return cleared;
+  }
+
+  const removed = await runRemovalCall({ call: params.call });
+
+  // A failed restore leaves the entry writable, which fails nothing more: the call's code stands.
+  if (removed.kind === 'failed' && !isMissingErrorCode(removed.failure)) {
+    params.attributes.save({ path: params.path, attributes: params.attributeBits });
+  }
+
+  return removed;
 }
 
 /** Counts the entries that stayed, and knows each folder that holds one of them. */

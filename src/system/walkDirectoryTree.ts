@@ -36,21 +36,22 @@ export type TreeUnreadable = { path: string; failure: DirectoryFailure | FileFai
 /** Takes each entry a walk left unread because only a cloud store holds its content. */
 export type EvictedEntryRecorder = (entry: EntryRef) => void;
 
-/** A folder to read; one kept only in a cloud store is recorded instead of read. */
-type PendingDirectory = { path: string; depth: number; isCloudOnly: boolean };
+type PendingDirectory = { path: string; depth: number };
 
 /**
  * Walks the folders below `rootPath`, reading at most `maxConcurrentDirectories` folders at
  * once, and asks `visitEntry` about every entry. Waiting folders are kept as paths, so a wide
  * tree costs memory for its paths only. Returns `stopped` once `visitEntry` returned `stop` or
  * `isStopped` turned true. A vanished entry is left out; an unreadable one goes to `onUnreadable`.
- * `entryReads.loadEntryPlacement` places the root and each entry once, before it is visited:
- * - a link is visited as a `symbolicLink` and never entered, nor is a root that is one;
- * - a cloud-only folder, such as an iCloud placeholder, is visited but never read, and goes to
- *   `onEvictedEntrySkipped` when the visit or the walk's start would enter it; any other
- *   cloud-only entry goes there and is never visited, so the walk downloads nothing;
- * - an entry that cannot be placed is read as one on disk, the root too, and its visit carries
- *   the code of the failed read.
+ * `entryReads.loadEntryPlacement` places each entry before it is visited, and each folder again,
+ * the root included, right before its listing, which may come long after its visit:
+ * - a link is visited as a `symbolicLink` and never entered, nor is a folder that reads as one
+ *   before its listing;
+ * - a cloud-only folder, such as an iCloud placeholder, is visited but never listed, and goes to
+ *   `onEvictedEntrySkipped` when it reads so before its listing; any other cloud-only entry goes
+ *   there and is never visited, so the walk downloads nothing;
+ * - an entry that cannot be placed is read as one on disk, and its visit carries the code of the
+ *   failed read; a folder that cannot be placed before its listing is listed.
  *
  * A `null` `onEvictedEntrySkipped` records none of them.
  */
@@ -64,7 +65,7 @@ export function walkDirectoryTree(params: {
   onUnreadable: (unreadable: TreeUnreadable) => void;
   onEvictedEntrySkipped: EvictedEntryRecorder | null;
 }): Promise<TreeWalkEnd> {
-  const pendingDirectories: PendingDirectory[] = [];
+  const pendingDirectories: PendingDirectory[] = [{ path: params.rootPath, depth: 0 }];
   let activeCount = 0;
   let isStoppedByVisit = false;
 
@@ -74,8 +75,8 @@ export function walkDirectoryTree(params: {
     }
   }
 
-  function visitPlacedEntry(placed: { entry: TreeEntry; isCloudOnly: boolean }): void {
-    const visit = params.visitEntry(placed.entry);
+  function visitPlacedEntry(entry: TreeEntry): void {
+    const visit = params.visitEntry(entry);
 
     if (visit === 'stop') {
       isStoppedByVisit = true;
@@ -83,12 +84,8 @@ export function walkDirectoryTree(params: {
       return;
     }
 
-    if (visit === 'descend' && placed.entry.kind === 'directory') {
-      pendingDirectories.push({
-        path: placed.entry.path,
-        depth: placed.entry.depth,
-        isCloudOnly: placed.isCloudOnly,
-      });
+    if (visit === 'descend' && entry.kind === 'directory') {
+      pendingDirectories.push({ path: entry.path, depth: entry.depth });
     }
   }
 
@@ -99,11 +96,20 @@ export function walkDirectoryTree(params: {
       return;
     }
 
-    // An evicted folder holds nothing on this disk, and reading it would download it.
-    if (directory.isCloudOnly) {
-      recordEvictedEntry({ path: directory.path, kind: 'directory' });
+    // A folder waits for its listing since its parent's: one swapped for a link meanwhile would
+    // list the link's target, and one evicted would be downloaded by its listing.
+    const directoryRef: EntryRef = { path: directory.path, kind: 'directory' };
 
-      return;
+    switch (params.entryReads.loadEntryPlacement(directoryRef).kind) {
+      case 'cloudOnly':
+        recordEvictedEntry(directoryRef);
+
+        return;
+      case 'link':
+        return;
+      case 'onDisk':
+      case 'unread':
+        break;
     }
 
     const listing = await loadDirectoryEntries({ path: directory.path });
@@ -143,42 +149,26 @@ export function walkDirectoryTree(params: {
 
       switch (placement.kind) {
         case 'onDisk':
-          visitPlacedEntry({ entry: treeEntry, isCloudOnly: false });
+          visitPlacedEntry(treeEntry);
           break;
         case 'unread':
-          visitPlacedEntry({
-            entry: { ...treeEntry, placementFailureCode: placement.code },
-            isCloudOnly: false,
-          });
+          visitPlacedEntry({ ...treeEntry, placementFailureCode: placement.code });
           break;
         case 'cloudOnly':
-          // A folder is visited but never read; any other entry is skipped before its visit,
-          // which may read it.
+          // A folder is visited and placed again before its listing; any other entry is skipped
+          // before its visit, which may read it.
           if (treeEntry.kind === 'directory') {
-            visitPlacedEntry({ entry: treeEntry, isCloudOnly: true });
+            visitPlacedEntry(treeEntry);
           } else {
             recordEvictedEntry({ path: treeEntry.path, kind: treeEntry.kind });
           }
 
           break;
         case 'link':
-          visitPlacedEntry({ entry: toLinkTreeEntry({ entry: treeEntry }), isCloudOnly: false });
+          visitPlacedEntry(toLinkTreeEntry({ entry: treeEntry }));
           break;
       }
     }
-  }
-
-  // The root is placed as the folder the walk expects; one that is a link is never entered.
-  switch (params.entryReads.loadEntryPlacement({ path: params.rootPath, kind: 'directory' }).kind) {
-    case 'onDisk':
-    case 'unread':
-      pendingDirectories.push({ path: params.rootPath, depth: 0, isCloudOnly: false });
-      break;
-    case 'cloudOnly':
-      pendingDirectories.push({ path: params.rootPath, depth: 0, isCloudOnly: true });
-      break;
-    case 'link':
-      break;
   }
 
   return new Promise((resolve, reject) => {

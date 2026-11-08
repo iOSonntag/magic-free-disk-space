@@ -5,6 +5,8 @@ export const FILE_ATTRIBUTE_DIRECTORY = 0x10;
 
 export const FILE_ATTRIBUTE_ARCHIVE = 0x20;
 
+export const FILE_ATTRIBUTE_NORMAL = 0x80;
+
 export const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
 
 export const FILE_ATTRIBUTE_OFFLINE = 0x1000;

@@ -28,6 +28,11 @@ describe('formatEnvironmentFailure', () => {
     ).toBe(
       'The temporary folder /Users/tester overlaps the home folder, so nothing in it can count as temporary.',
     );
+    expect(
+      formatEnvironmentFailure({ failure: { reason: 'tempHoldsProtectedFolder', path: 'D:\\' } }),
+    ).toBe(
+      'The temporary folder D:\\ is or holds a drive root or a folder this tool never deletes, so nothing in it can count as temporary.',
+    );
   });
 
   test('names a failed call of the system by its name and its code in hex, never as a path', () => {

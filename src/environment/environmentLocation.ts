@@ -98,6 +98,21 @@ export function findEnvironmentLocationPath(params: {
   });
 }
 
+/**
+ * The absolute path of each location below the folders, in their order; one in a known folder
+ * Windows names no path for is left out. Throws as `findEnvironmentLocationPath` does.
+ */
+export function findEnvironmentLocationPaths(params: {
+  folders: EnvironmentFolders;
+  locations: EnvironmentLocation[];
+}): AbsolutePath[] {
+  return params.locations.flatMap((location) => {
+    const path = findEnvironmentLocationPath({ folders: params.folders, location: location });
+
+    return path === null ? [] : [path];
+  });
+}
+
 function getEnvironmentBaseDir(params: {
   folders: EnvironmentFolders;
   base: EnvironmentBase;

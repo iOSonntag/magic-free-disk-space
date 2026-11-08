@@ -53,7 +53,7 @@ import {
   buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { createTestJournal } from '../support/deletionJournalFixtures.js';
+import { createTestJournal, loadTestJournalLines } from '../support/deletionJournalFixtures.js';
 import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -213,13 +213,6 @@ function createFixtureRootJournal(): Promise<DeletionJournal> {
     logPath: join(fixtureRoot.rootDir, 'deletions.jsonl'),
     nowMs: NOW_MS,
   });
-}
-
-async function loadJournalLines(journal: DeletionJournal): Promise<unknown[]> {
-  return (await readFile(journal.logPath, 'utf8'))
-    .trimEnd()
-    .split('\n')
-    .map((line) => JSON.parse(line));
 }
 
 /** A journal that records the first `successCount` entries and then fails, as a full disk would. */
@@ -382,7 +375,7 @@ describe('deleteCandidates', () => {
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
-    const journalLines = await loadJournalLines(journal);
+    const journalLines = await loadTestJournalLines({ logPath: journal.logPath });
 
     expect(run).toEqual({
       outcomes: [
@@ -886,7 +879,7 @@ process.exit(0);`,
       ],
       journalFailure: null,
     });
-    expect((await loadJournalLines(journal)).slice(1)).toEqual([
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1)).toEqual([
       buildExpectedToolIntent({ candidate: candidate, version: '20.1.0' }),
       {
         kind: 'toolOutcome',
@@ -929,7 +922,7 @@ process.exit(0);`,
       ],
       journalFailure: null,
     });
-    expect((await loadJournalLines(journal)).slice(1)).toEqual([
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1)).toEqual([
       buildExpectedToolIntent({ candidate: candidate, version: '18.0.0' }),
       { kind: 'toolOutcome', atMs: NOW_MS, path: candidate.path, outcome: 'changedSinceScan' },
     ]);
@@ -968,7 +961,7 @@ process.exit(1);`,
       ],
       journalFailure: null,
     });
-    expect((await loadJournalLines(journal)).slice(1)).toEqual([
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1)).toEqual([
       buildExpectedToolIntent({ candidate: candidate, version: '20.1.0' }),
       {
         kind: 'toolOutcome',
@@ -1006,7 +999,7 @@ process.exit(0);`,
       loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
-    const journalLines = await loadJournalLines(journal);
+    const journalLines = await loadTestJournalLines({ logPath: journal.logPath });
 
     expect(run).toEqual({
       outcomes: [
@@ -1120,7 +1113,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
       ],
       journalFailure: null,
     });
-    expect(await loadJournalLines(journal)).toEqual([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toEqual([
       expect.objectContaining({ kind: 'sessionStart' }),
       {
         kind: 'intent',
@@ -1290,7 +1283,7 @@ describe('deleteCandidates with an item of several targets', () => {
         code: null,
       },
     ]);
-    expect(await loadJournalLines(journal)).toEqual([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toEqual([
       expect.objectContaining({ kind: 'sessionStart' }),
       {
         kind: 'intent',
@@ -1326,7 +1319,7 @@ describe('deleteCandidates with an item of several targets', () => {
       outcome: 'changedSinceScan',
       freedBytes: secondBytes,
     });
-    expect(await loadJournalLines(journal)).toMatchObject([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toMatchObject([
       { kind: 'sessionStart' },
       { kind: 'intent', targetPaths: [firstPath, secondPath] },
       { kind: 'outcome', path: firstPath, outcome: 'changedSinceScan' },
@@ -1352,7 +1345,7 @@ describe('deleteCandidates with an item of several targets', () => {
 
     expect(secondBytes).toBeLessThan(candidate.allocatedBytes);
     expect(run.outcomes[0]).toMatchObject({ outcome: 'removed', freedBytes: secondBytes });
-    expect(await loadJournalLines(journal)).toMatchObject([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toMatchObject([
       { kind: 'sessionStart' },
       { kind: 'intent' },
       { kind: 'outcome', path: firstPath, outcome: 'alreadyGone' },
@@ -1467,7 +1460,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
       },
       expect.objectContaining({ outcome: 'removed' }),
     ]);
-    expect((await loadJournalLines(journal)).slice(1, 3)).toEqual([
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1, 3)).toEqual([
       {
         kind: 'intent',
         atMs: NOW_MS,
@@ -1547,7 +1540,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
       { outcome: 'alreadyGone', code: null, freedBytes: 0 },
       { outcome: 'removed' },
     ]);
-    expect((await loadJournalLines(journal))[2]).toEqual({
+    expect((await loadTestJournalLines({ logPath: journal.logPath }))[2]).toEqual({
       kind: 'outcome',
       atMs: NOW_MS,
       path: 'C:\\$Recycle.Bin',
@@ -1626,7 +1619,7 @@ describe('deleteCandidates with a path left partly in place', () => {
         stayedEntryCount: 2,
       },
     ]);
-    expect((await loadJournalLines(journal)).at(-1)).toEqual({
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).at(-1)).toEqual({
       kind: 'outcome',
       atMs: NOW_MS,
       path: selected,

@@ -39,7 +39,7 @@ export type ProjectPins = { files: ProjectPinFile[]; isWalkComplete: boolean };
 export type ProjectPinFileSource = 'walk' | 'miseTrackedConfig';
 
 /** Each kind of pin file that its name alone decides, by the names it goes by. */
-const PIN_FILE_NAMES: { kind: ProjectPinFileKind; names: string[] }[] = [
+const pinFileNames: { kind: ProjectPinFileKind; names: string[] }[] = [
   { kind: 'toolVersions', names: ['.tool-versions'] },
   { kind: 'nvmrc', names: ['.nvmrc'] },
   { kind: 'gradle', names: ['build.gradle', 'build.gradle.kts'] },
@@ -92,7 +92,7 @@ export function matchProjectPinFileName(params: {
   name: string;
   source: ProjectPinFileSource;
 }): ProjectPinFileKind | null {
-  const named = PIN_FILE_NAMES.find((pinFile) =>
+  const named = pinFileNames.find((pinFile) =>
     pinFile.names.some((pinFileName) =>
       isSameEntryName({ rules: params.pathRules, name: pinFileName, otherName: params.name }),
     ),

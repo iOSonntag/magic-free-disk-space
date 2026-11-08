@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
-import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
+import { buildCloudOnlyEntryTally, buildScanReportOfPhases } from '../../src/scan/runScan.js';
 import type { AdvisedApp } from '../../src/scan/scanPlatform.js';
 import { createAndroidAvdHome, writeAndroidSystemImage } from '../explore/androidFixtures.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
@@ -76,13 +78,13 @@ describe('buildScanReportOfPhases', () => {
         issues: [{ path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' }],
       },
       appAdvice: null,
-      evictedEntryCount: 2,
+      cloudOnlyEntries: { cloudStoreName: 'OneDrive', count: 2 },
     });
 
     expect(report.candidates).toEqual([vscodeCandidate]);
     expect(report.advice).toEqual([vscodeAdvice]);
     expect(report.skipped).toEqual([]);
-    expect(report.evictedEntryCount).toBe(2);
+    expect(report.cloudOnlyEntries).toEqual({ cloudStoreName: 'OneDrive', count: 2 });
     expect(report.issues).toEqual([
       { path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' },
     ]);
@@ -95,7 +97,7 @@ describe('buildScanReportOfPhases', () => {
       phases: [{ decisions: [vscodeOffer, { kind: 'advice', advice: vscodeAdvice }], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
       appAdvice: null,
-      evictedEntryCount: 0,
+      cloudOnlyEntries: null,
     });
 
     expect(report.candidates).toEqual([]);
@@ -243,11 +245,35 @@ describe('buildScanReportOfPhases', () => {
       phases: [{ decisions: [vscodeOffer], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
       appAdvice: { apps: [app], installedAppsPageName: 'Settings > Apps' },
-      evictedEntryCount: 0,
+      cloudOnlyEntries: null,
     });
 
     expect(report.candidates).toEqual([vscodeCandidate]);
     expect(report.appAdvice).toEqual({ apps: [app], installedAppsPageName: 'Settings > Apps' });
+  });
+});
+
+describe('buildCloudOnlyEntryTally', () => {
+  test('counts each path once on Windows, whose scan counts the entries left in OneDrive', () => {
+    const tally = buildCloudOnlyEntryTally({
+      cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
+    });
+
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Clips', kind: 'directory' });
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\clip.mov', kind: 'file' });
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Clips', kind: 'directory' });
+
+    expect(tally.getCloudOnlyEntryCount()).toEqual({ cloudStoreName: 'OneDrive', count: 2 });
+  });
+
+  test('counts no entry on macOS, whose scan never counted the entries left in iCloud', () => {
+    const tally = buildCloudOnlyEntryTally({
+      cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
+    });
+
+    tally.recordEvictedEntry({ path: '/Users/me/Library/Mobile Documents/clip.mov', kind: 'file' });
+
+    expect(tally.getCloudOnlyEntryCount()).toBeNull();
   });
 });
 
@@ -473,20 +499,18 @@ describeOnDarwin('runScan', () => {
     });
   });
 
-  test('counts each entry its walks left in the cloud once, and none a walk passed by', async () => {
+  test('counts no entry its walks left in iCloud, as the scan of macOS never did', async () => {
     await withFixtureHome({
       nowMs: SCAN_NOW_MS,
       run: async (home) => {
         const oldMs = Date.UTC(2025, 0, 1);
         const homeDir = home.environment.homeDir;
         const projectPath = join(homeDir, 'Documents/app');
-        // Met by the project walk and the large-file search, so counted once.
+        // Met by the project walk and the large-file search.
         const cloudFolderPath = join(homeDir, 'Movies/Cloud');
         const cloudFilePath = join(homeDir, 'Movies/cloud.mov');
         // Met only by the measurement of the artifact, which the project walk never enters.
         const cloudArtifactFilePath = join(projectPath, 'node_modules/pkg/cache.bin');
-        // Passed by every walk, which never reads a hidden folder.
-        const hiddenCloudFolderPath = join(homeDir, '.hidden/Cloud');
 
         await createFixtureFile({
           path: join(projectPath, 'package.json'),
@@ -503,24 +527,18 @@ describeOnDarwin('runScan', () => {
           cloudArtifactFilePath,
           cloudFilePath,
           join(cloudFolderPath, 'clip.mov'),
-          join(hiddenCloudFolderPath, 'note.txt'),
         ]) {
           await createFixtureFile({ path: filePath, sizeBytes: 64, modifiedMs: oldMs });
         }
 
-        const cloudOnlyPaths = [
-          cloudFolderPath,
-          cloudFilePath,
-          cloudArtifactFilePath,
-          hiddenCloudFolderPath,
-        ];
+        const cloudOnlyPaths = [cloudFolderPath, cloudFilePath, cloudArtifactFilePath];
         const report = await runTestScan({
           environment: home.environment,
           catalogEntries: [],
           entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: cloudOnlyPaths }),
         });
 
-        expect(report.evictedEntryCount).toBe(3);
+        expect(report.cloudOnlyEntries).toBeNull();
       },
     });
   });
@@ -590,7 +608,7 @@ function buildReportOfPhases(params: {
     phases: params.phases.map((decisions) => ({ decisions: decisions, issues: [] })),
     incompleteExploreAdvice: { decisions: [], issues: [] },
     appAdvice: null,
-    evictedEntryCount: 0,
+    cloudOnlyEntries: null,
   });
 }
 

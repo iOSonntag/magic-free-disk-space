@@ -8,7 +8,7 @@ import type { ContainerEngine } from '../../../src/explore/explorePlatform.js';
 import { formatExploreUnitKey } from '../../../src/explore/formatExploreUnitKey.js';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
 import { buildVolumeName } from '../../explore/engineFixtures.js';
-import { buildTestMacEnvironment } from '../../support/fixtureRoot.js';
+import { exampleDarwinEnvironment } from '../../support/environmentFixtures.js';
 
 /**
  * Every place an engine names: a fixed engine's sockets and disk image; a profile engine's
@@ -44,20 +44,19 @@ function listEnginePlacePaths(params: {
 // keys of the units at them may be kept by the shipped app, so none may change.
 describe("darwin's explore places", () => {
   test('resolves the container engines to the sockets and disk images of before', () => {
-    const environment = buildTestMacEnvironment();
     const engines = darwinPlatform.explore.containerEngines;
 
     expect({
       dockerDesktopEngine: listEnginePlacePaths({
-        environment: environment,
+        environment: exampleDarwinEnvironment,
         engine: engines.dockerDesktopEngine,
       }),
       orbStackEngine: listEnginePlacePaths({
-        environment: environment,
+        environment: exampleDarwinEnvironment,
         engine: engines.orbStackEngine,
       }),
       colimaEngine: listEnginePlacePaths({
-        environment: environment,
+        environment: exampleDarwinEnvironment,
         engine: engines.colimaEngine,
       }),
     }).toEqual({
@@ -78,7 +77,6 @@ describe("darwin's explore places", () => {
   });
 
   test('keeps the key of an engine unit at the socket of before', () => {
-    const environment = buildTestMacEnvironment();
     const engine = darwinPlatform.explore.containerEngines.dockerDesktopEngine;
 
     if (engine === null || engine.kind !== 'fixed') {
@@ -92,11 +90,11 @@ describe("darwin's explore places", () => {
           engineProbeId: 'dockerDesktopEngine',
           engineName: engine.engineName,
           socketPath: resolveEnvironmentLocation({
-            folders: environment,
+            folders: exampleDarwinEnvironment,
             location: engine.socketPaths[0],
           }),
           diskImagePath: resolveEnvironmentLocation({
-            folders: environment,
+            folders: exampleDarwinEnvironment,
             location: engine.diskImagePath,
           }),
           sizeBytes: 1,
@@ -107,13 +105,21 @@ describe("darwin's explore places", () => {
   });
 
   test('resolves the IDE version roots to the folders of before', () => {
-    const environment = buildTestMacEnvironment();
     const roots = darwinPlatform.explore.ideVersionRoots;
 
     expect<Record<string, string[]>>({
-      caches: resolveEnvironmentLocations({ folders: environment, locations: roots.caches }),
-      logs: resolveEnvironmentLocations({ folders: environment, locations: roots.logs }),
-      settings: resolveEnvironmentLocations({ folders: environment, locations: roots.settings }),
+      caches: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: roots.caches,
+      }),
+      logs: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: roots.logs,
+      }),
+      settings: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: roots.settings,
+      }),
     }).toEqual({
       caches: ['/Users/tester/Library/Caches/JetBrains', '/Users/tester/Library/Caches/Google'],
       logs: ['/Users/tester/Library/Logs/JetBrains', '/Users/tester/Library/Logs/Google'],
@@ -125,7 +131,6 @@ describe("darwin's explore places", () => {
   });
 
   test('resolves the folders of iCloud Drive, Mail and Downloads to those of before', () => {
-    const environment = buildTestMacEnvironment();
     const explore = darwinPlatform.explore;
     const folderRoots = [explore.icloudDriveRoot, explore.mailDownloadsRoot, explore.downloadsRoot];
 
@@ -133,7 +138,7 @@ describe("darwin's explore places", () => {
       folderRoots.map((location): string | null =>
         location === null
           ? null
-          : resolveEnvironmentLocation({ folders: environment, location: location }),
+          : resolveEnvironmentLocation({ folders: exampleDarwinEnvironment, location: location }),
       ),
     ).toEqual([
       '/Users/tester/Library/Mobile Documents',
@@ -143,30 +148,57 @@ describe("darwin's explore places", () => {
   });
 
   test("resolves pnpm's install places to those its loader named before", () => {
-    const environment = buildTestMacEnvironment();
     const places = darwinPlatform.explore.pnpmInstallPlaces;
 
     expect<Record<string, string[]>>({
-      homes: resolveEnvironmentLocations({ folders: environment, locations: places.homes }),
+      homes: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: places.homes,
+      }),
       corepackRoots: resolveEnvironmentLocations({
-        folders: environment,
+        folders: exampleDarwinEnvironment,
         locations: places.corepackRoots,
       }),
-      launchers: resolveEnvironmentLocations({ folders: environment, locations: places.launchers }),
+      pnpmVersionsRoots: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: places.pnpmVersionsRoots,
+      }),
+      miseInstallsRoots: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: places.miseInstallsRoots,
+      }),
+      launchers: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: places.launchers,
+      }),
       npmPrefixes: resolveEnvironmentLocations({
-        folders: environment,
+        folders: exampleDarwinEnvironment,
         locations: places.npmPrefixes,
       }),
       npmGlobalFolderNames: places.npmGlobalFolderNames,
+      nodeVersionsRoots: resolveEnvironmentLocations({
+        folders: exampleDarwinEnvironment,
+        locations: places.nodeVersionsRoots.map((root) => root.location),
+      }),
+      nodePrefixNames: places.nodeVersionsRoots.map((root) => root.prefixNames.join('/')),
     }).toEqual({
       homes: ['/Users/tester/Library/pnpm', '/Users/tester/.local/share/pnpm'],
       corepackRoots: [
         '/Users/tester/.cache/node/corepack/v1/pnpm',
         '/Users/tester/.cache/node/corepack/pnpm',
       ],
+      pnpmVersionsRoots: ['/Users/tester/.asdf/installs/pnpm'],
+      miseInstallsRoots: ['/Users/tester/.local/share/mise/installs'],
       launchers: ['/Users/tester/Library/pnpm/pnpm', '/Users/tester/.local/share/pnpm/pnpm'],
       npmPrefixes: [],
       npmGlobalFolderNames: ['lib', 'node_modules'],
+      nodeVersionsRoots: [
+        '/Users/tester/.asdf/installs/nodejs',
+        '/Users/tester/.local/share/mise/installs/node',
+        '/Users/tester/.nvm/versions/node',
+      ],
+      // Each node version is its own npm prefix on macOS.
+      nodePrefixNames: ['', '', ''],
     });
   });
 });

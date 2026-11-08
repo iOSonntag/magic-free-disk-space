@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { copyFile, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmodSync, writeFileSync } from 'node:fs';
+import { chmod, copyFile, mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EntryAttributeAccess } from '../../../src/platform/win32/removeTreeEntries.js';
 import {
@@ -8,7 +9,6 @@ import {
   removeTreeEntries,
 } from '../../../src/platform/win32/removeTreeEntries.js';
 import type { Result } from '../../../src/result.js';
-import type { EntryReads } from '../../../src/system/entryReads.js';
 import { buildTestEntryReads } from '../../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../../support/fixtureRoot.js';
@@ -23,32 +23,35 @@ import {
   FILE_ATTRIBUTE_REPARSE_POINT,
 } from '../../support/windowsFileAttributes.js';
 
-/** Reads no entry as evicted; the removal reads no private size. */
-const entryReads = buildTestEntryReads({ privateBytes: null });
+type AttributeSave = { path: string; attributes: number };
 
 /** The attributes a fake access answers from, and the calls it records. */
 type FakeAttributeState = {
   attributesByPath: Map<string, number>;
   failures: Map<string, string>;
+  onSaved: (saved: AttributeSave) => void;
   loadedPaths: string[];
-  saves: { path: string; attributes: number }[];
+  saves: AttributeSave[];
 };
 
 /**
  * Attributes a test sets by path, normal for any other; a path of `failures` fails its every call
- * with the code given. Records each load and each save.
+ * with the code given. Records each load and each save, and hands each save that succeeded to
+ * `onSaved`.
  */
 function buildFakeAttributes(params: {
   attributesByPath?: Map<string, number>;
   failures?: Map<string, string>;
+  onSaved?: (saved: AttributeSave) => void;
 }): {
   access: EntryAttributeAccess;
   loadedPaths: string[];
-  saves: { path: string; attributes: number }[];
+  saves: AttributeSave[];
 } {
   const state: FakeAttributeState = {
     attributesByPath: params.attributesByPath ?? new Map<string, number>(),
     failures: params.failures ?? new Map<string, string>(),
+    onSaved: params.onSaved ?? (() => undefined),
     loadedPaths: [],
     saves: [],
   };
@@ -73,7 +76,7 @@ function buildFakeAttributeAccess(state: FakeAttributeState): EntryAttributeAcce
     return { kind: 'succeeded', value: state.attributesByPath.get(params.path) ?? 0 };
   }
 
-  function save(params: { path: string; attributes: number }): Result<null, string> {
+  function save(params: AttributeSave): Result<null, string> {
     const failure = state.failures.get(params.path);
 
     if (failure !== undefined) {
@@ -82,6 +85,7 @@ function buildFakeAttributeAccess(state: FakeAttributeState): EntryAttributeAcce
 
     state.saves.push(params);
     state.attributesByPath.set(params.path, params.attributes);
+    state.onSaved(params);
 
     return { kind: 'succeeded', value: null };
   }
@@ -89,17 +93,24 @@ function buildFakeAttributeAccess(state: FakeAttributeState): EntryAttributeAcce
   return { load: load, save: save };
 }
 
-/** Removes the host path `path` under the host's rules, with no entry evicted unless given. */
+/**
+ * Removes the host path `path` under the host's rules. The entry reads place the paths of
+ * `placements` as it names them and every other as lstat does; the removal reads no private size.
+ */
 function removeTestTree(params: {
   path: string;
   attributes: EntryAttributeAccess;
-  entryReads?: EntryReads;
+  placements?: {
+    cloudOnlyPaths?: string[];
+    linkPaths?: string[];
+    unreadCodes?: Map<string, string>;
+  };
 }): ReturnType<typeof removeTreeEntries> {
   return removeTreeEntries({
     rootPath: buildTestHostPath({ text: params.path }),
     rules: hostPathRules,
     attributes: params.attributes,
-    entryReads: params.entryReads ?? entryReads,
+    entryReads: buildTestEntryReads({ privateBytes: null, ...params.placements }),
   });
 }
 
@@ -159,7 +170,7 @@ describe('removeTreeEntries', () => {
       await removeTestTree({
         path: treePath,
         attributes: access,
-        entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [junctionPath] }),
+        placements: { linkPaths: [junctionPath] },
       }),
     ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     expect(await readFile(join(junctionPath, 'b', 'leaf.bin'), 'utf8')).toBe('leaf');
@@ -175,7 +186,7 @@ describe('removeTreeEntries', () => {
       await removeTestTree({
         path: junctionPath,
         attributes: access,
-        entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [junctionPath] }),
+        placements: { linkPaths: [junctionPath] },
       }),
     ).toEqual({ kind: 'failed', failure: 'ENOTEMPTY' });
     expect(await readFile(join(junctionPath, 'mid.bin'), 'utf8')).toBe('mid');
@@ -190,7 +201,7 @@ describe('removeTreeEntries', () => {
       await removeTestTree({
         path: treePath,
         attributes: access,
-        entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [evictedPath] }),
+        placements: { cloudOnlyPaths: [evictedPath] },
       }),
     ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     expect(await readFile(evictedPath, 'utf8')).toBe('leaf');
@@ -206,7 +217,7 @@ describe('removeTreeEntries', () => {
         await removeTestTree({
           path: rootPath,
           attributes: access,
-          entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [rootPath] }),
+          placements: { cloudOnlyPaths: [rootPath] },
         }),
       ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     }
@@ -223,10 +234,7 @@ describe('removeTreeEntries', () => {
         await removeTestTree({
           path: treePath,
           attributes: access,
-          entryReads: buildTestEntryReads({
-            privateBytes: null,
-            unreadCodes: new Map([[treePath, code]]),
-          }),
+          placements: { unreadCodes: new Map([[treePath, code]]) },
         }),
       ).toEqual({ kind: 'failed', failure: code });
       expect(loadedPaths).toEqual([]);
@@ -246,10 +254,7 @@ describe('removeTreeEntries', () => {
         await removeTestTree({
           path: treePath,
           attributes: access,
-          entryReads: buildTestEntryReads({
-            privateBytes: null,
-            unreadCodes: new Map([[unplacedPath, code]]),
-          }),
+          placements: { unreadCodes: new Map([[unplacedPath, code]]) },
         }),
       ).toEqual({ kind: 'failed', failure: code });
     }
@@ -266,10 +271,7 @@ describe('removeTreeEntries', () => {
       await removeTestTree({
         path: treePath,
         attributes: access,
-        entryReads: buildTestEntryReads({
-          privateBytes: null,
-          unreadCodes: new Map([[unplacedPath, 'EPERM']]),
-        }),
+        placements: { unreadCodes: new Map([[unplacedPath, 'EPERM']]) },
       }),
     ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     expect(await readFile(unplacedPath, 'utf8')).toBe('top');
@@ -287,10 +289,7 @@ describe('removeTreeEntries', () => {
       await removeTestTree({
         path: treePath,
         attributes: access,
-        entryReads: buildTestEntryReads({
-          privateBytes: null,
-          unreadCodes: new Map([[unplacedPath, 'EBUSY']]),
-        }),
+        placements: { unreadCodes: new Map([[unplacedPath, 'EBUSY']]) },
       }),
     ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     expect(await readFile(unplacedPath, 'utf8')).toBe('top');
@@ -309,10 +308,7 @@ describe('removeTreeEntries', () => {
       await removeTestTree({
         path: treePath,
         attributes: access,
-        entryReads: buildTestEntryReads({
-          privateBytes: null,
-          unreadCodes: new Map([[unplacedPath, 'EBUSY']]),
-        }),
+        placements: { unreadCodes: new Map([[unplacedPath, 'EBUSY']]) },
       }),
     ).toEqual({ kind: 'succeeded', value: { kind: 'removed' } });
     expect(await isPresent(treePath)).toBe(false);
@@ -379,6 +375,99 @@ describe('removeTreeEntries', () => {
     expect(await readFile(heldPath, 'utf8')).toBe('mid');
     expect(await isPresent(join(treePath, 'a', 'b'))).toBe(false);
     expect(await isPresent(join(treePath, 'top.bin'))).toBe(false);
+  });
+
+  test('counts a held folder that holds a held file once, by the file', async () => {
+    const heldFolderPath = join(treePath, 'a');
+    const heldPath = join(heldFolderPath, 'mid.bin');
+    const { access } = buildFakeAttributes({
+      failures: new Map([
+        [heldPath, 'EBUSY'],
+        [heldFolderPath, 'EBUSY'],
+      ]),
+    });
+
+    expect(await removeTestTree({ path: treePath, attributes: access })).toEqual({
+      kind: 'succeeded',
+      value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
+    });
+    expect(await readFile(heldPath, 'utf8')).toBe('mid');
+    expect(await isPresent(join(heldFolderPath, 'b'))).toBe(false);
+  });
+
+  test('sets the read-only bit of a folder again when it stays', async () => {
+    const readOnlyFolderPath = join(treePath, 'a', 'b');
+    const readOnlyBits = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY;
+    const { access, saves } = buildFakeAttributes({
+      attributesByPath: new Map([[readOnlyFolderPath, readOnlyBits]]),
+      // An entry that arrives once the bit is cleared, so the folder's removal fails on it.
+      onSaved: (saved) => {
+        if (saved.attributes === FILE_ATTRIBUTE_DIRECTORY) {
+          writeFileSync(join(saved.path, 'late.bin'), 'late');
+        }
+      },
+    });
+
+    expect(await removeTestTree({ path: treePath, attributes: access })).toEqual({
+      kind: 'succeeded',
+      value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
+    });
+    expect(saves).toEqual([
+      { path: readOnlyFolderPath, attributes: FILE_ATTRIBUTE_DIRECTORY },
+      { path: readOnlyFolderPath, attributes: readOnlyBits },
+    ]);
+  });
+
+  test('keeps the end of a removal whose read-only bit it cannot set again', async () => {
+    const readOnlyFolderPath = join(treePath, 'a', 'b');
+    const failures = new Map<string, string>();
+    const { access } = buildFakeAttributes({
+      attributesByPath: new Map([
+        [readOnlyFolderPath, FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY],
+      ]),
+      failures: failures,
+      // The folder's removal fails on a late entry, and so does every later call on the folder.
+      onSaved: (saved) => {
+        writeFileSync(join(saved.path, 'late.bin'), 'late');
+        failures.set(saved.path, 'EIO');
+      },
+    });
+
+    expect(await removeTestTree({ path: treePath, attributes: access })).toEqual({
+      kind: 'succeeded',
+      value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
+    });
+  });
+
+  testOnPosix('sets the read-only bit of a file again when it stays', async () => {
+    const heldTreePath = join(fixtureRoot.homeDir, 'held');
+    const readOnlyFilePath = join(heldTreePath, 'held.bin');
+    const readOnlyBits = FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE;
+    await mkdir(heldTreePath);
+    await writeFile(readOnlyFilePath, 'held');
+    const { access, saves } = buildFakeAttributes({
+      attributesByPath: new Map([[readOnlyFilePath, readOnlyBits]]),
+      // A folder that refuses the removal of its entries once the bit is cleared.
+      onSaved: (saved) => {
+        if (saved.attributes === FILE_ATTRIBUTE_ARCHIVE) {
+          chmodSync(heldTreePath, 0o555);
+        }
+      },
+    });
+
+    try {
+      expect(await removeTestTree({ path: heldTreePath, attributes: access })).toEqual({
+        kind: 'succeeded',
+        value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
+      });
+      expect(saves).toEqual([
+        { path: readOnlyFilePath, attributes: FILE_ATTRIBUTE_ARCHIVE },
+        { path: readOnlyFilePath, attributes: readOnlyBits },
+      ]);
+      expect(await readFile(readOnlyFilePath, 'utf8')).toBe('held');
+    } finally {
+      await chmod(heldTreePath, 0o755);
+    }
   });
 
   test('leaves a file Windows refuses and goes on with the rest', async () => {

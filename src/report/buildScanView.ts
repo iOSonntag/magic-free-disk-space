@@ -21,7 +21,12 @@ import {
   getCategorySection,
   placeCandidate,
 } from '../scan/placeCandidate.js';
-import type { ScanProgress, ScanReport, SkippedItem } from '../scan/runScan.js';
+import type {
+  CloudOnlyEntryCount,
+  ScanProgress,
+  ScanReport,
+  SkippedItem,
+} from '../scan/runScan.js';
 import type { AppAdvice } from '../scan/scanPlatform.js';
 import type { VolumeSpace } from '../system/volumeSpace.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
@@ -384,7 +389,7 @@ export function buildScanView(params: {
     safeNumbers: params.report.safeNumbers,
     skipped: buildSkippedView({
       skipped: params.report.skipped,
-      evictedEntryCount: params.report.evictedEntryCount,
+      cloudOnlyEntries: params.report.cloudOnlyEntries,
       texts: params.texts,
     }),
     notices: [
@@ -765,33 +770,48 @@ function buildDetailLine(params: { kind: ItemDetailLineKind; text: string }): It
   return { kind: params.kind, text: formatDisplayText({ text: params.text }) };
 }
 
-/** The skipped items by reason, then the entries left unread in the cloud store, as one count. */
+/**
+ * The skipped items by reason, then the entries left unread in the cloud store where the scan
+ * counts them, as one count.
+ */
 function buildSkippedView(params: {
   skipped: SkippedItem[];
-  evictedEntryCount: number;
+  cloudOnlyEntries: CloudOnlyEntryCount | null;
   texts: ReportTexts;
 }): SkippedView | null {
-  const skippedCount = params.skipped.length + params.evictedEntryCount;
+  const cloudOnlyEntryCount = params.cloudOnlyEntries === null ? 0 : params.cloudOnlyEntries.count;
+  const skippedCount = params.skipped.length + cloudOnlyEntryCount;
 
   if (skippedCount === 0) {
     return null;
   }
 
   const itemCountText = formatCount({ count: skippedCount, singular: 'item', plural: 'items' });
-  const evictedLines =
-    params.evictedEntryCount === 0
-      ? []
-      : [
-          `in ${params.texts.cloudStoreName}, not on ${params.texts.computerPhrase}: ${params.evictedEntryCount}`,
-        ];
 
   return {
     titleText: `Skipped ${itemCountText}`,
     lines: [
       ...formatSkipReasonLines({ skipped: params.skipped, texts: params.texts }),
-      ...evictedLines,
+      ...formatCloudOnlyEntryLines({
+        cloudOnlyEntries: params.cloudOnlyEntries,
+        texts: params.texts,
+      }),
     ],
   };
+}
+
+/** The line of the entries left unread in the cloud store, when the scan counted any. */
+function formatCloudOnlyEntryLines(params: {
+  cloudOnlyEntries: CloudOnlyEntryCount | null;
+  texts: ReportTexts;
+}): string[] {
+  if (params.cloudOnlyEntries === null || params.cloudOnlyEntries.count === 0) {
+    return [];
+  }
+
+  return [
+    `in ${params.cloudOnlyEntries.cloudStoreName}, not on ${params.texts.computerPhrase}: ${params.cloudOnlyEntries.count}`,
+  ];
 }
 
 /** One line per reason that occurs, in the order of the reason table. */

@@ -1,12 +1,14 @@
 import { basename } from 'node:path';
 import type { Environment } from '../../environment/buildEnvironment.js';
-import { resolveEnvironmentLocations } from '../../environment/environmentLocation.js';
+import {
+  resolveEnvironmentLocation,
+  resolveEnvironmentLocations,
+} from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
-import { ASDF_INSTALLS_PATH_NAMES } from '../asdfVersions/asdfInstallsRoot.js';
 import type { PnpmInstallPlaces } from '../explorePlatform.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import {
@@ -14,8 +16,6 @@ import {
   loadExploreFolderNames,
   loadExploreRealPath,
 } from '../loadExploreRead.js';
-import { MISE_INSTALLS_PATH_NAMES } from '../miseVersions/miseInstallsRoot.js';
-import { NVM_NODE_VERSIONS_PATH_NAMES } from '../nvmVersions/nvmVersionsRoot.js';
 import { parsePnpmVersionMajor } from './parsePnpmVersionMajor.js';
 import { hasPnpmToolName, PNPM_TOOL_NAME } from './pnpmToolName.js';
 
@@ -47,10 +47,6 @@ const PNPM_GLOBAL_INSTALLS_FOLDER_PATTERN = /^v\d+$/;
 
 const SCRIPT_SHEBANG = '#!';
 
-const ASDF_NODE_TOOL_NAME = 'nodejs';
-
-const MISE_NODE_TOOL_NAME = 'node';
-
 const HOMEBREW_CELLAR_FOLDER_NAME = 'Cellar';
 
 const HOMEBREW_VERSIONED_PNPM_PREFIX = `${PNPM_TOOL_NAME}@`;
@@ -63,10 +59,11 @@ const PNPM_PACKAGE_PATH_NAMES = [[PNPM_TOOL_NAME], ['@pnpm', 'exe']];
 const PACKAGE_JSON_FILE_NAME = 'package.json';
 
 /**
- * The pnpm installed in every place of the platform's `places` (corepack, the launchers, npm's
- * prefixes, and pnpm's `.tools` and global folders in each home), and in those of asdf, mise (each
- * installs folder naming pnpm), Homebrew, and the npm globals of a node. A missing place holds
- * none; a place that cannot be read fails the whole state, so it never reads as no pnpm.
+ * The pnpm installed in every place of the platform's `places`: pnpm's `.tools` and global folders
+ * in each home, the launchers, the folders of pnpm versions (corepack's, a tool manager's, and each
+ * of mise's naming pnpm), and the npm globals below each prefix and each node version; and in
+ * Homebrew's prefixes. A missing place holds none; a place that cannot be read fails the whole
+ * state, so it never reads as no pnpm.
  */
 export async function loadPnpmInstallState(params: {
   environment: Environment;
@@ -82,6 +79,10 @@ export async function loadPnpmInstallState(params: {
     folders: params.environment,
     locations: params.places.corepackRoots,
   });
+  const pnpmVersionsRootPaths = resolveEnvironmentLocations({
+    folders: params.environment,
+    locations: params.places.pnpmVersionsRoots,
+  });
   const npmPrefixPaths = resolveEnvironmentLocations({
     folders: params.environment,
     locations: params.places.npmPrefixes,
@@ -90,9 +91,16 @@ export async function loadPnpmInstallState(params: {
     folders: params.environment,
     locations: params.places.launchers,
   });
+  const nodeVersionsRoots = params.places.nodeVersionsRoots.map((root) => ({
+    path: resolveEnvironmentLocation({ folders: params.environment, location: root.location }),
+    prefixNames: root.prefixNames,
+  }));
   const misePnpmRoots = await loadMisePnpmVersionsRoots({
     pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
+    miseInstallsPaths: resolveEnvironmentLocations({
+      folders: params.environment,
+      locations: params.places.miseInstallsRoots,
+    }),
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -110,16 +118,16 @@ export async function loadPnpmInstallState(params: {
     return cellarRoots;
   }
 
-  const homeRoots = listHomePnpmVersionsRoots({
+  const versionsRoots = listPnpmVersionsRoots({
     pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
+    pnpmVersionsRootPaths: pnpmVersionsRootPaths,
     pnpmHomePaths: pnpmHomePaths,
     misePnpmRoots: misePnpmRoots.value,
     corepackRootPaths: corepackRootPaths,
   });
   const folderInstalls = await loadVersionFolderInstalls({
     pathRules: params.environment.pathRules,
-    versionsRoots: [...homeRoots, ...cellarRoots.value],
+    versionsRoots: [...versionsRoots, ...cellarRoots.value],
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -137,22 +145,25 @@ export async function loadPnpmInstallState(params: {
     return globalFolders;
   }
 
-  const packageFolders = await loadPnpmPackageFolders({
+  const nodePrefixPaths = await loadNodePrefixPaths({
     pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
-    npmPrefixPaths: [...npmPrefixPaths, ...params.homebrewPrefixPaths],
-    npmGlobalFolderNames: params.places.npmGlobalFolderNames,
-    globalFolderPaths: globalFolders.value,
+    nodeVersionsRoots: nodeVersionsRoots,
     privacyDenialCode: params.privacyDenialCode,
   });
 
-  if (packageFolders.kind === 'failed') {
-    return packageFolders;
+  if (nodePrefixPaths.kind === 'failed') {
+    return nodePrefixPaths;
   }
 
+  const packageFolders = buildPnpmPackageFolders({
+    pathRules: params.environment.pathRules,
+    npmPrefixPaths: [...npmPrefixPaths, ...params.homebrewPrefixPaths, ...nodePrefixPaths.value],
+    npmGlobalFolderNames: params.places.npmGlobalFolderNames,
+    globalFolderPaths: globalFolders.value,
+  });
   const packageInstalls = await loadPackageJsonInstalls({
     pathRules: params.environment.pathRules,
-    packageFolders: packageFolders.value,
+    packageFolders: packageFolders,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -177,25 +188,26 @@ export async function loadPnpmInstallState(params: {
   };
 }
 
-function listHomePnpmVersionsRoots(params: {
+/** The folders that hold one folder per pnpm version, the platform's own and each home's `.tools`. */
+function listPnpmVersionsRoots(params: {
   pathRules: PathRules;
-  homeDir: AbsolutePath;
+  pnpmVersionsRootPaths: AbsolutePath[];
   pnpmHomePaths: AbsolutePath[];
   misePnpmRoots: AbsolutePath[];
   corepackRootPaths: AbsolutePath[];
 }): AbsolutePath[] {
-  const asdfRoot = joinAbsolutePath({
-    rules: params.pathRules,
-    parentPath: params.homeDir,
-    names: [...ASDF_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME],
-  });
   const pnpmToolsRoots = params.pnpmHomePaths.flatMap((pnpmHomePath) =>
     PNPM_TOOLS_PATH_NAMES.map((names) =>
       joinAbsolutePath({ rules: params.pathRules, parentPath: pnpmHomePath, names: names }),
     ),
   );
 
-  return [asdfRoot, ...params.misePnpmRoots, ...params.corepackRootPaths, ...pnpmToolsRoots];
+  return [
+    ...params.pnpmVersionsRootPaths,
+    ...params.misePnpmRoots,
+    ...params.corepackRootPaths,
+    ...pnpmToolsRoots,
+  ];
 }
 
 /**
@@ -204,17 +216,12 @@ function listHomePnpmVersionsRoots(params: {
  */
 async function loadMisePnpmVersionsRoots(params: {
   pathRules: PathRules;
-  homeDir: AbsolutePath;
+  miseInstallsPaths: AbsolutePath[];
   privacyDenialCode: string | null;
 }): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
-  const miseInstallsPath = joinAbsolutePath({
-    rules: params.pathRules,
-    parentPath: params.homeDir,
-    names: MISE_INSTALLS_PATH_NAMES,
-  });
   const entryPaths = await loadEntryPaths({
     pathRules: params.pathRules,
-    folderPaths: [miseInstallsPath],
+    folderPaths: params.miseInstallsPaths,
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -354,36 +361,66 @@ async function loadVersionsRootInstalls(params: {
 }
 
 /**
- * The `node_modules/pnpm` and `node_modules/@pnpm/exe` folders of pnpm's global folders, and the
- * `pnpm` and `@pnpm/exe` folders of npm's globals below each of `npmPrefixPaths` and each node's
- * folder.
+ * The real path of the npm prefix of each node version: each folder and live link in a root,
+ * `prefixNames` below it, each path once; a missing root holds none.
  */
-async function loadPnpmPackageFolders(params: {
+async function loadNodePrefixPaths(params: {
   pathRules: PathRules;
-  homeDir: AbsolutePath;
+  nodeVersionsRoots: { path: AbsolutePath; prefixNames: string[] }[];
+  privacyDenialCode: string | null;
+}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
+  const folderPrefixPaths: AbsolutePath[] = [];
+  const linkPrefixPaths: AbsolutePath[] = [];
+
+  for (const root of params.nodeVersionsRoots) {
+    const entryPaths = await loadEntryPaths({
+      pathRules: params.pathRules,
+      folderPaths: [root.path],
+      privacyDenialCode: params.privacyDenialCode,
+    });
+
+    if (entryPaths.kind === 'failed') {
+      return entryPaths;
+    }
+
+    folderPrefixPaths.push(
+      ...entryPaths.value.folderPaths.map((versionPath) =>
+        joinAbsolutePath({
+          rules: params.pathRules,
+          parentPath: versionPath,
+          names: root.prefixNames,
+        }),
+      ),
+    );
+    linkPrefixPaths.push(
+      ...entryPaths.value.linkPaths.map((versionPath) =>
+        joinAbsolutePath({
+          rules: params.pathRules,
+          parentPath: versionPath,
+          names: root.prefixNames,
+        }),
+      ),
+    );
+  }
+
+  return loadRealPaths({
+    pathRules: params.pathRules,
+    paths: [...folderPrefixPaths, ...linkPrefixPaths],
+    privacyDenialCode: params.privacyDenialCode,
+  });
+}
+
+/**
+ * The `node_modules/pnpm` and `node_modules/@pnpm/exe` folders of pnpm's global folders, and the
+ * `pnpm` and `@pnpm/exe` folders of npm's globals below each of `npmPrefixPaths`.
+ */
+function buildPnpmPackageFolders(params: {
+  pathRules: PathRules;
   npmPrefixPaths: AbsolutePath[];
   /** The folder of npm's global packages below a prefix, by its names. */
   npmGlobalFolderNames: string[];
   globalFolderPaths: AbsolutePath[];
-  privacyDenialCode: string | null;
-}): Promise<Result<AbsolutePath[], ExploreFileUnreadable>> {
-  const nodeInstallsRoots = [
-    [...ASDF_INSTALLS_PATH_NAMES, ASDF_NODE_TOOL_NAME],
-    [...MISE_INSTALLS_PATH_NAMES, MISE_NODE_TOOL_NAME],
-    NVM_NODE_VERSIONS_PATH_NAMES,
-  ].map((names) =>
-    joinAbsolutePath({ rules: params.pathRules, parentPath: params.homeDir, names: names }),
-  );
-  const nodeFolders = await loadEntryRealPaths({
-    pathRules: params.pathRules,
-    folderPaths: nodeInstallsRoots,
-    privacyDenialCode: params.privacyDenialCode,
-  });
-
-  if (nodeFolders.kind === 'failed') {
-    return nodeFolders;
-  }
-
+}): AbsolutePath[] {
   const globalPackageFolders = params.globalFolderPaths.flatMap((globalFolder) =>
     PNPM_PACKAGE_PATH_NAMES.map((names) =>
       joinAbsolutePath({
@@ -393,18 +430,17 @@ async function loadPnpmPackageFolders(params: {
       }),
     ),
   );
-  const npmGlobalPackageFolders = [...params.npmPrefixPaths, ...nodeFolders.value].flatMap(
-    (prefixPath) =>
-      PNPM_PACKAGE_PATH_NAMES.map((names) =>
-        joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: prefixPath,
-          names: [...params.npmGlobalFolderNames, ...names],
-        }),
-      ),
+  const npmGlobalPackageFolders = params.npmPrefixPaths.flatMap((prefixPath) =>
+    PNPM_PACKAGE_PATH_NAMES.map((names) =>
+      joinAbsolutePath({
+        rules: params.pathRules,
+        parentPath: prefixPath,
+        names: [...params.npmGlobalFolderNames, ...names],
+      }),
+    ),
   );
 
-  return { kind: 'succeeded', value: [...globalPackageFolders, ...npmGlobalPackageFolders] };
+  return [...globalPackageFolders, ...npmGlobalPackageFolders];
 }
 
 /**
