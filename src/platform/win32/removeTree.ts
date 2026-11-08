@@ -1,29 +1,16 @@
 import type { TreeRemoval } from '../../delete/deletePlatform.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { EntryReads } from '../../system/entryReads.js';
-import { formatSystemCallFailure } from '../../system/systemCallFailure.js';
+import { formatEntryCallFailure } from './formatEntryCallFailure.js';
 import { loadEntryPlacement } from './loadEntryPlacement.js';
-import { WIN32_PATH_RULES } from './loadEnvironment.js';
 import { loadPrivateBytes } from './loadPrivateBytes.js';
 import type { EntryAttributeAccess } from './removeTreeEntries.js';
 import { removeTreeEntries } from './removeTreeEntries.js';
 import type { Win32CallFailure } from './win32Api.js';
 import { loadFileAttributes, setFileAttributes } from './win32Api.js';
-
-/**
- * The `GetLastError` codes that Bun's file calls report by a POSIX name, so the deletion reads a
- * failed attribute call as it reads a failed removal: not found, access denied, a sharing
- * violation, and a lock violation.
- */
-const ERROR_CODE_NAMES = new Map<number, string>([
-  [2, 'ENOENT'],
-  [3, 'ENOENT'],
-  [5, 'EPERM'],
-  [32, 'EBUSY'],
-  [33, 'EBUSY'],
-]);
 
 const WIN32_ENTRY_ATTRIBUTES: EntryAttributeAccess = {
   load: loadEntryAttributes,
@@ -54,17 +41,6 @@ export async function removeTree(params: { path: string }): Promise<Result<TreeR
     attributes: WIN32_ENTRY_ATTRIBUTES,
     entryReads: WIN32_ENTRY_READS,
   });
-}
-
-/**
- * The failed call as the code the deletion reads: a POSIX name where Bun has one, else the call
- * with its code, as every failed call of the system reads.
- */
-export function formatEntryCallFailure(params: { failure: Win32CallFailure }): string {
-  return (
-    ERROR_CODE_NAMES.get(params.failure.code) ??
-    formatSystemCallFailure({ failure: params.failure })
-  );
 }
 
 function loadEntryAttributes(params: { path: AbsolutePath }): Result<number, string> {

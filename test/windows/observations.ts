@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { loadFileAttributes } from '../../src/platform/win32/win32Api.js';
 
 /** A thrown error as its raw fields, such as `code=EPERM errno=-4048 syscall=rm`. */

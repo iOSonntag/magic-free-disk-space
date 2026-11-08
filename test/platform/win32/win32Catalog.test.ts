@@ -145,12 +145,12 @@ function listNamedLocations(): NamedLocation[] {
     WIN32_CATALOG.explore.androidSdkRoot,
     WIN32_CATALOG.explore.vscodeProfilesRoot,
   ].map((location) => ({ name: `explore ${location.path}`, location: location }));
-  const userFileLocations = WIN32_CATALOG.userFileRoots.flatMap((root) =>
-    root.kind === 'location'
-      ? [{ name: `user files ${root.location.path}`, location: root.location }]
-      : [],
-  );
   // A known folder is the root it names, wherever Windows keeps it, so only the rest is checked.
+  const userFileLocations = WIN32_CATALOG.userFileRoots.flatMap((location) =>
+    location.root === 'knownFolder'
+      ? []
+      : [{ name: `user files ${location.path}`, location: location }],
+  );
   const guardedLocations = [
     ...WIN32_CATALOG.protectedLocations,
     ...WIN32_CATALOG.sensitiveLocations,

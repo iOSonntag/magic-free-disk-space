@@ -1,6 +1,7 @@
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { EntryPlacement, EntryRef } from '../../system/entryReads.js';
+import { formatEntryCallFailure } from './formatEntryCallFailure.js';
 import { loadFileAttributes } from './win32Api.js';
 
 /** Reading the content of an entry with this attribute downloads it, as OneDrive's online-only files. */
@@ -17,19 +18,20 @@ const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
 
 /**
  * The placement of an entry of any kind by its attributes, read without following a link or
- * recalling it. `onDisk` when they cannot be read, so a walk then reads it as any other.
+ * recalling it. `unread` with the code of the failed call when they cannot be read, and with
+ * `EINVAL` for a path that is no absolute Windows path.
  */
 export function loadEntryPlacement(params: EntryRef): EntryPlacement {
   const path = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.path });
 
   if (path.kind === 'failed') {
-    return 'onDisk';
+    return { kind: 'unread', code: 'EINVAL' };
   }
 
   const attributes = loadFileAttributes({ path: path.value });
 
   if (attributes.kind === 'failed') {
-    return 'onDisk';
+    return { kind: 'unread', code: formatEntryCallFailure({ failure: attributes.failure }) };
   }
 
   return decideEntryPlacement({ attributes: attributes.value });
@@ -45,12 +47,12 @@ export function decideEntryPlacement(params: { attributes: number }): EntryPlace
     (params.attributes & (FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_RECALL_ON_OPEN)) !==
     0
   ) {
-    return 'cloudOnly';
+    return { kind: 'cloudOnly' };
   }
 
   if ((params.attributes & FILE_ATTRIBUTE_REPARSE_POINT) !== 0) {
-    return 'link';
+    return { kind: 'link' };
   }
 
-  return 'onDisk';
+  return { kind: 'onDisk' };
 }

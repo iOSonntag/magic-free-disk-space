@@ -5,8 +5,8 @@ import {
   loadEnvironmentRealPath,
   loadExistingRealPaths,
 } from '../../src/environment/loadEnvironmentRealPath.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,

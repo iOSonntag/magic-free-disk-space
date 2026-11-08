@@ -19,6 +19,11 @@ export type TreeEntry = {
   stats: EntryStats | null;
   /** The names in the same folder, such as a marker file beside a project folder. */
   siblingNames: Set<string>;
+  /**
+   * The code of the read that failed to place the entry, which the walk then reads as on disk;
+   * `null` for an entry the reads placed.
+   */
+  placementFailureCode: string | null;
 };
 
 /** `descend` enters a folder (a link never); `stop` ends the whole walk. */
@@ -43,7 +48,9 @@ type PendingDirectory = { path: string; depth: number; isCloudOnly: boolean };
  * - a link is visited as a `symbolicLink` and never entered, nor is a root that is one;
  * - a cloud-only folder, such as an iCloud placeholder, is visited but never read, and goes to
  *   `onEvictedEntrySkipped` when the visit or the walk's start would enter it; any other
- *   cloud-only entry goes there and is never visited, so the walk downloads nothing.
+ *   cloud-only entry goes there and is never visited, so the walk downloads nothing;
+ * - an entry that cannot be placed is read as one on disk, the root too, and its visit carries
+ *   the code of the failed read.
  *
  * A `null` `onEvictedEntrySkipped` records none of them.
  */
@@ -134,9 +141,15 @@ export function walkDirectoryTree(params: {
         kind: treeEntry.kind,
       });
 
-      switch (placement) {
+      switch (placement.kind) {
         case 'onDisk':
           visitPlacedEntry({ entry: treeEntry, isCloudOnly: false });
+          break;
+        case 'unread':
+          visitPlacedEntry({
+            entry: { ...treeEntry, placementFailureCode: placement.code },
+            isCloudOnly: false,
+          });
           break;
         case 'cloudOnly':
           // A folder is visited but never read; any other entry is skipped before its visit,
@@ -156,8 +169,9 @@ export function walkDirectoryTree(params: {
   }
 
   // The root is placed as the folder the walk expects; one that is a link is never entered.
-  switch (params.entryReads.loadEntryPlacement({ path: params.rootPath, kind: 'directory' })) {
+  switch (params.entryReads.loadEntryPlacement({ path: params.rootPath, kind: 'directory' }).kind) {
     case 'onDisk':
+    case 'unread':
       pendingDirectories.push({ path: params.rootPath, depth: 0, isCloudOnly: false });
       break;
     case 'cloudOnly':
@@ -200,7 +214,7 @@ export function walkDirectoryTree(params: {
 
 /** The entry as a link, its stats too, so no visitor reads it as the folder or file lstat says. */
 function toLinkTreeEntry(params: { entry: TreeEntry }): TreeEntry {
-  const kind = getPlacedFileKind({ kind: params.entry.kind, placement: 'link' });
+  const kind = getPlacedFileKind({ kind: params.entry.kind, placement: { kind: 'link' } });
 
   return {
     ...params.entry,
@@ -229,6 +243,7 @@ async function loadTreeEntries(params: {
           kind: entry.kind,
           stats: null,
           siblingNames: params.siblingNames,
+          placementFailureCode: null,
         };
       }
 
@@ -254,6 +269,7 @@ async function loadTreeEntries(params: {
         kind: stats.value.kind,
         stats: stats.value,
         siblingNames: params.siblingNames,
+        placementFailureCode: null,
       };
     }),
   );

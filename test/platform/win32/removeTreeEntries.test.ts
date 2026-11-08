@@ -191,6 +191,68 @@ describe('removeTreeEntries', () => {
     expect(await readFile(filePath, 'utf8')).toBe('top');
   });
 
+  test('fails a root it cannot place with the code of the read, and removes nothing', async () => {
+    // As a folder on Windows whose attributes cannot be read, which may be another volume mounted.
+    for (const code of ['EPERM', 'GetFileAttributesW failed with 0x00000057']) {
+      const { access, loadedPaths } = buildFakeAttributes({});
+
+      expect(
+        await removeTestTree({
+          path: treePath,
+          attributes: access,
+          entryReads: buildTestEntryReads({
+            privateBytes: null,
+            unreadCodes: new Map([[treePath, code]]),
+          }),
+        }),
+      ).toEqual({ kind: 'failed', failure: code });
+      expect(loadedPaths).toEqual([]);
+    }
+
+    expect(await readFile(join(treePath, 'top.bin'), 'utf8')).toBe('top');
+    expect(await readFile(join(treePath, 'a', 'b', 'leaf.bin'), 'utf8')).toBe('leaf');
+  });
+
+  test('fails at a folder inside it cannot place, with the code of the read, before anything goes', async () => {
+    const unplacedPath = join(treePath, 'a');
+
+    for (const code of ['EPERM', 'EBUSY']) {
+      const { access } = buildFakeAttributes({});
+
+      expect(
+        await removeTestTree({
+          path: treePath,
+          attributes: access,
+          entryReads: buildTestEntryReads({
+            privateBytes: null,
+            unreadCodes: new Map([[unplacedPath, code]]),
+          }),
+        }),
+      ).toEqual({ kind: 'failed', failure: code });
+    }
+
+    expect(await readFile(join(unplacedPath, 'b', 'leaf.bin'), 'utf8')).toBe('leaf');
+    expect(await readFile(join(treePath, 'top.bin'), 'utf8')).toBe('top');
+  });
+
+  test('lists a file inside it cannot place as any other, whose own attribute read ends its removal', async () => {
+    const unplacedPath = join(treePath, 'top.bin');
+    const { access } = buildFakeAttributes({ failures: new Map([[unplacedPath, 'EPERM']]) });
+
+    expect(
+      await removeTestTree({
+        path: treePath,
+        attributes: access,
+        entryReads: buildTestEntryReads({
+          privateBytes: null,
+          unreadCodes: new Map([[unplacedPath, 'EPERM']]),
+        }),
+      }),
+    ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
+    expect(await readFile(unplacedPath, 'utf8')).toBe('top');
+    expect(await isPresent(join(treePath, 'a'))).toBe(false);
+  });
+
   test('leaves a file another program holds open and goes on with the rest', async () => {
     const heldPath = join(treePath, 'a', 'mid.bin');
     const { access } = buildFakeAttributes({ failures: new Map([[heldPath, 'EBUSY']]) });

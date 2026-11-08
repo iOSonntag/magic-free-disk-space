@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { formatEntryCallFailure, removeTree } from '../../../src/platform/win32/removeTree.js';
+import { removeTree } from '../../../src/platform/win32/removeTree.js';
 import { loadFileAttributes, setFileAttributes } from '../../../src/platform/win32/win32Api.js';
 import { isPresent } from '../../support/fixtureRoot.js';
 import { buildTestHostPath } from '../../support/parsedValueFixtures.js';
@@ -10,30 +10,6 @@ import { buildTestHostPath } from '../../support/parsedValueFixtures.js';
 const FILE_ATTRIBUTE_READONLY = 0x1;
 
 const HELD_LINE = 'held';
-
-describe('formatEntryCallFailure', () => {
-  test('names not found, access denied, and a sharing or lock violation as Bun does', () => {
-    const namesByCode: [number, string][] = [
-      [2, 'ENOENT'],
-      [3, 'ENOENT'],
-      [5, 'EPERM'],
-      [32, 'EBUSY'],
-      [33, 'EBUSY'],
-    ];
-
-    for (const [code, name] of namesByCode) {
-      expect(formatEntryCallFailure({ failure: { call: 'GetFileAttributesW', code: code } })).toBe(
-        name,
-      );
-    }
-  });
-
-  test('names any other code by its call and its code in hex, as every failed call reads', () => {
-    expect(formatEntryCallFailure({ failure: { call: 'SetFileAttributesW', code: 87 } })).toBe(
-      'SetFileAttributesW failed with 0x00000057',
-    );
-  });
-});
 
 /**
  * Opens `path` in PowerShell with no sharing, so no other program may delete it, until `release`

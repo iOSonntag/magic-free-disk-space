@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { isExecutableOwnerRunning } from '../../src/scan/isExecutableOwnerRunning.js';
 import { buildTestWindowsImageName, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 

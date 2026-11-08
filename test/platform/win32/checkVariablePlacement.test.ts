@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
 import type {
   VariableCheck,
   VariableReading,
 } from '../../../src/platform/win32/checkVariablePlacement.js';
 import { checkVariablePlacement } from '../../../src/platform/win32/checkVariablePlacement.js';
-import { WIN32_PATH_RULES } from '../../../src/platform/win32/loadEnvironment.js';
 import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
 const TEMP_PATH = buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Local\\Temp' });

@@ -36,7 +36,7 @@ describe('resolveUserFileRootPaths', () => {
     expect(() =>
       resolveUserFileRootPaths({
         environment: EXAMPLE_DARWIN_ENVIRONMENT,
-        roots: [{ kind: 'knownFolder', folder: 'desktop' }],
+        roots: [{ root: 'knownFolder', folder: 'desktop', path: '' }],
       }),
     ).toThrow();
   });

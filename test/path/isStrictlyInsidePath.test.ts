@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { isStrictlyInsidePath } from '../../src/path/isStrictlyInsidePath.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 
 const RULES = DARWIN_PATH_RULES;
 

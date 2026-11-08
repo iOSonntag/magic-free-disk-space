@@ -103,7 +103,7 @@ function buildRun(params: {
         ...platform.entryReads,
         loadEntryPlacement: (entry) =>
           evictedPaths.includes(entry.path)
-            ? 'cloudOnly'
+            ? { kind: 'cloudOnly' }
             : platform.entryReads.loadEntryPlacement(entry),
       },
     },

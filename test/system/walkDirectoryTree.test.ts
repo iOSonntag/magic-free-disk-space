@@ -143,6 +143,41 @@ describe('walkDirectoryTree', () => {
     expect(walk.evictedEntries).toEqual([]);
   });
 
+  test('reads a folder it cannot place as one on disk, and gives its visit the code of the read', async () => {
+    const unplacedPath = join(treeRoot, 'b');
+
+    const walk = await collectEntries({
+      isStatsNeeded: true,
+      entryReads: buildTestEntryReads({
+        privateBytes: null,
+        unreadCodes: new Map([[unplacedPath, 'EIO']]),
+      }),
+    });
+    const placementFailureCodes = walk.entries.map((entry) => [
+      relative(treeRoot, entry.path).split(sep).join('/'),
+      entry.placementFailureCode,
+    ]);
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.relativePaths).toContain('b/marker.json');
+    expect(placementFailureCodes.filter(([, code]) => code !== null)).toEqual([['b', 'EIO']]);
+    expect(walk.evictedEntries).toEqual([]);
+    expect(walk.unreadables).toEqual([]);
+  });
+
+  test('enters a root it cannot place, as one on disk', async () => {
+    const walk = await collectEntries({
+      isStatsNeeded: false,
+      entryReads: buildTestEntryReads({
+        privateBytes: null,
+        unreadCodes: new Map([[treeRoot, 'EIO']]),
+      }),
+    });
+
+    expect(walk.walkEnd).toBe('completed');
+    expect(walk.relativePaths).toContain('a/deep/deeper/leaf.txt');
+  });
+
   test('places the root and each entry with one read', async () => {
     const placedPaths: string[] = [];
     const entryReads = buildTestEntryReads({ privateBytes: null });

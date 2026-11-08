@@ -1,7 +1,7 @@
-import type { CatalogLocation, Risk } from '../catalog/catalog.js';
+import type { Risk } from '../catalog/catalog.js';
 import type { MacBundleId } from '../catalog/catalogOwner.js';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import type { WindowsKnownFolder } from '../environment/buildEnvironment.js';
+import type { EnvironmentLocation } from '../environment/environmentLocation.js';
 import type { DriveRoot } from '../path/driveRoot.js';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
@@ -148,14 +148,6 @@ export type RecycleBinLoad = (params: {
 /** Where the platform keeps the files its user deleted. */
 export type ScanPlatformTrash = ScanPlatformTrashCatalogFolder | ScanPlatformTrashRecycleBins;
 
-/**
- * A folder searched for large files the user may no longer need: one at a fixed place, or a known
- * folder of Windows wherever the user moved it, which the environment resolved.
- */
-export type UserFileRoot =
-  | { kind: 'location'; location: CatalogLocation }
-  | { kind: 'knownFolder'; folder: WindowsKnownFolder };
-
 /** What the scan takes from the operating system. */
 export type ScanPlatform = {
   apps: ScanPlatformApps;
@@ -170,6 +162,9 @@ export type ScanPlatform = {
   projectSearchExcludedNames: string[];
   /** The build and dependency folders the project search offers. */
   projectArtifactRules: ProjectArtifactRule[];
-  /** Folders searched for large files that the user may no longer need. */
-  userFileRoots: UserFileRoot[];
+  /**
+   * Folders searched for large files that the user may no longer need: each at a fixed place, or
+   * a known folder of Windows itself (`path` `''`) wherever the user moved it.
+   */
+  userFileRoots: EnvironmentLocation[];
 };

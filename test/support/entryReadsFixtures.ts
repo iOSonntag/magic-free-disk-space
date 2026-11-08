@@ -6,28 +6,36 @@ import { HOST_PLATFORM } from './platformFixtures.js';
 /**
  * Entry reads that answer from the test: `privateBytes` as the private size of every file, `null`
  * being a failed read. An entry at one of `cloudOnlyPaths` is kept in the cloud only, one at one
- * of `linkPaths` is a link whatever lstat says, and any other is placed as lstat names it, as on
- * macOS.
+ * of `linkPaths` is a link whatever lstat says, one at a path of `unreadCodes` cannot be placed
+ * and fails with its code, and any other is placed as lstat names it, as on macOS.
  */
 export function buildTestEntryReads(params: {
   privateBytes: number | null;
   cloudOnlyPaths?: string[];
   linkPaths?: string[];
+  unreadCodes?: Map<string, string>;
 }): EntryReads {
   const cloudOnlyPaths = params.cloudOnlyPaths ?? [];
   const linkPaths = params.linkPaths ?? [];
+  const unreadCodes = params.unreadCodes ?? new Map<string, string>();
 
   return {
     loadEntryPlacement: (entry) => {
+      const unreadCode = unreadCodes.get(entry.path);
+
+      if (unreadCode !== undefined) {
+        return { kind: 'unread', code: unreadCode };
+      }
+
       if (cloudOnlyPaths.includes(entry.path)) {
-        return 'cloudOnly';
+        return { kind: 'cloudOnly' };
       }
 
       if (linkPaths.includes(entry.path) || entry.kind === 'symbolicLink') {
-        return 'link';
+        return { kind: 'link' };
       }
 
-      return 'onDisk';
+      return { kind: 'onDisk' };
     },
     loadPrivateBytes: () => params.privateBytes,
   };

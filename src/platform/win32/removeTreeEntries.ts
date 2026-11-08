@@ -64,7 +64,8 @@ type DirectoryRemovalEnd = EntryRemovalEnd | { kind: 'notEmpty' };
  * removal. A file another program holds open or Windows refuses to delete stays, and so does an
  * entry kept online only, the root included, which a removal would delete from its cloud store;
  * the folders that hold them stay with them. Any other failure ends the removal with its code; an
- * unreadable folder ends it before anything is removed. Never throws.
+ * unreadable folder, or a root or a folder that cannot be placed, ends it before anything is
+ * removed. Never throws.
  */
 export async function removeTreeEntries(params: {
   rootPath: AbsolutePath;
@@ -83,8 +84,15 @@ export async function removeTreeEntries(params: {
     kind: rootStats.value.kind,
   });
 
-  if (rootPlacement === 'cloudOnly') {
-    return { kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } };
+  switch (rootPlacement.kind) {
+    case 'cloudOnly':
+      return { kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } };
+    // Entering it could reach another volume mounted there, or recall a placeholder.
+    case 'unread':
+      return { kind: 'failed', failure: rootPlacement.code };
+    case 'onDisk':
+    case 'link':
+      break;
   }
 
   switch (getPlacedFileKind({ kind: rootStats.value.kind, placement: rootPlacement })) {
@@ -211,7 +219,9 @@ async function removeDirectoryTree(params: {
 /**
  * Every entry below the root, as the walk places it, a link of any kind as a link. An entry the
  * walk finds evicted stays; an evicted folder is listed before the walk records it so, and its
- * removal skips it.
+ * removal skips it. A folder that cannot be placed ends the listing with the code of its read,
+ * unless it is gone. A file that cannot be placed is listed as any other: the clear of its
+ * read-only bit reads its attributes again, and a failure there ends its removal by its code.
  */
 async function listRemovalTargets(params: {
   rootPath: AbsolutePath;
@@ -260,10 +270,27 @@ async function listRemovalTargets(params: {
 
         return 'skip';
       case 'directory':
+        if (entry.placementFailureCode !== null) {
+          return refuseUnplacedDirectory(entry.placementFailureCode);
+        }
+
         directoryPaths.set(entry.path, entryPath);
         directories.push({ path: entryPath, depth: entry.depth });
 
         return 'descend';
+    }
+  }
+
+  // Entering it could reach another volume mounted there, or recall a placeholder.
+  function refuseUnplacedDirectory(code: string): TreeEntryVisit {
+    switch (decideEntryRemovalEnd({ code: code, entryKind: 'directory' }).kind) {
+      case 'gone':
+        return 'skip';
+      case 'stayed':
+      case 'failed':
+        failure ??= code;
+
+        return 'stop';
     }
   }
 

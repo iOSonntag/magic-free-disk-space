@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 import type { Result } from '../../src/result.js';
 
 function parseText(params: { rules: 'posix' | 'win32'; text: string }): Result<string, string> {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoots.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 import type { UserIdentity } from '../../src/system/userIdentity.js';
 import { buildTestUserIdentity, buildTestWindowsUser } from '../support/parsedValueFixtures.js';
 

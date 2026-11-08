@@ -132,7 +132,10 @@ async function loadIcloudPlaces(params: {
   return { kind: 'succeeded', value: places };
 }
 
-/** No place in a folder kept in the cloud only, whose listing would download it, or in a link. */
+/**
+ * No place in a folder kept in the cloud only, whose listing would download it, or in a link. A
+ * folder that cannot be placed is listed, as one on disk.
+ */
 async function loadCloudDocsPlaces(params: {
   run: ExploreProbeToolRun;
   folderPath: AbsolutePath;
@@ -142,11 +145,12 @@ async function loadCloudDocsPlaces(params: {
     kind: 'directory',
   });
 
-  switch (placement) {
+  switch (placement.kind) {
     case 'cloudOnly':
     case 'link':
       return { kind: 'succeeded', value: [] };
     case 'onDisk':
+    case 'unread':
       return loadListedCloudDocsPlaces(params);
   }
 }

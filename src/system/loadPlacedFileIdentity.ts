@@ -6,7 +6,8 @@ import { loadFileIdentityOfKind } from './loadFileIdentity.js';
 
 /**
  * The identity of the root of an item, kind and real path as the walks meet the entry: a link of
- * any kind, which `entryReads` may name where lstat does not, is a `symbolicLink`.
+ * any kind, which `entryReads` may name where lstat does not, is a `symbolicLink`, and an entry
+ * the reads cannot place keeps the kind lstat names, as a walk reads it on disk.
  */
 export function loadPlacedFileIdentity(params: {
   path: string;

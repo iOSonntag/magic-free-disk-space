@@ -1,4 +1,6 @@
-import { dlopen, FFIType, ptr } from 'bun:ffi';
+import { dlopen, FFIType, ptr, read } from 'bun:ffi';
+import { getSystemErrorName } from 'node:util';
+import type { Result } from '../../result.js';
 import type { EntryPlacement, EntryRef } from '../../system/entryReads.js';
 
 // macOS `struct stat` with 64-bit inodes: 144 bytes, `st_flags` at byte 116. Checked against
@@ -18,32 +20,41 @@ let libSystem: LibSystem | null = null;
 function openLibSystem() {
   return dlopen('/usr/lib/libSystem.B.dylib', {
     [LSTAT_SYMBOL_NAME]: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+    // The address of the calling thread's `errno`.
+    __error: { args: [], returns: FFIType.ptr },
   });
 }
 
 /**
- * `cloudOnly` for a folder whose content iCloud evicted from this Mac, by its dataless flag; a
- * link is the link lstat names, and any other entry is `onDisk`, so a walk visits every file and
- * other entry it meets.
+ * `cloudOnly` for a folder whose content iCloud evicted from this Mac, by its dataless flag, and
+ * `unread` with the code of lstat for one whose flags cannot be read; a link is the link lstat
+ * names, and any other entry is `onDisk`, so a walk visits every file and other entry it meets.
  */
 export function loadEntryPlacement(params: EntryRef): EntryPlacement {
   switch (params.kind) {
-    case 'directory':
-      return hasDatalessFlag({ path: params.path }) ? 'cloudOnly' : 'onDisk';
+    case 'directory': {
+      const flags = loadEntryFlags({ path: params.path });
+
+      if (flags.kind === 'failed') {
+        return { kind: 'unread', code: flags.failure };
+      }
+
+      return (flags.value & SF_DATALESS) !== 0 ? { kind: 'cloudOnly' } : { kind: 'onDisk' };
+    }
     case 'symbolicLink':
-      return 'link';
+      return { kind: 'link' };
     case 'file':
     case 'other':
-      return 'onDisk';
+      return { kind: 'onDisk' };
   }
 }
 
 /**
- * True when the entry is an iCloud placeholder whose content was evicted from this Mac.
- * Reads the entry itself without following a link and without downloading; `false` when it
- * cannot be read. `node:fs` hides `st_flags`, hence the direct call.
+ * The `st_flags` of the entry itself, read without following a link and without downloading; on
+ * failure the POSIX name of lstat's `errno`, such as `ENOENT`. `node:fs` hides `st_flags`, hence
+ * the direct call.
  */
-export function hasDatalessFlag(params: { path: string }): boolean {
+function loadEntryFlags(params: { path: string }): Result<number, string> {
   libSystem ??= openLibSystem();
 
   const statBuffer = new Uint8Array(STAT_BUFFER_BYTES);
@@ -51,10 +62,21 @@ export function hasDatalessFlag(params: { path: string }): boolean {
   const lstatResult = libSystem.symbols[LSTAT_SYMBOL_NAME]?.(ptr(pathBytes), ptr(statBuffer));
 
   if (lstatResult !== 0) {
-    return false;
+    // Read before any other call of the system can set `errno` again.
+    const errorNumberPointer = libSystem.symbols.__error();
+
+    if (errorNumberPointer === null) {
+      throw new Error('libSystem gave no address of errno.');
+    }
+
+    return {
+      kind: 'failed',
+      failure: getSystemErrorName(-read.i32(errorNumberPointer, 0)),
+    };
   }
 
-  const flags = new DataView(statBuffer.buffer).getUint32(STAT_FLAGS_OFFSET, true);
-
-  return (flags & SF_DATALESS) !== 0;
+  return {
+    kind: 'succeeded',
+    value: new DataView(statBuffer.buffer).getUint32(STAT_FLAGS_OFFSET, true),
+  };
 }

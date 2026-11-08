@@ -6,7 +6,6 @@ import type {
   EnvironmentLocationAtRoot,
 } from '../../../environment/environmentLocation.js';
 import type { ExplorePlatform } from '../../../explore/explorePlatform.js';
-import type { UserFileRoot } from '../../../scan/scanPlatform.js';
 import { WIN32_CATALOG_ENTRIES } from './catalogEntries.js';
 import { WIN32_PROTECTED_LOCATIONS, WIN32_SENSITIVE_LOCATIONS } from './protectedPaths.js';
 
@@ -26,7 +25,7 @@ export type Win32Catalog = {
   /** The build and dependency folders the project search offers. */
   projectArtifactRules: ProjectArtifactRule[];
   /** The folders searched for large files, each a known folder wherever the user moved it. */
-  userFileRoots: UserFileRoot[];
+  userFileRoots: EnvironmentLocation[];
   /** Where the Explore probes look on Windows. */
   explore: ExplorePlatform;
 };
@@ -77,10 +76,10 @@ export const WIN32_CATALOG: Win32Catalog = {
     },
   ],
   userFileRoots: [
-    { kind: 'knownFolder', folder: 'desktop' },
-    { kind: 'knownFolder', folder: 'documents' },
-    { kind: 'knownFolder', folder: 'downloads' },
-    { kind: 'knownFolder', folder: 'videos' },
+    { root: 'knownFolder', folder: 'desktop', path: '' },
+    { root: 'knownFolder', folder: 'documents', path: '' },
+    { root: 'knownFolder', folder: 'downloads', path: '' },
+    { root: 'knownFolder', folder: 'videos', path: '' },
   ],
   explore: {
     pnpmInstallPlaces: {

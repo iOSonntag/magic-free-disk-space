@@ -1,6 +1,6 @@
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { VolumeSpace } from '../../system/volumeSpace.js';
-import { WIN32_PATH_RULES } from './loadEnvironment.js';
 import { loadDiskFreeSpace } from './win32Api.js';
 
 /**

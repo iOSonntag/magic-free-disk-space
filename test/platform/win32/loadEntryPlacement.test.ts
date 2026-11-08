@@ -25,12 +25,12 @@ describe('decideEntryPlacement', () => {
       decideEntryPlacement({
         attributes: FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_ARCHIVE,
       }),
-    ).toBe('cloudOnly');
+    ).toEqual({ kind: 'cloudOnly' });
     expect(
       decideEntryPlacement({
         attributes: FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_DIRECTORY,
       }),
-    ).toBe('cloudOnly');
+    ).toEqual({ kind: 'cloudOnly' });
   });
 
   test('places a placeholder that shows its reparse point in the cloud only, never as a link', () => {
@@ -41,23 +41,36 @@ describe('decideEntryPlacement', () => {
           FILE_ATTRIBUTE_REPARSE_POINT |
           FILE_ATTRIBUTE_ARCHIVE,
       }),
-    ).toBe('cloudOnly');
+    ).toEqual({ kind: 'cloudOnly' });
   });
 
   test('places any other entry with a reparse point as a link, folder or file', () => {
     expect(
       decideEntryPlacement({ attributes: FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY }),
-    ).toBe('link');
+    ).toEqual({ kind: 'link' });
     expect(
       decideEntryPlacement({ attributes: FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_ARCHIVE }),
-    ).toBe('link');
+    ).toEqual({ kind: 'link' });
   });
 
   test('places a pinned, an offline, or a plain entry on this PC', () => {
     // FILE_ATTRIBUTE_PINNED, FILE_ATTRIBUTE_OFFLINE.
-    expect(decideEntryPlacement({ attributes: 0x80000 | 0x1000 })).toBe('onDisk');
-    expect(decideEntryPlacement({ attributes: FILE_ATTRIBUTE_DIRECTORY })).toBe('onDisk');
-    expect(decideEntryPlacement({ attributes: FILE_ATTRIBUTE_ARCHIVE })).toBe('onDisk');
+    expect(decideEntryPlacement({ attributes: 0x80000 | 0x1000 })).toEqual({ kind: 'onDisk' });
+    expect(decideEntryPlacement({ attributes: FILE_ATTRIBUTE_DIRECTORY })).toEqual({
+      kind: 'onDisk',
+    });
+    expect(decideEntryPlacement({ attributes: FILE_ATTRIBUTE_ARCHIVE })).toEqual({
+      kind: 'onDisk',
+    });
+  });
+});
+
+describe('loadEntryPlacement', () => {
+  test('cannot place a path that is no absolute Windows path, and names EINVAL', () => {
+    expect(loadEntryPlacement({ path: 'cache\\folder', kind: 'directory' })).toEqual({
+      kind: 'unread',
+      code: 'EINVAL',
+    });
   });
 });
 
@@ -80,14 +93,19 @@ describe.skipIf(process.platform !== 'win32')('loadEntryPlacement on Windows', (
     await writeFile(filePath, 'on this PC');
     await symlink(folderPath, junctionPath, 'junction');
 
-    expect(loadEntryPlacement({ path: junctionPath, kind: 'symbolicLink' })).toBe('link');
-    expect(loadEntryPlacement({ path: folderPath, kind: 'directory' })).toBe('onDisk');
-    expect(loadEntryPlacement({ path: filePath, kind: 'file' })).toBe('onDisk');
+    expect(loadEntryPlacement({ path: junctionPath, kind: 'symbolicLink' })).toEqual({
+      kind: 'link',
+    });
+    expect(loadEntryPlacement({ path: folderPath, kind: 'directory' })).toEqual({
+      kind: 'onDisk',
+    });
+    expect(loadEntryPlacement({ path: filePath, kind: 'file' })).toEqual({ kind: 'onDisk' });
   });
 
-  test('places a path it cannot read on this PC', () => {
-    expect(loadEntryPlacement({ path: join(fixtureRoot.homeDir, 'missing'), kind: 'file' })).toBe(
-      'onDisk',
-    );
+  test('cannot place a path whose attributes cannot be read, and names the code of the call', () => {
+    // `ERROR_FILE_NOT_FOUND`, which the deletion reads by the name Bun gives it.
+    expect(
+      loadEntryPlacement({ path: join(fixtureRoot.homeDir, 'missing'), kind: 'file' }),
+    ).toEqual({ kind: 'unread', code: 'ENOENT' });
   });
 });

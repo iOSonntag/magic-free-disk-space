@@ -13,7 +13,7 @@ import { isSameOrInsidePath } from '../../path/isSameOrInsidePath.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
-import type { PathRules } from '../../path/pathRules.js';
+import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parseWindowsSid } from '../../system/userIdentity.js';
@@ -35,9 +35,6 @@ import {
   loadTokenUserSid,
   openProcessToken,
 } from './win32Api.js';
-
-/** How Windows spells and compares an absolute path: from a drive letter, names without case. */
-export const WIN32_PATH_RULES: PathRules = { rootForm: 'win32', separator: '\\' };
 
 /** The `DRIVE_*` type of a disk of this PC, as against a removable, network, or optical drive. */
 const DRIVE_FIXED = 3;

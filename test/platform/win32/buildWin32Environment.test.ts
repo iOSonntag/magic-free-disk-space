@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  buildWin32Environment,
-  WIN32_PATH_RULES,
-} from '../../../src/platform/win32/loadEnvironment.js';
+import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
+import { buildWin32Environment } from '../../../src/platform/win32/loadEnvironment.js';
 import {
   EXAMPLE_WIN32_ENVIRONMENT,
   EXAMPLE_WIN32_ENVIRONMENT_PARAMS,

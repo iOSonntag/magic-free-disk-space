@@ -13,7 +13,7 @@ import type {
 import { SCAN_LIMITS } from '../scan/limits.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
 import { resolveRemovalOwnerState } from '../scan/resolveOwnerState.js';
-import type { EntryPlacement, EntryReads } from '../system/entryReads.js';
+import type { EntryReads } from '../system/entryReads.js';
 import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
 import { getFileFailure, loadFileIdentity } from '../system/loadFileIdentity.js';
 import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
@@ -670,7 +670,8 @@ function isPresentDespiteFailure(failure: FileFailure): boolean {
 /**
  * Deletes the target only while its identity still matches the scan and its content is still on
  * this computer: one a cloud store took since the scan keeps only its placeholder here, and
- * deleting that would delete the file in the cloud.
+ * deleting that would delete the file in the cloud. One whose placement cannot be read stays,
+ * with the code of that read.
  */
 async function deleteScannedTarget(params: {
   target: RemovalTarget;
@@ -707,14 +708,31 @@ async function deleteScannedTarget(params: {
     kind: params.target.identity.kind,
   });
 
-  if (isLeftByCloudStore(placement)) {
-    return {
-      path: params.target.path,
-      atMs: params.clock(),
-      outcome: 'changedSinceScan',
-      code: null,
-      deleteRan: false,
-    };
+  switch (placement.kind) {
+    case 'cloudOnly':
+      return {
+        path: params.target.path,
+        atMs: params.clock(),
+        outcome: 'changedSinceScan',
+        code: null,
+        deleteRan: false,
+      };
+    // Where its content lies is not known: it may be another volume, or a placeholder.
+    case 'unread': {
+      const unreadOutcome = fileFailureToOutcome(getFileFailure({ code: placement.code }));
+
+      return {
+        path: params.target.path,
+        atMs: params.clock(),
+        outcome: unreadOutcome.outcome,
+        code: unreadOutcome.code,
+        deleteRan: false,
+      };
+    }
+    // A link is removed as itself, never followed, as a target on disk is.
+    case 'onDisk':
+    case 'link':
+      break;
   }
 
   const removed = await params.delete.removeTree({ path: params.target.path });
@@ -734,20 +752,6 @@ async function deleteScannedTarget(params: {
     code: removed.failure,
     deleteRan: true,
   };
-}
-
-/**
- * Whether a cloud store took the target's content since the scan, which leaves only its
- * placeholder here. A link is removed as itself, never followed, as a target on disk is.
- */
-function isLeftByCloudStore(placement: EntryPlacement): boolean {
-  switch (placement) {
-    case 'cloudOnly':
-      return true;
-    case 'onDisk':
-    case 'link':
-      return false;
-  }
 }
 
 /** What a removal that ran and failed makes of its target, by the reason of the system's code. */

@@ -437,13 +437,48 @@ describe('deleteCandidates', () => {
         ...DELETION_PLATFORM.entryReads,
         loadEntryPlacement: (entry) =>
           entry.path === selected
-            ? 'cloudOnly'
+            ? { kind: 'cloudOnly' }
             : DELETION_PLATFORM.entryReads.loadEntryPlacement(entry),
       },
       clock: () => NOW_MS,
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
+    expect(removedPaths).toEqual([]);
+    expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
+  });
+
+  test('leaves a folder alone whose placement cannot be read, and names the code of the read', async () => {
+    // As a folder on Windows whose attributes cannot be read, which may be another volume mounted.
+    const selected = await createCacheFolder('unplaced');
+    const scanned = await scanCandidate(selected);
+    const removedPaths: string[] = [];
+
+    const run = await deleteCandidates({
+      candidates: [scanned],
+      journal: await createFixtureRootJournal(),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: {
+        ...DELETION_PLATFORM.delete,
+        removeTree: async (params) => {
+          removedPaths.push(params.path);
+
+          return { kind: 'failed', failure: 'The unplaced folder was removed.' };
+        },
+      },
+      entryReads: {
+        ...DELETION_PLATFORM.entryReads,
+        loadEntryPlacement: (entry) =>
+          entry.path === selected
+            ? { kind: 'unread', code: 'EIO' }
+            : DELETION_PLATFORM.entryReads.loadEntryPlacement(entry),
+      },
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'EIO', freedBytes: 0 });
     expect(removedPaths).toEqual([]);
     expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
   });
