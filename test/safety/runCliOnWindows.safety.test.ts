@@ -68,7 +68,7 @@ describeOnWindows(
           platform: platform,
         });
         const approvedNumbers = approvedPaths.map((path) =>
-          findItemNumber({ view: scannedView, path: path }),
+          getItemNumber({ view: scannedView, path: path }),
         );
         const approvedPathsBelowRoot = approvedFixturePaths.map((path) =>
           buildPathBelowRoot({ rootDir: fixtureRoot.rootDir, path: path }),
@@ -130,7 +130,7 @@ describeOnWindows(
 );
 
 /** The number the command line shows for the item at `path`, as the view of its scan numbers it. */
-function findItemNumber(params: { view: ScanView; path: string }): number {
+function getItemNumber(params: { view: ScanView; path: string }): number {
   const item = listNumberedViewItems({ view: params.view }).find(
     (candidate) =>
       candidate.revealPath !== null &&

@@ -49,7 +49,7 @@ describe('loadEnvironmentRealPath', () => {
 
   test('is unresolvable at the path when its real path is no absolute path under the rules', async () => {
     // The rules of the other platform, under which no real path of the host is absolute.
-    const otherRules = process.platform === 'win32' ? POSIX_PATH_RULES : WIN32_PATH_RULES;
+    const otherRules = hostPathRules === WIN32_PATH_RULES ? POSIX_PATH_RULES : WIN32_PATH_RULES;
 
     expect(
       await loadEnvironmentRealPath({ pathRules: otherRules, path: fixtureRoot.homeDir }),

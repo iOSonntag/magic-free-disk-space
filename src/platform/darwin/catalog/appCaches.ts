@@ -1,5 +1,5 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
-import { MAIL_DOWNLOADS_ROOT } from '../appleDataRoots.js';
+import { mailDownloadsRoot } from '../appleDataRoots.js';
 import { MAIL_APP } from '../systemApps.js';
 import { buildBundleIdOwner } from './buildBundleIdOwner.js';
 
@@ -216,8 +216,7 @@ export const APP_CACHE_ENTRIES: CatalogEntry[] = [
       'Copies of attachments that Mail saved when you opened them, left unchanged and not opened for a while. The attachments stay in your mail.',
     regeneration: 'Mail makes a new copy when you open the attachment again.',
     risk: 'review',
-    root: MAIL_DOWNLOADS_ROOT.root,
-    path: MAIL_DOWNLOADS_ROOT.path,
+    ...mailDownloadsRoot,
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: buildBundleIdOwner({ text: MAIL_APP.bundleId }),

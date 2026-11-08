@@ -85,6 +85,13 @@ describe('WIN32_CATALOG', () => {
     expect(forbiddenExcludedNames).toEqual([]);
   });
 
+  test("keeps VS Code's profiles under Code in RoamingAppData", () => {
+    expect(WIN32_CATALOG.explore.vscodeProfilesRoot).toEqual({
+      root: 'roamingAppData',
+      path: 'Code/User/profiles',
+    });
+  });
+
   test('offers no guarded folder whole and nothing inside a sensitive folder', () => {
     const guardedPaths = [
       ...exampleWin32Environment.protectedRealPaths,

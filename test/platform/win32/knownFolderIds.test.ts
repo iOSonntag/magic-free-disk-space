@@ -29,6 +29,7 @@ describe('knownFolderIds', () => {
     for (const id of ids) {
       expect(buildGuidBytes({ text: id })).toHaveLength(16);
     }
+
     expect(new Set(ids).size).toBe(ids.length);
   });
 });

@@ -126,7 +126,7 @@ export async function loadExploreEntryStats(
 
 /**
  * The path with every link resolved; `null` when nothing is there or a part of it is no folder.
- * Throws when `realpath` answers with a path that is not absolute.
+ * A real path the rules do not parse, such as a UNC path, fails as unreadable, code `notAbsolute`.
  */
 export async function loadExploreRealPath(
   params: ExploreRead & { pathRules: PathRules },
@@ -140,7 +140,14 @@ export async function loadExploreRealPath(
   const realPath = parseAbsolutePath({ rules: params.pathRules, text: text.value });
 
   if (realPath.kind === 'failed') {
-    throw new Error('realpath returned a path that is not absolute.');
+    return {
+      kind: 'failed',
+      failure: {
+        reason: 'fileUnreadable',
+        path: params.path,
+        failure: { reason: 'unexpected', code: 'notAbsolute' },
+      },
+    };
   }
 
   return realPath;

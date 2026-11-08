@@ -3,7 +3,7 @@ import { buildLocationBelow } from '../../../environment/environmentLocation.js'
 import type { PnpmInstallPlaces } from '../../../explore/explorePlatform.js';
 
 /** pnpm's home on Windows, `%LOCALAPPDATA%\pnpm`. */
-const PNPM_HOME: CatalogLocation = { root: 'localAppData', path: 'pnpm' };
+const pnpmHome: CatalogLocation = { root: 'localAppData', path: 'pnpm' };
 
 /**
  * Where pnpm is installed on Windows, each place at the default of its tool: pnpm's home,
@@ -11,8 +11,8 @@ const PNPM_HOME: CatalogLocation = { root: 'localAppData', path: 'pnpm' };
  * of the official installer, of Scoop and of Volta's packages, and the node versions of
  * nvm-windows, fnm, Volta and mise. npm installs a global package in `<prefix>\node_modules` on Windows, with no `lib`.
  */
-export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
-  homes: [PNPM_HOME],
+export const pnpmInstallPlaces: PnpmInstallPlaces = {
+  homes: [pnpmHome],
   corepackRoots: [
     { root: 'localAppData', path: 'node/corepack/v1/pnpm' },
     { root: 'localAppData', path: 'node/corepack/pnpm' },
@@ -27,8 +27,8 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
   // The standalone executable. The `pnpm.cmd` and `pnpm.ps1` shims beside it run the pnpm of
   // `.tools` or `global`, which the probe reads on its own, as it does a `#!` launcher.
   launchers: [
-    buildLocationBelow({ location: PNPM_HOME, path: 'pnpm.exe' }),
-    buildLocationBelow({ location: PNPM_HOME, path: 'bin/pnpm.exe' }),
+    buildLocationBelow({ location: pnpmHome, path: 'pnpm.exe' }),
+    buildLocationBelow({ location: pnpmHome, path: 'bin/pnpm.exe' }),
     // winget installs a portable package in a folder of its own and hard-links the command beside it.
     {
       root: 'localAppData',
@@ -62,7 +62,7 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
 };
 
 /** pnpm's store on Windows, `%LOCALAPPDATA%\pnpm\store`. */
-export const PNPM_STORE_ROOT: CatalogLocation = buildLocationBelow({
-  location: PNPM_HOME,
+export const pnpmStoreRoot: CatalogLocation = buildLocationBelow({
+  location: pnpmHome,
   path: 'store',
 });

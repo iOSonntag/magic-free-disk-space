@@ -1,4 +1,5 @@
-/** The FILE_ATTRIBUTE_* bits of Windows, with the values Windows defines for them. */
+// The FILE_ATTRIBUTE_* bits of Windows, with the values Windows defines for them.
+
 export const FILE_ATTRIBUTE_READONLY = 0x1;
 
 export const FILE_ATTRIBUTE_DIRECTORY = 0x10;

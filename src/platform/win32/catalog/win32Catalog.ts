@@ -8,7 +8,7 @@ import type {
 import type { ExplorePlatform } from '../../../explore/explorePlatform.js';
 import { androidSdkRoot } from './androidSdk.js';
 import { WIN32_CATALOG_ENTRIES } from './catalogEntries.js';
-import { PNPM_INSTALL_PLACES, PNPM_STORE_ROOT } from './pnpmHomes.js';
+import { pnpmInstallPlaces, pnpmStoreRoot } from './pnpmHomes.js';
 import { WIN32_PROTECTED_LOCATIONS, WIN32_SENSITIVE_LOCATIONS } from './protectedPaths.js';
 
 /** The data of Windows the run takes beside what it reads from the system. */
@@ -84,8 +84,8 @@ export const WIN32_CATALOG: Win32Catalog = {
     { root: 'knownFolder', folder: 'videos', path: '' },
   ],
   explore: {
-    pnpmInstallPlaces: PNPM_INSTALL_PLACES,
-    pnpmStoreRoot: PNPM_STORE_ROOT,
+    pnpmInstallPlaces: pnpmInstallPlaces,
+    pnpmStoreRoot: pnpmStoreRoot,
     pnpmXdgStoreRoot: null,
     androidSdkRoot: androidSdkRoot,
     // A second Android SDK that Flutter's settings name is not read on Windows yet.

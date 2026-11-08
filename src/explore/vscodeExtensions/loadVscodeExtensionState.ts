@@ -23,7 +23,7 @@ const REGISTRY_FILE_NAME = 'extensions.json';
 const OBSOLETE_FILE_NAME = '.obsolete';
 
 /** A `file:` URI path that starts at a drive, such as `/c:/Users`. */
-const URI_DRIVE_PATH_PATTERN = /^\/[A-Za-z]:\//;
+const uriDrivePathPattern = /^\/[A-Za-z]:\//;
 
 /**
  * VS Code's own parse of an extension folder name (`ExtensionKeyRegex`): `<publisher>.<name>`, a
@@ -495,7 +495,7 @@ function parseLocationUriPath(params: { pathRules: PathRules; uriPath: string })
     case 'posix':
       return posix.isAbsolute(params.uriPath) ? posix.resolve(params.uriPath) : null;
     case 'win32':
-      return URI_DRIVE_PATH_PATTERN.test(params.uriPath) ? params.uriPath.slice(1) : null;
+      return uriDrivePathPattern.test(params.uriPath) ? params.uriPath.slice(1) : null;
   }
 }
 

@@ -5,7 +5,7 @@ import { buildLocationBelow } from '../../../environment/environmentLocation.js'
 import { SCAN_LIMITS } from '../../../scan/limits.js';
 import { mapNonEmpty } from '../../../system/nonEmptyList.js';
 import { androidSdkRoot } from './androidSdk.js';
-import { PNPM_STORE_ROOT } from './pnpmHomes.js';
+import { pnpmStoreRoot } from './pnpmHomes.js';
 import { teamsCacheFolder, teamsClassicCacheFolder } from './teamsCaches.js';
 
 /** Brave, installed for the user or for every user of this PC. */
@@ -178,7 +178,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
       'The store of pnpm, into which projects link their packages; do not delete it by hand.',
     regeneration: 'Projects download their packages again on their next install.',
     risk: 'review',
-    ...PNPM_STORE_ROOT,
+    ...pnpmStoreRoot,
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,

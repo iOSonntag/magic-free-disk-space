@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { listDriveRootTexts } from '../../../src/platform/win32/listDriveRoots.js';
+import { listDriveRootTexts } from '../../../src/platform/win32/listDriveRootTexts.js';
 
 describe('listDriveRootTexts', () => {
   test('lists the root of each drive whose bit is set, in letter order', () => {

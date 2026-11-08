@@ -20,7 +20,7 @@ import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
 import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parsePosixUid } from '../../system/userIdentity.js';
-import { ICLOUD_DRIVE_ROOT } from './appleDataRoots.js';
+import { icloudDriveRoot } from './appleDataRoots.js';
 import { buildHomeLocation } from './buildHomeLocation.js';
 import {
   PROTECTED_HOME_DIR_NAMES,
@@ -32,19 +32,19 @@ import {
 const DARWIN_PROTECTED_ROOT_PATHS: AbsolutePath[] = [parseDarwinAbsolutePath({ text: '/' })];
 
 /** The folder of the deletion log. */
-const DARWIN_DELETION_LOG_LOCATION: EnvironmentLocationAtRoot = {
+const darwinDeletionLogLocation: EnvironmentLocationAtRoot = {
   root: 'home',
   path: 'Library/Logs/magic-free-disk-space',
 };
 
 /** The folder of the bridge's preference file. */
-const DARWIN_PREFERENCES_LOCATION: EnvironmentLocationAtRoot = {
+const darwinPreferencesLocation: EnvironmentLocationAtRoot = {
   root: 'home',
   path: 'Library/Application Support/magic-free-disk-space',
 };
 
 /** Folders the tool writes are the user's alone: `rwx------`, and `rw-------` for files. */
-const DARWIN_OWNER_ONLY_MODES: OwnerOnlyModes = { directoryMode: 0o700, fileMode: 0o600 };
+const darwinOwnerOnlyModes: OwnerOnlyModes = { directoryMode: 0o700, fileMode: 0o600 };
 
 /** Where macOS apps are installed for every user. */
 const DARWIN_SHARED_APPLICATION_DIR: AbsolutePath = parseDarwinAbsolutePath({
@@ -208,10 +208,10 @@ export function buildDarwinEnvironment(params: {
     sensitiveExceptionLocations: SENSITIVE_EXCEPTION_HOME_DIR_NAMES.map((names) =>
       buildHomeLocation({ names: names }),
     ),
-    evictLocations: [ICLOUD_DRIVE_ROOT],
-    deletionLogLocation: DARWIN_DELETION_LOG_LOCATION,
-    preferencesLocation: DARWIN_PREFERENCES_LOCATION,
-    ownerOnlyModes: DARWIN_OWNER_ONLY_MODES,
+    evictLocations: [icloudDriveRoot],
+    deletionLogLocation: darwinDeletionLogLocation,
+    preferencesLocation: darwinPreferencesLocation,
+    ownerOnlyModes: darwinOwnerOnlyModes,
   });
 }
 

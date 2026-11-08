@@ -7,6 +7,7 @@ import {
   loadPreferences,
   saveIsUpdateCheckEnabled,
 } from '../../src/preferences/preferencesFile.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -14,6 +15,7 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { testOnWindows } from '../support/windowsOnly.js';
 
 let fixtureRoot: FixtureRoot;
 let preferencesPath: string;
@@ -38,13 +40,22 @@ async function writePreferencesFile(text: string): Promise<void> {
 }
 
 describe('the place of the preferences', () => {
-  test('lives in the support folder of the app, below LocalAppData on Windows', () => {
-    const supportFolderPath =
-      process.platform === 'win32'
-        ? join(fixtureRoot.homeDir, 'AppData', 'Local', 'magic-free-disk-space')
-        : join(fixtureRoot.homeDir, 'Library', 'Application Support', 'magic-free-disk-space');
+  testOnWindows('lives in the support folder of the app below LocalAppData on Windows', () => {
+    expect(preferencesPath).toBe(
+      join(fixtureRoot.homeDir, 'AppData', 'Local', 'magic-free-disk-space', 'preferences.json'),
+    );
+  });
 
-    expect(preferencesPath).toBe(join(supportFolderPath, 'preferences.json'));
+  testOnDarwin('lives in the support folder of the app below Application Support on macOS', () => {
+    expect(preferencesPath).toBe(
+      join(
+        fixtureRoot.homeDir,
+        'Library',
+        'Application Support',
+        'magic-free-disk-space',
+        'preferences.json',
+      ),
+    );
   });
 });
 

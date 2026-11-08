@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, realpath, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { CatalogLocation } from '../../src/catalog/catalog.js';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { Environment, EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
 import {
+  buildLocationBelow,
   resolveEnvironmentLocation,
   resolveEnvironmentLocations,
 } from '../../src/environment/environmentLocation.js';
@@ -42,7 +43,6 @@ import type { Result } from '../../src/result.js';
 import { testOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
-  buildTestWin32PlatformFolders,
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
@@ -112,25 +112,188 @@ function buildPnpmHomePath(params: { environment: Environment; names: string[] }
 }
 
 /**
- * The fixture environment with the folders of the fixture environment of Windows below its home,
- * so the places of Windows resolve and are read on any host.
+ * The folders of the fixture environment with Windows' AppData folders below its home, where the
+ * fixture environment of Windows has them, so the places of Windows resolve and are read on any host.
  */
-function buildWindowsFolderEnvironment(params: { environment: Environment }): Environment {
+function buildWindowsFixtureFolders(params: { environment: Environment }): EnvironmentFolders {
   return {
-    ...params.environment,
-    platformFolders: buildTestWin32PlatformFolders({ homeDir: params.environment.homeDir }),
+    pathRules: params.environment.pathRules,
+    homeDir: params.environment.homeDir,
+    tempDir: params.environment.tempDir,
+    platformFolders: {
+      kind: 'win32',
+      appDataDirs: {
+        localDir: buildTestHostPath({ text: join(params.environment.homeDir, 'AppData', 'Local') }),
+        roamingDir: buildTestHostPath({
+          text: join(params.environment.homeDir, 'AppData', 'Roaming'),
+        }),
+      },
+      knownFolderPaths: {
+        desktop: null,
+        documents: null,
+        downloads: null,
+        videos: null,
+        music: null,
+        pictures: null,
+        localAppDataLow: null,
+        skyDrive: null,
+      },
+    },
   };
 }
 
-/** The path of `location` in the environment of `buildWindowsFolderEnvironment`. */
+/** The path of `location` in the folders of `buildWindowsFixtureFolders`. */
 function buildWindowsPlacePath(params: {
   environment: Environment;
   location: CatalogLocation;
 }): AbsolutePath {
   return resolveEnvironmentLocation({
-    folders: buildWindowsFolderEnvironment({ environment: params.environment }),
+    folders: buildWindowsFixtureFolders({ environment: params.environment }),
     location: params.location,
   });
+}
+
+/** How pnpm lies at a place: in folders named by its versions, or as one package with its package.json. */
+type PnpmInstallLayout = 'versionFolders' | 'packageFolder';
+
+/** A place of Windows where pnpm installs, by the words a test title names it with. */
+type WindowsPnpmInstallPlace = {
+  place: string;
+  location: CatalogLocation;
+  layout: PnpmInstallLayout;
+};
+
+const windowsPnpmInstallPlaces = {
+  corepackV1: {
+    place: "corepack's v1 folder in the local AppData",
+    location: { root: 'localAppData', path: 'node/corepack/v1/pnpm' },
+    layout: 'versionFolders',
+  },
+  corepack: {
+    place: "corepack's folder in the local AppData",
+    location: { root: 'localAppData', path: 'node/corepack/pnpm' },
+    layout: 'versionFolders',
+  },
+  npmGlobalPnpm: {
+    place: "npm's globals in the roaming AppData",
+    location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  npmGlobalPnpmExe: {
+    place: "npm's globals of @pnpm/exe in the roaming AppData",
+    location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
+    layout: 'packageFolder',
+  },
+  nvmWindows2Node: {
+    place: "npm's globals of a node version of nvm-windows 2",
+    location: {
+      root: 'localAppData',
+      path: 'Author Software/nvm/installs/v22.1.0/node_modules/pnpm',
+    },
+    layout: 'packageFolder',
+  },
+  nvmWindows12Node: {
+    place: "npm's globals of a node version of nvm-windows 1.2",
+    location: { root: 'localAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  nvmWindowsBefore12Node: {
+    place: "npm's globals of a node version of nvm-windows before 1.2",
+    location: { root: 'roamingAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  fnmNode: {
+    place: "npm's globals of a node version of fnm",
+    location: {
+      root: 'roamingAppData',
+      path: 'fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
+    },
+    layout: 'packageFolder',
+  },
+  fnmLegacyNode: {
+    place: "npm's globals of a node version in fnm's legacy folder",
+    location: { root: 'home', path: '.fnm/node-versions/v22.1.0/installation/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  voltaNode: {
+    place: "npm's globals of a node version of Volta",
+    location: { root: 'localAppData', path: 'Volta/tools/image/node/22.1.0/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  voltaPnpmPackage: {
+    place: "Volta's package prefix of pnpm",
+    location: { root: 'localAppData', path: 'Volta/tools/image/packages/pnpm/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  voltaPnpmExePackage: {
+    place: "Volta's package prefix of @pnpm/exe",
+    location: {
+      root: 'localAppData',
+      path: 'Volta/tools/image/packages/@pnpm/exe/node_modules/@pnpm/exe',
+    },
+    layout: 'packageFolder',
+  },
+  voltaVersions: {
+    place: "Volta's folder of pnpm versions",
+    location: { root: 'localAppData', path: 'Volta/tools/image/pnpm' },
+    layout: 'versionFolders',
+  },
+  scoopNodePrefix: {
+    place: "npm's globals of Scoop's persisted node prefix",
+    location: { root: 'home', path: 'scoop/persist/nodejs/bin/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  scoopNodeLtsPrefix: {
+    place: "npm's globals of Scoop's persisted node LTS prefix",
+    location: { root: 'home', path: 'scoop/persist/nodejs-lts/bin/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  scoopVersions: {
+    place: "Scoop's folder of pnpm versions",
+    location: { root: 'home', path: 'scoop/apps/pnpm' },
+    layout: 'versionFolders',
+  },
+  miseNode: {
+    place: "npm's globals of a node version of mise",
+    location: { root: 'localAppData', path: 'mise/installs/node/22.1.0/node_modules/pnpm' },
+    layout: 'packageFolder',
+  },
+  miseVersions: {
+    place: "mise's folder of pnpm versions",
+    location: { root: 'localAppData', path: 'mise/installs/pnpm' },
+    layout: 'versionFolders',
+  },
+} satisfies Record<string, WindowsPnpmInstallPlace>;
+
+/** Installs pnpm `version` at `installPlace` below `folders`, and answers the path of the install. */
+async function createWindowsPnpmInstall(params: {
+  folders: EnvironmentFolders;
+  installPlace: WindowsPnpmInstallPlace;
+  version: string;
+}): Promise<AbsolutePath> {
+  switch (params.installPlace.layout) {
+    case 'versionFolders': {
+      const versionPath = resolveEnvironmentLocation({
+        folders: params.folders,
+        location: buildLocationBelow({
+          location: params.installPlace.location,
+          path: params.version,
+        }),
+      });
+      await createFixtureDirectory({ path: versionPath });
+
+      return versionPath;
+    }
+    case 'packageFolder': {
+      const packagePath = resolveEnvironmentLocation({
+        folders: params.folders,
+        location: params.installPlace.location,
+      });
+      await writePnpmPackage({ packageFolder: packagePath, version: params.version });
+
+      return packagePath;
+    }
+  }
 }
 
 /** A file of the example project at `PROJECT_PATH`, which no probe reads from the disk. */
@@ -138,7 +301,6 @@ function buildProjectFilePath(fileName: string): AbsolutePath {
   return buildTestAbsolutePath({ text: `${PROJECT_PATH}/${fileName}` });
 }
 
-/** Creates the folders `folderNames` in the store at `storeRoot` of the fixture environment. */
 async function createStoreFolders(params: {
   storeRoot: CatalogLocation;
   folderNames: string[];
@@ -738,10 +900,21 @@ describe('loadPnpmInstallState', () => {
       Result<PnpmInstallState, ExploreFileUnreadable>
     > {
       return loadPnpmInstallState({
-        environment: buildWindowsFolderEnvironment({ environment: environment }),
+        environment: buildWindowsFixtureFolders({ environment: environment }),
         places: win32Platform.explore.pnpmInstallPlaces,
         homebrewPrefixPaths: [],
         privacyDenialCode: probePlatform.privacyDenialCode,
+      });
+    }
+
+    function createFixtureInstall(params: {
+      installPlace: WindowsPnpmInstallPlace;
+      version: string;
+    }): Promise<AbsolutePath> {
+      return createWindowsPnpmInstall({
+        folders: buildWindowsFixtureFolders({ environment: environment }),
+        installPlace: params.installPlace,
+        version: params.version,
       });
     }
 
@@ -804,16 +977,14 @@ describe('loadPnpmInstallState', () => {
     });
 
     test("reads npm's global pnpm and @pnpm/exe in the roaming AppData by their package.json", async () => {
-      const pnpmPackagePath = buildWindowsPlacePath({
-        environment: environment,
-        location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
+      const pnpmPackagePath = await createFixtureInstall({
+        installPlace: windowsPnpmInstallPlaces.npmGlobalPnpm,
+        version: '10.14.0',
       });
-      const exePackagePath = buildWindowsPlacePath({
-        environment: environment,
-        location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
+      const exePackagePath = await createFixtureInstall({
+        installPlace: windowsPnpmInstallPlaces.npmGlobalPnpmExe,
+        version: '9.15.4',
       });
-      await writePnpmPackage({ packageFolder: pnpmPackagePath, version: '10.14.0' });
-      await writePnpmPackage({ packageFolder: exePackagePath, version: '9.15.4' });
 
       expect(await loadWindowsInstallState()).toEqual({
         kind: 'succeeded',
@@ -827,16 +998,14 @@ describe('loadPnpmInstallState', () => {
     });
 
     test("reads corepack's pnpm versions in the local AppData, in either of its layouts", async () => {
-      const v1VersionPath = buildWindowsPlacePath({
-        environment: environment,
-        location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
+      const v1VersionPath = await createFixtureInstall({
+        installPlace: windowsPnpmInstallPlaces.corepackV1,
+        version: '10.14.0',
       });
-      const versionPath = buildWindowsPlacePath({
-        environment: environment,
-        location: { root: 'localAppData', path: 'node/corepack/pnpm/9.15.4' },
+      const versionPath = await createFixtureInstall({
+        installPlace: windowsPnpmInstallPlaces.corepack,
+        version: '9.15.4',
       });
-      await createFixtureDirectory({ path: v1VersionPath });
-      await createFixtureDirectory({ path: versionPath });
 
       expect(await loadWindowsInstallState()).toEqual({
         kind: 'succeeded',
@@ -850,21 +1019,18 @@ describe('loadPnpmInstallState', () => {
     });
 
     test("reads the pnpm versions of Volta's, Scoop's and mise's folders of pnpm", async () => {
-      const voltaVersionPath = buildWindowsPlacePath({
-        environment: environment,
-        location: { root: 'localAppData', path: 'Volta/tools/image/pnpm/10.14.0' },
+      const voltaVersionPath = await createFixtureInstall({
+        installPlace: windowsPnpmInstallPlaces.voltaVersions,
+        version: '10.14.0',
       });
-      const scoopVersionPath = buildWindowsPlacePath({
-        environment: environment,
-        location: { root: 'home', path: 'scoop/apps/pnpm/9.15.4' },
+      const scoopVersionPath = await createFixtureInstall({
+        installPlace: windowsPnpmInstallPlaces.scoopVersions,
+        version: '9.15.4',
       });
-      const miseVersionPath = buildWindowsPlacePath({
-        environment: environment,
-        location: { root: 'localAppData', path: 'mise/installs/pnpm/8.15.9' },
+      const miseVersionPath = await createFixtureInstall({
+        installPlace: windowsPnpmInstallPlaces.miseVersions,
+        version: '8.15.9',
       });
-      await createFixtureDirectory({ path: voltaVersionPath });
-      await createFixtureDirectory({ path: scoopVersionPath });
-      await createFixtureDirectory({ path: miseVersionPath });
 
       expect(await loadWindowsInstallState()).toEqual({
         kind: 'succeeded',
@@ -879,22 +1045,17 @@ describe('loadPnpmInstallState', () => {
     });
 
     test("reads npm's global pnpm below Scoop's persisted prefixes and Volta's package prefixes", async () => {
-      const packageLocations: CatalogLocation[] = [
-        { root: 'home', path: 'scoop/persist/nodejs/bin/node_modules/pnpm' },
-        { root: 'home', path: 'scoop/persist/nodejs-lts/bin/node_modules/pnpm' },
-        { root: 'localAppData', path: 'Volta/tools/image/packages/pnpm/node_modules/pnpm' },
-        {
-          root: 'localAppData',
-          path: 'Volta/tools/image/packages/@pnpm/exe/node_modules/@pnpm/exe',
-        },
+      const installPlaces = [
+        windowsPnpmInstallPlaces.scoopNodePrefix,
+        windowsPnpmInstallPlaces.scoopNodeLtsPrefix,
+        windowsPnpmInstallPlaces.voltaPnpmPackage,
+        windowsPnpmInstallPlaces.voltaPnpmExePackage,
       ];
-      const packagePaths = packageLocations.map((location) =>
-        buildWindowsPlacePath({ environment: environment, location: location }),
+      const packagePaths = await Promise.all(
+        installPlaces.map((installPlace) =>
+          createFixtureInstall({ installPlace: installPlace, version: '10.14.0' }),
+        ),
       );
-
-      for (const packagePath of packagePaths) {
-        await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
-      }
 
       expect(await loadWindowsInstallState()).toEqual({
         kind: 'succeeded',
@@ -909,59 +1070,25 @@ describe('loadPnpmInstallState', () => {
       });
     });
 
-    const nodeVersionPackagePlaces: { manager: string; packageFolder: CatalogLocation }[] = [
-      {
-        manager: 'nvm-windows 2',
-        packageFolder: {
-          root: 'localAppData',
-          path: 'Author Software/nvm/installs/v22.1.0/node_modules/pnpm',
-        },
-      },
-      {
-        manager: 'nvm-windows 1.2',
-        packageFolder: { root: 'localAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
-      },
+    const nodeVersionPackagePlaces: { manager: string; installPlace: WindowsPnpmInstallPlace }[] = [
+      { manager: 'nvm-windows 2', installPlace: windowsPnpmInstallPlaces.nvmWindows2Node },
+      { manager: 'nvm-windows 1.2', installPlace: windowsPnpmInstallPlaces.nvmWindows12Node },
       {
         manager: 'nvm-windows before 1.2',
-        packageFolder: { root: 'roamingAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
+        installPlace: windowsPnpmInstallPlaces.nvmWindowsBefore12Node,
       },
-      {
-        manager: 'fnm',
-        packageFolder: {
-          root: 'roamingAppData',
-          path: 'fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
-        },
-      },
-      {
-        manager: "fnm's legacy folder",
-        packageFolder: {
-          root: 'home',
-          path: '.fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
-        },
-      },
-      {
-        manager: 'Volta',
-        packageFolder: {
-          root: 'localAppData',
-          path: 'Volta/tools/image/node/22.1.0/node_modules/pnpm',
-        },
-      },
-      {
-        manager: 'mise',
-        packageFolder: {
-          root: 'localAppData',
-          path: 'mise/installs/node/22.1.0/node_modules/pnpm',
-        },
-      },
+      { manager: 'fnm', installPlace: windowsPnpmInstallPlaces.fnmNode },
+      { manager: "fnm's legacy folder", installPlace: windowsPnpmInstallPlaces.fnmLegacyNode },
+      { manager: 'Volta', installPlace: windowsPnpmInstallPlaces.voltaNode },
+      { manager: 'mise', installPlace: windowsPnpmInstallPlaces.miseNode },
     ];
 
     for (const packagePlace of nodeVersionPackagePlaces) {
       test(`reads npm's global pnpm of a node version of ${packagePlace.manager}`, async () => {
-        const packageFolder = buildWindowsPlacePath({
-          environment: environment,
-          location: packagePlace.packageFolder,
+        const packageFolder = await createFixtureInstall({
+          installPlace: packagePlace.installPlace,
+          version: '10.14.0',
         });
-        await writePnpmPackage({ packageFolder: packageFolder, version: '10.14.0' });
 
         expect(await loadWindowsInstallState()).toEqual({
           kind: 'succeeded',
@@ -987,7 +1114,7 @@ describe('loadPnpmInstallState', () => {
         createUnreadablePlace: async () => {
           const corepackPnpmPath = buildWindowsPlacePath({
             environment: environment,
-            location: { root: 'localAppData', path: 'node/corepack/v1/pnpm' },
+            location: windowsPnpmInstallPlaces.corepackV1.location,
           });
           await createFixtureDirectory({ path: corepackPnpmPath });
           await chmod(corepackPnpmPath, 0o000);
@@ -998,11 +1125,10 @@ describe('loadPnpmInstallState', () => {
       {
         place: "npm's global pnpm",
         createUnreadablePlace: async () => {
-          const packagePath = buildWindowsPlacePath({
-            environment: environment,
-            location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
+          const packagePath = await createFixtureInstall({
+            installPlace: windowsPnpmInstallPlaces.npmGlobalPnpm,
+            version: '10.14.0',
           });
-          await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
           await chmod(packagePath, 0o000);
 
           return join(packagePath, 'package.json');
@@ -1758,160 +1884,14 @@ for (const probeCase of probeCases) {
     }
 
     describeOnWindows("at pnpm's places of Windows", () => {
-      function createPnpmVersionFolder(params: { location: CatalogLocation }): Promise<void> {
-        return createFixtureDirectory({
-          path: resolveEnvironmentLocation({ folders: environment, location: params.location }),
-        });
-      }
-
-      /** The package of pnpm 10 at `location`, in a folder of npm's globals. */
-      function writePnpm10Package(params: { location: CatalogLocation }): Promise<void> {
-        return writePnpmPackage({
-          packageFolder: resolveEnvironmentLocation({
-            folders: environment,
-            location: params.location,
-          }),
-          version: '10.14.0',
-        });
-      }
-
-      const windowsInstallPlaces: { place: string; createInstall: () => Promise<void> }[] = [
-        {
-          place: "corepack's v1 folder in the local AppData",
-          createInstall: () =>
-            createPnpmVersionFolder({
-              location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
-            }),
-        },
-        {
-          place: "corepack's folder in the local AppData",
-          createInstall: () =>
-            createPnpmVersionFolder({
-              location: { root: 'localAppData', path: 'node/corepack/pnpm/10.14.0' },
-            }),
-        },
-        {
-          place: "npm's globals in the roaming AppData",
-          createInstall: () =>
-            writePnpm10Package({
-              location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
-            }),
-        },
-        {
-          place: "npm's globals of @pnpm/exe in the roaming AppData",
-          createInstall: () =>
-            writePnpm10Package({
-              location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
-            }),
-        },
-        {
-          place: "npm's globals of a node version of nvm-windows 2",
-          createInstall: () =>
-            writePnpm10Package({
-              location: {
-                root: 'localAppData',
-                path: 'Author Software/nvm/installs/v22.1.0/node_modules/pnpm',
-              },
-            }),
-        },
-        {
-          place: "npm's globals of a node version of nvm-windows 1.2",
-          createInstall: () =>
-            writePnpm10Package({
-              location: { root: 'localAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
-            }),
-        },
-        {
-          place: "npm's globals of a node version of nvm-windows before 1.2",
-          createInstall: () =>
-            writePnpm10Package({
-              location: { root: 'roamingAppData', path: 'nvm/v22.1.0/node_modules/pnpm' },
-            }),
-        },
-        {
-          place: "npm's globals of a node version of fnm",
-          createInstall: () =>
-            writePnpm10Package({
-              location: {
-                root: 'roamingAppData',
-                path: 'fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
-              },
-            }),
-        },
-        {
-          place: "npm's globals of a node version in fnm's legacy folder",
-          createInstall: () =>
-            writePnpm10Package({
-              location: {
-                root: 'home',
-                path: '.fnm/node-versions/v22.1.0/installation/node_modules/pnpm',
-              },
-            }),
-        },
-        {
-          place: "npm's globals of a node version of Volta",
-          createInstall: () =>
-            writePnpm10Package({
-              location: {
-                root: 'localAppData',
-                path: 'Volta/tools/image/node/22.1.0/node_modules/pnpm',
-              },
-            }),
-        },
-        {
-          place: "Volta's package prefix of pnpm",
-          createInstall: () =>
-            writePnpm10Package({
-              location: {
-                root: 'localAppData',
-                path: 'Volta/tools/image/packages/pnpm/node_modules/pnpm',
-              },
-            }),
-        },
-        {
-          place: "Volta's folder of pnpm versions",
-          createInstall: () =>
-            createPnpmVersionFolder({
-              location: { root: 'localAppData', path: 'Volta/tools/image/pnpm/10.14.0' },
-            }),
-        },
-        {
-          place: "npm's globals of Scoop's persisted node prefix",
-          createInstall: () =>
-            writePnpm10Package({
-              location: { root: 'home', path: 'scoop/persist/nodejs/bin/node_modules/pnpm' },
-            }),
-        },
-        {
-          place: "Scoop's folder of pnpm versions",
-          createInstall: () =>
-            createPnpmVersionFolder({
-              location: { root: 'home', path: 'scoop/apps/pnpm/10.14.0' },
-            }),
-        },
-        {
-          place: "npm's globals of a node version of mise",
-          createInstall: () =>
-            writePnpm10Package({
-              location: {
-                root: 'localAppData',
-                path: 'mise/installs/node/22.1.0/node_modules/pnpm',
-              },
-            }),
-        },
-        {
-          place: "mise's folder of pnpm versions",
-          createInstall: () =>
-            createPnpmVersionFolder({
-              location: { root: 'localAppData', path: 'mise/installs/pnpm/10.14.0' },
-            }),
-        },
-      ];
-
-      for (const installPlace of windowsInstallPlaces) {
+      for (const installPlace of Object.values(windowsPnpmInstallPlaces)) {
         test(`keeps a store version a pnpm in ${installPlace.place} uses`, async () => {
           await createStore({ folderNames: ['v3', 'v10'] });
-          await installPlace.createInstall();
+          await createWindowsPnpmInstall({
+            folders: environment,
+            installPlace: installPlace,
+            version: '10.14.0',
+          });
 
           expect(await loadOfferedVersions({ files: [] })).toEqual({
             storeVersions: ['v3'],

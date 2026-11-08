@@ -22,10 +22,12 @@ export function countTestCloudOnlyEntries(params: {
 }): CloudOnlyEntryCount | null {
   const tally = createCloudOnlyEntryTally({ cloudOnlyEntries: params.cloudOnlyEntries });
 
-  if (tally.recordEvictedEntry !== null) {
-    for (const entryPath of params.entryPaths) {
-      tally.recordEvictedEntry({ path: entryPath, kind: 'file' });
-    }
+  if (tally === null) {
+    return null;
+  }
+
+  for (const entryPath of params.entryPaths) {
+    tally.recordEvictedEntry({ path: entryPath, kind: 'file' });
   }
 
   return tally.getCloudOnlyEntryCount();

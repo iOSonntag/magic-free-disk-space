@@ -26,15 +26,6 @@ import { describeOnWindows } from '../../support/windowsOnly.js';
 
 type AttributeSave = { path: string; attributes: number };
 
-/** The attributes a fake access answers from, and the calls it records. */
-type FakeAttributeState = {
-  attributesByPath: Map<string, number>;
-  failures: Map<string, string>;
-  onSaved: (saved: AttributeSave) => void;
-  loadedPaths: string[];
-  saves: AttributeSave[];
-};
-
 /**
  * Attributes a test sets by path, normal for any other; a path of `failures` fails its every call
  * with the code given. Records each load and each save, and hands each save that succeeded to
@@ -49,49 +40,43 @@ function buildFakeAttributes(params: {
   loadedPaths: string[];
   saves: AttributeSave[];
 } {
-  const state: FakeAttributeState = {
-    attributesByPath: params.attributesByPath ?? new Map<string, number>(),
-    failures: params.failures ?? new Map<string, string>(),
-    onSaved: params.onSaved ?? (() => undefined),
-    loadedPaths: [],
-    saves: [],
-  };
+  const attributesByPath = params.attributesByPath ?? new Map<string, number>();
+  const failures = params.failures ?? new Map<string, string>();
+  const onSaved = params.onSaved ?? (() => undefined);
+  const loadedPaths: string[] = [];
+  const saves: AttributeSave[] = [];
 
-  return {
-    access: buildFakeAttributeAccess(state),
-    loadedPaths: state.loadedPaths,
-    saves: state.saves,
-  };
-}
+  function load(loaded: { path: string }): Result<number, string> {
+    loadedPaths.push(loaded.path);
 
-function buildFakeAttributeAccess(state: FakeAttributeState): EntryAttributeAccess {
-  function load(params: { path: string }): Result<number, string> {
-    state.loadedPaths.push(params.path);
-
-    const failure = state.failures.get(params.path);
+    const failure = failures.get(loaded.path);
 
     if (failure !== undefined) {
       return { kind: 'failed', failure: failure };
     }
 
-    return { kind: 'succeeded', value: state.attributesByPath.get(params.path) ?? 0 };
+    return { kind: 'succeeded', value: attributesByPath.get(loaded.path) ?? 0 };
   }
 
-  function save(params: AttributeSave): Result<null, string> {
-    const failure = state.failures.get(params.path);
+  function save(saved: AttributeSave): Result<null, string> {
+    const failure = failures.get(saved.path);
 
     if (failure !== undefined) {
       return { kind: 'failed', failure: failure };
     }
 
-    state.saves.push(params);
-    state.attributesByPath.set(params.path, params.attributes);
-    state.onSaved(params);
+    saves.push(saved);
+    attributesByPath.set(saved.path, saved.attributes);
+    onSaved(saved);
 
     return { kind: 'succeeded', value: null };
   }
 
-  return { load: load, save: save };
+  return {
+    access: { load: load, save: save },
+    loadedPaths: loadedPaths,
+    saves: saves,
+  };
 }
 
 /**

@@ -40,10 +40,9 @@ function listEnginePlacePaths(params: {
   }
 }
 
-// The paths these places resolved to on macOS before they moved onto the one location type. The
-// keys of the units at them may be kept by the shipped app, so none may change.
+// The paths of macOS whose unit keys the shipped app may keep, so none may change.
 describe("darwin's explore places", () => {
-  test('resolves the container engines to the sockets and disk images of before', () => {
+  test('resolves the container engines to their sockets and disk images', () => {
     const engines = darwinPlatform.explore.containerEngines;
 
     expect({
@@ -76,7 +75,7 @@ describe("darwin's explore places", () => {
     });
   });
 
-  test('keeps the key of an engine unit at the socket of before', () => {
+  test('keeps the key of an engine unit at its socket', () => {
     const engine = darwinPlatform.explore.containerEngines.dockerDesktopEngine;
 
     if (engine === null || engine.kind !== 'fixed') {
@@ -104,7 +103,7 @@ describe("darwin's explore places", () => {
     ).toBe('engineVolume:dockerDesktopEngine:/Users/tester/.docker/run/docker.sock:data');
   });
 
-  test('resolves the IDE version roots to the folders of before', () => {
+  test('resolves the IDE version roots to their folders', () => {
     const roots = darwinPlatform.explore.ideVersionRoots;
 
     expect<Record<string, string[]>>({
@@ -130,7 +129,7 @@ describe("darwin's explore places", () => {
     });
   });
 
-  test('resolves the folders of iCloud Drive, Mail and Downloads to those of before', () => {
+  test('resolves the folders of iCloud Drive, Mail and Downloads', () => {
     const explore = darwinPlatform.explore;
     const folderRoots = [explore.icloudDriveRoot, explore.mailDownloadsRoot, explore.downloadsRoot];
 

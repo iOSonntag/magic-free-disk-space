@@ -1,7 +1,7 @@
 import { PROJECT_ARTIFACT_RULES } from '../../catalog/projectArtifactRules.js';
 import type { Platform } from '../platform.js';
-import { ANDROID_SDK_ROOT, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
-import { DOWNLOADS_ROOT, ICLOUD_DRIVE_ROOT, MAIL_DOWNLOADS_ROOT } from './appleDataRoots.js';
+import { androidSdkRoot, FLUTTER_SETTINGS_PATHS } from './androidSdkRoot.js';
+import { downloadsRoot, icloudDriveRoot, mailDownloadsRoot } from './appleDataRoots.js';
 import { BROWSER_BUNDLES } from './browserBundles.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
 import { CONTAINER_ENGINES } from './containerEngines.js';
@@ -16,14 +16,14 @@ import { loadProcessCommands } from './loadProcessCommands.js';
 import { loadSystemVersion } from './loadSystemVersion.js';
 import { loadVolumeSpace } from './loadVolumeSpace.js';
 import { ORPHAN_LOCATIONS } from './orphanLocations.js';
-import { PNPM_INSTALL_PLACES, PNPM_STORE_ROOT, PNPM_XDG_STORE_ROOT } from './pnpmHomes.js';
+import { pnpmInstallPlaces, pnpmStoreRoot, pnpmXdgStoreRoot } from './pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from './projectSearchEvidence.js';
 import { removeTree } from './removeTree.js';
 import { PROJECT_SEARCH_EXCLUDED_NAMES, userFileRoots } from './scanHomeFolders.js';
 import { DARWIN_SYSTEM_APPS, MAIL_BUNDLE_PATHS } from './systemApps.js';
 import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
 import { darwinToolProcesses } from './toolProcesses.js';
-import { VSCODE_PROFILES_ROOT } from './vscodeProfilesRoot.js';
+import { vscodeProfilesRoot } from './vscodeProfilesRoot.js';
 
 /** Everything the app takes from macOS; the entry points hand each module its slice. */
 export const darwinPlatform: Platform = {
@@ -62,19 +62,19 @@ export const darwinPlatform: Platform = {
   },
   delete: { removeTree: removeTree, trash: { kind: 'catalogFolder' } },
   explore: {
-    pnpmInstallPlaces: PNPM_INSTALL_PLACES,
-    pnpmStoreRoot: PNPM_STORE_ROOT,
-    pnpmXdgStoreRoot: PNPM_XDG_STORE_ROOT,
-    androidSdkRoot: ANDROID_SDK_ROOT,
+    pnpmInstallPlaces: pnpmInstallPlaces,
+    pnpmStoreRoot: pnpmStoreRoot,
+    pnpmXdgStoreRoot: pnpmXdgStoreRoot,
+    androidSdkRoot: androidSdkRoot,
     flutterSettingsPaths: FLUTTER_SETTINGS_PATHS,
-    vscodeProfilesRoot: VSCODE_PROFILES_ROOT,
+    vscodeProfilesRoot: vscodeProfilesRoot,
     projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     containerEngines: CONTAINER_ENGINES,
     ideVersionRoots: IDE_VERSION_ROOTS,
-    icloudDriveRoot: ICLOUD_DRIVE_ROOT,
-    mailDownloadsRoot: MAIL_DOWNLOADS_ROOT,
+    icloudDriveRoot: icloudDriveRoot,
+    mailDownloadsRoot: mailDownloadsRoot,
     mailBundlePaths: MAIL_BUNDLE_PATHS,
-    downloadsRoot: DOWNLOADS_ROOT,
+    downloadsRoot: downloadsRoot,
     browserBundles: BROWSER_BUNDLES,
   },
   report: {

@@ -1,7 +1,7 @@
 import type { CatalogLocation } from '../../catalog/catalog.js';
 
 /** The Android SDK, `~/Library/Android/sdk`. */
-export const ANDROID_SDK_ROOT: CatalogLocation = { root: 'home', path: 'Library/Android/sdk' };
+export const androidSdkRoot: CatalogLocation = { root: 'home', path: 'Library/Android/sdk' };
 
 /**
  * Flutter's settings files, which may name another Android SDK, in Flutter's order: the legacy

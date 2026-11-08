@@ -7,7 +7,7 @@ import type {
   MacBundleId,
 } from '../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
-import type { Environment } from '../environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../environment/environmentLocation.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -280,7 +280,7 @@ function findOwnerInstalledAppName(params: {
  */
 export function findRemovalOwner(params: {
   owner: CatalogOwner | null;
-  environment: Environment;
+  environment: EnvironmentFolders;
   installedApps: InstalledApp[];
   systemApps: SystemApp[];
 }): RemovalOwner {
@@ -391,7 +391,7 @@ function resolveExecutableOwnerState(params: {
 
 function resolveInstallFolderPath(params: {
   owner: CatalogOwnerExecutable;
-  environment: Environment;
+  environment: EnvironmentFolders;
 }): AbsolutePath | null {
   if (params.owner.installFolder === null) {
     return null;

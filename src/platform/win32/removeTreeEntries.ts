@@ -38,13 +38,13 @@ export type EntryAttributeAccess = {
 };
 
 /** How the removal of one entry ended; one that stayed or failed carries the code of its call. */
-export type EntryRemovalEnd =
+type EntryRemovalEnd =
   | { kind: 'gone' }
   | { kind: 'stayed'; code: string }
   | { kind: 'failed'; code: string };
 
 /** The kind of entry a removal call went to: a file, a link of any kind, or a folder. */
-export type RemovalEntryKind = 'file' | 'link' | 'directory';
+type RemovalEntryKind = 'file' | 'link' | 'directory';
 
 /** A file, or a link of any kind, which goes as one entry. */
 type LeafTarget = { path: AbsolutePath; kind: 'file' | 'link' };

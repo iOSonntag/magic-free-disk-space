@@ -25,7 +25,6 @@ import { parseHuggingFaceRepoFolderName } from '../../src/explore/huggingFace/pa
 import { recheckHuggingFaceUnit } from '../../src/explore/huggingFace/recheckHuggingFaceUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -37,6 +36,7 @@ import {
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import type { TestProbeRunProcesses } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
   getProbeFindings,
@@ -93,10 +93,9 @@ async function withHubFixture(params: {
   });
 }
 
-async function loadFindings(params: {
-  environment: Environment;
-  runningProcesses?: RunningProcesses | null;
-}): Promise<ExploreProbeFindings> {
+async function loadFindings(
+  params: TestProbeRunProcesses & { environment: Environment },
+): Promise<ExploreProbeFindings> {
   return getProbeFindings(await loadHuggingFaceRepoFindings(buildTestProbeRun(params)));
 }
 

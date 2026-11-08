@@ -14,12 +14,12 @@ const ASDF_NODE_TOOL_NAME = 'nodejs';
 const MISE_NODE_TOOL_NAME = 'node';
 
 /** pnpm's home on macOS, `~/Library/pnpm`. */
-const PNPM_HOME: CatalogLocation = { root: 'home', path: 'Library/pnpm' };
+const pnpmHome: CatalogLocation = { root: 'home', path: 'Library/pnpm' };
 
 /** pnpm's home at the XDG data place, `~/.local/share/pnpm`. */
-const PNPM_XDG_HOME: CatalogLocation = { root: 'home', path: '.local/share/pnpm' };
+const pnpmXdgHome: CatalogLocation = { root: 'home', path: '.local/share/pnpm' };
 
-const PNPM_HOMES = [PNPM_HOME, PNPM_XDG_HOME];
+const pnpmHomes = [pnpmHome, pnpmXdgHome];
 
 /**
  * Where pnpm is installed on macOS beside Homebrew: its homes, corepack's cache in
@@ -27,15 +27,15 @@ const PNPM_HOMES = [PNPM_HOME, PNPM_XDG_HOME];
  * `pnpm` that `install.sh` and `pnpm setup` put in a home, and npm's globals in `lib/node_modules`
  * below each prefix.
  */
-export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
-  homes: PNPM_HOMES,
+export const pnpmInstallPlaces: PnpmInstallPlaces = {
+  homes: pnpmHomes,
   corepackRoots: [
     { root: 'home', path: '.cache/node/corepack/v1/pnpm' },
     { root: 'home', path: '.cache/node/corepack/pnpm' },
   ],
   pnpmVersionsRoots: [buildHomeLocation({ names: [...ASDF_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME] })],
   miseInstallsRoots: [buildHomeLocation({ names: MISE_INSTALLS_PATH_NAMES })],
-  launchers: PNPM_HOMES.map((home) => buildLocationBelow({ location: home, path: PNPM_TOOL_NAME })),
+  launchers: pnpmHomes.map((home) => buildLocationBelow({ location: home, path: PNPM_TOOL_NAME })),
   npmPrefixes: [],
   npmGlobalFolderNames: ['lib', 'node_modules'],
   nodeVersionsRoots: [
@@ -46,13 +46,13 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
 };
 
 /** pnpm's store on macOS, `~/Library/pnpm/store`. */
-export const PNPM_STORE_ROOT: CatalogLocation = buildLocationBelow({
-  location: PNPM_HOME,
+export const pnpmStoreRoot: CatalogLocation = buildLocationBelow({
+  location: pnpmHome,
   path: PNPM_STORE_FOLDER_NAME,
 });
 
 /** pnpm's store at the XDG data place, `~/.local/share/pnpm/store`. */
-export const PNPM_XDG_STORE_ROOT: CatalogLocation = buildLocationBelow({
-  location: PNPM_XDG_HOME,
+export const pnpmXdgStoreRoot: CatalogLocation = buildLocationBelow({
+  location: pnpmXdgHome,
   path: PNPM_STORE_FOLDER_NAME,
 });

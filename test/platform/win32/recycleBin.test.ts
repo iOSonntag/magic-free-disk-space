@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import type { DriveRoot } from '../../../src/path/driveRoot.js';
-import { listDriveRootTexts } from '../../../src/platform/win32/listDriveRoots.js';
+import { listDriveRootTexts } from '../../../src/platform/win32/listDriveRootTexts.js';
 import {
   emptyRecycleBin,
   loadLogicalDrives,

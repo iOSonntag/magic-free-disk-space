@@ -16,7 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { buildGuidBytes, knownFolderIds } from '../../src/platform/win32/knownFolderIds.js';
-import { listDriveRootTexts } from '../../src/platform/win32/listDriveRoots.js';
+import { listDriveRootTexts } from '../../src/platform/win32/listDriveRootTexts.js';
 import type { Win32CallFailure } from '../../src/platform/win32/win32Api.js';
 import {
   closeHandle,

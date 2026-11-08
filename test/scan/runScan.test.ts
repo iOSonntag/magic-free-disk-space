@@ -259,7 +259,7 @@ describe('createCloudOnlyEntryTally', () => {
       cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
     });
 
-    if (tally.recordEvictedEntry === null) {
+    if (tally === null) {
       throw new Error('The tally of Windows records no cloud-only entry.');
     }
 
@@ -275,8 +275,7 @@ describe('createCloudOnlyEntryTally', () => {
       cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
     });
 
-    expect(tally.recordEvictedEntry).toBeNull();
-    expect(tally.getCloudOnlyEntryCount()).toBeNull();
+    expect(tally).toBeNull();
   });
 });
 

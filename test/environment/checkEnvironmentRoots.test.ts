@@ -3,7 +3,10 @@ import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoo
 import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
+import {
+  buildWin32Environment,
+  checkWin32EnvironmentRoots,
+} from '../../src/platform/win32/loadEnvironment.js';
 import type { UserIdentity } from '../../src/system/userIdentity.js';
 import { exampleWin32EnvironmentParams } from '../support/environmentFixtures.js';
 import {
@@ -75,14 +78,11 @@ function checkWin32Environment(params: {
     oneDriveRealPaths: params.oneDriveRealPaths,
   });
 
-  return checkEnvironmentRoots({
-    pathRules: WIN32_PATH_RULES,
-    user: exampleWin32EnvironmentParams.user,
+  return checkWin32EnvironmentRoots({
+    environment: environment,
     homeRealPath: exampleWin32EnvironmentParams.home.realPath,
     homeOwner: exampleWin32EnvironmentParams.user,
     tempRealPath: params.temp.realPath,
-    tempPlacement: 'belowHome',
-    protectedRealPaths: environment.protectedRealPaths,
   });
 }
 

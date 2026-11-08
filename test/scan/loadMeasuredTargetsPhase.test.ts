@@ -66,7 +66,7 @@ async function loadPhase(params: {
 }
 
 describe('loadMeasuredTargetsPhase', () => {
-  test('gives a target the entry reads call a link the kind of a symbolic link, which every decision skips', async () => {
+  test('gives a target the entry reads call a link the kind of a symbolic link', async () => {
     // As a mounted folder on Windows, which lstat calls a folder and its reparse point a link.
     const linkedPath = join(fixtureRoot.homeDir, 'Downloads', 'mounted');
     await createFixtureFile({

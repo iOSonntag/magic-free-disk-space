@@ -69,8 +69,8 @@ function openCloudFilterApi() {
 }
 
 /**
- * The handle calls of kernel32, bound here since win32Api.ts keeps its own private, each handle
- * a u64 as win32Api.ts holds it.
+ * The handle calls of kernel32, bound here because win32Api.ts binds no `CreateFileW` and its
+ * `closeHandle` takes a `WindowsHandle` brand that only its own calls make; each handle a u64.
  */
 function openKernel32Handles() {
   return dlopen('kernel32.dll', {

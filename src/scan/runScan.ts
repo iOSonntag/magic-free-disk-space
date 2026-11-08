@@ -144,10 +144,9 @@ export type CloudOnlyEntryCount = {
 
 /** Takes the entries the scan's walks leave unread in the cloud store, and counts them. */
 export type CloudOnlyEntryTally = {
-  /** `null` on a platform that counts none. */
-  recordEvictedEntry: EvictedEntryRecorder | null;
-  /** The count of the entries recorded so far; `null` on a platform that counts none. */
-  getCloudOnlyEntryCount: () => CloudOnlyEntryCount | null;
+  recordEvictedEntry: EvictedEntryRecorder;
+  /** The count of the entries recorded so far. */
+  getCloudOnlyEntryCount: () => CloudOnlyEntryCount;
 };
 
 /** The apps the platform's app section lists: offered apps, or apps the scan only advises about. */
@@ -254,6 +253,8 @@ export async function runScan(params: {
   const cloudOnlyEntryTally = createCloudOnlyEntryTally({
     cloudOnlyEntries: params.scan.cloudOnlyEntries,
   });
+  const recordEvictedEntry =
+    cloudOnlyEntryTally === null ? null : cloudOnlyEntryTally.recordEvictedEntry;
   const runningProcessesLoad = params.system.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
@@ -274,7 +275,7 @@ export async function runScan(params: {
     maxDepth: SCAN_LIMITS.projectMaxDepth,
     deadlineMs: Date.now() + SCAN_LIMITS.walkTimeoutMs,
     entryReads: params.system.entryReads,
-    recordEvictedEntry: cloudOnlyEntryTally.recordEvictedEntry,
+    recordEvictedEntry: recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const projectPins: ProjectPinsLoad = {
@@ -326,7 +327,7 @@ export async function runScan(params: {
     runningProcesses: await knownRunningProcessesLoad,
     activeXcodeBundlePath: activeXcodeBundlePath,
     entryReads: params.system.entryReads,
-    recordEvictedEntry: cloudOnlyEntryTally.recordEvictedEntry,
+    recordEvictedEntry: recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
     userFileRootPaths: findEnvironmentLocationPaths({
       folders: params.environment,
@@ -418,7 +419,7 @@ export async function runScan(params: {
     measureTimeoutMs: SCAN_LIMITS.measureTimeoutMs,
     runItemMeasurement: runItemMeasurement,
     entryReads: params.system.entryReads,
-    recordEvictedEntry: cloudOnlyEntryTally.recordEvictedEntry,
+    recordEvictedEntry: recordEvictedEntry,
     privacyDenialCode: params.system.privacyDenialCode,
   });
   const exploreAdvice = await loadCatalogPhase({
@@ -447,20 +448,21 @@ export async function runScan(params: {
     ],
     incompleteExploreAdvice: incompleteExploreAdvice,
     appAdvice: installed.appAdvice,
-    cloudOnlyEntries: cloudOnlyEntryTally.getCloudOnlyEntryCount(),
+    cloudOnlyEntries:
+      cloudOnlyEntryTally === null ? null : cloudOnlyEntryTally.getCloudOnlyEntryCount(),
   });
 }
 
 /**
  * The tally of the entries a scan's walks leave unread because their content lives only in the
- * cloud store: on a platform that counts them, each path once; on any other, none.
+ * cloud store, each path once; `null` on a platform that counts none.
  */
 export function createCloudOnlyEntryTally(params: {
   cloudOnlyEntries: ScanPlatformCloudOnlyEntries;
-}): CloudOnlyEntryTally {
+}): CloudOnlyEntryTally | null {
   switch (params.cloudOnlyEntries.kind) {
     case 'notCounted':
-      return { recordEvictedEntry: null, getCloudOnlyEntryCount: () => null };
+      return null;
     case 'counted': {
       const cloudStoreName = params.cloudOnlyEntries.cloudStoreName;
       const entryPaths = new Set<string>();

@@ -23,7 +23,7 @@ import type { VariableReading } from './checkVariablePlacement.js';
 import { checkVariablePlacement } from './checkVariablePlacement.js';
 import type { RunKnownFolder } from './knownFolderIds.js';
 import { buildGuidBytes, knownFolderIds } from './knownFolderIds.js';
-import { listDriveRootTexts } from './listDriveRoots.js';
+import { listDriveRootTexts } from './listDriveRootTexts.js';
 import type { Win32CallFailure } from './win32Api.js';
 import {
   closeHandle,
@@ -47,13 +47,13 @@ const ERROR_INVALID_SID = 1337;
 const tempDirNames = ['Temp'];
 
 /** The folder of the deletion log. */
-const WIN32_DELETION_LOG_LOCATION: EnvironmentLocationAtRoot = {
+const win32DeletionLogLocation: EnvironmentLocationAtRoot = {
   root: 'localAppData',
   path: 'magic-free-disk-space/Logs',
 };
 
 /** The folder of the bridge's preference file. */
-const WIN32_PREFERENCES_LOCATION: EnvironmentLocationAtRoot = {
+const win32PreferencesLocation: EnvironmentLocationAtRoot = {
   root: 'localAppData',
   path: 'magic-free-disk-space',
 };
@@ -164,16 +164,11 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     oneDriveRealPaths: oneDriveRealPaths,
   });
 
-  // The whole temporary folder counts as expendable, so it is checked against every protected
-  // folder of the environment, which only exists once all of them are resolved.
-  const rootsFailure = checkEnvironmentRoots({
-    pathRules: WIN32_PATH_RULES,
-    user: token.value.user,
+  const rootsFailure = checkWin32EnvironmentRoots({
+    environment: environment,
     homeRealPath: home.value.realPath,
     homeOwner: homeOwner.value,
     tempRealPath: tempRealPath.value,
-    tempPlacement: 'belowHome',
-    protectedRealPaths: environment.protectedRealPaths,
   });
 
   if (rootsFailure !== null) {
@@ -258,11 +253,33 @@ export function buildWin32Environment(params: {
     sensitiveLocations: WIN32_CATALOG.sensitiveLocations,
     sensitiveExceptionLocations: [],
     evictLocations: [],
-    deletionLogLocation: WIN32_DELETION_LOG_LOCATION,
-    preferencesLocation: WIN32_PREFERENCES_LOCATION,
+    deletionLogLocation: win32DeletionLogLocation,
+    preferencesLocation: win32PreferencesLocation,
     // A file Windows creates takes the access list of its folder, which keeps the profile the
     // user's own; the POSIX modes of Node mean nothing there.
     ownerOnlyModes: null,
+  });
+}
+
+/**
+ * The check of the roots of a run on Windows, over the environment built for it. The whole
+ * temporary folder counts as expendable, so it is checked against every protected folder of the
+ * environment, which only exists once all of them are resolved.
+ */
+export function checkWin32EnvironmentRoots(params: {
+  environment: Environment;
+  homeRealPath: AbsolutePath;
+  homeOwner: UserIdentity;
+  tempRealPath: AbsolutePath;
+}): EnvironmentFailure | null {
+  return checkEnvironmentRoots({
+    pathRules: WIN32_PATH_RULES,
+    user: params.environment.user,
+    homeRealPath: params.homeRealPath,
+    homeOwner: params.homeOwner,
+    tempRealPath: params.tempRealPath,
+    tempPlacement: 'belowHome',
+    protectedRealPaths: params.environment.protectedRealPaths,
   });
 }
 

@@ -13,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, sep } from 'node:path';
 import type {
   Environment,
-  PlatformFoldersWin32,
   WindowsKnownFolder,
   WindowsKnownFolderPaths,
 } from '../../src/environment/buildEnvironment.js';
@@ -137,7 +136,6 @@ export async function loadTestWin32Environment(params: {
 }): Promise<Environment> {
   const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
   const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
-  const appDataDirs = buildTestWin32PlatformFolders({ homeDir: home.path }).appDataDirs;
   const knownFolderPaths = await createTestKnownFolders({
     homeDir: home.path,
     knownFolders: params.knownFolders,
@@ -149,28 +147,17 @@ export async function loadTestWin32Environment(params: {
     user: exampleWindowsUser,
     home: home,
     temp: temp,
-    localAppData: await createTestFolder({ path: appDataDirs.localDir }),
-    roamingAppData: await createTestFolder({ path: appDataDirs.roamingDir }),
+    localAppData: await createTestFolder({
+      path: buildTestHostPath({ text: join(home.path, 'AppData', 'Local') }),
+    }),
+    roamingAppData: await createTestFolder({
+      path: buildTestHostPath({ text: join(home.path, 'AppData', 'Roaming') }),
+    }),
     knownFolderPaths: knownFolderPaths.paths,
     knownFolderRealPaths: knownFolderPaths.realPaths,
     fixedDriveRoots: [buildTestDriveRoot({ text: parse(params.fixtureRoot.rootDir).root })],
     oneDriveRealPaths: [],
   });
-}
-
-/**
- * The platform folders of Windows below the fixture home `homeDir`: the AppData folders where
- * `loadTestWin32Environment` creates them, and no known folder. Creates nothing on disk.
- */
-export function buildTestWin32PlatformFolders(params: { homeDir: string }): PlatformFoldersWin32 {
-  return {
-    kind: 'win32',
-    appDataDirs: {
-      localDir: buildTestHostPath({ text: join(params.homeDir, 'AppData', 'Local') }),
-      roamingDir: buildTestHostPath({ text: join(params.homeDir, 'AppData', 'Roaming') }),
-    },
-    knownFolderPaths: noKnownFolderPaths,
-  };
 }
 
 /**
