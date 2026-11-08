@@ -260,7 +260,7 @@ export function loadFileAttributes(params: {
   const attributes = kernel32.symbols.GetFileAttributesW(toWidePath({ path: params.path }));
 
   if (attributes === INVALID_FILE_ATTRIBUTES) {
-    return buildLastErrorFailure({ call: 'GetFileAttributesW' });
+    return loadLastErrorFailure({ call: 'GetFileAttributesW' });
   }
 
   return { kind: 'succeeded', value: attributes };
@@ -273,7 +273,7 @@ export function loadLogicalDrives(): Result<number, Win32CallFailure> {
   const drives = kernel32.symbols.GetLogicalDrives();
 
   if (drives === 0) {
-    return buildLastErrorFailure({ call: 'GetLogicalDrives' });
+    return loadLastErrorFailure({ call: 'GetLogicalDrives' });
   }
 
   return { kind: 'succeeded', value: drives };
@@ -310,7 +310,7 @@ export function loadDiskFreeSpace(params: {
   );
 
   if (isRead === 0) {
-    return buildLastErrorFailure({ call: 'GetDiskFreeSpaceExW' });
+    return loadLastErrorFailure({ call: 'GetDiskFreeSpaceExW' });
   }
 
   return {
@@ -360,7 +360,7 @@ export function openProcessToken(): Result<WindowsHandle, Win32CallFailure> {
   );
 
   if (isOpened === 0) {
-    return buildLastErrorFailure({ call: 'OpenProcessToken' });
+    return loadLastErrorFailure({ call: 'OpenProcessToken' });
   }
 
   // The brand records that the handle came from OpenProcessToken.
@@ -390,7 +390,7 @@ export function loadTokenUserSid(params: {
   );
 
   if (isRead === 0) {
-    return buildLastErrorFailure({ call: 'GetTokenInformation' });
+    return loadLastErrorFailure({ call: 'GetTokenInformation' });
   }
 
   const sidOffset = Number(new DataView(tokenUser.buffer).getBigUint64(0, true)) - ptr(tokenUser);
@@ -420,7 +420,7 @@ export function loadTokenElevation(params: {
   );
 
   if (isRead === 0) {
-    return buildLastErrorFailure({ call: 'GetTokenInformation' });
+    return loadLastErrorFailure({ call: 'GetTokenInformation' });
   }
 
   return { kind: 'succeeded', value: elevation[0] !== 0 };
@@ -518,7 +518,7 @@ export function listProcesses(): Result<ProcessEntry[], Win32CallFailure> {
   const snapshot = kernel32.symbols.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
   if (snapshot === INVALID_HANDLE_VALUE) {
-    return buildLastErrorFailure({ call: 'CreateToolhelp32Snapshot' });
+    return loadLastErrorFailure({ call: 'CreateToolhelp32Snapshot' });
   }
 
   try {
@@ -559,7 +559,7 @@ export function loadProcessImagePath(params: {
   );
 
   if (processHandle === 0n) {
-    return buildLastErrorFailure({ call: 'OpenProcess' });
+    return loadLastErrorFailure({ call: 'OpenProcess' });
   }
 
   try {
@@ -573,7 +573,7 @@ export function loadProcessImagePath(params: {
     );
 
     if (isRead === 0) {
-      return buildLastErrorFailure({ call: 'QueryFullProcessImageNameW' });
+      return loadLastErrorFailure({ call: 'QueryFullProcessImageNameW' });
     }
 
     return {
@@ -595,7 +595,7 @@ export function createKillOnCloseJob(): Result<WindowsHandle, Win32CallFailure> 
   const job = kernel32.symbols.CreateJobObjectW(null, null);
 
   if (job === 0n) {
-    return buildLastErrorFailure({ call: 'CreateJobObjectW' });
+    return loadLastErrorFailure({ call: 'CreateJobObjectW' });
   }
 
   const limits = new Uint8Array(JOB_EXTENDED_LIMIT_BYTES);
@@ -614,7 +614,7 @@ export function createKillOnCloseJob(): Result<WindowsHandle, Win32CallFailure> 
   );
 
   if (isSet === 0) {
-    const failure = buildLastErrorFailure({ call: 'SetInformationJobObject' });
+    const failure = loadLastErrorFailure({ call: 'SetInformationJobObject' });
 
     kernel32.symbols.CloseHandle(job);
 
@@ -639,12 +639,12 @@ export function assignProcessToJob(params: {
   );
 
   if (processHandle === 0n) {
-    return buildLastErrorFailure({ call: 'OpenProcess' });
+    return loadLastErrorFailure({ call: 'OpenProcess' });
   }
 
   try {
     if (kernel32.symbols.AssignProcessToJobObject(params.job, processHandle) === 0) {
-      return buildLastErrorFailure({ call: 'AssignProcessToJobObject' });
+      return loadLastErrorFailure({ call: 'AssignProcessToJobObject' });
     }
 
     return { kind: 'succeeded', value: null };
@@ -675,7 +675,7 @@ export function setFileAttributes(params: {
   );
 
   if (isSet === 0) {
-    return buildLastErrorFailure({ call: 'SetFileAttributesW' });
+    return loadLastErrorFailure({ call: 'SetFileAttributesW' });
   }
 
   return { kind: 'succeeded', value: null };
@@ -883,7 +883,7 @@ function convertSidToString(params: {
   const isConverted = advapi32.symbols.ConvertSidToStringSidW(params.sid, stringAddress);
 
   if (isConverted === 0) {
-    return buildLastErrorFailure({ call: 'ConvertSidToStringSidW' });
+    return loadLastErrorFailure({ call: 'ConvertSidToStringSidW' });
   }
 
   try {
@@ -894,7 +894,7 @@ function convertSidToString(params: {
 }
 
 /** The failure of `call` with its `GetLastError`, read right after the call failed. */
-function buildLastErrorFailure(params: { call: Win32CallName }): Result<never, Win32CallFailure> {
+function loadLastErrorFailure(params: { call: Win32CallName }): Result<never, Win32CallFailure> {
   kernel32 ??= openKernel32();
 
   return {

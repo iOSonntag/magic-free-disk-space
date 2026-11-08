@@ -1,6 +1,6 @@
-import { win32 } from 'node:path';
 import type { WindowsImageName } from '../catalog/catalogOwner.js';
 import { isSameEntryName, isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { listPathNames } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 
@@ -16,7 +16,8 @@ export function isExecutableOwnerRunning(params: {
   processImagePaths: string[];
 }): boolean {
   return params.processImagePaths.some((imagePath) => {
-    const fileName = win32.basename(imagePath);
+    const fileName =
+      listPathNames({ rules: params.pathRules, path: imagePath }).at(-1) ?? imagePath;
 
     return (
       params.imageNames.some((imageName) =>

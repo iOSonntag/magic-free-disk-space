@@ -1,11 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Candidate, CandidateDecision, SkipReason } from '../../src/scan/candidate.js';
 import { skipOffersTheRemovalRefuses } from '../../src/scan/skipOffersTheRemovalRefuses.js';
-import {
-  buildTestCandidate,
-  buildTestRecycleBinCandidate,
-  buildTestToolCandidate,
-} from '../support/candidateFixtures.js';
+import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
 import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import {
   buildTestEvictCandidate,
@@ -13,6 +9,7 @@ import {
 } from '../support/evictCandidateFixtures.js';
 import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
 import { buildExampleHome } from '../support/parsedValueFixtures.js';
+import { buildTestRecycleBinCandidate } from '../support/platformFixtures.js';
 
 const HOME_DIR = '/Users/example';
 

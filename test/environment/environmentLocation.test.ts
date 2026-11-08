@@ -12,7 +12,7 @@ import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import {
   exampleDarwinEnvironment,
   exampleWin32Environment,
-  exampleWin32EnvironmentParams,
+  exampleWin32EnvironmentValues,
 } from '../support/environmentFixtures.js';
 import { buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
@@ -246,11 +246,11 @@ describe('findEnvironmentLocationPaths', () => {
 
   test('resolves the four known folders of the user files of Windows, in their order', () => {
     const knownFolderPaths = {
-      ...exampleWin32EnvironmentParams.knownFolderPaths,
+      ...exampleWin32EnvironmentValues.knownFolderPaths,
       videos: buildTestWindowsPath({ text: 'D:\\Videos' }),
     };
     const environment = buildWin32Environment({
-      ...exampleWin32EnvironmentParams,
+      ...exampleWin32EnvironmentValues,
       knownFolderPaths: knownFolderPaths,
       knownFolderRealPaths: knownFolderPaths,
     });

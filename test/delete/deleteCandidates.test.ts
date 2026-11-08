@@ -50,7 +50,6 @@ import {
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestProbedCandidate,
-  buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
 import { createTestJournal, loadTestJournalLines } from '../support/deletionJournalFixtures.js';
@@ -69,7 +68,7 @@ import {
   buildTestHostPath,
   buildTestWindowsImageName,
 } from '../support/parsedValueFixtures.js';
-import { hostPlatform } from '../support/platformFixtures.js';
+import { buildTestRecycleBinCandidate, hostPlatform } from '../support/platformFixtures.js';
 import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
@@ -716,7 +715,7 @@ describe('deleteCandidates', () => {
       loadKnownRunningProcesses: async () =>
         buildRunningImagePaths([
           join(fixtureRoot.rootDir, 'Example Editor', 'bin', 'editor.exe'),
-          'C:\\Tools\\tool.exe',
+          join(fixtureRoot.rootDir, 'Tools', 'tool.exe'),
         ]),
       environment: environment,
       ...DELETION_PLATFORM,

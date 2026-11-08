@@ -1,6 +1,7 @@
 import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type {
   EnvironmentFolders,
   PlatformFolders,
@@ -13,7 +14,7 @@ import type {
  * A folder of the run that a location may lie below: the home folder, the temporary folder,
  * macOS' per-user folder of the system's caches for `userCache`, or Windows' two AppData folders.
  */
-export type EnvironmentBase = 'home' | 'temp' | 'userCache' | 'localAppData' | 'roamingAppData';
+type EnvironmentBase = 'home' | 'temp' | 'userCache' | 'localAppData' | 'roamingAppData';
 
 /** The folder a fixed location is named below: a base folder, or none for `absolute`. */
 export type LocationRoot = EnvironmentBase | 'absolute';
@@ -60,11 +61,11 @@ export function resolveEnvironmentLocation(params: {
   location: EnvironmentLocationAtRoot;
 }): AbsolutePath {
   if (params.location.root === 'absolute') {
-    return parseWholePath({ folders: params.folders, text: params.location.path });
+    return parseWholePath({ rules: params.folders.pathRules, text: params.location.path });
   }
 
   return joinLocationPath({
-    folders: params.folders,
+    rules: params.folders.pathRules,
     baseDir: getEnvironmentBaseDir({ folders: params.folders, base: params.location.root }),
     path: params.location.path,
   });
@@ -104,7 +105,7 @@ export function findEnvironmentLocationPath(params: {
   }
 
   return joinLocationPath({
-    folders: params.folders,
+    rules: params.folders.pathRules,
     baseDir: knownFolderPath,
     path: params.location.path,
   });
@@ -163,8 +164,8 @@ function requireWin32Folders(params: { platformFolders: PlatformFolders }): Plat
   }
 }
 
-function parseWholePath(params: { folders: EnvironmentFolders; text: string }): AbsolutePath {
-  const path = parseAbsolutePath({ rules: params.folders.pathRules, text: params.text });
+function parseWholePath(params: { rules: PathRules; text: string }): AbsolutePath {
+  const path = parseAbsolutePath({ rules: params.rules, text: params.text });
 
   if (path.kind === 'failed') {
     throw new Error(`The location ${params.text} is not absolute.`);
@@ -174,12 +175,12 @@ function parseWholePath(params: { folders: EnvironmentFolders; text: string }): 
 }
 
 function joinLocationPath(params: {
-  folders: EnvironmentFolders;
+  rules: PathRules;
   baseDir: AbsolutePath;
   path: string;
 }): AbsolutePath {
   return joinAbsolutePath({
-    rules: params.folders.pathRules,
+    rules: params.rules,
     parentPath: params.baseDir,
     names: params.path === '' ? [] : params.path.split('/'),
   });

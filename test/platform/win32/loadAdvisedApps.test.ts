@@ -9,6 +9,7 @@ import type { UninstallKeyValues } from '../../../src/platform/win32/win32Api.js
 import { loadUninstallKeyValues } from '../../../src/platform/win32/win32Api.js';
 import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 import { describeOnWindows } from '../../support/windowsOnly.js';
+import { deleteRegistryKey, saveRegistryValue } from '../../support/windowsRegistry.js';
 
 /** The values of an Uninstall subkey of an app Settings > Apps lists, with `overrides` on top. */
 function buildKeyValues(overrides: Partial<UninstallKeyValues>): UninstallKeyValues {
@@ -136,23 +137,6 @@ describe('decideUninstallApps', () => {
   });
 });
 
-/** Writes one value of a registry key through `reg.exe`, the key made if missing, or fails the test. */
-function saveRegistryValue(params: {
-  key: string;
-  name: string;
-  type: 'REG_SZ' | 'REG_DWORD';
-  data: string;
-}): void {
-  const result = Bun.spawnSync(
-    ['reg', 'add', params.key, '/v', params.name, '/t', params.type, '/d', params.data, '/f'],
-    { stdout: 'ignore', stderr: 'pipe' },
-  );
-
-  if (result.exitCode !== 0) {
-    throw new Error(`reg add failed: ${result.stderr.toString()}`);
-  }
-}
-
 describe('buildUninstallKeyIssue', () => {
   test('names the key by its hive and the failed call with its code in hex', () => {
     expect(
@@ -216,13 +200,13 @@ describeOnWindows('the Uninstall keys of Windows', () => {
 
     try {
       for (const value of [
-        { key: appKey, name: 'DisplayName', type: 'REG_SZ', data: 'Fixture App' },
-        { key: appKey, name: 'UninstallString', type: 'REG_SZ', data: 'C:\\Fixture\\u.exe' },
-        { key: appKey, name: 'InstallLocation', type: 'REG_SZ', data: 'C:\\Fixture\\App\\' },
-        { key: appKey, name: 'EstimatedSize', type: 'REG_DWORD', data: '2048' },
-        { key: componentKey, name: 'DisplayName', type: 'REG_SZ', data: 'Fixture Part' },
-        { key: componentKey, name: 'UninstallString', type: 'REG_SZ', data: 'x.exe' },
-        { key: componentKey, name: 'SystemComponent', type: 'REG_DWORD', data: '1' },
+        { key: appKey, valueName: 'DisplayName', type: 'REG_SZ', data: 'Fixture App' },
+        { key: appKey, valueName: 'UninstallString', type: 'REG_SZ', data: 'C:\\Fixture\\u.exe' },
+        { key: appKey, valueName: 'InstallLocation', type: 'REG_SZ', data: 'C:\\Fixture\\App\\' },
+        { key: appKey, valueName: 'EstimatedSize', type: 'REG_DWORD', data: '2048' },
+        { key: componentKey, valueName: 'DisplayName', type: 'REG_SZ', data: 'Fixture Part' },
+        { key: componentKey, valueName: 'UninstallString', type: 'REG_SZ', data: 'x.exe' },
+        { key: componentKey, valueName: 'SystemComponent', type: 'REG_DWORD', data: '1' },
       ] as const) {
         saveRegistryValue(value);
       }
@@ -242,10 +226,7 @@ describeOnWindows('the Uninstall keys of Windows', () => {
         issues: [],
       });
     } finally {
-      Bun.spawnSync(['reg', 'delete', `HKCU\\${rootKeyPath}`, '/f'], {
-        stdout: 'ignore',
-        stderr: 'ignore',
-      });
+      deleteRegistryKey({ key: `HKCU\\${rootKeyPath}` });
     }
   });
 });

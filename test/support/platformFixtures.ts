@@ -1,10 +1,10 @@
-import type { CatalogEntry } from '../../src/catalog/catalog.js';
+import type { CatalogEntry, Risk } from '../../src/catalog/catalog.js';
 import type { DeletePlatformTrashRecycleBins } from '../../src/delete/deletePlatform.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Platform } from '../../src/platform/platform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { Result } from '../../src/result.js';
-import type { RecycleBinContent } from '../../src/scan/candidate.js';
+import type { CandidateRecycleBin, RecycleBinContent } from '../../src/scan/candidate.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
 import type {
   AdvisedApp,
@@ -15,6 +15,8 @@ import type {
 import type { SystemCallFailure } from '../../src/system/systemCallFailure.js';
 import type { RunningProcessesLoad } from '../../src/system/systemPlatform.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
+import { buildTestListing } from './candidateFixtures.js';
+import { buildTestDriveRoot } from './parsedValueFixtures.js';
 
 /** `E_FAIL`, the HRESULT of a call that failed for no reason it names. */
 const E_FAIL_HRESULT = 0x80004005;
@@ -127,4 +129,37 @@ export function loadEmptyRecycleBin(): Result<RecycleBinContent, SystemCallFailu
 /** Empties nothing and fails as `E_FAIL` would, since a test never empties a Recycle Bin. */
 function failToEmptyRecycleBin(): Result<null, SystemCallFailure> {
   return { kind: 'failed', failure: { call: 'SHEmptyRecycleBinW', code: E_FAIL_HRESULT } };
+}
+
+/**
+ * The Recycle Bin of the drive at `driveRootText` as the scan of Windows offers it, holding
+ * `scannedContent`; its folder, title, texts and risk are those of the Windows platform.
+ */
+export function buildTestRecycleBinCandidate(params: {
+  driveRootText: string;
+  risk?: Risk;
+  /** 4096 bytes in 2 items when left out. */
+  scannedContent?: RecycleBinContent;
+}): CandidateRecycleBin {
+  const trash = getWin32RecycleBinScanTrash();
+  const scannedContent = params.scannedContent ?? { sizeBytes: 4096, itemCount: 2 };
+
+  return {
+    ...buildTestListing({
+      path: `${params.driveRootText}${trash.binFolderName}`,
+      title: `${trash.title} (${params.driveRootText.slice(0, 2)})`,
+      category: 'trash',
+      risk: params.risk ?? trash.risk,
+      explanation: trash.explanation,
+      regeneration: trash.regeneration,
+      allocatedBytes: scannedContent.sizeBytes,
+      entryCount: scannedContent.itemCount,
+    }),
+    origin: { kind: 'recycleBin' },
+    removal: {
+      kind: 'emptyRecycleBin',
+      driveRoot: buildTestDriveRoot({ text: params.driveRootText }),
+      scannedContent: scannedContent,
+    },
+  };
 }

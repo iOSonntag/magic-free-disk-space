@@ -16,11 +16,11 @@ import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestEngineCandidate,
-  buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
 import { listNumberedViewItems } from '../support/numberedViewItems.js';
 import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+import { buildTestRecycleBinCandidate } from '../support/platformFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
   buildProtocolFixtureReport,

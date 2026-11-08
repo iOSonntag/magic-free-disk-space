@@ -35,6 +35,7 @@ import type {
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
@@ -99,10 +100,13 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** A path below pnpm's own home of the host, the first of its homes, in the fixture environment. */
-function buildPnpmHomePath(params: { environment: Environment; names: string[] }): string {
+/**
+ * A path below pnpm's own home of the host, the first of its homes, in the fixture environment;
+ * each of `names` may hold several names joined by `/`.
+ */
+function buildPnpmHomePath(params: { folders: EnvironmentFolders; names: string[] }): AbsolutePath {
   const [pnpmHomePath] = resolveEnvironmentLocations({
-    folders: params.environment,
+    folders: params.folders,
     locations: hostPlatform.explore.pnpmInstallPlaces.homes,
   });
 
@@ -110,21 +114,25 @@ function buildPnpmHomePath(params: { environment: Environment; names: string[] }
     throw new Error('The host has no pnpm home.');
   }
 
-  return join(pnpmHomePath, ...params.names);
+  return joinAbsolutePath({
+    rules: params.folders.pathRules,
+    parentPath: pnpmHomePath,
+    names: params.names.flatMap((name) => name.split('/')),
+  });
 }
 
 /**
  * The folders of the fixture environment with Windows' AppData folders below its home, where the
  * fixture environment of Windows has them, so the places of Windows resolve and are read on any host.
  */
-function buildWindowsFixtureFolders(params: { environment: Environment }): EnvironmentFolders {
+function buildWindowsFixtureFolders(params: { folders: EnvironmentFolders }): EnvironmentFolders {
   return {
-    pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
-    tempDir: params.environment.tempDir,
+    pathRules: params.folders.pathRules,
+    homeDir: params.folders.homeDir,
+    tempDir: params.folders.tempDir,
     platformFolders: {
       kind: 'win32',
-      appDataDirs: buildTestWin32AppDataDirs({ homeDir: params.environment.homeDir }),
+      appDataDirs: buildTestWin32AppDataDirs({ homeDir: params.folders.homeDir }),
       knownFolderPaths: noKnownFolderPaths,
     },
   };
@@ -132,11 +140,11 @@ function buildWindowsFixtureFolders(params: { environment: Environment }): Envir
 
 /** The path of `location` in the folders of `buildWindowsFixtureFolders`. */
 function buildWindowsPlacePath(params: {
-  environment: Environment;
+  folders: EnvironmentFolders;
   location: CatalogLocation;
 }): AbsolutePath {
   return resolveEnvironmentLocation({
-    folders: buildWindowsFixtureFolders({ environment: params.environment }),
+    folders: buildWindowsFixtureFolders({ folders: params.folders }),
     location: params.location,
   });
 }
@@ -858,7 +866,7 @@ describe('loadPnpmInstallState', () => {
 
   test('keeps a global package.json with no version as an install without a version', async () => {
     const packageFolder = buildPnpmHomePath({
-      environment: environment,
+      folders: environment,
       names: ['global/5/node_modules/pnpm'],
     });
     await writeFixtureTextFile({
@@ -888,7 +896,7 @@ describe('loadPnpmInstallState', () => {
       Result<PnpmInstallState, ExploreFileUnreadable>
     > {
       return loadPnpmInstallState({
-        environment: buildWindowsFixtureFolders({ environment: environment }),
+        environment: buildWindowsFixtureFolders({ folders: environment }),
         places: win32Platform.explore.pnpmInstallPlaces,
         homebrewPrefixPaths: [],
         privacyDenialCode: probePlatform.privacyDenialCode,
@@ -900,7 +908,7 @@ describe('loadPnpmInstallState', () => {
       version: string;
     }): Promise<AbsolutePath> {
       return createWindowsPnpmInstall({
-        folders: buildWindowsFixtureFolders({ environment: environment }),
+        folders: buildWindowsFixtureFolders({ folders: environment }),
         installPlace: params.installPlace,
         version: params.version,
       });
@@ -908,11 +916,11 @@ describe('loadPnpmInstallState', () => {
 
     test('reads the standalone pnpm.exe in pnpm home and in its bin as installs of no known version', async () => {
       const homeExePath = buildWindowsPlacePath({
-        environment: environment,
+        folders: environment,
         location: { root: 'localAppData', path: 'pnpm/pnpm.exe' },
       });
       const binExePath = buildWindowsPlacePath({
-        environment: environment,
+        folders: environment,
         location: { root: 'localAppData', path: 'pnpm/bin/pnpm.exe' },
       });
       await writeFixtureTextFile({ path: homeExePath, text: WINDOWS_EXECUTABLE_TEXT });
@@ -931,7 +939,7 @@ describe('loadPnpmInstallState', () => {
 
     test("reads the pnpm.exe of winget's portable package as an install of no known version", async () => {
       const wingetExePath = buildWindowsPlacePath({
-        environment: environment,
+        folders: environment,
         location: {
           root: 'localAppData',
           path: 'Microsoft/WinGet/Packages/pnpm.pnpm_Microsoft.Winget.Source_8wekyb3d8bbwe/pnpm.exe',
@@ -948,14 +956,14 @@ describe('loadPnpmInstallState', () => {
     test('counts the pnpm.cmd and pnpm.ps1 shims in pnpm home for nothing', async () => {
       await writeFixtureTextFile({
         path: buildWindowsPlacePath({
-          environment: environment,
+          folders: environment,
           location: { root: 'localAppData', path: 'pnpm/pnpm.cmd' },
         }),
         text: '@SETLOCAL\r\n@"%~dp0\\.tools\\pnpm\\10.14.0\\bin\\pnpm.cmd" %*\r\n',
       });
       await writeFixtureTextFile({
         path: buildWindowsPlacePath({
-          environment: environment,
+          folders: environment,
           location: { root: 'localAppData', path: 'pnpm/pnpm.ps1' },
         }),
         text: '& "$PSScriptRoot\\.tools\\pnpm\\10.14.0\\bin\\pnpm.ps1" $args\r\n',
@@ -1101,7 +1109,7 @@ describe('loadPnpmInstallState', () => {
         place: "corepack's folder of pnpm",
         createUnreadablePlace: async () => {
           const corepackPnpmPath = buildWindowsPlacePath({
-            environment: environment,
+            folders: environment,
             location: windowsPnpmInstallPlaces.corepackV1.location,
           });
           await createFixtureDirectory({ path: corepackPnpmPath });
@@ -1126,7 +1134,7 @@ describe('loadPnpmInstallState', () => {
         place: 'the standalone pnpm.exe',
         createUnreadablePlace: async () => {
           const exePath = buildWindowsPlacePath({
-            environment: environment,
+            folders: environment,
             location: { root: 'localAppData', path: 'pnpm/pnpm.exe' },
           });
           await writeFixtureTextFile({ path: exePath, text: WINDOWS_EXECUTABLE_TEXT });
@@ -1286,7 +1294,7 @@ for (const probeCase of probeCases) {
         createInstall: () =>
           createFixtureDirectory({
             path: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['.tools/pnpm/10.22.0'],
             }),
           }),
@@ -1297,7 +1305,7 @@ for (const probeCase of probeCases) {
         createInstall: () =>
           createFixtureDirectory({
             path: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['.tools/@pnpm+exe/10.22.0'],
             }),
           }),
@@ -1308,7 +1316,7 @@ for (const probeCase of probeCases) {
         createInstall: () =>
           writePnpmPackage({
             packageFolder: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['global/5/node_modules/pnpm'],
             }),
             version: '10.14.0',
@@ -1421,7 +1429,7 @@ for (const probeCase of probeCases) {
         testOfPlace: test,
         buildPackageFolder: () =>
           buildPnpmHomePath({
-            environment: environment,
+            folders: environment,
             names: ['global/5/node_modules/@pnpm/exe'],
           }),
       },
@@ -1454,7 +1462,7 @@ for (const probeCase of probeCases) {
         await createStore({ folderNames: ['v10'] });
         await writeFixtureTextFile({
           path: buildPnpmHomePath({
-            environment: environment,
+            folders: environment,
             names: ['pnpm'],
           }),
           text: 'Ïúíþ executable',
@@ -1471,7 +1479,7 @@ for (const probeCase of probeCases) {
       await createStore({ folderNames: ['v10'] });
       await writeFixtureTextFile({
         path: buildPnpmHomePath({
-          environment: environment,
+          folders: environment,
           names: ['pnpm'],
         }),
         text: '#!/bin/sh\nexec "$basedir/.tools/pnpm/10.14.0/bin/pnpm" "$@"\n',
@@ -1506,14 +1514,14 @@ for (const probeCase of probeCases) {
         createInstall: async () => {
           await writeFixtureTextFile({
             path: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['.tools/pnpm-exe/10.22.0/pnpm'],
             }),
             text: 'Ïúíþ executable',
           });
           await writeFixtureTextFile({
             path: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['pnpm'],
             }),
             text: '#!/bin/sh\nexec "$basedir/.tools/pnpm-exe/10.22.0/pnpm" "$@"\n',
@@ -1527,7 +1535,7 @@ for (const probeCase of probeCases) {
         createInstall: () =>
           writePnpmPackage({
             packageFolder: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['global/v11', PNPM_11_INSTALL_ID, 'node_modules/pnpm'],
             }),
             version: '11.1.2',
@@ -1540,7 +1548,7 @@ for (const probeCase of probeCases) {
         createInstall: () =>
           writePnpmPackage({
             packageFolder: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['global/v11', PNPM_11_INSTALL_ID, 'node_modules/@pnpm/exe'],
             }),
             version: '11.1.2',
@@ -1569,7 +1577,7 @@ for (const probeCase of probeCases) {
         async () => {
           const storeRoot = await createStore({ folderNames: ['v11'] });
           const globalInstallsPath = buildPnpmHomePath({
-            environment: environment,
+            folders: environment,
             names: ['global/v11'],
           });
           const installFolderPath = join(globalInstallsPath, PNPM_11_INSTALL_ID);
@@ -1598,7 +1606,7 @@ for (const probeCase of probeCases) {
             storeFolderName: 'v10',
             packageName: packageName,
             linkPath: buildPnpmHomePath({
-              environment: environment,
+              folders: environment,
               names: ['global/5/node_modules', packageName],
             }),
           });
@@ -1738,7 +1746,7 @@ for (const probeCase of probeCases) {
       await createStore({ folderNames: ['v3'] });
       await createFixtureDirectory({
         path: buildPnpmHomePath({
-          environment: environment,
+          folders: environment,
           names: ['.tools/pnpm/13.0.0'],
         }),
       });
@@ -1817,7 +1825,7 @@ for (const probeCase of probeCases) {
         testOfPlace: testOnPosix,
         createUnreadablePlace: async () => {
           const toolsPath = buildPnpmHomePath({
-            environment: environment,
+            folders: environment,
             names: ['.tools/pnpm'],
           });
           await createFixtureDirectory({ path: toolsPath });
@@ -1831,7 +1839,7 @@ for (const probeCase of probeCases) {
         testOfPlace: testOnDarwin,
         createUnreadablePlace: async () => {
           const launcherPath = buildPnpmHomePath({
-            environment: environment,
+            folders: environment,
             names: ['pnpm'],
           });
           await writeFixtureTextFile({ path: launcherPath, text: '#!/bin/sh\n' });
@@ -2001,7 +2009,7 @@ describe('the recheck of a pnpm store unit', () => {
   test('is changed once a pnpm of its store version is installed', async () => {
     await createFixtureDirectory({
       path: buildPnpmHomePath({
-        environment: environment,
+        folders: environment,
         names: ['.tools/pnpm/10.14.0'],
       }),
     });
@@ -2062,7 +2070,7 @@ describe('the recheck of a pnpm store unit', () => {
 
   testOnPosix('fails at a place of installed pnpm it cannot read, never as no pnpm', async () => {
     const toolsPath = buildPnpmHomePath({
-      environment: environment,
+      folders: environment,
       names: ['.tools/pnpm'],
     });
     await createFixtureDirectory({ path: toolsPath });
@@ -2079,7 +2087,7 @@ describe('the recheck of a pnpm store unit', () => {
       kind: 'failed',
       failure: {
         reason: 'fileUnreadable',
-        path: buildTestHostPath({ text: toolsPath }),
+        path: toolsPath,
         failure: { reason: 'permissionDenied', code: 'EACCES' },
       },
     });

@@ -240,10 +240,10 @@ async function removeDirectoryTree(params: {
 /**
  * Every entry below the root, as the walk places it, a link of any kind as a link. An entry the
  * walk finds evicted stays; an evicted folder is listed before the walk records it so, and its
- * removal skips it. A folder that cannot be placed at its visit ends the listing with the code of its read,
- * unless it is gone. A file that cannot be placed is listed as any other: its removal places it
- * again by the attributes it reads right before, and a failure of that read ends its removal by
- * its code, the file kept.
+ * removal skips it. A folder that cannot be placed at its visit ends the listing with the code of
+ * its read, unless it is gone. A file that cannot be placed is listed as any other: its removal
+ * places it again by the attributes it reads right before, and a failure of that read ends its
+ * removal by its code, the file kept.
  */
 async function listRemovalTargets(params: {
   rootPath: AbsolutePath;

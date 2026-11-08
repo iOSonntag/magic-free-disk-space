@@ -2,6 +2,7 @@ import type { EnvironmentFailure } from '../../environment/environmentPlatform.j
 import { isSamePath } from '../../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
+import type { ResolvedFolder } from './loadEnvironment.js';
 
 /** What a variable that names a folder of the run holds, as the loader read it. */
 export type VariableReading =
@@ -9,12 +10,11 @@ export type VariableReading =
   | { kind: 'resolved'; realPath: AbsolutePath }
   | { kind: 'unresolvable' };
 
-/** A variable, what it holds, and the folder Windows keeps for it, by display and real path. */
+/** A variable, what it holds, and the folder Windows keeps for it. */
 export type VariableCheck = {
   variableName: string;
   reading: VariableReading;
-  expectedPath: AbsolutePath;
-  expectedRealPath: AbsolutePath;
+  expectedFolder: ResolvedFolder;
 };
 
 /**
@@ -32,7 +32,7 @@ export function checkVariablePlacement(params: {
       return {
         reason: 'variableElsewhere',
         variableName: check.variableName,
-        path: check.expectedPath,
+        path: check.expectedFolder.path,
       };
     }
   }
@@ -50,7 +50,7 @@ function isPlacedAsExpected(params: { pathRules: PathRules; check: VariableCheck
       return isSamePath({
         rules: params.pathRules,
         path: params.check.reading.realPath,
-        otherPath: params.check.expectedRealPath,
+        otherPath: params.check.expectedFolder.realPath,
       });
   }
 }

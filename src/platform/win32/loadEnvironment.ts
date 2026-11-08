@@ -151,11 +151,12 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     pathRules: WIN32_PATH_RULES,
     paths: listOneDriveRootPaths({ skyDrivePath: knownFolderPaths.skyDrive }),
   });
+  const temp: ResolvedFolder = { path: tempDir, realPath: tempRealPath.value };
   const environment = buildWin32Environment({
     nowMs: Date.now(),
     user: token.value.user,
     home: home.value,
-    temp: { path: tempDir, realPath: tempRealPath.value },
+    temp: temp,
     localAppData: localAppData.value,
     roamingAppData: roamingAppData.value,
     knownFolderPaths: knownFolderPaths,
@@ -181,20 +182,17 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
       {
         variableName: 'USERPROFILE',
         reading: await loadVariableReading({ name: 'USERPROFILE' }),
-        expectedPath: home.value.path,
-        expectedRealPath: home.value.realPath,
+        expectedFolder: home.value,
       },
       {
         variableName: 'TMP',
         reading: await loadVariableReading({ name: 'TMP' }),
-        expectedPath: tempDir,
-        expectedRealPath: tempRealPath.value,
+        expectedFolder: temp,
       },
       {
         variableName: 'TEMP',
         reading: await loadVariableReading({ name: 'TEMP' }),
-        expectedPath: tempDir,
-        expectedRealPath: tempRealPath.value,
+        expectedFolder: temp,
       },
     ],
   });

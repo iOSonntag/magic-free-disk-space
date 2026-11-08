@@ -256,13 +256,13 @@ type ArtifactFolderMatchUnmarked = {
 type ArtifactFolderMatchNoRule = { kind: 'noRule' };
 
 /** What the artifact rules make of a folder, by its name and the names beside it. */
-export type ArtifactFolderMatch =
+type ArtifactFolderMatch =
   | ArtifactFolderMatchArtifact
   | ArtifactFolderMatchUnmarked
   | ArtifactFolderMatchNoRule;
 
 /** Matches folders to the artifact rules it was built from, under the path rules it was built for. */
-export type ArtifactFolderMatcher = {
+type ArtifactFolderMatcher = {
   /**
    * What the rules make of the folder named `name`, whose project folder holds `siblingNames`,
    * the folder's own name among them.

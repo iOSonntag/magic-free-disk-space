@@ -30,20 +30,22 @@ describe('isSameOrInsidePath', () => {
   });
 
   test('compares the names of a Windows path without case, by whole names', () => {
-    const windows = WIN32_PATH_RULES;
-
     expect(
-      isSameOrInsidePath({ rules: windows, path: 'c:\\USERS\\tester\\x', parentPath: 'C:\\Users' }),
+      isSameOrInsidePath({
+        rules: WIN32_PATH_RULES,
+        path: 'c:\\USERS\\tester\\x',
+        parentPath: 'C:\\Users',
+      }),
     ).toBe(true);
-    expect(isSameOrInsidePath({ rules: windows, path: 'C:\\Users', parentPath: 'C:\\' })).toBe(
-      true,
-    );
     expect(
-      isSameOrInsidePath({ rules: windows, path: 'C:\\Users2', parentPath: 'C:\\Users' }),
+      isSameOrInsidePath({ rules: WIN32_PATH_RULES, path: 'C:\\Users', parentPath: 'C:\\' }),
+    ).toBe(true);
+    expect(
+      isSameOrInsidePath({ rules: WIN32_PATH_RULES, path: 'C:\\Users2', parentPath: 'C:\\Users' }),
     ).toBe(false);
-    expect(isSameOrInsidePath({ rules: windows, path: 'D:\\Users', parentPath: 'C:\\' })).toBe(
-      false,
-    );
+    expect(
+      isSameOrInsidePath({ rules: WIN32_PATH_RULES, path: 'D:\\Users', parentPath: 'C:\\' }),
+    ).toBe(false);
   });
 });
 

@@ -4,7 +4,7 @@ import type { RecycleBinContent } from '../scan/candidate.js';
  * What a fresh count makes of a Recycle Bin the scan counted: `alreadyGone` once it holds nothing,
  * `changedSinceScan` once it holds other than the scan counted, else `unchanged`.
  */
-export type RecycleBinRecheck = 'alreadyGone' | 'changedSinceScan' | 'unchanged';
+type RecycleBinRecheck = 'alreadyGone' | 'changedSinceScan' | 'unchanged';
 
 /**
  * Whether the bin may still be emptied: only while it holds what the scan counted, since emptying

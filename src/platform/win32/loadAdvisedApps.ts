@@ -14,7 +14,7 @@ import type {
 import { loadUninstallKeyValues } from './win32Api.js';
 
 /** One key whose subkeys each describe an installed app, in one view of the registry. */
-export type UninstallKeySource = { hive: RegistryHive; view: RegistryView; keyPath: string };
+type UninstallKeySource = { hive: RegistryHive; view: RegistryView; keyPath: string };
 
 const UNINSTALL_KEY_PATH = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall';
 

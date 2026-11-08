@@ -24,7 +24,7 @@ const FIRST_FAILURE_HRESULT = 0x80000000;
 const isRecycleBinProbeOptedIn = process.env.MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE === '1';
 
 /** The root of the drive of the temporary folder, whose bin the probes count and empty. */
-function loadHostDriveRoot(): DriveRoot {
+function getHostDriveRoot(): DriveRoot {
   return buildTestDriveRoot({ text: parse(tmpdir()).root });
 }
 
@@ -48,7 +48,7 @@ function loadAbsentDriveRoot(): DriveRoot {
 
 describeOnWindows('the Recycle Bin of Windows', () => {
   test('SHQueryRecycleBinW counts the bin of the drive of the temporary folder', () => {
-    const content = loadRecycleBinContent({ driveRoot: loadHostDriveRoot() });
+    const content = loadRecycleBinContent({ driveRoot: getHostDriveRoot() });
 
     expect(content.kind).toBe('succeeded');
 
@@ -80,7 +80,7 @@ describeOnWindows('the Recycle Bin of Windows', () => {
     });
 
     test('SHEmptyRecycleBinW empties the bin of a binned file, then finds nothing to empty', async () => {
-      const driveRoot = loadHostDriveRoot();
+      const driveRoot = getHostDriveRoot();
       const filePath = join(folder, 'binned.txt');
       await writeFile(filePath, 'a file for the Recycle Bin');
       // The path goes through the environment, so no text of it is read as PowerShell.

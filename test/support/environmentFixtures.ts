@@ -30,7 +30,7 @@ const exampleWin32KnownFolderPaths: WindowsKnownFolderPaths = {
  * The values of a Windows environment of example paths below `C:\Users\tester`, the same on every
  * host: Documents moved into OneDrive, as Known Folder Move does, and no Videos folder.
  */
-export const exampleWin32EnvironmentParams: Win32EnvironmentValues = {
+export const exampleWin32EnvironmentValues: Win32EnvironmentValues = {
   nowMs: 0,
   user: exampleWindowsUser,
   home: {
@@ -55,7 +55,7 @@ export const exampleWin32EnvironmentParams: Win32EnvironmentValues = {
   oneDriveRealPaths: [buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive' })],
 };
 
-/** The Windows environment of `exampleWin32EnvironmentParams`. */
+/** The Windows environment of `exampleWin32EnvironmentValues`. */
 export const exampleWin32Environment: Environment = buildWin32Environment(
-  exampleWin32EnvironmentParams,
+  exampleWin32EnvironmentValues,
 );

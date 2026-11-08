@@ -1,6 +1,7 @@
 import { isPossiblySameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import { isStrictlyInsidePath } from '../path/isStrictlyInsidePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import type { Environment } from './buildEnvironment.js';
 import { isTouchingProtectedPath } from './isTouchingProtectedPath.js';
@@ -52,7 +53,10 @@ function findDeleteRefusal(params: {
   }
 
   if (
-    !isAbsoluteRealPath({ environment: params.environment, realPath: params.identity.realPath })
+    !isAbsoluteRealPath({
+      rules: params.environment.pathRules,
+      realPath: params.identity.realPath,
+    })
   ) {
     return 'outsideAllowedRoot';
   }
@@ -106,7 +110,10 @@ function findEvictRefusal(params: {
   }
 
   if (
-    !isAbsoluteRealPath({ environment: params.environment, realPath: params.identity.realPath }) ||
+    !isAbsoluteRealPath({
+      rules: params.environment.pathRules,
+      realPath: params.identity.realPath,
+    }) ||
     getEvictRootPlacement({
       environment: params.environment,
       realPath: params.identity.realPath,
@@ -128,11 +135,8 @@ function findEvictRefusal(params: {
 }
 
 /** Whether `realPath` is absolute as the platform of the environment spells a path. */
-function isAbsoluteRealPath(params: { environment: Environment; realPath: string }): boolean {
-  return (
-    parseAbsolutePath({ rules: params.environment.pathRules, text: params.realPath }).kind ===
-    'succeeded'
-  );
+function isAbsoluteRealPath(params: { rules: PathRules; realPath: string }): boolean {
+  return parseAbsolutePath({ rules: params.rules, text: params.realPath }).kind === 'succeeded';
 }
 
 /**

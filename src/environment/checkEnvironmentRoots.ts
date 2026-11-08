@@ -56,19 +56,20 @@ export function checkEnvironmentRoots(params: {
     return { reason: 'tempOverlapsHome', path: params.tempRealPath };
   }
 
-  if (
-    parseDriveRoot({ rules: params.pathRules, text: params.tempRealPath }).kind === 'succeeded' ||
-    listProtectedRealPathsBesideTemp({
-      protectedRealPaths: params.protectedRealPaths,
-      tempRealPath: params.tempRealPath,
-    }).some((protectedRealPath) =>
-      isPossiblySameOrInsidePath({
-        rules: params.pathRules,
-        path: protectedRealPath,
-        parentPath: params.tempRealPath,
-      }),
-    )
-  ) {
+  const tempIsDriveRoot =
+    parseDriveRoot({ rules: params.pathRules, text: params.tempRealPath }).kind === 'succeeded';
+  const tempHoldsProtectedFolder = listProtectedRealPathsBesideTemp({
+    protectedRealPaths: params.protectedRealPaths,
+    tempRealPath: params.tempRealPath,
+  }).some((protectedRealPath) =>
+    isPossiblySameOrInsidePath({
+      rules: params.pathRules,
+      path: protectedRealPath,
+      parentPath: params.tempRealPath,
+    }),
+  );
+
+  if (tempIsDriveRoot || tempHoldsProtectedFolder) {
     return { reason: 'tempHoldsProtectedFolder', path: params.tempRealPath };
   }
 

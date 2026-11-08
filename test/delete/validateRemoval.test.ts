@@ -8,13 +8,13 @@ import type { FileKind } from '../../src/system/loadFileIdentity.js';
 import {
   buildTestCandidate,
   buildTestEngineCandidate,
-  buildTestRecycleBinCandidate,
   buildTestToolCandidate,
   buildTestUnitPathsCandidate,
 } from '../support/candidateFixtures.js';
 import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestRecycleBinCandidate } from '../support/platformFixtures.js';
 
 const ENVIRONMENT = buildTestMacEnvironment();
 

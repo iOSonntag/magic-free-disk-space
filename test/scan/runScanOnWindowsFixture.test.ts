@@ -3,9 +3,9 @@ import { sep } from 'node:path';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import { placeCandidate } from '../../src/scan/placeCandidate.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
-import { buildTestRecycleBinCandidate } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { buildTestRecycleBinCandidate } from '../support/platformFixtures.js';
 import { runTestScanOnPlatform } from '../support/scanRunFixtures.js';
 import type { WindowsFixtureHome, WindowsFixturePlatform } from '../support/windowsFixtureHome.js';
 import {

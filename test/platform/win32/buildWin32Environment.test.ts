@@ -3,7 +3,7 @@ import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
 import { buildWin32Environment } from '../../../src/platform/win32/loadEnvironment.js';
 import {
   exampleWin32Environment,
-  exampleWin32EnvironmentParams,
+  exampleWin32EnvironmentValues,
 } from '../../support/environmentFixtures.js';
 import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
@@ -125,9 +125,9 @@ describe('buildWin32Environment', () => {
 
   test('refuses a moved known folder at its real path, and leaves out one whose real path is gone', () => {
     const environment = buildWin32Environment({
-      ...exampleWin32EnvironmentParams,
+      ...exampleWin32EnvironmentValues,
       knownFolderRealPaths: {
-        ...exampleWin32EnvironmentParams.knownFolderRealPaths,
+        ...exampleWin32EnvironmentValues.knownFolderRealPaths,
         desktop: buildTestWindowsPath({ text: 'D:\\Desktop' }),
         downloads: null,
       },

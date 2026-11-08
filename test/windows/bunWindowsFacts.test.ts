@@ -41,6 +41,7 @@ import {
   FILE_ATTRIBUTE_REPARSE_POINT,
 } from '../support/windowsFileAttributes.js';
 import { describeOnWindows } from '../support/windowsOnly.js';
+import { deleteRegistryKey, saveRegistryValue } from '../support/windowsRegistry.js';
 import { buildLongPathSegments, loadLongPathsEnabled } from './longPath.js';
 import { parseProbeLines } from './observations.js';
 
@@ -120,33 +121,6 @@ function loadAttributes(path: string): number {
 /** A key below `HKEY_CURRENT_USER\Software` that no program writes, named anew for each call. */
 function buildTestKeyPath(): string {
   return `Software\\magic-free-disk-space-tests-${randomUUID()}`;
-}
-
-/** Writes a value below `HKEY_CURRENT_USER` with reg.exe, its key created on the way. */
-async function addCurrentUserValue(params: {
-  keyPath: string;
-  valueName: string;
-  type: 'REG_SZ' | 'REG_DWORD';
-  data: string;
-}): Promise<void> {
-  const run = await runChildProcess({
-    command: [
-      'reg.exe',
-      'add',
-      `HKCU\\${params.keyPath}`,
-      '/v',
-      params.valueName,
-      '/t',
-      params.type,
-      '/d',
-      params.data,
-      '/f',
-    ],
-    stdin: null,
-    timeoutMs: CHILD_TIMEOUT_MS,
-  });
-
-  expect(run).toMatchObject({ exitCode: 0, timedOut: false });
 }
 
 describeOnWindows('Bun and win32Api.ts on Windows', () => {
@@ -333,31 +307,31 @@ describeOnWindows('Bun and win32Api.ts on Windows', () => {
 
   test(
     'the string value of each subkey of HKEY_CURRENT_USER is read, as OneDrive writes its accounts',
-    async () => {
+    () => {
       const keyPath = buildTestKeyPath();
 
       try {
-        await addCurrentUserValue({
-          keyPath: `${keyPath}\\Business1`,
+        saveRegistryValue({
+          key: `HKCU\\${keyPath}\\Business1`,
           valueName: 'UserFolder',
           type: 'REG_SZ',
           data: 'C:\\Users\\tester\\OneDrive - Tests',
         });
-        await addCurrentUserValue({
-          keyPath: `${keyPath}\\Personal`,
+        saveRegistryValue({
+          key: `HKCU\\${keyPath}\\Personal`,
           valueName: 'UserFolder',
           type: 'REG_SZ',
           data: 'C:\\Users\\tester\\OneDrive',
         });
         // Left out: a value of another type, and a subkey without the value.
-        await addCurrentUserValue({
-          keyPath: `${keyPath}\\Number`,
+        saveRegistryValue({
+          key: `HKCU\\${keyPath}\\Number`,
           valueName: 'UserFolder',
           type: 'REG_DWORD',
           data: '1',
         });
-        await addCurrentUserValue({
-          keyPath: `${keyPath}\\Other`,
+        saveRegistryValue({
+          key: `HKCU\\${keyPath}\\Other`,
           valueName: 'DisplayName',
           type: 'REG_SZ',
           data: 'Tests',
@@ -372,11 +346,7 @@ describeOnWindows('Bun and win32Api.ts on Windows', () => {
           'C:\\Users\\tester\\OneDrive - Tests',
         ]);
       } finally {
-        await runChildProcess({
-          command: ['reg.exe', 'delete', `HKCU\\${keyPath}`, '/f'],
-          stdin: null,
-          timeoutMs: CHILD_TIMEOUT_MS,
-        });
+        deleteRegistryKey({ key: `HKCU\\${keyPath}` });
       }
     },
     CHILD_TIMEOUT_MS * 5,

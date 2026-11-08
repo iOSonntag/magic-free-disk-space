@@ -15,10 +15,8 @@ import type {
   CandidateListing,
   CandidateMatched,
   CandidateProbed,
-  CandidateRecycleBin,
   CandidateRemovalDeletePaths,
   CandidateRemovalProbed,
-  RecycleBinContent,
   RemovalTarget,
   RemovalTargets,
   TargetsMeasurement,
@@ -30,12 +28,10 @@ import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.
 import type { HomeFolder } from './parsedValueFixtures.js';
 import {
   buildTestAbsolutePath,
-  buildTestDriveRoot,
   buildTestMiseToolName,
   buildTestMiseToolVersion,
   joinBelowHome,
 } from './parsedValueFixtures.js';
-import { getWin32RecycleBinScanTrash } from './platformFixtures.js';
 
 let nextTestIno = 1000n;
 
@@ -150,7 +146,7 @@ export function buildTestProbedCandidate(
   };
 }
 
-function buildTestListing(params: TestListingParams): CandidateListing {
+export function buildTestListing(params: TestListingParams): CandidateListing {
   return {
     path: params.path,
     title: params.title ?? `Test item ${params.path}`,
@@ -382,39 +378,6 @@ export function buildTestEngineCandidate(params: {
     },
     evidenceLines: ['Docker Desktop reports these records unused.'],
   });
-}
-
-/**
- * The Recycle Bin of the drive at `driveRootText` as the scan of Windows offers it, holding
- * `scannedContent`; its folder, title, texts and risk are those of the Windows platform.
- */
-export function buildTestRecycleBinCandidate(params: {
-  driveRootText: string;
-  risk?: Risk;
-  /** 4096 bytes in 2 items when left out. */
-  scannedContent?: RecycleBinContent;
-}): CandidateRecycleBin {
-  const trash = getWin32RecycleBinScanTrash();
-  const scannedContent = params.scannedContent ?? { sizeBytes: 4096, itemCount: 2 };
-
-  return {
-    ...buildTestListing({
-      path: `${params.driveRootText}${trash.binFolderName}`,
-      title: `${trash.title} (${params.driveRootText.slice(0, 2)})`,
-      category: 'trash',
-      risk: params.risk ?? trash.risk,
-      explanation: trash.explanation,
-      regeneration: trash.regeneration,
-      allocatedBytes: scannedContent.sizeBytes,
-      entryCount: scannedContent.itemCount,
-    }),
-    origin: { kind: 'recycleBin' },
-    removal: {
-      kind: 'emptyRecycleBin',
-      driveRoot: buildTestDriveRoot({ text: params.driveRootText }),
-      scannedContent: scannedContent,
-    },
-  };
 }
 
 /** No place for any tool, so a scan in a test never runs a real tool. */

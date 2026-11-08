@@ -13,8 +13,7 @@ function buildTempCheck(params: { variableName: string; reading: VariableReading
   return {
     variableName: params.variableName,
     reading: params.reading,
-    expectedPath: tempPath,
-    expectedRealPath: tempPath,
+    expectedFolder: { path: tempPath, realPath: tempPath },
   };
 }
 
