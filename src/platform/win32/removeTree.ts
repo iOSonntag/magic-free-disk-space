@@ -3,10 +3,8 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
-import type { EntryReads } from '../../system/entryReads.js';
+import { win32EntryReads } from './entryReads.js';
 import { formatEntryCallFailure } from './formatEntryCallFailure.js';
-import { loadEntryPlacement } from './loadEntryPlacement.js';
-import { loadPrivateBytes } from './loadPrivateBytes.js';
 import type { EntryAttributeAccess } from './removeTreeEntries.js';
 import { removeTreeEntries } from './removeTreeEntries.js';
 import type { Win32CallFailure } from './win32Api.js';
@@ -15,12 +13,6 @@ import { loadFileAttributes, setFileAttributes } from './win32Api.js';
 const win32EntryAttributes: EntryAttributeAccess = {
   load: loadEntryAttributes,
   save: saveEntryAttributes,
-};
-
-/** How Windows places an entry and reads its private bytes, for the scan and for the removal. */
-export const win32EntryReads: EntryReads = {
-  loadEntryPlacement: loadEntryPlacement,
-  loadPrivateBytes: loadPrivateBytes,
 };
 
 /**

@@ -36,7 +36,11 @@ const VALUE_VERSIONS_PATH = '/Users/example/fvm/versions';
 const UNPINNED: ToolPins = { kind: 'texts', files: [] };
 
 function buildFvmrcText(params: { text: string }): ProjectPinFileText {
-  return buildTestPinText({ path: '/Users/example/app/.fvmrc', kind: 'fvmrc', text: params.text });
+  return buildTestPinText({
+    path: buildTestAbsolutePath({ text: '/Users/example/app/.fvmrc' }),
+    kind: 'fvmrc',
+    text: params.text,
+  });
 }
 
 describe('parseFvmrcPins', () => {

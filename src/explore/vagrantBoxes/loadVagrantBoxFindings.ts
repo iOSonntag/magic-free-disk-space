@@ -9,10 +9,7 @@ export async function loadVagrantBoxFindings(
 ): Promise<ExploreProbeToolResult> {
   const boxes = await loadProbeOutput({
     probe: VAGRANT_BOX_LIST_PROBE,
-    tool: run.tool,
-    environment: run.environment,
-    processes: run.platform.toolProcesses,
-    deadlineMs: run.deadlineMs,
+    ...run,
   });
 
   if (boxes.kind === 'failed') {

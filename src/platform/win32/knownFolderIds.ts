@@ -4,7 +4,7 @@ import type { WindowsKnownFolder } from '../../environment/buildEnvironment.js';
 export type RunKnownFolder = 'profile' | 'localAppData' | 'roamingAppData' | WindowsKnownFolder;
 
 /** The `KNOWNFOLDERID` of each known folder, as Microsoft's list of `FOLDERID_*` writes it. */
-export const KNOWN_FOLDER_IDS: Record<RunKnownFolder, string> = {
+export const knownFolderIds: Record<RunKnownFolder, string> = {
   profile: '5E6C858F-0E22-4760-9AFE-EA3317B67173',
   localAppData: 'F1B32785-6FBA-4FCF-9D55-7B8E7F157091',
   roamingAppData: '3EB685DB-65F9-4CF6-A03A-E3EF65729F3D',
@@ -19,14 +19,14 @@ export const KNOWN_FOLDER_IDS: Record<RunKnownFolder, string> = {
 };
 
 /** A GUID in its registry form without braces: groups of 8, 4, 4, 4 and 12 hex digits. */
-const GUID_PATTERN = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i;
+const guidPattern = /^([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})$/i;
 
 /**
  * The 16 bytes of a `GUID` struct for `text`: `Data1` to `Data3` little-endian, `Data4` in the
  * order written. Throws for a text that is no GUID, a bug of the table above.
  */
 export function buildGuidBytes(params: { text: string }): Uint8Array {
-  const groups = GUID_PATTERN.exec(params.text);
+  const groups = guidPattern.exec(params.text);
 
   if (groups === null) {
     throw new Error(`${params.text} is no GUID.`);

@@ -175,6 +175,8 @@ export function buildEnvironment(params: {
       ...platformBaseRealPaths,
       ...params.applicationRealPaths,
     ],
+    // Never deduplicated: `checkEnvironmentRoots` leaves out the temporary folder's own entry once,
+    // so a protected folder that is the temporary folder too is refused by its own entry.
     protectedRealPaths: [
       ...protectedLocationRealPaths,
       ...params.protectedFolderRealPaths,

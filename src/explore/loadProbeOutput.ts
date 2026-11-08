@@ -27,8 +27,8 @@ export async function loadProbeOutput<T>(params: {
   probe: ExploreProbeDefinition<T>;
   tool: LocatedTool;
   environment: Environment;
-  processes: ToolProcessPlatform;
   deadlineMs: number;
+  platform: { toolProcesses: ToolProcessPlatform };
 }): Promise<Result<T, ExploreToolFailure>> {
   if (params.tool.name !== params.probe.toolName) {
     throw new Error(`A probe of ${params.probe.toolName} got the tool ${params.tool.name}`);
@@ -40,7 +40,7 @@ export async function loadProbeOutput<T>(params: {
     homeDir: params.environment.homeDir,
     tempDir: params.environment.tempDir,
     timeoutMs: Math.max(params.deadlineMs - Date.now(), 0),
-    processes: params.processes,
+    processes: params.platform.toolProcesses,
   });
 
   if (output.kind === 'failed') {

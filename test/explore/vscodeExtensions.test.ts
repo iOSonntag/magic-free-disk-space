@@ -6,7 +6,6 @@ import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../../src/explore/exploreUnit.js';
 import { loadVscodeExtensionFindings } from '../../src/explore/vscodeExtensions/loadVscodeExtensionFindings.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -17,6 +16,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import type { TestProbeRunProcesses } from '../support/probeRunFixtures.js';
 import { buildTestProbeRun, getProbeFindings } from '../support/probeRunFixtures.js';
 import {
   buildObsoleteVscodeUnit,
@@ -54,13 +54,11 @@ afterEach(async () => {
 });
 
 /** A probe run over the fixture environment, where no process runs unless `runningProcesses` names one. */
-function buildRun(params: { runningProcesses?: RunningProcesses | null } = {}): ExploreProbeRun {
+function buildRun(params: TestProbeRunProcesses = {}): ExploreProbeRun {
   return buildTestProbeRun({ environment: environment, ...params });
 }
 
-async function loadFindings(
-  params: { runningProcesses?: RunningProcesses | null } = {},
-): Promise<ExploreProbeFindings> {
+async function loadFindings(params: TestProbeRunProcesses = {}): Promise<ExploreProbeFindings> {
   return getProbeFindings(await loadVscodeExtensionFindings(buildRun(params)));
 }
 

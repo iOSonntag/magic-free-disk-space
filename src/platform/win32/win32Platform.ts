@@ -1,13 +1,14 @@
 import type { Platform } from '../platform.js';
 import { WIN32_CATALOG } from './catalog/win32Catalog.js';
-import { loadAdvisedApps, UNINSTALL_KEY_SOURCES } from './loadAdvisedApps.js';
+import { win32EntryReads } from './entryReads.js';
+import { loadAdvisedApps, uninstallKeySources } from './loadAdvisedApps.js';
 import { loadEnvironment } from './loadEnvironment.js';
 import { loadRunningProcesses } from './loadRunningProcesses.js';
 import { loadSystemVersion } from './loadSystemVersion.js';
 import { loadVolumeSpace } from './loadVolumeSpace.js';
 import { loadFullDiskAccess, WIN32_PRIVACY_DENIAL_CODE } from './readRules.js';
-import { removeTree, win32EntryReads } from './removeTree.js';
-import { WIN32_REPORT_TEXTS } from './reportTexts.js';
+import { removeTree } from './removeTree.js';
+import { win32ReportTexts } from './reportTexts.js';
 import { win32ToolProcesses } from './toolProcesses.js';
 import { emptyRecycleBin, loadRecycleBinContent } from './win32Api.js';
 
@@ -46,14 +47,14 @@ export const win32Platform: Platform = {
   scan: {
     apps: {
       appSection: 'adviseOnly',
-      loadAdvisedApps: () => loadAdvisedApps({ sources: UNINSTALL_KEY_SOURCES }),
+      loadAdvisedApps: () => loadAdvisedApps({ sources: uninstallKeySources }),
       installedAppsPageName: 'Settings > Apps',
     },
     // A system app is a bundle macOS keeps outside its app folders.
     systemApps: [],
     trash: {
       kind: 'recycleBins',
-      title: WIN32_REPORT_TEXTS.trashName,
+      title: win32ReportTexts.trashName,
       explanation:
         'Files you deleted on this drive; emptying the Recycle Bin removes all of them at once, as Windows does.',
       regeneration: 'A deleted file does not come back.',
@@ -78,7 +79,7 @@ export const win32Platform: Platform = {
     },
   },
   explore: WIN32_CATALOG.explore,
-  report: WIN32_REPORT_TEXTS,
+  report: win32ReportTexts,
   system: {
     entryReads: win32EntryReads,
     privacyDenialCode: WIN32_PRIVACY_DENIAL_CODE,

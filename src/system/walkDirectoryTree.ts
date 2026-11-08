@@ -1,6 +1,5 @@
 import { join } from 'node:path';
 import type { EntryReads, EntryRef } from './entryReads.js';
-import { getPlacedFileKind } from './entryReads.js';
 import type { DirectoryEntry } from './loadDirectoryEntries.js';
 import { loadDirectoryEntries } from './loadDirectoryEntries.js';
 import type { DirectoryFailure } from './loadDirectoryNames.js';
@@ -204,12 +203,10 @@ export function walkDirectoryTree(params: {
 
 /** The entry as a link, its stats too, so no visitor reads it as the folder or file lstat says. */
 function toLinkTreeEntry(params: { entry: TreeEntry }): TreeEntry {
-  const kind = getPlacedFileKind({ kind: params.entry.kind, placement: { kind: 'link' } });
-
   return {
     ...params.entry,
-    kind: kind,
-    stats: params.entry.stats === null ? null : { ...params.entry.stats, kind: kind },
+    kind: 'symbolicLink',
+    stats: params.entry.stats === null ? null : { ...params.entry.stats, kind: 'symbolicLink' },
   };
 }
 

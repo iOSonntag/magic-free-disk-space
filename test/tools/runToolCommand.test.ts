@@ -13,6 +13,7 @@ import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, waitUntilPresent } from '../support/fixtureRoot.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { testOnWindows } from '../support/windowsOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -298,7 +299,7 @@ await Bun.sleep(60_000);`,
   );
 
   // Windows ends the processes of a tool's job with an exit code, never a signal.
-  test.skipIf(process.platform !== 'win32')(
+  testOnWindows(
     'stopRunningTools ends the job of a running tool with all it started, and the run settles',
     async () => {
       const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');

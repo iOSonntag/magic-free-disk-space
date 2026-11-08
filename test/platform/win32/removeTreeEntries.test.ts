@@ -22,6 +22,7 @@ import {
   FILE_ATTRIBUTE_RECALL_ON_OPEN,
   FILE_ATTRIBUTE_REPARSE_POINT,
 } from '../../support/windowsFileAttributes.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 type AttributeSave = { path: string; attributes: number };
 
@@ -604,7 +605,7 @@ describe('decideEntryRemovalEnd', () => {
   });
 });
 
-describe.skipIf(process.platform !== 'win32')('the removal of a running program on NTFS', () => {
+describeOnWindows('the removal of a running program on NTFS', () => {
   test('leaves a program that runs and removes the files beside it', async () => {
     const systemRootPath = process.env.SystemRoot;
 

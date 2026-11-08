@@ -52,7 +52,11 @@ const VALUE_TOOLCHAINS_PATH = '/Users/example/.rustup/toolchains';
 function parsePinTexts(...files: { path: string; text: string }[]): RustToolchainPins {
   return parseRustToolchainPins({
     files: files.map((file) =>
-      buildTestPinText({ path: file.path, kind: 'rustToolchain', text: file.text }),
+      buildTestPinText({
+        path: buildTestAbsolutePath({ text: file.path }),
+        kind: 'rustToolchain',
+        text: file.text,
+      }),
     ),
   });
 }
@@ -284,7 +288,7 @@ describe('compareRustupToolchainUnit', () => {
         kind: 'texts',
         files: [
           buildTestPinText({
-            path: '/code/a/rust-toolchain',
+            path: buildTestAbsolutePath({ text: '/code/a/rust-toolchain' }),
             kind: 'rustToolchain',
             text: '1.70.0\n',
           }),

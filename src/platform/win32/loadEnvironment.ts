@@ -22,7 +22,7 @@ import { WIN32_CATALOG } from './catalog/win32Catalog.js';
 import type { VariableReading } from './checkVariablePlacement.js';
 import { checkVariablePlacement } from './checkVariablePlacement.js';
 import type { RunKnownFolder } from './knownFolderIds.js';
-import { buildGuidBytes, KNOWN_FOLDER_IDS } from './knownFolderIds.js';
+import { buildGuidBytes, knownFolderIds } from './knownFolderIds.js';
 import { listDriveRootTexts } from './listDriveRoots.js';
 import type { Win32CallFailure } from './win32Api.js';
 import {
@@ -44,7 +44,7 @@ const DRIVE_FIXED = 3;
 const ERROR_INVALID_SID = 1337;
 
 /** Windows keeps the user's temporary folder below LocalAppData, one name per level. */
-const TEMP_DIR_NAMES = ['Temp'];
+const tempDirNames = ['Temp'];
 
 /** The folder of the deletion log. */
 const WIN32_DELETION_LOG_LOCATION: EnvironmentLocationAtRoot = {
@@ -59,7 +59,7 @@ const WIN32_PREFERENCES_LOCATION: EnvironmentLocationAtRoot = {
 };
 
 /** The variables OneDrive sets to the root of each account it syncs. */
-const ONE_DRIVE_VARIABLE_NAMES = ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial'];
+const oneDriveVariableNames = ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial'];
 
 /** OneDrive keeps each account it syncs below this key of the user's registry. */
 const ONE_DRIVE_ACCOUNTS_KEY_PATH = 'Software\\Microsoft\\OneDrive\\Accounts';
@@ -105,7 +105,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   const tempDir = joinAbsolutePath({
     rules: WIN32_PATH_RULES,
     parentPath: localAppData.value.path,
-    names: TEMP_DIR_NAMES,
+    names: tempDirNames,
   });
   const tempRealPath = await loadEnvironmentRealPath({
     pathRules: WIN32_PATH_RULES,
@@ -173,10 +173,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     homeOwner: homeOwner.value,
     tempRealPath: tempRealPath.value,
     tempPlacement: 'belowHome',
-    protectedRealPaths: listProtectedRealPathsBesideTemp({
-      protectedRealPaths: environment.protectedRealPaths,
-      tempRealPath: tempRealPath.value,
-    }),
+    protectedRealPaths: environment.protectedRealPaths,
   });
 
   if (rootsFailure !== null) {
@@ -212,23 +209,6 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   }
 
   return { kind: 'succeeded', value: environment };
-}
-
-/**
- * The protected real paths without the one entry the temporary folder adds for itself. A protected
- * folder that is the temporary folder too keeps its entry, so the check refuses it.
- */
-export function listProtectedRealPathsBesideTemp(params: {
-  protectedRealPaths: string[];
-  tempRealPath: string;
-}): string[] {
-  const tempEntryIndex = params.protectedRealPaths.indexOf(params.tempRealPath);
-
-  if (tempEntryIndex === -1) {
-    return params.protectedRealPaths;
-  }
-
-  return params.protectedRealPaths.toSpliced(tempEntryIndex, 1);
 }
 
 /** The environment of a run on Windows: the values read for the run, with the facts of Windows. */
@@ -395,7 +375,7 @@ function loadKnownFolderDrivePath(params: {
   folder: RunKnownFolder;
 }): Result<AbsolutePath, EnvironmentFailure> {
   const pathText = loadKnownFolderPath({
-    folderId: buildGuidBytes({ text: KNOWN_FOLDER_IDS[params.folder] }),
+    folderId: buildGuidBytes({ text: knownFolderIds[params.folder] }),
   });
 
   if (pathText.kind === 'failed') {
@@ -451,8 +431,8 @@ function listOneDriveRootPaths(params: { skyDrivePath: AbsolutePath | null }): A
     valueName: ONE_DRIVE_USER_FOLDER_VALUE_NAME,
   });
   const rootTexts = [
-    ...ONE_DRIVE_VARIABLE_NAMES.flatMap((name) => {
-      const value = readSetVariable({ name: name });
+    ...oneDriveVariableNames.flatMap((name) => {
+      const value = getSetVariable({ name: name });
 
       return value === null ? [] : [value];
     }),
@@ -493,7 +473,7 @@ function loadFixedDriveRoots(): Result<DriveRoot[], EnvironmentFailure> {
 
 /** What the variable holds: unset, the real path of the folder it names, or a path that fails. */
 async function loadVariableReading(params: { name: string }): Promise<VariableReading> {
-  const value = readSetVariable({ name: params.name });
+  const value = getSetVariable({ name: params.name });
 
   if (value === null) {
     return { kind: 'unset' };
@@ -515,7 +495,7 @@ async function loadVariableReading(params: { name: string }): Promise<VariableRe
 }
 
 /** The value of the environment variable; `null` when it is unset or empty, which Windows treats alike. */
-function readSetVariable(params: { name: string }): string | null {
+function getSetVariable(params: { name: string }): string | null {
   const value = process.env[params.name];
 
   return value === undefined || value === '' ? null : value;

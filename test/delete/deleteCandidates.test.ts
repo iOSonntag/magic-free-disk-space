@@ -1329,6 +1329,41 @@ describe('deleteCandidates with an item of several targets', () => {
     expect(await isPresent(secondPath)).toBe(false);
   });
 
+  test('counts the entries that stayed in every target left in part', async () => {
+    const firstPath = await createCacheFolder('held-first');
+    const secondPath = await createCacheFolder('held-second');
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createFixtureRootJournal();
+
+    // The fake removal leaves each whole tree, as when every file of it was held open.
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: journal,
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: {
+        ...DELETION_PLATFORM.delete,
+        removeTree: async (tree) => ({
+          kind: 'succeeded',
+          value: { kind: 'partlyRemoved', stayedEntryCount: tree.path === firstPath ? 2 : 3 },
+        }),
+      },
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes).toMatchObject([{ outcome: 'partlyRemoved', stayedEntryCount: 5 }]);
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toMatchObject([
+      { kind: 'sessionStart' },
+      { kind: 'intent', targetPaths: [firstPath, secondPath] },
+      { kind: 'outcome', path: firstPath, outcome: 'partlyRemoved', stayedEntryCount: 2 },
+      { kind: 'outcome', path: secondPath, outcome: 'partlyRemoved', stayedEntryCount: 3 },
+    ]);
+  });
+
   test('is removed when a target was gone already and the other deleted, counting only what this run deleted', async () => {
     const firstPath = await createCacheFolder('gone');
     const secondPath = await createCacheFolder('deleted');

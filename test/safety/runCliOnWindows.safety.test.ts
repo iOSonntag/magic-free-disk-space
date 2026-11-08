@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { isSamePath } from '../../src/path/isSameOrInsidePath.js';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
@@ -23,11 +23,12 @@ import {
   buildWindowsFixtureScanView,
   createWindowsFixtureHome,
 } from '../support/windowsFixtureHome.js';
+import { describeOnWindows } from '../support/windowsOnly.js';
 
 // The fixture writes a file over the large-file limit, and the run scans twice and deletes.
 const CLI_RUN_TIMEOUT_MS = 60_000;
 
-describe.skipIf(process.platform !== 'win32')(
+describeOnWindows(
   'the deletion of approved items of a Windows fixture home through the command line',
   () => {
     let fixtureRoot: FixtureRoot;

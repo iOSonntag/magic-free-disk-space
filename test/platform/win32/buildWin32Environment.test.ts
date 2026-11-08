@@ -1,9 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
-import {
-  buildWin32Environment,
-  listProtectedRealPathsBesideTemp,
-} from '../../../src/platform/win32/loadEnvironment.js';
+import { buildWin32Environment } from '../../../src/platform/win32/loadEnvironment.js';
 import {
   exampleWin32Environment,
   exampleWin32EnvironmentParams,
@@ -140,29 +137,5 @@ describe('buildWin32Environment', () => {
     expect<string[]>(environment.protectedRealPaths).not.toContain('C:\\Users\\tester\\Desktop');
     expect<string[]>(environment.protectedRealPaths).not.toContain('C:\\Users\\tester\\Downloads');
     expect<unknown>(environment.platformFolders).toEqual(exampleWin32Environment.platformFolders);
-  });
-});
-
-describe('listProtectedRealPathsBesideTemp', () => {
-  test('leaves out the entry of the temporary folder and keeps every other folder', () => {
-    expect(
-      listProtectedRealPathsBesideTemp({
-        protectedRealPaths: exampleWin32Environment.protectedRealPaths,
-        tempRealPath: exampleWin32EnvironmentParams.temp.realPath,
-      }),
-    ).toEqual(
-      exampleWin32Environment.protectedRealPaths.filter(
-        (path) => path !== 'C:\\Users\\tester\\AppData\\Local\\Temp',
-      ),
-    );
-  });
-
-  test('keeps a protected folder that is the temporary folder too', () => {
-    expect(
-      listProtectedRealPathsBesideTemp({
-        protectedRealPaths: ['D:\\Documents', 'C:\\', 'D:\\Documents'],
-        tempRealPath: 'D:\\Documents',
-      }),
-    ).toEqual(['C:\\', 'D:\\Documents']);
   });
 });

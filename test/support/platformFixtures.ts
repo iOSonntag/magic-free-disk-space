@@ -94,7 +94,8 @@ export function getWin32RecycleBinScanTrash(): ScanPlatformTrashRecycleBins {
   return trash;
 }
 
-function getWin32RecycleBinDeleteTrash(): DeletePlatformTrashRecycleBins {
+/** The Recycle Bins as the deletion of Windows empties them; throws if Windows ever empties its trash otherwise. */
+export function getWin32RecycleBinDeleteTrash(): DeletePlatformTrashRecycleBins {
   const trash = win32Platform.delete.trash;
 
   if (trash.kind !== 'recycleBins') {

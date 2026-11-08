@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadEntryPlacement } from '../../../src/platform/darwin/loadEntryPlacement.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../../support/fixtureRoot.js';
-import { describeOnPosix } from '../../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
 
@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 // A test cannot create an iCloud placeholder; the flag offset was checked against `ls -lO` on one.
-describeOnPosix('loadEntryPlacement on macOS', () => {
+describeOnDarwin('loadEntryPlacement on macOS', () => {
   test('places a folder and a file on this disk on disk, and a link as a link', async () => {
     const folder = join(fixtureRoot.homeDir, 'local');
     const file = join(folder, 'file.txt');

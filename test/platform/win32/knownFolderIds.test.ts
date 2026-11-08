@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { buildGuidBytes, KNOWN_FOLDER_IDS } from '../../../src/platform/win32/knownFolderIds.js';
+import { buildGuidBytes, knownFolderIds } from '../../../src/platform/win32/knownFolderIds.js';
 
 describe('buildGuidBytes', () => {
   test('lays out FOLDERID_Desktop as the GUID struct does', () => {
-    expect([...buildGuidBytes({ text: KNOWN_FOLDER_IDS.desktop })]).toEqual([
+    expect([...buildGuidBytes({ text: knownFolderIds.desktop })]).toEqual([
       0x3a, 0xcc, 0xbf, 0xb4, 0x2c, 0xdb, 0x4c, 0x42, 0xb0, 0x29, 0x7f, 0xe9, 0x9a, 0x87, 0xc6,
       0x41,
     ]);
@@ -22,9 +22,9 @@ describe('buildGuidBytes', () => {
   });
 });
 
-describe('KNOWN_FOLDER_IDS', () => {
+describe('knownFolderIds', () => {
   test('names a distinct GUID for each known folder', () => {
-    const ids = Object.values(KNOWN_FOLDER_IDS).map((id) => id.toUpperCase());
+    const ids = Object.values(knownFolderIds).map((id) => id.toUpperCase());
 
     for (const id of ids) {
       expect(buildGuidBytes({ text: id })).toHaveLength(16);

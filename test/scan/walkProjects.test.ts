@@ -32,6 +32,7 @@ import { buildTestHostPath, hostPathRules } from '../support/parsedValueFixtures
 import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { runTestScan } from '../support/scanRunFixtures.js';
+import { testOnWindows } from '../support/windowsOnly.js';
 
 const NO_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
@@ -284,7 +285,7 @@ describe('walkProjects', () => {
     ]);
   });
 
-  test.skipIf(process.platform !== 'win32')(
+  testOnWindows(
     'skips a top folder named as an excluded name in another case, as Windows compares names',
     async () => {
       const projectPath = join(fixtureRoot.homeDir, 'appdata', 'app');

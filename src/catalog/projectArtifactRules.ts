@@ -240,42 +240,91 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   },
 ];
 
-/** The rules by their artifact name in the form `pathRules` compare names in, each in its order. */
-export type ArtifactRulesByName = Map<string, ProjectArtifactRule[]>;
-
-/** The rules grouped once for a walk, so `findArtifactRulesOfName` matches a folder's name once. */
-export function groupArtifactRulesByName(params: {
-  pathRules: PathRules;
-  rules: ProjectArtifactRule[];
-}): ArtifactRulesByName {
-  return Map.groupBy(params.rules, (rule) =>
-    toComparablePathText({ rules: params.pathRules, text: rule.artifactName }),
-  );
-}
+/** The folder is the artifact of `rule`, the first rule of its name whose marker stands beside it. */
+type ArtifactFolderMatchArtifact = { kind: 'artifact'; rule: ProjectArtifactRule };
 
 /**
- * The rules whose artifact a folder named `name` may be, its name compared as `pathRules` compare
- * names, so `Bin` finds the rules of `bin` on Windows; `null` when no rule names it.
+ * Rules name the folder, yet no marker of theirs stands beside it: `skipped` when one of them
+ * skips such a folder, else `walked`.
  */
-export function findArtifactRulesOfName(params: {
+type ArtifactFolderMatchUnmarked = {
+  kind: 'unmarked';
+  unmarkedFolder: ProjectArtifactRule['unmarkedFolder'];
+};
+
+/** No rule names the folder. */
+type ArtifactFolderMatchNoRule = { kind: 'noRule' };
+
+/** What the artifact rules make of a folder, by its name and the names beside it. */
+export type ArtifactFolderMatch =
+  | ArtifactFolderMatchArtifact
+  | ArtifactFolderMatchUnmarked
+  | ArtifactFolderMatchNoRule;
+
+/** Matches folders to the artifact rules it was built from, under the path rules it was built for. */
+export type ArtifactFolderMatcher = {
+  /**
+   * What the rules make of the folder named `name`, whose project folder holds `siblingNames`,
+   * the folder's own name among them.
+   */
+  matchFolder: (params: { name: string; siblingNames: ReadonlySet<string> }) => ArtifactFolderMatch;
+};
+
+/** The rules by their artifact name in the form `pathRules` compare names in, each in its order. */
+type ArtifactRulesByName = Map<string, ProjectArtifactRule[]>;
+
+/**
+ * Builds the matcher of a walk, its rules grouped once by their names compared as `pathRules`
+ * compare names, so `Bin` beside `Foo.CSPROJ` is the artifact of `bin` on Windows and of no rule
+ * on POSIX.
+ */
+export function buildArtifactFolderMatcher(params: {
   pathRules: PathRules;
-  rulesByName: ArtifactRulesByName;
-  name: string;
-}): ProjectArtifactRule[] | null {
-  return (
-    params.rulesByName.get(toComparablePathText({ rules: params.pathRules, text: params.name })) ??
-    null
+  rules: ProjectArtifactRule[];
+}): ArtifactFolderMatcher {
+  const rulesByName: ArtifactRulesByName = Map.groupBy(params.rules, (rule) =>
+    toComparablePathText({ rules: params.pathRules, text: rule.artifactName }),
   );
+
+  function matchFolder(folder: {
+    name: string;
+    siblingNames: ReadonlySet<string>;
+  }): ArtifactFolderMatch {
+    const nameRules = rulesByName.get(
+      toComparablePathText({ rules: params.pathRules, text: folder.name }),
+    );
+
+    if (nameRules === undefined) {
+      return { kind: 'noRule' };
+    }
+
+    const markedRule = findMarkedArtifactRule({
+      pathRules: params.pathRules,
+      nameRules: nameRules,
+      projectEntryNames: folder.siblingNames,
+    });
+
+    if (markedRule !== null) {
+      return { kind: 'artifact', rule: markedRule };
+    }
+
+    return {
+      kind: 'unmarked',
+      unmarkedFolder: nameRules.some((rule) => rule.unmarkedFolder === 'skipped')
+        ? 'skipped'
+        : 'walked',
+    };
+  }
+
+  return { matchFolder: matchFolder };
 }
 
 /**
  * The first of the rules of a folder's name whose marker its project folder holds, by the names
- * of its entries; `null` when the folder is no artifact. Names compare as `pathRules` compare
- * them, so `Foo.CSPROJ` marks `Bin` on Windows.
+ * of its entries; `null` when none does.
  */
-export function findMarkedArtifactRule(params: {
+function findMarkedArtifactRule(params: {
   pathRules: PathRules;
-  /** The rules of the folder's name, as `findArtifactRulesOfName` finds them. */
   nameRules: ProjectArtifactRule[];
   projectEntryNames: ReadonlySet<string>;
 }): ProjectArtifactRule | null {

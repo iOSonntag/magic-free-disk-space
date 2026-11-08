@@ -22,7 +22,7 @@ export type UserIdentityWindows = { kind: 'windows'; sid: WindowsSid };
 export type UserIdentity = UserIdentityPosix | UserIdentityWindows;
 
 /** `S-1-`, an identifier authority in decimal or hex, and up to 15 decimal sub-authorities. */
-const WINDOWS_SID_PATTERN = /^S-1-(?:\d+|0x[0-9A-F]{12})(?:-\d+){0,15}$/;
+const windowsSidPattern = /^S-1-(?:\d+|0x[0-9A-F]{12})(?:-\d+){0,15}$/;
 
 /** The one maker of a `PosixUid`; fails for a value that is no non-negative integer. */
 export function parsePosixUid(params: { value: number }): Result<PosixUid, string> {
@@ -38,7 +38,7 @@ export function parsePosixUid(params: { value: number }): Result<PosixUid, strin
 export function parseWindowsSid(params: {
   text: string;
 }): Result<WindowsSid, 'not a security identifier'> {
-  if (!WINDOWS_SID_PATTERN.test(params.text)) {
+  if (!windowsSidPattern.test(params.text)) {
     return { kind: 'failed', failure: 'not a security identifier' };
   }
 

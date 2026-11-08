@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import type { Environment } from '../../environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../environment/buildEnvironment.js';
 import {
   resolveEnvironmentLocation,
   resolveEnvironmentLocations,
@@ -66,7 +66,7 @@ const PACKAGE_JSON_FILE_NAME = 'package.json';
  * state, so it never reads as no pnpm.
  */
 export async function loadPnpmInstallState(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   places: PnpmInstallPlaces;
   homebrewPrefixPaths: AbsolutePath[];
   privacyDenialCode: string | null;
@@ -384,22 +384,18 @@ async function loadNodePrefixPaths(params: {
     }
 
     folderPrefixPaths.push(
-      ...entryPaths.value.folderPaths.map((versionPath) =>
-        joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: versionPath,
-          names: root.prefixNames,
-        }),
-      ),
+      ...buildPrefixPaths({
+        pathRules: params.pathRules,
+        versionPaths: entryPaths.value.folderPaths,
+        prefixNames: root.prefixNames,
+      }),
     );
     linkPrefixPaths.push(
-      ...entryPaths.value.linkPaths.map((versionPath) =>
-        joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: versionPath,
-          names: root.prefixNames,
-        }),
-      ),
+      ...buildPrefixPaths({
+        pathRules: params.pathRules,
+        versionPaths: entryPaths.value.linkPaths,
+        prefixNames: root.prefixNames,
+      }),
     );
   }
 
@@ -408,6 +404,20 @@ async function loadNodePrefixPaths(params: {
     paths: [...folderPrefixPaths, ...linkPrefixPaths],
     privacyDenialCode: params.privacyDenialCode,
   });
+}
+
+function buildPrefixPaths(params: {
+  pathRules: PathRules;
+  versionPaths: AbsolutePath[];
+  prefixNames: string[];
+}): AbsolutePath[] {
+  return params.versionPaths.map((versionPath) =>
+    joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: versionPath,
+      names: params.prefixNames,
+    }),
+  );
 }
 
 /**

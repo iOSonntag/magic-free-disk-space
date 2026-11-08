@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import {
   chmod,
@@ -14,11 +15,12 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
-import { buildGuidBytes, KNOWN_FOLDER_IDS } from '../../src/platform/win32/knownFolderIds.js';
+import { buildGuidBytes, knownFolderIds } from '../../src/platform/win32/knownFolderIds.js';
 import { listDriveRootTexts } from '../../src/platform/win32/listDriveRoots.js';
 import type { Win32CallFailure } from '../../src/platform/win32/win32Api.js';
 import {
   closeHandle,
+  loadCurrentUserSubkeyStrings,
   loadDriveType,
   loadFileAttributes,
   loadFileOwnerSid,
@@ -38,7 +40,8 @@ import {
   FILE_ATTRIBUTE_READONLY,
   FILE_ATTRIBUTE_REPARSE_POINT,
 } from '../support/windowsFileAttributes.js';
-import { buildLongPathSegments } from './longPath.js';
+import { describeOnWindows } from '../support/windowsOnly.js';
+import { buildLongPathSegments, loadLongPathsEnabled } from './longPath.js';
 import { parseProbeLines } from './observations.js';
 
 // Asserts what the code relies on of Bun and of the calls of win32Api.ts on Windows. The workflow
@@ -58,6 +61,12 @@ const ECHO_LINE = 'Größe – 🧹';
  * API on this machine for the time of the probe; the Windows runners of the tests set it.
  */
 const isCloudProbeOptedIn = process.env.MAGIC_FREE_DISK_SPACE_CLOUD_PROBE === '1';
+
+/**
+ * `off` in the run the workflow turns long paths off for, which then proves the setting took
+ * effect; unset in every other run, which asserts nothing about the setting.
+ */
+const isLongPathsOffRun = process.env.MAGIC_FREE_DISK_SPACE_LONG_PATHS === 'off';
 
 /** The longest path a W function takes without its `\\?\` form while long paths are off. */
 const MAX_PATH = 260;
@@ -108,7 +117,39 @@ function loadAttributes(path: string): number {
   return unwrapCall(loadFileAttributes({ path: buildTestHostPath({ text: path }) }));
 }
 
-describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', () => {
+/** A key below `HKEY_CURRENT_USER\Software` that no program writes, named anew for each call. */
+function buildTestKeyPath(): string {
+  return `Software\\magic-free-disk-space-tests-${randomUUID()}`;
+}
+
+/** Writes a value below `HKEY_CURRENT_USER` with reg.exe, its key created on the way. */
+async function addCurrentUserValue(params: {
+  keyPath: string;
+  valueName: string;
+  type: 'REG_SZ' | 'REG_DWORD';
+  data: string;
+}): Promise<void> {
+  const run = await runChildProcess({
+    command: [
+      'reg.exe',
+      'add',
+      `HKCU\\${params.keyPath}`,
+      '/v',
+      params.valueName,
+      '/t',
+      params.type,
+      '/d',
+      params.data,
+      '/f',
+    ],
+    stdin: null,
+    timeoutMs: CHILD_TIMEOUT_MS,
+  });
+
+  expect(run).toMatchObject({ exitCode: 0, timedOut: false });
+}
+
+describeOnWindows('Bun and win32Api.ts on Windows', () => {
   let folder: string;
 
   beforeEach(async () => {
@@ -159,6 +200,10 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
     async () => {
       const longFolder = join(folder, ...buildLongPathSegments());
       const longFile = join(longFolder, 'file.txt');
+
+      if (isLongPathsOffRun) {
+        expect(loadLongPathsEnabled()).toBe(false);
+      }
 
       expect(longFile.length).toBeGreaterThan(MAX_PATH);
 
@@ -251,7 +296,7 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
     for (const knownFolder of knownFolderVariables) {
       const pathText = unwrapCall(
         loadKnownFolderPath({
-          folderId: buildGuidBytes({ text: KNOWN_FOLDER_IDS[knownFolder.folder] }),
+          folderId: buildGuidBytes({ text: knownFolderIds[knownFolder.folder] }),
         }),
       );
 
@@ -269,7 +314,7 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
 
   test('the drives in use hold the drive of the profile, a fixed one', () => {
     const profile = unwrapCall(
-      loadKnownFolderPath({ folderId: buildGuidBytes({ text: KNOWN_FOLDER_IDS.profile }) }),
+      loadKnownFolderPath({ folderId: buildGuidBytes({ text: knownFolderIds.profile }) }),
     );
     const profileRootText = parse(buildTestHostPath({ text: profile })).root;
     const driveRootTexts = listDriveRootTexts({ logicalDrives: unwrapCall(loadLogicalDrives()) });
@@ -279,6 +324,63 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
       DRIVE_FIXED,
     );
   });
+
+  test('a key of HKEY_CURRENT_USER that does not exist holds no subkey values', () => {
+    expect(
+      loadCurrentUserSubkeyStrings({ keyPath: buildTestKeyPath(), valueName: 'UserFolder' }),
+    ).toEqual({ kind: 'succeeded', value: [] });
+  });
+
+  test(
+    'the string value of each subkey of HKEY_CURRENT_USER is read, as OneDrive writes its accounts',
+    async () => {
+      const keyPath = buildTestKeyPath();
+
+      try {
+        await addCurrentUserValue({
+          keyPath: `${keyPath}\\Business1`,
+          valueName: 'UserFolder',
+          type: 'REG_SZ',
+          data: 'C:\\Users\\tester\\OneDrive - Tests',
+        });
+        await addCurrentUserValue({
+          keyPath: `${keyPath}\\Personal`,
+          valueName: 'UserFolder',
+          type: 'REG_SZ',
+          data: 'C:\\Users\\tester\\OneDrive',
+        });
+        // Left out: a value of another type, and a subkey without the value.
+        await addCurrentUserValue({
+          keyPath: `${keyPath}\\Number`,
+          valueName: 'UserFolder',
+          type: 'REG_DWORD',
+          data: '1',
+        });
+        await addCurrentUserValue({
+          keyPath: `${keyPath}\\Other`,
+          valueName: 'DisplayName',
+          type: 'REG_SZ',
+          data: 'Tests',
+        });
+
+        const userFolders = unwrapCall(
+          loadCurrentUserSubkeyStrings({ keyPath: keyPath, valueName: 'UserFolder' }),
+        );
+
+        expect(userFolders.toSorted()).toEqual([
+          'C:\\Users\\tester\\OneDrive',
+          'C:\\Users\\tester\\OneDrive - Tests',
+        ]);
+      } finally {
+        await runChildProcess({
+          command: ['reg.exe', 'delete', `HKCU\\${keyPath}`, '/f'],
+          stdin: null,
+          timeoutMs: CHILD_TIMEOUT_MS,
+        });
+      }
+    },
+    CHILD_TIMEOUT_MS * 5,
+  );
 
   test(
     'a probe compiled with the flags of the bridge echoes stdin byte-exact, ends with it, and reaches a long path through win32Api.ts',

@@ -3,11 +3,12 @@ import {
   buildUninstallKeyIssue,
   decideUninstallApps,
   loadAdvisedApps,
-  UNINSTALL_KEY_SOURCES,
+  uninstallKeySources,
 } from '../../../src/platform/win32/loadAdvisedApps.js';
 import type { UninstallKeyValues } from '../../../src/platform/win32/win32Api.js';
 import { loadUninstallKeyValues } from '../../../src/platform/win32/win32Api.js';
 import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 /** The values of an Uninstall subkey of an app Settings > Apps lists, with `overrides` on top. */
 function buildKeyValues(overrides: Partial<UninstallKeyValues>): UninstallKeyValues {
@@ -167,11 +168,34 @@ describe('buildUninstallKeyIssue', () => {
   });
 });
 
-describe.skipIf(process.platform !== 'win32')('the Uninstall keys of Windows', () => {
-  test('opens the key of the machine in its 64-bit and its 32-bit view', () => {
-    for (const source of UNINSTALL_KEY_SOURCES) {
+describeOnWindows('the Uninstall keys of Windows', () => {
+  test('opens each key Settings > Apps lists', () => {
+    for (const source of uninstallKeySources) {
       expect(loadUninstallKeyValues(source).kind).toBe('succeeded');
     }
+  });
+
+  // The windows-2025 image holds apps of 64 bits and the Visual C++ runtimes of 32 bits.
+  test('reads the apps of the machine in its 64-bit and its 32-bit view, each its own', () => {
+    const keyNamesByView = new Map<string, string[]>();
+
+    for (const source of uninstallKeySources) {
+      const values = loadUninstallKeyValues(source);
+
+      if (source.hive === 'localMachine' && values.kind === 'succeeded') {
+        keyNamesByView.set(
+          source.view,
+          values.value.map((value) => value.keyName),
+        );
+      }
+    }
+
+    const bits64KeyNames = keyNamesByView.get('bits64') ?? [];
+    const bits32KeyNames = keyNamesByView.get('bits32') ?? [];
+
+    expect(bits64KeyNames.length).toBeGreaterThan(0);
+    expect(bits32KeyNames.length).toBeGreaterThan(0);
+    expect(bits32KeyNames.toSorted()).not.toEqual(bits64KeyNames.toSorted());
   });
 
   test('takes a key that does not exist for one with no subkeys', () => {

@@ -1,21 +1,13 @@
 import { basename } from 'node:path';
-import type { ArtifactRulesByName, ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import {
-  findArtifactRulesOfName,
-  findMarkedArtifactRule,
-  groupArtifactRulesByName,
-} from '../catalog/projectArtifactRules.js';
+import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
+import { buildArtifactFolderMatcher } from '../catalog/projectArtifactRules.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { EntryReads } from '../system/entryReads.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import { loadPlacedFileIdentity } from '../system/loadPlacedFileIdentity.js';
-import type {
-  EvictedEntryRecorder,
-  TreeEntry,
-  TreeEntryVisit,
-} from '../system/walkDirectoryTree.js';
+import type { EvictedEntryRecorder, TreeEntryVisit } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
@@ -69,7 +61,7 @@ export async function findLargeUserFiles(params: {
   recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
-  const artifactRulesByName = groupArtifactRulesByName({
+  const artifactFolderMatcher = buildArtifactFolderMatcher({
     pathRules: params.pathRules,
     rules: params.artifactRules,
   });
@@ -137,19 +129,24 @@ export async function findLargeUserFiles(params: {
           return 'skip';
         }
 
-        if (
-          entry.kind === 'directory' &&
-          isUserFolderName({ name: entry.name }) &&
-          !isMarkedArtifactFolder({
-            pathRules: params.pathRules,
-            artifactRulesByName: artifactRulesByName,
-            entry: entry,
-          })
-        ) {
-          return 'descend';
+        if (entry.kind !== 'directory' || !isUserFolderName({ name: entry.name })) {
+          return 'skip';
         }
 
-        return 'skip';
+        const folderMatch = artifactFolderMatcher.matchFolder({
+          name: entry.name,
+          siblingNames: entry.siblingNames,
+        });
+
+        switch (folderMatch.kind) {
+          case 'artifact':
+            return 'skip';
+          // Any other folder is the user's, even one the project search skips beside no marker,
+          // such as `vendor`.
+          case 'unmarked':
+          case 'noRule':
+            return 'descend';
+        }
       },
       onUnreadable: (unreadable) => {
         issues.push(
@@ -243,31 +240,6 @@ async function loadUserFileFindings(params: {
   );
 
   return findings.filter((finding) => finding !== null);
-}
-
-/** Whether the folder is a project's artifact by a rule of its name and a marker beside it. */
-function isMarkedArtifactFolder(params: {
-  pathRules: PathRules;
-  artifactRulesByName: ArtifactRulesByName;
-  entry: TreeEntry;
-}): boolean {
-  const nameRules = findArtifactRulesOfName({
-    pathRules: params.pathRules,
-    rulesByName: params.artifactRulesByName,
-    name: params.entry.name,
-  });
-
-  if (nameRules === null) {
-    return false;
-  }
-
-  return (
-    findMarkedArtifactRule({
-      pathRules: params.pathRules,
-      nameRules: nameRules,
-      projectEntryNames: params.entry.siblingNames,
-    }) !== null
-  );
 }
 
 function isUserFolderName(params: { name: string }): boolean {

@@ -1,5 +1,5 @@
 import type { CloudOnlyEntryCount, ScanReport } from '../../src/scan/runScan.js';
-import { buildCloudOnlyEntryTally } from '../../src/scan/runScan.js';
+import { createCloudOnlyEntryTally } from '../../src/scan/runScan.js';
 import type { ScanPlatformCloudOnlyEntries } from '../../src/scan/scanPlatform.js';
 
 export const EMPTY_REPORT: ScanReport = {
@@ -20,7 +20,7 @@ export function countTestCloudOnlyEntries(params: {
   cloudOnlyEntries: ScanPlatformCloudOnlyEntries;
   entryPaths: string[];
 }): CloudOnlyEntryCount | null {
-  const tally = buildCloudOnlyEntryTally({ cloudOnlyEntries: params.cloudOnlyEntries });
+  const tally = createCloudOnlyEntryTally({ cloudOnlyEntries: params.cloudOnlyEntries });
 
   if (tally.recordEvictedEntry !== null) {
     for (const entryPath of params.entryPaths) {

@@ -418,10 +418,7 @@ function buildCommandProbe<T>(params: {
     loadFindings: async (run) => {
       const output = await loadProbeOutput({
         probe: params.definition,
-        tool: run.tool,
-        environment: run.environment,
-        processes: run.platform.toolProcesses,
-        deadlineMs: run.deadlineMs,
+        ...run,
       });
 
       if (output.kind === 'failed') {

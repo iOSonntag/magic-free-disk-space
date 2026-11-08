@@ -19,7 +19,7 @@ import { ORPHAN_LOCATIONS } from './orphanLocations.js';
 import { PNPM_INSTALL_PLACES, PNPM_STORE_ROOT, PNPM_XDG_STORE_ROOT } from './pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from './projectSearchEvidence.js';
 import { removeTree } from './removeTree.js';
-import { PROJECT_SEARCH_EXCLUDED_NAMES, USER_FILE_ROOTS } from './scanHomeFolders.js';
+import { PROJECT_SEARCH_EXCLUDED_NAMES, userFileRoots } from './scanHomeFolders.js';
 import { DARWIN_SYSTEM_APPS, MAIL_BUNDLE_PATHS } from './systemApps.js';
 import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
 import { darwinToolProcesses } from './toolProcesses.js';
@@ -58,7 +58,7 @@ export const darwinPlatform: Platform = {
     loadActiveXcodeBundlePath: loadActiveXcodeBundlePath,
     projectSearchExcludedNames: PROJECT_SEARCH_EXCLUDED_NAMES,
     projectArtifactRules: PROJECT_ARTIFACT_RULES,
-    userFileRoots: USER_FILE_ROOTS,
+    userFileRoots: userFileRoots,
   },
   delete: { removeTree: removeTree, trash: { kind: 'catalogFolder' } },
   explore: {

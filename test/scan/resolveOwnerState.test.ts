@@ -35,6 +35,7 @@ import {
   buildRunningImagePaths,
 } from '../support/runningProcessesFixtures.js';
 import { getCatalogEntry } from '../support/scanRunFixtures.js';
+import { describeOnWindows } from '../support/windowsOnly.js';
 
 /** VS Code as a Windows program: its image name, and its install folder below LocalAppData. */
 const codeOwner: CatalogOwner = {
@@ -863,7 +864,7 @@ describe('the state of a Windows program owner', () => {
   });
 });
 
-describe.skipIf(process.platform !== 'win32')('a bundle-id-shaped child on Windows', () => {
+describeOnWindows('a bundle-id-shaped child on Windows', () => {
   test('is stopped, since no app carries the bundle its name reads as', () => {
     const owner = resolveTargetOwner({
       entry: getCatalogEntry('gradle-wrapper-distributions', win32Platform.catalog),

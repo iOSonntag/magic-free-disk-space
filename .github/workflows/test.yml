@@ -80,6 +80,9 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 0 -Type DWord
           bun test test/windows/bunWindowsFacts.test.ts
+        env:
+          # The facts test then asserts that Windows answers long paths off to the process.
+          MAGIC_FREE_DISK_SPACE_LONG_PATHS: 'off'
 
   # The release ships a native arm64 build for Windows, and every Win32 call goes through bun:ffi,
   # so the facts are checked on arm64 too, long before a release proof would show them.

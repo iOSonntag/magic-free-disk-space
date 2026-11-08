@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { loadVolumeSpace } from '../../../src/platform/win32/loadVolumeSpace.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../../support/fixtureRoot.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
-describe.skipIf(process.platform !== 'win32')('loadVolumeSpace on Windows', () => {
+describeOnWindows('loadVolumeSpace on Windows', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

@@ -7,7 +7,7 @@ import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
-import { buildCloudOnlyEntryTally, buildScanReportOfPhases } from '../../src/scan/runScan.js';
+import { buildScanReportOfPhases, createCloudOnlyEntryTally } from '../../src/scan/runScan.js';
 import type { AdvisedApp } from '../../src/scan/scanPlatform.js';
 import { createAndroidAvdHome, writeAndroidSystemImage } from '../explore/androidFixtures.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
@@ -253,9 +253,9 @@ describe('buildScanReportOfPhases', () => {
   });
 });
 
-describe('buildCloudOnlyEntryTally', () => {
+describe('createCloudOnlyEntryTally', () => {
   test('counts each path once on Windows, whose scan counts the entries left in OneDrive', () => {
-    const tally = buildCloudOnlyEntryTally({
+    const tally = createCloudOnlyEntryTally({
       cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
     });
 
@@ -271,7 +271,7 @@ describe('buildCloudOnlyEntryTally', () => {
   });
 
   test('counts no entry on macOS, whose scan never counted the entries left in iCloud', () => {
-    const tally = buildCloudOnlyEntryTally({
+    const tally = createCloudOnlyEntryTally({
       cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
     });
 

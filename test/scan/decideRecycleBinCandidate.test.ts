@@ -2,20 +2,25 @@ import { describe, expect, test } from 'bun:test';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { decideRecycleBinCandidate } from '../../src/scan/decideRecycleBinCandidate.js';
-import { buildTestRecycleBinCandidate } from '../support/candidateFixtures.js';
+import type { RecycleBinDescription } from '../../src/scan/scanPlatform.js';
 import { buildTestDriveRoot } from '../support/parsedValueFixtures.js';
-import { getWin32RecycleBinScanTrash } from '../support/platformFixtures.js';
 
 const MB = 1_000_000;
 
-const recycleBinTrash = getWin32RecycleBinScanTrash();
+const recycleBin: RecycleBinDescription = {
+  title: 'Example Bin',
+  explanation: 'Files deleted on an example drive.',
+  regeneration: 'A deleted file of the example does not come back.',
+  risk: 'review',
+  binFolderName: '$Recycle.Bin',
+};
 
 const driveRoot = buildTestDriveRoot({ text: 'D:\\' });
 
 function decide(params: { sizeBytes: number; itemCount: number }): CandidateDecision[] {
   return decideRecycleBinCandidate({
     pathRules: WIN32_PATH_RULES,
-    trash: recycleBinTrash,
+    recycleBin: recycleBin,
     driveRoot: driveRoot,
     content: { sizeBytes: params.sizeBytes, itemCount: params.itemCount },
     minOfferedBytes: 10 * MB,
@@ -23,28 +28,40 @@ function decide(params: { sizeBytes: number; itemCount: number }): CandidateDeci
 }
 
 describe('decideRecycleBinCandidate', () => {
-  test('offers the bin of a drive as one item at its folder, named by its drive', () => {
-    const decisions = decide({ sizeBytes: 50 * MB, itemCount: 3 });
-
-    expect(decisions).toEqual([
+  test('offers the bin of a drive as one item at its folder, named by its drive, as its description says', () => {
+    expect(decide({ sizeBytes: 50 * MB, itemCount: 3 })).toEqual([
       {
         kind: 'offer',
-        candidate: buildTestRecycleBinCandidate({
-          driveRootText: 'D:\\',
-          scannedContent: { sizeBytes: 50 * MB, itemCount: 3 },
-        }),
+        candidate: {
+          path: 'D:\\$Recycle.Bin',
+          title: 'Example Bin (D:)',
+          category: 'trash',
+          risk: 'review',
+          origin: { kind: 'recycleBin' },
+          explanation: 'Files deleted on an example drive.',
+          regeneration: 'A deleted file of the example does not come back.',
+          allocatedBytes: 50 * MB,
+          entryCount: 3,
+          isComplete: true,
+          privateSizeFallbackCount: 0,
+          lastUsedAtMs: null,
+          downloadedAtMs: null,
+          appName: null,
+          removal: {
+            kind: 'emptyRecycleBin',
+            driveRoot: driveRoot,
+            scannedContent: { sizeBytes: 50 * MB, itemCount: 3 },
+          },
+        },
       },
-    ]);
-    expect(decisions).toMatchObject([
-      { candidate: { path: 'D:\\$Recycle.Bin', title: 'Recycle Bin (D:)' } },
     ]);
   });
 
-  test('takes the folder of the bin from the platform', () => {
+  test('takes the folder of the bin from its description', () => {
     expect(
       decideRecycleBinCandidate({
         pathRules: WIN32_PATH_RULES,
-        trash: { ...recycleBinTrash, binFolderName: 'RECYCLER' },
+        recycleBin: { ...recycleBin, binFolderName: 'RECYCLER' },
         driveRoot: driveRoot,
         content: { sizeBytes: MB, itemCount: 1 },
         minOfferedBytes: 10 * MB,

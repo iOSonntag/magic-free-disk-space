@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { ProjectArtifactRule } from '../../src/catalog/projectArtifactRules.js';
-import {
-  findArtifactRulesOfName,
-  findMarkedArtifactRule,
-  groupArtifactRulesByName,
-} from '../../src/catalog/projectArtifactRules.js';
-import type { PathRules } from '../../src/path/pathRules.js';
+import { buildArtifactFolderMatcher } from '../../src/catalog/projectArtifactRules.js';
 import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 
 const binRule: ProjectArtifactRule = {
@@ -36,146 +31,119 @@ const nodeModulesRule: ProjectArtifactRule = {
 
 const artifactRules = [binRule, nodeModulesRule];
 
-/** The rule a folder is the artifact of, its name and its marker matched as a walk matches them. */
-function findMarkedRuleOfFolder(params: {
-  pathRules: PathRules;
-  rules: ProjectArtifactRule[];
-  name: string;
-  projectEntryNames: ReadonlySet<string>;
-}): ProjectArtifactRule | null {
-  const nameRules = findArtifactRulesOfName({
-    pathRules: params.pathRules,
-    rulesByName: groupArtifactRulesByName({ pathRules: params.pathRules, rules: params.rules }),
-    name: params.name,
-  });
+const win32Matcher = buildArtifactFolderMatcher({
+  pathRules: WIN32_PATH_RULES,
+  rules: artifactRules,
+});
 
-  if (nameRules === null) {
-    return null;
-  }
+const posixMatcher = buildArtifactFolderMatcher({
+  pathRules: POSIX_PATH_RULES,
+  rules: artifactRules,
+});
 
-  return findMarkedArtifactRule({
-    pathRules: params.pathRules,
-    nameRules: nameRules,
-    projectEntryNames: params.projectEntryNames,
-  });
-}
-
-describe('findArtifactRulesOfName', () => {
+describe('buildArtifactFolderMatcher', () => {
   test('finds the rules of a name in another case under the rules of Windows, in their order', () => {
-    expect(
-      findArtifactRulesOfName({
-        pathRules: WIN32_PATH_RULES,
-        rulesByName: groupArtifactRulesByName({
-          pathRules: WIN32_PATH_RULES,
-          rules: [binRule, nodeModulesRule, otherBinRule],
-        }),
-        name: 'BIN',
-      }),
-    ).toEqual([binRule, otherBinRule]);
-  });
-
-  test('finds a name only exactly under the rules of POSIX, and none no rule names', () => {
-    const rulesByName = groupArtifactRulesByName({
-      pathRules: POSIX_PATH_RULES,
-      rules: artifactRules,
+    const matcher = buildArtifactFolderMatcher({
+      pathRules: WIN32_PATH_RULES,
+      rules: [binRule, nodeModulesRule, otherBinRule],
     });
 
     expect(
-      findArtifactRulesOfName({
-        pathRules: POSIX_PATH_RULES,
-        rulesByName: rulesByName,
-        name: 'Bin',
-      }),
-    ).toBeNull();
+      matcher.matchFolder({ name: 'BIN', siblingNames: new Set(['BIN', 'Makefile']) }),
+    ).toEqual({ kind: 'artifact', rule: otherBinRule });
     expect(
-      findArtifactRulesOfName({
-        pathRules: POSIX_PATH_RULES,
-        rulesByName: rulesByName,
-        name: 'bin',
+      matcher.matchFolder({
+        name: 'BIN',
+        siblingNames: new Set(['BIN', 'Makefile', 'Foo.CSPROJ']),
       }),
-    ).toEqual([binRule]);
-    expect(
-      findArtifactRulesOfName({
-        pathRules: POSIX_PATH_RULES,
-        rulesByName: rulesByName,
-        name: 'src',
-      }),
-    ).toBeNull();
+    ).toEqual({ kind: 'artifact', rule: binRule });
+    expect(matcher.matchFolder({ name: 'BIN', siblingNames: new Set(['BIN']) })).toEqual({
+      kind: 'unmarked',
+      unmarkedFolder: 'walked',
+    });
   });
-});
 
-describe('findMarkedArtifactRule', () => {
+  test('finds a name only exactly under the rules of POSIX, and none no rule names', () => {
+    expect(posixMatcher.matchFolder({ name: 'Bin', siblingNames: new Set(['Bin']) })).toEqual({
+      kind: 'noRule',
+    });
+    expect(posixMatcher.matchFolder({ name: 'bin', siblingNames: new Set(['bin']) })).toEqual({
+      kind: 'unmarked',
+      unmarkedFolder: 'walked',
+    });
+    expect(posixMatcher.matchFolder({ name: 'src', siblingNames: new Set(['src']) })).toEqual({
+      kind: 'noRule',
+    });
+  });
+
   test('matches a folder and its marker in another case under the rules of Windows, as the catalog names its rule', () => {
     expect(
-      findMarkedRuleOfFolder({
-        pathRules: WIN32_PATH_RULES,
-        rules: artifactRules,
-        name: 'Bin',
-        projectEntryNames: new Set(['Bin', 'Foo.CSPROJ']),
-      }),
-    ).toBe(binRule);
+      win32Matcher.matchFolder({ name: 'Bin', siblingNames: new Set(['Bin', 'Foo.CSPROJ']) }),
+    ).toEqual({ kind: 'artifact', rule: binRule });
     expect(
-      findMarkedRuleOfFolder({
-        pathRules: WIN32_PATH_RULES,
-        rules: artifactRules,
+      win32Matcher.matchFolder({
         name: 'NODE_MODULES',
-        projectEntryNames: new Set(['NODE_MODULES', 'Package.JSON']),
+        siblingNames: new Set(['NODE_MODULES', 'Package.JSON']),
       }),
-    ).toBe(nodeModulesRule);
+    ).toEqual({ kind: 'artifact', rule: nodeModulesRule });
   });
 
   test('matches names only exactly under the rules of POSIX', () => {
     expect(
-      findMarkedRuleOfFolder({
-        pathRules: POSIX_PATH_RULES,
-        rules: artifactRules,
-        name: 'Bin',
-        projectEntryNames: new Set(['Bin', 'Foo.csproj']),
-      }),
-    ).toBeNull();
+      posixMatcher.matchFolder({ name: 'Bin', siblingNames: new Set(['Bin', 'Foo.csproj']) }),
+    ).toEqual({ kind: 'noRule' });
     expect(
-      findMarkedRuleOfFolder({
-        pathRules: POSIX_PATH_RULES,
-        rules: artifactRules,
+      posixMatcher.matchFolder({
         name: 'node_modules',
-        projectEntryNames: new Set(['node_modules', 'Package.json']),
+        siblingNames: new Set(['node_modules', 'Package.json']),
       }),
-    ).toBeNull();
+    ).toEqual({ kind: 'unmarked', unmarkedFolder: 'skipped' });
     expect(
-      findMarkedRuleOfFolder({
-        pathRules: POSIX_PATH_RULES,
-        rules: artifactRules,
-        name: 'bin',
-        projectEntryNames: new Set(['bin', 'Foo.csproj']),
-      }),
-    ).toBe(binRule);
+      posixMatcher.matchFolder({ name: 'bin', siblingNames: new Set(['bin', 'Foo.csproj']) }),
+    ).toEqual({ kind: 'artifact', rule: binRule });
   });
 
   test('takes no suffix alone as a marker, in any case', () => {
     expect(
-      findMarkedRuleOfFolder({
-        pathRules: WIN32_PATH_RULES,
-        rules: artifactRules,
-        name: 'bin',
-        projectEntryNames: new Set(['bin', '.CSPROJ']),
-      }),
-    ).toBeNull();
+      win32Matcher.matchFolder({ name: 'bin', siblingNames: new Set(['bin', '.CSPROJ']) }),
+    ).toEqual({ kind: 'unmarked', unmarkedFolder: 'walked' });
   });
 
   test('takes the first rule of the name whose marker the project folder holds', () => {
+    const matcher = buildArtifactFolderMatcher({
+      pathRules: POSIX_PATH_RULES,
+      rules: [binRule, otherBinRule],
+    });
+
     expect(
-      findMarkedArtifactRule({
-        pathRules: POSIX_PATH_RULES,
-        nameRules: [binRule, otherBinRule],
-        projectEntryNames: new Set(['bin', 'Makefile']),
-      }),
-    ).toBe(otherBinRule);
+      matcher.matchFolder({ name: 'bin', siblingNames: new Set(['bin', 'Makefile']) }),
+    ).toEqual({ kind: 'artifact', rule: otherBinRule });
     expect(
-      findMarkedArtifactRule({
-        pathRules: POSIX_PATH_RULES,
-        nameRules: [binRule, otherBinRule],
-        projectEntryNames: new Set(['bin', 'Makefile', 'app.csproj']),
+      matcher.matchFolder({
+        name: 'bin',
+        siblingNames: new Set(['bin', 'Makefile', 'app.csproj']),
       }),
-    ).toBe(binRule);
+    ).toEqual({ kind: 'artifact', rule: binRule });
+  });
+
+  test('matches no rule of another name, though a marker of a rule stands beside the folder', () => {
+    expect(
+      posixMatcher.matchFolder({
+        name: 'vendor',
+        siblingNames: new Set(['vendor', 'package.json']),
+      }),
+    ).toEqual({ kind: 'noRule' });
+  });
+
+  test('skips an unmarked folder once any rule of its name skips one', () => {
+    const matcher = buildArtifactFolderMatcher({
+      pathRules: POSIX_PATH_RULES,
+      rules: [binRule, { ...otherBinRule, unmarkedFolder: 'skipped' }],
+    });
+
+    expect(matcher.matchFolder({ name: 'bin', siblingNames: new Set(['bin']) })).toEqual({
+      kind: 'unmarked',
+      unmarkedFolder: 'skipped',
+    });
   });
 });

@@ -11,9 +11,9 @@ import { listProcesses, loadProcessImagePath } from './win32Api.js';
  * query keeps the file name of its image, which still matches an owner by its image names. A
  * failed snapshot fails the whole listing, so every owned item is withheld.
  */
-export async function loadRunningProcesses(_params: {
-  commandTimeoutMs: number;
-}): Promise<Result<RunningProcessesImagePaths, RunningProcessesFailure>> {
+export async function loadRunningProcesses(): Promise<
+  Result<RunningProcessesImagePaths, RunningProcessesFailure>
+> {
   const processes = listProcesses();
 
   if (processes.kind === 'failed') {

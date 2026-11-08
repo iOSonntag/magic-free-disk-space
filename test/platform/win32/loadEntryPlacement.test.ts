@@ -16,6 +16,7 @@ import {
   FILE_ATTRIBUTE_RECALL_ON_OPEN,
   FILE_ATTRIBUTE_REPARSE_POINT,
 } from '../../support/windowsFileAttributes.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 describe('decideEntryPlacement', () => {
   test('places an entry a read downloads and one an open downloads in the cloud only', () => {
@@ -73,7 +74,7 @@ describe('loadEntryPlacement', () => {
   });
 });
 
-describe.skipIf(process.platform !== 'win32')('loadEntryPlacement on Windows', () => {
+describeOnWindows('loadEntryPlacement on Windows', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

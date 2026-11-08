@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoots.js';
 import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import type { UserIdentity } from '../../src/system/userIdentity.js';
+import { exampleWin32EnvironmentParams } from '../support/environmentFixtures.js';
 import {
   buildTestUserIdentity,
+  buildTestWindowsPath,
   buildTestWindowsUser,
   exampleWindowsUser,
 } from '../support/parsedValueFixtures.js';
@@ -41,6 +45,10 @@ function check(params: {
   });
 }
 
+/**
+ * The check on the protected folders as an environment lists them: with the entry the temporary
+ * folder adds for itself.
+ */
 function checkOnWindows(params: {
   homeOwner?: UserIdentity;
   tempRealPath?: string;
@@ -52,7 +60,29 @@ function checkOnWindows(params: {
     homeOwner: params.homeOwner ?? exampleWindowsUser,
     tempRealPath: params.tempRealPath ?? WINDOWS_TEMP,
     tempPlacement: 'belowHome',
-    protectedRealPaths: windowsProtectedRealPaths,
+    protectedRealPaths: [...windowsProtectedRealPaths, params.tempRealPath ?? WINDOWS_TEMP],
+  });
+}
+
+/** The check as Windows runs it: on the protected list of the environment built for `temp`. */
+function checkWin32Environment(params: {
+  temp: { path: AbsolutePath; realPath: AbsolutePath };
+  oneDriveRealPaths: AbsolutePath[];
+}): EnvironmentFailure | null {
+  const environment = buildWin32Environment({
+    ...exampleWin32EnvironmentParams,
+    temp: params.temp,
+    oneDriveRealPaths: params.oneDriveRealPaths,
+  });
+
+  return checkEnvironmentRoots({
+    pathRules: WIN32_PATH_RULES,
+    user: exampleWin32EnvironmentParams.user,
+    homeRealPath: exampleWin32EnvironmentParams.home.realPath,
+    homeOwner: exampleWin32EnvironmentParams.user,
+    tempRealPath: params.temp.realPath,
+    tempPlacement: 'belowHome',
+    protectedRealPaths: environment.protectedRealPaths,
   });
 }
 
@@ -139,5 +169,27 @@ describe('checkEnvironmentRoots on Windows', () => {
 
   test('accepts a temporary folder below a protected folder', () => {
     expect(checkOnWindows({ tempRealPath: 'D:\\Documents\\Temp' })).toBeNull();
+  });
+});
+
+describe('checkEnvironmentRoots on the protected list of the Windows environment', () => {
+  test('accepts the temporary folder, whose own entry the list holds', () => {
+    expect(
+      checkWin32Environment({
+        temp: exampleWin32EnvironmentParams.temp,
+        oneDriveRealPaths: exampleWin32EnvironmentParams.oneDriveRealPaths,
+      }),
+    ).toBeNull();
+  });
+
+  test('refuses a temporary folder that is a OneDrive root too, which the list holds twice', () => {
+    const oneDriveRoot = buildTestWindowsPath({ text: 'D:\\OneDrive' });
+
+    expect(
+      checkWin32Environment({
+        temp: { path: oneDriveRoot, realPath: oneDriveRoot },
+        oneDriveRealPaths: [oneDriveRoot],
+      }),
+    ).toEqual({ reason: 'tempHoldsProtectedFolder', path: 'D:\\OneDrive' });
   });
 });

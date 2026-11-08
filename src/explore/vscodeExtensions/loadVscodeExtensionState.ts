@@ -1,6 +1,6 @@
 import { basename, dirname, posix } from 'node:path';
 import type { CatalogLocation } from '../../catalog/catalog.js';
-import type { Environment } from '../../environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath, resolveAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
@@ -71,7 +71,7 @@ type VscodeRegistry = {
  * A read that is absent or unfit is a fact of the state; only a failed read fails.
  */
 export async function loadVscodeExtensionState(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   /** VS Code's folder of profiles, from the explore slice. */
   profilesRoot: CatalogLocation;
   privacyDenialCode: string | null;

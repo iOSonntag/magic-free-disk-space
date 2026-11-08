@@ -17,10 +17,7 @@ export async function recheckCondaUnit(params: {
 }): Promise<UnitRecheck> {
   const plan = await loadProbeOutput({
     probe: CONDA_CLEAN_DRY_RUN_PROBE,
-    tool: params.run.tool,
-    environment: params.run.environment,
-    processes: params.run.platform.toolProcesses,
-    deadlineMs: params.run.deadlineMs,
+    ...params.run,
   });
 
   if (plan.kind === 'failed') {

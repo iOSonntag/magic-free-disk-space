@@ -25,8 +25,8 @@ export function checkEnvironmentRoots(params: {
   tempRealPath: string;
   tempPlacement: TempPlacement;
   /**
-   * The real paths of the protected folders known before the check, such as the drive roots,
-   * without the entry of the temporary folder itself.
+   * The real paths of the protected folders known before the check, such as the drive roots, as
+   * the environment lists them: the entry the temporary folder adds for itself is left out once.
    */
   protectedRealPaths: string[];
 }): EnvironmentFailure | null {
@@ -58,7 +58,10 @@ export function checkEnvironmentRoots(params: {
 
   if (
     parseDriveRoot({ rules: params.pathRules, text: params.tempRealPath }).kind === 'succeeded' ||
-    params.protectedRealPaths.some((protectedRealPath) =>
+    listProtectedRealPathsBesideTemp({
+      protectedRealPaths: params.protectedRealPaths,
+      tempRealPath: params.tempRealPath,
+    }).some((protectedRealPath) =>
       isPossiblySameOrInsidePath({
         rules: params.pathRules,
         path: protectedRealPath,
@@ -70,6 +73,23 @@ export function checkEnvironmentRoots(params: {
   }
 
   return null;
+}
+
+/**
+ * The protected real paths without the one entry the temporary folder adds for itself. A protected
+ * folder that is the temporary folder too has an entry of its own, which stays, so it is refused.
+ */
+function listProtectedRealPathsBesideTemp(params: {
+  protectedRealPaths: string[];
+  tempRealPath: string;
+}): string[] {
+  const tempEntryIndex = params.protectedRealPaths.indexOf(params.tempRealPath);
+
+  if (tempEntryIndex === -1) {
+    return params.protectedRealPaths;
+  }
+
+  return params.protectedRealPaths.toSpliced(tempEntryIndex, 1);
 }
 
 /** Refuses root, and a user who does not own the home. */

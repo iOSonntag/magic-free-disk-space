@@ -372,13 +372,13 @@ describe('the Android probes with an SDK', () => {
     ]);
     expect(emulator?.risk).toBe('review');
     expect(emulator?.title).toBe('Android emulator package');
-    expect(emulator?.evidenceLines[0]).toBe(
-      `No AVD exists in ${formatHomeRelativePath({
-        rules: environment.pathRules,
-        path: buildAndroidAvdHome({ environment: environment }),
-        homeDir: environment.homeDir,
-      })}.`,
-    );
+    const avdHomeText = formatHomeRelativePath({
+      rules: environment.pathRules,
+      path: buildAndroidAvdHome({ environment: environment }),
+      homeDir: environment.homeDir,
+    });
+
+    expect(emulator?.evidenceLines[0]).toBe(`No AVD exists in ${avdHomeText}.`);
     expect(image?.regeneration).toBe(
       'The SDK Manager of Android Studio installs it again, as does `sdkmanager "system-images;android-35;google_apis;arm64-v8a"`.',
     );

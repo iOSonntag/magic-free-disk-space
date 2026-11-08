@@ -35,8 +35,7 @@ export type Win32CallName =
   | 'SetInformationJobObject'
   | 'SHEmptyRecycleBinW'
   | 'SHGetKnownFolderPath'
-  | 'SHQueryRecycleBinW'
-  | 'TerminateJobObject';
+  | 'SHQueryRecycleBinW';
 
 /**
  * A call of Windows that failed, with the code it failed with: its `GetLastError`, the error code
@@ -68,7 +67,7 @@ const OWNER_SECURITY_INFORMATION = 0x1;
  * The predefined key of each hive: `HKEY_CURRENT_USER` and `HKEY_LOCAL_MACHINE` are
  * `(HKEY)(ULONG_PTR)(LONG)0x80000001` and `0x80000002`, sign-extended to 64 bits.
  */
-const REGISTRY_HIVE_KEYS: Record<RegistryHive, bigint> = {
+const registryHiveKeys: Record<RegistryHive, bigint> = {
   currentUser: 0xffffffff80000001n,
   localMachine: 0xffffffff80000002n,
 };
@@ -81,7 +80,7 @@ const ERROR_NO_MORE_FILES = 18;
 const ERROR_NO_MORE_ITEMS = 259;
 
 /** The flags that open the 64-bit or the 32-bit view of a redirected key. */
-const KEY_WOW64_FLAGS: Record<RegistryView, number> = { shared: 0, bits64: 0x100, bits32: 0x200 };
+const keyWow64Flags: Record<RegistryView, number> = { shared: 0, bits64: 0x100, bits32: 0x200 };
 
 /** A key name has at most 255 characters, a value at most 32 767, each with its NUL. */
 const REGISTRY_KEY_NAME_UNITS = 256;
@@ -90,7 +89,7 @@ const REGISTRY_VALUE_BYTES = 65_536;
 /** A path of Windows has at most 32 767 UTF-16 code units. */
 const MAX_WIDE_STRING_UNITS = 32_767;
 
-/** What `CreateToolhelp32Snapshot` and `CreateFileW` return when they fail. */
+/** What `CreateToolhelp32Snapshot` returns when it fails. */
 const INVALID_HANDLE_VALUE = 0xffffffffffffffffn;
 const TH32CS_SNAPPROCESS = 0x2;
 const PROCESS_TERMINATE = 0x1;
@@ -654,15 +653,13 @@ export function assignProcessToJob(params: {
   }
 }
 
-/** Ends every process of the job with the exit code 1. */
-export function terminateJob(params: { job: WindowsHandle }): Result<null, Win32CallFailure> {
+/**
+ * Ends every process of the job with the exit code 1. A failure goes unread, since closing a job
+ * created by `createKillOnCloseJob` ends its processes as well.
+ */
+export function terminateJob(params: { job: WindowsHandle }): void {
   kernel32 ??= openKernel32();
-
-  if (kernel32.symbols.TerminateJobObject(params.job, 1) === 0) {
-    return buildLastErrorFailure({ call: 'TerminateJobObject' });
-  }
-
-  return { kind: 'succeeded', value: null };
+  kernel32.symbols.TerminateJobObject(params.job, 1);
 }
 
 /** Sets the `FILE_ATTRIBUTE_*` bits of the entry at `path`; no bit set at all is `NORMAL`. */
@@ -811,10 +808,10 @@ function loadFromEachSubkey<TValue>(params: {
 
   const keyHandle = new BigUint64Array(1);
   const openStatus = advapi32.symbols.RegOpenKeyExW(
-    REGISTRY_HIVE_KEYS[params.hive],
+    registryHiveKeys[params.hive],
     toWideString({ text: params.keyPath }),
     0,
-    KEY_READ | KEY_WOW64_FLAGS[params.view],
+    KEY_READ | keyWow64Flags[params.view],
     keyHandle,
   );
 
@@ -914,7 +911,11 @@ function buildHresultFailure(params: {
   return { kind: 'failed', failure: { call: params.call, code: params.hresult >>> 0 } };
 }
 
-/** The drive path in its `\\?\` form as an `LPCWSTR`, the form every W function above takes. */
+/**
+ * The drive path in its `\\?\` form as an `LPCWSTR`, the form the file calls above take for a path
+ * that may pass 260 characters. `GetDiskFreeSpaceExW` takes its folder as it is, a home folder or
+ * a drive root never that long, and the shell calls of the Recycle Bin take a plain drive root.
+ */
 function toWidePath(params: { path: AbsolutePath }): Buffer {
   return toWideString({ text: `${EXTENDED_LENGTH_PREFIX}${params.path}` });
 }

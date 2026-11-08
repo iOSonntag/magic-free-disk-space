@@ -21,17 +21,11 @@ export async function loadSimulatorRuntimeState(
   const [runtimes, devices] = await Promise.all([
     loadProbeOutput({
       probe: SIMULATOR_RUNTIME_LIST_PROBE,
-      tool: run.tool,
-      environment: run.environment,
-      processes: run.platform.toolProcesses,
-      deadlineMs: run.deadlineMs,
+      ...run,
     }),
     loadProbeOutput({
       probe: SIMULATOR_DEVICE_LIST_PROBE,
-      tool: run.tool,
-      environment: run.environment,
-      processes: run.platform.toolProcesses,
-      deadlineMs: run.deadlineMs,
+      ...run,
     }),
   ]);
 

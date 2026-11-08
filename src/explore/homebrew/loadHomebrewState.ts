@@ -42,10 +42,7 @@ export async function loadHomebrewState(
 ): Promise<Result<HomebrewState, ExploreProbeFailure>> {
   const cellarPath = await loadProbeOutput({
     probe: { toolName: run.tool.name, args: ['--cellar'], parse: parseHomebrewCellarPath },
-    tool: run.tool,
-    environment: run.environment,
-    processes: run.platform.toolProcesses,
-    deadlineMs: run.deadlineMs,
+    ...run,
   });
 
   if (cellarPath.kind === 'failed') {
@@ -54,10 +51,7 @@ export async function loadHomebrewState(
 
   const removals = await loadProbeOutput({
     probe: { toolName: run.tool.name, args: ['cleanup', '-n'], parse: parseHomebrewCleanupDryRun },
-    tool: run.tool,
-    environment: run.environment,
-    processes: run.platform.toolProcesses,
-    deadlineMs: run.deadlineMs,
+    ...run,
   });
 
   if (removals.kind === 'failed') {
@@ -70,10 +64,7 @@ export async function loadHomebrewState(
       args: ['autoremove', '-n'],
       parse: parseHomebrewAutoremoveDryRun,
     },
-    tool: run.tool,
-    environment: run.environment,
-    processes: run.platform.toolProcesses,
-    deadlineMs: run.deadlineMs,
+    ...run,
   });
 
   if (orphanFormulae.kind === 'failed') {

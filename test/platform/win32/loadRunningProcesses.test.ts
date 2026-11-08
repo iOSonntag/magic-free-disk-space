@@ -5,6 +5,7 @@ import {
   loadRunningProcesses,
 } from '../../../src/platform/win32/loadRunningProcesses.js';
 import { listProcesses, loadProcessImagePath } from '../../../src/platform/win32/win32Api.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 describe('listProcessImagePaths', () => {
   test('takes the image path of each process it can query', () => {
@@ -47,7 +48,7 @@ describe('listProcessImagePaths', () => {
   });
 });
 
-describe.skipIf(process.platform !== 'win32')('the processes of Windows', () => {
+describeOnWindows('the processes of Windows', () => {
   test('a Toolhelp snapshot lists this process by its id and the file name of its image', () => {
     const processes = listProcesses();
 
@@ -72,7 +73,7 @@ describe.skipIf(process.platform !== 'win32')('the processes of Windows', () => 
   });
 
   test('the listing holds the image path of this process', async () => {
-    const processes = await loadRunningProcesses({ commandTimeoutMs: 10_000 });
+    const processes = await loadRunningProcesses();
 
     expect(processes.kind).toBe('succeeded');
 

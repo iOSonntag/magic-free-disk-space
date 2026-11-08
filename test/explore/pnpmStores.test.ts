@@ -58,6 +58,7 @@ import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
+import { describeOnWindows } from '../support/windowsOnly.js';
 import { buildTestProbeStart } from './probeStartFixtures.js';
 import {
   buildFoundProjectPinsLoad,
@@ -1044,14 +1045,26 @@ describe('loadPnpmInstallState', () => {
 
 type StoreVersionsOffered = { storeVersions: string[]; isComplete: boolean };
 
-const probeCases: { probeId: 'pnpmStores' | 'pnpmStoresXdg'; storeRoot: CatalogLocation }[] = [
-  { probeId: 'pnpmStores', storeRoot: hostPlatform.explore.pnpmStoreRoot },
-];
+type StoreProbeCase = { probeId: 'pnpmStores' | 'pnpmStoresXdg'; storeRoot: CatalogLocation };
 
-// The XDG store is a place of the host only where pnpm has a default for it.
-if (hostPlatform.explore.pnpmXdgStoreRoot !== null) {
-  probeCases.push({ probeId: 'pnpmStoresXdg', storeRoot: hostPlatform.explore.pnpmXdgStoreRoot });
+/** The store probes of the host; the XDG store is a place only where pnpm has a default for it. */
+function listHostStoreProbeCases(): StoreProbeCase[] {
+  const defaultCase: StoreProbeCase = {
+    probeId: 'pnpmStores',
+    storeRoot: hostPlatform.explore.pnpmStoreRoot,
+  };
+
+  if (hostPlatform.explore.pnpmXdgStoreRoot === null) {
+    return [defaultCase];
+  }
+
+  return [
+    defaultCase,
+    { probeId: 'pnpmStoresXdg', storeRoot: hostPlatform.explore.pnpmXdgStoreRoot },
+  ];
 }
+
+const probeCases = listHostStoreProbeCases();
 
 for (const probeCase of probeCases) {
   describe(`the probe ${probeCase.probeId}`, () => {
@@ -1744,8 +1757,7 @@ for (const probeCase of probeCases) {
       );
     }
 
-    describe.skipIf(process.platform !== 'win32')("at pnpm's places of Windows", () => {
-      /** Creates the version folder at `location`. */
+    describeOnWindows("at pnpm's places of Windows", () => {
       function createPnpmVersionFolder(params: { location: CatalogLocation }): Promise<void> {
         return createFixtureDirectory({
           path: resolveEnvironmentLocation({ folders: environment, location: params.location }),

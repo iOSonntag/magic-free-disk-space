@@ -8,7 +8,7 @@ declare const absolutePathBrand: unique symbol;
 export type AbsolutePath = string & { [absolutePathBrand]: true };
 
 /** A Windows path rooted at a drive letter, such as `C:\` or `c:/`. */
-const WIN32_DRIVE_ROOT_PATTERN = /^[A-Za-z]:[\\/]/;
+const win32DriveRootPattern = /^[A-Za-z]:[\\/]/;
 
 /**
  * The one maker of an `AbsolutePath`; fails for a path that is not absolute under `rules`, and for
@@ -47,7 +47,7 @@ function parseUnderRules(params: { rules: PathRules; text: string }): string | n
 }
 
 function parseWin32DrivePath(params: { text: string }): string | null {
-  if (!WIN32_DRIVE_ROOT_PATTERN.test(params.text)) {
+  if (!win32DriveRootPattern.test(params.text)) {
     return null;
   }
 

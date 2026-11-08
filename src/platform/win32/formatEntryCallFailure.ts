@@ -6,7 +6,7 @@ import type { Win32CallFailure } from './win32Api.js';
  * failed attribute call as it reads a failed removal: not found, access denied, a sharing
  * violation, and a lock violation.
  */
-const ERROR_CODE_NAMES = new Map<number, string>([
+const errorCodeNames = new Map<number, string>([
   [2, 'ENOENT'],
   [3, 'ENOENT'],
   [5, 'EPERM'],
@@ -20,7 +20,6 @@ const ERROR_CODE_NAMES = new Map<number, string>([
  */
 export function formatEntryCallFailure(params: { failure: Win32CallFailure }): string {
   return (
-    ERROR_CODE_NAMES.get(params.failure.code) ??
-    formatSystemCallFailure({ failure: params.failure })
+    errorCodeNames.get(params.failure.code) ?? formatSystemCallFailure({ failure: params.failure })
   );
 }

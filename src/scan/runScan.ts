@@ -251,7 +251,7 @@ export async function runScan(params: {
     probeClaimPaths: knownClaimPaths,
   });
 
-  const cloudOnlyEntryTally = buildCloudOnlyEntryTally({
+  const cloudOnlyEntryTally = createCloudOnlyEntryTally({
     cloudOnlyEntries: params.scan.cloudOnlyEntries,
   });
   const runningProcessesLoad = params.system.loadRunningProcesses({
@@ -455,7 +455,7 @@ export async function runScan(params: {
  * The tally of the entries a scan's walks leave unread because their content lives only in the
  * cloud store: on a platform that counts them, each path once; on any other, none.
  */
-export function buildCloudOnlyEntryTally(params: {
+export function createCloudOnlyEntryTally(params: {
   cloudOnlyEntries: ScanPlatformCloudOnlyEntries;
 }): CloudOnlyEntryTally {
   switch (params.cloudOnlyEntries.kind) {
@@ -572,7 +572,7 @@ async function loadTrashPhase(params: {
         return {
           decisions: decideRecycleBinCandidate({
             pathRules: params.context.environment.pathRules,
-            trash: trash,
+            recycleBin: trash,
             driveRoot: driveRoot,
             content: content.value,
             minOfferedBytes: SCAN_LIMITS.minOfferedBytes,

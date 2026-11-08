@@ -4,13 +4,19 @@ import type {
   RunningProcessesImagePaths,
 } from '../../src/system/systemPlatform.js';
 
-/** No running process, in the form the host's platform lists processes in. */
-export function buildHostNoRunningProcesses(): RunningProcesses {
+/**
+ * The running processes in the form the host's platform lists them: `imagePaths` on Windows,
+ * `commandLines` elsewhere; two empty lists for no running process.
+ */
+export function buildHostRunningProcesses(params: {
+  commandLines: string[];
+  imagePaths: string[];
+}): RunningProcesses {
   if (process.platform === 'win32') {
-    return buildRunningImagePaths([]);
+    return buildRunningImagePaths(params.imagePaths);
   }
 
-  return buildRunningCommandLines([]);
+  return buildRunningCommandLines(params.commandLines);
 }
 
 /** The processes as macOS lists them, by their command lines; `null` stays `null`, a run whose processes could not be listed. */

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import {
   FILE_ATTRIBUTE_DIRECTORY,
   FILE_ATTRIBUTE_READONLY,
 } from '../../support/windowsFileAttributes.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 const HELD_LINE = 'held';
 
@@ -65,7 +66,7 @@ async function holdFile(params: { path: string }): Promise<{ release: () => Prom
   };
 }
 
-describe.skipIf(process.platform !== 'win32')('the removal of a tree on NTFS', () => {
+describeOnWindows('the removal of a tree on NTFS', () => {
   let folder: string;
 
   beforeEach(async () => {

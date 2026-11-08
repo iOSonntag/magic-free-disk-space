@@ -1,5 +1,5 @@
 import type { CatalogLocation } from '../../catalog/catalog.js';
-import type { Environment } from '../../environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
@@ -67,7 +67,7 @@ export async function loadEachAndroidSdkRoot<
  * platform's SDK fails.
  */
 export async function loadAndroidSdkRoots(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   androidSdkRoot: CatalogLocation;
   flutterSettingsPaths: CatalogLocation[];
   pinFiles: ProjectPinFile[];
@@ -117,7 +117,7 @@ export async function loadAndroidSdkRoots(params: {
  * could not be read leave the platform's and Flutter's roots alone. Never rejects.
  */
 export async function loadScanAndroidSdkRoots(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   platform: ExploreProbePlatform;
   projectPins: ProjectPinsLoad;
 }): Promise<Result<AndroidSdkRoot[], ExploreFileUnreadable>> {
@@ -172,7 +172,7 @@ async function loadSdkRootResolved(params: {
  * file cannot be read.
  */
 async function loadFlutterSettingsSdkRoot(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   flutterSettingsPaths: CatalogLocation[];
   privacyDenialCode: string | null;
 }): Promise<string | null> {

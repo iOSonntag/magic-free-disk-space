@@ -1,10 +1,6 @@
 import { basename, dirname } from 'node:path';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import {
-  findArtifactRulesOfName,
-  findMarkedArtifactRule,
-  groupArtifactRulesByName,
-} from '../catalog/projectArtifactRules.js';
+import { buildArtifactFolderMatcher } from '../catalog/projectArtifactRules.js';
 import type { ProjectPinFileRef } from '../explore/projectPins/projectPins.js';
 import {
   matchProjectPinFile,
@@ -62,7 +58,7 @@ export async function walkProjects(params: {
   recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ProjectWalk> {
-  const artifactRulesByName = groupArtifactRulesByName({
+  const artifactFolderMatcher = buildArtifactFolderMatcher({
     pathRules: params.pathRules,
     rules: params.rules,
   });
@@ -98,36 +94,30 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
-    const nameRules = findArtifactRulesOfName({
-      pathRules: params.pathRules,
-      rulesByName: artifactRulesByName,
+    const folderMatch = artifactFolderMatcher.matchFolder({
       name: entry.name,
+      siblingNames: entry.siblingNames,
     });
 
-    if (nameRules !== null) {
-      const markedRule = findMarkedArtifactRule({
-        pathRules: params.pathRules,
-        nameRules: nameRules,
-        projectEntryNames: entry.siblingNames,
-      });
-
-      if (markedRule !== null) {
+    switch (folderMatch.kind) {
+      case 'artifact':
         artifacts.push({
           artifactPath: entry.path,
           projectRoot: dirname(entry.path),
-          rule: markedRule,
+          rule: folderMatch.rule,
         });
 
         return 'skip';
-      }
-
       // An unmarked folder one rule skips is no project to search either, such as `vendor`; any
       // other is an ordinary folder, such as a `bin` beside no project file of .NET.
-      if (nameRules.some((rule) => rule.unmarkedFolder === 'skipped')) {
-        return 'skip';
-      }
+      case 'unmarked':
+        return folderMatch.unmarkedFolder === 'skipped' ? 'skip' : visitOrdinaryFolder(entry);
+      case 'noRule':
+        return visitOrdinaryFolder(entry);
     }
+  }
 
+  function visitOrdinaryFolder(entry: TreeEntry): TreeEntryVisit {
     if (entry.name.startsWith('.') || entry.depth >= params.maxDepth) {
       return 'skip';
     }

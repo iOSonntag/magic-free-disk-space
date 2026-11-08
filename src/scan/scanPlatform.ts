@@ -126,18 +126,22 @@ export type ScanPlatformApps = ScanPlatformAppsOffered | ScanPlatformAppsAdvised
 /** The trash is a folder the catalog names with its other entries, as `~/.Trash` on macOS. */
 export type ScanPlatformTrashCatalogFolder = { kind: 'catalogFolder' };
 
-/**
- * Each fixed drive has a Recycle Bin, which the system counts and empties as one unit, as on
- * Windows; the texts and the risk are those of each bin's item.
- */
-export type ScanPlatformTrashRecycleBins = {
-  kind: 'recycleBins';
+/** What each drive's Recycle Bin is as an item: its texts, its risk, and the folder of the bin. */
+export type RecycleBinDescription = {
   title: string;
   explanation: string;
   regeneration: string;
   risk: Risk;
   /** The folder at the root of a drive that holds the drive's bin, such as `$Recycle.Bin`. */
   binFolderName: string;
+};
+
+/**
+ * Each fixed drive has a Recycle Bin, which the system counts and empties as one unit, as on
+ * Windows; the description is that of each bin's item.
+ */
+export type ScanPlatformTrashRecycleBins = RecycleBinDescription & {
+  kind: 'recycleBins';
   loadRecycleBin: RecycleBinLoad;
 };
 

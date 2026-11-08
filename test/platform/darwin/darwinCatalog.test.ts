@@ -1,34 +1,14 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { CatalogOwner } from '../../../src/catalog/catalogOwner.js';
-import type { Environment } from '../../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
 import { isAppleBundleId } from '../../../src/scan/resolveOwnerState.js';
 import { isLocationUnderRoot } from '../../support/catalogLocationFixtures.js';
-import { describeOnDarwin } from '../../support/darwinOnly.js';
-import type { FixtureRoot } from '../../support/fixtureRoot.js';
-import {
-  createFixtureRoot,
-  deleteFixtureRoot,
-  loadTestEnvironment,
-} from '../../support/fixtureRoot.js';
+import { exampleDarwinEnvironment } from '../../support/environmentFixtures.js';
 
 /** The kinds of owner a macOS entry may name besides `null` for no app: an app by its bundle id. */
 const DARWIN_OWNER_KINDS: CatalogOwner['kind'][] = ['bundleId', 'bundleIdFamily'];
 
-// The catalog resolves against the environment of the host, which only macOS gives it.
-describeOnDarwin('the catalog of darwinPlatform', () => {
-  let fixtureRoot: FixtureRoot;
-  let environment: Environment;
-
-  beforeEach(async () => {
-    fixtureRoot = await createFixtureRoot();
-    environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  });
-
-  afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  });
-
+describe('the catalog of darwinPlatform', () => {
   test('every entry is owned by no app, a bundle id or a family of bundle ids', () => {
     const otherOwnerIds = darwinPlatform.catalog.entries
       .filter((entry) => entry.owner !== null && !DARWIN_OWNER_KINDS.includes(entry.owner.app.kind))
@@ -56,7 +36,9 @@ describeOnDarwin('the catalog of darwinPlatform', () => {
 
   test('every entry resolves under its root in a fixture environment, none below AppData', () => {
     const unresolvedIds = darwinPlatform.catalog.entries
-      .filter((entry) => !isLocationUnderRoot({ location: entry, environment: environment }))
+      .filter(
+        (entry) => !isLocationUnderRoot({ location: entry, environment: exampleDarwinEnvironment }),
+      )
       .map((entry) => entry.id);
 
     expect(darwinPlatform.catalog.entries.length).toBeGreaterThan(0);

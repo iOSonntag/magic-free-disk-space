@@ -9,7 +9,7 @@ declare const driveRootBrand: unique symbol;
 export type DriveRoot = AbsolutePath & { [driveRootBrand]: true };
 
 /** A drive letter, a colon and a backslash, nothing before or after. */
-const DRIVE_ROOT_PATTERN = /^[A-Za-z]:\\$/;
+const driveRootPattern = /^[A-Za-z]:\\$/;
 
 /**
  * The one maker of a `DriveRoot`: a letter, a colon and a backslash under the Windows rules, the
@@ -24,7 +24,7 @@ export function parseDriveRoot(params: {
     case 'posix':
       return { kind: 'failed', failure: 'not a drive root' };
     case 'win32': {
-      if (!DRIVE_ROOT_PATTERN.test(params.text)) {
+      if (!driveRootPattern.test(params.text)) {
         return { kind: 'failed', failure: 'not a drive root' };
       }
 

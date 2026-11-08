@@ -11,7 +11,7 @@ import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { FixtureRoot } from './fixtureRoot.js';
 import { loadTestEnvironment, withFixtureRoot } from './fixtureRoot.js';
 import { buildTestProbePlatform } from './probePlatformFixtures.js';
-import { buildHostNoRunningProcesses } from './runningProcessesFixtures.js';
+import { buildHostRunningProcesses } from './runningProcessesFixtures.js';
 
 /** How long a test probe run may take before its deadline. */
 const TEST_PROBE_RUN_DURATION_MS = 10_000;
@@ -28,6 +28,9 @@ type TestProbeRunParams = {
   staleCutoffMs?: number;
   unusedCutoffMs?: number;
 };
+
+/** The running processes of a test probe run, for a test that sets only those. */
+export type TestProbeRunProcesses = Pick<TestProbeRunParams, 'runningProcesses'>;
 
 /** A unit of the kind `TKind`. */
 export type ExploreUnitOfKind<TKind extends ExploreUnit['kind']> = Extract<
@@ -65,7 +68,7 @@ export function buildTestProbeRun(params: TestProbeRunParams): ExploreProbeRun {
     platform: params.platform ?? buildTestProbePlatform(),
     runningProcesses:
       params.runningProcesses === undefined
-        ? buildHostNoRunningProcesses()
+        ? buildHostRunningProcesses({ commandLines: [], imagePaths: [] })
         : params.runningProcesses,
     deadlineMs: Date.now() + TEST_PROBE_RUN_DURATION_MS,
     unusedCutoffMs: params.unusedCutoffMs ?? 0,

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { loadPrivateBytes } from '../../../src/platform/win32/loadPrivateBytes.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
@@ -7,11 +7,12 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../../support/fixtureRoot.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 /** Far above the size NTFS keeps inside the file's own record, so the file takes clusters. */
 const FILE_BYTES = 64 * 1024;
 
-describe.skipIf(process.platform !== 'win32')('loadPrivateBytes on Windows', () => {
+describeOnWindows('loadPrivateBytes on Windows', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

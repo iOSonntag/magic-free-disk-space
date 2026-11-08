@@ -9,8 +9,9 @@ import {
   loadLogicalDrives,
   loadRecycleBinContent,
 } from '../../../src/platform/win32/win32Api.js';
-import { win32Platform } from '../../../src/platform/win32/win32Platform.js';
 import { buildTestDriveRoot } from '../../support/parsedValueFixtures.js';
+import { getWin32RecycleBinDeleteTrash } from '../../support/platformFixtures.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 /** The lowest code of a failed HRESULT, read as unsigned. */
 const FIRST_FAILURE_HRESULT = 0x80000000;
@@ -28,7 +29,7 @@ function loadHostDriveRoot(): DriveRoot {
 }
 
 /** The root of the last drive letter no drive of this machine has. */
-function findAbsentDriveRoot(): DriveRoot {
+function loadAbsentDriveRoot(): DriveRoot {
   const logicalDrives = loadLogicalDrives();
 
   if (logicalDrives.kind === 'failed') {
@@ -45,19 +46,7 @@ function findAbsentDriveRoot(): DriveRoot {
   return buildTestDriveRoot({ text: lastAbsentRootText });
 }
 
-/** The code the deletion of Windows reads as a bin that held nothing to empty. */
-function getNothingToEmptyCode(): number {
-  const trash = win32Platform.delete.trash;
-
-  switch (trash.kind) {
-    case 'catalogFolder':
-      throw new Error('The trash of Windows is its Recycle Bins.');
-    case 'recycleBins':
-      return trash.nothingToEmptyCode;
-  }
-}
-
-describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () => {
+describeOnWindows('the Recycle Bin of Windows', () => {
   test('SHQueryRecycleBinW counts the bin of the drive of the temporary folder', () => {
     const content = loadRecycleBinContent({ driveRoot: loadHostDriveRoot() });
 
@@ -70,7 +59,7 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
   });
 
   test('SHQueryRecycleBinW fails with its HRESULT for a drive that is not there', () => {
-    const content = loadRecycleBinContent({ driveRoot: findAbsentDriveRoot() });
+    const content = loadRecycleBinContent({ driveRoot: loadAbsentDriveRoot() });
 
     expect(content).toEqual({
       kind: 'failed',
@@ -121,7 +110,10 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
       });
       expect(emptyRecycleBin({ driveRoot: driveRoot })).toEqual({
         kind: 'failed',
-        failure: { call: 'SHEmptyRecycleBinW', code: getNothingToEmptyCode() },
+        failure: {
+          call: 'SHEmptyRecycleBinW',
+          code: getWin32RecycleBinDeleteTrash().nothingToEmptyCode,
+        },
       });
     });
   });

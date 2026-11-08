@@ -23,19 +23,19 @@ const UNINSTALL_KEY_PATH = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninst
  * machine's in its 64-bit and its 32-bit view. The 32-bit view is how the machine's key reads
  * the apps of 32 bits, so `Wow6432Node` is never opened by its name.
  */
-export const UNINSTALL_KEY_SOURCES: UninstallKeySource[] = [
+export const uninstallKeySources: UninstallKeySource[] = [
   { hive: 'currentUser', view: 'shared', keyPath: UNINSTALL_KEY_PATH },
   { hive: 'localMachine', view: 'bits64', keyPath: UNINSTALL_KEY_PATH },
   { hive: 'localMachine', view: 'bits32', keyPath: UNINSTALL_KEY_PATH },
 ];
 
 /** The `ReleaseType` values of an update of another app, which Settings > Apps does not list. */
-const UPDATE_RELEASE_TYPES = ['Update', 'Hotfix', 'Security Update'];
+const updateReleaseTypes = ['Update', 'Hotfix', 'Security Update'];
 
 /** `EstimatedSize` counts kilobytes. */
 const ESTIMATED_SIZE_UNIT_BYTES = 1024;
 
-const HIVE_NAMES: Record<RegistryHive, string> = {
+const hiveNames: Record<RegistryHive, string> = {
   currentUser: 'HKEY_CURRENT_USER',
   localMachine: 'HKEY_LOCAL_MACHINE',
 };
@@ -75,7 +75,7 @@ export function buildUninstallKeyIssue(params: {
   failure: Win32CallFailure;
 }): ScanIssue {
   return {
-    path: `${HIVE_NAMES[params.source.hive]}\\${params.source.keyPath}`,
+    path: `${hiveNames[params.source.hive]}\\${params.source.keyPath}`,
     reason: 'unexpected',
     detail: formatSystemCallFailure({ failure: params.failure }),
   };
@@ -129,7 +129,7 @@ function toAdvisedApp(params: { values: UninstallKeyValues }): AdvisedApp | null
 
   if (
     params.values.releaseType !== null &&
-    UPDATE_RELEASE_TYPES.includes(params.values.releaseType)
+    updateReleaseTypes.includes(params.values.releaseType)
   ) {
     return null;
   }

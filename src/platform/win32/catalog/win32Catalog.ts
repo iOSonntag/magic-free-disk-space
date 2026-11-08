@@ -33,7 +33,7 @@ export type Win32Catalog = {
 };
 
 /** Any project file of .NET in C#, F#, or Visual Basic ends in one of these. */
-const DOTNET_PROJECT_MARKERS: ProjectMarker[] = [
+const dotnetProjectMarkers: ProjectMarker[] = [
   { kind: 'fileSuffix', suffix: '.csproj' },
   { kind: 'fileSuffix', suffix: '.fsproj' },
   { kind: 'fileSuffix', suffix: '.vbproj' },
@@ -60,7 +60,7 @@ export const WIN32_CATALOG: Win32Catalog = {
     ...PROJECT_ARTIFACT_RULES,
     {
       artifactName: 'bin',
-      markers: DOTNET_PROJECT_MARKERS,
+      markers: dotnetProjectMarkers,
       unmarkedFolder: 'walked',
       title: '.NET build output',
       explanation: 'Compiled output of a .NET project.',
@@ -69,7 +69,7 @@ export const WIN32_CATALOG: Win32Catalog = {
     },
     {
       artifactName: 'obj',
-      markers: DOTNET_PROJECT_MARKERS,
+      markers: dotnetProjectMarkers,
       unmarkedFolder: 'walked',
       title: '.NET intermediate output',
       explanation: 'Intermediate build files and the package restore of a .NET project.',

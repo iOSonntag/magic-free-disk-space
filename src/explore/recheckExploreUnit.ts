@@ -68,10 +68,7 @@ export async function recheckExploreUnit(params: {
     case 'simulatorDevice': {
       const devices = await loadProbeOutput({
         probe: SIMULATOR_DEVICE_LIST_PROBE,
-        tool: run.tool,
-        environment: run.environment,
-        processes: run.platform.toolProcesses,
-        deadlineMs: run.deadlineMs,
+        ...run,
       });
 
       if (devices.kind === 'failed') {
@@ -87,10 +84,7 @@ export async function recheckExploreUnit(params: {
     case 'dartPubCache': {
       const gcPaths = await loadProbeOutput({
         probe: DART_PUB_CACHE_GC_DRY_RUN_PROBE,
-        tool: run.tool,
-        environment: run.environment,
-        processes: run.platform.toolProcesses,
-        deadlineMs: run.deadlineMs,
+        ...run,
       });
 
       if (gcPaths.kind === 'failed') {
@@ -106,10 +100,7 @@ export async function recheckExploreUnit(params: {
     case 'miseVersion': {
       const versions = await loadProbeOutput({
         probe: MISE_PRUNABLE_LIST_PROBE,
-        tool: run.tool,
-        environment: run.environment,
-        processes: run.platform.toolProcesses,
-        deadlineMs: run.deadlineMs,
+        ...run,
       });
 
       if (versions.kind === 'failed') {

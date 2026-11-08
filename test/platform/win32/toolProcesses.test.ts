@@ -4,6 +4,7 @@ import {
   win32ToolProcesses,
 } from '../../../src/platform/win32/toolProcesses.js';
 import type { StartedTool } from '../../../src/tools/toolsPlatform.js';
+import { describeOnWindows } from '../../support/windowsOnly.js';
 
 describe('buildWin32BaseEnvironment', () => {
   test('holds the profile, the temporary folder, SystemRoot, and its folders after the tool folder', () => {
@@ -40,7 +41,7 @@ describe('buildWin32BaseEnvironment', () => {
   });
 });
 
-describe.skipIf(process.platform !== 'win32')('a Windows tool in its job', () => {
+describeOnWindows('a Windows tool in its job', () => {
   /** Starts a Bun child that runs until something ends it, in a job of its own. */
   function startIdleTool(): StartedTool {
     const started = win32ToolProcesses.startTool({

@@ -1,4 +1,4 @@
-import type { Environment } from '../../environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
@@ -40,7 +40,7 @@ export type IdeVersionFolder = IdeVersionFolderPlain | IdeVersionFolderSettings;
 
 /** Reads every version folder of every root, for the probe and the recheck of its units. */
 export async function loadIdeVersionState(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   roots: IdeVersionRoots;
   privacyDenialCode: string | null;
 }): Promise<Result<IdeVersionFolder[], ExploreFileUnreadable>> {

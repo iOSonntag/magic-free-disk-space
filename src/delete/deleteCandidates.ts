@@ -71,7 +71,7 @@ export type RemovalOutcomeToolFailed = {
 /**
  * An item whose removal left entries of a target that another program held, or whose content only
  * a cloud store keeps; `freedBytes` is the drop to what a measurement after the removal still
- * found, and `stayedEntryCount` the entries left of the first target that stayed.
+ * found, and `stayedEntryCount` the entries left of every target its removal left in part.
  */
 export type RemovalOutcomePartlyRemoved = {
   candidate: Candidate;
@@ -794,9 +794,9 @@ function treeRemovalToTargetOutcome(params: {
 
 /**
  * The item is gone once each target is: `alreadyGone` when none went by this run, else `removed`,
- * freeing `presentBytes`, what its targets held before the run. Otherwise it takes the first
- * target that stayed, and frees the drop from `presentBytes` to what its targets still hold,
- * measured as the scan measured them, once any delete ran.
+ * freeing `presentBytes`, what its targets held before the run. Otherwise it takes the outcome of
+ * the first target that stayed, and frees the drop from `presentBytes` to what its targets still
+ * hold, measured as the scan measured them, once any delete ran.
  */
 async function loadTargetsOutcome(params: {
   candidate: Candidate;
@@ -821,7 +821,8 @@ async function loadTargetsOutcome(params: {
   if (!params.targetOutcomes.some((targetOutcome) => targetOutcome.deleteRan)) {
     return buildStayedTargetOutcome({
       candidate: params.candidate,
-      target: decision.target,
+      stayedTarget: decision.target,
+      targetOutcomes: params.targetOutcomes,
       freedBytes: 0,
     });
   }
@@ -835,24 +836,29 @@ async function loadTargetsOutcome(params: {
 
   return buildStayedTargetOutcome({
     candidate: params.candidate,
-    target: decision.target,
+    stayedTarget: decision.target,
+    targetOutcomes: params.targetOutcomes,
     freedBytes: getMeasuredFreedBytes({ beforeBytes: params.presentBytes, after: left }),
   });
 }
 
-/** The item's outcome named by the first target that stayed, whole or in part. */
+/**
+ * The item's outcome named by `stayedTarget`, the first of its `targetOutcomes` that stayed, whole
+ * or in part; one left in part counts the entries that stayed of every target left in part.
+ */
 function buildStayedTargetOutcome(params: {
   candidate: Candidate;
-  target: TargetOutcome;
+  stayedTarget: TargetOutcome;
+  targetOutcomes: TargetOutcome[];
   freedBytes: number;
 }): TargetsRemovalOutcome {
-  switch (params.target.outcome) {
+  switch (params.stayedTarget.outcome) {
     case 'partlyRemoved':
       return {
         candidate: params.candidate,
         freedBytes: params.freedBytes,
         outcome: 'partlyRemoved',
-        stayedEntryCount: params.target.stayedEntryCount,
+        stayedEntryCount: countStayedEntries({ targetOutcomes: params.targetOutcomes }),
       };
     case 'removed':
     case 'alreadyGone':
@@ -866,10 +872,23 @@ function buildStayedTargetOutcome(params: {
       return {
         candidate: params.candidate,
         freedBytes: params.freedBytes,
-        outcome: params.target.outcome,
-        code: params.target.code,
+        outcome: params.stayedTarget.outcome,
+        code: params.stayedTarget.code,
       };
   }
+}
+
+/** The entries that stayed in all the targets their removal left in part. */
+function countStayedEntries(params: { targetOutcomes: TargetOutcome[] }): number {
+  let stayedEntryCount = 0;
+
+  for (const targetOutcome of params.targetOutcomes) {
+    if (targetOutcome.outcome === 'partlyRemoved') {
+      stayedEntryCount += targetOutcome.stayedEntryCount;
+    }
+  }
+
+  return stayedEntryCount;
 }
 
 function isSameIdentity(params: { current: FileIdentity; scanned: FileIdentity }): boolean {

@@ -12,10 +12,7 @@ export async function recheckVagrantBoxUnit(params: {
 }): Promise<UnitRecheck> {
   const boxes = await loadProbeOutput({
     probe: VAGRANT_BOX_LIST_PROBE,
-    tool: params.run.tool,
-    environment: params.run.environment,
-    processes: params.run.platform.toolProcesses,
-    deadlineMs: params.run.deadlineMs,
+    ...params.run,
   });
 
   if (boxes.kind === 'failed') {

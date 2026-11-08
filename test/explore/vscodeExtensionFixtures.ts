@@ -11,10 +11,7 @@ import { createFixtureFile, writeFixtureTextFile } from '../support/fixtureRoot.
 import type { HomeFolder } from '../support/parsedValueFixtures.js';
 import { joinBelowHome } from '../support/parsedValueFixtures.js';
 import { hostPlatform } from '../support/platformFixtures.js';
-import {
-  buildRunningCommandLines,
-  buildRunningImagePaths,
-} from '../support/runningProcessesFixtures.js';
+import { buildHostRunningProcesses } from '../support/runningProcessesFixtures.js';
 
 /** A command line of VS Code's app, which keeps its extension folders busy. */
 const VSCODE_APP_COMMAND = '/Applications/Visual Studio Code.app/Contents/MacOS/Electron';
@@ -24,10 +21,10 @@ const VSCODE_WINDOWS_IMAGE_PATH =
   'C:\\Users\\tester\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe';
 
 /** The processes of a running VS Code, in the form the host lists them. */
-export const runningVscodeProcesses: RunningProcesses =
-  process.platform === 'win32'
-    ? buildRunningImagePaths([VSCODE_WINDOWS_IMAGE_PATH])
-    : buildRunningCommandLines([VSCODE_APP_COMMAND]);
+export const runningVscodeProcesses: RunningProcesses = buildHostRunningProcesses({
+  commandLines: [VSCODE_APP_COMMAND],
+  imagePaths: [VSCODE_WINDOWS_IMAGE_PATH],
+});
 
 /** Marked in `.obsolete`, listed by no registry, and the only version of its id: obsolete. */
 export const OBSOLETE_FOLDER_NAME = 'example.alpha-1.0.0';

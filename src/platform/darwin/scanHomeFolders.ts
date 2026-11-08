@@ -1,4 +1,5 @@
 import type { EnvironmentLocation } from '../../environment/environmentLocation.js';
+import { buildHomeLocation } from './buildHomeLocation.js';
 
 /** Top-level home folders that the project search never enters. */
 export const PROJECT_SEARCH_EXCLUDED_NAMES: string[] = [
@@ -12,9 +13,9 @@ export const PROJECT_SEARCH_EXCLUDED_NAMES: string[] = [
 ];
 
 /** Home folders searched for large files that the user may no longer need. */
-export const USER_FILE_ROOTS: EnvironmentLocation[] = [
+export const userFileRoots: EnvironmentLocation[] = [
   'Desktop',
   'Documents',
   'Downloads',
   'Movies',
-].map((name) => ({ root: 'home', path: name }));
+].map((name) => buildHomeLocation({ names: [name] }));

@@ -10,7 +10,7 @@ import type { EntryReads } from '../../src/system/entryReads.js';
 import type { RunningProcessesResult } from '../../src/system/systemPlatform.js';
 import { TOOL_INSTALL_LOCATIONS_NONE } from './candidateFixtures.js';
 import { buildTestPlatform } from './platformFixtures.js';
-import { buildHostNoRunningProcesses } from './runningProcessesFixtures.js';
+import { buildHostRunningProcesses } from './runningProcessesFixtures.js';
 
 /**
  * Scans the fixture home of `environment` through the host's platform with only `catalogEntries`
@@ -27,7 +27,7 @@ export function runTestScan(params: {
 }): Promise<ScanReport> {
   const runningProcesses = params.runningProcesses ?? {
     kind: 'succeeded',
-    value: buildHostNoRunningProcesses(),
+    value: buildHostRunningProcesses({ commandLines: [], imagePaths: [] }),
   };
   const platform = buildTestPlatform({
     catalogEntries: params.catalogEntries,

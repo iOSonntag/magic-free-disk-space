@@ -123,7 +123,7 @@ function holdInJob(params: { child: ToolProcess; job: WindowsHandle }): StartedT
 
   return {
     process: params.child,
-    // A job already empty is no error; once released, closing its handle ended what was left.
+    // Once released, closing its handle ended what was left.
     stop: () => {
       if (!isReleased) {
         terminateJob({ job: params.job });

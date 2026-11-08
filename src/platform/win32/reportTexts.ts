@@ -1,7 +1,7 @@
 import type { ReportTexts } from '../../report/reportTexts.js';
 
 /** The words of Windows in the texts every platform shows. */
-export const WIN32_REPORT_TEXTS: ReportTexts = {
+export const win32ReportTexts: ReportTexts = {
   computerPhrase: 'this PC',
   systemName: 'Windows',
   trashName: 'Recycle Bin',

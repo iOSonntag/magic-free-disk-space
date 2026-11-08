@@ -13,10 +13,7 @@ export async function loadCondaPackageFindings(
 ): Promise<ExploreProbeToolResult> {
   const plan = await loadProbeOutput({
     probe: CONDA_CLEAN_DRY_RUN_PROBE,
-    tool: run.tool,
-    environment: run.environment,
-    processes: run.platform.toolProcesses,
-    deadlineMs: run.deadlineMs,
+    ...run,
   });
 
   if (plan.kind === 'failed') {

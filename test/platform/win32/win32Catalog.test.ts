@@ -126,6 +126,11 @@ describe('WIN32_CATALOG', () => {
 
     expect(holdingIds).toEqual(['teams-cache', 'teams-classic-cache']);
     expect(
+      WIN32_CATALOG.entries
+        .filter((entry) => holdingIds.includes(entry.id))
+        .map((entry) => entry.selection.kind),
+    ).toEqual(['children', 'children']);
+    expect(
       teamsBackgroundRealPaths.filter(
         (backgroundPath) => !exampleWin32Environment.sensitiveRealPaths.includes(backgroundPath),
       ),
