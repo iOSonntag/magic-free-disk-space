@@ -2,11 +2,8 @@ import type {
   EnvironmentLocation,
   EnvironmentLocationAtRoot,
 } from '../../../environment/environmentLocation.js';
-import {
-  buildTeamsBackgroundsLocation,
-  teamsCacheFolder,
-  teamsClassicCacheFolder,
-} from './teamsCaches.js';
+import { buildLocationBelow } from '../../../environment/environmentLocation.js';
+import { teamsCacheFolder, teamsClassicCacheFolder } from './teamsCaches.js';
 
 /**
  * Root-like folders, never removed as a whole, while an entry below one may go, such as a
@@ -68,6 +65,6 @@ export const WIN32_SENSITIVE_LOCATIONS: EnvironmentLocationAtRoot[] = [
   { root: 'localAppData', path: 'Microsoft/Vault' },
   // The backgrounds the user uploaded to Teams lie among the folders of its cache, which the
   // catalog offers one by one.
-  buildTeamsBackgroundsLocation(teamsCacheFolder),
-  buildTeamsBackgroundsLocation(teamsClassicCacheFolder),
+  buildLocationBelow({ location: teamsCacheFolder, path: 'Backgrounds' }),
+  buildLocationBelow({ location: teamsClassicCacheFolder, path: 'Backgrounds' }),
 ];

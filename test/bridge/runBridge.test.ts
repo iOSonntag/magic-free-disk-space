@@ -7,8 +7,6 @@ import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
 import { formatHomeRelativePath } from '../../src/path/formatHomeRelativePath.js';
-import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
-import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { PreferencesSaveFailure } from '../../src/preferences/preferencesFile.js';
 import { formatDeletionWarningLines } from '../../src/report/formatDeletionConfirmation.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
@@ -31,6 +29,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { joinBelowHome } from '../support/parsedValueFixtures.js';
 import { buildTestPlatform, hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { loadProtocolFixtureEvents } from '../support/protocolFixture.js';
@@ -390,20 +389,11 @@ function listRecordShapeMismatches(params: {
   );
 }
 
-/** The path of `names` below the fixture home, joined as the host's platform joins it. */
-function buildHomeEntryPath(params: { names: string[] }): AbsolutePath {
-  return joinAbsolutePath({
-    rules: environment.pathRules,
-    parentPath: environment.homeDir,
-    names: params.names,
-  });
-}
-
 describe('runBridge', () => {
   test('scans and answers with the view of the scan, numbered top to bottom', async () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
-    const toolCachePath = buildHomeEntryPath({ names: ['Library', 'Caches', 'ToolCache'] });
+    const toolCachePath = joinBelowHome({ home: environment, path: 'Library/Caches/ToolCache' });
 
     const progressEvents = events.flatMap((event) => (event.kind === 'progress' ? [event] : []));
 
@@ -566,7 +556,7 @@ describe('runBridge', () => {
       'deleted',
       'failed',
     ]);
-    const appCacheKey = `catalog:app-cache:${buildHomeEntryPath({ names: ['Library', 'Caches', 'AppCache'] })}`;
+    const appCacheKey = `catalog:app-cache:${joinBelowHome({ home: environment, path: 'Library/Caches/AppCache' })}`;
 
     expect(answers[1]).toMatchObject({
       planId: 1,

@@ -11,8 +11,3 @@ export const teamsClassicCacheFolder: CatalogLocation = {
   root: 'roamingAppData',
   path: 'Microsoft/Teams',
 };
-
-/** The backgrounds the user uploaded to Teams, a folder among the folders of its cache. */
-export function buildTeamsBackgroundsLocation(cacheFolder: CatalogLocation): CatalogLocation {
-  return { root: cacheFolder.root, path: `${cacheFolder.path}/Backgrounds` };
-}

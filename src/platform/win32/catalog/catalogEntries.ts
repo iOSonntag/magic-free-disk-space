@@ -1,9 +1,10 @@
 import type { CatalogEntry, CatalogEntryOwner, CatalogLocation } from '../../../catalog/catalog.js';
 import type { WindowsImageName } from '../../../catalog/catalogOwner.js';
 import { parseWindowsImageName } from '../../../catalog/catalogOwner.js';
+import { buildLocationBelow } from '../../../environment/environmentLocation.js';
 import { SCAN_LIMITS } from '../../../scan/limits.js';
 import { mapNonEmpty } from '../../../system/nonEmptyList.js';
-import { buildAndroidSdkLocation } from './androidSdk.js';
+import { androidSdkRoot } from './androidSdk.js';
 import { PNPM_STORE_ROOT } from './pnpmHomes.js';
 import { teamsCacheFolder, teamsClassicCacheFolder } from './teamsCaches.js';
 
@@ -69,7 +70,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
       'The system images that Android emulators start from, one for each Android version and CPU type.',
     regeneration: 'An image comes back only when you install it again in the SDK Manager.',
     risk: 'review',
-    ...buildAndroidSdkLocation({ path: 'system-images' }),
+    ...buildLocationBelow({ location: androidSdkRoot, path: 'system-images' }),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,
@@ -87,7 +88,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     explanation: 'The Android platform versions that apps are built against.',
     regeneration: 'A version comes back only when you install it again in the SDK Manager.',
     risk: 'review',
-    ...buildAndroidSdkLocation({ path: 'platforms' }),
+    ...buildLocationBelow({ location: androidSdkRoot, path: 'platforms' }),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,

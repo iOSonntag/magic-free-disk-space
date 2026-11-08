@@ -24,6 +24,14 @@ export type LocationRoot = EnvironmentBase | 'absolute';
  */
 export type EnvironmentLocationAtRoot = { root: LocationRoot; path: string };
 
+/** The place at `path`, its names joined by `/`, below `location`, at the same root. */
+export function buildLocationBelow(params: {
+  location: EnvironmentLocationAtRoot;
+  path: string;
+}): EnvironmentLocationAtRoot {
+  return { root: params.location.root, path: `${params.location.path}/${params.path}` };
+}
+
 /**
  * A folder or file in a known folder of Windows, wherever the user moved it, relative to the known
  * folder as a fixed location is to its root.

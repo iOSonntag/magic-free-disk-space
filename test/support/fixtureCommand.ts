@@ -2,7 +2,7 @@
 export type FixtureCommandRun = { exitCode: number; stdoutText: string; stderrText: string };
 
 /** What a child process exited with, whether it was killed at its time limit, and all it printed. */
-export type ChildProcessRun = {
+type ChildProcessRun = {
   exitCode: number | null;
   timedOut: boolean;
   stdout: Uint8Array;

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildLocationBelow,
   findEnvironmentLocationPath,
   findEnvironmentLocationPaths,
   resolveEnvironmentLocation,
@@ -14,6 +15,17 @@ import {
   exampleWin32EnvironmentParams,
 } from '../support/environmentFixtures.js';
 import { buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+
+describe('buildLocationBelow', () => {
+  test('keeps the root of the location and joins the paths with a slash', () => {
+    expect(
+      buildLocationBelow({
+        location: { root: 'localAppData', path: 'Android/Sdk' },
+        path: 'system-images/android-34',
+      }),
+    ).toEqual({ root: 'localAppData', path: 'Android/Sdk/system-images/android-34' });
+  });
+});
 
 describe('resolveEnvironmentLocation', () => {
   test('joins the names of a location below the home or the temporary folder of macOS', () => {

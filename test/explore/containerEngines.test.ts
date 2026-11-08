@@ -16,6 +16,7 @@ import type {
   ExploreEngineUnitPlace,
   ExploreProbeFindings,
 } from '../../src/explore/exploreUnit.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
 import { DAY_MS } from '../../src/scan/limits.js';
@@ -28,7 +29,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath, joinBelowHome } from '../support/parsedValueFixtures.js';
+import { joinBelowHome } from '../support/parsedValueFixtures.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
@@ -750,7 +751,11 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
     const colima = CONTAINER_ENGINES.colimaEngine;
 
     function buildColimaPath(names: string[]): AbsolutePath {
-      return buildTestHostPath({ text: join(environment.homeDir, '.colima', ...names) });
+      return joinAbsolutePath({
+        rules: environment.pathRules,
+        parentPath: environment.homeDir,
+        names: ['.colima', ...names],
+      });
     }
 
     /** Serves a fake engine in the profile's folder with one unused volume named after it. */

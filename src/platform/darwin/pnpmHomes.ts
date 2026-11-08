@@ -1,4 +1,5 @@
 import type { CatalogLocation } from '../../catalog/catalog.js';
+import { buildLocationBelow } from '../../environment/environmentLocation.js';
 import { ASDF_INSTALLS_PATH_NAMES } from '../../explore/asdfVersions/asdfInstallsRoot.js';
 import type { PnpmInstallPlaces } from '../../explore/explorePlatform.js';
 import { MISE_INSTALLS_PATH_NAMES } from '../../explore/miseVersions/miseInstallsRoot.js';
@@ -34,7 +35,7 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
   ],
   pnpmVersionsRoots: [buildHomeLocation({ names: [...ASDF_INSTALLS_PATH_NAMES, PNPM_TOOL_NAME] })],
   miseInstallsRoots: [buildHomeLocation({ names: MISE_INSTALLS_PATH_NAMES })],
-  launchers: PNPM_HOMES.map((home) => buildPnpmHomeEntry({ home: home, name: PNPM_TOOL_NAME })),
+  launchers: PNPM_HOMES.map((home) => buildLocationBelow({ location: home, path: PNPM_TOOL_NAME })),
   npmPrefixes: [],
   npmGlobalFolderNames: ['lib', 'node_modules'],
   nodeVersionsRoots: [
@@ -45,17 +46,13 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
 };
 
 /** pnpm's store on macOS, `~/Library/pnpm/store`. */
-export const PNPM_STORE_ROOT: CatalogLocation = buildPnpmHomeEntry({
-  home: PNPM_HOME,
-  name: PNPM_STORE_FOLDER_NAME,
+export const PNPM_STORE_ROOT: CatalogLocation = buildLocationBelow({
+  location: PNPM_HOME,
+  path: PNPM_STORE_FOLDER_NAME,
 });
 
 /** pnpm's store at the XDG data place, `~/.local/share/pnpm/store`. */
-export const PNPM_XDG_STORE_ROOT: CatalogLocation = buildPnpmHomeEntry({
-  home: PNPM_XDG_HOME,
-  name: PNPM_STORE_FOLDER_NAME,
+export const PNPM_XDG_STORE_ROOT: CatalogLocation = buildLocationBelow({
+  location: PNPM_XDG_HOME,
+  path: PNPM_STORE_FOLDER_NAME,
 });
-
-function buildPnpmHomeEntry(params: { home: CatalogLocation; name: string }): CatalogLocation {
-  return { root: params.home.root, path: `${params.home.path}/${params.name}` };
-}

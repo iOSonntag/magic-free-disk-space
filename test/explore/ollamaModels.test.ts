@@ -58,11 +58,23 @@ const DIGESTS = {
 
 const VALUE_MODELS_PATH = '/models';
 
+/**
+ * The findings of the probe. No process runs unless `runningProcesses` names one, listed by command
+ * line on every host, since only macOS explores Ollama models.
+ */
 async function loadFindings(params: {
   environment: Environment;
   runningProcesses?: RunningProcesses | null;
 }): Promise<ExploreProbeFindings> {
-  return getProbeFindings(await loadOllamaModelFindings(buildTestProbeRun(params)));
+  const probeRun = buildTestProbeRun({
+    environment: params.environment,
+    runningProcesses:
+      params.runningProcesses === undefined
+        ? buildRunningCommandLines([])
+        : params.runningProcesses,
+  });
+
+  return getProbeFindings(await loadOllamaModelFindings(probeRun));
 }
 
 function buildModelsPath(params: { environment: Environment }): string {

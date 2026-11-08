@@ -1,4 +1,5 @@
 import type { CatalogLocation } from '../../../catalog/catalog.js';
+import { buildLocationBelow } from '../../../environment/environmentLocation.js';
 import type { PnpmInstallPlaces } from '../../../explore/explorePlatform.js';
 
 /** pnpm's home on Windows, `%LOCALAPPDATA%\pnpm`. */
@@ -26,8 +27,8 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
   // The standalone executable. The `pnpm.cmd` and `pnpm.ps1` shims beside it run the pnpm of
   // `.tools` or `global`, which the probe reads on its own, as it does a `#!` launcher.
   launchers: [
-    buildPnpmHomeEntry({ path: 'pnpm.exe' }),
-    buildPnpmHomeEntry({ path: 'bin/pnpm.exe' }),
+    buildLocationBelow({ location: PNPM_HOME, path: 'pnpm.exe' }),
+    buildLocationBelow({ location: PNPM_HOME, path: 'bin/pnpm.exe' }),
     // winget installs a portable package in a folder of its own and hard-links the command beside it.
     {
       root: 'localAppData',
@@ -61,9 +62,7 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
 };
 
 /** pnpm's store on Windows, `%LOCALAPPDATA%\pnpm\store`. */
-export const PNPM_STORE_ROOT: CatalogLocation = buildPnpmHomeEntry({ path: 'store' });
-
-/** The place at `path` below pnpm's home, its names joined by `/`. */
-function buildPnpmHomeEntry(params: { path: string }): CatalogLocation {
-  return { root: PNPM_HOME.root, path: `${PNPM_HOME.path}/${params.path}` };
-}
+export const PNPM_STORE_ROOT: CatalogLocation = buildLocationBelow({
+  location: PNPM_HOME,
+  path: 'store',
+});
