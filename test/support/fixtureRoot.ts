@@ -294,8 +294,8 @@ export async function isPresent(path: string): Promise<boolean> {
 }
 
 /**
- * Resolves once anything is at `path`, as `isPresent` reads it; throws when nothing came within 5
- * s.
+ * Resolves once anything is at `path`, as `isPresent` reads it; throws when nothing came within
+ * 5 s.
  */
 export async function waitUntilPresent(path: string): Promise<void> {
   for (let attempt = 0; attempt < 250; attempt += 1) {

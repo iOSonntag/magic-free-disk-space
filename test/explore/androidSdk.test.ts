@@ -84,7 +84,7 @@ let sdkRoot: AbsolutePath;
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  sdkRoot = buildAndroidSdkRoot({ environment: environment });
+  sdkRoot = buildAndroidSdkRoot({ folders: environment });
 });
 
 afterEach(async () => {
@@ -307,7 +307,7 @@ describe('the Android probes without an SDK', () => {
 
   test('leave the AVD probe not judged while ~/.android/avd holds an ini', async () => {
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -328,7 +328,7 @@ describe('the Android probes with an SDK', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
 
     expect(await loadAndroidProbeAnswers()).toEqual({
       avds: JUDGED_EMPTY,
@@ -343,8 +343,8 @@ describe('the Android probes with an SDK', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    const emulatorPath = await writeAndroidEmulator({ environment: environment });
-    await createAndroidAvdHome({ environment: environment });
+    const emulatorPath = await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
 
     const answers = await loadAndroidProbeAnswers();
 
@@ -403,15 +403,15 @@ describe('the Android probes with an SDK', () => {
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     const old = await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel_Old',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel_Recent',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -462,7 +462,7 @@ describe('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-34', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -486,7 +486,7 @@ describe('the Android probes with an SDK', () => {
     await mkdir(unparsablePath, { recursive: true });
     await writeFile(join(unparsablePath, 'package.xml'), '<repository/>');
     await mkdir(join(sdkRoot, 'system-images', 'a', 'b', 'c'), { recursive: true });
-    await createAndroidAvdHome({ environment: environment });
+    await createAndroidAvdHome({ home: environment });
 
     const answers = await loadAndroidProbeAnswers();
 
@@ -499,14 +499,14 @@ describe('the Android probes with an SDK', () => {
   test('read an image folder whose package.xml is no file as not judged', async () => {
     const folderPath = join(sdkRoot, 'system-images', 'x', 'y', 'z');
     await mkdir(join(folderPath, 'package.xml'), { recursive: true });
-    await createAndroidAvdHome({ environment: environment });
+    await createAndroidAvdHome({ home: environment });
 
     expect((await loadAndroidProbeAnswers()).systemImages).toEqual(NOT_JUDGED);
   });
 
   test('leave the emulator not judged when its package.xml does not parse, and absent without it', async () => {
-    const emulatorPath = await writeAndroidEmulator({ environment: environment });
-    await createAndroidAvdHome({ environment: environment });
+    const emulatorPath = await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
     await writeFile(join(emulatorPath, 'package.xml'), 'garbage');
 
     expect((await loadAndroidProbeAnswers()).emulator).toEqual(NOT_JUDGED);
@@ -522,8 +522,8 @@ describe('the Android probes with an SDK', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ environment: environment });
-    await createAndroidAvdHome({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
     await writeFile(
       join(buildAndroidAvdHome({ home: environment }), 'Pixel.ini'),
       'target=android-35\n',
@@ -537,7 +537,7 @@ describe('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose ini is no file not judged', async () => {
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     await mkdir(join(buildAndroidAvdHome({ home: environment }), 'Pixel.ini'), {
       recursive: true,
     });
@@ -556,7 +556,7 @@ describe('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     const avd = await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-34', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -577,7 +577,7 @@ describe('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -596,7 +596,7 @@ describe('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     const avd = await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -610,9 +610,9 @@ describe('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD with none of its last-use files not judged', async () => {
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     const avd = await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -624,9 +624,9 @@ describe('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose name could start an option not judged, with no unit', async () => {
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: '-rf',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -639,9 +639,9 @@ describe('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose config.ini names no image not judged, with no unit', async () => {
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -651,9 +651,9 @@ describe('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose ini names a folder not named *.avd not judged, though its config.ini names an image', async () => {
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Old',
       folderName: 'notes',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
@@ -664,9 +664,9 @@ describe('the Android probes with an SDK', () => {
   });
 
   testOnPosix('fail with fileUnreadable on a denied read, naming the file', async () => {
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     const avd = await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -854,9 +854,9 @@ describe('compareAndroidAvdUnit', () => {
 
 describe('recheckAndroidAvdUnit', () => {
   async function createOfferedAvd(): Promise<ExploreToolUnitAndroidAvd> {
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -904,8 +904,8 @@ describe('compareAndroidPathUnit', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ environment: environment });
-    await createAndroidAvdHome({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
     const answers = await loadAndroidProbeAnswers();
 
     return {
@@ -954,7 +954,7 @@ describe('compareAndroidPathUnit', () => {
   test('answers changed once an AVD names the image, which also makes the emulator used', async () => {
     const units = await createOfferedPackages();
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,

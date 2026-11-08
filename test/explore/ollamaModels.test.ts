@@ -27,6 +27,7 @@ import {
   updateModifiedMs,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import type { HomeFolder } from '../support/parsedValueFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
@@ -74,16 +75,16 @@ async function loadFindings(params: {
   return getProbeFindings(await loadOllamaModelFindings(probeRun));
 }
 
-function buildModelsPath(params: { environment: Environment }): string {
-  return join(params.environment.homeDir, '.ollama', 'models');
+function buildModelsPath(params: { home: HomeFolder }): string {
+  return join(params.home.homeDir, '.ollama', 'models');
 }
 
-function buildBlobPath(params: { environment: Environment; hex: string }): string {
+function buildBlobPath(params: { home: HomeFolder; hex: string }): string {
   return join(buildModelsPath(params), 'blobs', `sha256-${params.hex}`);
 }
 
 /** The manifest of a tag of the model `llama3` in Ollama's own library. */
-function buildManifestPath(params: { environment: Environment; tag: string }): string {
+function buildManifestPath(params: { home: HomeFolder; tag: string }): string {
   return join(buildModelsPath(params), ...LIBRARY_PATH_NAMES, MODEL, params.tag);
 }
 
@@ -98,7 +99,7 @@ function buildManifestText(params: { configHex: string; layerHexes: string[] }):
 
 /** Writes the manifest of a tag, written at `MANIFEST_MODIFIED_MS`. */
 async function writeManifest(params: {
-  environment: Environment;
+  home: HomeFolder;
   tag: string;
   configHex: string;
   layerHexes: string[];
@@ -109,10 +110,10 @@ async function writeManifest(params: {
   await updateModifiedMs({ path: path, modifiedMs: MANIFEST_MODIFIED_MS });
 }
 
-async function writeBlobs(params: { environment: Environment; hexes: string[] }): Promise<void> {
+async function writeBlobs(params: { home: HomeFolder; hexes: string[] }): Promise<void> {
   for (const hex of params.hexes) {
     await createFixtureFile({
-      path: buildBlobPath({ environment: params.environment, hex: hex }),
+      path: buildBlobPath({ home: params.home, hex: hex }),
       sizeBytes: 4096,
       modifiedMs: BLOB_MODIFIED_MS,
     });
@@ -120,19 +121,19 @@ async function writeBlobs(params: { environment: Environment; hexes: string[] })
 }
 
 /** Two tags of one model that share a layer: `latest` and `small`. */
-async function createTwoModels(params: { environment: Environment }): Promise<void> {
+async function createTwoModels(params: { home: HomeFolder }): Promise<void> {
   await writeBlobs({
-    environment: params.environment,
+    home: params.home,
     hexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.smallConfig, DIGESTS.shared],
   });
   await writeManifest({
-    environment: params.environment,
+    home: params.home,
     tag: 'latest',
     configHex: DIGESTS.latestConfig,
     layerHexes: [DIGESTS.latestWeights, DIGESTS.shared],
   });
   await writeManifest({
-    environment: params.environment,
+    home: params.home,
     tag: 'small',
     configHex: DIGESTS.smallConfig,
     layerHexes: [DIGESTS.shared],
@@ -403,16 +404,16 @@ describe('loadOllamaModelFindings', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const probed = await loadFindings({ environment: environment });
         const latest = getModelUnit({
           findings: probed,
-          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'latest' }),
         });
         const small = getModelUnit({
           findings: probed,
-          manifestPath: buildManifestPath({ environment: environment, tag: 'small' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'small' }),
         });
 
         expect(probed.isComplete).toBe(true);
@@ -424,15 +425,15 @@ describe('loadOllamaModelFindings', () => {
         expect(latest.downloadedAtMs).toBe(MANIFEST_MODIFIED_MS);
         expect<string[]>([...latest.foundPaths].toSorted()).toEqual(
           [
-            buildManifestPath({ environment: environment, tag: 'latest' }),
-            buildBlobPath({ environment: environment, hex: DIGESTS.latestConfig }),
-            buildBlobPath({ environment: environment, hex: DIGESTS.latestWeights }),
+            buildManifestPath({ home: environment, tag: 'latest' }),
+            buildBlobPath({ home: environment, hex: DIGESTS.latestConfig }),
+            buildBlobPath({ home: environment, hex: DIGESTS.latestWeights }),
           ].toSorted(),
         );
         expect<string[]>([...small.foundPaths].toSorted()).toEqual(
           [
-            buildManifestPath({ environment: environment, tag: 'small' }),
-            buildBlobPath({ environment: environment, hex: DIGESTS.smallConfig }),
+            buildManifestPath({ home: environment, tag: 'small' }),
+            buildBlobPath({ home: environment, hex: DIGESTS.smallConfig }),
           ].toSorted(),
         );
       },
@@ -445,9 +446,9 @@ describe('loadOllamaModelFindings', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
         await writeFixtureTextFile({
-          path: buildManifestPath({ environment: environment, tag: 'broken' }),
+          path: buildManifestPath({ home: environment, tag: 'broken' }),
           text: '{',
         });
 
@@ -465,9 +466,9 @@ describe('loadOllamaModelFindings', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
         await writeFixtureTextFile({
-          path: join(buildModelsPath({ environment: environment }), 'manifests', 'stray'),
+          path: join(buildModelsPath({ home: environment }), 'manifests', 'stray'),
           text: buildManifestText({ configHex: DIGESTS.latestWeights, layerHexes: [] }),
         });
 
@@ -499,7 +500,7 @@ describe('loadOllamaModelFindings', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const probed = await loadFindings({
           environment: environment,
@@ -521,11 +522,11 @@ describe('recheckOllamaModelUnit', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const unit = getModelUnit({
           findings: await loadFindings({ environment: environment }),
-          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'latest' }),
         });
 
         expect(await recheck({ unit: unit, environment: environment, commandLines: [] })).toEqual({
@@ -548,16 +549,16 @@ describe('recheckOllamaModelUnit', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const unit = getModelUnit({
           findings: await loadFindings({ environment: environment }),
-          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'latest' }),
         });
 
-        await writeBlobs({ environment: environment, hexes: [DIGESTS.extra] });
+        await writeBlobs({ home: environment, hexes: [DIGESTS.extra] });
         await writeManifest({
-          environment: environment,
+          home: environment,
           tag: 'copy',
           configHex: DIGESTS.extra,
           layerHexes: [DIGESTS.latestWeights],

@@ -4,10 +4,9 @@ import { loadEntryStats } from '../../src/system/loadEntryStats.js';
 import { hostPlatform } from './platformFixtures.js';
 
 /**
- * Entry reads that answer from the test: `privateBytes` as the private size of every file, `null`
- * being a failed read. An entry at one of `cloudOnlyPaths` is kept in the cloud only, one at one
- * of `linkPaths` is a link whatever lstat says, one at a path of `unreadCodes` cannot be placed
- * and fails with its code, and any other is placed as lstat names it, as on macOS.
+ * Entry reads that answer from the test: `privateBytes` for every file, `null` a failed read. An
+ * entry of `cloudOnlyPaths` is cloud-only, of `linkPaths` a link, of `unreadCodes` unplaceable
+ * with its code; any other is placed as lstat names it, as on macOS.
  */
 export function buildTestEntryReads(params: {
   privateBytes: number | null;

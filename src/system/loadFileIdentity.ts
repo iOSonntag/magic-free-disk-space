@@ -44,29 +44,66 @@ export async function loadFileIdentityOfKind(params: {
   path: string;
   decideKind: (lstatKind: FileKind) => FileKind;
 }): Promise<Result<FileIdentity, FileFailure>> {
+  const lstatResult = await loadLstat({ path: params.path });
+
+  if (lstatResult.kind === 'failed') {
+    return lstatResult;
+  }
+
+  const stats = lstatResult.value;
+  const kind = params.decideKind(getFileKind({ stats: stats }));
+  const realPathResult = await loadRealPathOfKind({ path: params.path, kind: kind });
+
+  if (realPathResult.kind === 'failed') {
+    return realPathResult;
+  }
+
+  return {
+    kind: 'succeeded',
+    value: {
+      dev: stats.dev,
+      ino: stats.ino,
+      birthtimeNs: stats.birthtimeNs,
+      kind: kind,
+      realPath: realPathResult.value,
+    },
+  };
+}
+
+async function loadLstat(params: { path: string }): Promise<Result<BigIntStats, FileFailure>> {
   try {
     const stats = await runFilesystemCall(() => lstat(params.path, { bigint: true }));
-    const kind = params.decideKind(getFileKind({ stats: stats }));
-    // A file or folder resolves fully, which also takes the case on disk. A link keeps its own
-    // name, and a socket or pipe resolves through its folder: realpath fails on one (EOPNOTSUPP).
-    const realPath =
-      kind === 'file' || kind === 'directory'
-        ? await runFilesystemCall(() => realpath(params.path))
-        : join(
-            await runFilesystemCall(() => realpath(dirname(params.path))),
-            basename(params.path),
-          );
 
-    return {
-      kind: 'succeeded',
-      value: {
-        dev: stats.dev,
-        ino: stats.ino,
-        birthtimeNs: stats.birthtimeNs,
-        kind: kind,
-        realPath: realPath,
-      },
-    };
+    return { kind: 'succeeded', value: stats };
+  } catch (error) {
+    return { kind: 'failed', failure: getFileFailure({ code: getErrorCode(error) }) };
+  }
+}
+
+async function loadRealPathOfKind(params: {
+  path: string;
+  kind: FileKind;
+}): Promise<Result<string, FileFailure>> {
+  // A file or folder resolves fully, which also takes the case on disk. A link keeps its own
+  // name, and a socket or pipe resolves through its folder: realpath fails on one (EOPNOTSUPP).
+  if (params.kind === 'file' || params.kind === 'directory') {
+    return loadRealPathOf({ path: params.path });
+  }
+
+  const folderResult = await loadRealPathOf({ path: dirname(params.path) });
+
+  if (folderResult.kind === 'failed') {
+    return folderResult;
+  }
+
+  return { kind: 'succeeded', value: join(folderResult.value, basename(params.path)) };
+}
+
+async function loadRealPathOf(params: { path: string }): Promise<Result<string, FileFailure>> {
+  try {
+    const realPath = await runFilesystemCall(() => realpath(params.path));
+
+    return { kind: 'succeeded', value: realPath };
   } catch (error) {
     return { kind: 'failed', failure: getFileFailure({ code: getErrorCode(error) }) };
   }

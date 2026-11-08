@@ -47,7 +47,7 @@ afterEach(async () => {
 });
 
 function buildSdkRoot(): AbsolutePath {
-  return buildAndroidSdkRoot({ environment: environment });
+  return buildAndroidSdkRoot({ folders: environment });
 }
 
 describeWithFakeTools('startExploreProbes with the Android probes', () => {
@@ -67,15 +67,15 @@ describeWithFakeTools('startExploreProbes with the Android probes', () => {
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ environment: environment });
+    await writeAndroidEmulator({ folders: environment });
     const old = await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel_Old',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel_Recent',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -138,8 +138,8 @@ describe('recheckExplorePathUnit with the Android path units', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    const emulatorPath = await writeAndroidEmulator({ environment: environment });
-    await createAndroidAvdHome({ environment: environment });
+    const emulatorPath = await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
 
     return {
       image: { kind: 'androidSystemImage', sdkRoot: buildSdkRoot(), folderPath: imagePath },
@@ -180,7 +180,7 @@ describe('recheckExplorePathUnit with the Android path units', () => {
   test('answers changed for both once an AVD names the image', async () => {
     const units = await createPackageUnits();
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,

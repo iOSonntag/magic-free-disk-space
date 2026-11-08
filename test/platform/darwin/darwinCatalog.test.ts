@@ -37,7 +37,7 @@ describe('the catalog of darwinPlatform', () => {
   test('every entry resolves under its root in a fixture environment, none below AppData', () => {
     const unresolvedIds = darwinPlatform.catalog.entries
       .filter(
-        (entry) => !isLocationUnderRoot({ location: entry, environment: exampleDarwinEnvironment }),
+        (entry) => !isLocationUnderRoot({ location: entry, folders: exampleDarwinEnvironment }),
       )
       .map((entry) => entry.id);
 

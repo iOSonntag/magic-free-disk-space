@@ -37,7 +37,7 @@ beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
   extensionsPath = buildVscodeExtensionsPath({ home: environment });
-  await createVscodeInstallation({ environment: environment });
+  await createVscodeInstallation({ folders: environment });
 });
 
 afterEach(async () => {
@@ -64,7 +64,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
   test('answers changed once a profile lists the folder', async () => {
     await writeFixtureTextFile({
       path: join(
-        buildVscodeProfilesPath({ environment: environment }),
+        buildVscodeProfilesPath({ folders: environment }),
         FIXTURE_PROFILE_ID,
         'extensions.json',
       ),

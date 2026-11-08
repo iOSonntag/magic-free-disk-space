@@ -144,7 +144,7 @@ describe('loadAndroidSdkRoots', () => {
 
   /** The platform SDK's root, the one whose failed read fails the probes. */
   function buildPlatformRoot(): AndroidSdkRoot {
-    return { path: buildAndroidSdkRoot({ environment: environment }), isRequired: true };
+    return { path: buildAndroidSdkRoot({ folders: environment }), isRequired: true };
   }
 
   /** The probes over the fixture home with `projectPins`, judging use by the Android cutoff. */
@@ -168,7 +168,7 @@ describe('loadAndroidSdkRoots', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -287,7 +287,7 @@ describe('loadAndroidSdkRoots', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      environment: environment,
+      home: environment,
       name: 'Pixel',
       imageSysdir: usedSysdir,
       lastUsedAtMs: ANDROID_RECENT_USE_MS,

@@ -4,7 +4,6 @@ import type { EnvironmentFolders } from '../../environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath, resolveAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
-import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { isJsonObject, parseJsonValue } from '../../system/parseJsonValue.js';
@@ -456,17 +455,11 @@ function parseRegistryEntryFolderPath(params: {
   const relativeLocation = params.entry.relativeLocation;
 
   if (typeof relativeLocation === 'string' && relativeLocation !== '') {
-    const folderPath = resolveAbsolutePath({
-      rules: params.pathRules,
-      basePath: params.extensionsPath,
+    return resolveEntryFolderPath({
+      pathRules: params.pathRules,
+      extensionsPath: params.extensionsPath,
       text: relativeLocation,
     });
-
-    if (folderPath.kind === 'failed') {
-      return { kind: 'failed', failure: 'an entry names no folder' };
-    }
-
-    return folderPath;
   }
 
   const location = params.entry.location;
@@ -485,28 +478,36 @@ function parseRegistryEntryFolderPath(params: {
     return { kind: 'failed', failure: 'an entry names no folder' };
   }
 
-  return parseFolderPath({ pathRules: params.pathRules, text: filePath });
+  return resolveEntryFolderPath({
+    pathRules: params.pathRules,
+    extensionsPath: params.extensionsPath,
+    text: filePath,
+  });
 }
 
 /**
- * The file path a `file:` URI path names. A URI path always starts at `/`, so on Windows it holds
- * the drive after it, as `/c:/Users/…`; that slash goes, and `parseAbsolutePath` turns the rest
- * into `C:\Users\…`. `null` for a path that is not absolute.
+ * The path a `file:` URI path names, or `null` for one that is not absolute. A URI path starts at
+ * `/`, so on Windows that slash goes, leaving `c:/Users/…` for `resolveAbsolutePath` to take.
  */
 function parseLocationUriPath(params: { pathRules: PathRules; uriPath: string }): string | null {
   switch (params.pathRules.rootForm) {
     case 'posix':
-      return posix.isAbsolute(params.uriPath) ? posix.resolve(params.uriPath) : null;
+      return posix.isAbsolute(params.uriPath) ? params.uriPath : null;
     case 'win32':
       return uriDrivePathPattern.test(params.uriPath) ? params.uriPath.slice(1) : null;
   }
 }
 
-function parseFolderPath(params: {
+function resolveEntryFolderPath(params: {
   pathRules: PathRules;
+  extensionsPath: AbsolutePath;
   text: string;
 }): Result<AbsolutePath, string> {
-  const folderPath = parseAbsolutePath({ rules: params.pathRules, text: params.text });
+  const folderPath = resolveAbsolutePath({
+    rules: params.pathRules,
+    basePath: params.extensionsPath,
+    text: params.text,
+  });
 
   if (folderPath.kind === 'failed') {
     return { kind: 'failed', failure: 'an entry names no folder' };

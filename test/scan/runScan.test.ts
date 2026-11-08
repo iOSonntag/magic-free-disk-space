@@ -346,7 +346,7 @@ describeOnDarwin('runScan', () => {
           abi: 'arm64-v8a',
         });
         const imagePath = join(imageFolderPath, 'system.img');
-        await createAndroidAvdHome({ environment: home.environment });
+        await createAndroidAvdHome({ home: home.environment });
         await createFixtureFile({
           path: imagePath,
           sizeBytes: SCAN_LIMITS.minUserFileBytes,

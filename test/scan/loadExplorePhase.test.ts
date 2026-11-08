@@ -137,7 +137,7 @@ let environment: Environment;
 
 /** The outcome of the VS Code probe over the fixture installation, which offers two folders. */
 async function loadVscodeOutcome(): Promise<ExploreProbeOutcome> {
-  await createVscodeInstallation({ environment: environment });
+  await createVscodeInstallation({ folders: environment });
 
   const findings = await loadVscodeExtensionFindings(
     buildTestProbeRun({ environment: environment }),

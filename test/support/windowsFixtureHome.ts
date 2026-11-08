@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { DeletePlatformTrashRecycleBins } from '../../src/delete/deletePlatform.js';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { Environment, EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { DriveRoot } from '../../src/path/driveRoot.js';
 import { isSameOrInsidePath } from '../../src/path/isSameOrInsidePath.js';
@@ -21,6 +21,7 @@ import {
   updateModifiedMs,
   writeFixtureTextFile,
 } from './fixtureRoot.js';
+import type { HomeFolder } from './parsedValueFixtures.js';
 import { buildTestWindowsPath } from './parsedValueFixtures.js';
 import { buildTestWin32Platform, loadEmptyRecycleBin } from './platformFixtures.js';
 import { buildRunningImagePaths } from './runningProcessesFixtures.js';
@@ -248,10 +249,10 @@ export async function createWindowsFixtureHome(params: {
  * bin. Its catalog leaves out each entry that lies outside the fixture home and temp folder.
  */
 export function buildWindowsFixturePlatform(params: {
-  environment: Environment;
+  folders: EnvironmentFolders;
 }): WindowsFixturePlatform {
   const leftOutEntries = win32Platform.catalog.entries.filter(
-    (entry) => !isEntryInsideFixture({ entry: entry, environment: params.environment }),
+    (entry) => !isEntryInsideFixture({ entry: entry, folders: params.folders }),
   );
   const fakeRecycleBins = buildFakeRecycleBins(windowsFixtureRecycleBinContent);
   const platform = buildTestWin32Platform({
@@ -280,15 +281,15 @@ export function buildWindowsFixturePlatform(params: {
 /** The view the command line shows in a terminal for `report`, a scan of the fixture home. */
 export function buildWindowsFixtureScanView(params: {
   report: ScanReport;
-  environment: Environment;
+  home: HomeFolder;
   platform: Platform;
 }): ScanView {
   return buildScanView({
     report: params.report,
     fullDiskAccessHolder: 'terminal',
     texts: params.platform.report,
-    pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
+    pathRules: params.home.pathRules,
+    homeDir: params.home.homeDir,
     disk: null,
   });
 }
@@ -317,15 +318,18 @@ async function createOldProjectFiles(params: {
   await updateModifiedMs({ path: params.projectPath, modifiedMs: params.oldMs });
 }
 
-function isEntryInsideFixture(params: { entry: CatalogEntry; environment: Environment }): boolean {
+function isEntryInsideFixture(params: {
+  entry: CatalogEntry;
+  folders: EnvironmentFolders;
+}): boolean {
   const entryPath = resolveEnvironmentLocation({
-    folders: params.environment,
+    folders: params.folders,
     location: { root: params.entry.root, path: params.entry.path },
   });
 
-  return [params.environment.homeDir, params.environment.tempDir].some((folderPath) =>
+  return [params.folders.homeDir, params.folders.tempDir].some((folderPath) =>
     isSameOrInsidePath({
-      rules: params.environment.pathRules,
+      rules: params.folders.pathRules,
       path: entryPath,
       parentPath: folderPath,
     }),

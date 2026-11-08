@@ -29,7 +29,7 @@ describeOnWindows('a scan of a Windows fixture home over the Windows catalog', (
   beforeAll(async () => {
     fixtureRoot = await createFixtureRoot();
     home = await createWindowsFixtureHome({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-    fixturePlatform = buildWindowsFixturePlatform({ environment: home.environment });
+    fixturePlatform = buildWindowsFixturePlatform({ folders: home.environment });
     report = await runTestScanOnPlatform({
       environment: home.environment,
       platform: fixturePlatform.platform,
@@ -155,7 +155,7 @@ describeOnWindows('a scan of a Windows fixture home over the Windows catalog', (
   test('advises uninstalling each installed app in Settings > Apps, and offers none for deletion', () => {
     const view = buildWindowsFixtureScanView({
       report: report,
-      environment: home.environment,
+      home: home.environment,
       platform: fixturePlatform.platform,
     });
 

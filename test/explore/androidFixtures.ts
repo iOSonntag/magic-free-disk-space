@@ -20,9 +20,9 @@ export const ANDROID_EMULATOR_PROCESS_COMMAND =
   '/Users/example/Library/Android/sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64 -avd Pixel';
 
 /** The SDK where the host's Android Studio installs it below the fixture home. */
-export function buildAndroidSdkRoot(params: { environment: EnvironmentFolders }): AbsolutePath {
+export function buildAndroidSdkRoot(params: { folders: EnvironmentFolders }): AbsolutePath {
   return resolveEnvironmentLocation({
-    folders: params.environment,
+    folders: params.folders,
     location: hostPlatform.explore.androidSdkRoot,
   });
 }
@@ -37,10 +37,8 @@ export function buildAndroidImageSysdir(params: { platform: string; abi: string 
 }
 
 /** Creates `~/.android/avd`, empty, so the folder exists with no AVD. */
-export async function createAndroidAvdHome(params: {
-  environment: EnvironmentFolders;
-}): Promise<void> {
-  await mkdir(buildAndroidAvdHome({ home: params.environment }), { recursive: true });
+export async function createAndroidAvdHome(params: { home: HomeFolder }): Promise<void> {
+  await mkdir(buildAndroidAvdHome({ home: params.home }), { recursive: true });
 }
 
 /**
@@ -49,13 +47,13 @@ export async function createAndroidAvdHome(params: {
  * are dated `lastUsedAtMs`.
  */
 export async function writeAndroidAvd(params: {
-  environment: EnvironmentFolders;
+  home: HomeFolder;
   name: string;
   folderName?: string;
   imageSysdir: string | null;
   lastUsedAtMs: number;
 }): Promise<{ iniPath: AbsolutePath; avdPath: AbsolutePath }> {
-  const avdHome = buildAndroidAvdHome({ home: params.environment });
+  const avdHome = buildAndroidAvdHome({ home: params.home });
   const folderName = params.folderName ?? `${params.name}.avd`;
   const avdPath = join(avdHome, folderName);
   const iniPath = join(avdHome, `${params.name}.ini`);
@@ -114,7 +112,7 @@ export async function writeAndroidSystemImage(params: {
 
 /** Writes `<sdk>/emulator/package.xml`; returns the folder. */
 export async function writeAndroidEmulator(params: {
-  environment: EnvironmentFolders;
+  folders: EnvironmentFolders;
 }): Promise<AbsolutePath> {
   const folderPath = join(buildAndroidSdkRoot(params), 'emulator');
 
@@ -132,7 +130,7 @@ export async function writeAndroidEmulator(params: {
  * `platforms;<folderName>`; returns the folder.
  */
 export async function writeAndroidPlatform(params: {
-  environment: EnvironmentFolders;
+  folders: EnvironmentFolders;
   folderName: string;
   packagePath?: string;
 }): Promise<AbsolutePath> {

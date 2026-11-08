@@ -53,9 +53,9 @@ export function buildVscodeExtensionsPath(params: { home: HomeFolder }): Absolut
 }
 
 /** VS Code's folder of profiles where the host's platform keeps it. */
-export function buildVscodeProfilesPath(params: { environment: EnvironmentFolders }): AbsolutePath {
+export function buildVscodeProfilesPath(params: { folders: EnvironmentFolders }): AbsolutePath {
   return resolveEnvironmentLocation({
-    folders: params.environment,
+    folders: params.folders,
     location: hostPlatform.explore.vscodeProfilesRoot,
   });
 }
@@ -139,12 +139,12 @@ export async function createVscodeExtensionFolders(params: {
  * marking alpha 1.0.0 and gamma.
  */
 export async function createVscodeInstallation(params: {
-  environment: EnvironmentFolders;
+  folders: EnvironmentFolders;
 }): Promise<void> {
-  const extensionsPath = buildVscodeExtensionsPath({ home: params.environment });
+  const extensionsPath = buildVscodeExtensionsPath({ home: params.folders });
 
   await createVscodeExtensionFolders({
-    home: params.environment,
+    home: params.folders,
     folderNames: [
       OBSOLETE_FOLDER_NAME,
       DEFAULT_LISTED_FOLDER_NAME,
@@ -156,12 +156,12 @@ export async function createVscodeInstallation(params: {
   });
   await writeFixtureTextFile({
     path: joinAbsolutePath({
-      rules: params.environment.pathRules,
+      rules: params.folders.pathRules,
       parentPath: extensionsPath,
       names: ['extensions.json'],
     }),
     text: buildVscodeRegistryText({
-      pathRules: params.environment.pathRules,
+      pathRules: params.folders.pathRules,
       extensionsPath: extensionsPath,
       folderNames: [DEFAULT_LISTED_FOLDER_NAME],
       form: 'current',
@@ -169,12 +169,12 @@ export async function createVscodeInstallation(params: {
   });
   await writeFixtureTextFile({
     path: joinAbsolutePath({
-      rules: params.environment.pathRules,
-      parentPath: buildVscodeProfilesPath({ environment: params.environment }),
+      rules: params.folders.pathRules,
+      parentPath: buildVscodeProfilesPath({ folders: params.folders }),
       names: [FIXTURE_PROFILE_ID, 'extensions.json'],
     }),
     text: buildVscodeRegistryText({
-      pathRules: params.environment.pathRules,
+      pathRules: params.folders.pathRules,
       extensionsPath: extensionsPath,
       folderNames: [BETA_CURRENT_FOLDER_NAME, LISTED_OBSOLETE_FOLDER_NAME],
       form: 'locationOnly',
@@ -182,7 +182,7 @@ export async function createVscodeInstallation(params: {
   });
   await writeFixtureTextFile({
     path: joinAbsolutePath({
-      rules: params.environment.pathRules,
+      rules: params.folders.pathRules,
       parentPath: extensionsPath,
       names: ['.obsolete'],
     }),

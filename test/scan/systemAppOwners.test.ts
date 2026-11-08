@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { deleteCandidates } from '../../src/delete/deleteCandidates.js';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import { describeOnDarwin } from '../support/darwinOnly.js';
 import { createTestJournal } from '../support/deletionJournalFixtures.js';
 import { createFixtureFile, isPresent } from '../support/fixtureRoot.js';
+import type { HomeFolder } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { withFixtureHome } from '../support/probeRunFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
@@ -22,13 +22,13 @@ const MESSAGES_BUNDLE_PATH = '/System/Applications/Messages.app';
 const MESSAGES_COMMAND = `${MESSAGES_BUNDLE_PATH}/Contents/MacOS/Messages`;
 
 /** The previews folder of the catalog entry `messages-attachment-previews` in the fixture home. */
-function getPreviewsPath(params: { environment: Environment }): string {
-  return join(params.environment.homeDir, 'Library/Messages/Caches/Previews/Attachments');
+function getPreviewsPath(params: { home: HomeFolder }): string {
+  return join(params.home.homeDir, 'Library/Messages/Caches/Previews/Attachments');
 }
 
 /** Writes a preview into the previews folder, large enough for the scan to offer it. */
-async function createPreview(params: { environment: Environment }): Promise<string> {
-  const path = join(getPreviewsPath({ environment: params.environment }), 'preview.jpg');
+async function createPreview(params: { home: HomeFolder }): Promise<string> {
+  const path = join(getPreviewsPath({ home: params.home }), 'preview.jpg');
 
   await createFixtureFile({
     path: path,
@@ -44,7 +44,7 @@ describeOnDarwin('the data of a system app', () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
-        await createPreview({ environment: home.environment });
+        await createPreview({ home: home.environment });
 
         const report = await runTestScan({
           environment: home.environment,
@@ -57,7 +57,7 @@ describeOnDarwin('the data of a system app', () => {
 
         expect(report.candidates).toEqual([]);
         expect(report.skipped).toContainEqual({
-          path: getPreviewsPath({ environment: home.environment }),
+          path: getPreviewsPath({ home: home.environment }),
           reason: 'ownerRunning',
         });
       },
@@ -68,7 +68,7 @@ describeOnDarwin('the data of a system app', () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
-        const previewPath = await createPreview({ environment: home.environment });
+        const previewPath = await createPreview({ home: home.environment });
         const report = await runTestScan({
           environment: home.environment,
           catalogEntries: [getCatalogEntry('messages-attachment-previews')],
@@ -76,7 +76,7 @@ describeOnDarwin('the data of a system app', () => {
 
         expect(report.candidates).toMatchObject([
           {
-            path: getPreviewsPath({ environment: home.environment }),
+            path: getPreviewsPath({ home: home.environment }),
             appName: 'Messages',
             removal: {
               kind: 'deletePaths',

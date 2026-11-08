@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import type { JournalEntry } from '../../src/delete/deletionJournal.js';
 import { isSamePath } from '../../src/path/isSameOrInsidePath.js';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
@@ -46,7 +47,7 @@ describeOnWindows(
     test(
       'deletes exactly the approved items, empties the approved bins through the fake, and logs each',
       async () => {
-        const fixturePlatform = buildWindowsFixturePlatform({ environment: home.environment });
+        const fixturePlatform = buildWindowsFixturePlatform({ folders: home.environment });
         const platform = fixturePlatform.platform;
         const approvedFixturePaths = [
           home.paths.staleTempFilePath,
@@ -64,7 +65,7 @@ describeOnWindows(
             environment: home.environment,
             platform: platform,
           }),
-          environment: home.environment,
+          home: home.environment,
           platform: platform,
         });
         const approvedNumbers = approvedPaths.map((path) =>
@@ -147,7 +148,7 @@ function getItemNumber(params: { view: ScanView; path: string }): number {
 /** The lines of the log that are records of `kind`, their fields still unchecked. */
 function filterLogLinesOfKind(params: {
   lines: unknown[];
-  kind: string;
+  kind: JournalEntry['kind'];
 }): Record<string, unknown>[] {
   return params.lines.filter(
     (line): line is Record<string, unknown> =>

@@ -1061,7 +1061,7 @@ process.exit(0);`,
 describe('deleteCandidates with a VS Code extension folder', () => {
   /** The obsolete folder of the fixture installation, scanned with the identity it has. */
   async function scanVscodeCandidate(): Promise<Candidate> {
-    await createVscodeInstallation({ environment: environment });
+    await createVscodeInstallation({ folders: environment });
 
     const candidate = buildTestVscodeExtensionCandidate({ home: environment });
 
@@ -1134,7 +1134,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
     await writeFixtureTextFile({
       path: join(
-        buildVscodeProfilesPath({ environment: environment }),
+        buildVscodeProfilesPath({ folders: environment }),
         FIXTURE_PROFILE_ID,
         'extensions.json',
       ),

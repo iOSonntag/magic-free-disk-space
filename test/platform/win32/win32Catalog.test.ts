@@ -64,7 +64,7 @@ describe('WIN32_CATALOG', () => {
         (namedLocation) =>
           !isLocationUnderRoot({
             location: namedLocation.location,
-            environment: exampleWin32Environment,
+            folders: exampleWin32Environment,
           }),
       )
       .map((namedLocation) => namedLocation.name);

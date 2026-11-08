@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import type { CatalogOwner } from '../../src/catalog/catalogOwner.js';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { RemovalOwner } from '../../src/scan/candidate.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import {
+  buildRemovalOwner,
   findOwnerAppName,
   findOwnerBundlePaths,
-  findRemovalOwner,
   isAppleBundleId,
   isBundleIdShape,
   isOwnerUninstalled,
@@ -50,19 +50,19 @@ const codeOwner: CatalogOwner = {
  */
 function resolveOwnerStateOf(params: {
   owner: CatalogOwner | null;
-  environment: Environment;
+  folders: EnvironmentFolders;
   installedApps: InstalledApp[];
   systemApps: SystemApp[];
   runningProcesses: RunningProcesses | null;
 }): OwnerState {
   return resolveRemovalOwnerState({
-    owner: findRemovalOwner({
+    owner: buildRemovalOwner({
       owner: params.owner,
-      environment: params.environment,
+      environment: params.folders,
       installedApps: params.installedApps,
       systemApps: params.systemApps,
     }),
-    pathRules: params.environment.pathRules,
+    pathRules: params.folders.pathRules,
     runningProcesses: params.runningProcesses,
   });
 }
@@ -85,7 +85,7 @@ function resolveFooCacheOwnerState(params: { commandLines: string[] | null }): O
 
   return resolveOwnerStateOf({
     owner: owner,
-    environment: exampleDarwinEnvironment,
+    folders: exampleDarwinEnvironment,
     installedApps: [foo],
     systemApps: [],
     runningProcesses: buildRunningCommandLines(params.commandLines),
@@ -105,7 +105,7 @@ function resolveCatalogEntryOwner(params: { id: string }): CatalogOwner | null {
 function resolveCodeOwnerState(params: { processImagePaths: string[] | null }): OwnerState {
   return resolveOwnerStateOf({
     owner: codeOwner,
-    environment: exampleWin32Environment,
+    folders: exampleWin32Environment,
     installedApps: [],
     systemApps: [],
     runningProcesses: buildRunningImagePaths(params.processImagePaths),
@@ -255,7 +255,7 @@ describe('resolveTargetOwner', () => {
     expect(
       resolveOwnerStateOf({
         owner: owner,
-        environment: exampleWin32Environment,
+        folders: exampleWin32Environment,
         installedApps: [],
         systemApps: [],
         runningProcesses: buildRunningImagePaths([
@@ -266,7 +266,7 @@ describe('resolveTargetOwner', () => {
     expect(
       resolveOwnerStateOf({
         owner: owner,
-        environment: exampleWin32Environment,
+        folders: exampleWin32Environment,
         installedApps: [],
         systemApps: [],
         runningProcesses: buildRunningImagePaths(['C:\\Windows\\explorer.exe']),
@@ -390,10 +390,10 @@ describe('resolveRemovalOwnerState', () => {
   });
 });
 
-describe('findRemovalOwner', () => {
+describe('buildRemovalOwner', () => {
   test('is no owner for a path without one', () => {
     expect(
-      findRemovalOwner({
+      buildRemovalOwner({
         owner: null,
         environment: exampleDarwinEnvironment,
         installedApps: [],
@@ -409,7 +409,7 @@ describe('findRemovalOwner', () => {
     });
 
     expect(
-      findRemovalOwner({
+      buildRemovalOwner({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
         environment: exampleDarwinEnvironment,
         installedApps: [slack],
@@ -420,7 +420,7 @@ describe('findRemovalOwner', () => {
 
   test('is the program of an executable owner, its install folder resolved', () => {
     expect(
-      findRemovalOwner({
+      buildRemovalOwner({
         owner: codeOwner,
         environment: exampleWin32Environment,
         installedApps: [],
@@ -567,7 +567,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: null }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
         runningProcesses: buildRunningCommandLines(null),
@@ -579,7 +579,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
         runningProcesses: buildRunningCommandLines(null),
@@ -588,7 +588,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
         runningProcesses: buildRunningCommandLines(null),
@@ -600,7 +600,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
         runningProcesses: buildRunningCommandLines([
@@ -614,7 +614,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
         runningProcesses: buildRunningCommandLines([
@@ -629,7 +629,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack.helper' }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
         runningProcesses: buildRunningCommandLines([
@@ -643,7 +643,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
         runningProcesses: buildRunningCommandLines([
@@ -672,7 +672,7 @@ describe('the state of a bundle owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [slack, copy],
         systemApps: [],
         runningProcesses: buildRunningCommandLines([
@@ -696,7 +696,7 @@ describe('a system app owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: notesOwner,
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [],
         systemApps: [notes],
         runningProcesses: buildRunningCommandLines([notesCommand]),
@@ -705,7 +705,7 @@ describe('a system app owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: notesOwner,
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: [],
         systemApps: [notes],
         runningProcesses: buildRunningCommandLines(['/sbin/launchd']),
@@ -759,7 +759,7 @@ describe('a system app owner', () => {
       ownerRuns.map(([id, command]) =>
         resolveOwnerStateOf({
           owner: resolveCatalogEntryOwner({ id: id }),
-          environment: exampleDarwinEnvironment,
+          folders: exampleDarwinEnvironment,
           installedApps: [],
           systemApps: darwinPlatform.scan.systemApps,
           runningProcesses: buildRunningCommandLines([command]),
@@ -796,7 +796,7 @@ describe('a bundle id family owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: owner,
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: installedApps,
         systemApps: [],
         runningProcesses: buildRunningCommandLines([
@@ -810,7 +810,7 @@ describe('a bundle id family owner', () => {
     expect(
       resolveOwnerStateOf({
         owner: owner,
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         installedApps: installedApps,
         systemApps: [],
         runningProcesses: buildRunningCommandLines([
@@ -875,7 +875,7 @@ describeOnWindows('a bundle-id-shaped child on Windows', () => {
     expect(
       resolveOwnerStateOf({
         owner: owner,
-        environment: exampleWin32Environment,
+        folders: exampleWin32Environment,
         installedApps: [],
         systemApps: [],
         runningProcesses: buildRunningImagePaths(['C:\\Windows\\explorer.exe']),

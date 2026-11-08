@@ -1,5 +1,5 @@
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import { findEnvironmentLocationPath } from '../../src/environment/environmentLocation.js';
 import { isSameOrInsidePath } from '../../src/path/isSameOrInsidePath.js';
@@ -27,27 +27,27 @@ export function listMisnamedCatalogIds(params: { entries: CatalogEntry[] }): str
  */
 export function isLocationUnderRoot(params: {
   location: EnvironmentLocation;
-  environment: Environment;
+  folders: EnvironmentFolders;
 }): boolean {
   if (params.location.root === 'absolute') {
     return (
-      parseAbsolutePath({ rules: params.environment.pathRules, text: params.location.path })
-        .kind === 'succeeded'
+      parseAbsolutePath({ rules: params.folders.pathRules, text: params.location.path }).kind ===
+      'succeeded'
     );
   }
 
   const rootPath = findEnvironmentLocationPath({
-    folders: params.environment,
+    folders: params.folders,
     location: { ...params.location, path: '' },
   });
   const path = findEnvironmentLocationPath({
-    folders: params.environment,
+    folders: params.folders,
     location: params.location,
   });
 
   return (
     rootPath !== null &&
     path !== null &&
-    isSameOrInsidePath({ rules: params.environment.pathRules, path: path, parentPath: rootPath })
+    isSameOrInsidePath({ rules: params.folders.pathRules, path: path, parentPath: rootPath })
   );
 }

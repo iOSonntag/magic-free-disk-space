@@ -30,7 +30,7 @@ export function decideCatalogCandidate(params: {
   path: string;
   measurement: TargetsMeasurement;
   owner: CatalogOwner | null;
-  /** The owner the deletion checks again, as `findRemovalOwner` finds it. */
+  /** The owner the deletion checks again, as `buildRemovalOwner` builds it. */
   removalOwner: RemovalOwner;
   ownerState: OwnerState;
   /** The installed app of the owner, by its name; `null` for none. */

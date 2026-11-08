@@ -161,4 +161,36 @@ describeOnWindows('the removal of a tree on NTFS', () => {
       await holder.release();
     }
   });
+
+  test('removes a read-only file and a junction around a held file', async () => {
+    const targetPath = join(folder, 'target');
+    const treePath = join(folder, 'tree');
+    const readOnlyPath = join(treePath, 'locked.txt');
+    const junctionPath = join(treePath, 'junction');
+    const heldPath = join(treePath, 'held.bin');
+    await mkdir(targetPath);
+    await writeFile(join(targetPath, 'kept.txt'), 'kept');
+    await mkdir(treePath);
+    await writeFile(readOnlyPath, 'text');
+    setFileAttributes({
+      path: buildTestHostPath({ text: readOnlyPath }),
+      attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE,
+    });
+    await symlink(targetPath, junctionPath, 'junction');
+    await writeFile(heldPath, 'held');
+    const holder = await holdFile({ path: heldPath });
+
+    try {
+      expect(await removeTree({ path: treePath })).toEqual({
+        kind: 'succeeded',
+        value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
+      });
+      expect(await isPresent(readOnlyPath)).toBe(false);
+      expect(await isPresent(junctionPath)).toBe(false);
+      expect(await readFile(join(targetPath, 'kept.txt'), 'utf8')).toBe('kept');
+      expect((await stat(heldPath)).isFile()).toBe(true);
+    } finally {
+      await holder.release();
+    }
+  });
 });

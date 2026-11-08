@@ -67,8 +67,8 @@ import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
 import { loadTreeActivity } from './loadTreeActivity.js';
 import {
   buildAppOwner,
+  buildRemovalOwner,
   findOwnerAppName,
-  findRemovalOwner,
   isOwnerUninstalled,
   resolveRemovalOwnerState,
   resolveTargetOwner,
@@ -760,7 +760,7 @@ async function loadCatalogTargetPhase(params: {
     entry: entry,
     path: path,
   });
-  const removalOwner = findRemovalOwner({
+  const removalOwner = buildRemovalOwner({
     owner: owner,
     environment: params.context.environment,
     installedApps: params.context.installedApps,
@@ -925,7 +925,7 @@ function loadAppItemPhase(params: {
               bundleId: app.bundleId,
               displayName: app.displayName,
             });
-      const appOwner = findRemovalOwner({
+      const appOwner = buildRemovalOwner({
         owner: buildAppOwner({ app: app }),
         environment: params.context.environment,
         installedApps: params.context.installedApps,

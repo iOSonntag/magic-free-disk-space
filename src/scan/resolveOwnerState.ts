@@ -278,7 +278,7 @@ function findOwnerInstalledAppName(params: {
  * deletion: the bundles of the installed and system apps that are a bundle owner, as
  * `findOwnerBundlePaths` tells them, or the program of an executable owner.
  */
-export function findRemovalOwner(params: {
+export function buildRemovalOwner(params: {
   owner: CatalogOwner | null;
   environment: EnvironmentFolders;
   installedApps: InstalledApp[];

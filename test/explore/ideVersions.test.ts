@@ -61,7 +61,7 @@ type IdeFixture = {
 
 /** The root of the IDE versions of `kind` the host's catalog keeps for the IDEs of `vendor`. */
 function buildIdeVersionRootPath(params: {
-  environment: EnvironmentFolders;
+  folders: EnvironmentFolders;
   kind: keyof IdeVersionRoots;
   vendor: 'JetBrains' | 'Google';
 }): AbsolutePath {
@@ -73,7 +73,7 @@ function buildIdeVersionRootPath(params: {
     throw new Error(`The platform has no ${params.kind} folder of ${params.vendor}.`);
   }
 
-  return resolveEnvironmentLocation({ folders: params.environment, location: root });
+  return resolveEnvironmentLocation({ folders: params.folders, location: root });
 }
 
 /** Builds a temporary home and app folder, hands them to `run`, and removes them afterwards. */
@@ -86,22 +86,22 @@ async function withIdeHome(params: { run: (fixture: IdeFixture) => Promise<void>
       await params.run({
         environment: home.environment,
         jetBrainsCachesPath: buildIdeVersionRootPath({
-          environment: home.environment,
+          folders: home.environment,
           kind: 'caches',
           vendor: 'JetBrains',
         }),
         jetBrainsLogsPath: buildIdeVersionRootPath({
-          environment: home.environment,
+          folders: home.environment,
           kind: 'logs',
           vendor: 'JetBrains',
         }),
         jetBrainsSettingsPath: buildIdeVersionRootPath({
-          environment: home.environment,
+          folders: home.environment,
           kind: 'settings',
           vendor: 'JetBrains',
         }),
         googleCachesPath: buildIdeVersionRootPath({
-          environment: home.environment,
+          folders: home.environment,
           kind: 'caches',
           vendor: 'Google',
         }),
