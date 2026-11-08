@@ -272,7 +272,7 @@ export function decideOrphanCandidate(params: {
       removal: {
         kind: 'deletePaths',
         targets: [{ path: params.path, identity: params.measurement.identity }],
-        ownerBundlePaths: [],
+        owner: { kind: 'none' },
       },
     },
   };

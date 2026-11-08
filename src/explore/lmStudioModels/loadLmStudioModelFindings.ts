@@ -20,7 +20,7 @@ export async function loadLmStudioModelFindings(
     kind: 'succeeded',
     value: buildLmStudioModelFindings({
       folders: folders.value,
-      processCommands: run.processCommands,
+      runningProcesses: run.runningProcesses,
     }),
   };
 }

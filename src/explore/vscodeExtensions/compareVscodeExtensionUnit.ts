@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitVscodeExtension } from '../exploreUnit.js';
@@ -8,7 +9,7 @@ import type { VscodeExtensionState } from './loadVscodeExtensionState.js';
 export function compareVscodeExtensionUnit(params: {
   unit: ExplorePathUnitVscodeExtension;
   state: VscodeExtensionState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   switch (params.state.kind) {
     case 'noExtensions':
@@ -31,7 +32,7 @@ export function compareVscodeExtensionUnit(params: {
 
       return decideComparisonActivity({
         facts: { kind: 'vscodeExtension' },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     }
   }

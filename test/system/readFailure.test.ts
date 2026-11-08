@@ -66,4 +66,22 @@ describe('decideReadFailure', () => {
       failure: { reason: 'unexpected', code: 'EIO' },
     });
   });
+
+  test('an entry another program holds open fails as inUse', () => {
+    expect(
+      decideReadFailure({
+        failure: { reason: 'inUse', code: 'EBUSY' },
+        privacyDenialCode: PRIVACY_DENIAL_CODE,
+      }),
+    ).toEqual({ kind: 'failed', failure: { reason: 'inUse', code: 'EBUSY' } });
+  });
+
+  test('no permission failure is a privacy denial when the platform names no code for one', () => {
+    expect(
+      decideReadFailure({
+        failure: { reason: 'permissionDenied', code: 'EPERM' },
+        privacyDenialCode: null,
+      }),
+    ).toEqual({ kind: 'failed', failure: { reason: 'permissionDenied', code: 'EPERM' } });
+  });
 });

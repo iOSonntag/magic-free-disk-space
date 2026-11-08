@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { LeftoverMatch } from '../../src/scan/candidateOrigin.js';
 import type { OrphanInstalledFacts } from '../../src/scan/decideOrphanCandidate.js';
 import {
@@ -9,7 +9,6 @@ import {
 } from '../../src/scan/decideOrphanCandidate.js';
 import type { OrphanLocation } from '../../src/scan/scanPlatform.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 
@@ -125,7 +124,7 @@ function decide(params: {
   });
 }
 
-describeAwaitingWin32Platform('decideOrphanCandidate', () => {
+describe('decideOrphanCandidate', () => {
   test('offers the container of an app that is not installed as careful leftovers', () => {
     const decision = decide({ name: 'com.example.removed' });
 
@@ -178,7 +177,7 @@ describeAwaitingWin32Platform('decideOrphanCandidate', () => {
   });
 });
 
-describeAwaitingWin32Platform('matchOrphanName by bundle id', () => {
+describe('matchOrphanName by bundle id', () => {
   test('matches a bundle id that no installed app carries', () => {
     expect(match({ name: 'com.example.removed', location: SANDBOX_LOCATION })).toEqual({
       kind: 'match',
@@ -258,7 +257,7 @@ describeAwaitingWin32Platform('matchOrphanName by bundle id', () => {
   });
 });
 
-describeAwaitingWin32Platform('matchOrphanName by app name in Application Support', () => {
+describe('matchOrphanName by app name in Application Support', () => {
   test('matches the name of an app that is not installed', () => {
     expect(match({ name: 'Removed Tool', location: NAMED_LOCATION })).toEqual({
       kind: 'match',

@@ -1,10 +1,10 @@
-import type { Environment } from '../../environment/buildEnvironment.js';
-import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import type { CatalogLocation } from '../../catalog/catalog.js';
+import type { EnvironmentFolders } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
-import type { HomeRelativePathNames } from '../explorePlatform.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExploreFileUnreadable } from '../exploreUnit.js';
 import { loadExploreFileText, loadExploreRealPath } from '../loadExploreRead.js';
@@ -67,10 +67,9 @@ export async function loadEachAndroidSdkRoot<
  * platform's SDK fails.
  */
 export async function loadAndroidSdkRoots(params: {
-  pathRules: PathRules;
-  homeDir: AbsolutePath;
-  androidSdkRoot: HomeRelativePathNames;
-  flutterSettingsPaths: HomeRelativePathNames[];
+  environment: EnvironmentFolders;
+  androidSdkRoot: CatalogLocation;
+  flutterSettingsPaths: CatalogLocation[];
   pinFiles: ProjectPinFile[];
   privacyDenialCode: string | null;
 }): Promise<Result<AndroidSdkRoot[], ExploreFileUnreadable>> {
@@ -82,10 +81,9 @@ export async function loadAndroidSdkRoots(params: {
   );
   const candidates: SdkRootCandidate[] = [
     {
-      text: joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeDir,
-        names: params.androidSdkRoot,
+      text: resolveEnvironmentLocation({
+        folders: params.environment,
+        location: params.androidSdkRoot,
       }),
       isRequired: true,
     },
@@ -96,7 +94,7 @@ export async function loadAndroidSdkRoots(params: {
     roots: candidates,
     loadRoot: (candidate) =>
       loadSdkRootResolved({
-        pathRules: params.pathRules,
+        pathRules: params.environment.pathRules,
         candidate: candidate,
         privacyDenialCode: params.privacyDenialCode,
       }),
@@ -119,15 +117,14 @@ export async function loadAndroidSdkRoots(params: {
  * could not be read leave the platform's and Flutter's roots alone. Never rejects.
  */
 export async function loadScanAndroidSdkRoots(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   platform: ExploreProbePlatform;
   projectPins: ProjectPinsLoad;
 }): Promise<Result<AndroidSdkRoot[], ExploreFileUnreadable>> {
   const pins = await params.projectPins.pins;
 
   return loadAndroidSdkRoots({
-    pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
+    environment: params.environment,
     androidSdkRoot: params.platform.explore.androidSdkRoot,
     flutterSettingsPaths: params.platform.explore.flutterSettingsPaths,
     pinFiles: pins.kind === 'succeeded' ? pins.value.files : [],
@@ -175,18 +172,13 @@ async function loadSdkRootResolved(params: {
  * file cannot be read.
  */
 async function loadFlutterSettingsSdkRoot(params: {
-  pathRules: PathRules;
-  homeDir: AbsolutePath;
-  flutterSettingsPaths: HomeRelativePathNames[];
+  environment: EnvironmentFolders;
+  flutterSettingsPaths: CatalogLocation[];
   privacyDenialCode: string | null;
 }): Promise<string | null> {
-  for (const settingsPathNames of params.flutterSettingsPaths) {
+  for (const settingsPath of params.flutterSettingsPaths) {
     const settings = await loadExploreFileText({
-      path: joinAbsolutePath({
-        rules: params.pathRules,
-        parentPath: params.homeDir,
-        names: settingsPathNames,
-      }),
+      path: resolveEnvironmentLocation({ folders: params.environment, location: settingsPath }),
       privacyDenialCode: params.privacyDenialCode,
     });
 

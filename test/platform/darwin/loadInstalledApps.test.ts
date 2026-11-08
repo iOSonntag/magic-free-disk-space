@@ -3,7 +3,7 @@ import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadInstalledApps } from '../../../src/platform/darwin/loadInstalledApps.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../../src/system/limits.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -51,7 +51,7 @@ async function createFixtureBundle(params: {
   );
 }
 
-describeAwaitingWin32Platform('loadInstalledApps', () => {
+describeOnDarwin('loadInstalledApps', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

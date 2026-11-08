@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { OwnerOnlyModes } from '../environment/buildEnvironment.js';
 import type { Result } from '../result.js';
+import { createDirectory } from '../system/createDirectory.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import { loadFileText } from '../system/loadFileText.js';
 import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
@@ -39,18 +41,29 @@ function parsePreferences(fileJson: Record<string, unknown>): Preferences {
 
 /**
  * Sets `isUpdateCheckEnabled` and keeps every other key of the file, so a key of another release
- * survives. Replaces the file by a rename, so a reader never sees half of it. Never throws.
+ * survives. Replaces the file by a rename, so a reader never sees half of it. Creates the folder
+ * and the file with `ownerOnlyModes`, or with the system's defaults for `null`. Never throws.
  */
 export async function saveIsUpdateCheckEnabled(params: {
   preferencesDir: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
   isEnabled: boolean;
 }): Promise<Result<null, PreferencesSaveFailure>> {
-  try {
-    await mkdir(params.preferencesDir, { recursive: true, mode: 0o700 });
-  } catch (error) {
+  const fileOptions: { flag: 'wx'; mode?: number } = { flag: 'wx' };
+
+  if (params.ownerOnlyModes !== null) {
+    fileOptions.mode = params.ownerOnlyModes.fileMode;
+  }
+
+  const directoryCreated = await createDirectory({
+    path: params.preferencesDir,
+    ownerOnlyModes: params.ownerOnlyModes,
+  });
+
+  if (directoryCreated.kind === 'failed') {
     return {
       kind: 'failed',
-      failure: { reason: 'directoryUnavailable', code: getErrorCode(error) },
+      failure: { reason: 'directoryUnavailable', code: directoryCreated.failure.code },
     };
   }
 
@@ -59,10 +72,7 @@ export async function saveIsUpdateCheckEnabled(params: {
   const temporaryPath = join(params.preferencesDir, `${PREFERENCES_FILE_NAME}.${randomUUID()}.tmp`);
 
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(savedJson, null, 2)}\n`, {
-      flag: 'wx',
-      mode: 0o600,
-    });
+    await writeFile(temporaryPath, `${JSON.stringify(savedJson, null, 2)}\n`, fileOptions);
     await rename(temporaryPath, buildPreferencesPath({ preferencesDir: params.preferencesDir }));
   } catch (error) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);

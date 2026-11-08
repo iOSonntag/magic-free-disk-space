@@ -1,14 +1,14 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { utimes } from 'node:fs/promises';
 import { join } from 'node:path';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadMailDownloadFindings } from '../../src/explore/mailDownloads/loadMailDownloadFindings.js';
 import { recheckMailDownloadsUnit } from '../../src/explore/mailDownloads/recheckMailDownloadsUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
@@ -16,6 +16,7 @@ import {
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 // Whole seconds, which the fixture's times keep exactly.
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
@@ -24,14 +25,17 @@ const OLD_MS = NOW_MS - 90 * DAY_MS;
 const FILE_SIZE_BYTES = 4096;
 const MAIL_COMMAND = '/System/Applications/Mail.app/Contents/MacOS/Mail';
 
-function getMailDownloadsPath(home: FixtureHome): string {
-  const rootNames = buildTestProbePlatform().explore.mailDownloadsRoot;
+/** Runs a suite only on a host whose catalog names the folder Mail saves its attachments in. */
+const describeWithMailDownloads = describe.skipIf(hostPlatform.explore.mailDownloadsRoot === null);
 
-  if (rootNames === null) {
+function getMailDownloadsPath(home: FixtureHome): string {
+  const root = hostPlatform.explore.mailDownloadsRoot;
+
+  if (root === null) {
     throw new Error('The platform has no Mail Downloads folder.');
   }
 
-  return join(home.fixtureRoot.homeDir, ...rootNames);
+  return resolveEnvironmentLocation({ folders: home.environment, location: root });
 }
 
 /**
@@ -47,7 +51,7 @@ async function createMailFile(params: { path: string; accessedMs?: number }): Pr
   });
 }
 
-describeAwaitingWin32Platform('the Mail Downloads probe', () => {
+describeWithMailDownloads('the Mail Downloads probe', () => {
   test('finds the attachment copies saved and read before the cutoff and never changed', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -74,15 +78,15 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
             {
               unit: {
                 kind: 'mailDownloads',
-                folderPath: buildTestAbsolutePath({ text: folder }),
+                folderPath: buildTestHostPath({ text: folder }),
                 cutoffMs: STALE_CUTOFF_MS,
                 foundFiles: [
                   {
-                    path: buildTestAbsolutePath({ text: join(folder, 'A1', 'saved.pdf') }),
+                    path: buildTestHostPath({ text: join(folder, 'A1', 'saved.pdf') }),
                     modifiedMs: OLD_MS,
                   },
                   {
-                    path: buildTestAbsolutePath({ text: join(folder, 'B2', 'Deep', 'scan.jpg') }),
+                    path: buildTestHostPath({ text: join(folder, 'B2', 'Deep', 'scan.jpg') }),
                     modifiedMs: OLD_MS,
                   },
                 ],
@@ -92,7 +96,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
               regeneration: expect.any(String),
               risk: 'review',
               evidenceLines: [expect.stringContaining('2 attachments')],
-              displayPath: buildTestAbsolutePath({ text: folder }),
+              displayPath: buildTestHostPath({ text: folder }),
               activity: 'idle',
             },
           ],
@@ -124,7 +128,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
           getUnitOfKind({ findings: probed, kind: 'mailDownloads' }).foundFiles.map(
             (file) => file.path,
           ),
-        ).toEqual([buildTestAbsolutePath({ text: savedPath })]);
+        ).toEqual([buildTestHostPath({ text: savedPath })]);
       },
     });
   });
@@ -139,7 +143,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
           await loadMailDownloadFindings(
             buildTestProbeRun({
               environment: home.environment,
-              processCommands: [MAIL_COMMAND],
+              runningProcesses: buildRunningCommandLines([MAIL_COMMAND]),
               staleCutoffMs: STALE_CUTOFF_MS,
             }),
           ),
@@ -149,8 +153,10 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
       },
     });
   });
+});
 
-  test('says the place is missing without the folder', async () => {
+describe('the Mail Downloads probe without its folder', () => {
+  test('says the place is missing', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
@@ -164,7 +170,7 @@ describeAwaitingWin32Platform('the Mail Downloads probe', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckMailDownloadsUnit', () => {
+describeWithMailDownloads('recheckMailDownloadsUnit', () => {
   test('finds a unit unchanged, then changed once a file was opened or changed', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -182,12 +188,12 @@ describeAwaitingWin32Platform('recheckMailDownloadsUnit', () => {
           kind: 'mailDownloads',
         });
 
-        function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+        function recheck(commandLines: string[] | null): Promise<PathUnitRecheck> {
           return recheckMailDownloadsUnit({
             unit: unit,
             environment: run.environment,
             platform: run.platform,
-            processCommands: processCommands,
+            runningProcesses: buildRunningCommandLines(commandLines),
           });
         }
 

@@ -3,7 +3,7 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import type { DirectoryEntry } from '../../system/loadDirectoryEntries.js';
-import type { ExploreProbePlatform, ExploreToolCommandRun } from '../exploreProbe.js';
+import type { ExploreToolCommandRun } from '../exploreProbe.js';
 import type { ExploreFileUnreadable, ExploreProbeFailure } from '../exploreUnit.js';
 import { loadExploreDirectoryEntries } from '../loadExploreRead.js';
 import { loadProbeOutput } from '../loadProbeOutput.js';
@@ -38,11 +38,11 @@ export type HomebrewOrphan = {
  * The first failed command or failed rack read ends it.
  */
 export async function loadHomebrewState(
-  run: ExploreToolCommandRun & { platform: ExploreProbePlatform },
+  run: ExploreToolCommandRun,
 ): Promise<Result<HomebrewState, ExploreProbeFailure>> {
   const cellarPath = await loadProbeOutput({
-    ...run,
     probe: { toolName: run.tool.name, args: ['--cellar'], parse: parseHomebrewCellarPath },
+    ...run,
   });
 
   if (cellarPath.kind === 'failed') {
@@ -50,8 +50,8 @@ export async function loadHomebrewState(
   }
 
   const removals = await loadProbeOutput({
-    ...run,
     probe: { toolName: run.tool.name, args: ['cleanup', '-n'], parse: parseHomebrewCleanupDryRun },
+    ...run,
   });
 
   if (removals.kind === 'failed') {
@@ -59,12 +59,12 @@ export async function loadHomebrewState(
   }
 
   const orphanFormulae = await loadProbeOutput({
-    ...run,
     probe: {
       toolName: run.tool.name,
       args: ['autoremove', '-n'],
       parse: parseHomebrewAutoremoveDryRun,
     },
+    ...run,
   });
 
   if (orphanFormulae.kind === 'failed') {

@@ -13,9 +13,7 @@ export async function loadCondaPackageFindings(
 ): Promise<ExploreProbeToolResult> {
   const plan = await loadProbeOutput({
     probe: CONDA_CLEAN_DRY_RUN_PROBE,
-    tool: run.tool,
-    environment: run.environment,
-    deadlineMs: run.deadlineMs,
+    ...run,
   });
 
   if (plan.kind === 'failed') {
@@ -24,7 +22,7 @@ export async function loadCondaPackageFindings(
 
   const activity = decideUnitActivity({
     facts: { kind: 'conda' },
-    processCommands: run.processCommands,
+    runningProcesses: run.runningProcesses,
   });
   const findings: ExploreFinding[] = [];
   const firstTarballPath = plan.value.tarballPaths[0];

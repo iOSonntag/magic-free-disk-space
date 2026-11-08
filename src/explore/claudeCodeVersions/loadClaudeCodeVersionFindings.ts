@@ -23,7 +23,7 @@ export async function loadClaudeCodeVersionFindings(
     kind: 'succeeded',
     value: buildClaudeCodeVersionFindings({
       state: state.value,
-      processCommands: run.processCommands,
+      runningProcesses: run.runningProcesses,
     }),
   };
 }

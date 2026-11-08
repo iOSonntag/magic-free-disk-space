@@ -2,12 +2,38 @@ import type { Result } from '../result.js';
 import type { EntryReads } from './entryReads.js';
 import type { FullDiskAccess } from './fullDiskAccess.js';
 import type { CommandFailure } from './loadCommandOutput.js';
+import type { SystemCallFailure } from './systemCallFailure.js';
 import type { VolumeSpace } from './volumeSpace.js';
 
-/** The command line of each running process, which tells what is in use. Never throws. */
+/** A call of the operating system that listed the processes failed, with its error code. */
+type ProcessListingCallFailure = { reason: 'callFailed' } & SystemCallFailure;
+
+/** Why the processes could not be listed: by the command that lists them, or by a system call. */
+export type RunningProcessesFailure = CommandFailure | ProcessListingCallFailure;
+
+/** The running processes of macOS, each by its command line. */
+export type RunningProcessesCommandLines = { kind: 'commandLines'; commandLines: string[] };
+
+/**
+ * The running processes of Windows, each by the full path of its image, since Windows gives no
+ * other process's arguments to a reader; a process whose image path cannot be read is its image's
+ * file name.
+ */
+export type RunningProcessesImagePaths = { kind: 'imagePaths'; imagePaths: string[] };
+
+/** The running processes, in the form the platform tells what is in use by. */
+export type RunningProcesses = RunningProcessesCommandLines | RunningProcessesImagePaths;
+
+/** The running processes as listed, or why they could not be. */
+export type RunningProcessesResult = Result<RunningProcesses, RunningProcessesFailure>;
+
+/**
+ * Lists the running processes; `commandTimeoutMs` bounds a listing that runs a command. Never
+ * throws.
+ */
 export type RunningProcessesLoad = (params: {
   commandTimeoutMs: number;
-}) => Promise<Result<string[], CommandFailure>>;
+}) => Promise<RunningProcessesResult>;
 
 /** What the system mechanisms take from the operating system. */
 export type SystemPlatform = {

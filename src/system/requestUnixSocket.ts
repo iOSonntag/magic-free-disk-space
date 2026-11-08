@@ -2,7 +2,7 @@ import type { Stats } from 'node:fs';
 import { lstat, readlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import type { Result } from '../result.js';
-import { getErrorCode } from './getErrorCode.js';
+import { getErrorCode, isMissingErrorCode } from './getErrorCode.js';
 import type { UserIdentity } from './userIdentity.js';
 
 export type UnixSocketMethod = 'GET' | 'POST' | 'DELETE';
@@ -33,8 +33,6 @@ export type UnixSocketRequestFailure =
   | UnixSocketRequestFailureRequestFailed;
 
 export type UnixSocketRequestResult = Result<UnixSocketAnswer, UnixSocketRequestFailure>;
-
-const MISSING_CODES = ['ENOENT', 'ENOTDIR'];
 
 const REFUSED_CODES = ['ENOENT', 'ECONNREFUSED'];
 
@@ -81,7 +79,7 @@ async function findTrustedSocketPath(params: {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notSocket' } };
   }
 
-  if (entry.value.uid !== params.user.uid) {
+  if (!isOwnedByUser({ stats: entry.value, user: params.user })) {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notOwnedByUser' } };
   }
 
@@ -105,11 +103,21 @@ async function findTrustedSocketPath(params: {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notSocket' } };
   }
 
-  if (targetEntry.value.uid !== params.user.uid) {
+  if (!isOwnedByUser({ stats: targetEntry.value, user: params.user })) {
     return { kind: 'failed', failure: { kind: 'socketUntrusted', detail: 'notOwnedByUser' } };
   }
 
   return { kind: 'succeeded', value: target.value };
+}
+
+/** Never for a user of Windows, whose owner an `lstat` does not report, so no socket is trusted. */
+function isOwnedByUser(params: { stats: Stats; user: UserIdentity }): boolean {
+  switch (params.user.kind) {
+    case 'posix':
+      return params.stats.uid === params.user.uid;
+    case 'windows':
+      return false;
+  }
 }
 
 async function loadSocketEntryStats(params: {
@@ -136,7 +144,7 @@ async function loadLinkTargetPath(params: {
 }
 
 function toEntryFailure(params: { code: string }): UnixSocketRequestFailure {
-  if (MISSING_CODES.includes(params.code)) {
+  if (isMissingErrorCode(params.code)) {
     return { kind: 'socketMissing' };
   }
 

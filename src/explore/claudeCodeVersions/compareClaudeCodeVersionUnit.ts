@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitClaudeCodeVersion } from '../exploreUnit.js';
@@ -8,7 +9,7 @@ import type { ClaudeCodeVersionState } from './loadClaudeCodeVersionState.js';
 export function compareClaudeCodeVersionUnit(params: {
   unit: ExplorePathUnitClaudeCodeVersion;
   state: ClaudeCodeVersionState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   switch (params.state.kind) {
     case 'noVersions':
@@ -24,7 +25,7 @@ export function compareClaudeCodeVersionUnit(params: {
 
       return decideComparisonActivity({
         facts: { kind: 'claudeCodeVersion', versionPath: params.unit.folderPath },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     }
   }

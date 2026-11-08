@@ -1,41 +1,50 @@
-import { realpath, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import type { Environment } from '../../environment/buildEnvironment.js';
+import type { Environment, OwnerOnlyModes } from '../../environment/buildEnvironment.js';
 import { buildEnvironment } from '../../environment/buildEnvironment.js';
 import { checkEnvironmentRoots } from '../../environment/checkEnvironmentRoots.js';
+import type { EnvironmentLocationAtRoot } from '../../environment/environmentLocation.js';
 import type { EnvironmentFailure } from '../../environment/environmentPlatform.js';
+import {
+  loadEnvironmentRealPath,
+  loadExistingRealPaths,
+  parseEnvironmentPath,
+} from '../../environment/loadEnvironmentRealPath.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
-import type { PathRules } from '../../path/pathRules.js';
+import { POSIX_PATH_RULES } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { getErrorCode } from '../../system/getErrorCode.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
 import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parsePosixUid } from '../../system/userIdentity.js';
-import { ICLOUD_DRIVE_ROOT_PATH_NAMES } from './appleDataRoots.js';
+import { icloudDriveRoot } from './appleDataRoots.js';
+import { buildHomeLocation } from './buildHomeLocation.js';
 import {
   PROTECTED_HOME_DIR_NAMES,
   SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
   SENSITIVE_HOME_DIR_NAMES,
 } from './protectedPaths.js';
 
-/** How macOS spells and compares an absolute path. */
-export const DARWIN_PATH_RULES: PathRules = { rootForm: 'posix', separator: '/' };
-
 /** The root of the macOS file system, which is refused as a whole. */
 const DARWIN_PROTECTED_ROOT_PATHS: AbsolutePath[] = [parseDarwinAbsolutePath({ text: '/' })];
 
-/** The folder of the deletion log below the home folder, one name per level. */
-const DARWIN_DELETION_LOG_HOME_DIR_NAMES: string[] = ['Library', 'Logs', 'magic-free-disk-space'];
+/** The folder of the deletion log. */
+const darwinDeletionLogLocation: EnvironmentLocationAtRoot = {
+  root: 'home',
+  path: 'Library/Logs/magic-free-disk-space',
+};
 
-/** The folder of the bridge's preference file below the home folder, one name per level. */
-const DARWIN_PREFERENCES_HOME_DIR_NAMES: string[] = [
-  'Library',
-  'Application Support',
-  'magic-free-disk-space',
-];
+/** The folder of the bridge's preference file. */
+const darwinPreferencesLocation: EnvironmentLocationAtRoot = {
+  root: 'home',
+  path: 'Library/Application Support/magic-free-disk-space',
+};
+
+/** Folders the tool writes are the user's alone: `rwx------`, and `rw-------` for files. */
+const darwinOwnerOnlyModes: OwnerOnlyModes = { directoryMode: 0o700, fileMode: 0o600 };
 
 /** Where macOS apps are installed for every user. */
 const DARWIN_SHARED_APPLICATION_DIR: AbsolutePath = parseDarwinAbsolutePath({
@@ -58,7 +67,11 @@ const USER_CACHE_DIR_NAME = 'DARWIN_USER_CACHE_DIR';
 
 export async function loadEnvironment(): Promise<Result<Environment, EnvironmentFailure>> {
   const homeText = homedir();
-  const homeDir = parseEnvironmentPath({ text: homeText, failurePath: homeText });
+  const homeDir = parseEnvironmentPath({
+    pathRules: POSIX_PATH_RULES,
+    text: homeText,
+    failurePath: homeText,
+  });
 
   if (homeDir.kind === 'failed') {
     return homeDir;
@@ -67,13 +80,16 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   const applicationDirs = [
     DARWIN_SHARED_APPLICATION_DIR,
     joinAbsolutePath({
-      rules: DARWIN_PATH_RULES,
+      rules: POSIX_PATH_RULES,
       parentPath: homeDir.value,
       names: DARWIN_USER_APPLICATION_DIR_NAMES,
     }),
   ];
 
-  const homeRealPath = await loadRealPath({ path: homeDir.value });
+  const homeRealPath = await loadEnvironmentRealPath({
+    pathRules: POSIX_PATH_RULES,
+    path: homeDir.value,
+  });
 
   if (homeRealPath.kind === 'failed') {
     return homeRealPath;
@@ -92,7 +108,10 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     return tempDir;
   }
 
-  const tempRealPath = await loadRealPath({ path: tempDir.value });
+  const tempRealPath = await loadEnvironmentRealPath({
+    pathRules: POSIX_PATH_RULES,
+    path: tempDir.value,
+  });
 
   if (tempRealPath.kind === 'failed') {
     return tempRealPath;
@@ -104,7 +123,10 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     return userCacheDir;
   }
 
-  const userCacheRealPath = await loadRealPath({ path: userCacheDir.value });
+  const userCacheRealPath = await loadEnvironmentRealPath({
+    pathRules: POSIX_PATH_RULES,
+    path: userCacheDir.value,
+  });
 
   if (userCacheRealPath.kind === 'failed') {
     return userCacheRealPath;
@@ -112,18 +134,24 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
 
   const user = getEffectiveUser();
   const rootsFailure = checkEnvironmentRoots({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     user: user,
     homeRealPath: homeRealPath.value,
-    homeOwnerId: homeOwnerId.value,
+    homeOwner: buildPosixUser({ uid: homeOwnerId.value }),
     tempRealPath: tempRealPath.value,
+    tempPlacement: 'apartFromHome',
+    // The protected folders of macOS are resolved with the environment, after this check.
+    protectedRealPaths: [],
   });
 
   if (rootsFailure !== null) {
     return { kind: 'failed', failure: rootsFailure };
   }
 
-  const applicationRealPaths = await loadExistingRealPaths({ paths: applicationDirs });
+  const applicationRealPaths = await loadExistingRealPaths({
+    pathRules: POSIX_PATH_RULES,
+    paths: applicationDirs,
+  });
 
   return {
     kind: 'succeeded',
@@ -158,28 +186,38 @@ export function buildDarwinEnvironment(params: {
   return buildEnvironment({
     nowMs: params.nowMs,
     user: params.user,
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     homeDir: params.homeDir,
     homeRealPath: params.homeRealPath,
     tempDir: params.tempDir,
     tempRealPath: params.tempRealPath,
-    userCacheDir: params.userCacheDir,
-    userCacheRealPath: params.userCacheRealPath,
+    platformFolders: { kind: 'darwin', userCacheDir: params.userCacheDir },
+    platformRealFolders: { kind: 'darwin', userCacheDir: params.userCacheRealPath },
     applicationDirs: params.applicationDirs,
     applicationRealPaths: params.applicationRealPaths,
     protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
-    protectedHomeDirNames: PROTECTED_HOME_DIR_NAMES,
-    sensitiveHomeDirNames: SENSITIVE_HOME_DIR_NAMES,
-    sensitiveExceptionHomeDirNames: SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
-    evictHomeDirNames: [ICLOUD_DRIVE_ROOT_PATH_NAMES],
-    deletionLogHomeDirNames: DARWIN_DELETION_LOG_HOME_DIR_NAMES,
-    preferencesHomeDirNames: DARWIN_PREFERENCES_HOME_DIR_NAMES,
+    // macOS mounts every volume below its one root, so no drive has a root of its own.
+    fixedDriveRoots: [],
+    protectedLocations: PROTECTED_HOME_DIR_NAMES.map((names) =>
+      buildHomeLocation({ names: names }),
+    ),
+    protectedFolderRealPaths: [],
+    sensitiveLocations: SENSITIVE_HOME_DIR_NAMES.map((names) =>
+      buildHomeLocation({ names: names }),
+    ),
+    sensitiveExceptionLocations: SENSITIVE_EXCEPTION_HOME_DIR_NAMES.map((names) =>
+      buildHomeLocation({ names: names }),
+    ),
+    evictLocations: [icloudDriveRoot],
+    deletionLogLocation: darwinDeletionLogLocation,
+    preferencesLocation: darwinPreferencesLocation,
+    ownerOnlyModes: darwinOwnerOnlyModes,
   });
 }
 
 /** A path of macOS this file spells out; throws for one that is not absolute, which is a bug. */
 function parseDarwinAbsolutePath(params: { text: string }): AbsolutePath {
-  const path = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text });
+  const path = parseAbsolutePath({ rules: POSIX_PATH_RULES, text: params.text });
 
   if (path.kind === 'failed') {
     throw new Error(`The macOS path ${params.text} is not absolute.`);
@@ -188,30 +226,18 @@ function parseDarwinAbsolutePath(params: { text: string }): AbsolutePath {
   return path.value;
 }
 
-/** Parses `text` as a macOS absolute path; unresolvable at `failurePath` when it is not one. */
-function parseEnvironmentPath(params: {
-  text: string;
-  failurePath: string;
-}): Result<AbsolutePath, EnvironmentFailure> {
-  const path = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text });
-
-  if (path.kind === 'failed') {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: params.failurePath, code: 'notAbsolute' },
-    };
-  }
-
-  return { kind: 'succeeded', value: path.value };
-}
-
 /** The effective user of the process; throws for an id that is no non-negative integer. */
 function getEffectiveUser(): UserIdentity {
   // Without an id, as on no Mac, the check refuses as for root.
-  const uid = parsePosixUid({ value: process.geteuid?.() ?? 0 });
+  return buildPosixUser({ uid: process.geteuid?.() ?? 0 });
+}
+
+/** Throws for an id that is no non-negative integer, which no Mac reports. */
+function buildPosixUser(params: { uid: number }): UserIdentity {
+  const uid = parsePosixUid({ value: params.uid });
 
   if (uid.kind === 'failed') {
-    throw new Error(`The effective user id is ${uid.failure}.`);
+    throw new Error(`The user id is ${uid.failure}.`);
   }
 
   return { kind: 'posix', uid: uid.value };
@@ -237,33 +263,11 @@ async function loadUserConfDir(params: {
   // Printed with a trailing slash, which would end up in every path shown below it.
   const dirText = output.value.trim().replace(/\/+$/, '');
 
-  return parseEnvironmentPath({ text: dirText, failurePath: params.name });
-}
-
-/** The real path of `path`; unresolvable when it cannot be read or is not absolute. */
-async function loadRealPath(params: {
-  path: string;
-}): Promise<Result<AbsolutePath, EnvironmentFailure>> {
-  const realPathText = await loadRealPathText({ path: params.path });
-
-  if (realPathText.kind === 'failed') {
-    return realPathText;
-  }
-
-  return parseEnvironmentPath({ text: realPathText.value, failurePath: params.path });
-}
-
-async function loadRealPathText(params: {
-  path: string;
-}): Promise<Result<string, EnvironmentFailure>> {
-  try {
-    return { kind: 'succeeded', value: await realpath(params.path) };
-  } catch (error) {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: params.path, code: getErrorCode(error) },
-    };
-  }
+  return parseEnvironmentPath({
+    pathRules: POSIX_PATH_RULES,
+    text: dirText,
+    failurePath: params.name,
+  });
 }
 
 async function loadOwnerId(params: { path: string }): Promise<Result<number, EnvironmentFailure>> {
@@ -275,18 +279,4 @@ async function loadOwnerId(params: { path: string }): Promise<Result<number, Env
       failure: { reason: 'unresolvable', path: params.path, code: getErrorCode(error) },
     };
   }
-}
-
-async function loadExistingRealPaths(params: { paths: AbsolutePath[] }): Promise<AbsolutePath[]> {
-  const realPaths: AbsolutePath[] = [];
-
-  for (const path of params.paths) {
-    const result = await loadRealPath({ path: path });
-
-    if (result.kind === 'succeeded') {
-      realPaths.push(result.value);
-    }
-  }
-
-  return realPaths;
 }

@@ -1,4 +1,6 @@
+import { isSameEntryName, toComparablePathText } from '../../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { ReadFailure } from '../../system/readFailure.js';
 import type { ExploreFileReadText, ExploreFileReadUnfit } from '../loadExploreRead.js';
 
@@ -36,75 +38,74 @@ export type ProjectPins = { files: ProjectPinFile[]; isWalkComplete: boolean };
 /** Where a pin file was found: in the project walk, or as a link in mise's tracked configs. */
 export type ProjectPinFileSource = 'walk' | 'miseTrackedConfig';
 
-const MISE_CONFIG_FILE_NAMES = ['mise.toml', '.mise.toml', 'mise.local.toml', '.mise.local.toml'];
-
-const GRADLE_BUILD_FILE_NAMES = ['build.gradle', 'build.gradle.kts'];
+/** Each kind of pin file that its name alone decides, by the names it goes by. */
+const pinFileNames: { kind: ProjectPinFileKind; names: string[] }[] = [
+  { kind: 'toolVersions', names: ['.tool-versions'] },
+  { kind: 'nvmrc', names: ['.nvmrc'] },
+  { kind: 'gradle', names: ['build.gradle', 'build.gradle.kts'] },
+  { kind: 'packageJson', names: ['package.json'] },
+  { kind: 'rustToolchain', names: ['rust-toolchain.toml', 'rust-toolchain'] },
+  { kind: 'fvmrc', names: ['.fvmrc'] },
+  { kind: 'androidLocalProperties', names: ['local.properties'] },
+  { kind: 'miseConfig', names: ['mise.toml', '.mise.toml', 'mise.local.toml', '.mise.local.toml'] },
+];
 
 const PNPM_LOCK_FILE_NAME = 'pnpm-lock.yaml';
-
-const RUST_TOOLCHAIN_FILE_NAMES = ['rust-toolchain.toml', 'rust-toolchain'];
 
 const TOML_SUFFIX = '.toml';
 
 /**
  * The kind of the pin file named `name`, or `null` for a file that pins nothing. A `package.json`
- * pins only beside a `pnpm-lock.yaml`; any `*.toml` mise tracks is a mise config.
+ * pins only beside a `pnpm-lock.yaml`; any `*.toml` mise tracks is a mise config. Names compare
+ * as `pathRules` compare them.
  */
 export function matchProjectPinFile(params: {
+  pathRules: PathRules;
   name: string;
   siblingNames: ReadonlySet<string>;
   source: ProjectPinFileSource;
 }): ProjectPinFileKind | null {
-  const kind = matchProjectPinFileName({ name: params.name, source: params.source });
+  const kind = matchProjectPinFileName({
+    pathRules: params.pathRules,
+    name: params.name,
+    source: params.source,
+  });
 
-  if (kind === 'packageJson' && !params.siblingNames.has(PNPM_LOCK_FILE_NAME)) {
-    return null;
+  if (kind !== 'packageJson') {
+    return kind;
   }
 
-  return kind;
+  const hasPnpmLockFile = [...params.siblingNames].some((siblingName) =>
+    isSameEntryName({ rules: params.pathRules, name: PNPM_LOCK_FILE_NAME, otherName: siblingName }),
+  );
+
+  return hasPnpmLockFile ? kind : null;
 }
 
 /**
  * The kind of pin file that `name` may be, whatever lies beside it, or `null` for a name that
- * never pins: a `package.json` here may still lack its `pnpm-lock.yaml`.
+ * never pins: a `package.json` here may still lack its `pnpm-lock.yaml`. Names compare as
+ * `pathRules` compare them.
  */
 export function matchProjectPinFileName(params: {
+  pathRules: PathRules;
   name: string;
   source: ProjectPinFileSource;
 }): ProjectPinFileKind | null {
-  if (params.name === '.tool-versions') {
-    return 'toolVersions';
+  const named = pinFileNames.find((pinFile) =>
+    pinFile.names.some((pinFileName) =>
+      isSameEntryName({ rules: params.pathRules, name: pinFileName, otherName: params.name }),
+    ),
+  );
+
+  if (named !== undefined) {
+    return named.kind;
   }
 
-  if (params.name === '.nvmrc') {
-    return 'nvmrc';
-  }
+  const comparableName = toComparablePathText({ rules: params.pathRules, text: params.name });
+  const comparableSuffix = toComparablePathText({ rules: params.pathRules, text: TOML_SUFFIX });
 
-  if (GRADLE_BUILD_FILE_NAMES.includes(params.name)) {
-    return 'gradle';
-  }
-
-  if (params.name === 'package.json') {
-    return 'packageJson';
-  }
-
-  if (RUST_TOOLCHAIN_FILE_NAMES.includes(params.name)) {
-    return 'rustToolchain';
-  }
-
-  if (params.name === '.fvmrc') {
-    return 'fvmrc';
-  }
-
-  if (params.name === 'local.properties') {
-    return 'androidLocalProperties';
-  }
-
-  if (MISE_CONFIG_FILE_NAMES.includes(params.name)) {
-    return 'miseConfig';
-  }
-
-  if (params.source === 'miseTrackedConfig' && params.name.endsWith(TOML_SUFFIX)) {
+  if (params.source === 'miseTrackedConfig' && comparableName.endsWith(comparableSuffix)) {
     return 'miseConfig';
   }
 

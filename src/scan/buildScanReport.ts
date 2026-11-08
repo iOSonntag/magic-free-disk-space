@@ -2,7 +2,8 @@ import type { Advice, Candidate, CandidateDecision } from './candidate.js';
 import type { ScanIssue } from './issue.js';
 import { placeCandidate } from './placeCandidate.js';
 import { rankByPlace, rankBySize } from './rankCandidates.js';
-import type { ScanReport, SkippedItem } from './runScan.js';
+import type { CloudOnlyEntryCount, ScanReport, SkippedItem } from './runScan.js';
+import type { AppAdvice } from './scanPlatform.js';
 
 /** The share of one decision in each part of the report; all but one part are empty. */
 type DecisionPartition = {
@@ -17,6 +18,8 @@ type DecisionPartition = {
  */
 export function buildScanReport(params: {
   decisions: CandidateDecision[];
+  appAdvice: AppAdvice | null;
+  cloudOnlyEntries: CloudOnlyEntryCount | null;
   issues: ScanIssue[];
 }): ScanReport {
   const partitions = params.decisions.map(partitionDecision);
@@ -28,7 +31,9 @@ export function buildScanReport(params: {
     candidates: candidates,
     safeNumbers: listSafeNumbers({ candidates: candidates }),
     advice: rankBySize({ items: partitions.flatMap((partition) => partition.advice) }),
+    appAdvice: params.appAdvice,
     skipped: partitions.flatMap((partition) => partition.skipped),
+    cloudOnlyEntries: params.cloudOnlyEntries,
     issues: params.issues,
   };
 }

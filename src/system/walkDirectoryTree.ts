@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import type { EntryReads, EvictionCandidate } from './entryReads.js';
+import type { EntryPlacement, EntryReads, EntryRef } from './entryReads.js';
+import { getPlacedFileKind } from './entryReads.js';
 import type { DirectoryEntry } from './loadDirectoryEntries.js';
 import { loadDirectoryEntries } from './loadDirectoryEntries.js';
 import type { DirectoryFailure } from './loadDirectoryNames.js';
@@ -12,31 +13,39 @@ export type TreeEntry = {
   name: string;
   /** The entries of the root have depth 1. */
   depth: number;
+  /** As the entry reads place it: a link of any kind is `symbolicLink`, whatever lstat says. */
   kind: FileKind;
-  /** Read only when the walk asked for stats. */
+  /** Read only when the walk asked for stats; their kind is the entry's `kind`. */
   stats: EntryStats | null;
   /** The names in the same folder, such as a marker file beside a project folder. */
   siblingNames: Set<string>;
+  /**
+   * The code of the read that failed to place the entry, which the walk then reads as on disk;
+   * `null` for an entry the reads placed.
+   */
+  placementFailureCode: string | null;
 };
 
-/** `descend` enters a folder (a symbolic link never); `stop` ends the whole walk. */
+/** `descend` enters a folder (a link never); `stop` ends the whole walk. */
 export type TreeEntryVisit = 'descend' | 'skip' | 'stop';
 
 export type TreeWalkEnd = 'completed' | 'stopped';
 
 export type TreeUnreadable = { path: string; failure: DirectoryFailure | FileFailure };
 
+/** Takes each entry a walk left unread because only a cloud store holds its content. */
+export type EvictedEntryRecorder = (entry: EntryRef) => void;
+
 type PendingDirectory = { path: string; depth: number };
 
 /**
- * Walks the folders below `rootPath`, reading at most `maxConcurrentDirectories` folders at
- * once, and asks `visitEntry` about every entry. Waiting folders are kept as paths, so a wide
- * tree costs memory for its paths only. Returns `stopped` once `visitEntry` returned `stop` or
- * `isStopped` turned true. A vanished entry is left out; an unreadable one goes to `onUnreadable`.
- * `entryReads.isEntryEvicted` is asked about each folder before it is read, the root included,
- * and about each other entry before it is visited. An evicted entry, such as an iCloud
- * placeholder, goes to `onEvictedEntrySkipped`: a folder is visited but never read, any other
- * entry is never visited, so the walk downloads nothing.
+ * Walks the folders below `rootPath`, reading at most `maxConcurrentDirectories` at once, and asks
+ * `visitEntry` about every entry, placed by `entryReads` before each visit or listing. Returns
+ * `stopped` once `visitEntry` returned `stop` or `isStopped` turned true. A vanished entry is left
+ * out; an unreadable one goes to `onUnreadable`. A link is visited as a `symbolicLink` and never
+ * entered, nor is a folder listed that reads as one before its listing; a folder that cannot be
+ * placed is listed. A cloud-only folder is visited but never listed, and any other cloud-only
+ * entry is never visited; each one goes to `onEvictedEntrySkipped`, so the walk downloads nothing.
  */
 export function walkDirectoryTree(params: {
   rootPath: string;
@@ -46,11 +55,32 @@ export function walkDirectoryTree(params: {
   entryReads: EntryReads;
   visitEntry: (entry: TreeEntry) => TreeEntryVisit;
   onUnreadable: (unreadable: TreeUnreadable) => void;
-  onEvictedEntrySkipped: (entry: EvictionCandidate) => void;
+  /** Takes each cloud-only entry the walk leaves unread; `null` takes none. */
+  onEvictedEntrySkipped: EvictedEntryRecorder | null;
 }): Promise<TreeWalkEnd> {
   const pendingDirectories: PendingDirectory[] = [{ path: params.rootPath, depth: 0 }];
   let activeCount = 0;
   let isStoppedByVisit = false;
+
+  function recordEvictedEntry(entry: EntryRef): void {
+    if (params.onEvictedEntrySkipped !== null) {
+      params.onEvictedEntrySkipped(entry);
+    }
+  }
+
+  function visitPlacedEntry(entry: TreeEntry): void {
+    const visit = params.visitEntry(entry);
+
+    if (visit === 'stop') {
+      isStoppedByVisit = true;
+
+      return;
+    }
+
+    if (visit === 'descend' && entry.kind === 'directory') {
+      pendingDirectories.push({ path: entry.path, depth: entry.depth });
+    }
+  }
 
   async function readDirectory(directory: PendingDirectory): Promise<void> {
     if (isStoppedByVisit || params.isStopped()) {
@@ -59,26 +89,36 @@ export function walkDirectoryTree(params: {
       return;
     }
 
-    const directoryCandidate: EvictionCandidate = { path: directory.path, kind: 'directory' };
+    // A folder waits for its listing since its parent's: one swapped for a link meanwhile would
+    // list the link's target, and one evicted would be downloaded by its listing.
+    const directoryRef: EntryRef = { path: directory.path, kind: 'directory' };
 
-    // An evicted folder holds nothing on this disk, and reading it would download it.
-    if (params.entryReads.isEntryEvicted(directoryCandidate)) {
-      params.onEvictedEntrySkipped(directoryCandidate);
+    switch (params.entryReads.loadEntryPlacement(directoryRef).kind) {
+      case 'cloudOnly':
+        recordEvictedEntry(directoryRef);
 
-      return;
+        return;
+      case 'link':
+        return;
+      case 'onDisk':
+      case 'unread':
+        break;
     }
 
     const listing = await loadDirectoryEntries({ path: directory.path });
 
     if (listing.kind === 'failed') {
-      if (
-        listing.failure.reason === 'permissionDenied' ||
-        listing.failure.reason === 'unexpected'
-      ) {
-        params.onUnreadable({ path: directory.path, failure: listing.failure });
-      }
+      switch (listing.failure.reason) {
+        case 'missing':
+        case 'notDirectory':
+          return;
+        case 'permissionDenied':
+        case 'inUse':
+        case 'unexpected':
+          params.onUnreadable({ path: directory.path, failure: listing.failure });
 
-      return;
+          return;
+      }
     }
 
     const siblingNames = new Set(listing.value.map((entry) => entry.name));
@@ -95,25 +135,29 @@ export function walkDirectoryTree(params: {
         return;
       }
 
-      const entryCandidate: EvictionCandidate = { path: treeEntry.path, kind: treeEntry.kind };
+      const entryRef: EntryRef = { path: treeEntry.path, kind: treeEntry.kind };
+      const placement = params.entryReads.loadEntryPlacement(entryRef);
 
-      // A folder is asked once it is read; any other entry before its visit, which may read it.
-      if (treeEntry.kind !== 'directory' && params.entryReads.isEntryEvicted(entryCandidate)) {
-        params.onEvictedEntrySkipped(entryCandidate);
+      switch (placement.kind) {
+        case 'onDisk':
+          visitPlacedEntry(treeEntry);
+          break;
+        case 'unread':
+          visitPlacedEntry({ ...treeEntry, placementFailureCode: placement.code });
+          break;
+        case 'cloudOnly':
+          // A folder is visited and placed again before its listing; any other entry is skipped
+          // before its visit, which may read it.
+          if (treeEntry.kind === 'directory') {
+            visitPlacedEntry(treeEntry);
+          } else {
+            recordEvictedEntry(entryRef);
+          }
 
-        continue;
-      }
-
-      const visit = params.visitEntry(treeEntry);
-
-      if (visit === 'stop') {
-        isStoppedByVisit = true;
-
-        return;
-      }
-
-      if (visit === 'descend' && treeEntry.kind === 'directory') {
-        pendingDirectories.push({ path: treeEntry.path, depth: treeEntry.depth });
+          break;
+        case 'link':
+          visitPlacedEntry(toLinkTreeEntry({ entry: treeEntry, placement: placement }));
+          break;
       }
     }
   }
@@ -149,6 +193,17 @@ export function walkDirectoryTree(params: {
   });
 }
 
+/** The entry as a link, its stats too, so no visitor reads it as the folder or file lstat says. */
+function toLinkTreeEntry(params: { entry: TreeEntry; placement: EntryPlacement }): TreeEntry {
+  const placedKind = getPlacedFileKind({ kind: params.entry.kind, placement: params.placement });
+
+  return {
+    ...params.entry,
+    kind: placedKind,
+    stats: params.entry.stats === null ? null : { ...params.entry.stats, kind: placedKind },
+  };
+}
+
 async function loadTreeEntries(params: {
   directory: PendingDirectory;
   entries: DirectoryEntry[];
@@ -169,17 +224,23 @@ async function loadTreeEntries(params: {
           kind: entry.kind,
           stats: null,
           siblingNames: params.siblingNames,
+          placementFailureCode: null,
         };
       }
 
       const stats = await loadEntryStats({ path: path });
 
       if (stats.kind === 'failed') {
-        if (stats.failure.reason !== 'missing') {
-          params.onUnreadable({ path: path, failure: stats.failure });
-        }
+        switch (stats.failure.reason) {
+          case 'missing':
+            return null;
+          case 'permissionDenied':
+          case 'inUse':
+          case 'unexpected':
+            params.onUnreadable({ path: path, failure: stats.failure });
 
-        return null;
+            return null;
+        }
       }
 
       return {
@@ -189,6 +250,7 @@ async function loadTreeEntries(params: {
         kind: stats.value.kind,
         stats: stats.value,
         siblingNames: params.siblingNames,
+        placementFailureCode: null,
       };
     }),
   );

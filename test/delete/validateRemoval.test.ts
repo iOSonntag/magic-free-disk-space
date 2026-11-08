@@ -1,17 +1,20 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { Risk } from '../../src/catalog/catalog.js';
+import type { RemovalDecision } from '../../src/delete/validateRemoval.js';
 import { validateRemoval } from '../../src/delete/validateRemoval.js';
+import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { CandidateProbed } from '../../src/scan/candidate.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestEngineCandidate,
   buildTestToolCandidate,
   buildTestUnitPathsCandidate,
 } from '../support/candidateFixtures.js';
+import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestRecycleBinCandidate } from '../support/platformFixtures.js';
 
 const ENVIRONMENT = buildTestMacEnvironment();
 
@@ -20,18 +23,99 @@ function buildHomePath(relativePath: string): string {
   return `${TEST_MAC_HOME_DIR}/${relativePath}`;
 }
 
-function validate(params: { path: string; risk?: Risk; kind?: FileKind }) {
+function validate(params: {
+  path: string;
+  risk?: Risk;
+  kind?: FileKind;
+  environment?: Environment;
+}): RemovalDecision {
   return validateRemoval({
     candidate: buildTestCandidate({
       path: params.path,
       risk: params.risk ?? 'safe',
       kind: params.kind ?? 'directory',
     }),
-    environment: ENVIRONMENT,
+    environment: params.environment ?? ENVIRONMENT,
   });
 }
 
-describeAwaitingWin32Platform('validateRemoval', () => {
+/** The decision on `path` in the example environment of Windows. */
+function validateOnWindows(params: { path: string; kind?: FileKind }): RemovalDecision {
+  return validate({ ...params, environment: exampleWin32Environment });
+}
+
+describe('validateRemoval on Windows', () => {
+  test('approves an entry below the profile or an AppData folder, in any case', () => {
+    for (const path of [
+      'c:\\users\\TESTER\\appdata\\local\\Example\\Cache',
+      'C:\\Users\\tester\\AppData\\Roaming\\Example\\logs',
+      'C:\\Users\\tester\\Downloads\\old.zip',
+      'C:\\Users\\tester\\AppData\\Local\\Temp\\build-123',
+    ]) {
+      expect(validateOnWindows({ path: path }).kind).toBe('approved');
+    }
+  });
+
+  test('refuses every protected folder itself, each fixed drive root among them', () => {
+    for (const protectedPath of exampleWin32Environment.protectedRealPaths) {
+      expect(validateOnWindows({ path: protectedPath })).toMatchObject({ reason: 'protectedRoot' });
+    }
+  });
+
+  test('refuses the deletion log and the preferences in any case, whole and in every part', () => {
+    for (const path of [
+      'C:\\USERS\\tester\\AppData\\Local\\magic-free-disk-space\\Logs\\deletions.jsonl',
+      'c:\\users\\tester\\appdata\\local\\MAGIC-FREE-DISK-SPACE',
+      'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space\\preferences.json',
+    ]) {
+      expect(validateOnWindows({ path: path, kind: 'file' })).toMatchObject({
+        reason: 'protectedRoot',
+      });
+    }
+  });
+
+  test('approves the Recycle Bin of a fixed drive the environment lists, and no other', () => {
+    for (const driveRootText of ['C:\\', 'D:\\']) {
+      const candidate = buildTestRecycleBinCandidate({ driveRootText: driveRootText });
+
+      expect(
+        validateRemoval({ candidate: candidate, environment: exampleWin32Environment }),
+      ).toEqual({ kind: 'approved', candidate: candidate });
+    }
+
+    expect(
+      validateRemoval({
+        candidate: buildTestRecycleBinCandidate({ driveRootText: 'E:\\' }),
+        environment: exampleWin32Environment,
+      }),
+    ).toEqual({ kind: 'refused', path: 'E:\\', reason: 'outsideAllowedRoot' });
+    expect(
+      validateRemoval({
+        candidate: buildTestRecycleBinCandidate({ driveRootText: 'C:\\' }),
+        environment: ENVIRONMENT,
+      }),
+    ).toMatchObject({ kind: 'refused', reason: 'outsideAllowedRoot' });
+  });
+
+  test('refuses a Recycle Bin marked never', () => {
+    expect(
+      validateRemoval({
+        candidate: buildTestRecycleBinCandidate({ driveRootText: 'C:\\', risk: 'never' }),
+        environment: exampleWin32Environment,
+      }),
+    ).toMatchObject({ kind: 'refused', reason: 'neverRisk' });
+  });
+
+  test('refuses a path on another drive and one that names no drive', () => {
+    for (const path of ['D:\\Data\\old.zip', '\\\\server\\share\\x', 'C:Users\\tester\\x']) {
+      expect(validateOnWindows({ path: path, kind: 'file' })).toMatchObject({
+        reason: 'outsideAllowedRoot',
+      });
+    }
+  });
+});
+
+describe('validateRemoval', () => {
   test('approves files and folders strictly inside an allowed root', () => {
     expect(validate({ path: buildHomePath('Library/Caches/com.example.app') }).kind).toBe(
       'approved',
@@ -105,6 +189,12 @@ describeAwaitingWin32Platform('validateRemoval', () => {
     });
   });
 
+  test('approves no path whose case differs from its allowed root, which macOS compares exactly', () => {
+    expect(validate({ path: '/users/tester/Downloads/old.dmg', kind: 'file' })).toMatchObject({
+      reason: 'outsideAllowedRoot',
+    });
+  });
+
   test('refuses paths outside every allowed root', () => {
     expect(validate({ path: '/etc/hosts', kind: 'file' })).toMatchObject({
       reason: 'outsideAllowedRoot',
@@ -130,7 +220,7 @@ describeAwaitingWin32Platform('validateRemoval', () => {
   test('approves a tool item of any other risk, and refuses one marked never', () => {
     for (const risk of ['safe', 'careful', 'review'] as const) {
       const candidate = buildTestToolCandidate({
-        homeDir: TEST_MAC_HOME_DIR,
+        home: ENVIRONMENT,
         version: '20.1.0',
         risk: risk,
       });
@@ -142,7 +232,7 @@ describeAwaitingWin32Platform('validateRemoval', () => {
     }
 
     const neverCandidate = buildTestToolCandidate({
-      homeDir: TEST_MAC_HOME_DIR,
+      home: ENVIRONMENT,
       version: '20.1.0',
       risk: 'never',
     });

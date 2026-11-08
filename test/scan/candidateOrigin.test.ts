@@ -1,15 +1,14 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { Advice } from '../../src/scan/candidate.js';
 import { buildItemKey } from '../../src/scan/candidateOrigin.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { buildTestMacBundleId } from '../support/parsedValueFixtures.js';
+import { buildExampleHome, buildTestMacBundleId } from '../support/parsedValueFixtures.js';
 
 const ADVICE: Advice = buildTestAdvice({
   origin: { kind: 'catalog', entryId: 'tool-store' },
@@ -19,7 +18,7 @@ const ADVICE: Advice = buildTestAdvice({
   allocatedBytes: 1,
 });
 
-describeAwaitingWin32Platform('buildItemKey', () => {
+describe('buildItemKey', () => {
   test('names an item by its source, the id that source knows it by, and its path', () => {
     expect<string[]>(
       [
@@ -51,11 +50,13 @@ describeAwaitingWin32Platform('buildItemKey', () => {
   });
 
   test('names a probed item by its probe and its unit', () => {
+    const home = buildExampleHome({ text: '/fixture' });
+
     expect<string[]>(
       [
-        buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0' }),
-        buildTestDartToolCandidate({ homeDir: '/fixture' }),
-        buildTestVscodeExtensionCandidate({ homeDir: '/fixture' }),
+        buildTestToolCandidate({ home: home, version: '20.1.0' }),
+        buildTestDartToolCandidate({ home: home }),
+        buildTestVscodeExtensionCandidate({ home: home }),
       ].map((candidate) => buildItemKey({ item: candidate })),
     ).toEqual([
       'explore:miseVersions:miseVersion:node@20.1.0',

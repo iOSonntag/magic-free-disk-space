@@ -1,6 +1,7 @@
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { compareDottedVersions } from '../compareDottedVersions.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
@@ -25,11 +26,11 @@ export function buildVagrantBoxFindings(params: {
   boxes: VagrantBox[];
   pathRules: PathRules;
   homeDir: AbsolutePath;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding[] {
   const activity = decideUnitActivity({
     facts: { kind: 'vagrant' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 
   return listOutdatedVagrantBoxes(params.boxes).map((outdated) => {

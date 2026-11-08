@@ -1,4 +1,5 @@
 import type { Result } from '../result.js';
+import { formatThrownError } from './formatThrownError.js';
 
 export type AllowedCommand = 'ps' | 'plutil' | 'xcode-select' | 'getconf';
 
@@ -98,7 +99,7 @@ function startCommand(params: {
 
     return { kind: 'succeeded', value: subprocess };
   } catch (error) {
-    return { kind: 'failed', failure: error instanceof Error ? error.message : String(error) };
+    return { kind: 'failed', failure: formatThrownError(error) };
   }
 }
 

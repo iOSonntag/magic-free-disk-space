@@ -6,17 +6,17 @@ import type {
   ProjectPinFileText,
   ProjectPins,
 } from '../../src/explore/projectPins/projectPins.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { Result } from '../../src/result.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
 /** A pin file whose text was read. */
 export function buildTestPinFileText(params: {
-  path: string;
+  path: AbsolutePath;
   kind: ProjectPinFileKind;
   text: string;
 }): ProjectPinFile {
   return {
-    path: buildTestAbsolutePath({ text: params.path }),
+    path: params.path,
     kind: params.kind,
     content: { kind: 'text', text: params.text },
   };
@@ -24,12 +24,12 @@ export function buildTestPinFileText(params: {
 
 /** The text of a pin file as a tool's pins hold it. */
 export function buildTestPinText(params: {
-  path: string;
+  path: AbsolutePath;
   kind: ProjectPinFileKind;
   text: string;
 }): ProjectPinFileText {
   return {
-    path: buildTestAbsolutePath({ text: params.path }),
+    path: params.path,
     kind: params.kind,
     text: params.text,
   };
@@ -37,11 +37,11 @@ export function buildTestPinText(params: {
 
 /** A pin file that is there but too large or no file. */
 export function buildTestPinFileUnfit(params: {
-  path: string;
+  path: AbsolutePath;
   kind: ProjectPinFileKind;
 }): ProjectPinFile {
   return {
-    path: buildTestAbsolutePath({ text: params.path }),
+    path: params.path,
     kind: params.kind,
     content: { kind: 'unfit' },
   };
@@ -49,11 +49,11 @@ export function buildTestPinFileUnfit(params: {
 
 /** A pin file whose read failed with `permissionDenied`. */
 export function buildTestPinFileUnreadable(params: {
-  path: string;
+  path: AbsolutePath;
   kind: ProjectPinFileKind;
 }): ProjectPinFile {
   return {
-    path: buildTestAbsolutePath({ text: params.path }),
+    path: params.path,
     kind: params.kind,
     content: { kind: 'unreadable', failure: { reason: 'permissionDenied', code: 'EACCES' } },
   };

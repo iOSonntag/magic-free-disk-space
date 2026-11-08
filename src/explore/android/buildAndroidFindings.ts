@@ -1,4 +1,8 @@
 import { basename } from 'node:path';
+import { formatHomeRelativePath } from '../../path/formatHomeRelativePath.js';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type {
@@ -9,6 +13,7 @@ import type {
 import { formatIsoDay } from '../formatLimitTexts.js';
 import type { AndroidPackageOffer, AndroidPackageOffers } from './decideAndroidPackageOffers.js';
 import type { AndroidAvdPresent, AndroidSdkState } from './loadAndroidSdkState.js';
+import { buildAndroidAvdHomePath } from './loadAndroidSdkState.js';
 
 const AVDS_ELSEWHERE_TEXT =
   'AVDs moved elsewhere, such as by `ANDROID_AVD_HOME`, are not seen here.';
@@ -34,7 +39,7 @@ export function buildAndroidAvdFindings(params: {
   state: AndroidSdkState;
   tool: LocatedTool;
   unusedCutoffMs: number;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   const avds = params.state.avds ?? [];
 
@@ -91,7 +96,7 @@ export function buildAndroidAvdFindings(params: {
       displayPath: avd.avdPath,
       activity: decideUnitActivity({
         facts: { kind: 'android' },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     });
   }
@@ -101,31 +106,54 @@ export function buildAndroidAvdFindings(params: {
 
 /** One finding for each system image folder that no AVD names. */
 export function buildAndroidSystemImageFindings(params: {
+  pathRules: PathRules;
+  homeDir: AbsolutePath;
   offers: AndroidPackageOffers;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
+  const avdHomeText = formatAndroidAvdHomeText({
+    pathRules: params.pathRules,
+    homeDir: params.homeDir,
+  });
+
   return buildAndroidPackageFindings({
     unitKind: 'androidSystemImage',
     buildTitle: (packagePath) => `Android system image ${packagePath}`,
-    explanation: `A system image of the Android SDK that no AVD in ~/.android/avd uses. ${AVDS_ELSEWHERE_TEXT} A deleted image downloads again when an AVD needs it.`,
+    explanation: `A system image of the Android SDK that no AVD in ${avdHomeText} uses. ${AVDS_ELSEWHERE_TEXT} A deleted image downloads again when an AVD needs it.`,
     firstEvidenceLine: 'No AVD uses this image.',
     offers: params.offers,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }
 
 /** The finding of the emulator package while no AVD exists. */
 export function buildAndroidEmulatorFindings(params: {
+  pathRules: PathRules;
+  homeDir: AbsolutePath;
   offers: AndroidPackageOffers;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
+  const avdHomeText = formatAndroidAvdHomeText({
+    pathRules: params.pathRules,
+    homeDir: params.homeDir,
+  });
+
   return buildAndroidPackageFindings({
     unitKind: 'androidEmulator',
     buildTitle: () => 'Android emulator package',
-    explanation: `The Android emulator of the SDK, which only runs AVDs, while ~/.android/avd holds none. ${AVDS_ELSEWHERE_TEXT} A deleted emulator downloads again when an AVD needs it.`,
-    firstEvidenceLine: 'No AVD exists in ~/.android/avd.',
+    explanation: `The Android emulator of the SDK, which only runs AVDs, while ${avdHomeText} holds none. ${AVDS_ELSEWHERE_TEXT} A deleted emulator downloads again when an AVD needs it.`,
+    firstEvidenceLine: `No AVD exists in ${avdHomeText}.`,
     offers: params.offers,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
+  });
+}
+
+/** The folder of the AVDs below the home folder, as `~/.android/avd` on macOS. */
+function formatAndroidAvdHomeText(params: { pathRules: PathRules; homeDir: AbsolutePath }): string {
+  return formatHomeRelativePath({
+    rules: params.pathRules,
+    path: buildAndroidAvdHomePath({ pathRules: params.pathRules, homeDir: params.homeDir }),
+    homeDir: params.homeDir,
   });
 }
 
@@ -136,11 +164,11 @@ function buildAndroidPackageFindings(params: {
   explanation: string;
   firstEvidenceLine: string;
   offers: AndroidPackageOffers;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   const activity = decideUnitActivity({
     facts: { kind: 'android' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
   const findings = params.offers.offers.map((offer) => {
     const finding: ExploreFinding = {

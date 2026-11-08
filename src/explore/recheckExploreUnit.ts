@@ -1,5 +1,6 @@
 import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { recheckAndroidAvdUnit } from './android/recheckAndroidAvdUnit.js';
 import { recheckAndroidPackageUnit } from './android/recheckAndroidPackageUnit.js';
@@ -52,7 +53,7 @@ export async function recheckExploreUnit(params: {
   tool: LocatedTool;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   timeoutMs: number;
 }): Promise<UnitRecheck> {
   const run: ExploreUnitRecheckRun = {
@@ -60,12 +61,15 @@ export async function recheckExploreUnit(params: {
     environment: params.environment,
     platform: params.platform,
     deadlineMs: Date.now() + params.timeoutMs,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   };
 
   switch (params.unit.kind) {
     case 'simulatorDevice': {
-      const devices = await loadProbeOutput({ ...run, probe: SIMULATOR_DEVICE_LIST_PROBE });
+      const devices = await loadProbeOutput({
+        probe: SIMULATOR_DEVICE_LIST_PROBE,
+        ...run,
+      });
 
       if (devices.kind === 'failed') {
         return devices;
@@ -74,11 +78,14 @@ export async function recheckExploreUnit(params: {
       return compareSimulatorDevice({
         unit: params.unit,
         devices: devices.value,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     }
     case 'dartPubCache': {
-      const gcPaths = await loadProbeOutput({ ...run, probe: DART_PUB_CACHE_GC_DRY_RUN_PROBE });
+      const gcPaths = await loadProbeOutput({
+        probe: DART_PUB_CACHE_GC_DRY_RUN_PROBE,
+        ...run,
+      });
 
       if (gcPaths.kind === 'failed') {
         return gcPaths;
@@ -87,11 +94,14 @@ export async function recheckExploreUnit(params: {
       return compareDartPubCache({
         unit: params.unit,
         gcPaths: gcPaths.value,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     }
     case 'miseVersion': {
-      const versions = await loadProbeOutput({ ...run, probe: MISE_PRUNABLE_LIST_PROBE });
+      const versions = await loadProbeOutput({
+        probe: MISE_PRUNABLE_LIST_PROBE,
+        ...run,
+      });
 
       if (versions.kind === 'failed') {
         return versions;
@@ -100,7 +110,7 @@ export async function recheckExploreUnit(params: {
       return compareMiseVersion({
         unit: params.unit,
         versions: versions.value,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     }
     case 'simulatorRuntime':
@@ -130,7 +140,7 @@ export async function recheckExplorePathUnit(params: {
   unit: ExplorePathUnit;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   switch (params.unit.kind) {
     case 'androidSystemImage':
@@ -138,8 +148,8 @@ export async function recheckExplorePathUnit(params: {
       return recheckAndroidPackageUnit({ ...params, unit: params.unit });
     case 'vscodeExtension': {
       const state = await loadVscodeExtensionState({
-        pathRules: params.environment.pathRules,
-        homeDir: params.environment.homeDir,
+        environment: params.environment,
+        profilesRoot: params.platform.explore.vscodeProfilesRoot,
         privacyDenialCode: params.platform.privacyDenialCode,
       });
 
@@ -150,7 +160,7 @@ export async function recheckExplorePathUnit(params: {
       return compareVscodeExtensionUnit({
         unit: params.unit,
         state: state.value,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     }
     case 'nvmVersion':
@@ -187,7 +197,7 @@ export async function recheckExplorePathUnit(params: {
 export function compareSimulatorDevice(params: {
   unit: ExploreToolUnitSimulatorDevice;
   devices: SimulatorDevice[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const device = params.devices.find((listed) => listed.udid === params.unit.udid);
 
@@ -201,7 +211,7 @@ export function compareSimulatorDevice(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'simulatorDevice', state: device.state },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }
 
@@ -209,7 +219,7 @@ export function compareSimulatorDevice(params: {
 export function compareDartPubCache(params: {
   unit: ExploreToolUnitDartPubCache;
   gcPaths: AbsolutePath[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const scannedPaths = new Set(params.unit.gcPaths);
 
@@ -222,7 +232,7 @@ export function compareDartPubCache(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'dartPubCache' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }
 
@@ -230,7 +240,7 @@ export function compareDartPubCache(params: {
 export function compareMiseVersion(params: {
   unit: ExploreToolUnitMiseVersion;
   versions: MisePrunableVersion[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const stillPrunable = params.versions.some(
     (version) =>
@@ -245,6 +255,6 @@ export function compareMiseVersion(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'miseVersion' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

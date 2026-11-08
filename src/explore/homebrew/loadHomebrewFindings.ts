@@ -18,7 +18,7 @@ export async function loadHomebrewFindings(
   const probeFindings = buildHomebrewFindings({
     tool: run.tool,
     state: state.value,
-    processCommands: run.processCommands,
+    runningProcesses: run.runningProcesses,
   });
 
   return { kind: 'succeeded', value: probeFindings };

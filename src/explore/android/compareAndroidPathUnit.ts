@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitAndroidPackage } from '../exploreUnit.js';
@@ -15,7 +16,7 @@ import type { AndroidSdkState } from './loadAndroidSdkState.js';
 export function compareAndroidPathUnit(params: {
   unit: ExplorePathUnitAndroidPackage;
   state: AndroidSdkState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const offers = decideAndroidPathUnitOffers({ unit: params.unit, state: params.state });
   const isStillOffered = offers.offers.some(
@@ -28,7 +29,7 @@ export function compareAndroidPathUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'android' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }
 

@@ -21,12 +21,13 @@ import { parseOllamaModelName } from '../../src/explore/ollamaModels/parseOllama
 import { recheckOllamaModelUnit } from '../../src/explore/ollamaModels/recheckOllamaModelUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import {
   createFixtureFile,
   updateModifiedMs,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import type { HomeFolder } from '../support/parsedValueFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
@@ -35,6 +36,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 
@@ -57,23 +59,32 @@ const DIGESTS = {
 
 const VALUE_MODELS_PATH = '/models';
 
+/**
+ * The findings of the probe. No process runs unless `runningProcesses` names one, listed by command
+ * line on every host, since only macOS explores Ollama models.
+ */
 async function loadFindings(params: {
   environment: Environment;
-  processCommands?: string[] | null;
+  runningProcesses?: RunningProcesses;
 }): Promise<ExploreProbeFindings> {
-  return getProbeFindings(await loadOllamaModelFindings(buildTestProbeRun(params)));
+  const probeRun = buildTestProbeRun({
+    environment: params.environment,
+    runningProcesses: params.runningProcesses ?? buildRunningCommandLines([]),
+  });
+
+  return getProbeFindings(await loadOllamaModelFindings(probeRun));
 }
 
-function buildModelsPath(params: { environment: Environment }): string {
-  return join(params.environment.homeDir, '.ollama', 'models');
+function buildModelsPath(params: { home: HomeFolder }): string {
+  return join(params.home.homeDir, '.ollama', 'models');
 }
 
-function buildBlobPath(params: { environment: Environment; hex: string }): string {
+function buildBlobPath(params: { home: HomeFolder; hex: string }): string {
   return join(buildModelsPath(params), 'blobs', `sha256-${params.hex}`);
 }
 
 /** The manifest of a tag of the model `llama3` in Ollama's own library. */
-function buildManifestPath(params: { environment: Environment; tag: string }): string {
+function buildManifestPath(params: { home: HomeFolder; tag: string }): string {
   return join(buildModelsPath(params), ...LIBRARY_PATH_NAMES, MODEL, params.tag);
 }
 
@@ -88,7 +99,7 @@ function buildManifestText(params: { configHex: string; layerHexes: string[] }):
 
 /** Writes the manifest of a tag, written at `MANIFEST_MODIFIED_MS`. */
 async function writeManifest(params: {
-  environment: Environment;
+  home: HomeFolder;
   tag: string;
   configHex: string;
   layerHexes: string[];
@@ -99,10 +110,10 @@ async function writeManifest(params: {
   await updateModifiedMs({ path: path, modifiedMs: MANIFEST_MODIFIED_MS });
 }
 
-async function writeBlobs(params: { environment: Environment; hexes: string[] }): Promise<void> {
+async function writeBlobs(params: { home: HomeFolder; hexes: string[] }): Promise<void> {
   for (const hex of params.hexes) {
     await createFixtureFile({
-      path: buildBlobPath({ environment: params.environment, hex: hex }),
+      path: buildBlobPath({ home: params.home, hex: hex }),
       sizeBytes: 4096,
       modifiedMs: BLOB_MODIFIED_MS,
     });
@@ -110,19 +121,19 @@ async function writeBlobs(params: { environment: Environment; hexes: string[] })
 }
 
 /** Two tags of one model that share a layer: `latest` and `small`. */
-async function createTwoModels(params: { environment: Environment }): Promise<void> {
+async function createTwoModels(params: { home: HomeFolder }): Promise<void> {
   await writeBlobs({
-    environment: params.environment,
+    home: params.home,
     hexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.smallConfig, DIGESTS.shared],
   });
   await writeManifest({
-    environment: params.environment,
+    home: params.home,
     tag: 'latest',
     configHex: DIGESTS.latestConfig,
     layerHexes: [DIGESTS.latestWeights, DIGESTS.shared],
   });
   await writeManifest({
-    environment: params.environment,
+    home: params.home,
     tag: 'small',
     configHex: DIGESTS.smallConfig,
     layerHexes: [DIGESTS.shared],
@@ -148,13 +159,13 @@ function getModelUnit(params: {
 function recheck(params: {
   unit: ExplorePathUnitOllamaModel;
   environment: Environment;
-  processCommands: string[] | null;
+  commandLines: string[] | null;
 }): Promise<PathUnitRecheck> {
   return recheckOllamaModelUnit({
     unit: params.unit,
     environment: params.environment,
     platform: buildTestProbePlatform(),
-    processCommands: params.processCommands,
+    runningProcesses: buildRunningCommandLines(params.commandLines),
   });
 }
 
@@ -271,7 +282,10 @@ describe('compareOllamaModelUnit', () => {
     manifests: [latest, small],
     blobHexes: [DIGESTS.latestConfig, DIGESTS.latestWeights, DIGESTS.smallConfig, DIGESTS.shared],
   });
-  const scannedFindings = buildOllamaModelFindings({ state: scanned, processCommands: [] });
+  const scannedFindings = buildOllamaModelFindings({
+    state: scanned,
+    runningProcesses: buildRunningCommandLines([]),
+  });
 
   test('is unchanged once the model it shared a blob with is gone, so the blob is its own', () => {
     const afterLatest = buildValueState({
@@ -283,7 +297,7 @@ describe('compareOllamaModelUnit', () => {
       compareOllamaModelUnit({
         unit: getModelUnit({ findings: scannedFindings, manifestPath: small.path }),
         state: afterLatest,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -304,7 +318,7 @@ describe('compareOllamaModelUnit', () => {
             DIGESTS.extra,
           ],
         }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -324,7 +338,7 @@ describe('compareOllamaModelUnit', () => {
             DIGESTS.shared,
           ],
         }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -334,7 +348,7 @@ describe('compareOllamaModelUnit', () => {
       compareOllamaModelUnit({
         unit: getModelUnit({ findings: scannedFindings, manifestPath: latest.path }),
         state: scanned,
-        processCommands: ['ollama run llama3'],
+        runningProcesses: buildRunningCommandLines(['ollama run llama3']),
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -383,23 +397,23 @@ describe('formatOllamaModelName', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
+describe('loadOllamaModelFindings', () => {
   test('offers each model with only the blobs no other manifest names', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const probed = await loadFindings({ environment: environment });
         const latest = getModelUnit({
           findings: probed,
-          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'latest' }),
         });
         const small = getModelUnit({
           findings: probed,
-          manifestPath: buildManifestPath({ environment: environment, tag: 'small' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'small' }),
         });
 
         expect(probed.isComplete).toBe(true);
@@ -411,15 +425,15 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
         expect(latest.downloadedAtMs).toBe(MANIFEST_MODIFIED_MS);
         expect<string[]>([...latest.foundPaths].toSorted()).toEqual(
           [
-            buildManifestPath({ environment: environment, tag: 'latest' }),
-            buildBlobPath({ environment: environment, hex: DIGESTS.latestConfig }),
-            buildBlobPath({ environment: environment, hex: DIGESTS.latestWeights }),
+            buildManifestPath({ home: environment, tag: 'latest' }),
+            buildBlobPath({ home: environment, hex: DIGESTS.latestConfig }),
+            buildBlobPath({ home: environment, hex: DIGESTS.latestWeights }),
           ].toSorted(),
         );
         expect<string[]>([...small.foundPaths].toSorted()).toEqual(
           [
-            buildManifestPath({ environment: environment, tag: 'small' }),
-            buildBlobPath({ environment: environment, hex: DIGESTS.smallConfig }),
+            buildManifestPath({ home: environment, tag: 'small' }),
+            buildBlobPath({ home: environment, hex: DIGESTS.smallConfig }),
           ].toSorted(),
         );
       },
@@ -432,9 +446,9 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
         await writeFixtureTextFile({
-          path: buildManifestPath({ environment: environment, tag: 'broken' }),
+          path: buildManifestPath({ home: environment, tag: 'broken' }),
           text: '{',
         });
 
@@ -452,9 +466,9 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
         await writeFixtureTextFile({
-          path: join(buildModelsPath({ environment: environment }), 'manifests', 'stray'),
+          path: join(buildModelsPath({ home: environment }), 'manifests', 'stray'),
           text: buildManifestText({ configHex: DIGESTS.latestWeights, layerHexes: [] }),
         });
 
@@ -486,11 +500,13 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const probed = await loadFindings({
           environment: environment,
-          processCommands: ['/Applications/Ollama.app/Contents/Resources/ollama serve'],
+          runningProcesses: buildRunningCommandLines([
+            '/Applications/Ollama.app/Contents/Resources/ollama serve',
+          ]),
         });
 
         expect(probed.findings.map((finding) => finding.activity)).toEqual(['busy', 'busy']);
@@ -499,25 +515,29 @@ describeAwaitingWin32Platform('loadOllamaModelFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
+describe('recheckOllamaModelUnit', () => {
   test('is unchanged while the model keeps its blobs, and busy while Ollama runs', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const unit = getModelUnit({
           findings: await loadFindings({ environment: environment }),
-          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'latest' }),
         });
 
+        expect(await recheck({ unit: unit, environment: environment, commandLines: [] })).toEqual({
+          kind: 'unchanged',
+        });
         expect(
-          await recheck({ unit: unit, environment: environment, processCommands: [] }),
-        ).toEqual({ kind: 'unchanged' });
-        expect(
-          await recheck({ unit: unit, environment: environment, processCommands: null }),
+          await recheck({
+            unit: unit,
+            environment: environment,
+            commandLines: null,
+          }),
         ).toEqual({ kind: 'busy' });
       },
     });
@@ -529,24 +549,24 @@ describeAwaitingWin32Platform('recheckOllamaModelUnit', () => {
       run: async (home) => {
         const environment = home.environment;
 
-        await createTwoModels({ environment: environment });
+        await createTwoModels({ home: environment });
 
         const unit = getModelUnit({
           findings: await loadFindings({ environment: environment }),
-          manifestPath: buildManifestPath({ environment: environment, tag: 'latest' }),
+          manifestPath: buildManifestPath({ home: environment, tag: 'latest' }),
         });
 
-        await writeBlobs({ environment: environment, hexes: [DIGESTS.extra] });
+        await writeBlobs({ home: environment, hexes: [DIGESTS.extra] });
         await writeManifest({
-          environment: environment,
+          home: environment,
           tag: 'copy',
           configHex: DIGESTS.extra,
           layerHexes: [DIGESTS.latestWeights],
         });
 
-        expect(
-          await recheck({ unit: unit, environment: environment, processCommands: [] }),
-        ).toEqual({ kind: 'changed' });
+        expect(await recheck({ unit: unit, environment: environment, commandLines: [] })).toEqual({
+          kind: 'changed',
+        });
       },
     });
   });

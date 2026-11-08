@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -12,17 +12,18 @@ import type { SimulatorRuntimeState } from '../../src/explore/simulatorRuntimes/
 import { parseSimulatorRuntimeList } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeList.js';
 import { compareSimulatorRuntime } from '../../src/explore/simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { describeWithFakeTools } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import type { ProbeFakeAnswer } from './probeFakeTools.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -54,11 +55,11 @@ const tool: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 
 function parseFixtureState(): SimulatorRuntimeState {
   const runtimes = parseSimulatorRuntimeList({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     stdoutText: buildSimulatorRuntimeListJson(),
   });
   const devices = parseSimulatorDeviceList({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     stdoutText: buildSimulatorDeviceListJson({ homeDir: FIXTURE_HOME_DIR }),
   });
 
@@ -91,7 +92,7 @@ function buildWorkingAnswers(params: { homeDir: string }): ProbeFakeAnswer[] {
   ];
 }
 
-describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
+describe('parseSimulatorRuntimeList', () => {
   test('reads each runtime with its id, identifier, image, and last use', () => {
     const state = parseFixtureState();
 
@@ -114,7 +115,7 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
   });
 
   test('reads an empty list', () => {
-    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '{}' })).toEqual({
+    expect(parseSimulatorRuntimeList({ pathRules: POSIX_PATH_RULES, stdoutText: '{}' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -122,9 +123,9 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
 
   test('rejects text that is no JSON object', () => {
     expect(
-      parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+      parseSimulatorRuntimeList({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage' }).kind,
     ).toBe('failed');
-    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '[]' }).kind).toBe(
+    expect(parseSimulatorRuntimeList({ pathRules: POSIX_PATH_RULES, stdoutText: '[]' }).kind).toBe(
       'failed',
     );
   });
@@ -141,7 +142,7 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
 
       expect(
         parseSimulatorRuntimeList({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: POSIX_PATH_RULES,
           stdoutText: JSON.stringify({ [runtimeId]: entry }),
         }).kind,
       ).toBe('failed');
@@ -161,7 +162,7 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
     for (const value of [entry, relativeEntry]) {
       expect(
         parseSimulatorRuntimeList({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: POSIX_PATH_RULES,
           stdoutText: JSON.stringify({ [OFFERED_RUNTIME_ID]: value }),
         }).kind,
       ).toBe('failed');
@@ -169,13 +170,13 @@ describeAwaitingWin32Platform('parseSimulatorRuntimeList', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
+describe('buildSimulatorRuntimeFindings', () => {
   test('offers only the deletable runtime unused since the cutoff that no available device runs on', () => {
     const findings = buildSimulatorRuntimeFindings({
       tool: tool,
       state: parseFixtureState(),
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(findings.map((finding) => finding.unit)).toEqual([buildOfferedUnit({ tool: tool })]);
@@ -192,7 +193,7 @@ describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
       tool: tool,
       state: { runtimes: state.runtimes, devices: devices },
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(findings.map((finding) => finding.unit)).toMatchObject([
@@ -206,7 +207,7 @@ describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
       tool: tool,
       state: parseFixtureState(),
       unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(finding?.title).toBe('iOS 17.0 simulator runtime');
@@ -219,12 +220,16 @@ describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
   });
 
   test('is busy while Simulator.app runs, and unknown without the processes', () => {
-    const activities = [[SIMULATOR_APP_COMMAND], [], null].map((processCommands) =>
+    const activities = [
+      buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
+      buildRunningCommandLines([]),
+      null,
+    ].map((runningProcesses) =>
       buildSimulatorRuntimeFindings({
         tool: tool,
         state: parseFixtureState(),
         unusedCutoffMs: RUNTIME_UNUSED_CUTOFF_MS,
-        processCommands: processCommands,
+        runningProcesses: runningProcesses,
       }).map((finding) => finding.activity),
     );
 
@@ -232,23 +237,27 @@ describeAwaitingWin32Platform('buildSimulatorRuntimeFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
+describe('compareSimulatorRuntime', () => {
   const unit = buildOfferedUnit({ tool: tool });
 
   test('answers unchanged, and busy while Simulator.app runs or the processes are unknown', () => {
     const state = parseFixtureState();
 
-    expect(compareSimulatorRuntime({ unit: unit, state: state, processCommands: [] })).toEqual({
-      kind: 'unchanged',
-    });
     expect(
       compareSimulatorRuntime({
         unit: unit,
         state: state,
-        processCommands: [SIMULATOR_APP_COMMAND],
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({ kind: 'unchanged' });
+    expect(
+      compareSimulatorRuntime({
+        unit: unit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
-    expect(compareSimulatorRuntime({ unit: unit, state: state, processCommands: null })).toEqual({
+    expect(compareSimulatorRuntime({ unit: unit, state: state, runningProcesses: null })).toEqual({
       kind: 'busy',
     });
   });
@@ -273,7 +282,11 @@ describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
 
     for (const changedState of changedStates) {
       expect(
-        compareSimulatorRuntime({ unit: unit, state: changedState, processCommands: [] }),
+        compareSimulatorRuntime({
+          unit: unit,
+          state: changedState,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
@@ -290,7 +303,7 @@ describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
       compareSimulatorRuntime({
         unit: unit,
         state: { runtimes: state.runtimes, devices: devices },
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -306,12 +319,16 @@ describeAwaitingWin32Platform('compareSimulatorRuntime', () => {
     };
 
     expect(
-      compareSimulatorRuntime({ unit: recentUnit, state: state, processCommands: [] }),
+      compareSimulatorRuntime({
+        unit: recentUnit,
+        state: state,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
     ).toEqual({ kind: 'unchanged' });
   });
 });
 
-describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', () => {
+describeWithFakeTools('the simulator runtime probe with a fake xcrun', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -409,7 +426,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       tool: xcrun,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     };
 
@@ -418,7 +435,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       await recheckExploreUnit({
         ...recheck,
         unit: unit,
-        processCommands: [SIMULATOR_APP_COMMAND],
+        runningProcesses: buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
@@ -442,7 +459,7 @@ describeAwaitingWin32Platform('the simulator runtime probe with a fake xcrun', (
       tool: failing,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     });
 

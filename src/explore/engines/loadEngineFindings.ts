@@ -1,5 +1,6 @@
 import type { EngineProbeId } from '../../catalog/catalog.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
@@ -9,7 +10,6 @@ import type {
   ContainerEngine,
   ContainerEngineFixed,
   ContainerEngineProfiles,
-  HomeRelativePathNames,
 } from '../explorePlatform.js';
 import type {
   ExploreEngineFailure,
@@ -29,16 +29,20 @@ type EngineSocket = { socketPath: AbsolutePath; diskImagePath: AbsolutePath };
 const ENGINE_FOLDER_PREFIX = '_';
 
 /**
- * Asks each instance of the engine over its socket, trusted by `requestUnixSocket`, and judges its
- * images, containers, volumes and build cache. An instance whose socket is missing or untrusted is
- * skipped quietly; one that answers not as asked leaves the findings incomplete, and fails the
- * probe when no instance answered. Never rejects.
+ * Judges each instance's images, containers, volumes and build cache over its socket, trusted by
+ * `requestUnixSocket`. A missing or untrusted socket is skipped quietly; an answer not as asked
+ * leaves the findings incomplete, and fails the probe when none answered. Never rejects.
  */
 export async function loadEngineFindings(params: {
   run: ExploreProbeRun;
   engineProbeId: EngineProbeId;
-  engine: ContainerEngine;
+  /** The platform's engine; `null` where it has none, so the probe fails as `socketMissing`. */
+  engine: ContainerEngine | null;
 }): Promise<ExploreProbeEngineResult> {
+  if (params.engine === null) {
+    return { kind: 'failed', failure: { kind: 'socketMissing' } };
+  }
+
   const sockets = await loadEngineSockets({
     environment: params.run.environment,
     engine: params.engine,
@@ -128,7 +132,7 @@ async function loadSocketFindings(params: {
     },
     usage: state.value.usage,
     nowMs: params.run.environment.nowMs,
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 
   return { kind: 'succeeded', value: { findings: findings, isComplete: true } };
@@ -151,16 +155,19 @@ async function loadFixedEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngineFixed;
 }): Promise<EngineSocket[]> {
-  for (const pathNames of params.engine.socketPaths) {
-    const socketPath = resolveHomePath({ environment: params.environment, pathNames: pathNames });
+  for (const socketLocation of params.engine.socketPaths) {
+    const socketPath = resolveEnvironmentLocation({
+      folders: params.environment,
+      location: socketLocation,
+    });
 
     if (await isPathPresent({ path: socketPath })) {
       return [
         {
           socketPath: socketPath,
-          diskImagePath: resolveHomePath({
-            environment: params.environment,
-            pathNames: params.engine.diskImagePath,
+          diskImagePath: resolveEnvironmentLocation({
+            folders: params.environment,
+            location: params.engine.diskImagePath,
           }),
         },
       ];
@@ -178,12 +185,11 @@ async function loadProfileEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngineProfiles;
 }): Promise<EngineSocket[]> {
-  const entries = await loadDirectoryEntries({
-    path: resolveHomePath({
-      environment: params.environment,
-      pathNames: params.engine.profilesRoot,
-    }),
+  const profilesRootPath = resolveEnvironmentLocation({
+    folders: params.environment,
+    location: params.engine.profilesRoot,
   });
+  const entries = await loadDirectoryEntries({ path: profilesRootPath });
 
   if (entries.kind === 'failed') {
     switch (entries.failure.reason) {
@@ -207,17 +213,18 @@ async function loadProfileEngineSockets(params: {
   const sockets: EngineSocket[] = [];
 
   for (const profileName of profileNames) {
-    const socketPath = resolveHomePath({
-      environment: params.environment,
-      pathNames: [...params.engine.profilesRoot, profileName, params.engine.socketName],
+    const socketPath = joinAbsolutePath({
+      rules: params.environment.pathRules,
+      parentPath: profilesRootPath,
+      names: [profileName, params.engine.socketName],
     });
 
     if (await isPathPresent({ path: socketPath })) {
       sockets.push({
         socketPath: socketPath,
-        diskImagePath: resolveHomePath({
-          environment: params.environment,
-          pathNames: params.engine.buildDiskImagePath(profileName),
+        diskImagePath: resolveEnvironmentLocation({
+          folders: params.environment,
+          location: params.engine.buildDiskImagePath(profileName),
         }),
       });
     }
@@ -234,15 +241,4 @@ async function isPathPresent(params: { path: AbsolutePath }): Promise<boolean> {
   const stats = await loadEntryStats({ path: params.path });
 
   return stats.kind === 'succeeded' || stats.failure.reason !== 'missing';
-}
-
-function resolveHomePath(params: {
-  environment: Environment;
-  pathNames: HomeRelativePathNames;
-}): AbsolutePath {
-  return joinAbsolutePath({
-    rules: params.environment.pathRules,
-    parentPath: params.environment.homeDir,
-    names: params.pathNames,
-  });
 }

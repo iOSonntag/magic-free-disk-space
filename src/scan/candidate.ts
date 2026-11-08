@@ -1,16 +1,20 @@
 import type { AdviceOpener, CandidateCategory, Risk } from '../catalog/catalog.js';
+import type { WindowsImageName } from '../catalog/catalogOwner.js';
 import type {
   ExploreEngineUnit,
   ExploreEvictUnit,
   ExplorePathUnit,
   ExploreToolUnit,
 } from '../explore/exploreUnit.js';
+import type { DriveRoot } from '../path/driveRoot.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import type {
   CandidateOrigin,
   CandidateOriginApplication,
   CandidateOriginCatalog,
   CandidateOriginExplore,
+  CandidateOriginRecycleBin,
 } from './candidateOrigin.js';
 import type { Measurement } from './loadPathMeasurement.js';
 
@@ -42,12 +46,44 @@ export function hasSymbolicLinkTarget(measurement: TargetsMeasurement): boolean 
 /** An evict also needs "still downloaded and untouched": its recheck compares these with a fresh lstat. */
 export type EvictTarget = RemovalTarget & { modifiedMs: number; accessedMs: number };
 
+/** No program owns the item, so no running process withholds it. */
+type RemovalOwnerNone = { kind: 'none' };
+
+/** The macOS app bundles whose running process withholds the item; none withholds nothing. */
+export type RemovalOwnerBundles = { kind: 'bundles'; bundlePaths: string[] };
+
+/**
+ * The Windows program whose running process withholds the item: a process whose image lies in
+ * its install folder, or carries one of its image names.
+ */
+export type RemovalOwnerExecutable = {
+  kind: 'executable';
+  imageNames: [WindowsImageName, ...WindowsImageName[]];
+  /** `null` when its install folder is unknown, so only the image names tell. */
+  installFolderPath: AbsolutePath | null;
+};
+
+/** The owner of an item, checked again right before its deletion. */
+export type RemovalOwner = RemovalOwnerNone | RemovalOwnerBundles | RemovalOwnerExecutable;
+
 /** Deleted as its targets, each only while its identity still matches the scan. */
 export type CandidateRemovalDeletePaths = {
   kind: 'deletePaths';
   targets: RemovalTargets<RemovalTarget>;
-  /** App bundles whose running process withholds the item, checked again right before deletion. */
-  ownerBundlePaths: string[];
+  owner: RemovalOwner;
+};
+
+/** What the Recycle Bin of one drive holds, as the system counts it. */
+export type RecycleBinContent = { sizeBytes: number; itemCount: number };
+
+/**
+ * The Recycle Bin of one drive, emptied as one unit by the system, only while what it holds still
+ * matches the scan: emptying a bin that gained items would delete files the user never saw.
+ */
+export type CandidateRemovalEmptyRecycleBin = {
+  kind: 'emptyRecycleBin';
+  driveRoot: DriveRoot;
+  scannedContent: RecycleBinContent;
 };
 
 /** Removed by the command of the unit's own tool, after the unit is checked again. */
@@ -80,7 +116,10 @@ export type CandidateRemovalProbed =
   | CandidateRemovalEvictUnitFiles
   | CandidateRemovalCallEngine;
 
-export type CandidateRemoval = CandidateRemovalDeletePaths | CandidateRemovalProbed;
+export type CandidateRemoval =
+  | CandidateRemovalDeletePaths
+  | CandidateRemovalProbed
+  | CandidateRemovalEmptyRecycleBin;
 
 /** What an item is and what it holds, the same for every origin. */
 export type CandidateListing = {
@@ -110,7 +149,7 @@ export type CandidateListing = {
 
 /** An item a rule matched to paths on disk, deleted as those paths. */
 export type CandidateMatched = CandidateListing & {
-  origin: Exclude<CandidateOrigin, CandidateOriginExplore>;
+  origin: Exclude<CandidateOrigin, CandidateOriginExplore | CandidateOriginRecycleBin>;
   removal: CandidateRemovalDeletePaths;
 };
 
@@ -125,7 +164,13 @@ export type CandidateProbed = CandidateListing & {
   evidenceLines: string[];
 };
 
-export type Candidate = CandidateMatched | CandidateProbed;
+/** The Recycle Bin of one fixed drive, with the bin's folder at the drive root as its path. */
+export type CandidateRecycleBin = CandidateListing & {
+  origin: CandidateOriginRecycleBin;
+  removal: CandidateRemovalEmptyRecycleBin;
+};
+
+export type Candidate = CandidateMatched | CandidateProbed | CandidateRecycleBin;
 
 export type Advice = {
   /**

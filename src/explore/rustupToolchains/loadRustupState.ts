@@ -28,9 +28,7 @@ export async function loadRustupState(params: {
 }): Promise<Result<RustupState, ExploreProbeFailure>> {
   const listed = await loadProbeOutput({
     probe: RUSTUP_TOOLCHAIN_LIST_PROBE,
-    tool: params.run.tool,
-    environment: params.run.environment,
-    deadlineMs: params.run.deadlineMs,
+    ...params.run,
   });
 
   if (listed.kind === 'failed') {
@@ -39,9 +37,7 @@ export async function loadRustupState(params: {
 
   const overrideNames = await loadProbeOutput({
     probe: RUSTUP_OVERRIDE_LIST_PROBE,
-    tool: params.run.tool,
-    environment: params.run.environment,
-    deadlineMs: params.run.deadlineMs,
+    ...params.run,
   });
 
   if (overrideNames.kind === 'failed') {

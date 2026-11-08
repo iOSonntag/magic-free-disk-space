@@ -1,12 +1,13 @@
-import { posix } from 'node:path';
+import { posix, win32 } from 'node:path';
+import type { Result } from '../result.js';
 import type { AbsolutePath } from './parseAbsolutePath.js';
 import { parseAbsolutePath } from './parseAbsolutePath.js';
 import type { PathRules } from './pathRules.js';
 
 /**
  * The path of `names` below `parentPath`, one folder level per name. Throws for a name that is
- * empty, `.`, or `..`, or holds the separator of `rules`, since such a name is no entry of its
- * parent.
+ * empty, `.`, or `..`, or holds a separator of `rules` (on Windows either `\` or `/`), since such a
+ * name is no entry of its parent.
  */
 export function joinAbsolutePath(params: {
   rules: PathRules;
@@ -14,18 +15,19 @@ export function joinAbsolutePath(params: {
   names: string[];
 }): AbsolutePath {
   for (const name of params.names) {
-    if (name === '' || name === '.' || name === '..' || name.includes(params.rules.separator)) {
+    if (
+      name === '' ||
+      name === '.' ||
+      name === '..' ||
+      getNameSeparatorPattern(params.rules).test(name)
+    ) {
       throw new Error(`"${name}" is no entry name to join below a folder.`);
     }
   }
 
   const path = parseAbsolutePath({
     rules: params.rules,
-    text: joinUnderRules({
-      rules: params.rules,
-      parentPath: params.parentPath,
-      names: params.names,
-    }),
+    text: selectPathModule(params.rules).join(params.parentPath, ...params.names),
   });
 
   if (path.kind === 'failed') {
@@ -35,13 +37,53 @@ export function joinAbsolutePath(params: {
   return path.value;
 }
 
-function joinUnderRules(params: {
+/**
+ * The path `text` names from `basePath`, as the platform's rules resolve it and never the host's:
+ * a relative text below the base, an absolute one as it is. Fails as `parseAbsolutePath` does.
+ */
+export function resolveAbsolutePath(params: {
   rules: PathRules;
-  parentPath: AbsolutePath;
-  names: string[];
-}): string {
-  switch (params.rules.rootForm) {
+  basePath: AbsolutePath;
+  text: string;
+}): Result<AbsolutePath, 'not an absolute path'> {
+  return parseAbsolutePath({
+    rules: params.rules,
+    text: selectPathModule(params.rules).resolve(params.basePath, params.text),
+  });
+}
+
+/**
+ * The names of `path` in order, each between two separators of `rules` (on Windows either `\` or
+ * `/`), without the empty ones a leading, doubled, or trailing separator leaves.
+ */
+export function listPathNames(params: { rules: PathRules; path: string }): string[] {
+  return params.path.split(getNameSeparatorPattern(params.rules)).filter((name) => name !== '');
+}
+
+/**
+ * Whether `text` stands as the platform's rules normalize it, never the host's: with no `.` or `..`
+ * name and no doubled separator, and on Windows with `\` alone.
+ */
+export function isNormalPath(params: { rules: PathRules; text: string }): boolean {
+  return selectPathModule(params.rules).normalize(params.text) === params.text;
+}
+
+/** What separates two names of a path: Windows takes `/` as well as its own `\`. */
+function getNameSeparatorPattern(rules: PathRules): RegExp {
+  switch (rules.rootForm) {
     case 'posix':
-      return posix.join(params.parentPath, ...params.names);
+      return /\//;
+    case 'win32':
+      return /[\\/]/;
+  }
+}
+
+/** The path functions of the platform the rules are of, never the host's. */
+function selectPathModule(rules: PathRules): typeof posix {
+  switch (rules.rootForm) {
+    case 'posix':
+      return posix;
+    case 'win32':
+      return win32;
   }
 }

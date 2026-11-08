@@ -1,19 +1,18 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogEntry, CatalogSelectionProfileFolders } from '../../src/catalog/catalog.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { findProfileFolderTargets } from '../../src/scan/findProfileFolderTargets.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import {
   createFixtureDirectory,
   withFixtureRoot,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
-const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = hostPlatform.system.privacyDenialCode;
 
 const SELECTION: CatalogSelectionProfileFolders = {
   kind: 'profileFolders',
@@ -36,7 +35,7 @@ async function createFakeProfile(params: {
   }
 }
 
-describeAwaitingWin32Platform('findProfileFolderTargets', () => {
+describe('findProfileFolderTargets', () => {
   test('gives one item per profile, its targets the subpaths that exist in it', async () => {
     await withFixtureRoot({
       run: async (fixtureRoot) => {

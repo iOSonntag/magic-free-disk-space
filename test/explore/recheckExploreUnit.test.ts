@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -15,7 +15,6 @@ import {
 } from '../../src/explore/recheckExploreUnit.js';
 import type { SimulatorDevice } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -27,7 +26,9 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
+import { describeWithFakeTools } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import type { ProbeCommandName } from './probeFakeTools.js';
 import { createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -99,13 +100,13 @@ const miseUnit: ExploreToolUnitMiseVersion = {
   installPath: nodeInstallPath,
 };
 
-describeAwaitingWin32Platform('compareSimulatorDevice', () => {
+describe('compareSimulatorDevice', () => {
   test('is unchanged while the device is still listed and offered', () => {
     expect(
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [unavailableDevice],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -122,7 +123,11 @@ describeAwaitingWin32Platform('compareSimulatorDevice', () => {
       [{ ...unavailableDevice, isAvailable: true }],
     ]) {
       expect(
-        compareSimulatorDevice({ unit: deviceUnit, devices: devices, processCommands: [] }),
+        compareSimulatorDevice({
+          unit: deviceUnit,
+          devices: devices,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
@@ -132,40 +137,48 @@ describeAwaitingWin32Platform('compareSimulatorDevice', () => {
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [{ ...unavailableDevice, state: 'Booted' }],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [unavailableDevice],
-        processCommands: [SIMULATOR_APP_COMMAND],
+        runningProcesses: buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
     expect(
       compareSimulatorDevice({
         unit: deviceUnit,
         devices: [unavailableDevice],
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'busy' });
   });
 });
 
-describeAwaitingWin32Platform('compareDartPubCache', () => {
+describe('compareDartPubCache', () => {
   test('is unchanged for the same set or a subset, even when ps failed', () => {
     expect(
-      compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths, processCommands: null }),
+      compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths, runningProcesses: null }),
     ).toEqual({ kind: 'unchanged' });
     expect(
-      compareDartPubCache({ unit: dartUnit, gcPaths: gcPaths.slice(1), processCommands: [] }),
+      compareDartPubCache({
+        unit: dartUnit,
+        gcPaths: gcPaths.slice(1),
+        runningProcesses: buildRunningCommandLines([]),
+      }),
     ).toEqual({ kind: 'unchanged' });
   });
 
   test('is changed for an empty set or a path the scan did not list', () => {
-    expect(compareDartPubCache({ unit: dartUnit, gcPaths: [], processCommands: [] })).toEqual({
-      kind: 'changed',
-    });
+    expect(
+      compareDartPubCache({
+        unit: dartUnit,
+        gcPaths: [],
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({ kind: 'changed' });
     expect(
       compareDartPubCache({
         unit: dartUnit,
@@ -175,13 +188,13 @@ describeAwaitingWin32Platform('compareDartPubCache', () => {
             text: '/Users/example/.pub-cache/hosted/pub.dev/example_d-1.0.0',
           }),
         ],
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
 });
 
-describeAwaitingWin32Platform('compareMiseVersion', () => {
+describe('compareMiseVersion', () => {
   test('is unchanged while the version is still prunable at the same path, even when ps failed', () => {
     expect(
       compareMiseVersion({
@@ -189,7 +202,7 @@ describeAwaitingWin32Platform('compareMiseVersion', () => {
         versions: [
           { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
         ],
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -213,13 +226,17 @@ describeAwaitingWin32Platform('compareMiseVersion', () => {
       ],
     ]) {
       expect(
-        compareMiseVersion({ unit: miseUnit, versions: versions, processCommands: [] }),
+        compareMiseVersion({
+          unit: miseUnit,
+          versions: versions,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
 });
 
-describeAwaitingWin32Platform('recheckExploreUnit', () => {
+describeWithFakeTools('recheckExploreUnit', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -277,13 +294,13 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
       tool: tool,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     };
 
     expect(await recheckExploreUnit({ ...recheck, unit: unit })).toEqual({ kind: 'unchanged' });
     expect(await recheckExploreUnit({ ...recheck, unit: usedUnit })).toEqual({ kind: 'changed' });
-    expect(await recheckExploreUnit({ ...recheck, unit: unit, processCommands: null })).toEqual({
+    expect(await recheckExploreUnit({ ...recheck, unit: unit, runningProcesses: null })).toEqual({
       kind: 'busy',
     });
   });
@@ -308,7 +325,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
         tool: dart,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: null,
+        runningProcesses: null,
         timeoutMs: TIMEOUT_MS,
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -328,7 +345,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
         tool: mise,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: null,
+        runningProcesses: null,
         timeoutMs: TIMEOUT_MS,
       }),
     ).toEqual({ kind: 'unchanged' });
@@ -344,7 +361,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
         tool: failing,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
         timeoutMs: TIMEOUT_MS,
       }),
     ).toEqual({
@@ -361,7 +378,7 @@ describeAwaitingWin32Platform('recheckExploreUnit', () => {
       tool: garbled,
       environment: environment,
       platform: buildTestProbePlatform(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
       timeoutMs: TIMEOUT_MS,
     });
 

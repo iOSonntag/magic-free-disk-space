@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -24,9 +24,8 @@ import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.j
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -34,9 +33,11 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import type { HomeFolder } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, joinBelowHome } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_UNUSED_CUTOFF_MS,
@@ -77,7 +78,7 @@ function buildApiLevelPins(...apiLevels: number[]): AndroidCompileSdkPins {
 
 function buildExamplePlatformPath(folderName: string): AbsolutePath {
   return joinAbsolutePath({
-    rules: DARWIN_PATH_RULES,
+    rules: POSIX_PATH_RULES,
     parentPath: EXAMPLE_SDK_ROOT,
     names: ['platforms', folderName],
   });
@@ -109,7 +110,7 @@ function buildTextPins(...texts: string[]): ToolPins {
   return { kind: 'texts', files: texts.map((text) => buildGradleText(text)) };
 }
 
-describeAwaitingWin32Platform('parseAndroidCompileSdkPins', () => {
+describe('parseAndroidCompileSdkPins', () => {
   test('reads a compileSdk indented in an android block', () => {
     expect(
       parseGradleTexts('android {\n    namespace "com.example"\n    compileSdk 34\n}\n'),
@@ -193,7 +194,7 @@ describeAwaitingWin32Platform('parseAndroidCompileSdkPins', () => {
   });
 });
 
-describeAwaitingWin32Platform('decideAndroidPlatformOffers', () => {
+describe('decideAndroidPlatformOffers', () => {
   test('offers each platform no Gradle file pins', () => {
     expect(
       decideAndroidPlatformOffers({
@@ -273,7 +274,7 @@ describeAwaitingWin32Platform('decideAndroidPlatformOffers', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildAndroidPlatformFindings', () => {
+describe('buildAndroidPlatformFindings', () => {
   const offers: AndroidPlatformOffers = {
     offers: [
       {
@@ -291,7 +292,7 @@ describeAwaitingWin32Platform('buildAndroidPlatformFindings', () => {
         offers: offers,
         pinFiles: [{ path: buildTestAbsolutePath({ text: EXAMPLE_GRADLE_PATH }), kind: 'gradle' }],
         projectPins: buildTestProjectPins({ files: [] }),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
         projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
       }),
     ).toEqual({
@@ -326,7 +327,7 @@ describeAwaitingWin32Platform('buildAndroidPlatformFindings', () => {
       offers: offers,
       pinFiles: [],
       projectPins: buildTestProjectPins({ files: [], isWalkComplete: false }),
-      processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+      runningProcesses: buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
       projectSearchIncompleteEvidence: PROJECT_SEARCH_INCOMPLETE_EVIDENCE,
     });
 
@@ -340,7 +341,7 @@ describeAwaitingWin32Platform('buildAndroidPlatformFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
+describe('compareAndroidPlatformUnit', () => {
   const unit: ExplorePathUnitAndroidPlatform = {
     kind: 'androidPlatform',
     sdkRoot: EXAMPLE_SDK_ROOT,
@@ -355,7 +356,7 @@ describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
         unit: unit,
         state: buildExampleState(),
         toolPins: buildTextPins('android { compileSdk 35 }\n'),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -366,7 +367,7 @@ describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
         unit: unit,
         state: buildExampleState(),
         toolPins: buildTextPins('android { compileSdk 34 }\n'),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -377,19 +378,22 @@ describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
         unit: unit,
         state: { sdks: [{ sdkRoot: EXAMPLE_SDK_ROOT, platforms: [] }] },
         toolPins: buildTextPins(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
 
   test('answers busy while an emulator runs or the processes are unknown', () => {
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
+      null,
+    ]) {
       expect(
         compareAndroidPlatformUnit({
           unit: unit,
           state: buildExampleState(),
           toolPins: buildTextPins(),
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -398,12 +402,10 @@ describeAwaitingWin32Platform('compareAndroidPlatformUnit', () => {
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
-let homeDir: AbsolutePath;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  homeDir = environment.homeDir;
 });
 
 afterEach(async () => {
@@ -411,7 +413,7 @@ afterEach(async () => {
 });
 
 function buildPlatformsPath(): string {
-  return join(buildAndroidSdkRoot({ homeDir: homeDir }), 'platforms');
+  return join(buildAndroidSdkRoot({ folders: environment }), 'platforms');
 }
 
 type AndroidProbeOutcomes = {
@@ -438,21 +440,30 @@ async function loadAndroidProbeOutcomes(params: {
   };
 }
 
-function buildHomeGradlePin(text: string): ProjectPinFile {
+function buildHomeGradlePath(params: { home: HomeFolder }): AbsolutePath {
+  return joinBelowHome({ home: params.home, path: 'code/app/build.gradle' });
+}
+
+function buildHomeGradlePin(params: { home: HomeFolder; text: string }): ProjectPinFile {
   return buildTestPinFileText({
-    path: join(homeDir, 'code', 'app', 'build.gradle'),
+    path: buildHomeGradlePath({ home: params.home }),
     kind: 'gradle',
-    text: text,
+    text: params.text,
   });
 }
 
-describeAwaitingWin32Platform('startExploreProbes with the Android platform probe', () => {
+describe('startExploreProbes with the Android platform probe', () => {
   test('offers the platform no Gradle file pins', async () => {
-    const unpinnedPath = await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
-    await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-35' });
+    const unpinnedPath = await writeAndroidPlatform({
+      folders: environment,
+      folderName: 'android-34',
+    });
+    await writeAndroidPlatform({ folders: environment, folderName: 'android-35' });
 
     const outcomes = await loadAndroidProbeOutcomes({
-      pinFiles: [buildHomeGradlePin('android {\n  compileSdk 35\n}\n')],
+      pinFiles: [
+        buildHomeGradlePin({ home: environment, text: 'android {\n  compileSdk 35\n}\n' }),
+      ],
     });
 
     expect(outcomes.platforms).toEqual({
@@ -461,15 +472,10 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
         expect.objectContaining({
           unit: {
             kind: 'androidPlatform',
-            sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+            sdkRoot: buildAndroidSdkRoot({ folders: environment }),
             folderPath: unpinnedPath,
             apiLevel: 34,
-            pinFiles: [
-              {
-                path: buildTestAbsolutePath({ text: join(homeDir, 'code', 'app', 'build.gradle') }),
-                kind: 'gradle',
-              },
-            ],
+            pinFiles: [{ path: buildHomeGradlePath({ home: environment }), kind: 'gradle' }],
           },
           risk: 'careful',
           activity: 'idle',
@@ -480,14 +486,14 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
   });
 
   test('offers nothing when every platform is pinned', async () => {
-    await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
-    await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-35' });
+    await writeAndroidPlatform({ folders: environment, folderName: 'android-34' });
+    await writeAndroidPlatform({ folders: environment, folderName: 'android-35' });
 
     const outcomes = await loadAndroidProbeOutcomes({
       pinFiles: [
-        buildHomeGradlePin('android { compileSdk 34 }\n'),
+        buildHomeGradlePin({ home: environment, text: 'android { compileSdk 34 }\n' }),
         buildTestPinFileText({
-          path: join(homeDir, 'code', 'other', 'build.gradle.kts'),
+          path: joinBelowHome({ home: environment, path: 'code/other/build.gradle.kts' }),
           kind: 'gradle',
           text: 'android {\n  compileSdk = 35\n}\n',
         }),
@@ -498,11 +504,17 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
   });
 
   test('offers nothing and judges when a pin pins every platform', async () => {
-    await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
+    await writeAndroidPlatform({ folders: environment, folderName: 'android-34' });
 
     for (const pinFile of [
-      buildHomeGradlePin('android {\n  compileSdkVersion flutter.compileSdkVersion\n}\n'),
-      buildTestPinFileUnfit({ path: join(homeDir, 'code', 'app', 'build.gradle'), kind: 'gradle' }),
+      buildHomeGradlePin({
+        home: environment,
+        text: 'android {\n  compileSdkVersion flutter.compileSdkVersion\n}\n',
+      }),
+      buildTestPinFileUnfit({
+        path: buildHomeGradlePath({ home: environment }),
+        kind: 'gradle',
+      }),
     ]) {
       expect((await loadAndroidProbeOutcomes({ pinFiles: [pinFile] })).platforms).toEqual({
         kind: 'probed',
@@ -521,7 +533,7 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
   });
 
   test('leaves an extension platform not judged', async () => {
-    await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-33-ext5' });
+    await writeAndroidPlatform({ folders: environment, folderName: 'android-33-ext5' });
 
     expect((await loadAndroidProbeOutcomes({ pinFiles: [] })).platforms).toEqual({
       kind: 'probed',
@@ -533,14 +545,14 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
   testOnPosix(
     'answers unreadable on the platforms folder and leaves the other Android probes judged',
     async () => {
-      await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
+      await writeAndroidPlatform({ folders: environment, folderName: 'android-34' });
       await writeAndroidSystemImage({
-        sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+        sdkRoot: buildAndroidSdkRoot({ folders: environment }),
         platform: 'android-35',
         abi: 'arm64-v8a',
       });
-      await writeAndroidEmulator({ homeDir: homeDir });
-      await createAndroidAvdHome({ homeDir: homeDir });
+      await writeAndroidEmulator({ folders: environment });
+      await createAndroidAvdHome({ home: environment });
       await chmod(buildPlatformsPath(), 0o000);
 
       try {
@@ -560,8 +572,8 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
   );
 
   test('answers unreadable on an unreadable Gradle file', async () => {
-    await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
-    const gradlePath = join(homeDir, 'code', 'app', 'build.gradle');
+    await writeAndroidPlatform({ folders: environment, folderName: 'android-34' });
+    const gradlePath = buildHomeGradlePath({ home: environment });
 
     const outcomes = await loadAndroidProbeOutcomes({
       pinFiles: [buildTestPinFileUnreadable({ path: gradlePath, kind: 'gradle' })],
@@ -575,22 +587,25 @@ describeAwaitingWin32Platform('startExploreProbes with the Android platform prob
   });
 });
 
-describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform unit', () => {
+describe('recheckExplorePathUnit with an Android platform unit', () => {
   async function createPlatformUnit(): Promise<{
     unit: ExplorePathUnitAndroidPlatform;
-    gradlePath: string;
+    gradlePath: AbsolutePath;
   }> {
-    const folderPath = await writeAndroidPlatform({ homeDir: homeDir, folderName: 'android-34' });
-    const gradlePath = join(homeDir, 'code', 'app', 'build.gradle');
+    const folderPath = await writeAndroidPlatform({
+      folders: environment,
+      folderName: 'android-34',
+    });
+    const gradlePath = buildHomeGradlePath({ home: environment });
     await writeFixtureTextFile({ path: gradlePath, text: 'android {\n  compileSdk 35\n}\n' });
 
     return {
       unit: {
         kind: 'androidPlatform',
-        sdkRoot: buildAndroidSdkRoot({ homeDir: homeDir }),
+        sdkRoot: buildAndroidSdkRoot({ folders: environment }),
         folderPath: folderPath,
         apiLevel: 34,
-        pinFiles: [{ path: buildTestAbsolutePath({ text: gradlePath }), kind: 'gradle' }],
+        pinFiles: [{ path: gradlePath, kind: 'gradle' }],
       },
       gradlePath: gradlePath,
     };
@@ -604,7 +619,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
         unit: platform.unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -618,7 +633,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
         unit: platform.unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -631,7 +646,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
         unit: platform.unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+        runningProcesses: buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
       }),
     ).toEqual({ kind: 'busy' });
   });
@@ -646,7 +661,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with an Android platform u
           unit: platform.unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({
         kind: 'failed',

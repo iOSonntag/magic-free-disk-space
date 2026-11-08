@@ -1,17 +1,18 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
 import type { CandidateDecision, TargetsMeasurement } from '../../src/scan/candidate.js';
 import type { TargetsCarve } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import { loadMeasuredTargetsPhase } from '../../src/scan/loadMeasuredTargetsPhase.js';
 import type { ScanPhase } from '../../src/scan/scanPhase.js';
 import { createConcurrencyLimit } from '../../src/system/createConcurrencyLimit.js';
+import type { EntryReads } from '../../src/system/entryReads.js';
 import { mapNonEmpty } from '../../src/system/nonEmptyList.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureFile, createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { hostPathRules } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const FILE_SIZE_BYTES = 8192;
@@ -43,6 +44,7 @@ async function createTargetFile(name: string): Promise<string> {
 async function loadPhase(params: {
   paths: [string, ...string[]];
   carve?: TargetsCarve;
+  entryReads?: EntryReads;
 }): Promise<LoadedPhase> {
   const measurements: TargetsMeasurement[] = [];
   const phase = await loadMeasuredTargetsPhase({
@@ -50,8 +52,9 @@ async function loadPhase(params: {
     carve: params.carve ?? null,
     measureTimeoutMs: 10_000,
     runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
-    entryReads: darwinPlatform.system.entryReads,
-    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    entryReads: params.entryReads ?? hostPlatform.system.entryReads,
+    recordEvictedEntry: null,
+    privacyDenialCode: hostPlatform.system.privacyDenialCode,
     decide: async (measurement): Promise<CandidateDecision> => {
       measurements.push(measurement);
 
@@ -62,7 +65,29 @@ async function loadPhase(params: {
   return { phase: phase, measurements: measurements };
 }
 
-describeAwaitingWin32Platform('loadMeasuredTargetsPhase', () => {
+describe('loadMeasuredTargetsPhase', () => {
+  test('gives a target the entry reads call a link the kind of a symbolic link', async () => {
+    // As a mounted folder on Windows, which lstat calls a folder and its reparse point a link.
+    const linkedPath = join(fixtureRoot.homeDir, 'Downloads', 'mounted');
+    await createFixtureFile({
+      path: join(linkedPath, 'inside.bin'),
+      sizeBytes: FILE_SIZE_BYTES,
+      modifiedMs: MODIFIED_MS,
+    });
+    const plainPath = await createTargetFile('plain.dmg');
+
+    const { measurements } = await loadPhase({
+      paths: [linkedPath, plainPath],
+      entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [linkedPath] }),
+    });
+
+    expect(measurements[0]?.targets.map((target) => [target.path, target.identity.kind])).toEqual([
+      [linkedPath, 'symbolicLink'],
+      [plainPath, 'file'],
+    ]);
+    expect(measurements[0]?.entryCount).toBe(2);
+  });
+
   test('measures every found path as one tally, each target with its identity', async () => {
     const firstPath = await createTargetFile('first.dmg');
     const secondPath = await createTargetFile('second.pkg');
@@ -108,7 +133,7 @@ describeAwaitingWin32Platform('loadMeasuredTargetsPhase', () => {
 
     const { measurements } = await loadPhase({
       paths: [userDataPath],
-      carve: { pathRules: DARWIN_PATH_RULES, carvedPaths: [carvedPath] },
+      carve: { pathRules: hostPathRules, carvedPaths: [carvedPath] },
     });
 
     expect(measurements[0]?.targets.map((target) => [target.path, target.identity.kind])).toEqual([

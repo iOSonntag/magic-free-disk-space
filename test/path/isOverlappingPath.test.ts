@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { isOverlappingPath } from '../../src/path/isOverlappingPath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 
-const RULES = DARWIN_PATH_RULES;
+const RULES = POSIX_PATH_RULES;
 
 describe('isOverlappingPath', () => {
   test('a path overlaps itself, a path it holds and a path it lies in', () => {

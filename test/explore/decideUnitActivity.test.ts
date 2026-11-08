@@ -1,15 +1,20 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { UnitActivityFacts } from '../../src/explore/decideUnitActivity.js';
 import { decideUnitActivity } from '../../src/explore/decideUnitActivity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import {
+  buildRunningCommandLines,
+  buildRunningImagePaths,
+} from '../support/runningProcessesFixtures.js';
 
 const SIMULATOR_APP_COMMAND =
   '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator';
 
 const UNRELATED_COMMAND = '/usr/bin/some-daemon';
 
-/** Each unit kind whose busy rule only reads the processes, with a command of its owner. */
+const UNRELATED_IMAGE_PATH = 'C:\\Windows\\System32\\svchost.exe';
+
+/** Each unit kind whose busy rule only reads the processes, with a command line of its owner. */
 const PROCESS_RULES: { facts: UnitActivityFacts; ownerCommands: string[] }[] = [
   { facts: { kind: 'simulatorRuntime' }, ownerCommands: [SIMULATOR_APP_COMMAND] },
   {
@@ -41,6 +46,38 @@ const PROCESS_RULES: { facts: UnitActivityFacts; ownerCommands: string[] }[] = [
       '/opt/homebrew/bin/pnpm store prune',
       'pnpx create-vite',
       'pnpm',
+    ],
+  },
+];
+
+/**
+ * Each unit kind Windows explores whose busy rule only reads the processes, with an image of its
+ * owner as Windows lists it: its path, or its file name alone, in any case.
+ */
+const windowsProcessRules: { facts: UnitActivityFacts; ownerImagePaths: string[] }[] = [
+  {
+    facts: { kind: 'android' },
+    ownerImagePaths: [
+      'C:\\Users\\example\\AppData\\Local\\Android\\Sdk\\emulator\\emulator.exe',
+      'C:\\Users\\example\\AppData\\Local\\Android\\Sdk\\emulator\\qemu\\windows-x86_64\\qemu-system-x86_64.exe',
+      'qemu-system-x86_64.exe',
+      'EMULATOR.EXE',
+      '\\\\server\\share\\emulator.exe',
+    ],
+  },
+  {
+    facts: { kind: 'vscodeExtension' },
+    ownerImagePaths: [
+      'C:\\Users\\example\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe',
+      'CODE.EXE',
+    ],
+  },
+  {
+    facts: { kind: 'pnpmStore' },
+    ownerImagePaths: [
+      'C:\\Users\\example\\AppData\\Local\\pnpm\\pnpm.exe',
+      'Pnpm.EXE',
+      'C:\\Program Files\\nodejs\\node.exe',
     ],
   },
 ];
@@ -92,12 +129,31 @@ const RUSTUP_TOOLCHAIN_PATH = buildTestAbsolutePath({
   text: `${RUSTUP_TOOLCHAINS_PATH}/nightly-aarch64-apple-darwin`,
 });
 
-describeAwaitingWin32Platform('decideUnitActivity', () => {
+/**
+ * Each unit kind whose busy rule reads the processes by their command lines alone, with no rule
+ * for an image path.
+ */
+const factsWithoutImagePathRule: UnitActivityFacts[] = [
+  { kind: 'simulatorDevice', state: 'Shutdown' },
+  { kind: 'simulatorRuntime' },
+  { kind: 'homebrew' },
+  { kind: 'versionFolder', folderPath: NVM_VERSION_FOLDER_PATH },
+  { kind: 'vagrant' },
+  { kind: 'rustup', toolchainPath: RUSTUP_TOOLCHAIN_PATH },
+  { kind: 'conda' },
+  { kind: 'ollama' },
+  { kind: 'huggingFace' },
+  { kind: 'lmStudio' },
+  { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
+  { kind: 'appBundles', bundlePaths: ['/System/Applications/Mail.app'] },
+];
+
+describe('decideUnitActivity', () => {
   test('a shut-down device is idle while Simulator.app does not run', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'simulatorDevice', state: 'Shutdown' },
-        processCommands: ['/usr/bin/some-daemon'],
+        runningProcesses: buildRunningCommandLines(['/usr/bin/some-daemon']),
       }),
     ).toBe('idle');
   });
@@ -106,7 +162,7 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'simulatorDevice', state: 'Shutdown' },
-        processCommands: [SIMULATOR_APP_COMMAND],
+        runningProcesses: buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       }),
     ).toBe('busy');
   });
@@ -115,7 +171,7 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'simulatorDevice', state: 'Booted' },
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toBe('busy');
   });
@@ -124,18 +180,28 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'simulatorDevice', state: 'Shutdown' },
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toBe('unknown');
   });
 
   test('a Dart or mise unit is idle whatever the processes', () => {
-    for (const processCommands of [null, [SIMULATOR_APP_COMMAND]]) {
+    for (const runningProcesses of [
+      null,
+      buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
+      buildRunningImagePaths([UNRELATED_IMAGE_PATH]),
+    ]) {
       expect(
-        decideUnitActivity({ facts: { kind: 'dartPubCache' }, processCommands: processCommands }),
+        decideUnitActivity({
+          facts: { kind: 'dartPubCache' },
+          runningProcesses: runningProcesses,
+        }),
       ).toBe('idle');
       expect(
-        decideUnitActivity({ facts: { kind: 'miseVersion' }, processCommands: processCommands }),
+        decideUnitActivity({
+          facts: { kind: 'miseVersion' },
+          runningProcesses: runningProcesses,
+        }),
       ).toBe('idle');
     }
   });
@@ -146,7 +212,7 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
         expect(
           decideUnitActivity({
             facts: rule.facts,
-            processCommands: [UNRELATED_COMMAND, ownerCommand],
+            runningProcesses: buildRunningCommandLines([UNRELATED_COMMAND, ownerCommand]),
           }),
         ).toBe('busy');
       }
@@ -155,18 +221,80 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
 
   test('a runtime, Android, Homebrew, VS Code, or pnpm store unit is idle while no owner runs, and unknown without processes', () => {
     for (const rule of PROCESS_RULES) {
-      expect(decideUnitActivity({ facts: rule.facts, processCommands: [UNRELATED_COMMAND] })).toBe(
-        'idle',
-      );
-      expect(decideUnitActivity({ facts: rule.facts, processCommands: null })).toBe('unknown');
+      expect(
+        decideUnitActivity({
+          facts: rule.facts,
+          runningProcesses: buildRunningCommandLines([UNRELATED_COMMAND]),
+        }),
+      ).toBe('idle');
+      expect(decideUnitActivity({ facts: rule.facts, runningProcesses: null })).toBe('unknown');
     }
   });
 
-  test('an Android unit stays idle beside a command that only starts with the word emulator', () => {
+  test('an Android, VS Code, or pnpm store unit is busy while each image of its owner runs on Windows', () => {
+    for (const rule of windowsProcessRules) {
+      for (const ownerImagePath of rule.ownerImagePaths) {
+        expect(
+          decideUnitActivity({
+            facts: rule.facts,
+            runningProcesses: buildRunningImagePaths([UNRELATED_IMAGE_PATH, ownerImagePath]),
+          }),
+        ).toBe('busy');
+      }
+    }
+  });
+
+  test('an Android, VS Code, or pnpm store unit is idle while no image of its owner runs on Windows', () => {
+    for (const rule of windowsProcessRules) {
+      expect(
+        decideUnitActivity({
+          facts: rule.facts,
+          runningProcesses: buildRunningImagePaths([UNRELATED_IMAGE_PATH]),
+        }),
+      ).toBe('idle');
+    }
+  });
+
+  test('a unit without a rule for an image path is unknown beside the images Windows lists', () => {
+    for (const facts of factsWithoutImagePathRule) {
+      expect(
+        decideUnitActivity({
+          facts: facts,
+          runningProcesses: buildRunningImagePaths([UNRELATED_IMAGE_PATH]),
+        }),
+      ).toBe('unknown');
+    }
+  });
+
+  test('an Android unit stays idle beside a command or an image that only holds the word emulator', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'android' },
-        processCommands: ['/usr/local/bin/emulator-check accel', '/opt/example/emulators/run'],
+        runningProcesses: buildRunningCommandLines([
+          '/usr/local/bin/emulator-check accel',
+          '/opt/example/emulators/run',
+        ]),
+      }),
+    ).toBe('idle');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'android' },
+        runningProcesses: buildRunningImagePaths([
+          'C:\\tools\\myemulator.exe',
+          'C:\\tools\\emulator.exe.bak',
+        ]),
+      }),
+    ).toBe('idle');
+  });
+
+  test('a VS Code unit stays idle beside an image whose name only holds the word code', () => {
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'vscodeExtension' },
+        runningProcesses: buildRunningImagePaths([
+          'C:\\tools\\vscode-helper.exe',
+          'C:\\tools\\mycode.exe',
+        ]),
       }),
     ).toBe('idle');
   });
@@ -175,7 +303,19 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'pnpmStore' },
-        processCommands: ['/usr/local/bin/pnpm-sync watch', '/opt/example/pnpmx/run'],
+        runningProcesses: buildRunningCommandLines([
+          '/usr/local/bin/pnpm-sync watch',
+          '/opt/example/pnpmx/run',
+        ]),
+      }),
+    ).toBe('idle');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'pnpmStore' },
+        runningProcesses: buildRunningImagePaths([
+          'C:\\tools\\pnpm-sync.exe',
+          'C:\\tools\\pnpx-tools.exe',
+        ]),
       }),
     ).toBe('idle');
   });
@@ -184,7 +324,10 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'versionFolder', folderPath: NVM_VERSION_FOLDER_PATH },
-        processCommands: [UNRELATED_COMMAND, `${NVM_VERSION_FOLDER_PATH}/bin/node server.js`],
+        runningProcesses: buildRunningCommandLines([
+          UNRELATED_COMMAND,
+          `${NVM_VERSION_FOLDER_PATH}/bin/node server.js`,
+        ]),
       }),
     ).toBe('busy');
   });
@@ -193,7 +336,9 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'versionFolder', folderPath: NVM_VERSION_FOLDER_PATH },
-        processCommands: [`${NVM_VERSION_FOLDER_PATH}0/bin/node server.js`],
+        runningProcesses: buildRunningCommandLines([
+          `${NVM_VERSION_FOLDER_PATH}0/bin/node server.js`,
+        ]),
       }),
     ).toBe('idle');
   });
@@ -202,7 +347,7 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'versionFolder', folderPath: NVM_VERSION_FOLDER_PATH },
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toBe('unknown');
   });
@@ -213,7 +358,7 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
         expect(
           decideUnitActivity({
             facts: rule.facts,
-            processCommands: [UNRELATED_COMMAND, ownerCommand],
+            runningProcesses: buildRunningCommandLines([UNRELATED_COMMAND, ownerCommand]),
           }),
         ).toBe('busy');
       }
@@ -221,10 +366,10 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
       expect(
         decideUnitActivity({
           facts: rule.facts,
-          processCommands: [UNRELATED_COMMAND, ...rule.otherCommands],
+          runningProcesses: buildRunningCommandLines([UNRELATED_COMMAND, ...rule.otherCommands]),
         }),
       ).toBe('idle');
-      expect(decideUnitActivity({ facts: rule.facts, processCommands: null })).toBe('unknown');
+      expect(decideUnitActivity({ facts: rule.facts, runningProcesses: null })).toBe('unknown');
     }
   });
 
@@ -232,13 +377,13 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
-        processCommands: [UNRELATED_COMMAND, 'claude --resume'],
+        runningProcesses: buildRunningCommandLines([UNRELATED_COMMAND, 'claude --resume']),
       }),
     ).toBe('busy');
     expect(
       decideUnitActivity({
         facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
-        processCommands: [`${CLAUDE_CODE_VERSION_PATH} --print`],
+        runningProcesses: buildRunningCommandLines([`${CLAUDE_CODE_VERSION_PATH} --print`]),
       }),
     ).toBe('busy');
   });
@@ -247,13 +392,16 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
-        processCommands: [`${CLAUDE_CODE_VERSION_PATH}0 --print`, '/usr/local/bin/claude-monitor'],
+        runningProcesses: buildRunningCommandLines([
+          `${CLAUDE_CODE_VERSION_PATH}0 --print`,
+          '/usr/local/bin/claude-monitor',
+        ]),
       }),
     ).toBe('idle');
     expect(
       decideUnitActivity({
         facts: { kind: 'claudeCodeVersion', versionPath: CLAUDE_CODE_VERSION_PATH },
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toBe('unknown');
   });
@@ -268,7 +416,7 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
       expect(
         decideUnitActivity({
           facts: { kind: 'rustup', toolchainPath: RUSTUP_TOOLCHAIN_PATH },
-          processCommands: [UNRELATED_COMMAND, ownerCommand],
+          runningProcesses: buildRunningCommandLines([UNRELATED_COMMAND, ownerCommand]),
         }),
       ).toBe('busy');
     }
@@ -278,16 +426,16 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'rustup', toolchainPath: RUSTUP_TOOLCHAIN_PATH },
-        processCommands: [
+        runningProcesses: buildRunningCommandLines([
           `${RUSTUP_TOOLCHAINS_PATH}/stable-aarch64-apple-darwin/libexec/rust-analyzer-proc-macro-srv`,
           '/Users/example/.cargo/bin/cargo-watch',
-        ],
+        ]),
       }),
     ).toBe('idle');
     expect(
       decideUnitActivity({
         facts: { kind: 'rustup', toolchainPath: RUSTUP_TOOLCHAIN_PATH },
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toBe('unknown');
   });
@@ -302,7 +450,7 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
       expect(
         decideUnitActivity({
           facts: { kind: 'conda' },
-          processCommands: [UNRELATED_COMMAND, ownerCommand],
+          runningProcesses: buildRunningCommandLines([UNRELATED_COMMAND, ownerCommand]),
         }),
       ).toBe('busy');
     }
@@ -312,13 +460,18 @@ describeAwaitingWin32Platform('decideUnitActivity', () => {
     expect(
       decideUnitActivity({
         facts: { kind: 'conda' },
-        processCommands: [
+        runningProcesses: buildRunningCommandLines([
           '/usr/local/bin/condax run black',
           '/opt/example/mambaforge-tools/run',
           'python -m condastats',
-        ],
+        ]),
       }),
     ).toBe('idle');
-    expect(decideUnitActivity({ facts: { kind: 'conda' }, processCommands: null })).toBe('unknown');
+    expect(
+      decideUnitActivity({
+        facts: { kind: 'conda' },
+        runningProcesses: null,
+      }),
+    ).toBe('unknown');
   });
 });

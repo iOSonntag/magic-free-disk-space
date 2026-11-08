@@ -1,5 +1,6 @@
 import type { EntryReads } from '../system/entryReads.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
+import type { EvictedEntryRecorder } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 
 export type ActivityProbe = 'recent' | 'quiet' | 'unknown';
@@ -20,6 +21,11 @@ export async function loadTreeActivity(params: {
   maxEntries: number;
   deadlineMs: number;
   entryReads: EntryReads;
+  /**
+   * Takes each entry the walk leaves unread because its content is in the cloud only; `null` for
+   * none.
+   */
+  recordEvictedEntry: EvictedEntryRecorder | null;
 }): Promise<ActivityProbe> {
   const rootStats = await loadEntryStats({ path: params.path });
 
@@ -71,7 +77,7 @@ export async function loadTreeActivity(params: {
     onUnreadable: () => {
       hasUnreadableEntry = true;
     },
-    onEvictedEntrySkipped: () => undefined,
+    onEvictedEntrySkipped: params.recordEvictedEntry,
   });
 
   if (hasRecentEntry) {

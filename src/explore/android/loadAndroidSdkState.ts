@@ -1,5 +1,5 @@
 import { basename, join } from 'node:path';
-import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import { joinAbsolutePath, listPathNames } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -62,6 +62,8 @@ export type AndroidSdk = {
 
 /** What the reads of the SDKs and of `~/.android/avd` found. */
 export type AndroidSdkState = {
+  /** The rules of the paths read, by which the image an AVD names matches a folder of an SDK. */
+  pathRules: PathRules;
   /** The SDKs of the roots that are folders, in the roots' order; none without an SDK. */
   sdks: AndroidSdk[];
   /** `null` when `~/.android/avd` is absent, so the AVDs may live elsewhere. */
@@ -111,11 +113,7 @@ export async function loadAndroidSdkState(params: {
 
   const avds = await loadAndroidAvds({
     pathRules: params.pathRules,
-    avdHomePath: joinAbsolutePath({
-      rules: params.pathRules,
-      parentPath: params.homeDir,
-      names: AVD_HOME_FOLDER_NAMES,
-    }),
+    avdHomePath: buildAndroidAvdHomePath({ pathRules: params.pathRules, homeDir: params.homeDir }),
     privacyDenialCode: params.privacyDenialCode,
   });
 
@@ -123,7 +121,22 @@ export async function loadAndroidSdkState(params: {
     return avds;
   }
 
-  return { kind: 'succeeded', value: { sdks: sdks.value, avds: avds.value } };
+  return {
+    kind: 'succeeded',
+    value: { pathRules: params.pathRules, sdks: sdks.value, avds: avds.value },
+  };
+}
+
+/** The folder of the AVDs the probes read, `~/.android/avd`. */
+export function buildAndroidAvdHomePath(params: {
+  pathRules: PathRules;
+  homeDir: AbsolutePath;
+}): AbsolutePath {
+  return joinAbsolutePath({
+    rules: params.pathRules,
+    parentPath: params.homeDir,
+    names: AVD_HOME_FOLDER_NAMES,
+  });
 }
 
 async function loadAndroidSdk(params: {
@@ -295,6 +308,7 @@ async function loadAndroidAvd(params: {
   }
 
   const imageSysdir = await loadAndroidImageSysdir({
+    pathRules: params.pathRules,
     avdPath: avdPath.value,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -327,6 +341,7 @@ async function loadAndroidAvd(params: {
 
 /** `null` when `config.ini` is absent or unfit, or holds no `image.sysdir.1`. */
 async function loadAndroidImageSysdir(params: {
+  pathRules: PathRules;
   avdPath: AbsolutePath;
   privacyDenialCode: string | null;
 }): Promise<Result<string | null, ExploreFileUnreadable>> {
@@ -345,11 +360,38 @@ async function loadAndroidImageSysdir(params: {
 
   const imageSysdir = parseAndroidIniText({ text: configIni.value.text }).get(IMAGE_SYSDIR_KEY);
 
-  if (imageSysdir === undefined || imageSysdir === '') {
+  if (imageSysdir === undefined) {
     return { kind: 'succeeded', value: null };
   }
 
-  return { kind: 'succeeded', value: imageSysdir };
+  return {
+    kind: 'succeeded',
+    value: parseAndroidImageSysdir({ pathRules: params.pathRules, text: imageSysdir }),
+  };
+}
+
+/**
+ * The `image.sysdir.1` of an AVD, relative to the SDK, in the separator of `pathRules`; `null`
+ * for an empty one. The SDK on Windows writes it with backslashes, and a hand-made AVD may carry
+ * slashes, so on Windows both separate its names; on macOS the text stays as written.
+ */
+export function parseAndroidImageSysdir(params: {
+  pathRules: PathRules;
+  text: string;
+}): string | null {
+  if (params.text === '') {
+    return null;
+  }
+
+  switch (params.pathRules.rootForm) {
+    case 'posix':
+      return params.text;
+    case 'win32': {
+      const names = listPathNames({ rules: params.pathRules, path: params.text });
+
+      return names.length === 0 ? null : names.join(params.pathRules.separator);
+    }
+  }
 }
 
 async function loadAndroidAvdLastUsedAtMs(params: {

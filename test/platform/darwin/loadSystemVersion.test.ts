@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadPlistVersion } from '../../../src/platform/darwin/loadSystemVersion.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../../src/system/limits.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import { withFixtureRoot } from '../../support/fixtureRoot.js';
 
 const VERSIONS_PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
@@ -19,7 +19,8 @@ const VERSIONS_PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `;
 
-describeAwaitingWin32Platform('loadPlistVersion', () => {
+// The version comes from `plutil`, which only macOS has.
+describeOnDarwin('loadPlistVersion', () => {
   test('reads the version under the key, and null for an empty, missing or unread one', async () => {
     await withFixtureRoot({
       run: async (fixtureRoot) => {

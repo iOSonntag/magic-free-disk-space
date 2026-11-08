@@ -79,6 +79,7 @@ function formatRemovalWayLines(params: { candidate: Candidate }): string[] {
   switch (params.candidate.removal.kind) {
     case 'deletePaths':
     case 'deleteUnitPaths':
+    case 'emptyRecycleBin':
       return [];
     case 'runTool':
       return [`   by running: ${formatToolCommandText({ unit: params.candidate.removal.unit })}`];

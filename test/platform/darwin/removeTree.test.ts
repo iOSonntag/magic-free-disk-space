@@ -56,7 +56,7 @@ describeOnPosix('removeTreeAsUser', () => {
 
     expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
       kind: 'succeeded',
-      value: null,
+      value: { kind: 'removed' },
     });
     expect(await isPresent(rootPath)).toBe(false);
   });
@@ -74,7 +74,7 @@ describeOnPosix('removeTreeAsUser', () => {
 
     expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
       kind: 'succeeded',
-      value: null,
+      value: { kind: 'removed' },
     });
     expect(await isPresent(rootPath)).toBe(false);
   });
@@ -103,7 +103,7 @@ describeOnPosix('removeTreeAsUser', () => {
 
     expect(await removeTreeAsUser({ path: rootPath, user: processUser })).toEqual({
       kind: 'succeeded',
-      value: null,
+      value: { kind: 'removed' },
     });
     expect(await isPresent(rootPath)).toBe(false);
     expect(await isPresent(join(outsidePath, 'keep.txt'))).toBe(true);

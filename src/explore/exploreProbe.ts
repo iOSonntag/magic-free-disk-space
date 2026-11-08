@@ -2,10 +2,10 @@ import type { Environment } from '../environment/buildEnvironment.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
 import type { EntryReads } from '../system/entryReads.js';
-import type { SystemPlatform } from '../system/systemPlatform.js';
+import type { RunningProcesses, SystemPlatform } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import type { ToolName } from '../tools/toolInstallLocations.js';
-import type { ToolsPlatform } from '../tools/toolsPlatform.js';
+import type { ToolProcessPlatform, ToolsPlatform } from '../tools/toolsPlatform.js';
 import type { AndroidSdkRoot } from './android/loadAndroidSdkRoots.js';
 import type { ExplorePlatform } from './explorePlatform.js';
 import type {
@@ -25,6 +25,8 @@ export type ExploreProbePlatform = {
   privacyDenialCode: string | null;
   /** The system slice's entry reads, so a probe never lists a folder that only the cloud holds. */
   entryReads: EntryReads;
+  /** How the tools slice starts and stops the tool of a probe or of a unit's command. */
+  toolProcesses: ToolProcessPlatform;
 };
 
 /** What the probes and their rechecks take of the explore, tools, and system slices. */
@@ -38,6 +40,7 @@ export function buildExploreProbePlatform(params: {
     homebrewPrefixPaths: params.tools.homebrewPrefixPaths,
     privacyDenialCode: params.system.privacyDenialCode,
     entryReads: params.system.entryReads,
+    toolProcesses: params.tools.processes,
   };
 }
 
@@ -49,7 +52,7 @@ export function buildExploreProbePlatform(params: {
 export type ExploreProbeRun = {
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   deadlineMs: number;
   unusedCutoffMs: number;
   staleCutoffMs: number;
@@ -125,7 +128,10 @@ export type ExploreEngineAnswerFailure =
   | ExploreEngineAnswerFailureRequestFailed
   | ExploreEngineAnswerFailureBadAnswer;
 
-/** No socket exists, or the first that exists refused the connect, as a stale one does. */
+/**
+ * No socket exists, as on a platform without the engine, or the first that exists refused the
+ * connect, as a stale one does.
+ */
 export type ExploreEngineFailureSocketMissing = { kind: 'socketMissing' };
 
 /** The first socket that exists is not a socket, or not the user's, so nothing was sent. */
@@ -162,15 +168,18 @@ export type ExploreProbe =
   | ExploreProbeAndroidSdk
   | ExploreProbeEngine;
 
-/** What the commands of a located tool need: its environment, and the time they must end by. */
+/**
+ * What the commands of a located tool need: its environment, the platform that starts it, and
+ * the time they must end by.
+ */
 export type ExploreToolCommandRun = {
   tool: LocatedTool;
   environment: Environment;
+  platform: ExploreProbePlatform;
   deadlineMs: number;
 };
 
 /** What the recheck of a tool unit gets: the fresh tool, and the processes read right before. */
 export type ExploreUnitRecheckRun = ExploreToolCommandRun & {
-  platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 };

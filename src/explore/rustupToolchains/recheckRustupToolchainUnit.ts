@@ -38,6 +38,6 @@ export async function recheckRustupToolchainUnit(params: {
     unit: params.unit,
     state: state.value,
     toolPins: toolPins.value,
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 }

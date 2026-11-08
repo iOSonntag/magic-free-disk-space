@@ -1,8 +1,11 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanProgressView, buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
+import type { ReportTexts } from '../../src/report/reportTexts.js';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, Candidate, CandidateDecision } from '../../src/scan/candidate.js';
@@ -10,26 +13,30 @@ import type { ScanIssue } from '../../src/scan/issue.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
 import type { VolumeSpace } from '../../src/system/volumeSpace.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestEngineCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { listNumberedViewItems } from '../support/numberedViewItems.js';
+import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+import { buildTestRecycleBinCandidate } from '../support/platformFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
   buildProtocolFixtureReport,
   PROTOCOL_FIXTURE_DISK,
   PROTOCOL_FIXTURE_HOME_DIR,
 } from '../support/protocolFixtureScan.js';
-import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
+import { countTestCloudOnlyEntries, EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const MB = 1_000_000;
 
 const TEXTS = darwinPlatform.report;
 
 const HOME_DIR = PROTOCOL_FIXTURE_HOME_DIR;
+
+const home = buildExampleHome({ text: HOME_DIR });
 
 function buildAdvice(params: {
   path: string;
@@ -62,31 +69,31 @@ function buildRankedReport(params: {
     (item): CandidateDecision => ({ kind: 'advice', advice: item }),
   );
 
-  return buildScanReport({ decisions: [...offers, ...advice], issues: params.issues ?? [] });
+  return buildScanReport({
+    decisions: [...offers, ...advice],
+    appAdvice: null,
+    cloudOnlyEntries: null,
+    issues: params.issues ?? [],
+  });
 }
 
-function buildView(params: { report: ScanReport; disk?: VolumeSpace }): ScanView {
+/** The view the app gets for the scan of the example home, worded by `texts` or those of macOS. */
+function buildView(params: {
+  report: ScanReport;
+  texts?: ReportTexts;
+  disk?: VolumeSpace;
+}): ScanView {
   return buildScanView({
     report: params.report,
     fullDiskAccessHolder: 'app',
-    texts: TEXTS,
-    homeDir: HOME_DIR,
+    texts: params.texts ?? TEXTS,
+    pathRules: home.pathRules,
+    homeDir: home.homeDir,
     disk: params.disk ?? null,
   });
 }
 
-/** Every number of the view, top to bottom as the app and the CLI show them. */
-function listNumbersTopToBottom(params: { view: ScanView }): number[] {
-  const sectionNumbers = params.view.sections.flatMap((section) => [
-    ...section.items.map((item) => item.number),
-    ...(section.checkGroup?.items ?? []).map((item) => item.number),
-  ]);
-  const exploreNumbers = (params.view.explore?.items ?? []).map((item) => item.number);
-
-  return [...sectionNumbers, ...exploreNumbers];
-}
-
-describeAwaitingWin32Platform('buildScanView', () => {
+describe('buildScanView', () => {
   test('shows an empty scan as its summary alone, with the disk it read', () => {
     expect(buildView({ report: EMPTY_REPORT, disk: PROTOCOL_FIXTURE_DISK })).toEqual({
       summary: {
@@ -104,7 +111,112 @@ describeAwaitingWin32Platform('buildScanView', () => {
       skipped: null,
       notices: [],
       sectionTotals: [],
+      appAdvice: null,
     });
+  });
+
+  test('shows the installed apps of advice beside the sections, unnumbered, with what is known', () => {
+    const view = buildView({
+      texts: win32Platform.report,
+      report: {
+        ...EMPTY_REPORT,
+        appAdvice: {
+          apps: [
+            {
+              displayName: 'Example\u001b[2J Editor',
+              installFolderPath: buildTestWindowsPath({
+                text: 'C:\\Program Files\\Example Editor',
+              }),
+              estimatedBytes: 3 * MB,
+            },
+            { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
+          ],
+          installedAppsPageName: 'Settings > Apps',
+        },
+      },
+    });
+
+    expect(view.summary).toEqual({
+      titleText: 'Nothing to delete was found.',
+      lines: [],
+      totalBytes: 0,
+      isTotalComplete: true,
+      safeBytes: 0,
+      isSafeComplete: true,
+      disk: null,
+    });
+    expect(view.safeNumbers).toEqual([]);
+    expect(view.sectionTotals).toEqual([]);
+    expect(view.appAdvice).toEqual({
+      titleText: 'Installed apps',
+      introText:
+        'Uninstall the apps you no longer use in Settings > Apps; this tool never deletes an app.',
+      items: [
+        {
+          title: 'Example\\u{1b}[2J Editor',
+          risk: 'review',
+          riskText: 'review',
+          sizeText: '3.0 MB',
+          detailLines: [
+            { kind: 'path', text: 'C:\\Program Files\\Example Editor' },
+            { kind: 'explanation', text: 'Installed on this PC, as Settings > Apps lists it.' },
+            { kind: 'advice', text: 'Uninstall it in Settings > Apps if you no longer use it.' },
+          ],
+        },
+        {
+          title: 'Example Tool',
+          risk: 'review',
+          riskText: 'review',
+          sizeText: 'size unknown',
+          detailLines: [
+            { kind: 'explanation', text: 'Installed on this PC, as Settings > Apps lists it.' },
+            { kind: 'advice', text: 'Uninstall it in Settings > Apps if you no longer use it.' },
+          ],
+        },
+      ],
+    });
+  });
+
+  test('words the installed apps by the page the platform names and the computer of its texts', () => {
+    const view = buildView({
+      report: {
+        ...EMPTY_REPORT,
+        appAdvice: {
+          apps: [{ displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null }],
+          installedAppsPageName: 'Example Programs',
+        },
+      },
+    });
+
+    expect(view.appAdvice).toEqual({
+      titleText: 'Installed apps',
+      introText:
+        'Uninstall the apps you no longer use in Example Programs; this tool never deletes an app.',
+      items: [
+        {
+          title: 'Example Tool',
+          risk: 'review',
+          riskText: 'review',
+          sizeText: 'size unknown',
+          detailLines: [
+            { kind: 'explanation', text: 'Installed on this Mac, as Example Programs lists it.' },
+            { kind: 'advice', text: 'Uninstall it in Example Programs if you no longer use it.' },
+          ],
+        },
+      ],
+    });
+  });
+
+  test('shows no installed apps on a platform that offers its apps, nor for an empty list', () => {
+    expect(buildView({ report: { ...EMPTY_REPORT, appAdvice: null } }).appAdvice).toBeNull();
+    expect(
+      buildView({
+        report: {
+          ...EMPTY_REPORT,
+          appAdvice: { apps: [], installedAppsPageName: 'Settings > Apps' },
+        },
+      }).appAdvice,
+    ).toBeNull();
   });
 
   test('gives the scanned event of the protocol fixture for the scan it shows', async () => {
@@ -113,6 +225,45 @@ describeAwaitingWin32Platform('buildScanView', () => {
     const view = buildView({ report: buildProtocolFixtureReport(), disk: PROTOCOL_FIXTURE_DISK });
 
     expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
+  });
+
+  test('counts only the skipped items on macOS, whose scan counts no entry left in iCloud', () => {
+    const view = buildView({
+      report: {
+        ...EMPTY_REPORT,
+        skipped: [{ path: '/Users/me/busy', reason: 'ownerRunning' }],
+        cloudOnlyEntries: countTestCloudOnlyEntries({
+          pathRules: POSIX_PATH_RULES,
+          cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
+          entryPaths: ['/Users/me/a', '/Users/me/b', '/Users/me/c', '/Users/me/d'],
+        }),
+      },
+    });
+
+    expect(view.skipped).toEqual({
+      titleText: 'Skipped 1 item',
+      lines: ['its app or tool is running: 1'],
+    });
+  });
+
+  test('counts the entries left in OneDrive into the skipped items on Windows, on a line of their own', () => {
+    const view = buildView({
+      texts: win32Platform.report,
+      report: {
+        ...EMPTY_REPORT,
+        skipped: [{ path: 'C:\\Users\\me\\busy', reason: 'ownerRunning' }],
+        cloudOnlyEntries: countTestCloudOnlyEntries({
+          pathRules: WIN32_PATH_RULES,
+          cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
+          entryPaths: ['C:\\Users\\me\\OneDrive\\a', 'C:\\Users\\me\\OneDrive\\b'],
+        }),
+      },
+    });
+
+    expect(view.skipped).toEqual({
+      titleText: 'Skipped 3 items',
+      lines: ['its app or tool is running: 1', 'in OneDrive, not on this PC: 2'],
+    });
   });
 
   test('puts a section of check items only into its closed check group', () => {
@@ -144,6 +295,57 @@ describeAwaitingWin32Platform('buildScanView', () => {
       },
     ]);
     expect(view.safeNumbers).toEqual([]);
+  });
+
+  test('shows the Recycle Bin of a drive as an item of the Recycle Bin section, with no command', () => {
+    const candidate = buildTestRecycleBinCandidate({
+      driveRootText: 'C:\\',
+      scannedContent: { sizeBytes: 2 * MB, itemCount: 3 },
+    });
+    const view = buildView({
+      texts: win32Platform.report,
+      report: buildRankedReport({ candidates: [candidate] }),
+    });
+
+    expect<unknown>(view.sections).toEqual([
+      {
+        key: 'trash',
+        titleText: 'Recycle Bin',
+        sizeText: '2.0 MB',
+        isInitiallyExpanded: false,
+        items: [],
+        checkGroup: {
+          titleText: 'Check before deleting',
+          items: [
+            {
+              number: 1,
+              key: 'recycleBin:C:\\$Recycle.Bin',
+              title: 'Recycle Bin (C:)',
+              risk: 'careful',
+              riskText: 'careful',
+              sizeText: '2.0 MB',
+              detailLines: [
+                { kind: 'path', text: 'C:\\$Recycle.Bin' },
+                { kind: 'explanation', text: candidate.explanation },
+                { kind: 'regeneration', text: candidate.regeneration },
+              ],
+              sectionKey: 'trash',
+              group: 'careful',
+              origin: 'trash',
+              removal: 'delete',
+              allocatedBytes: 2 * MB,
+              isComplete: true,
+              displayPath: 'C:\\$Recycle.Bin',
+              revealPath: 'C:\\$Recycle.Bin',
+              lastUsedAt: null,
+              downloadedAt: null,
+              appName: null,
+              matchedBy: null,
+            },
+          ],
+        },
+      },
+    ]);
   });
 
   test('shows a never item in its check group and counts it in no space the summary names', () => {
@@ -257,7 +459,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('shows a safe item a probe found under Explore, in the review group of its section', () => {
     const toolCandidate = buildTestToolCandidate({
-      homeDir: HOME_DIR,
+      home: home,
       version: '20.1.0',
       allocatedBytes: 2 * MB,
     });
@@ -416,7 +618,7 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
   test('shows an engine item with nothing to reveal and the paths of a unit as deleted', () => {
     const engineCandidate = buildTestEngineCandidate({ homeDir: HOME_DIR, allocatedBytes: 2 * MB });
-    const unitCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR });
+    const unitCandidate = buildTestVscodeExtensionCandidate({ home: home });
     const view = buildView({
       report: buildRankedReport({ candidates: [engineCandidate, unitCandidate] }),
     });
@@ -580,7 +782,11 @@ describeAwaitingWin32Platform('buildScanView', () => {
   test('numbers ascend top to bottom across the sections and Explore', () => {
     const report = buildRankedReport({
       candidates: [
-        buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0', allocatedBytes: 9 * MB }),
+        buildTestToolCandidate({
+          home: buildExampleHome({ text: '/fixture' }),
+          version: '20.1.0',
+          allocatedBytes: 9 * MB,
+        }),
         buildTestCandidate({
           path: '/fixture/.Trash',
           title: 'Trash',
@@ -621,7 +827,9 @@ describeAwaitingWin32Platform('buildScanView', () => {
 
     const view = buildView({ report: report });
 
-    expect(listNumbersTopToBottom({ view: view })).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(listNumberedViewItems({ view: view }).map((item) => item.number)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
     expect(view.sections.map((section) => section.titleText)).toEqual([
       'Caches',
       'Projects',
@@ -671,7 +879,8 @@ describeAwaitingWin32Platform('buildScanView', () => {
       report: report,
       fullDiskAccessHolder: 'terminal',
       texts: TEXTS,
-      homeDir: HOME_DIR,
+      pathRules: home.pathRules,
+      homeDir: home.homeDir,
       disk: null,
     });
 

@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings, ExploreUnit } from '../exploreUnit.js';
 import { formatCountText, formatDaySpan } from '../formatLimitTexts.js';
@@ -16,7 +17,7 @@ import type { HuggingFaceRepoName } from './parseHuggingFaceRepoFolderName.js';
 export function buildHuggingFaceRepoFindings(params: {
   repos: HuggingFaceRepoState[];
   partialCutoffMs: number;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   const judgedRepos = params.repos.map((repo) => ({
     repo: repo,
@@ -28,7 +29,7 @@ export function buildHuggingFaceRepoFindings(params: {
         repo: judgedRepo.repo,
         offer: offer,
         partialCutoffMs: params.partialCutoffMs,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     ),
   );
@@ -48,7 +49,7 @@ function buildHuggingFaceRepoFinding(params: {
   repo: HuggingFaceRepoState;
   offer: HuggingFaceRepoOffer;
   partialCutoffMs: number;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding {
   const repoName = formatHuggingFaceRepoName({ name: params.repo.name });
   const unit = buildRepoUnit({
@@ -58,7 +59,7 @@ function buildHuggingFaceRepoFinding(params: {
   });
   const activity = decideUnitActivity({
     facts: { kind: 'huggingFace' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 
   switch (params.offer.kind) {

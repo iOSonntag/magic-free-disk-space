@@ -2,6 +2,7 @@ import type {
   RemovalOutcome,
   RemovalOutcomeCoded,
   RemovalOutcomeKind,
+  RemovalOutcomePartlyRemoved,
   RemovalOutcomeToolFailed,
   RemovalRun,
 } from '../delete/deleteCandidates.js';
@@ -11,10 +12,12 @@ import { formatBytes } from './formatBytes.js';
 import { formatCandidateItemText } from './formatCandidateItemText.js';
 import { formatCount } from './formatCount.js';
 import { formatToolFailureStderrLines, formatToolFailureSummary } from './formatToolFailure.js';
+import type { ReportTexts } from './reportTexts.js';
 import { isEngineOutcome, sumFreedSpace } from './sumFreedSpace.js';
 
 const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   removed: 'deleted',
+  partlyRemoved: 'partly deleted',
   alreadyGone: 'already gone',
   changedSinceScan: 'changed since the scan, left alone',
   ownerRunning: 'its app or tool is running now, left alone',
@@ -26,11 +29,13 @@ const outcomeTexts: Record<RemovalOutcomeKind, string> = {
   engineNotRunning: 'its engine is not running, left alone',
 };
 
-export function formatRemovalRun(params: { run: RemovalRun }): string[] {
+export function formatRemovalRun(params: { run: RemovalRun; texts: ReportTexts }): string[] {
   const freedSpace = sumFreedSpace(params.run.outcomes);
 
   return [
-    ...params.run.outcomes.flatMap((outcome) => formatOutcomeLines({ outcome: outcome })),
+    ...params.run.outcomes.flatMap((outcome) =>
+      formatOutcomeLines({ outcome: outcome, texts: params.texts }),
+    ),
     formatFreedSummaryLine({
       outcomes: params.run.outcomes,
       freedBytes: freedSpace.freedBytes,
@@ -46,12 +51,40 @@ export function formatAvailableSpaceLine(params: { availableBytes: number }): st
   return `${formatBytes(params.availableBytes)} is free on this disk now.`;
 }
 
-function formatOutcomeLines(params: { outcome: RemovalOutcome }): string[] {
-  if (params.outcome.outcome === 'toolFailed') {
-    return formatToolFailedLines({ outcome: params.outcome });
+function formatOutcomeLines(params: { outcome: RemovalOutcome; texts: ReportTexts }): string[] {
+  switch (params.outcome.outcome) {
+    case 'toolFailed':
+      return formatToolFailedLines({ outcome: params.outcome });
+    case 'partlyRemoved':
+      return [formatPartlyRemovedLine({ outcome: params.outcome, texts: params.texts })];
+    case 'removed':
+    case 'alreadyGone':
+    case 'changedSinceScan':
+    case 'ownerRunning':
+    case 'permissionDenied':
+    case 'failed':
+    case 'notAttempted':
+    case 'engineInUse':
+    case 'engineNotRunning':
+      return [formatCodedOutcomeLine({ outcome: params.outcome })];
   }
+}
 
-  return [formatCodedOutcomeLine({ outcome: params.outcome })];
+/**
+ * How many entries stayed: files another program held open or the operating system refused, or
+ * content kept only online.
+ */
+function formatPartlyRemovedLine(params: {
+  outcome: RemovalOutcomePartlyRemoved;
+  texts: ReportTexts;
+}): string {
+  const stayedText = formatCount({
+    count: params.outcome.stayedEntryCount,
+    singular: 'entry',
+    plural: 'entries',
+  });
+
+  return `- ${outcomeTexts.partlyRemoved}: ${formatCandidateItemText({ candidate: params.outcome.candidate })} (${stayedText} stayed, in use by another program, kept only online, or refused by ${params.texts.systemName}; ${formatBytes(params.outcome.freedBytes)} freed)`;
 }
 
 function formatCodedOutcomeLine(params: { outcome: RemovalOutcomeCoded }): string {

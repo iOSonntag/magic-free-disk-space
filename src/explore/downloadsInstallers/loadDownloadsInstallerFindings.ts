@@ -1,3 +1,4 @@
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { toNonEmpty } from '../../system/nonEmptyList.js';
@@ -26,15 +27,18 @@ const INCOMPLETE_DOWNLOADS_TITLES: Record<BrowserFamily, string> = {
  * since the stale cutoff: one unit of the installers, and one of each browser family's partial
  * downloads. A hidden entry and a symbolic link are left alone; so is an entry whose newest change
  * is not known by the deadline, which leaves the findings incomplete. Fails on an entry it cannot
- * read; `placeMissing` without a Downloads folder.
+ * read; `placeMissing` without a Downloads folder, or where the platform explores none.
  */
 export async function loadDownloadsInstallerFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {
-  const folderPath = joinAbsolutePath({
-    rules: run.environment.pathRules,
-    parentPath: run.environment.homeDir,
-    names: run.platform.explore.downloadsRoot,
+  if (run.platform.explore.downloadsRoot === null) {
+    return { kind: 'failed', failure: { reason: 'placeMissing' } };
+  }
+
+  const folderPath = resolveEnvironmentLocation({
+    folders: run.environment,
+    location: run.platform.explore.downloadsRoot,
   });
   const entries = await loadExploreDirectoryEntries({
     path: folderPath,
@@ -148,7 +152,7 @@ function buildDownloadsFinding(params: {
       environment: params.run.environment,
       platform: params.run.platform,
     }),
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 
   switch (params.fileKind.kind) {

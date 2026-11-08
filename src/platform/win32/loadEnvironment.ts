@@ -1,0 +1,542 @@
+import type { Environment, WindowsKnownFolderPaths } from '../../environment/buildEnvironment.js';
+import { buildEnvironment } from '../../environment/buildEnvironment.js';
+import { checkEnvironmentRoots } from '../../environment/checkEnvironmentRoots.js';
+import type { EnvironmentLocationAtRoot } from '../../environment/environmentLocation.js';
+import type { EnvironmentFailure } from '../../environment/environmentPlatform.js';
+import {
+  loadEnvironmentRealPath,
+  loadExistingRealPaths,
+  parseEnvironmentPath,
+} from '../../environment/loadEnvironmentRealPath.js';
+import type { DriveRoot } from '../../path/driveRoot.js';
+import { parseDriveRoot } from '../../path/driveRoot.js';
+import { isSameOrInsidePath } from '../../path/isSameOrInsidePath.js';
+import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
+import { WIN32_PATH_RULES } from '../../path/pathRules.js';
+import type { Result } from '../../result.js';
+import type { UserIdentity } from '../../system/userIdentity.js';
+import { parseWindowsSid } from '../../system/userIdentity.js';
+import { WIN32_CATALOG } from './catalog/win32Catalog.js';
+import type {
+  FolderVariableName,
+  ResolvedFolder,
+  VariableCheck,
+  VariableReading,
+} from './checkVariablePlacement.js';
+import { checkVariablePlacement } from './checkVariablePlacement.js';
+import type { RunKnownFolder } from './knownFolderIds.js';
+import { buildGuidBytes, knownFolderIds } from './knownFolderIds.js';
+import { listDriveRootTexts } from './listDriveRootTexts.js';
+import type { Win32CallFailure } from './win32Api.js';
+import {
+  closeHandle,
+  loadCurrentUserSubkeyStrings,
+  loadDriveType,
+  loadFileOwnerSid,
+  loadKnownFolderPath,
+  loadLogicalDrives,
+  loadTokenElevation,
+  loadTokenUserSid,
+  openProcessToken,
+} from './win32Api.js';
+
+/** The `DRIVE_*` type of a disk of this PC, as against a removable, network, or optical drive. */
+const DRIVE_FIXED = 3;
+
+/** `ERROR_INVALID_SID`, what Windows answers for a security identifier that is malformed. */
+const ERROR_INVALID_SID = 1337;
+
+/** Windows keeps the user's temporary folder below LocalAppData, one name per level. */
+const tempDirNames = ['Temp'];
+
+/** The folder of the deletion log. */
+const win32DeletionLogLocation: EnvironmentLocationAtRoot = {
+  root: 'localAppData',
+  path: 'magic-free-disk-space/Logs',
+};
+
+/** The folder of the bridge's preference file. */
+const win32PreferencesLocation: EnvironmentLocationAtRoot = {
+  root: 'localAppData',
+  path: 'magic-free-disk-space',
+};
+
+/** The variables OneDrive sets to the root of each account it syncs. */
+const oneDriveVariableNames = ['OneDrive', 'OneDriveConsumer', 'OneDriveCommercial'];
+
+/** OneDrive keeps each account it syncs below this key of the user's registry. */
+const ONE_DRIVE_ACCOUNTS_KEY_PATH = 'Software\\Microsoft\\OneDrive\\Accounts';
+
+/** The value of an account's key that holds the root of the account. */
+const ONE_DRIVE_USER_FOLDER_VALUE_NAME = 'UserFolder';
+
+/** The user of the token of this process, and whether the token is elevated. */
+type TokenFacts = { user: UserIdentity; isElevated: boolean };
+
+export async function loadEnvironment(): Promise<Result<Environment, EnvironmentFailure>> {
+  const token = loadTokenFacts();
+
+  if (token.kind === 'failed') {
+    return token;
+  }
+
+  if (token.value.isElevated) {
+    return { kind: 'failed', failure: { reason: 'runElevated' } };
+  }
+
+  const home = await loadRequiredKnownFolder({ folder: 'profile' });
+
+  if (home.kind === 'failed') {
+    return home;
+  }
+
+  const localAppData = await loadRequiredKnownFolder({ folder: 'localAppData' });
+
+  if (localAppData.kind === 'failed') {
+    return localAppData;
+  }
+
+  const roamingAppData = await loadRequiredKnownFolder({ folder: 'roamingAppData' });
+
+  if (roamingAppData.kind === 'failed') {
+    return roamingAppData;
+  }
+
+  const tempDir = joinAbsolutePath({
+    rules: WIN32_PATH_RULES,
+    parentPath: localAppData.value.path,
+    names: tempDirNames,
+  });
+  const tempRealPath = await loadEnvironmentRealPath({
+    pathRules: WIN32_PATH_RULES,
+    path: tempDir,
+  });
+
+  if (tempRealPath.kind === 'failed') {
+    return tempRealPath;
+  }
+
+  const homeOwner = loadOwner({ path: home.value.realPath });
+
+  if (homeOwner.kind === 'failed') {
+    return homeOwner;
+  }
+
+  const fixedDriveRoots = loadFixedDriveRoots();
+
+  if (fixedDriveRoots.kind === 'failed') {
+    return fixedDriveRoots;
+  }
+
+  // Each fixed drive's root is refused as a whole; a home on no listed drive would leave its own
+  // drive root unguarded.
+  if (
+    !fixedDriveRoots.value.some((driveRoot) =>
+      isSameOrInsidePath({
+        rules: WIN32_PATH_RULES,
+        path: home.value.realPath,
+        parentPath: driveRoot,
+      }),
+    )
+  ) {
+    return {
+      kind: 'failed',
+      failure: { reason: 'unresolvable', path: home.value.realPath, code: 'notOnFixedDrive' },
+    };
+  }
+
+  const knownFolderPaths = loadKnownFolderPaths();
+  const knownFolderRealPaths = await loadKnownFolderRealPaths({ paths: knownFolderPaths });
+  const oneDriveRealPaths = await loadExistingRealPaths({
+    pathRules: WIN32_PATH_RULES,
+    paths: listOneDriveRootPaths({ skyDrivePath: knownFolderPaths.skyDrive }),
+  });
+  const tempFolder: ResolvedFolder = { path: tempDir, realPath: tempRealPath.value };
+  const environment = buildWin32Environment({
+    nowMs: Date.now(),
+    user: token.value.user,
+    home: home.value,
+    tempFolder: tempFolder,
+    localAppData: localAppData.value,
+    roamingAppData: roamingAppData.value,
+    knownFolderPaths: knownFolderPaths,
+    knownFolderRealPaths: knownFolderRealPaths,
+    fixedDriveRoots: fixedDriveRoots.value,
+    oneDriveRealPaths: oneDriveRealPaths,
+  });
+
+  const rootsFailure = checkWin32EnvironmentRoots({
+    environment: environment,
+    homeRealPath: home.value.realPath,
+    homeOwner: homeOwner.value,
+    tempRealPath: tempRealPath.value,
+  });
+
+  if (rootsFailure !== null) {
+    return { kind: 'failed', failure: rootsFailure };
+  }
+
+  const variablesFailure = checkVariablePlacement({
+    checks: [
+      await loadVariableCheck({ variableName: 'USERPROFILE', expectedFolder: home.value }),
+      await loadVariableCheck({ variableName: 'TMP', expectedFolder: tempFolder }),
+      await loadVariableCheck({ variableName: 'TEMP', expectedFolder: tempFolder }),
+    ],
+  });
+
+  if (variablesFailure !== null) {
+    return { kind: 'failed', failure: variablesFailure };
+  }
+
+  return { kind: 'succeeded', value: environment };
+}
+
+/** The values a run on Windows reads, from which `buildWin32Environment` builds its environment. */
+export type Win32EnvironmentValues = {
+  nowMs: number;
+  user: UserIdentity;
+  home: ResolvedFolder;
+  tempFolder: ResolvedFolder;
+  localAppData: ResolvedFolder;
+  roamingAppData: ResolvedFolder;
+  knownFolderPaths: WindowsKnownFolderPaths;
+  /**
+   * The real path of each known folder; `null` for one Windows names no path for or that is gone.
+   */
+  knownFolderRealPaths: WindowsKnownFolderPaths;
+  /** The root of each fixed drive, each refused as a whole and each with its Recycle Bin. */
+  fixedDriveRoots: DriveRoot[];
+  /** The real paths of the OneDrive roots that exist. */
+  oneDriveRealPaths: AbsolutePath[];
+};
+
+/** The environment of a run on Windows: the values read for the run, with the facts of Windows. */
+export function buildWin32Environment(params: Win32EnvironmentValues): Environment {
+  return buildEnvironment({
+    nowMs: params.nowMs,
+    user: params.user,
+    pathRules: WIN32_PATH_RULES,
+    homeDir: params.home.path,
+    homeRealPath: params.home.realPath,
+    tempDir: params.tempFolder.path,
+    tempRealPath: params.tempFolder.realPath,
+    platformFolders: {
+      kind: 'win32',
+      appDataDirs: { localDir: params.localAppData.path, roamingDir: params.roamingAppData.path },
+      knownFolderPaths: params.knownFolderPaths,
+    },
+    platformRealFolders: {
+      kind: 'win32',
+      appDataDirs: {
+        localDir: params.localAppData.realPath,
+        roamingDir: params.roamingAppData.realPath,
+      },
+      knownFolderPaths: params.knownFolderRealPaths,
+    },
+    // Apps of Windows are only ever advised on, so no app folder is a root of a removal.
+    applicationDirs: [],
+    applicationRealPaths: [],
+    protectedRootPaths: params.fixedDriveRoots,
+    fixedDriveRoots: params.fixedDriveRoots,
+    protectedLocations: WIN32_CATALOG.protectedLocations,
+    protectedFolderRealPaths: params.oneDriveRealPaths,
+    sensitiveLocations: WIN32_CATALOG.sensitiveLocations,
+    sensitiveExceptionLocations: [],
+    evictLocations: [],
+    deletionLogLocation: win32DeletionLogLocation,
+    preferencesLocation: win32PreferencesLocation,
+    // A file Windows creates takes the access list of its folder, which keeps the profile the
+    // user's own; the POSIX modes of Node mean nothing there.
+    ownerOnlyModes: null,
+  });
+}
+
+/**
+ * The check of the roots of a run on Windows, over the environment built for it. The whole
+ * temporary folder counts as expendable, so it is checked against every protected folder of the
+ * environment, which only exists once all of them are resolved.
+ */
+export function checkWin32EnvironmentRoots(params: {
+  environment: Environment;
+  homeRealPath: AbsolutePath;
+  homeOwner: UserIdentity;
+  tempRealPath: AbsolutePath;
+}): EnvironmentFailure | null {
+  return checkEnvironmentRoots({
+    pathRules: WIN32_PATH_RULES,
+    user: params.environment.user,
+    homeRealPath: params.homeRealPath,
+    homeOwner: params.homeOwner,
+    tempRealPath: params.tempRealPath,
+    tempPlacement: 'belowHome',
+    protectedRealPaths: params.environment.protectedRealPaths,
+  });
+}
+
+/** The user of this process's token and whether it is elevated, the token closed after. */
+function loadTokenFacts(): Result<TokenFacts, EnvironmentFailure> {
+  const token = openProcessToken();
+
+  if (token.kind === 'failed') {
+    return buildCallFailure({ failure: token.failure });
+  }
+
+  try {
+    const elevation = loadTokenElevation({ token: token.value });
+
+    if (elevation.kind === 'failed') {
+      return buildCallFailure({ failure: elevation.failure });
+    }
+
+    const sidText = loadTokenUserSid({ token: token.value });
+
+    if (sidText.kind === 'failed') {
+      return buildCallFailure({ failure: sidText.failure });
+    }
+
+    const user = buildWindowsUser({
+      sidText: sidText.value,
+      // The text the conversion gave holds no security identifier.
+      failure: { reason: 'callFailed', call: 'ConvertSidToStringSidW', code: ERROR_INVALID_SID },
+    });
+
+    if (user.kind === 'failed') {
+      return user;
+    }
+
+    return { kind: 'succeeded', value: { user: user.value, isElevated: elevation.value } };
+  } finally {
+    closeHandle({ handle: token.value });
+  }
+}
+
+/**
+ * The owner of the folder at `path` as a user: the failed call when it cannot be read, and
+ * unresolvable for an owner that is no SID.
+ */
+function loadOwner(params: { path: AbsolutePath }): Result<UserIdentity, EnvironmentFailure> {
+  const sidText = loadFileOwnerSid({ path: params.path });
+
+  if (sidText.kind === 'failed') {
+    return buildCallFailure({ failure: sidText.failure });
+  }
+
+  return buildWindowsUser({
+    sidText: sidText.value,
+    failure: { reason: 'unresolvable', path: params.path, code: 'notSecurityIdentifier' },
+  });
+}
+
+/** The user of the SID text, or `failure` for a text that holds no SID. */
+function buildWindowsUser(params: {
+  sidText: string;
+  failure: EnvironmentFailure;
+}): Result<UserIdentity, EnvironmentFailure> {
+  const sid = parseWindowsSid({ text: params.sidText });
+
+  if (sid.kind === 'failed') {
+    return { kind: 'failed', failure: params.failure };
+  }
+
+  return { kind: 'succeeded', value: { kind: 'windows', sid: sid.value } };
+}
+
+/** A known folder the run cannot do without, by its path and its real path. */
+async function loadRequiredKnownFolder(params: {
+  folder: RunKnownFolder;
+}): Promise<Result<ResolvedFolder, EnvironmentFailure>> {
+  const path = loadKnownFolderDrivePath({ folder: params.folder });
+
+  if (path.kind === 'failed') {
+    return path;
+  }
+
+  const realPath = await loadEnvironmentRealPath({ pathRules: WIN32_PATH_RULES, path: path.value });
+
+  if (realPath.kind === 'failed') {
+    return realPath;
+  }
+
+  return { kind: 'succeeded', value: { path: path.value, realPath: realPath.value } };
+}
+
+/**
+ * The path Windows names for each known folder; `null` for one it names none or no drive path for.
+ */
+function loadKnownFolderPaths(): WindowsKnownFolderPaths {
+  return {
+    desktop: loadOptionalKnownFolderPath({ folder: 'desktop' }),
+    documents: loadOptionalKnownFolderPath({ folder: 'documents' }),
+    downloads: loadOptionalKnownFolderPath({ folder: 'downloads' }),
+    videos: loadOptionalKnownFolderPath({ folder: 'videos' }),
+    music: loadOptionalKnownFolderPath({ folder: 'music' }),
+    pictures: loadOptionalKnownFolderPath({ folder: 'pictures' }),
+    localAppDataLow: loadOptionalKnownFolderPath({ folder: 'localAppDataLow' }),
+    skyDrive: loadOptionalKnownFolderPath({ folder: 'skyDrive' }),
+  };
+}
+
+function loadOptionalKnownFolderPath(params: { folder: RunKnownFolder }): AbsolutePath | null {
+  const path = loadKnownFolderDrivePath({ folder: params.folder });
+
+  return path.kind === 'succeeded' ? path.value : null;
+}
+
+/** The path Windows names for the known folder, which must be a drive path. */
+function loadKnownFolderDrivePath(params: {
+  folder: RunKnownFolder;
+}): Result<AbsolutePath, EnvironmentFailure> {
+  const pathText = loadKnownFolderPath({
+    folderId: buildGuidBytes({ text: knownFolderIds[params.folder] }),
+  });
+
+  if (pathText.kind === 'failed') {
+    return buildCallFailure({ failure: pathText.failure });
+  }
+
+  // A folder on a network share, as Folder Redirection may place it, is no drive path.
+  return parseEnvironmentPath({
+    pathRules: WIN32_PATH_RULES,
+    text: pathText.value,
+    failurePath: pathText.value,
+  });
+}
+
+/** The real path of each known folder; `null` for one without a path or whose path is gone. */
+async function loadKnownFolderRealPaths(params: {
+  paths: WindowsKnownFolderPaths;
+}): Promise<WindowsKnownFolderPaths> {
+  return {
+    desktop: await loadOptionalRealPath({ path: params.paths.desktop }),
+    documents: await loadOptionalRealPath({ path: params.paths.documents }),
+    downloads: await loadOptionalRealPath({ path: params.paths.downloads }),
+    videos: await loadOptionalRealPath({ path: params.paths.videos }),
+    music: await loadOptionalRealPath({ path: params.paths.music }),
+    pictures: await loadOptionalRealPath({ path: params.paths.pictures }),
+    localAppDataLow: await loadOptionalRealPath({ path: params.paths.localAppDataLow }),
+    skyDrive: await loadOptionalRealPath({ path: params.paths.skyDrive }),
+  };
+}
+
+async function loadOptionalRealPath(params: {
+  path: AbsolutePath | null;
+}): Promise<AbsolutePath | null> {
+  if (params.path === null) {
+    return null;
+  }
+
+  const realPath = await loadEnvironmentRealPath({
+    pathRules: WIN32_PATH_RULES,
+    path: params.path,
+  });
+
+  return realPath.kind === 'succeeded' ? realPath.value : null;
+}
+
+/**
+ * The roots OneDrive may sync to: its known folder, the variables it sets, and the accounts in the
+ * user's registry. Each source only adds; a value that is no drive path is left out.
+ */
+function listOneDriveRootPaths(params: { skyDrivePath: AbsolutePath | null }): AbsolutePath[] {
+  const accountFolders = loadCurrentUserSubkeyStrings({
+    keyPath: ONE_DRIVE_ACCOUNTS_KEY_PATH,
+    valueName: ONE_DRIVE_USER_FOLDER_VALUE_NAME,
+  });
+  const rootTexts = [
+    ...oneDriveVariableNames.flatMap((name) => {
+      const value = getSetVariable({ name: name });
+
+      return value === null ? [] : [value];
+    }),
+    ...(accountFolders.kind === 'succeeded' ? accountFolders.value : []),
+  ];
+
+  return [
+    ...(params.skyDrivePath === null ? [] : [params.skyDrivePath]),
+    ...rootTexts.flatMap((text) => {
+      const path = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: text });
+
+      return path.kind === 'succeeded' ? [path.value] : [];
+    }),
+  ];
+}
+
+/** The root of each fixed drive, from the drives in use and the type of each. */
+function loadFixedDriveRoots(): Result<DriveRoot[], EnvironmentFailure> {
+  const logicalDrives = loadLogicalDrives();
+
+  if (logicalDrives.kind === 'failed') {
+    return buildCallFailure({ failure: logicalDrives.failure });
+  }
+
+  const driveRoots = listDriveRootTexts({ logicalDrives: logicalDrives.value }).flatMap(
+    (rootText) => {
+      const driveRoot = parseDriveRoot({ rules: WIN32_PATH_RULES, text: rootText });
+
+      return driveRoot.kind === 'succeeded' ? [driveRoot.value] : [];
+    },
+  );
+
+  return {
+    kind: 'succeeded',
+    value: driveRoots.filter((driveRoot) => loadDriveType({ rootPath: driveRoot }) === DRIVE_FIXED),
+  };
+}
+
+async function loadVariableCheck(params: {
+  variableName: FolderVariableName;
+  expectedFolder: ResolvedFolder;
+}): Promise<VariableCheck> {
+  return {
+    variableName: params.variableName,
+    reading: await loadVariableReading({ variableName: params.variableName }),
+    expectedFolder: params.expectedFolder,
+  };
+}
+
+/** What the variable holds: unset, the real path of the folder it names, or a path that fails. */
+async function loadVariableReading(params: {
+  variableName: FolderVariableName;
+}): Promise<VariableReading> {
+  const value = getSetVariable({ name: params.variableName });
+
+  if (value === null) {
+    return { kind: 'unset' };
+  }
+
+  const path = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: value });
+
+  if (path.kind === 'failed') {
+    return { kind: 'unresolvable' };
+  }
+
+  const realPath = await loadEnvironmentRealPath({ pathRules: WIN32_PATH_RULES, path: path.value });
+
+  if (realPath.kind === 'failed') {
+    return { kind: 'unresolvable' };
+  }
+
+  return { kind: 'resolved', realPath: realPath.value };
+}
+
+/**
+ * The value of the environment variable; `null` when it is unset or empty, which Windows treats
+ * alike.
+ */
+function getSetVariable(params: { name: string }): string | null {
+  const value = process.env[params.name];
+
+  return value === undefined || value === '' ? null : value;
+}
+
+/** A failed call of Windows as the environment's failure. */
+function buildCallFailure(params: {
+  failure: Win32CallFailure;
+}): Result<never, EnvironmentFailure> {
+  return {
+    kind: 'failed',
+    failure: { reason: 'callFailed', call: params.failure.call, code: params.failure.code },
+  };
+}

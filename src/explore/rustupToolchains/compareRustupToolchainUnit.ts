@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreToolUnitRustupToolchain } from '../exploreUnit.js';
@@ -13,7 +14,7 @@ export function compareRustupToolchainUnit(params: {
   unit: ExploreToolUnitRustupToolchain;
   state: RustupState;
   toolPins: ToolPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const isStillOffered = decideRustupToolchainOffers({
     state: params.state,
@@ -29,6 +30,6 @@ export function compareRustupToolchainUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'rustup', toolchainPath: params.unit.toolchainPath },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

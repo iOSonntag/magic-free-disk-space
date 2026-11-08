@@ -145,6 +145,7 @@ async function loadMiseTrackedConfigPinFile(params: {
   }
 
   const kind = matchProjectPinFile({
+    pathRules: params.pathRules,
     name: basename(realPath.value),
     siblingNames: new Set(siblingNames.value),
     source: 'miseTrackedConfig',

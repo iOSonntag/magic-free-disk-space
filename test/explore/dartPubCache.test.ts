@@ -1,9 +1,10 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildDartPubCacheFindings } from '../../src/explore/dartPubCache/buildDartPubCacheFindings.js';
 import { parseDartPubCacheGc } from '../../src/explore/dartPubCache/parseDartPubCacheGc.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   buildDartGcDryRunText,
   buildDartGcPaths,
@@ -15,11 +16,13 @@ const tool: LocatedTool = { name: 'dart', path: '/opt/example/dart-sdk/bin/dart'
 
 const gcPaths = buildDartGcPaths({ homeDir: FIXTURE_HOME_DIR });
 
-describeAwaitingWin32Platform('parseDartPubCacheGc', () => {
+const homeDir = buildTestAbsolutePath({ text: FIXTURE_HOME_DIR });
+
+describe('parseDartPubCacheGc', () => {
   test('reads the paths after "Would delete:"', () => {
     expect(
       parseDartPubCacheGc({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: buildDartGcDryRunText({ homeDir: FIXTURE_HOME_DIR, gcPaths: gcPaths }),
       }),
     ).toEqual({ kind: 'succeeded', value: gcPaths });
@@ -28,7 +31,7 @@ describeAwaitingWin32Platform('parseDartPubCacheGc', () => {
   test('reads an empty set when nothing is unused', () => {
     expect(
       parseDartPubCacheGc({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: DART_GC_NOTHING_UNUSED_TEXT,
       }),
     ).toEqual({
@@ -38,28 +41,29 @@ describeAwaitingWin32Platform('parseDartPubCacheGc', () => {
   });
 
   test('rejects output with neither answer', () => {
-    expect(
-      parseDartPubCacheGc({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage\n' }).kind,
-    ).toBe('failed');
+    expect(parseDartPubCacheGc({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage\n' }).kind).toBe(
+      'failed',
+    );
   });
 
   test('rejects a listed path that is not absolute', () => {
     expect(
       parseDartPubCacheGc({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: 'Would delete:\nrelative/path\n',
       }).kind,
     ).toBe('failed');
   });
 });
 
-describeAwaitingWin32Platform('buildDartPubCacheFindings', () => {
+describe('buildDartPubCacheFindings', () => {
   test('offers one unit for the whole set, with the count and three samples shown with ~', () => {
     const findings = buildDartPubCacheFindings({
       tool: tool,
       gcPaths: gcPaths,
-      homeDir: FIXTURE_HOME_DIR,
-      processCommands: null,
+      pathRules: POSIX_PATH_RULES,
+      homeDir: homeDir,
+      runningProcesses: null,
     });
 
     expect(findings).toHaveLength(1);
@@ -81,8 +85,9 @@ describeAwaitingWin32Platform('buildDartPubCacheFindings', () => {
       buildDartPubCacheFindings({
         tool: tool,
         gcPaths: [],
-        homeDir: FIXTURE_HOME_DIR,
-        processCommands: [],
+        pathRules: POSIX_PATH_RULES,
+        homeDir: homeDir,
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual([]);
   });

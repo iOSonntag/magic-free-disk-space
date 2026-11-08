@@ -1,5 +1,9 @@
-import type { CatalogOwner, MacBundleId } from '../../src/catalog/catalogOwner.js';
-import { parseMacBundleId } from '../../src/catalog/catalogOwner.js';
+import type {
+  CatalogOwner,
+  MacBundleId,
+  WindowsImageName,
+} from '../../src/catalog/catalogOwner.js';
+import { parseMacBundleId, parseWindowsImageName } from '../../src/catalog/catalogOwner.js';
 import type { AndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import { parseAndroidAvdName } from '../../src/explore/android/parseAndroidAvdName.js';
 import type {
@@ -40,19 +44,76 @@ import type {
   VagrantBoxProvider,
   VagrantBoxVersion,
 } from '../../src/explore/vagrantBoxes/vagrantBoxNames.js';
+import type { DriveRoot } from '../../src/path/driveRoot.js';
+import { parseDriveRoot } from '../../src/path/driveRoot.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import type { PathRules } from '../../src/path/pathRules.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { Result } from '../../src/result.js';
-import type { UserIdentity } from '../../src/system/userIdentity.js';
-import { parsePosixUid } from '../../src/system/userIdentity.js';
+import type { UserIdentity, WindowsSid } from '../../src/system/userIdentity.js';
+import { parsePosixUid, parseWindowsSid } from '../../src/system/userIdentity.js';
 
 /** Branded values for fixtures, each made by its one maker; a value that fails it throws. */
 
+/** The rules of the operating system that runs the tests, for the paths it names itself. */
+export const hostPathRules: PathRules =
+  process.platform === 'win32' ? WIN32_PATH_RULES : POSIX_PATH_RULES;
+
+/** The rules of the other operating system, under which no path the host names is absolute. */
+export const otherPathRules: PathRules =
+  process.platform === 'win32' ? POSIX_PATH_RULES : WIN32_PATH_RULES;
+
+/** An example macOS path, such as `/Users/test/Library`, the same on every host. */
 export function buildTestAbsolutePath(params: { text: string }): AbsolutePath {
   return unwrapFixtureValue({
-    parsed: parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text }),
+    parsed: parseAbsolutePath({ rules: POSIX_PATH_RULES, text: params.text }),
     text: params.text,
+  });
+}
+
+/** A path the host names, such as one below its temporary folder, under the rules of the host. */
+export function buildTestHostPath(params: { text: string }): AbsolutePath {
+  return unwrapFixtureValue({
+    parsed: parseAbsolutePath({ rules: hostPathRules, text: params.text }),
+    text: params.text,
+  });
+}
+
+/** An example Windows path, such as `C:\Users\test`, the same on every host. */
+export function buildTestWindowsPath(params: { text: string }): AbsolutePath {
+  return unwrapFixtureValue({
+    parsed: parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.text }),
+    text: params.text,
+  });
+}
+
+/** The root of a Windows drive, such as `C:\`, under the Windows rules on every host. */
+export function buildTestDriveRoot(params: { text: string }): DriveRoot {
+  return unwrapFixtureValue({
+    parsed: parseDriveRoot({ rules: WIN32_PATH_RULES, text: params.text }),
+    text: params.text,
+  });
+}
+
+/**
+ * A home folder with the rules its paths follow: the environment of a test on the fixture root,
+ * which the host names, or an example one.
+ */
+export type HomeFolder = { pathRules: PathRules; homeDir: AbsolutePath };
+
+/** An example macOS home, such as `/Users/example`, the same on every host. */
+export function buildExampleHome(params: { text: string }): HomeFolder {
+  return { pathRules: POSIX_PATH_RULES, homeDir: buildTestAbsolutePath({ text: params.text }) };
+}
+
+/** The path of `path`, written with `/`, below the home, joined under the home's rules. */
+export function joinBelowHome(params: { home: HomeFolder; path: string }): AbsolutePath {
+  return joinAbsolutePath({
+    rules: params.home.pathRules,
+    parentPath: params.home.homeDir,
+    names: params.path.split('/'),
   });
 }
 
@@ -64,6 +125,26 @@ export function buildTestUserIdentity(params: { uid: number }): UserIdentity {
       text: String(params.uid),
     }),
   };
+}
+
+function buildTestWindowsSid(params: { text: string }): WindowsSid {
+  return unwrapFixtureValue({ parsed: parseWindowsSid(params), text: params.text });
+}
+
+/** A Windows user by its SID. */
+export function buildTestWindowsUser(params: { sidText: string }): UserIdentity {
+  return { kind: 'windows', sid: buildTestWindowsSid({ text: params.sidText }) };
+}
+
+const EXAMPLE_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
+
+/** The example user of the Windows fixtures. */
+export const exampleWindowsUser: UserIdentity = buildTestWindowsUser({
+  sidText: EXAMPLE_WINDOWS_SID_TEXT,
+});
+
+export function buildTestWindowsImageName(params: { text: string }): WindowsImageName {
+  return unwrapFixtureValue({ parsed: parseWindowsImageName(params), text: params.text });
 }
 
 export function buildTestMacBundleId(params: { text: string }): MacBundleId {

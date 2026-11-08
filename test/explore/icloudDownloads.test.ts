@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Risk } from '../../src/catalog/catalog.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type {
   ExploreProbeToolResult,
   ExploreProbeToolRun,
@@ -15,9 +16,9 @@ import { DAY_MS } from '../../src/scan/limits.js';
 import type { EntryStats } from '../../src/system/loadEntryStats.js';
 import type { FileIdentity } from '../../src/system/loadFileIdentity.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, createFixtureFile } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
@@ -58,8 +59,20 @@ const VALUE_IDENTITY: FileIdentity = {
   realPath: '/Users/example/Library/Mobile Documents/com~apple~CloudDocs/old.txt',
 };
 
+const placeMissingResult: ExploreProbeToolResult = {
+  kind: 'failed',
+  failure: { reason: 'placeMissing' },
+};
+
+/** The folder of iCloud Drive where the host's catalog keeps it below the fixture home. */
 function getMobileDocumentsPath(params: { home: FixtureHome }): string {
-  return join(params.home.environment.homeDir, 'Library', 'Mobile Documents');
+  const root = hostPlatform.explore.icloudDriveRoot;
+
+  if (root === null) {
+    throw new Error('The platform has no iCloud Drive folder.');
+  }
+
+  return resolveEnvironmentLocation({ folders: params.home.environment, location: root });
 }
 
 /** Writes a file changed and read at the given times, by default long ago. */
@@ -88,7 +101,12 @@ function buildRun(params: {
   unusedCutoffMs?: number;
   staleCutoffMs?: number;
 }): ExploreProbeToolRun {
-  const platform = buildTestProbePlatform();
+  const platform = buildTestProbePlatform({
+    explore: {
+      icloudDriveRoot:
+        params.hasIcloudDrive === false ? null : hostPlatform.explore.icloudDriveRoot,
+    },
+  });
   const evictedPaths = params.evictedPaths ?? [];
 
   return buildTestProbeToolRun({
@@ -96,14 +114,12 @@ function buildRun(params: {
     tool: BRCTL_TOOL,
     platform: {
       ...platform,
-      explore: {
-        ...platform.explore,
-        icloudDriveRoot: params.hasIcloudDrive === false ? null : platform.explore.icloudDriveRoot,
-      },
       entryReads: {
         ...platform.entryReads,
-        isEntryEvicted: (entry) =>
-          evictedPaths.includes(entry.path) || platform.entryReads.isEntryEvicted(entry),
+        loadEntryPlacement: (entry) =>
+          evictedPaths.includes(entry.path)
+            ? { kind: 'cloudOnly' }
+            : platform.entryReads.loadEntryPlacement(entry),
       },
     },
     unusedCutoffMs: params.unusedCutoffMs ?? CUTOFF_MS,
@@ -184,7 +200,7 @@ describe('isEvictFileUnchanged', () => {
   });
 });
 
-describeAwaitingWin32Platform('the iCloud Drive probe', () => {
+describe.skipIf(hostPlatform.explore.icloudDriveRoot === null)('the iCloud Drive probe', () => {
   test('finds downloaded files untouched since the cutoff, one unit per folder', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -297,7 +313,7 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
 
         expect(unit.foundFiles).toEqual([
           {
-            path: buildTestAbsolutePath({ text: filePath }),
+            path: buildTestHostPath({ text: filePath }),
             modifiedMs: OLD_MS,
             accessedMs: accessedMs,
           },
@@ -338,24 +354,30 @@ describeAwaitingWin32Platform('the iCloud Drive probe', () => {
     });
   });
 
-  test('says the place is missing without iCloud Drive or its folder', async () => {
+  test('says the place is missing on a platform without iCloud Drive, though its folder exists', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
-        const missing: ExploreProbeToolResult = {
-          kind: 'failed',
-          failure: { reason: 'placeMissing' },
-        };
-
-        expect(await loadIcloudDownloadFindings(buildRun({ home: home }))).toEqual(missing);
-
         await createFixtureDirectory({
           path: getMobileDocumentsPath({ home: home }),
         });
 
         expect(
           await loadIcloudDownloadFindings(buildRun({ home: home, hasIcloudDrive: false })),
-        ).toEqual(missing);
+        ).toEqual(placeMissingResult);
+      },
+    });
+  });
+});
+
+describe('the iCloud Drive probe without its folder', () => {
+  test('says the place is missing', async () => {
+    await withFixtureHome({
+      nowMs: NOW_MS,
+      run: async (home) => {
+        expect(await loadIcloudDownloadFindings(buildRun({ home: home }))).toEqual(
+          placeMissingResult,
+        );
       },
     });
   });

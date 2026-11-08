@@ -3,7 +3,7 @@ import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { Result } from '../result.js';
 import type { EntryReads } from '../system/entryReads.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../system/limits.js';
-import type { RunningProcessesLoad } from '../system/systemPlatform.js';
+import type { RunningProcesses, RunningProcessesLoad } from '../system/systemPlatform.js';
 import type { RemovalRun } from './deleteCandidates.js';
 import { deleteCandidates } from './deleteCandidates.js';
 import type { DeletePlatform } from './deletePlatform.js';
@@ -33,6 +33,7 @@ export async function deleteApprovedCandidates(params: {
 }): Promise<Result<ApprovedRemoval, JournalFailure>> {
   const journal = await createDeletionJournal({
     logPath: params.environment.deletionLogPath,
+    ownerOnlyModes: params.environment.ownerOnlyModes,
     nowMs: params.clock(),
   });
 
@@ -47,8 +48,8 @@ export async function deleteApprovedCandidates(params: {
     delete: params.delete,
     probePlatform: params.probePlatform,
     entryReads: params.entryReads,
-    loadProcessCommands: () =>
-      loadCurrentProcessCommands({ loadRunningProcesses: params.loadRunningProcesses }),
+    loadKnownRunningProcesses: () =>
+      loadKnownRunningProcesses({ loadRunningProcesses: params.loadRunningProcesses }),
     clock: params.clock,
   });
 
@@ -56,12 +57,12 @@ export async function deleteApprovedCandidates(params: {
 }
 
 /** `null` when the process listing failed, which withholds every item whose owner it would name. */
-async function loadCurrentProcessCommands(params: {
+async function loadKnownRunningProcesses(params: {
   loadRunningProcesses: RunningProcessesLoad;
-}): Promise<string[] | null> {
-  const processCommands = await params.loadRunningProcesses({
+}): Promise<RunningProcesses | null> {
+  const runningProcesses = await params.loadRunningProcesses({
     commandTimeoutMs: SYSTEM_COMMAND_TIMEOUT_MS,
   });
 
-  return processCommands.kind === 'succeeded' ? processCommands.value : null;
+  return runningProcesses.kind === 'succeeded' ? runningProcesses.value : null;
 }

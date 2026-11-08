@@ -1,5 +1,6 @@
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
 import type { UnitActivity } from './exploreUnit.js';
 
 /** What a probe saw of a simulator device; `state` as `simctl` reports it, such as `Shutdown`. */
@@ -111,6 +112,16 @@ const VSCODE_BUNDLE_PATH_PART = '/Visual Studio Code.app/Contents/';
 // pnpm or pnpx as the last segment of a path or the whole program, its launcher or its script.
 const PNPM_PROGRAM_PATTERN = /(^|\/)pnp[mx](\.[cm]?js)?( |$)/;
 
+// On Windows a process is the path of its image, or its file name alone: the emulator's launcher
+// and the `qemu-system-<arch>` of each running AVD.
+const ANDROID_EMULATOR_WINDOWS_IMAGE_PATTERN = /(^|\\)(emulator|qemu-system-[^\\]+)\.exe$/i;
+
+// The app and each of its helpers run as its one image on Windows.
+const VSCODE_WINDOWS_IMAGE_PATTERN = /(^|\\)code\.exe$/i;
+
+// pnpm's own build, or Node, which may run pnpm's script: Windows lists no arguments to tell.
+const PNPM_WINDOWS_IMAGE_PATTERN = /(^|\\)(pnpm|pnpx|node)\.exe$/i;
+
 // Each program as the last segment of a path or the whole executable.
 const VAGRANT_PROGRAM_PATTERN = /(^|\/)vagrant( |$)/;
 
@@ -137,110 +148,134 @@ const LM_STUDIO_PROGRAM_PATTERN = /(^|\/)(llmster|lms)( |$)/;
 const CLAUDE_PROGRAM_PATTERN = /(^|\/)claude( |$)/;
 
 /**
- * The one busy rule of the explore units, at the scan and right before a run. `unknown` only for
- * a unit whose rule reads the processes while they are `null`.
+ * The one busy rule of the explore units, at the scan and right before a run. `unknown` for a unit
+ * whose rule reads the processes while they are `null`, and for a unit no probe of the platform
+ * whose processes these are reaches. Each rule knows the form of each platform that explores it.
  */
 export function decideUnitActivity(params: {
   facts: UnitActivityFacts;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitActivity {
   switch (params.facts.kind) {
     case 'simulatorDevice':
       return decideSimulatorDeviceActivity({
         state: params.facts.state,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
     case 'dartPubCache':
     case 'miseVersion':
       return 'idle';
     case 'simulatorRuntime':
-      return decideSimulatorAppActivity({ processCommands: params.processCommands });
+      return decideSimulatorAppActivity({ runningProcesses: params.runningProcesses });
     case 'android':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) =>
-          command.includes(ANDROID_EMULATOR_QEMU_PATH_PART) ||
-          ANDROID_EMULATOR_LAUNCHER_PATTERN.test(command),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) =>
+          commandLine.includes(ANDROID_EMULATOR_QEMU_PATH_PART) ||
+          ANDROID_EMULATOR_LAUNCHER_PATTERN.test(commandLine),
+        isOwnerImagePath: (imagePath) => ANDROID_EMULATOR_WINDOWS_IMAGE_PATTERN.test(imagePath),
       });
     case 'homebrew':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => command.includes(HOMEBREW_RUBY_ENTRY_PATH_PART),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) => commandLine.includes(HOMEBREW_RUBY_ENTRY_PATH_PART),
+        // Windows explores no Homebrew.
+        isOwnerImagePath: null,
       });
     case 'vscodeExtension':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => command.includes(VSCODE_BUNDLE_PATH_PART),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) => commandLine.includes(VSCODE_BUNDLE_PATH_PART),
+        isOwnerImagePath: (imagePath) => VSCODE_WINDOWS_IMAGE_PATTERN.test(imagePath),
       });
     case 'versionFolder': {
       const folderPathPrefix = `${params.facts.folderPath}/`;
 
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => command.includes(folderPathPrefix),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) => commandLine.includes(folderPathPrefix),
+        // Windows explores no version folders.
+        isOwnerImagePath: null,
       });
     }
     case 'pnpmStore':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => PNPM_PROGRAM_PATTERN.test(command),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) => PNPM_PROGRAM_PATTERN.test(commandLine),
+        isOwnerImagePath: (imagePath) => PNPM_WINDOWS_IMAGE_PATTERN.test(imagePath),
       });
     case 'vagrant':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => VAGRANT_PROGRAM_PATTERN.test(command),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) => VAGRANT_PROGRAM_PATTERN.test(commandLine),
+        // Windows explores no Vagrant boxes.
+        isOwnerImagePath: null,
       });
     case 'rustup': {
       const toolchainPath = params.facts.toolchainPath;
 
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) =>
-          RUSTUP_PROGRAM_PATTERN.test(command) ||
-          isPathInCommand({ path: toolchainPath, command: command }),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) =>
+          RUSTUP_PROGRAM_PATTERN.test(commandLine) ||
+          isPathInCommandLine({ path: toolchainPath, commandLine: commandLine }),
+        // Windows explores no rustup toolchains.
+        isOwnerImagePath: null,
       });
     }
     case 'conda':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) =>
-          CONDA_PROGRAM_PATTERN.test(command) || CONDA_MODULE_PATTERN.test(command),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) =>
+          CONDA_PROGRAM_PATTERN.test(commandLine) || CONDA_MODULE_PATTERN.test(commandLine),
+        // Windows explores no conda packages.
+        isOwnerImagePath: null,
       });
     case 'ollama':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => OLLAMA_PROGRAM_PATTERN.test(command),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) => OLLAMA_PROGRAM_PATTERN.test(commandLine),
+        // Windows explores no Ollama models.
+        isOwnerImagePath: null,
       });
     case 'huggingFace':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) => HUGGING_FACE_PROGRAM_PATTERN.test(command),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) => HUGGING_FACE_PROGRAM_PATTERN.test(commandLine),
+        // Windows explores no Hugging Face cache.
+        isOwnerImagePath: null,
       });
     case 'lmStudio':
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) =>
-          command.includes(LM_STUDIO_BUNDLE_PATH_PART) ||
-          command.includes(LM_STUDIO_HOME_PATH_PART) ||
-          LM_STUDIO_PROGRAM_PATTERN.test(command),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) =>
+          commandLine.includes(LM_STUDIO_BUNDLE_PATH_PART) ||
+          commandLine.includes(LM_STUDIO_HOME_PATH_PART) ||
+          LM_STUDIO_PROGRAM_PATTERN.test(commandLine),
+        // Windows explores no LM Studio models.
+        isOwnerImagePath: null,
       });
     case 'claudeCodeVersion': {
       const versionPath = params.facts.versionPath;
 
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) =>
-          CLAUDE_PROGRAM_PATTERN.test(command) ||
-          isPathInCommand({ path: versionPath, command: command }),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) =>
+          CLAUDE_PROGRAM_PATTERN.test(commandLine) ||
+          isPathInCommandLine({ path: versionPath, commandLine: commandLine }),
+        // Windows explores no Claude Code versions.
+        isOwnerImagePath: null,
       });
     }
     case 'appBundles': {
       const bundlePaths = params.facts.bundlePaths;
 
       return decideProcessActivity({
-        processCommands: params.processCommands,
-        isOwnerProcess: (command) =>
-          isAnyBundleRunning({ bundlePaths: bundlePaths, processCommands: [command] }),
+        runningProcesses: params.runningProcesses,
+        isOwnerCommandLine: (commandLine) =>
+          isAnyBundleRunning({ bundlePaths: bundlePaths, commandLines: [commandLine] }),
+        // Only macOS names app bundles, for Mail, the browsers, and the IDEs.
+        isOwnerImagePath: null,
       });
     }
     case 'untouchedFiles':
@@ -252,51 +287,69 @@ export function decideUnitActivity(params: {
 /** A device that is not shut down is in use; so is every device while Simulator.app runs. */
 function decideSimulatorDeviceActivity(params: {
   state: string;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitActivity {
   if (params.state !== SIMULATOR_DEVICE_IDLE_STATE) {
     return 'busy';
   }
 
-  return decideSimulatorAppActivity({ processCommands: params.processCommands });
+  return decideSimulatorAppActivity({ runningProcesses: params.runningProcesses });
 }
 
 /** Busy while Simulator.app runs; `unknown` when the processes were not read. */
-function decideSimulatorAppActivity(params: { processCommands: string[] | null }): UnitActivity {
+function decideSimulatorAppActivity(params: {
+  runningProcesses: RunningProcesses | null;
+}): UnitActivity {
   return decideProcessActivity({
-    processCommands: params.processCommands,
-    isOwnerProcess: (command) => command.includes(SIMULATOR_APP_EXECUTABLE_PATH_PART),
+    runningProcesses: params.runningProcesses,
+    isOwnerCommandLine: (commandLine) => commandLine.includes(SIMULATOR_APP_EXECUTABLE_PATH_PART),
+    // Windows explores no simulators.
+    isOwnerImagePath: null,
   });
 }
 
 /**
- * Whether the command names the path whole, followed by its end, a space, or a separator, so the
- * path of version `2.1.3` never matches the one of `2.1.30`.
+ * Whether the command line names the path whole, followed by its end, a space, or a separator, so
+ * the path of version `2.1.3` never matches the one of `2.1.30`.
  */
-function isPathInCommand(params: { path: string; command: string }): boolean {
-  let index = params.command.indexOf(params.path);
+function isPathInCommandLine(params: { path: string; commandLine: string }): boolean {
+  let index = params.commandLine.indexOf(params.path);
 
   while (index !== -1) {
-    const next = params.command.charAt(index + params.path.length);
+    const next = params.commandLine.charAt(index + params.path.length);
 
     if (next === '' || next === ' ' || next === '/') {
       return true;
     }
 
-    index = params.command.indexOf(params.path, index + 1);
+    index = params.commandLine.indexOf(params.path, index + 1);
   }
 
   return false;
 }
 
-/** Busy while a process of the unit's owner runs; `unknown` when the processes were not read. */
+/**
+ * Busy while a process of the unit's owner runs, told by the form the processes come in;
+ * `unknown` when the processes were not read, and for image paths when `isOwnerImagePath` is
+ * `null`, since no probe of Windows reaches the unit.
+ */
 function decideProcessActivity(params: {
-  processCommands: string[] | null;
-  isOwnerProcess: (command: string) => boolean;
+  runningProcesses: RunningProcesses | null;
+  isOwnerCommandLine: (commandLine: string) => boolean;
+  isOwnerImagePath: ((imagePath: string) => boolean) | null;
 }): UnitActivity {
-  if (params.processCommands === null) {
+  if (params.runningProcesses === null) {
     return 'unknown';
   }
 
-  return params.processCommands.some(params.isOwnerProcess) ? 'busy' : 'idle';
+  switch (params.runningProcesses.kind) {
+    case 'commandLines':
+      return params.runningProcesses.commandLines.some(params.isOwnerCommandLine) ? 'busy' : 'idle';
+    case 'imagePaths':
+      if (params.isOwnerImagePath === null) {
+        return 'unknown';
+      }
+
+      return params.runningProcesses.imagePaths.some(params.isOwnerImagePath) ? 'busy' : 'idle';
+  }
 }

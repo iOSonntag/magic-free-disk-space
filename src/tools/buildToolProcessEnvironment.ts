@@ -1,8 +1,4 @@
-import { dirname } from 'node:path';
-import type { LocatedTool } from './findTrustedTool.js';
 import type { ToolName } from './toolInstallLocations.js';
-
-const SYSTEM_PATH_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
 
 // Keeps Homebrew from updating itself, reporting home, and printing hints or colour codes into its
 // output. Homebrew reads its brew.env files anyway, and `HOMEBREW_NO_COLOR` wins over a
@@ -31,19 +27,15 @@ const TOOL_ENVIRONMENT_ENTRIES: Record<ToolName, Record<string, string>> = {
 };
 
 /**
- * The whole environment of a tool's process: nothing is inherited, and `PATH` holds only the
- * tool's own folder and the system folders.
+ * The whole environment of a tool's process: `baseEnvironment`, then the tool's own entries.
+ * Nothing else is inherited.
  */
 export function buildToolProcessEnvironment(params: {
-  tool: LocatedTool;
-  homeDir: string;
-  tempDir: string;
+  toolName: ToolName;
+  baseEnvironment: Record<string, string>;
 }): Record<string, string> {
   return {
-    HOME: params.homeDir,
-    TMPDIR: params.tempDir,
-    LANG: 'en_US.UTF-8',
-    PATH: [dirname(params.tool.path), ...SYSTEM_PATH_DIRS].join(':'),
-    ...TOOL_ENVIRONMENT_ENTRIES[params.tool.name],
+    ...params.baseEnvironment,
+    ...TOOL_ENVIRONMENT_ENTRIES[params.toolName],
   };
 }

@@ -10,7 +10,6 @@ import {
   FAKE_API_VERSION,
   startFakeEngine,
 } from '../explore/engineFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestEngineCandidate } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -18,12 +17,14 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
 
 const VOLUME_BYTES = 4096;
 
-describeAwaitingWin32Platform('callEngineCandidate', () => {
+// The fake engine serves on a Unix socket, as the engines of macOS do.
+describeOnPosix('callEngineCandidate', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

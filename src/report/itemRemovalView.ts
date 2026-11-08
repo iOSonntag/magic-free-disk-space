@@ -1,8 +1,8 @@
 import type { CandidateRemoval } from '../scan/candidate.js';
 
 /**
- * How an offered item goes: deleted as its paths, by its tool's command, over its engine's API,
- * or evicted from the Mac while iCloud keeps it.
+ * How an offered item goes: deleted as its paths or as a Recycle Bin the system empties, by its
+ * tool's command, over its engine's API, or evicted from the Mac while iCloud keeps it.
  */
 export type ItemRemovalView = 'delete' | 'tool' | 'engine' | 'evict';
 
@@ -12,6 +12,7 @@ const removalViews: Record<CandidateRemoval['kind'], ItemRemovalView> = {
   runTool: 'tool',
   callEngine: 'engine',
   evictUnitFiles: 'evict',
+  emptyRecycleBin: 'delete',
 };
 
 /** The removal of an item as the scan view and the plan word it, the same for both. */

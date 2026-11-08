@@ -2,6 +2,7 @@ import type { AdviceOpener, Risk } from '../catalog/catalog.js';
 import { isRemovableRisk } from '../catalog/catalog.js';
 import type { ExploreEngineAnswerFailure } from '../explore/exploreProbe.js';
 import { formatHomeRelativePath } from '../path/formatHomeRelativePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { SectionTotal } from '../scan/buildSectionTotals.js';
 import { buildSectionTotals } from '../scan/buildSectionTotals.js';
 import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
@@ -20,10 +21,16 @@ import {
   getCategorySection,
   placeCandidate,
 } from '../scan/placeCandidate.js';
-import type { ScanProgress, ScanReport, SkippedItem } from '../scan/runScan.js';
+import type {
+  CloudOnlyEntryCount,
+  ScanProgress,
+  ScanReport,
+  SkippedItem,
+} from '../scan/runScan.js';
+import type { AppAdvice } from '../scan/scanPlatform.js';
 import type { VolumeSpace } from '../system/volumeSpace.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
-import { formatSizeText, formatTotalSizeText } from './formatBytes.js';
+import { formatBytes, formatSizeText, formatTotalSizeText } from './formatBytes.js';
 import { formatCandidateCommandText } from './formatCandidateCommandText.js';
 import { formatCount } from './formatCount.js';
 import { formatDisplayText } from './formatDisplayText.js';
@@ -48,6 +55,23 @@ export type ScanView = {
   notices: NoticeView[];
   /** What each section holds, Explore items and advice in the section of their category. */
   sectionTotals: SectionTotalView[];
+  /**
+   * `null` when the scan listed no installed app as advice, as on macOS, whose unused apps are
+   * items of their own.
+   */
+  appAdvice: AppAdviceView | null;
+};
+
+/** The installed apps, largest first, which the person uninstalls the way the system does. */
+export type AppAdviceView = { titleText: string; introText: string; items: AppAdviceItemView[] };
+
+/** An installed app the scan only advises about: never selectable, and in no section. */
+export type AppAdviceItemView = {
+  title: string;
+  risk: Risk;
+  riskText: string;
+  sizeText: string;
+  detailLines: ItemDetailLine[];
 };
 
 /** A section's total with the title a client shows the section by. */
@@ -97,7 +121,10 @@ export type ExploreView = {
 /** What the tool never removes: places the person handles with the owning tool. */
 type AdviceGroupView = { titleText: string; items: AdviceItemView[] };
 
-/** The source of an item as a client words it; catalog items in the Trash read as `trash`. */
+/**
+ * The source of an item as a client words it; catalog items in the Trash and a Recycle Bin read
+ * as `trash`.
+ */
 type ItemOriginView =
   | 'catalog'
   | 'trash'
@@ -197,6 +224,11 @@ const EXPLORE_INTRO_TEXT =
 
 const ADVICE_GROUP_TITLE_TEXT = 'Handle these yourself; this tool never deletes them';
 
+const APP_ADVICE_TITLE_TEXT = 'Installed apps';
+
+/** An app whose installer wrote no size. */
+const APP_SIZE_UNKNOWN_TEXT = 'size unknown';
+
 function buildSectionTitleTexts(params: { texts: ReportTexts }): Record<ConsumerSection, string> {
   return {
     caches: 'Caches',
@@ -220,6 +252,7 @@ const originViews: Record<CandidateOrigin['kind'], ItemOriginView> = {
   userFile: 'largeFile',
   leftover: 'leftover',
   explore: 'explore',
+  recycleBin: 'trash',
 };
 
 const riskTexts: Record<Risk, string> = {
@@ -267,6 +300,7 @@ function buildIssueReasonTexts(params: {
   return {
     privacyDenied: `blocked by ${params.texts.systemName} privacy protection`,
     permissionDenied: 'permission denied',
+    inUse: 'in use by another program',
     unexpected: 'unexpected error',
     commandFailed: 'a system command failed',
     walkStopped: 'search stopped at its time limit',
@@ -280,12 +314,14 @@ const toolDistrustDetailTexts: Record<ToolDistrustDetail, string> = {
   foreignOwner: 'owned by another user',
   writableByOthers: 'others can change it',
   notExecutableFile: 'not an executable file',
+  ownerUnchecked: 'its owner is not checked on this system',
 };
 
 /** Issues of a tool that could not be asked are listed apart from the places that could not be read. */
 const issueNoticeKinds: Record<ScanIssue['reason'], 'place' | 'tool'> = {
   privacyDenied: 'place',
   permissionDenied: 'place',
+  inUse: 'place',
   unexpected: 'place',
   commandFailed: 'place',
   walkStopped: 'place',
@@ -307,6 +343,7 @@ export function buildScanView(params: {
   report: ScanReport;
   fullDiskAccessHolder: FullDiskAccessHolder;
   texts: ReportTexts;
+  pathRules: PathRules;
   homeDir: string;
   /** The space of the home folder's volume, read right before the view. */
   disk: VolumeSpace | null;
@@ -321,6 +358,7 @@ export function buildScanView(params: {
         candidate: candidate,
         place: place,
         number: index + 1,
+        pathRules: params.pathRules,
         homeDir: params.homeDir,
       }),
     };
@@ -345,10 +383,15 @@ export function buildScanView(params: {
     explore: buildExploreView({
       placedItems: placedItems,
       advice: params.report.advice,
+      pathRules: params.pathRules,
       homeDir: params.homeDir,
     }),
     safeNumbers: params.report.safeNumbers,
-    skipped: buildSkippedView({ skipped: params.report.skipped, texts: params.texts }),
+    skipped: buildSkippedView({
+      skipped: params.report.skipped,
+      cloudOnlyEntries: params.report.cloudOnlyEntries,
+      texts: params.texts,
+    }),
     notices: [
       ...buildIssueNotices({
         issues: params.report.issues,
@@ -358,6 +401,47 @@ export function buildScanView(params: {
       ...buildPrivateSizeFallbackNotices({ report: params.report, texts: params.texts }),
     ],
     sectionTotals: sectionTotalViews,
+    appAdvice: buildAppAdviceView({ appAdvice: params.report.appAdvice, texts: params.texts }),
+  };
+}
+
+/**
+ * Each app with the size the system estimates for it, and its install folder where it names one;
+ * `null` on a platform that offers its apps, and when the system lists none.
+ */
+function buildAppAdviceView(params: {
+  appAdvice: AppAdvice | null;
+  texts: ReportTexts;
+}): AppAdviceView | null {
+  if (params.appAdvice === null || params.appAdvice.apps.length === 0) {
+    return null;
+  }
+
+  const pageName = params.appAdvice.installedAppsPageName;
+
+  return {
+    titleText: APP_ADVICE_TITLE_TEXT,
+    introText: `Uninstall the apps you no longer use in ${pageName}; this tool never deletes an app.`,
+    items: params.appAdvice.apps.map((app) => ({
+      title: formatDisplayText({ text: app.displayName }),
+      risk: 'review',
+      riskText: riskTexts.review,
+      sizeText:
+        app.estimatedBytes === null ? APP_SIZE_UNKNOWN_TEXT : formatBytes(app.estimatedBytes),
+      detailLines: [
+        ...(app.installFolderPath === null
+          ? []
+          : [buildDetailLine({ kind: 'path', text: app.installFolderPath })]),
+        buildDetailLine({
+          kind: 'explanation',
+          text: `Installed on ${params.texts.computerPhrase}, as ${pageName} lists it.`,
+        }),
+        buildDetailLine({
+          kind: 'advice',
+          text: `Uninstall it in ${pageName} if you no longer use it.`,
+        }),
+      ],
+    })),
   };
 }
 
@@ -524,6 +608,7 @@ function buildSectionView(params: {
 function buildExploreView(params: {
   placedItems: PlacedItem[];
   advice: Advice[];
+  pathRules: PathRules;
   homeDir: string;
 }): ExploreView | null {
   const items = params.placedItems.flatMap((item) =>
@@ -538,12 +623,17 @@ function buildExploreView(params: {
     titleText: EXPLORE_TITLE_TEXT,
     introText: EXPLORE_INTRO_TEXT,
     items: items,
-    adviceGroup: buildAdviceGroupView({ advice: params.advice, homeDir: params.homeDir }),
+    adviceGroup: buildAdviceGroupView({
+      advice: params.advice,
+      pathRules: params.pathRules,
+      homeDir: params.homeDir,
+    }),
   };
 }
 
 function buildAdviceGroupView(params: {
   advice: Advice[];
+  pathRules: PathRules;
   homeDir: string;
 }): AdviceGroupView | null {
   if (params.advice.length === 0) {
@@ -553,7 +643,7 @@ function buildAdviceGroupView(params: {
   return {
     titleText: ADVICE_GROUP_TITLE_TEXT,
     items: params.advice.map((item) =>
-      buildAdviceItemView({ advice: item, homeDir: params.homeDir }),
+      buildAdviceItemView({ advice: item, pathRules: params.pathRules, homeDir: params.homeDir }),
     ),
   };
 }
@@ -562,6 +652,7 @@ function buildItemView(params: {
   candidate: Candidate;
   place: CandidatePlace;
   number: number;
+  pathRules: PathRules;
   homeDir: string;
 }): ItemView {
   return {
@@ -578,7 +669,11 @@ function buildItemView(params: {
     removal: buildItemRemovalView({ removal: params.candidate.removal }),
     allocatedBytes: params.candidate.allocatedBytes,
     isComplete: params.candidate.isComplete,
-    displayPath: formatDisplayPath({ path: params.candidate.path, homeDir: params.homeDir }),
+    displayPath: formatDisplayPath({
+      pathRules: params.pathRules,
+      path: params.candidate.path,
+      homeDir: params.homeDir,
+    }),
     revealPath: params.candidate.removal.kind === 'callEngine' ? null : params.candidate.path,
     lastUsedAt: params.candidate.lastUsedAtMs,
     downloadedAt: params.candidate.downloadedAtMs,
@@ -597,9 +692,17 @@ function candidateOriginToView(params: { item: Candidate | Advice }): ItemOrigin
   return originViews[params.item.origin.kind];
 }
 
-function formatDisplayPath(params: { path: string; homeDir: string }): string {
+function formatDisplayPath(params: {
+  pathRules: PathRules;
+  path: string;
+  homeDir: string;
+}): string {
   return formatDisplayText({
-    text: formatHomeRelativePath({ path: params.path, homeDir: params.homeDir }),
+    text: formatHomeRelativePath({
+      rules: params.pathRules,
+      path: params.path,
+      homeDir: params.homeDir,
+    }),
   });
 }
 
@@ -629,7 +732,11 @@ function buildItemDetailLines(params: { candidate: Candidate }): ItemDetailLine[
   return lines;
 }
 
-function buildAdviceItemView(params: { advice: Advice; homeDir: string }): AdviceItemView {
+function buildAdviceItemView(params: {
+  advice: Advice;
+  pathRules: PathRules;
+  homeDir: string;
+}): AdviceItemView {
   return {
     key: buildItemKey({ item: params.advice }),
     title: formatDisplayText({ text: params.advice.title }),
@@ -646,7 +753,11 @@ function buildAdviceItemView(params: { advice: Advice; homeDir: string }): Advic
     removal: 'advice',
     allocatedBytes: params.advice.allocatedBytes,
     isComplete: params.advice.isComplete,
-    displayPath: formatDisplayPath({ path: params.advice.path, homeDir: params.homeDir }),
+    displayPath: formatDisplayPath({
+      pathRules: params.pathRules,
+      path: params.advice.path,
+      homeDir: params.homeDir,
+    }),
     revealPath: params.advice.path,
     opener: params.advice.opener,
     lastUsedAt: params.advice.lastUsedAtMs,
@@ -659,24 +770,48 @@ function buildDetailLine(params: { kind: ItemDetailLineKind; text: string }): It
   return { kind: params.kind, text: formatDisplayText({ text: params.text }) };
 }
 
+/**
+ * The skipped items by reason, then the entries left unread in the cloud store where the scan
+ * counts them, as one count.
+ */
 function buildSkippedView(params: {
   skipped: SkippedItem[];
+  cloudOnlyEntries: CloudOnlyEntryCount | null;
   texts: ReportTexts;
 }): SkippedView | null {
-  if (params.skipped.length === 0) {
+  const cloudOnlyEntryCount = params.cloudOnlyEntries === null ? 0 : params.cloudOnlyEntries.count;
+  const skippedCount = params.skipped.length + cloudOnlyEntryCount;
+
+  if (skippedCount === 0) {
     return null;
   }
 
-  const itemCountText = formatCount({
-    count: params.skipped.length,
-    singular: 'item',
-    plural: 'items',
-  });
+  const itemCountText = formatCount({ count: skippedCount, singular: 'item', plural: 'items' });
 
   return {
     titleText: `Skipped ${itemCountText}`,
-    lines: formatSkipReasonLines({ skipped: params.skipped, texts: params.texts }),
+    lines: [
+      ...formatSkipReasonLines({ skipped: params.skipped, texts: params.texts }),
+      ...formatCloudOnlyEntryLines({
+        cloudOnlyEntries: params.cloudOnlyEntries,
+        texts: params.texts,
+      }),
+    ],
   };
+}
+
+/** The line of the entries left unread in the cloud store, when the scan counted any. */
+function formatCloudOnlyEntryLines(params: {
+  cloudOnlyEntries: CloudOnlyEntryCount | null;
+  texts: ReportTexts;
+}): string[] {
+  if (params.cloudOnlyEntries === null || params.cloudOnlyEntries.count === 0) {
+    return [];
+  }
+
+  return [
+    `in ${params.cloudOnlyEntries.cloudStoreName}, not on ${params.texts.computerPhrase}: ${params.cloudOnlyEntries.count}`,
+  ];
 }
 
 /** One line per reason that occurs, in the order of the reason table. */
@@ -821,6 +956,7 @@ function formatIssueDetail(params: { issue: ScanIssue }): string {
   switch (params.issue.reason) {
     case 'privacyDenied':
     case 'permissionDenied':
+    case 'inUse':
     case 'unexpected':
     case 'commandFailed':
     case 'walkStopped':

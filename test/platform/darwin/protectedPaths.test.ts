@@ -1,6 +1,5 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { validateRemoval } from '../../../src/delete/validateRemoval.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
 import { buildTestCandidate } from '../../support/candidateFixtures.js';
 import { buildTestMacEnvironment } from '../../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../../support/parsedValueFixtures.js';
@@ -14,7 +13,7 @@ function validatePath(params: { path: string }): ReturnType<typeof validateRemov
   });
 }
 
-describeAwaitingWin32Platform('the sensitive folders of the darwin platform', () => {
+describe('the sensitive folders of the darwin platform', () => {
   test('refuses Mail, Messages, the Photos library and the device backups, whole and in every part', () => {
     for (const path of [
       '/Users/tester/Library/Mail',
@@ -78,9 +77,12 @@ describeAwaitingWin32Platform('the sensitive folders of the darwin platform', ()
   });
 });
 
-describeAwaitingWin32Platform('the user cache folder of the darwin platform', () => {
+describe('the user cache folder of the darwin platform', () => {
   test('is an allowed root: its contents may go, never the folder itself', () => {
-    expect(ENVIRONMENT.userCacheDir).toBe(buildTestAbsolutePath({ text: '/var/folders/xy/abc/C' }));
+    expect(ENVIRONMENT.platformFolders).toEqual({
+      kind: 'darwin',
+      userCacheDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/C' }),
+    });
     expect(
       validatePath({ path: '/private/var/folders/xy/abc/C/com.apple.metal/shaders' }).kind,
     ).toBe('approved');

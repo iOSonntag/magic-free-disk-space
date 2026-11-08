@@ -1,13 +1,12 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildSimulatorDeviceFindings } from '../../src/explore/simulatorDevices/buildSimulatorDeviceFindings.js';
 import {
   parseSimulatorDeviceList,
   parseSimulatorDeviceUdid,
 } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
-import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   AVAILABLE_UNDATED_DEVICE_UDID,
   BOOTED_DEVICE_UDID,
@@ -21,7 +20,7 @@ const tool: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 
 function parseFixtureDevices() {
   const parsed = parseSimulatorDeviceList({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     stdoutText: buildSimulatorDeviceListJson({ homeDir: FIXTURE_HOME_DIR }),
   });
 
@@ -32,7 +31,7 @@ function parseFixtureDevices() {
   return parsed.value;
 }
 
-describeAwaitingWin32Platform('parseSimulatorDeviceUdid', () => {
+describe('parseSimulatorDeviceUdid', () => {
   test('passes a UUID in either case', () => {
     expect(parseSimulatorDeviceUdid({ text: '11111111-aaaa-4aaa-8aaa-111111111111' }).kind).toBe(
       'succeeded',
@@ -49,17 +48,7 @@ describeAwaitingWin32Platform('parseSimulatorDeviceUdid', () => {
   });
 });
 
-describeAwaitingWin32Platform('parseAbsolutePath', () => {
-  test('passes an absolute path and rejects a relative one', () => {
-    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: '/Users/example/data' }).kind).toBe(
-      'succeeded',
-    );
-    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: 'data' }).kind).toBe('failed');
-    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: '-rf' }).kind).toBe('failed');
-  });
-});
-
-describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
+describe('parseSimulatorDeviceList', () => {
   test('reads each device with its runtime', () => {
     const devices = parseFixtureDevices();
 
@@ -94,22 +83,21 @@ describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
         },
       });
 
-      expect(
-        parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind,
-      ).toBe('succeeded');
+      expect(parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
+        'succeeded',
+      );
     }
   });
 
   test('rejects text that is no JSON', () => {
     expect(
-      parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+      parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage' }).kind,
     ).toBe('failed');
   });
 
   test('rejects JSON without a devices object', () => {
     expect(
-      parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: '{"runtimes":[]}' })
-        .kind,
+      parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: '{"runtimes":[]}' }).kind,
     ).toBe('failed');
   });
 
@@ -128,7 +116,7 @@ describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
       },
     });
 
-    expect(parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });
@@ -148,18 +136,18 @@ describeAwaitingWin32Platform('parseSimulatorDeviceList', () => {
       },
     });
 
-    expect(parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });
 });
 
-describeAwaitingWin32Platform('buildSimulatorDeviceFindings', () => {
+describe('buildSimulatorDeviceFindings', () => {
   test('offers the unavailable and the booted unavailable device, no available one', () => {
     const findings = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(findings.map((finding) => finding.unit)).toEqual([
@@ -186,7 +174,11 @@ describeAwaitingWin32Platform('buildSimulatorDeviceFindings', () => {
 
     expect(undatedDevices).toMatchObject([{ isAvailable: true, state: 'Shutdown' }]);
     expect(
-      buildSimulatorDeviceFindings({ tool: tool, devices: undatedDevices, processCommands: [] }),
+      buildSimulatorDeviceFindings({
+        tool: tool,
+        devices: undatedDevices,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
     ).toEqual([]);
   });
 
@@ -194,7 +186,7 @@ describeAwaitingWin32Platform('buildSimulatorDeviceFindings', () => {
     const [unavailable, booted] = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(unavailable?.title).toBe('Simulator iPhone 15 (iOS 17.0)');
@@ -215,7 +207,7 @@ describeAwaitingWin32Platform('buildSimulatorDeviceFindings', () => {
     const findings = buildSimulatorDeviceFindings({
       tool: tool,
       devices: parseFixtureDevices(),
-      processCommands: null,
+      runningProcesses: null,
     });
 
     expect(findings.map((finding) => finding.activity)).toEqual(['unknown', 'busy']);

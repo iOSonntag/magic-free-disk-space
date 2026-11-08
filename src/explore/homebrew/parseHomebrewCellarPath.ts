@@ -1,4 +1,4 @@
-import { normalize } from 'node:path';
+import { isNormalPath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -11,7 +11,11 @@ export function parseHomebrewCellarPath(params: {
 }): Result<AbsolutePath, string> {
   const text = params.stdoutText.trim();
 
-  if (text.includes('\n') || normalize(text) !== text || text.endsWith('/')) {
+  if (
+    text.includes('\n') ||
+    !isNormalPath({ rules: params.pathRules, text: text }) ||
+    text.endsWith('/')
+  ) {
     return { kind: 'failed', failure: 'not one normal path of a Cellar' };
   }
 

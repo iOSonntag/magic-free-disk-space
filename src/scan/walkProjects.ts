@@ -1,16 +1,21 @@
 import { basename, dirname } from 'node:path';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import { findMarkedArtifactRule } from '../catalog/projectArtifactRules.js';
+import { buildArtifactFolderMatcher } from '../catalog/projectArtifactRules.js';
 import type { ProjectPinFileRef } from '../explore/projectPins/projectPins.js';
 import {
   matchProjectPinFile,
   matchProjectPinFileName,
 } from '../explore/projectPins/projectPins.js';
+import { isSameEntryName } from '../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { EntryReads } from '../system/entryReads.js';
-import type { TreeEntry, TreeEntryVisit } from '../system/walkDirectoryTree.js';
+import type {
+  EvictedEntryRecorder,
+  TreeEntry,
+  TreeEntryVisit,
+} from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { ScanIssue } from './issue.js';
@@ -36,9 +41,9 @@ export type ProjectWalk = {
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
- * Walks the projects under `homeDir` once: the artifact folders whose project folder holds a
- * marker file, and the pin files it passes. Symbolic links are never followed; a passed
- * `deadlineMs` stops the walk with one `walkStopped` issue. Never rejects.
+ * Walks the projects under `homeDir` for the artifact folders beside a marker file, and the pin
+ * files it passes. An artifact folder beside no marker is skipped or walked as its rule says.
+ * Never follows a link, which on Windows is any reparse point. Never rejects.
  */
 export async function walkProjects(params: {
   pathRules: PathRules;
@@ -46,11 +51,16 @@ export async function walkProjects(params: {
   excludedTopNames: string[];
   rules: ProjectArtifactRule[];
   maxDepth: number;
+  /** Once passed, the walk ends with one `walkStopped` issue. */
   deadlineMs: number;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ProjectWalk> {
-  const artifactNames = new Set(params.rules.map((rule) => rule.artifactName));
+  const artifactFolderMatcher = buildArtifactFolderMatcher({
+    pathRules: params.pathRules,
+    rules: params.rules,
+  });
   const artifacts: ArtifactFinding[] = [];
   const pinFiles: ProjectPinFileRef[] = [];
   const issues: ScanIssue[] = [];
@@ -68,34 +78,45 @@ export async function walkProjects(params: {
       return 'skip';
     }
 
-    // Only real folders count: a symbolic link is never followed.
+    // Only real folders count: a link is never followed.
     if (entry.kind !== 'directory') {
       return 'skip';
     }
 
-    if (entry.depth === 1 && params.excludedTopNames.includes(entry.name)) {
+    // Compared as the platform compares names, so `appdata` is `AppData` on Windows.
+    if (
+      entry.depth === 1 &&
+      params.excludedTopNames.some((name) =>
+        isSameEntryName({ rules: params.pathRules, name: name, otherName: entry.name }),
+      )
+    ) {
       return 'skip';
     }
 
-    // An unmarked folder of an artifact's name is no project to search either, such as `vendor`.
-    if (artifactNames.has(entry.name)) {
-      const markedRule = findMarkedArtifactRule({
-        rules: params.rules,
-        name: entry.name,
-        projectEntryNames: entry.siblingNames,
-      });
+    const folderMatch = artifactFolderMatcher.matchFolder({
+      name: entry.name,
+      siblingNames: entry.siblingNames,
+    });
 
-      if (markedRule !== null) {
+    switch (folderMatch.kind) {
+      case 'artifact':
         artifacts.push({
           artifactPath: entry.path,
           projectRoot: dirname(entry.path),
-          rule: markedRule,
+          rule: folderMatch.rule,
         });
-      }
 
-      return 'skip';
+        return 'skip';
+      // An unmarked folder one rule skips is no project to search either, such as `vendor`; any
+      // other is an ordinary folder, such as a `bin` beside no project file of .NET.
+      case 'unmarked':
+        return folderMatch.unmarkedFolder === 'skipped' ? 'skip' : visitOrdinaryFolder(entry);
+      case 'noRule':
+        return visitOrdinaryFolder(entry);
     }
+  }
 
+  function visitOrdinaryFolder(entry: TreeEntry): TreeEntryVisit {
     if (entry.name.startsWith('.') || entry.depth >= params.maxDepth) {
       return 'skip';
     }
@@ -125,9 +146,17 @@ export async function walkProjects(params: {
     },
     // An evicted entry is no read failure, yet a pin file below it or in it stays unknown.
     onEvictedEntrySkipped: (entry) => {
+      if (params.recordEvictedEntry !== null) {
+        params.recordEvictedEntry(entry);
+      }
+
       if (
         entry.kind === 'directory' ||
-        matchProjectPinFileName({ name: basename(entry.path), source: 'walk' }) !== null
+        matchProjectPinFileName({
+          pathRules: params.pathRules,
+          name: basename(entry.path),
+          source: 'walk',
+        }) !== null
       ) {
         hasEvictedPinSource = true;
       }
@@ -154,6 +183,7 @@ function findWalkedPinFile(params: {
   entry: TreeEntry;
 }): ProjectPinFileRef | null {
   const kind = matchProjectPinFile({
+    pathRules: params.pathRules,
     name: params.entry.name,
     siblingNames: params.entry.siblingNames,
     source: 'walk',

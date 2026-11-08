@@ -1,14 +1,13 @@
 import { readdir } from 'node:fs/promises';
 import type { Result } from '../result.js';
-import { getErrorCode } from './getErrorCode.js';
+import { getErrorCode, isInUseErrorCode, isPermissionDeniedErrorCode } from './getErrorCode.js';
 import { runFilesystemCall } from './runFilesystemCall.js';
 
+/** `inUse`: another program holds the folder open, which only Windows refuses a read for. */
 export type DirectoryFailure = {
-  reason: 'missing' | 'permissionDenied' | 'notDirectory' | 'unexpected';
+  reason: 'missing' | 'permissionDenied' | 'inUse' | 'notDirectory' | 'unexpected';
   code: string;
 };
-
-const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
 
 export async function loadDirectoryNames(params: {
   path: string;
@@ -31,8 +30,12 @@ export function getDirectoryFailure(params: { code: string }): DirectoryFailure 
     return { reason: 'notDirectory', code: params.code };
   }
 
-  if (PERMISSION_DENIED_CODES.includes(params.code)) {
+  if (isPermissionDeniedErrorCode(params.code)) {
     return { reason: 'permissionDenied', code: params.code };
+  }
+
+  if (isInUseErrorCode(params.code)) {
+    return { reason: 'inUse', code: params.code };
   }
 
   return { reason: 'unexpected', code: params.code };

@@ -14,6 +14,7 @@ export const moduleBoundary = {
     'limits.ts',
     'loadPathMeasurement.ts',
     'placeCandidate.ts',
+    'resolveOwnerState.ts',
     'runScan.ts',
     'scanPlatform.ts',
   ],

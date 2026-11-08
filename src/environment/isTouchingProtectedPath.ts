@@ -1,4 +1,4 @@
-import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isPossiblySameOrInsidePath, isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { Environment } from './buildEnvironment.js';
 
 /**
@@ -10,16 +10,14 @@ export function isTouchingProtectedPath(params: {
   environment: Environment;
   realPath: string;
 }): boolean {
-  // Compared without case: macOS disks usually ignore it, and the looser match only refuses more.
-  const lowerCaseRealPath = params.realPath.toLowerCase();
   const holdsProtectedPath = [
     ...params.environment.protectedRealPaths,
     ...params.environment.sensitiveRealPaths,
   ].some((protectedPath) =>
-    isSameOrInsidePath({
+    isPossiblySameOrInsidePath({
       rules: params.environment.pathRules,
-      path: protectedPath.toLowerCase(),
-      parentPath: lowerCaseRealPath,
+      path: protectedPath,
+      parentPath: params.realPath,
     }),
   );
 
@@ -28,14 +26,14 @@ export function isTouchingProtectedPath(params: {
   }
 
   const isInsideSensitivePath = params.environment.sensitiveRealPaths.some((sensitivePath) =>
-    isSameOrInsidePath({
+    isPossiblySameOrInsidePath({
       rules: params.environment.pathRules,
-      path: lowerCaseRealPath,
-      parentPath: sensitivePath.toLowerCase(),
+      path: params.realPath,
+      parentPath: sensitivePath,
     }),
   );
-  // Compared with case, unlike the refusals above: an exception lets more go, so only the exact
-  // folder on disk counts.
+  // Compared as the platform compares names, unlike the looser refusals above: an exception lets
+  // more go, so only the folder on disk counts.
   const isInsideSensitiveException = params.environment.sensitiveExceptionRealPaths.some(
     (exceptionPath) =>
       isSameOrInsidePath({

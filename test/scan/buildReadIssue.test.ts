@@ -4,12 +4,11 @@ import { join } from 'node:path';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildFailureIssues, buildReadIssue } from '../../src/scan/buildReadIssue.js';
 import { loadDirectoryNames } from '../../src/system/loadDirectoryNames.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
-describeAwaitingWin32Platform('buildReadIssue', () => {
+describe('buildReadIssue', () => {
   test('reports the path with the reason of the failure and its code as the detail', () => {
     expect(
       buildReadIssue({
@@ -30,7 +29,7 @@ describeAwaitingWin32Platform('buildReadIssue', () => {
   });
 });
 
-describeAwaitingWin32Platform('buildFailureIssues', () => {
+describe('buildFailureIssues', () => {
   test('reports a denial by macOS privacy protection as privacyDenied', () => {
     expect(
       buildFailureIssues({

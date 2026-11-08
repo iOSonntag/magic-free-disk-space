@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitIdeVersionFolder } from '../exploreUnit.js';
@@ -15,7 +16,7 @@ export function compareIdeVersionUnit(params: {
   unit: ExplorePathUnitIdeVersionFolder;
   folders: IdeVersionFolder[];
   runningIdes: RunningIde[];
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const offer = decideIdeVersionOffers({ folders: params.folders }).find(
     (candidate) =>
@@ -36,6 +37,6 @@ export function compareIdeVersionUnit(params: {
       version: params.unit.version,
       runningIdes: params.runningIdes,
     }),
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

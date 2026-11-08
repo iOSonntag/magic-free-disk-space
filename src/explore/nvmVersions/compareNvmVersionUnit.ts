@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExplorePathUnitNvmVersion } from '../exploreUnit.js';
@@ -13,7 +14,7 @@ export function compareNvmVersionUnit(params: {
   unit: ExplorePathUnitNvmVersion;
   state: NvmState;
   toolPins: ToolPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const offers = decideNvmVersionOffers({ state: params.state, toolPins: params.toolPins });
   const isStillOffered = offers.offers.some(
@@ -26,6 +27,6 @@ export function compareNvmVersionUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'versionFolder', folderPath: params.unit.folderPath },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

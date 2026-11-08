@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
 import type { ProjectPinFileRef, ProjectPins } from '../projectPins/projectPins.js';
@@ -12,7 +13,7 @@ export function buildNvmVersionFindings(params: {
   offers: NvmVersionOffers;
   pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   projectSearchIncompleteEvidence: string;
 }): ExploreProbeFindings {
   const findings = params.offers.offers.map((offer) => {
@@ -38,7 +39,7 @@ export function buildNvmVersionFindings(params: {
       displayPath: offer.folderPath,
       activity: decideUnitActivity({
         facts: { kind: 'versionFolder', folderPath: offer.folderPath },
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     };
 

@@ -1,4 +1,4 @@
-import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { toNonEmpty } from '../../system/nonEmptyList.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
@@ -22,10 +22,9 @@ export async function loadMailDownloadFindings(
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
-  const folderPath = joinAbsolutePath({
-    rules: run.environment.pathRules,
-    parentPath: run.environment.homeDir,
-    names: run.platform.explore.mailDownloadsRoot,
+  const folderPath = resolveEnvironmentLocation({
+    folders: run.environment,
+    location: run.platform.explore.mailDownloadsRoot,
   });
   const folderStats = await loadExploreEntryStats({
     path: folderPath,
@@ -80,7 +79,7 @@ export async function loadMailDownloadFindings(
           displayPath: folderPath,
           activity: decideUnitActivity({
             facts: { kind: 'appBundles', bundlePaths: run.platform.explore.mailBundlePaths },
-            processCommands: run.processCommands,
+            runningProcesses: run.runningProcesses,
           }),
         },
       ],

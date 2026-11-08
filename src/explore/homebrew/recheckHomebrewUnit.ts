@@ -1,4 +1,5 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison, UnitRecheck } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
@@ -23,7 +24,7 @@ export async function recheckHomebrewUnit(params: {
   return compareHomebrewUnit({
     unit: params.unit,
     state: state.value,
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 }
 
@@ -35,7 +36,7 @@ export async function recheckHomebrewUnit(params: {
 export function compareHomebrewUnit(params: {
   unit: ExploreToolUnitHomebrew;
   state: HomebrewState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const freshUnitPaths = listFreshHomebrewUnitPaths({ unit: params.unit, state: params.state });
   const scannedUnitPaths = new Set(listUnitPaths(params.unit));
@@ -46,7 +47,7 @@ export function compareHomebrewUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'homebrew' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }
 

@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type {
@@ -24,7 +25,7 @@ export function compareHuggingFaceUnit(params: {
     | ExplorePathUnitHuggingFaceDetachedRevisions
     | ExplorePathUnitHuggingFacePartialDownloads;
   repo: HuggingFaceRepoState | null;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   if (params.repo === null) {
     return { kind: 'changed' };
@@ -38,7 +39,7 @@ export function compareHuggingFaceUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'huggingFace' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }
 

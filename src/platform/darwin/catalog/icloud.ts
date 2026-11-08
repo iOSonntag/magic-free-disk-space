@@ -1,5 +1,5 @@
 import type { CatalogEntry } from '../../../catalog/catalog.js';
-import { ICLOUD_DRIVE_ROOT_PATH_NAMES } from '../appleDataRoots.js';
+import { icloudDriveRoot } from '../appleDataRoots.js';
 
 /** iCloud Drive files kept on this Mac. */
 export const ICLOUD_ENTRIES: CatalogEntry[] = [
@@ -11,8 +11,7 @@ export const ICLOUD_ENTRIES: CatalogEntry[] = [
       'Files of iCloud Drive and of the apps that keep their documents in it, downloaded to this Mac and not opened or changed for the unused period. Removing the download frees the space here; iCloud Drive keeps every file.',
     regeneration: 'Downloaded again from iCloud Drive when a file is opened.',
     risk: 'review',
-    root: 'home',
-    path: ICLOUD_DRIVE_ROOT_PATH_NAMES.join('/'),
+    ...icloudDriveRoot,
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,

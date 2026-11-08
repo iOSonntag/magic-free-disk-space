@@ -1,4 +1,5 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitAndroidPackage } from '../exploreUnit.js';
@@ -10,7 +11,7 @@ export async function recheckAndroidPackageUnit(params: {
   unit: ExplorePathUnitAndroidPackage;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const state = await loadAndroidSdkState({
     pathRules: params.environment.pathRules,
@@ -26,6 +27,6 @@ export async function recheckAndroidPackageUnit(params: {
   return compareAndroidPathUnit({
     unit: params.unit,
     state: state.value,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

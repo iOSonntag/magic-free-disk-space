@@ -4,6 +4,7 @@ import type { Result } from '../result.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
 import type { ToolName } from '../tools/toolInstallLocations.js';
+import type { ToolProcessPlatform } from '../tools/toolsPlatform.js';
 import type { ExploreToolFailure } from './exploreUnit.js';
 
 /**
@@ -27,6 +28,7 @@ export async function loadProbeOutput<T>(params: {
   tool: LocatedTool;
   environment: Environment;
   deadlineMs: number;
+  platform: { toolProcesses: ToolProcessPlatform };
 }): Promise<Result<T, ExploreToolFailure>> {
   if (params.tool.name !== params.probe.toolName) {
     throw new Error(`A probe of ${params.probe.toolName} got the tool ${params.tool.name}`);
@@ -38,6 +40,7 @@ export async function loadProbeOutput<T>(params: {
     homeDir: params.environment.homeDir,
     tempDir: params.environment.tempDir,
     timeoutMs: Math.max(params.deadlineMs - Date.now(), 0),
+    processes: params.platform.toolProcesses,
   });
 
   if (output.kind === 'failed') {

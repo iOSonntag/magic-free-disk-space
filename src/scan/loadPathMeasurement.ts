@@ -4,6 +4,7 @@ import type { EntryReads } from '../system/entryReads.js';
 import type { EntryStats } from '../system/loadEntryStats.js';
 import { loadEntryStats } from '../system/loadEntryStats.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
+import type { EvictedEntryRecorder } from '../system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../system/walkDirectoryTree.js';
 import type { EntryTally, MeasuredEntry } from './tallyMeasuredEntry.js';
 import { createEntryTally, getEntryTallyTotals, tallyMeasuredEntry } from './tallyMeasuredEntry.js';
@@ -77,15 +78,17 @@ const MAX_CONCURRENT_PATHS = 8;
 const MAX_CONCURRENT_DIRECTORIES = 16;
 
 /**
- * Measures the paths of one offer as one tally, so a hard link split across two of them counts
- * once. The paths must not overlap. Follows no symbolic link and enters no other volume mounted
- * inside a path, which it notes instead, as it notes a path that is a mount point. A path that is
- * gone counts 0; one that cannot be read, or a passed deadline, leaves `isComplete` false.
+ * Measures one offer's paths as one tally, so a hard link split across two of them counts once.
+ * Follows no link; a volume mounted in a path, or a mount point, is noted, not entered.
+ * A gone path counts 0; an unreadable one, or a passed deadline, leaves `isComplete` false.
  */
 export async function loadPathMeasurement(params: {
+  /** The paths of one offer; they must not overlap. */
   paths: string[];
   deadlineMs: number;
   entryReads: EntryReads;
+  /** Takes each entry left unread because only the cloud holds its content; `null` takes none. */
+  recordEvictedEntry: EvictedEntryRecorder | null;
 }): Promise<PathMeasurement> {
   const tally = createEntryTally();
   const runPathPart = createConcurrencyLimit({ maxConcurrent: MAX_CONCURRENT_PATHS });
@@ -97,6 +100,7 @@ export async function loadPathMeasurement(params: {
           tally: tally,
           deadlineMs: params.deadlineMs,
           entryReads: params.entryReads,
+          recordEvictedEntry: params.recordEvictedEntry,
         }),
       ),
     ),
@@ -121,6 +125,7 @@ async function loadPathPart(params: {
   tally: EntryTally;
   deadlineMs: number;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
 }): Promise<PathPart> {
   const rootStatsResult = await loadEntryStats({ path: params.path });
 
@@ -188,7 +193,7 @@ async function loadPathPart(params: {
     onUnreadable: () => {
       unreadableCount += 1;
     },
-    onEvictedEntrySkipped: () => undefined,
+    onEvictedEntrySkipped: params.recordEvictedEntry,
   });
 
   return {

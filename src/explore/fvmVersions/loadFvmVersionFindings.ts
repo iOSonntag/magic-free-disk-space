@@ -57,7 +57,7 @@ export async function loadFvmVersionFindings(params: {
         displayPath: folder.folderPath,
         activity: decideUnitActivity({
           facts: { kind: 'versionFolder', folderPath: folder.folderPath },
-          processCommands: params.run.processCommands,
+          runningProcesses: params.run.runningProcesses,
         }),
       };
 

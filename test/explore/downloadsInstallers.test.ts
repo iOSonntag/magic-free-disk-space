@@ -1,15 +1,21 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { chmod, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { CatalogLocation } from '../../src/catalog/catalog.js';
+import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadDownloadsInstallerFindings } from '../../src/explore/downloadsInstallers/loadDownloadsInstallerFindings.js';
 import { recheckDownloadsUnit } from '../../src/explore/downloadsInstallers/recheckDownloadsUnit.js';
+import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreFinding, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
+import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
@@ -17,6 +23,7 @@ import {
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 // Whole seconds, which the fixture's times keep exactly.
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
@@ -24,8 +31,29 @@ const STALE_CUTOFF_MS = NOW_MS - 30 * DAY_MS;
 const OLD_MS = NOW_MS - 90 * DAY_MS;
 const FILE_SIZE_BYTES = 4096;
 
+/**
+ * Runs only on macOS a test of a running browser: a browser counts as running by its app bundle,
+ * which only the catalog of macOS names.
+ */
+const testWithBrowserBundles = testOnDarwin;
+
+/** The Downloads folder the probe platform of these tests names, on every host. */
+const fixtureDownloadsRoot: CatalogLocation = { root: 'home', path: 'Downloads' };
+
+/** A probe run of the fixture home's Downloads folder, with the stale cutoff of these tests. */
+function buildDownloadsRun(environment: Environment): ExploreProbeRun {
+  return buildTestProbeRun({
+    environment: environment,
+    platform: buildTestProbePlatform({ explore: { downloadsRoot: fixtureDownloadsRoot } }),
+    staleCutoffMs: STALE_CUTOFF_MS,
+  });
+}
+
 function getDownloadsPath(home: FixtureHome): string {
-  return join(home.fixtureRoot.homeDir, 'Downloads');
+  return resolveEnvironmentLocation({
+    folders: home.environment,
+    location: fixtureDownloadsRoot,
+  });
 }
 
 /** Writes a file last changed at `modifiedMs`, by default long ago. */
@@ -54,89 +82,91 @@ function findFinding(params: {
   return params.findings.find((finding) => finding.unit.kind === params.kind) ?? null;
 }
 
-describeAwaitingWin32Platform('the Downloads probe', () => {
-  test('finds old installers and stale partial downloads at the top of Downloads', async () => {
-    await withFixtureHome({
-      nowMs: NOW_MS,
-      run: async (home) => {
-        const downloads = getDownloadsPath(home);
-        const safariDownload = join(downloads, 'Movie.mp4.download');
-        const safariPartMs = OLD_MS + DAY_MS;
+describe('the Downloads probe', () => {
+  // The fixture holds a symbolic link the probe must pass over.
+  testOnPosix(
+    'finds old installers and stale partial downloads at the top of Downloads',
+    async () => {
+      await withFixtureHome({
+        nowMs: NOW_MS,
+        run: async (home) => {
+          const downloads = getDownloadsPath(home);
+          const safariDownload = join(downloads, 'Movie.mp4.download');
+          const safariPartMs = OLD_MS + DAY_MS;
 
-        for (const name of ['Old.dmg', 'Tool.PKG', 'Suite.mpkg', 'Xcode.xip', 'Linux.iso']) {
-          await createDownloadsFile({ path: join(downloads, name) });
-        }
+          for (const name of ['Old.dmg', 'Tool.PKG', 'Suite.mpkg', 'Xcode.xip', 'Linux.iso']) {
+            await createDownloadsFile({ path: join(downloads, name) });
+          }
 
-        await createDownloadsFile({ path: join(downloads, 'New.pkg'), modifiedMs: NOW_MS });
-        await createDownloadsFile({ path: join(downloads, 'Report.pdf') });
-        await createDownloadsFile({ path: join(downloads, '.Hidden.dmg') });
-        await createDownloadsFile({ path: join(downloads, 'Nested', 'Inner.dmg') });
-        await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
-        await createDownloadsFile({
-          path: join(safariDownload, 'Movie.mp4'),
-          modifiedMs: safariPartMs,
-        });
-        await updateModifiedMs({ path: safariDownload, modifiedMs: OLD_MS });
-        await symlink(join(downloads, 'Old.dmg'), join(downloads, 'Link.dmg'));
+          await createDownloadsFile({ path: join(downloads, 'New.pkg'), modifiedMs: NOW_MS });
+          await createDownloadsFile({ path: join(downloads, 'Report.pdf') });
+          await createDownloadsFile({ path: join(downloads, '.Hidden.dmg') });
+          await createDownloadsFile({ path: join(downloads, 'Nested', 'Inner.dmg') });
+          await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
+          await createDownloadsFile({
+            path: join(safariDownload, 'Movie.mp4'),
+            modifiedMs: safariPartMs,
+          });
+          await updateModifiedMs({ path: safariDownload, modifiedMs: OLD_MS });
+          await symlink(join(downloads, 'Old.dmg'), join(downloads, 'Link.dmg'));
 
-        const probed = getProbeFindings(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
-          ),
-        );
-        const installers = getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' });
+          const probed = getProbeFindings(
+            await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment)),
+          );
+          const installers = getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' });
 
-        expect(probed.isComplete).toBe(true);
-        expect(probed.findings).toHaveLength(3);
-        expect(
-          findFinding({ findings: probed.findings, kind: 'downloadsInstallers' }),
-        ).toMatchObject({
-          title: 'Old installers in Downloads',
-          risk: 'careful',
-          activity: 'idle',
-          unit: { kind: 'downloadsInstallers', folderPath: downloads, cutoffMs: STALE_CUTOFF_MS },
-        });
-        expect(
-          installers.foundFiles.toSorted((left, right) => left.path.localeCompare(right.path)),
-        ).toEqual(
-          ['Linux.iso', 'Old.dmg', 'Suite.mpkg', 'Tool.PKG', 'Xcode.xip'].map((name) => ({
-            path: buildTestAbsolutePath({ text: join(downloads, name) }),
-            modifiedMs: OLD_MS,
-          })),
-        );
-        expect(
-          probed.findings.filter((finding) => finding.unit.kind === 'downloadsIncomplete'),
-        ).toMatchObject([
-          {
-            title: 'Unfinished downloads of Chrome and other Chromium browsers',
-            risk: 'safe',
+          expect(probed.isComplete).toBe(true);
+          expect(probed.findings).toHaveLength(3);
+          expect(
+            findFinding({ findings: probed.findings, kind: 'downloadsInstallers' }),
+          ).toMatchObject({
+            title: 'Old installers in Downloads',
+            risk: 'careful',
             activity: 'idle',
-            unit: {
-              browserFamily: 'chromium',
-              foundFiles: [
-                {
-                  path: buildTestAbsolutePath({ text: join(downloads, 'Big.iso.crdownload') }),
-                  modifiedMs: OLD_MS,
-                },
-              ],
+            unit: { kind: 'downloadsInstallers', folderPath: downloads, cutoffMs: STALE_CUTOFF_MS },
+          });
+          expect(
+            installers.foundFiles.toSorted((left, right) => left.path.localeCompare(right.path)),
+          ).toEqual(
+            ['Linux.iso', 'Old.dmg', 'Suite.mpkg', 'Tool.PKG', 'Xcode.xip'].map((name) => ({
+              path: buildTestHostPath({ text: join(downloads, name) }),
+              modifiedMs: OLD_MS,
+            })),
+          );
+          expect(
+            probed.findings.filter((finding) => finding.unit.kind === 'downloadsIncomplete'),
+          ).toMatchObject([
+            {
+              title: 'Unfinished downloads of Chrome and other Chromium browsers',
+              risk: 'safe',
+              activity: 'idle',
+              unit: {
+                browserFamily: 'chromium',
+                foundFiles: [
+                  {
+                    path: buildTestHostPath({ text: join(downloads, 'Big.iso.crdownload') }),
+                    modifiedMs: OLD_MS,
+                  },
+                ],
+              },
             },
-          },
-          {
-            title: 'Unfinished downloads of Safari',
-            risk: 'safe',
-            activity: 'idle',
-            unit: {
-              browserFamily: 'safari',
-              // A Safari download is a folder: its newest change is the part written last.
-              foundFiles: [
-                { path: buildTestAbsolutePath({ text: safariDownload }), modifiedMs: safariPartMs },
-              ],
+            {
+              title: 'Unfinished downloads of Safari',
+              risk: 'safe',
+              activity: 'idle',
+              unit: {
+                browserFamily: 'safari',
+                // A Safari download is a folder: its newest change is the part written last.
+                foundFiles: [
+                  { path: buildTestHostPath({ text: safariDownload }), modifiedMs: safariPartMs },
+                ],
+              },
             },
-          },
-        ]);
-      },
-    });
-  });
+          ]);
+        },
+      });
+    },
+  );
 
   test('goes by the stale window, not the unused one', async () => {
     await withFixtureHome({
@@ -151,20 +181,17 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
         });
 
         const probed = getProbeFindings(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              staleCutoffMs: STALE_CUTOFF_MS,
-              unusedCutoffMs: NOW_MS - 180 * DAY_MS,
-            }),
-          ),
+          await loadDownloadsInstallerFindings({
+            ...buildDownloadsRun(home.environment),
+            unusedCutoffMs: NOW_MS - 180 * DAY_MS,
+          }),
         );
 
         expect(
           getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' }).foundFiles.map(
             (file) => file.path,
           ),
-        ).toEqual([buildTestAbsolutePath({ text: join(downloads, 'Old.dmg') })]);
+        ).toEqual([buildTestHostPath({ text: join(downloads, 'Old.dmg') })]);
       },
     });
   });
@@ -178,11 +205,10 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
         await createDownloadsFile({ path: join(safariDownload, 'A.zip'), modifiedMs: NOW_MS });
         await updateModifiedMs({ path: safariDownload, modifiedMs: OLD_MS });
 
-        expect(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
-          ),
-        ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
+        expect(await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment))).toEqual({
+          kind: 'succeeded',
+          value: { findings: [], isComplete: true },
+        });
       },
     });
   });
@@ -200,7 +226,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
 
         const probed = getProbeFindings(
           await loadDownloadsInstallerFindings({
-            ...buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
+            ...buildDownloadsRun(home.environment),
             deadlineMs: Date.now() - 1,
           }),
         );
@@ -224,9 +250,7 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
         await chmod(downloads, 0o400);
 
         expect(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
-          ),
+          await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment)),
         ).toMatchObject({
           kind: 'failed',
           failure: { reason: 'fileUnreadable', path: join(downloads, 'Old.dmg') },
@@ -235,79 +259,91 @@ describeAwaitingWin32Platform('the Downloads probe', () => {
     });
   });
 
-  test('tells a partial download busy while a browser of its family runs, an installer never', async () => {
-    await withFixtureHome({
-      nowMs: NOW_MS,
-      run: async (home) => {
-        const downloads = getDownloadsPath(home);
+  testWithBrowserBundles(
+    'tells a partial download busy while a browser of its family runs, an installer never',
+    async () => {
+      await withFixtureHome({
+        nowMs: NOW_MS,
+        run: async (home) => {
+          const downloads = getDownloadsPath(home);
 
-        await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
-        await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
+          await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
+          await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
 
-        const findings = getProbeFindings(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              processCommands: [buildChromeCommand(home)],
-              staleCutoffMs: STALE_CUTOFF_MS,
+          const findings = getProbeFindings(
+            await loadDownloadsInstallerFindings({
+              ...buildDownloadsRun(home.environment),
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
             }),
-          ),
-        ).findings;
+          ).findings;
 
-        expect(findFinding({ findings: findings, kind: 'downloadsIncomplete' })?.activity).toBe(
-          'busy',
-        );
-        expect(findFinding({ findings: findings, kind: 'downloadsInstallers' })?.activity).toBe(
-          'idle',
-        );
-      },
-    });
-  });
+          expect(findFinding({ findings: findings, kind: 'downloadsIncomplete' })?.activity).toBe(
+            'busy',
+          );
+          expect(findFinding({ findings: findings, kind: 'downloadsInstallers' })?.activity).toBe(
+            'idle',
+          );
+        },
+      });
+    },
+  );
 
-  test('offers a partial download of Firefox while only Chrome runs', async () => {
-    await withFixtureHome({
-      nowMs: NOW_MS,
-      run: async (home) => {
-        const downloads = getDownloadsPath(home);
+  testWithBrowserBundles(
+    'offers a partial download of Firefox while only Chrome runs',
+    async () => {
+      await withFixtureHome({
+        nowMs: NOW_MS,
+        run: async (home) => {
+          const downloads = getDownloadsPath(home);
 
-        await createDownloadsFile({ path: join(downloads, 'Big.iso.part') });
+          await createDownloadsFile({ path: join(downloads, 'Big.iso.part') });
 
-        const findings = getProbeFindings(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              processCommands: [buildChromeCommand(home)],
-              staleCutoffMs: STALE_CUTOFF_MS,
+          const findings = getProbeFindings(
+            await loadDownloadsInstallerFindings({
+              ...buildDownloadsRun(home.environment),
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
             }),
-          ),
-        ).findings;
+          ).findings;
 
-        expect(findings).toMatchObject([
-          {
-            title: 'Unfinished downloads of Firefox',
-            activity: 'idle',
-            unit: { kind: 'downloadsIncomplete', browserFamily: 'firefox' },
-          },
-        ]);
-      },
-    });
-  });
+          expect(findings).toMatchObject([
+            {
+              title: 'Unfinished downloads of Firefox',
+              activity: 'idle',
+              unit: { kind: 'downloadsIncomplete', browserFamily: 'firefox' },
+            },
+          ]);
+        },
+      });
+    },
+  );
 
   test('says the place is missing without a Downloads folder', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
-        expect(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
-          ),
-        ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
+        expect(await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment))).toEqual({
+          kind: 'failed',
+          failure: { reason: 'placeMissing' },
+        });
       },
     });
   });
 });
 
-describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
+describe('the Downloads probe on a platform without a fixed Downloads place', () => {
+  test('says the place is missing', async () => {
+    expect(
+      await loadDownloadsInstallerFindings(
+        buildTestProbeRun({
+          environment: exampleWin32Environment,
+          platform: buildTestProbePlatform({ explore: { downloadsRoot: null } }),
+        }),
+      ),
+    ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
+  });
+});
+
+describe('recheckDownloadsUnit', () => {
   test('finds a unit unchanged, then changed once a file changed or went', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -317,10 +353,7 @@ describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
         await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
         await createDownloadsFile({ path: join(downloads, 'Other.pkg') });
 
-        const run = buildTestProbeRun({
-          environment: home.environment,
-          staleCutoffMs: STALE_CUTOFF_MS,
-        });
+        const run = buildDownloadsRun(home.environment);
         const unit = getUnitOfKind({
           findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
           kind: 'downloadsInstallers',
@@ -330,7 +363,7 @@ describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
             unit: unit,
             environment: run.environment,
             platform: run.platform,
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           });
         }
 
@@ -348,47 +381,47 @@ describeAwaitingWin32Platform('recheckDownloadsUnit', () => {
     });
   });
 
-  test('finds a partial download busy while a browser of its family runs, unchanged while another runs', async () => {
-    await withFixtureHome({
-      nowMs: NOW_MS,
-      run: async (home) => {
-        const downloads = getDownloadsPath(home);
+  testWithBrowserBundles(
+    'finds a partial download busy while a browser of its family runs, unchanged while another runs',
+    async () => {
+      await withFixtureHome({
+        nowMs: NOW_MS,
+        run: async (home) => {
+          const downloads = getDownloadsPath(home);
 
-        await createDownloadsFile({ path: join(downloads, 'A.part') });
+          await createDownloadsFile({ path: join(downloads, 'A.part') });
 
-        const run = buildTestProbeRun({
-          environment: home.environment,
-          staleCutoffMs: STALE_CUTOFF_MS,
-        });
-        const unit = getUnitOfKind({
-          findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
-          kind: 'downloadsIncomplete',
-        });
-        const firefoxCommand = join(
-          home.fixtureRoot.applicationDir,
-          'Firefox.app',
-          'Contents',
-          'MacOS',
-          'firefox',
-        );
+          const run = buildDownloadsRun(home.environment);
+          const unit = getUnitOfKind({
+            findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
+            kind: 'downloadsIncomplete',
+          });
+          const firefoxCommand = join(
+            home.fixtureRoot.applicationDir,
+            'Firefox.app',
+            'Contents',
+            'MacOS',
+            'firefox',
+          );
 
-        const outcomes = [
-          await recheckDownloadsUnit({
-            unit: unit,
-            environment: run.environment,
-            platform: run.platform,
-            processCommands: [firefoxCommand],
-          }),
-          await recheckDownloadsUnit({
-            unit: unit,
-            environment: run.environment,
-            platform: run.platform,
-            processCommands: [buildChromeCommand(home)],
-          }),
-        ];
+          const outcomes = [
+            await recheckDownloadsUnit({
+              unit: unit,
+              environment: run.environment,
+              platform: run.platform,
+              runningProcesses: buildRunningCommandLines([firefoxCommand]),
+            }),
+            await recheckDownloadsUnit({
+              unit: unit,
+              environment: run.environment,
+              platform: run.platform,
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
+            }),
+          ];
 
-        expect(outcomes).toEqual([{ kind: 'busy' }, { kind: 'unchanged' }]);
-      },
-    });
-  });
+          expect(outcomes).toEqual([{ kind: 'busy' }, { kind: 'unchanged' }]);
+        },
+      });
+    },
+  );
 });

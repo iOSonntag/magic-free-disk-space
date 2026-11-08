@@ -1,4 +1,5 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type {
@@ -17,7 +18,7 @@ export async function recheckHuggingFaceUnit(params: {
     | ExplorePathUnitHuggingFacePartialDownloads;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const repo = await loadHuggingFaceRepoState({
     pathRules: params.environment.pathRules,
@@ -32,6 +33,6 @@ export async function recheckHuggingFaceUnit(params: {
   return compareHuggingFaceUnit({
     unit: params.unit,
     repo: repo.value,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

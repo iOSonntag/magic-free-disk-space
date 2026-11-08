@@ -104,6 +104,7 @@ export async function runCli(params: {
     lines: formatScanReport({
       report: report,
       texts: params.texts,
+      pathRules: params.environment.pathRules,
       homeDir: params.environment.homeDir,
       disk: disk,
     }),
@@ -244,7 +245,7 @@ async function runInteractiveDeletion(params: {
     io: params.io,
     lines: [
       '',
-      ...formatRemovalRun({ run: run }),
+      ...formatRemovalRun({ run: run, texts: params.texts }),
       ...(diskAfter === null
         ? []
         : [formatAvailableSpaceLine({ availableBytes: diskAfter.availableBytes })]),

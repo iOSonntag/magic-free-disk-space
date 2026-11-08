@@ -6,13 +6,13 @@ describe('isAnyBundleRunning', () => {
     expect(
       isAnyBundleRunning({
         bundlePaths: ['/Applications/Mac.app'],
-        processCommands: ['/Applications/Mac.app/Contents/MacOS/Mac --flag'],
+        commandLines: ['/Applications/Mac.app/Contents/MacOS/Mac --flag'],
       }),
     ).toBe(true);
     expect(
       isAnyBundleRunning({
         bundlePaths: ['/Applications/Phone.app'],
-        processCommands: ['/Applications/Phone.app/Wrapper/Phone.app/Phone'],
+        commandLines: ['/Applications/Phone.app/Wrapper/Phone.app/Phone'],
       }),
     ).toBe(true);
   });
@@ -21,9 +21,9 @@ describe('isAnyBundleRunning', () => {
     expect(
       isAnyBundleRunning({
         bundlePaths: ['/Applications/Mac.app'],
-        processCommands: ['/Applications/Mac.app.old/Contents/MacOS/Mac'],
+        commandLines: ['/Applications/Mac.app.old/Contents/MacOS/Mac'],
       }),
     ).toBe(false);
-    expect(isAnyBundleRunning({ bundlePaths: [], processCommands: ['/bin/zsh'] })).toBe(false);
+    expect(isAnyBundleRunning({ bundlePaths: [], commandLines: ['/bin/zsh'] })).toBe(false);
   });
 });

@@ -1,12 +1,30 @@
-import { posix } from 'node:path';
+import type { EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { ExplorePathUnitVscodeExtension } from '../../src/explore/exploreUnit.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import type { PathRules } from '../../src/path/pathRules.js';
 import type { CandidateProbed } from '../../src/scan/candidate.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import { buildTestIdentity, buildTestProbedCandidate } from '../support/candidateFixtures.js';
 import { createFixtureFile, writeFixtureTextFile } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import type { HomeFolder } from '../support/parsedValueFixtures.js';
+import { joinBelowHome } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
+import { buildHostRunningProcesses } from '../support/runningProcessesFixtures.js';
 
 /** A command line of VS Code's app, which keeps its extension folders busy. */
-export const VSCODE_APP_COMMAND = '/Applications/Visual Studio Code.app/Contents/MacOS/Electron';
+const VSCODE_APP_COMMAND = '/Applications/Visual Studio Code.app/Contents/MacOS/Electron';
+
+/** The image path of VS Code's app on Windows, which keeps its extension folders busy. */
+const VSCODE_WINDOWS_IMAGE_PATH =
+  'C:\\Users\\tester\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe';
+
+/** The processes of a running VS Code, in the form the host lists them. */
+export const runningVscodeProcesses: RunningProcesses = buildHostRunningProcesses({
+  commandLines: [VSCODE_APP_COMMAND],
+  imagePaths: [VSCODE_WINDOWS_IMAGE_PATH],
+});
 
 /** Marked in `.obsolete`, listed by no registry, and the only version of its id: obsolete. */
 export const OBSOLETE_FOLDER_NAME = 'example.alpha-1.0.0';
@@ -30,12 +48,16 @@ export const FIXTURE_PROFILE_ID = '-1a2b3c4d';
 
 export const VSCODE_FOLDER_SIZE_BYTES = 4096;
 
-export function buildVscodeExtensionsPath(params: { homeDir: string }): string {
-  return posix.join(params.homeDir, '.vscode/extensions');
+export function buildVscodeExtensionsPath(params: { home: HomeFolder }): AbsolutePath {
+  return joinBelowHome({ home: params.home, path: '.vscode/extensions' });
 }
 
-export function buildVscodeProfilesPath(params: { homeDir: string }): string {
-  return posix.join(params.homeDir, 'Library/Application Support/Code/User/profiles');
+/** VS Code's folder of profiles where the host's platform keeps it. */
+export function buildVscodeProfilesPath(params: { folders: EnvironmentFolders }): AbsolutePath {
+  return resolveEnvironmentLocation({
+    folders: params.folders,
+    location: hostPlatform.explore.vscodeProfilesRoot,
+  });
 }
 
 /**
@@ -43,12 +65,18 @@ export function buildVscodeProfilesPath(params: { homeDir: string }): string {
  * current form also its `relativeLocation`.
  */
 export function buildVscodeRegistryText(params: {
-  extensionsPath: string;
+  pathRules: PathRules;
+  extensionsPath: AbsolutePath;
   folderNames: string[];
   form: 'current' | 'locationOnly';
 }): string {
   const entries = params.folderNames.map((folderName) => {
-    const folderPath = posix.join(params.extensionsPath, folderName);
+    const folderPath = joinAbsolutePath({
+      rules: params.pathRules,
+      parentPath: params.extensionsPath,
+      names: [folderName],
+    });
+    const uriPath = buildLocationUriPath({ pathRules: params.pathRules, folderPath: folderPath });
     const [extensionId, version] = folderName.split(/-(?=\d)/);
     const entry = {
       identifier: { id: extensionId },
@@ -56,8 +84,8 @@ export function buildVscodeRegistryText(params: {
       location: {
         $mid: 1,
         fsPath: folderPath,
-        external: `file://${folderPath}`,
-        path: folderPath,
+        external: `file://${uriPath}`,
+        path: uriPath,
         scheme: 'file',
       },
       metadata: { installedTimestamp: 1_700_000_000_000, pinned: false, source: 'gallery' },
@@ -73,18 +101,36 @@ export function buildVscodeRegistryText(params: {
   return JSON.stringify(entries);
 }
 
+/** The path of a folder's `file:` URI: on Windows `/c:/Users/…`, as VS Code writes it. */
+function buildLocationUriPath(params: { pathRules: PathRules; folderPath: AbsolutePath }): string {
+  switch (params.pathRules.rootForm) {
+    case 'posix':
+      return params.folderPath;
+    case 'win32': {
+      const driveLetter = params.folderPath.charAt(0).toLowerCase();
+      const pathAfterDrive = params.folderPath.slice(1).replaceAll('\\', '/');
+
+      return `/${driveLetter}${pathAfterDrive}`;
+    }
+  }
+}
+
 export function buildVscodeObsoleteText(params: { folderNames: string[] }): string {
   return JSON.stringify(Object.fromEntries(params.folderNames.map((name) => [name, true])));
 }
 
 /** Creates each extension folder with one file of `VSCODE_FOLDER_SIZE_BYTES`. */
 export async function createVscodeExtensionFolders(params: {
-  homeDir: string;
+  home: HomeFolder;
   folderNames: string[];
 }): Promise<void> {
   for (const folderName of params.folderNames) {
     await createFixtureFile({
-      path: posix.join(buildVscodeExtensionsPath(params), folderName, 'package.json'),
+      path: joinAbsolutePath({
+        rules: params.home.pathRules,
+        parentPath: buildVscodeExtensionsPath({ home: params.home }),
+        names: [folderName, 'package.json'],
+      }),
       sizeBytes: VSCODE_FOLDER_SIZE_BYTES,
       modifiedMs: Date.UTC(2026, 0, 1),
     });
@@ -96,11 +142,13 @@ export async function createVscodeExtensionFolders(params: {
  * epsilon, a profile listing the current beta and gamma by location only, and `.obsolete`
  * marking alpha 1.0.0 and gamma.
  */
-export async function createVscodeInstallation(params: { homeDir: string }): Promise<void> {
-  const extensionsPath = buildVscodeExtensionsPath(params);
+export async function createVscodeInstallation(params: {
+  folders: EnvironmentFolders;
+}): Promise<void> {
+  const extensionsPath = buildVscodeExtensionsPath({ home: params.folders });
 
   await createVscodeExtensionFolders({
-    homeDir: params.homeDir,
+    home: params.folders,
     folderNames: [
       OBSOLETE_FOLDER_NAME,
       DEFAULT_LISTED_FOLDER_NAME,
@@ -111,23 +159,37 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
     ],
   });
   await writeFixtureTextFile({
-    path: posix.join(extensionsPath, 'extensions.json'),
+    path: joinAbsolutePath({
+      rules: params.folders.pathRules,
+      parentPath: extensionsPath,
+      names: ['extensions.json'],
+    }),
     text: buildVscodeRegistryText({
+      pathRules: params.folders.pathRules,
       extensionsPath: extensionsPath,
       folderNames: [DEFAULT_LISTED_FOLDER_NAME],
       form: 'current',
     }),
   });
   await writeFixtureTextFile({
-    path: posix.join(buildVscodeProfilesPath(params), FIXTURE_PROFILE_ID, 'extensions.json'),
+    path: joinAbsolutePath({
+      rules: params.folders.pathRules,
+      parentPath: buildVscodeProfilesPath({ folders: params.folders }),
+      names: [FIXTURE_PROFILE_ID, 'extensions.json'],
+    }),
     text: buildVscodeRegistryText({
+      pathRules: params.folders.pathRules,
       extensionsPath: extensionsPath,
       folderNames: [BETA_CURRENT_FOLDER_NAME, LISTED_OBSOLETE_FOLDER_NAME],
       form: 'locationOnly',
     }),
   });
   await writeFixtureTextFile({
-    path: posix.join(extensionsPath, '.obsolete'),
+    path: joinAbsolutePath({
+      rules: params.folders.pathRules,
+      parentPath: extensionsPath,
+      names: ['.obsolete'],
+    }),
     text: buildVscodeObsoleteText({
       folderNames: [OBSOLETE_FOLDER_NAME, LISTED_OBSOLETE_FOLDER_NAME],
     }),
@@ -135,12 +197,14 @@ export async function createVscodeInstallation(params: { homeDir: string }): Pro
 }
 
 export function buildObsoleteVscodeUnit(params: {
-  homeDir: string;
+  home: HomeFolder;
 }): ExplorePathUnitVscodeExtension {
   return {
     kind: 'vscodeExtension',
-    folderPath: buildTestAbsolutePath({
-      text: posix.join(buildVscodeExtensionsPath(params), OBSOLETE_FOLDER_NAME),
+    folderPath: joinAbsolutePath({
+      rules: params.home.pathRules,
+      parentPath: buildVscodeExtensionsPath({ home: params.home }),
+      names: [OBSOLETE_FOLDER_NAME],
     }),
     extensionId: 'example.alpha',
     version: '1.0.0',
@@ -148,11 +212,13 @@ export function buildObsoleteVscodeUnit(params: {
   };
 }
 
-export function buildOlderVscodeUnit(params: { homeDir: string }): ExplorePathUnitVscodeExtension {
+export function buildOlderVscodeUnit(params: { home: HomeFolder }): ExplorePathUnitVscodeExtension {
   return {
     kind: 'vscodeExtension',
-    folderPath: buildTestAbsolutePath({
-      text: posix.join(buildVscodeExtensionsPath(params), OLDER_FOLDER_NAME),
+    folderPath: joinAbsolutePath({
+      rules: params.home.pathRules,
+      parentPath: buildVscodeExtensionsPath({ home: params.home }),
+      names: [OLDER_FOLDER_NAME],
     }),
     extensionId: 'example.beta',
     version: '2.0.0',
@@ -161,7 +227,7 @@ export function buildOlderVscodeUnit(params: { homeDir: string }): ExplorePathUn
 }
 
 /** The obsolete folder's item as the scan offers it, with a made-up identity. */
-export function buildTestVscodeExtensionCandidate(params: { homeDir: string }): CandidateProbed {
+export function buildTestVscodeExtensionCandidate(params: { home: HomeFolder }): CandidateProbed {
   const unit = buildObsoleteVscodeUnit(params);
 
   return buildTestProbedCandidate({

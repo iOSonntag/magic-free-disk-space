@@ -36,7 +36,7 @@ export async function loadAndroidAvdFindings(params: {
       state: state.value,
       tool: params.run.tool,
       unusedCutoffMs: params.run.unusedCutoffMs,
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
     }),
   };
 }
@@ -55,8 +55,10 @@ export async function loadAndroidSystemImageFindings(params: {
   return {
     kind: 'succeeded',
     value: buildAndroidSystemImageFindings({
+      pathRules: params.run.environment.pathRules,
+      homeDir: params.run.environment.homeDir,
       offers: decideAndroidSystemImageOffers(state.value),
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
     }),
   };
 }
@@ -75,8 +77,10 @@ export async function loadAndroidEmulatorFindings(params: {
   return {
     kind: 'succeeded',
     value: buildAndroidEmulatorFindings({
+      pathRules: params.run.environment.pathRules,
+      homeDir: params.run.environment.homeDir,
       offers: decideAndroidEmulatorOffers(state.value),
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
     }),
   };
 }

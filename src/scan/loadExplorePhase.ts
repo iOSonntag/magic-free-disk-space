@@ -1,5 +1,6 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../environment/environmentLocation.js';
 import type {
   ExploreEngineUnit,
   ExploreEvictUnit,
@@ -13,6 +14,7 @@ import type { ExploreProbeOutcome } from '../explore/startExploreProbes.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
 import { mapNonEmpty, toNonEmpty } from '../system/nonEmptyList.js';
+import type { EvictedEntryRecorder } from '../system/walkDirectoryTree.js';
 import { buildReadIssue } from './buildReadIssue.js';
 import type {
   CandidateDecision,
@@ -26,7 +28,6 @@ import type {
   RemovalTargets,
 } from './candidate.js';
 import { hasSymbolicLinkTarget } from './candidate.js';
-import { getCatalogEntryPath } from './getCatalogEntryPath.js';
 import type { ScanIssue } from './issue.js';
 import type { FoundTarget } from './loadMeasuredTargetsPhase.js';
 import { loadMeasuredTargetsPhase } from './loadMeasuredTargetsPhase.js';
@@ -59,6 +60,7 @@ export async function loadExplorePhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const entryPhases = await Promise.all(
@@ -76,6 +78,7 @@ export async function loadExplorePhase(params: {
           measureTimeoutMs: params.measureTimeoutMs,
           runItemMeasurement: params.runItemMeasurement,
           entryReads: params.entryReads,
+          recordEvictedEntry: params.recordEvictedEntry,
           privacyDenialCode: params.privacyDenialCode,
         }),
       ];
@@ -98,6 +101,7 @@ async function loadExploreEntryPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const outcome = await params.outcome;
@@ -113,6 +117,7 @@ async function loadExploreEntryPhase(params: {
             measureTimeoutMs: params.measureTimeoutMs,
             runItemMeasurement: params.runItemMeasurement,
             entryReads: params.entryReads,
+            recordEvictedEntry: params.recordEvictedEntry,
             privacyDenialCode: params.privacyDenialCode,
           }),
         ),
@@ -158,7 +163,7 @@ async function loadExploreEntryPhase(params: {
       };
     case 'timedOut': {
       const deadlineIssue: ScanIssue = {
-        path: getCatalogEntryPath({ environment: params.environment, entry: params.entry }),
+        path: resolveEnvironmentLocation({ folders: params.environment, location: params.entry }),
         reason: 'walkStopped',
         detail: 'deadline',
       };
@@ -191,6 +196,7 @@ async function loadExploreFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   switch (params.finding.activity) {
@@ -216,6 +222,7 @@ async function loadIdleFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   const unit = params.finding.unit;
@@ -276,12 +283,14 @@ async function loadToolFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
 }): Promise<ScanPhase> {
   const measurement = await params.runItemMeasurement(() =>
     loadPathMeasurement({
       paths: listUnitPaths(params.unit),
       deadlineMs: Date.now() + params.measureTimeoutMs,
       entryReads: params.entryReads,
+      recordEvictedEntry: params.recordEvictedEntry,
     }),
   );
   const removal: CandidateRemovalRunTool = { kind: 'runTool', unit: params.unit };
@@ -306,6 +315,7 @@ function loadPathFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   const unitPaths = toNonEmpty(listUnitPaths(params.unit));
@@ -328,6 +338,7 @@ function loadPathFindingPhase(params: {
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry,
     privacyDenialCode: params.privacyDenialCode,
   });
 }
@@ -344,6 +355,7 @@ function loadEvictFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   return loadTargetsFindingPhase({
@@ -359,6 +371,7 @@ function loadEvictFindingPhase(params: {
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry,
     privacyDenialCode: params.privacyDenialCode,
   });
 }
@@ -379,6 +392,7 @@ function loadTargetsFindingPhase<TFound extends FoundTarget>(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   return loadMeasuredTargetsPhase({
@@ -387,6 +401,7 @@ function loadTargetsFindingPhase<TFound extends FoundTarget>(params: {
     measureTimeoutMs: params.measureTimeoutMs,
     runItemMeasurement: params.runItemMeasurement,
     entryReads: params.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry,
     privacyDenialCode: params.privacyDenialCode,
     decide: async (measurement) => {
       // A delete takes only the link itself, and the system evicts only a file.

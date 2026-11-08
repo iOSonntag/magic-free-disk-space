@@ -3,6 +3,7 @@ import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ExploreProbeFailure } from '../explore/exploreUnit.js';
 import { buildUnitRunArguments, listEngineUnitIds } from '../explore/exploreUnit.js';
 import { recheckExplorePathUnit } from '../explore/recheckExploreUnit.js';
+import type { PathRules } from '../path/pathRules.js';
 import type {
   Candidate,
   CandidateRemovalDeletePaths,
@@ -12,16 +13,18 @@ import type {
 } from '../scan/candidate.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
+import { resolveRemovalOwnerState } from '../scan/resolveOwnerState.js';
 import type { EntryReads } from '../system/entryReads.js';
-import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
-import type { FileIdentity } from '../system/loadFileIdentity.js';
-import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
+import { getFileFailure, loadFileIdentity } from '../system/loadFileIdentity.js';
 import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
 import type { ReadFailure } from '../system/readFailure.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
 import { callEngineCandidate } from './callEngineCandidate.js';
 import { decideTargetsOutcome } from './decideTargetsOutcome.js';
-import type { DeletePlatform } from './deletePlatform.js';
+import type { DeletePlatform, TreeRemoval } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
+import { emptyRecycleBinCandidate } from './emptyRecycleBinCandidate.js';
 import { evictCandidateFiles } from './evictCandidateFiles.js';
 import { fileFailureToOutcome } from './fileFailureToOutcome.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
@@ -29,6 +32,7 @@ import { runToolCandidate, TOOL_RUN_TIMEOUT_MS } from './runToolCandidate.js';
 
 export type RemovalOutcomeKind =
   | 'removed'
+  | 'partlyRemoved'
   | 'alreadyGone'
   | 'changedSinceScan'
   | 'ownerRunning'
@@ -41,8 +45,8 @@ export type RemovalOutcomeKind =
   /** The engine's socket was gone or refused the connect, so nothing was sent; the item stays. */
   | 'engineNotRunning';
 
-/** The outcomes that carry an error code rather than a tool failure. */
-export type RemovalOutcomeCodedKind = Exclude<RemovalOutcomeKind, 'toolFailed'>;
+/** The outcomes that carry an error code rather than a tool failure or the entries that stayed. */
+export type RemovalOutcomeCodedKind = Exclude<RemovalOutcomeKind, 'toolFailed' | 'partlyRemoved'>;
 
 export type RemovalOutcomeCoded = {
   candidate: Candidate;
@@ -65,18 +69,32 @@ export type RemovalOutcomeToolFailed = {
   failure: ExploreProbeFailure;
 };
 
-export type RemovalOutcome = RemovalOutcomeCoded | RemovalOutcomeToolFailed;
+/**
+ * An item whose removal left entries of a target that another program held, or whose content only
+ * a cloud store keeps; `freedBytes` is the drop to what a measurement after the removal still
+ * found, and `stayedEntryCount` the entries left of every target its removal left in part.
+ */
+export type RemovalOutcomePartlyRemoved = {
+  candidate: Candidate;
+  freedBytes: number;
+  outcome: 'partlyRemoved';
+  stayedEntryCount: number;
+};
+
+/** The outcome of an item deleted as its targets. */
+type TargetsRemovalOutcome = RemovalOutcomeCoded | RemovalOutcomePartlyRemoved;
+
+export type RemovalOutcome = TargetsRemovalOutcome | RemovalOutcomeToolFailed;
 
 export type RemovalRun = {
   outcomes: RemovalOutcome[];
   journalFailure: JournalFailure | null;
 };
 
-const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
-
 /** Whether the outcome left its item in place through a failure, which the run reports. */
 export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
   switch (kind) {
+    case 'partlyRemoved':
     case 'permissionDenied':
     case 'failed':
     case 'toolFailed':
@@ -93,27 +111,27 @@ export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
 }
 
 /**
- * Removes each candidate permanently, in order, after recording the intent, and records the
- * outcome entries after it. A target goes only while its identity still matches the scan and no
- * owner app runs in the processes `loadProcessCommands` read once after the confirmation; `null`
- * withholds every owned item. A tool item, a unit deleted as its paths, an evict, and an engine's
- * unit are checked again first and go only while the unit is still unchanged and idle. A journal
- * failure stops the run.
+ * Removes each candidate permanently, in order, after recording its intent, and records the
+ * outcomes after it. A target goes only while its identity matches the scan, its content is still
+ * on this computer, and no owner runs in the processes `loadKnownRunningProcesses` read once after
+ * the confirmation; `null` withholds every owned item. A tool item, a unit deleted as its paths,
+ * an evict, and an engine's unit go only while checked again unchanged and idle. A Recycle Bin is
+ * emptied only while it holds what the scan counted. A journal failure stops the run.
  */
 export async function deleteCandidates(params: {
   candidates: Candidate[];
   journal: DeletionJournal;
   environment: Environment;
-  /** The delete slice, whose `removeTree` removes each path. */
+  /** The delete slice, whose `removeTree` removes each path and whose `trash` empties a bin. */
   delete: DeletePlatform;
   /** What the rechecks of the units read by. */
   probePlatform: ExploreProbePlatform;
   /** The system slice's entry reads, for measuring around a tool's run and a failed removal. */
   entryReads: EntryReads;
-  loadProcessCommands: () => Promise<string[] | null>;
+  loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   clock: () => number;
 }): Promise<RemovalRun> {
-  const processCommands = await params.loadProcessCommands();
+  const runningProcesses = await params.loadKnownRunningProcesses();
   const outcomes: RemovalOutcome[] = [];
 
   for (const [index, candidate] of params.candidates.entries()) {
@@ -137,8 +155,8 @@ export async function deleteCandidates(params: {
       delete: params.delete,
       probePlatform: params.probePlatform,
       entryReads: params.entryReads,
-      processCommands: processCommands,
-      loadProcessCommands: params.loadProcessCommands,
+      runningProcesses: runningProcesses,
+      loadKnownRunningProcesses: params.loadKnownRunningProcesses,
       clock: params.clock,
     });
 
@@ -190,6 +208,15 @@ function buildIntentEntry(params: { candidate: Candidate; atMs: number }): Journ
         allocatedBytes: params.candidate.allocatedBytes,
         targetPaths: params.candidate.removal.targets.map((target) => target.path),
       };
+    // The system empties the bin as one unit, which its outcome entry records at the bin's path.
+    case 'emptyRecycleBin':
+      return {
+        kind: 'intent',
+        atMs: params.atMs,
+        path: params.candidate.path,
+        allocatedBytes: params.candidate.allocatedBytes,
+        targetPaths: [params.candidate.path],
+      };
     case 'evictUnitFiles':
       return {
         kind: 'evictIntent',
@@ -224,8 +251,8 @@ async function removeCandidate(params: {
   probePlatform: ExploreProbePlatform;
   entryReads: EntryReads;
   /** The processes read once before the run, for path items. */
-  processCommands: string[] | null;
-  loadProcessCommands: () => Promise<string[] | null>;
+  runningProcesses: RunningProcesses | null;
+  loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   clock: () => number;
 }): Promise<RecordedRemoval> {
   switch (params.candidate.removal.kind) {
@@ -233,9 +260,10 @@ async function removeCandidate(params: {
       return deletePathsCandidate({
         candidate: params.candidate,
         removal: params.candidate.removal,
+        pathRules: params.environment.pathRules,
         delete: params.delete,
         entryReads: params.entryReads,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
         clock: params.clock,
       });
     case 'deleteUnitPaths':
@@ -246,7 +274,7 @@ async function removeCandidate(params: {
         delete: params.delete,
         probePlatform: params.probePlatform,
         entryReads: params.entryReads,
-        loadProcessCommands: params.loadProcessCommands,
+        loadKnownRunningProcesses: params.loadKnownRunningProcesses,
         clock: params.clock,
       });
     case 'evictUnitFiles':
@@ -254,6 +282,7 @@ async function removeCandidate(params: {
         candidate: params.candidate,
         removal: params.candidate.removal,
         environment: params.environment,
+        toolProcesses: params.probePlatform.toolProcesses,
         clock: params.clock,
       });
     case 'callEngine':
@@ -263,13 +292,20 @@ async function removeCandidate(params: {
         user: params.environment.user,
         clock: params.clock,
       });
+    case 'emptyRecycleBin':
+      return emptyRecycleBinCandidate({
+        candidate: params.candidate,
+        removal: params.candidate.removal,
+        trash: params.delete.trash,
+        clock: params.clock,
+      });
     case 'runTool': {
       const run = await runToolCandidate({
         unit: params.candidate.removal.unit,
         environment: params.environment,
         probePlatform: params.probePlatform,
         entryReads: params.entryReads,
-        loadProcessCommands: params.loadProcessCommands,
+        loadKnownRunningProcesses: params.loadKnownRunningProcesses,
         timeoutMs: TOOL_RUN_TIMEOUT_MS,
       });
 
@@ -284,7 +320,8 @@ async function removeCandidate(params: {
 
 /**
  * The outcome of a removal and the journal entries that record it, in the order they happened: one
- * per target of an item of paths or an evict, one for a tool's run or an engine's call.
+ * per target of an item of paths or an evict, one for a tool's run, an engine's call, or a
+ * Recycle Bin.
  */
 export type RecordedRemoval = {
   outcome: RemovalOutcome;
@@ -360,33 +397,38 @@ export function toolCandidateRunToRemoval(params: {
 async function deletePathsCandidate(params: {
   candidate: Candidate;
   removal: CandidateRemovalDeletePaths;
+  pathRules: PathRules;
   delete: DeletePlatform;
   entryReads: EntryReads;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   clock: () => number;
 }): Promise<RecordedRemoval> {
-  if (
-    isOwnerPossiblyRunning({
-      ownerBundlePaths: params.removal.ownerBundlePaths,
-      processCommands: params.processCommands,
-    })
-  ) {
-    return buildKeptRemoval({
-      candidate: params.candidate,
-      targets: params.removal.targets,
-      outcome: 'ownerRunning',
-      code: null,
-      atMs: params.clock(),
-    });
-  }
-
-  return deleteScannedTargets({
-    candidate: params.candidate,
-    targets: params.removal.targets,
-    delete: params.delete,
-    entryReads: params.entryReads,
-    clock: params.clock,
+  const ownerState = resolveRemovalOwnerState({
+    owner: params.removal.owner,
+    pathRules: params.pathRules,
+    runningProcesses: params.runningProcesses,
   });
+
+  switch (ownerState) {
+    // An owner that cannot be checked withholds the item as one that runs.
+    case 'running':
+    case 'unknown':
+      return buildKeptRemoval({
+        candidate: params.candidate,
+        targets: params.removal.targets,
+        outcome: 'ownerRunning',
+        code: null,
+        atMs: params.clock(),
+      });
+    case 'stopped':
+      return deleteScannedTargets({
+        candidate: params.candidate,
+        targets: params.removal.targets,
+        delete: params.delete,
+        entryReads: params.entryReads,
+        clock: params.clock,
+      });
+  }
 }
 
 /**
@@ -400,14 +442,14 @@ async function deleteUnitPathsCandidate(params: {
   delete: DeletePlatform;
   probePlatform: ExploreProbePlatform;
   entryReads: EntryReads;
-  loadProcessCommands: () => Promise<string[] | null>;
+  loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   clock: () => number;
 }): Promise<RecordedRemoval> {
   const recheck = await recheckExplorePathUnit({
     unit: params.removal.unit,
     environment: params.environment,
     platform: params.probePlatform,
-    processCommands: await params.loadProcessCommands(),
+    runningProcesses: await params.loadKnownRunningProcesses(),
   });
 
   switch (recheck.kind) {
@@ -477,19 +519,31 @@ function readFailureToOutcomeKind(failure: ReadFailure): RemovalOutcomeCodedKind
     case 'privacyDenied':
     case 'permissionDenied':
       return 'permissionDenied';
+    case 'inUse':
     case 'unexpected':
       return 'failed';
   }
 }
 
 /** What became of one target, and whether its delete ran, which may have taken part of it. */
-type TargetOutcome = {
+type TargetOutcomeCoded = {
   path: string;
   atMs: number;
   outcome: RemovalOutcomeCodedKind;
   code: string | null;
   deleteRan: boolean;
 };
+
+/** The target's delete ran and left `stayedEntryCount` of its entries where they were. */
+type TargetOutcomePartlyRemoved = {
+  path: string;
+  atMs: number;
+  outcome: 'partlyRemoved';
+  stayedEntryCount: number;
+  deleteRan: true;
+};
+
+type TargetOutcome = TargetOutcomeCoded | TargetOutcomePartlyRemoved;
 
 /**
  * Deletes each target in turn, each only while its identity still matches the scan, so a target
@@ -508,7 +562,12 @@ async function deleteScannedTargets(params: {
     entryReads: params.entryReads,
   });
   const targetOutcomes = await mapNonEmptyInTurn(params.targets, (target) =>
-    deleteScannedTarget({ target: target, delete: params.delete, clock: params.clock }),
+    deleteScannedTarget({
+      target: target,
+      delete: params.delete,
+      entryReads: params.entryReads,
+      clock: params.clock,
+    }),
   );
 
   return {
@@ -518,14 +577,37 @@ async function deleteScannedTargets(params: {
       presentBytes: presentBytes,
       entryReads: params.entryReads,
     }),
-    outcomeEntries: mapNonEmpty(targetOutcomes, (targetOutcome) => ({
-      kind: 'outcome',
-      atMs: targetOutcome.atMs,
-      path: targetOutcome.path,
-      outcome: targetOutcome.outcome,
-      code: targetOutcome.code,
-    })),
+    outcomeEntries: mapNonEmpty(targetOutcomes, targetOutcomeToJournalEntry),
   };
+}
+
+function targetOutcomeToJournalEntry(targetOutcome: TargetOutcome): JournalEntry {
+  switch (targetOutcome.outcome) {
+    case 'partlyRemoved':
+      return {
+        kind: 'outcome',
+        atMs: targetOutcome.atMs,
+        path: targetOutcome.path,
+        outcome: 'partlyRemoved',
+        stayedEntryCount: targetOutcome.stayedEntryCount,
+      };
+    case 'removed':
+    case 'alreadyGone':
+    case 'changedSinceScan':
+    case 'ownerRunning':
+    case 'permissionDenied':
+    case 'failed':
+    case 'notAttempted':
+    case 'engineInUse':
+    case 'engineNotRunning':
+      return {
+        kind: 'outcome',
+        atMs: targetOutcome.atMs,
+        path: targetOutcome.path,
+        outcome: targetOutcome.outcome,
+        code: targetOutcome.code,
+      };
+  }
 }
 
 /**
@@ -552,6 +634,7 @@ async function loadPresentTargetsBytes(params: {
     paths: presentPaths,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
 
   return present.allocatedBytes;
@@ -564,7 +647,7 @@ async function listPresentTargetPaths(params: { targets: RemovalTarget[] }): Pro
   for (const target of params.targets) {
     const identity = await loadFileIdentity({ path: target.path });
 
-    if (identity.kind === 'succeeded' || identity.failure.reason !== 'missing') {
+    if (identity.kind === 'succeeded' || isPresentDespiteFailure(identity.failure)) {
       presentPaths.push(target.path);
     }
   }
@@ -572,10 +655,29 @@ async function listPresentTargetPaths(params: { targets: RemovalTarget[] }): Pro
   return presentPaths;
 }
 
-/** Deletes the target only while its identity still matches the scan. */
+/**
+ * Whether a target whose identity could not be read is still there, as all but a missing one are.
+ */
+function isPresentDespiteFailure(failure: FileFailure): boolean {
+  switch (failure.reason) {
+    case 'missing':
+      return false;
+    case 'permissionDenied':
+    case 'inUse':
+    case 'unexpected':
+      return true;
+  }
+}
+
+/**
+ * Deletes the target only while its identity matches the scan and its content is still on this
+ * computer, since deleting a cloud placeholder deletes the file in the cloud. A target whose
+ * placement cannot be read stays, with the code of that read.
+ */
 async function deleteScannedTarget(params: {
   target: RemovalTarget;
   delete: DeletePlatform;
+  entryReads: EntryReads;
   clock: () => number;
 }): Promise<TargetOutcome> {
   const currentIdentity = await loadFileIdentity({ path: params.target.path });
@@ -602,39 +704,107 @@ async function deleteScannedTarget(params: {
     };
   }
 
+  const placement = params.entryReads.loadEntryPlacement({
+    path: params.target.path,
+    kind: params.target.identity.kind,
+  });
+
+  switch (placement.kind) {
+    case 'cloudOnly':
+      return {
+        path: params.target.path,
+        atMs: params.clock(),
+        outcome: 'changedSinceScan',
+        code: null,
+        deleteRan: false,
+      };
+    // Where its content lies is not known: it may be another volume, or a placeholder.
+    case 'unread': {
+      const unreadOutcome = fileFailureToOutcome(getFileFailure({ code: placement.code }));
+
+      return {
+        path: params.target.path,
+        atMs: params.clock(),
+        outcome: unreadOutcome.outcome,
+        code: unreadOutcome.code,
+        deleteRan: false,
+      };
+    }
+    // A link is removed as itself, never followed, as a target on disk is.
+    case 'onDisk':
+    case 'link':
+      break;
+  }
+
   const removed = await params.delete.removeTree({ path: params.target.path });
 
   if (removed.kind === 'succeeded') {
-    return {
+    return treeRemovalToTargetOutcome({
       path: params.target.path,
+      removal: removed.value,
       atMs: params.clock(),
-      outcome: 'removed',
-      code: null,
-      deleteRan: true,
-    };
+    });
   }
 
   return {
     path: params.target.path,
     atMs: params.clock(),
-    outcome: PERMISSION_DENIED_CODES.includes(removed.failure) ? 'permissionDenied' : 'failed',
+    outcome: removalFailureToOutcomeKind(getFileFailure({ code: removed.failure })),
     code: removed.failure,
     deleteRan: true,
   };
 }
 
+/** What a removal that ran and failed makes of its target, by the reason of the system's code. */
+function removalFailureToOutcomeKind(failure: FileFailure): RemovalOutcomeCodedKind {
+  switch (failure.reason) {
+    case 'permissionDenied':
+      return 'permissionDenied';
+    // The removal ran, so part of the target may be gone: only a refusal names its own outcome.
+    case 'missing':
+    case 'inUse':
+    case 'unexpected':
+      return 'failed';
+  }
+}
+
+function treeRemovalToTargetOutcome(params: {
+  path: string;
+  removal: TreeRemoval;
+  atMs: number;
+}): TargetOutcome {
+  switch (params.removal.kind) {
+    case 'removed':
+      return {
+        path: params.path,
+        atMs: params.atMs,
+        outcome: 'removed',
+        code: null,
+        deleteRan: true,
+      };
+    case 'partlyRemoved':
+      return {
+        path: params.path,
+        atMs: params.atMs,
+        outcome: 'partlyRemoved',
+        stayedEntryCount: params.removal.stayedEntryCount,
+        deleteRan: true,
+      };
+  }
+}
+
 /**
  * The item is gone once each target is: `alreadyGone` when none went by this run, else `removed`,
- * freeing `presentBytes`, what its targets held before the run. Otherwise it takes the first
- * target that stayed, and frees the drop from `presentBytes` to what its targets still hold,
- * measured as the scan measured them, once any delete ran.
+ * freeing `presentBytes`, what its targets held before the run. Otherwise it takes the outcome of
+ * the first target that stayed, and frees the drop from `presentBytes` to what its targets still
+ * hold, measured as the scan measured them, once any delete ran.
  */
 async function loadTargetsOutcome(params: {
   candidate: Candidate;
   targetOutcomes: [TargetOutcome, ...TargetOutcome[]];
   presentBytes: number;
   entryReads: EntryReads;
-}): Promise<RemovalOutcomeCoded> {
+}): Promise<TargetsRemovalOutcome> {
   const decision = decideTargetsOutcome({
     targets: params.targetOutcomes,
     getOutcome: (targetOutcome) => targetOutcome.outcome,
@@ -650,45 +820,76 @@ async function loadTargetsOutcome(params: {
   }
 
   if (!params.targetOutcomes.some((targetOutcome) => targetOutcome.deleteRan)) {
-    return {
+    return buildStayedTargetOutcome({
       candidate: params.candidate,
+      stayedTarget: decision.target,
+      targetOutcomes: params.targetOutcomes,
       freedBytes: 0,
-      outcome: decision.target.outcome,
-      code: decision.target.code,
-    };
+    });
   }
 
   const left = await loadPathMeasurement({
     paths: params.targetOutcomes.map((targetOutcome) => targetOutcome.path),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
 
-  return {
+  return buildStayedTargetOutcome({
     candidate: params.candidate,
+    stayedTarget: decision.target,
+    targetOutcomes: params.targetOutcomes,
     freedBytes: getMeasuredFreedBytes({ beforeBytes: params.presentBytes, after: left }),
-    outcome: decision.target.outcome,
-    code: decision.target.code,
-  };
+  });
 }
 
-/** An owned item is withheld while its app runs, or while that cannot be checked. */
-function isOwnerPossiblyRunning(params: {
-  ownerBundlePaths: string[];
-  processCommands: string[] | null;
-}): boolean {
-  if (params.ownerBundlePaths.length === 0) {
-    return false;
+/**
+ * The item's outcome named by `stayedTarget`, the first of its `targetOutcomes` that stayed, whole
+ * or in part; one left in part counts the entries that stayed of every target left in part.
+ */
+function buildStayedTargetOutcome(params: {
+  candidate: Candidate;
+  stayedTarget: TargetOutcome;
+  targetOutcomes: TargetOutcome[];
+  freedBytes: number;
+}): TargetsRemovalOutcome {
+  switch (params.stayedTarget.outcome) {
+    case 'partlyRemoved':
+      return {
+        candidate: params.candidate,
+        freedBytes: params.freedBytes,
+        outcome: 'partlyRemoved',
+        stayedEntryCount: countStayedEntries({ targetOutcomes: params.targetOutcomes }),
+      };
+    case 'removed':
+    case 'alreadyGone':
+    case 'changedSinceScan':
+    case 'ownerRunning':
+    case 'permissionDenied':
+    case 'failed':
+    case 'notAttempted':
+    case 'engineInUse':
+    case 'engineNotRunning':
+      return {
+        candidate: params.candidate,
+        freedBytes: params.freedBytes,
+        outcome: params.stayedTarget.outcome,
+        code: params.stayedTarget.code,
+      };
+  }
+}
+
+/** The entries that stayed in all the targets their removal left in part. */
+function countStayedEntries(params: { targetOutcomes: TargetOutcome[] }): number {
+  let stayedEntryCount = 0;
+
+  for (const targetOutcome of params.targetOutcomes) {
+    if (targetOutcome.outcome === 'partlyRemoved') {
+      stayedEntryCount += targetOutcome.stayedEntryCount;
+    }
   }
 
-  if (params.processCommands === null) {
-    return true;
-  }
-
-  return isAnyBundleRunning({
-    bundlePaths: params.ownerBundlePaths,
-    processCommands: params.processCommands,
-  });
+  return stayedEntryCount;
 }
 
 function isSameIdentity(params: { current: FileIdentity; scanned: FileIdentity }): boolean {

@@ -1,14 +1,17 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, CandidateDecision } from '../../src/scan/candidate.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
-import { buildScanReportOfPhases } from '../../src/scan/runScan.js';
+import { buildScanReportOfPhases, createCloudOnlyEntryTally } from '../../src/scan/runScan.js';
+import type { AdvisedApp } from '../../src/scan/scanPlatform.js';
 import { createAndroidAvdHome, writeAndroidSystemImage } from '../explore/androidFixtures.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { TestUnitPathsCandidateParams } from '../support/candidateFixtures.js';
 import {
   buildTestAdvice,
@@ -17,13 +20,15 @@ import {
   buildTestInstallersCandidate,
   buildTestUnitPathsCandidate,
 } from '../support/candidateFixtures.js';
+import { describeOnDarwin } from '../support/darwinOnly.js';
+import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import {
   buildTestPathEnvironment,
   createFixtureFile,
   updateModifiedMs,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildExampleHome, buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { withFixtureHome } from '../support/probeRunFixtures.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
 
@@ -57,11 +62,13 @@ const vscodeAdvice: Advice = buildTestAdvice({
   allocatedBytes: 65_536,
 });
 
-const vscodeCandidate = buildTestVscodeExtensionCandidate({ homeDir: HOME_DIR });
+const vscodeCandidate = buildTestVscodeExtensionCandidate({
+  home: buildExampleHome({ text: HOME_DIR }),
+});
 
 const vscodeOffer: CandidateDecision = { kind: 'offer', candidate: vscodeCandidate };
 
-describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
+describe('buildScanReportOfPhases', () => {
   test('keeps the offers of an incomplete probe and shows the advice of its entry', () => {
     const report = buildScanReportOfPhases({
       environment: ENVIRONMENT,
@@ -71,11 +78,14 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
         decisions: [{ kind: 'advice', advice: vscodeAdvice }],
         issues: [{ path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' }],
       },
+      appAdvice: null,
+      cloudOnlyEntries: { cloudStoreName: 'OneDrive', count: 2 },
     });
 
     expect(report.candidates).toEqual([vscodeCandidate]);
     expect(report.advice).toEqual([vscodeAdvice]);
     expect(report.skipped).toEqual([]);
+    expect(report.cloudOnlyEntries).toEqual({ cloudStoreName: 'OneDrive', count: 2 });
     expect(report.issues).toEqual([
       { path: vscodeAdvice.path, reason: 'unexpected', detail: 'EIO' },
     ]);
@@ -87,6 +97,8 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
       reservedEntryPaths: [vscodeAdvice.path],
       phases: [{ decisions: [vscodeOffer, { kind: 'advice', advice: vscodeAdvice }], issues: [] }],
       incompleteExploreAdvice: { decisions: [], issues: [] },
+      appAdvice: null,
+      cloudOnlyEntries: null,
     });
 
     expect(report.candidates).toEqual([]);
@@ -220,9 +232,75 @@ describeAwaitingWin32Platform('buildScanReportOfPhases', () => {
       { path: `${DOWNLOADS_PATH}/archive.iso`, reason: 'overlapsEarlierCandidate' },
     ]);
   });
+
+  test('keeps the installed apps beside the offers, never among them', () => {
+    const app: AdvisedApp = {
+      displayName: 'Example',
+      installFolderPath: buildTestAbsolutePath({ text: `${HOME_DIR}/.vscode` }),
+      estimatedBytes: 1024,
+    };
+
+    const report = buildScanReportOfPhases({
+      environment: ENVIRONMENT,
+      reservedEntryPaths: [],
+      phases: [{ decisions: [vscodeOffer], issues: [] }],
+      incompleteExploreAdvice: { decisions: [], issues: [] },
+      appAdvice: { apps: [app], installedAppsPageName: 'Settings > Apps' },
+      cloudOnlyEntries: null,
+    });
+
+    expect(report.candidates).toEqual([vscodeCandidate]);
+    expect(report.appAdvice).toEqual({ apps: [app], installedAppsPageName: 'Settings > Apps' });
+  });
 });
 
-describeAwaitingWin32Platform('runScan', () => {
+describe('createCloudOnlyEntryTally', () => {
+  test('counts each path once on Windows, whose scan counts the entries left in OneDrive', () => {
+    const tally = createCloudOnlyEntryTally({
+      pathRules: WIN32_PATH_RULES,
+      cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
+    });
+
+    if (tally === null) {
+      throw new Error('The tally of Windows records no cloud-only entry.');
+    }
+
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Clips', kind: 'directory' });
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\clip.mov', kind: 'file' });
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Clips', kind: 'directory' });
+
+    expect(tally.getCloudOnlyEntryCount()).toEqual({ cloudStoreName: 'OneDrive', count: 2 });
+  });
+
+  test('counts a path once on Windows in whatever case each walk spells it', () => {
+    const tally = createCloudOnlyEntryTally({
+      pathRules: WIN32_PATH_RULES,
+      cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
+    });
+
+    if (tally === null) {
+      throw new Error('The tally of Windows records no cloud-only entry.');
+    }
+
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Documents\\a.docx', kind: 'file' });
+    tally.recordEvictedEntry({ path: 'C:\\Users\\me\\onedrive\\documents\\a.docx', kind: 'file' });
+
+    expect(tally.getCloudOnlyEntryCount()).toEqual({ cloudStoreName: 'OneDrive', count: 1 });
+  });
+
+  test('counts no entry on macOS, whose scan never counted the entries left in iCloud', () => {
+    const tally = createCloudOnlyEntryTally({
+      pathRules: POSIX_PATH_RULES,
+      cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
+    });
+
+    expect(tally).toBeNull();
+  });
+});
+
+// The scans read the entries of the macOS catalog in a fixture home of the host, which only macOS
+// lays out as those entries expect.
+describeOnDarwin('runScan', () => {
   test('never shows a section larger while it scans than the report makes it, for a folder a probe claims', async () => {
     await withFixtureHome({
       nowMs: SCAN_NOW_MS,
@@ -287,7 +365,7 @@ describeAwaitingWin32Platform('runScan', () => {
           abi: 'arm64-v8a',
         });
         const imagePath = join(imageFolderPath, 'system.img');
-        await createAndroidAvdHome({ homeDir: home.fixtureRoot.homeDir });
+        await createAndroidAvdHome({ home: home.environment });
         await createFixtureFile({
           path: imagePath,
           sizeBytes: SCAN_LIMITS.minUserFileBytes,
@@ -441,6 +519,103 @@ describeAwaitingWin32Platform('runScan', () => {
       },
     });
   });
+
+  test('counts no entry its walks left in iCloud, as the scan of macOS never did', async () => {
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const oldMs = Date.UTC(2025, 0, 1);
+        const homeDir = home.environment.homeDir;
+        const projectPath = join(homeDir, 'Documents/app');
+        // Met by the project walk and the large-file search.
+        const cloudFolderPath = join(homeDir, 'Movies/Cloud');
+        const cloudFilePath = join(homeDir, 'Movies/cloud.mov');
+        // Met only by the measurement of the artifact, which the project walk never enters.
+        const cloudArtifactFilePath = join(projectPath, 'node_modules/pkg/cache.bin');
+
+        await createFixtureFile({
+          path: join(projectPath, 'package.json'),
+          sizeBytes: 64,
+          modifiedMs: oldMs,
+        });
+        await createFixtureFile({
+          path: join(projectPath, 'node_modules/pkg/index.js'),
+          sizeBytes: 2 * SCAN_LIMITS.minOfferedBytes,
+          modifiedMs: oldMs,
+        });
+
+        for (const filePath of [
+          cloudArtifactFilePath,
+          cloudFilePath,
+          join(cloudFolderPath, 'clip.mov'),
+        ]) {
+          await createFixtureFile({ path: filePath, sizeBytes: 64, modifiedMs: oldMs });
+        }
+
+        const cloudOnlyPaths = [cloudFolderPath, cloudFilePath, cloudArtifactFilePath];
+        const report = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [],
+          entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: cloudOnlyPaths }),
+        });
+
+        expect(report.cloudOnlyEntries).toBeNull();
+      },
+    });
+  });
+
+  test('offers no item whose folder the entry reads call a link, and skips it as one', async () => {
+    // As a mounted folder on Windows, which lstat calls a folder and its reparse point a link.
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const denoPath = join(home.fixtureRoot.homeDir, 'Library/Caches/deno');
+        const remotePath = join(denoPath, 'remote');
+        await createFixtureFile({
+          path: join(remotePath, 'https/deno.land/module.ts'),
+          sizeBytes: 2 * SCAN_LIMITS.minOfferedBytes,
+          modifiedMs: Date.UTC(2026, 0, 1),
+        });
+
+        const plainReport = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [getCatalogEntry('deno-cache')],
+          entryReads: buildTestEntryReads({ privateBytes: null }),
+        });
+        const linkReport = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [getCatalogEntry('deno-cache')],
+          entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [remotePath] }),
+        });
+
+        expect(listOfferedPaths(plainReport)).toEqual([denoPath]);
+        expect(listOfferedPaths(linkReport)).toEqual([]);
+        expect(linkReport.skipped).toContainEqual({ path: denoPath, reason: 'symbolicLink' });
+      },
+    });
+  });
+
+  test('names a failed system call of the process listing by its call and its code', async () => {
+    await withFixtureHome({
+      nowMs: SCAN_NOW_MS,
+      run: async (home) => {
+        const report = await runTestScan({
+          environment: home.environment,
+          catalogEntries: [],
+          runningProcesses: {
+            kind: 'failed',
+            failure: { reason: 'callFailed', call: 'Process32NextW', code: 5 },
+          },
+        });
+
+        expect(report.issues).toContainEqual({
+          path: 'Process32NextW',
+          reason: 'commandFailed',
+          detail: 'Process32NextW failed with 0x00000005',
+        });
+      },
+    });
+  });
 });
 
 /** The report of phases of the given decisions, with no advice of an incomplete probe. */
@@ -453,6 +628,8 @@ function buildReportOfPhases(params: {
     reservedEntryPaths: params.reservedEntryPaths,
     phases: params.phases.map((decisions) => ({ decisions: decisions, issues: [] })),
     incompleteExploreAdvice: { decisions: [], issues: [] },
+    appAdvice: null,
+    cloudOnlyEntries: null,
   });
 }
 

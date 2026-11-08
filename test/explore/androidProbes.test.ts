@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
@@ -9,7 +9,6 @@ import type {
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -17,7 +16,9 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
+import { describeWithFakeTools } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -35,12 +36,10 @@ import { buildTestProbeStart } from './probeStartFixtures.js';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
-let homeDir: string;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  homeDir = environment.homeDir;
 });
 
 afterEach(async () => {
@@ -48,10 +47,10 @@ afterEach(async () => {
 });
 
 function buildSdkRoot(): AbsolutePath {
-  return buildAndroidSdkRoot({ homeDir: homeDir });
+  return buildAndroidSdkRoot({ folders: environment });
 }
 
-describeAwaitingWin32Platform('startExploreProbes with the Android probes', () => {
+describeWithFakeTools('startExploreProbes with the Android probes', () => {
   test('offers the unused AVD with the located avdmanager, and the image no AVD names', async () => {
     const avdmanager = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'cmdline-tools', 'bin'),
@@ -68,15 +67,15 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     const old = await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel_Old',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel_Recent',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -129,7 +128,7 @@ describeAwaitingWin32Platform('startExploreProbes with the Android probes', () =
   });
 });
 
-describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path units', () => {
+describe('recheckExplorePathUnit with the Android path units', () => {
   async function createPackageUnits(): Promise<{
     image: ExplorePathUnitAndroidSystemImage;
     emulator: ExplorePathUnitAndroidEmulator;
@@ -139,8 +138,8 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    const emulatorPath = await writeAndroidEmulator({ homeDir: homeDir });
-    await createAndroidAvdHome({ homeDir: homeDir });
+    const emulatorPath = await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
 
     return {
       image: { kind: 'androidSystemImage', sdkRoot: buildSdkRoot(), folderPath: imagePath },
@@ -157,7 +156,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'unchanged' });
     }
@@ -172,7 +171,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [ANDROID_EMULATOR_PROCESS_COMMAND],
+          runningProcesses: buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
         }),
       ).toEqual({ kind: 'busy' });
     }
@@ -181,7 +180,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
   test('answers changed for both once an AVD names the image', async () => {
     const units = await createPackageUnits();
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -193,7 +192,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit with the Android path unit
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }

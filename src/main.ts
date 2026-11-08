@@ -5,11 +5,12 @@ import { createTerminalIo } from './cli/terminalIo.js';
 import { darwinPlatform } from './platform/darwin/darwinPlatform.js';
 import type { Platform } from './platform/platform.js';
 import { parsePlatformId } from './platform/platform.js';
+import { win32Platform } from './platform/win32/win32Platform.js';
 import {
   formatEnvironmentFailure,
   formatUnsupportedPlatform,
 } from './report/formatEnvironmentFailure.js';
-import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
+import { runStoppingToolsOnProcessEnd } from './tools/runToolCommand.js';
 
 async function main(): Promise<number> {
   const io = createTerminalIo();
@@ -23,14 +24,22 @@ async function main(): Promise<number> {
     case 'darwin':
       return runCliOnPlatform({ io: io, platform: darwinPlatform });
     case 'win32':
-      return refuseUnsupportedPlatform({ io: io });
+      return runCliOnPlatform({ io: io, platform: win32Platform });
   }
 }
 
 /** Runs the CLI with the platform's slices, its tools stopped on every end of the process. */
-async function runCliOnPlatform(params: { io: TerminalIo; platform: Platform }): Promise<number> {
-  stopRunningToolsOnProcessEnd({ processEndSignals: params.platform.tools.processEndSignals });
+function runCliOnPlatform(params: { io: TerminalIo; platform: Platform }): Promise<number> {
+  return runStoppingToolsOnProcessEnd({
+    processEndSignals: params.platform.tools.processEndSignals,
+    run: () => runCliWithEnvironment({ io: params.io, platform: params.platform }),
+  });
+}
 
+async function runCliWithEnvironment(params: {
+  io: TerminalIo;
+  platform: Platform;
+}): Promise<number> {
   const environmentResult = await params.platform.environment.loadEnvironment();
 
   if (environmentResult.kind === 'failed') {

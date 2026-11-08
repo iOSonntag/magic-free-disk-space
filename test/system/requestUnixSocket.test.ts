@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { link, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { requestUnixSocket } from '../../src/system/requestUnixSocket.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
+import { buildTestUserIdentity, exampleWindowsUser } from '../support/parsedValueFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 
 const USER = buildTestUserIdentity({ uid: process.getuid?.() ?? 0 });
 
@@ -33,7 +33,7 @@ function startCountingServer(params: {
   return { server: server, requestPaths: requestPaths };
 }
 
-describeAwaitingWin32Platform('requestUnixSocket', () => {
+describeOnPosix('requestUnixSocket', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -132,6 +132,32 @@ describeAwaitingWin32Platform('requestUnixSocket', () => {
         user: OTHER_USER,
         method: 'DELETE',
         requestPath: '/v1.47/volumes/data',
+        timeoutMs: TIMEOUT_MS,
+      });
+
+      expect(result).toEqual({
+        kind: 'failed',
+        failure: { kind: 'socketUntrusted', detail: 'notOwnedByUser' },
+      });
+      expect(served.requestPaths).toEqual([]);
+    } finally {
+      served.server.stop(true);
+    }
+  });
+
+  test('refuses every socket for a user of Windows as notOwnedByUser, sending nothing', async () => {
+    const socketPath = join(fixtureRoot.rootDir, 'engine.sock');
+    const served = startCountingServer({
+      socketPath: socketPath,
+      answer: () => new Response('OK'),
+    });
+
+    try {
+      const result = await requestUnixSocket({
+        socketPath: socketPath,
+        user: exampleWindowsUser,
+        method: 'GET',
+        requestPath: '/_ping',
         timeoutMs: TIMEOUT_MS,
       });
 

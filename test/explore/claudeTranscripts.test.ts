@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { compareClaudeTranscriptsUnit } from '../../src/explore/claudeTranscripts/compareClaudeTranscriptsUnit.js';
@@ -19,7 +19,6 @@ import type {
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { updateModifiedMs, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
@@ -29,6 +28,7 @@ import {
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Math.floor(Date.now() / 1000) * 1000;
 
@@ -146,7 +146,7 @@ function buildValueProject(entries: ClaudeProjectEntry[]): ClaudeProjectState {
   };
 }
 
-describeAwaitingWin32Platform('decideOldTranscriptPaths', () => {
+describe('decideOldTranscriptPaths', () => {
   test('takes each session whose files and own folder are all older than the cutoff', () => {
     expect(
       decideOldTranscriptPaths({ project: buildValueProject(VALUE_ENTRIES), cutoffMs: CUTOFF_MS }),
@@ -165,7 +165,7 @@ describeAwaitingWin32Platform('decideOldTranscriptPaths', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareClaudeTranscriptsUnit', () => {
+describe('compareClaudeTranscriptsUnit', () => {
   const unit: ExplorePathUnitClaudeTranscripts = {
     kind: 'claudeTranscripts',
     projectFolderPath: buildTestAbsolutePath({ text: VALUE_PROJECT_PATH }),
@@ -174,12 +174,12 @@ describeAwaitingWin32Platform('compareClaudeTranscriptsUnit', () => {
   };
 
   test("is unchanged while the old sessions are exactly the unit's, whatever the processes", () => {
-    for (const processCommands of [[], null]) {
+    for (const runningProcesses of [buildRunningCommandLines([]), null]) {
       expect(
         compareClaudeTranscriptsUnit({
           unit: unit,
           project: buildValueProject(VALUE_ENTRIES),
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'unchanged' });
     }
@@ -195,13 +195,17 @@ describeAwaitingWin32Platform('compareClaudeTranscriptsUnit', () => {
 
     for (const project of [buildValueProject(resumed), buildValueProject(grownOld), null]) {
       expect(
-        compareClaudeTranscriptsUnit({ unit: unit, project: project, processCommands: [] }),
+        compareClaudeTranscriptsUnit({
+          unit: unit,
+          project: project,
+          runningProcesses: buildRunningCommandLines([]),
+        }),
       ).toEqual({ kind: 'changed' });
     }
   });
 });
 
-describeAwaitingWin32Platform('loadClaudeTranscriptFindings', () => {
+describe('loadClaudeTranscriptFindings', () => {
   test('offers the files and folders of the sessions untouched for 30 days, as careful', async () => {
     await withClaudeHome({
       run: async (fixture) => {
@@ -243,7 +247,7 @@ describeAwaitingWin32Platform('loadClaudeTranscriptFindings', () => {
 
         const probed = getProbeFindings(
           await loadClaudeTranscriptFindings(
-            buildTestProbeRun({ environment: fixture.environment, processCommands: null }),
+            buildTestProbeRun({ environment: fixture.environment, runningProcesses: null }),
           ),
         );
 
@@ -265,7 +269,7 @@ describeAwaitingWin32Platform('loadClaudeTranscriptFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckClaudeTranscriptsUnit', () => {
+describe('recheckClaudeTranscriptsUnit', () => {
   test('is unchanged while the old sessions stay untouched, and changed once one is resumed', async () => {
     await withClaudeHome({
       run: async (fixture) => {
@@ -284,7 +288,7 @@ describeAwaitingWin32Platform('recheckClaudeTranscriptsUnit', () => {
             unit: unit,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           });
         }
 

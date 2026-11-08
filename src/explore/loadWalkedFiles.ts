@@ -57,7 +57,8 @@ export async function loadWalkedFiles(params: {
     onUnreadable: () => {
       isComplete = false;
     },
-    onEvictedEntrySkipped: () => {},
+    // The scan counts the entries its own phases leave unread, never a probe's.
+    onEvictedEntrySkipped: null,
   });
   const files: WalkedFile[] = [];
 

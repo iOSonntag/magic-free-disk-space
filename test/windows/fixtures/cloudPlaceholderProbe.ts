@@ -1,12 +1,19 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadLstatText, observeSafely } from '../observations.js';
-import { formatHex, loadFileAttributes, loadFindData, toWideString } from '../win32Bindings.js';
+import { win32Platform } from '../../../src/platform/win32/win32Platform.js';
+import type { EntryRef } from '../../../src/system/entryReads.js';
+import { formatSystemCallCode } from '../../../src/system/systemCallFailure.js';
+import {
+  FILE_ATTRIBUTE_DIRECTORY,
+  FILE_ATTRIBUTE_NORMAL,
+} from '../../support/windowsFileAttributes.js';
+import { loadAttributesText, loadLstatText, observeSafely } from '../observations.js';
 
 // Registers a sync root in the given empty folder, creates cloud placeholders in it and converts
 // an ordinary file into a full, in-sync one through cldapi, and writes one JSON line per stage,
-// so a crash from a wrong struct layout still leaves the stages before it on stdout.
+// so a crash from a wrong struct layout still leaves the stages before it on stdout. Each
+// placeholder is read as the walk reads it, through win32Api.ts and loadEntryPlacement.
 //   cloudPlaceholderProbe.ts <sync root folder>
 
 // The layouts follow learn.microsoft.com/windows/win32/api/cfapi for LLP64, shared by x64 and
@@ -30,11 +37,11 @@ const CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION = 0x1;
 const CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC = 0x2;
 const CF_CONVERT_FLAG_MARK_IN_SYNC = 0x1;
 
-const FILE_ATTRIBUTE_DIRECTORY = 0x10;
-const FILE_ATTRIBUTE_NORMAL = 0x80;
 const GENERIC_READ_WRITE = 0xc0000000;
 const FILE_SHARE_READ_WRITE_DELETE = 0x7;
 const OPEN_EXISTING = 3;
+const INVALID_HANDLE_VALUE = 0xffffffffffffffffn;
+
 const PLACEHOLDER_FILE_SIZE_BYTES = 1048576n;
 // The seconds from 1601-01-01, the FILETIME epoch, to the Unix epoch.
 const FILETIME_UNIX_EPOCH_SECONDS = 11644473600n;
@@ -43,7 +50,7 @@ const CLOUD_ONLY_FILE_NAME = 'cloudOnlyFile.txt';
 const CLOUD_ONLY_FOLDER_NAME = 'cloudOnlyFolder';
 const HYDRATED_FILE_NAME = 'hydratedFile.txt';
 
-const openCloudFilterApi = () => {
+function openCloudFilterApi() {
   return dlopen('cldapi.dll', {
     CfRegisterSyncRoot: {
       args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u32],
@@ -55,13 +62,17 @@ const openCloudFilterApi = () => {
       returns: FFIType.i32,
     },
     CfConvertToPlaceholder: {
-      args: [FFIType.i64, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.ptr],
+      args: [FFIType.u64, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.ptr],
       returns: FFIType.i32,
     },
   });
-};
+}
 
-const openKernel32Handles = () => {
+/**
+ * The handle calls of kernel32, bound here because win32Api.ts binds no `CreateFileW` and its
+ * `closeHandle` takes a `WindowsHandle` brand that only its own calls make; each handle a u64.
+ */
+function openKernel32Handles() {
   return dlopen('kernel32.dll', {
     CreateFileW: {
       args: [
@@ -73,24 +84,29 @@ const openKernel32Handles = () => {
         FFIType.u32,
         FFIType.ptr,
       ],
-      returns: FFIType.i64,
+      returns: FFIType.u64,
     },
-    CloseHandle: { args: [FFIType.i64], returns: FFIType.i32 },
+    CloseHandle: { args: [FFIType.u64], returns: FFIType.i32 },
     GetLastError: { args: [], returns: FFIType.u32 },
   });
-};
+}
 
 type CloudFilterApi = ReturnType<typeof openCloudFilterApi>;
 
-const writeStage = (stage: string, observations: Record<string, unknown>): void => {
-  process.stdout.write(`${JSON.stringify({ stage: stage, ...observations })}\n`);
-};
+/** The text as a NUL-terminated UTF-16LE buffer, the form of an `LPCWSTR`. */
+function toWideString(text: string): Buffer {
+  return Buffer.from(`${text}\0`, 'utf16le');
+}
 
-const buildSyncRegistration = (params: {
+function writeStage(stage: string, observations: Record<string, unknown>): void {
+  process.stdout.write(`${JSON.stringify({ stage: stage, ...observations })}\n`);
+}
+
+function buildSyncRegistration(params: {
   providerName: Buffer;
   providerVersion: Buffer;
   identity: Uint8Array;
-}): Uint8Array => {
+}): Uint8Array {
   const registration = new Uint8Array(SYNC_REGISTRATION_BYTES);
   const view = new DataView(registration.buffer);
 
@@ -102,9 +118,9 @@ const buildSyncRegistration = (params: {
   registration.set(crypto.getRandomValues(new Uint8Array(16)), 52);
 
   return registration;
-};
+}
 
-const buildSyncPolicies = (): Uint8Array => {
+function buildSyncPolicies(): Uint8Array {
   const policies = new Uint8Array(SYNC_POLICIES_BYTES);
   const view = new DataView(policies.buffer);
 
@@ -113,9 +129,9 @@ const buildSyncPolicies = (): Uint8Array => {
   view.setUint16(8, CF_POPULATION_POLICY_ALWAYS_FULL, true);
 
   return policies;
-};
+}
 
-const writePlaceholderCreateInfo = (params: {
+function writePlaceholderCreateInfo(params: {
   view: DataView;
   offset: number;
   relativeName: Buffer;
@@ -123,7 +139,7 @@ const writePlaceholderCreateInfo = (params: {
   fileAttributes: number;
   fileSizeBytes: bigint;
   flags: number;
-}): void => {
+}): void {
   const nowFiletime = (BigInt(Date.now()) / 1000n + FILETIME_UNIX_EPOCH_SECONDS) * 10000000n;
 
   params.view.setBigUint64(params.offset, BigInt(ptr(params.relativeName)), true);
@@ -137,9 +153,9 @@ const writePlaceholderCreateInfo = (params: {
   params.view.setBigUint64(params.offset + 56, BigInt(ptr(params.identity)), true);
   params.view.setUint32(params.offset + 64, params.identity.byteLength, true);
   params.view.setUint32(params.offset + 68, params.flags, true);
-};
+}
 
-const createCloudOnlyPlaceholders = (cloudFilterApi: CloudFilterApi, syncRoot: string): boolean => {
+function createCloudOnlyPlaceholders(cloudFilterApi: CloudFilterApi, syncRoot: string): boolean {
   const fileName = toWideString(CLOUD_ONLY_FILE_NAME);
   const folderName = toWideString(CLOUD_ONLY_FOLDER_NAME);
   const fileIdentity = new TextEncoder().encode('cloud-only-file');
@@ -178,19 +194,21 @@ const createCloudOnlyPlaceholders = (cloudFilterApi: CloudFilterApi, syncRoot: s
   );
 
   writeStage('CfCreatePlaceholders', {
-    hresult: formatHex(hresult),
+    hresult: formatSystemCallCode({ code: hresult }),
     entriesProcessed: entriesProcessed[0],
-    fileResult: formatHex(view.getInt32(72, true)),
-    folderResult: formatHex(view.getInt32(PLACEHOLDER_CREATE_INFO_BYTES + 72, true)),
+    fileResult: formatSystemCallCode({ code: view.getInt32(72, true) }),
+    folderResult: formatSystemCallCode({
+      code: view.getInt32(PLACEHOLDER_CREATE_INFO_BYTES + 72, true),
+    }),
   });
 
   return hresult >= 0;
-};
+}
 
-const convertToHydratedPlaceholder = async (
+async function convertToHydratedPlaceholder(
   cloudFilterApi: CloudFilterApi,
   path: string,
-): Promise<boolean> => {
+): Promise<boolean> {
   await writeFile(path, 'A fully local file in a sync root.\n');
 
   const kernel32 = openKernel32Handles();
@@ -204,8 +222,10 @@ const convertToHydratedPlaceholder = async (
     null,
   );
 
-  if (handle === -1n) {
-    writeStage('CreateFileW', { lastError: kernel32.symbols.GetLastError() });
+  if (handle === INVALID_HANDLE_VALUE) {
+    writeStage('CreateFileW', {
+      lastError: formatSystemCallCode({ code: kernel32.symbols.GetLastError() }),
+    });
 
     return false;
   }
@@ -221,29 +241,25 @@ const convertToHydratedPlaceholder = async (
       null,
     );
 
-    writeStage('CfConvertToPlaceholder', { hresult: formatHex(hresult) });
+    writeStage('CfConvertToPlaceholder', { hresult: formatSystemCallCode({ code: hresult }) });
 
     return hresult >= 0;
   } finally {
     kernel32.symbols.CloseHandle(handle);
   }
-};
+}
 
-const observeEntry = async (label: string, path: string): Promise<void> => {
-  const lstatText = await observeSafely(() => loadLstatText(path));
-  const attributes = loadFileAttributes(path);
-  const findData = loadFindData(path);
+async function observeEntry(label: string, entry: EntryRef): Promise<void> {
+  const lstatText = await observeSafely(() => loadLstatText(entry.path));
 
   writeStage(label, {
     lstat: lstatText,
-    attributes: `${attributes.attributesHex} ${attributes.attributeNames}`,
-    findFirstFile: findData.isFound
-      ? `attributes=${findData.attributesHex} dwReserved0=${findData.reparseTagHex}`
-      : `failed lastError=${findData.lastError}`,
+    attributes: loadAttributesText(entry.path),
+    placement: win32Platform.system.entryReads.loadEntryPlacement(entry),
   });
-};
+}
 
-const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
+async function runCloudPlaceholderProbe(syncRoot: string): Promise<void> {
   const cloudFilterApi = openCloudFilterApi();
 
   writeStage('dlopen cldapi.dll', { result: 'ok' });
@@ -263,7 +279,7 @@ const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
     0,
   );
 
-  writeStage('CfRegisterSyncRoot', { hresult: formatHex(registerHresult) });
+  writeStage('CfRegisterSyncRoot', { hresult: formatSystemCallCode({ code: registerHresult }) });
 
   if (registerHresult < 0) {
     return;
@@ -271,21 +287,29 @@ const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
 
   try {
     if (createCloudOnlyPlaceholders(cloudFilterApi, syncRoot)) {
-      await observeEntry('cloud-only file', join(syncRoot, CLOUD_ONLY_FILE_NAME));
-      await observeEntry('cloud-only folder', join(syncRoot, CLOUD_ONLY_FOLDER_NAME));
+      await observeEntry('cloud-only file', {
+        path: join(syncRoot, CLOUD_ONLY_FILE_NAME),
+        kind: 'file',
+      });
+      await observeEntry('cloud-only folder', {
+        path: join(syncRoot, CLOUD_ONLY_FOLDER_NAME),
+        kind: 'directory',
+      });
     }
 
     const hydratedPath = join(syncRoot, HYDRATED_FILE_NAME);
 
     if (await convertToHydratedPlaceholder(cloudFilterApi, hydratedPath)) {
-      await observeEntry('hydrated file', hydratedPath);
+      await observeEntry('hydrated file', { path: hydratedPath, kind: 'file' });
     }
   } finally {
     const unregisterHresult = cloudFilterApi.symbols.CfUnregisterSyncRoot(toWideString(syncRoot));
 
-    writeStage('CfUnregisterSyncRoot', { hresult: formatHex(unregisterHresult) });
+    writeStage('CfUnregisterSyncRoot', {
+      hresult: formatSystemCallCode({ code: unregisterHresult }),
+    });
   }
-};
+}
 
 const syncRoot = process.argv[2];
 

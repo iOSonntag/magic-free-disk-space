@@ -1,4 +1,5 @@
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreFinding, ExploreProbeFindings } from '../exploreUnit.js';
 import type { ProjectPinFileRef, ProjectPins } from '../projectPins/projectPins.js';
@@ -19,12 +20,12 @@ export function buildPnpmStoreFindings(params: {
   storeRoot: AbsolutePath;
   pinFiles: ProjectPinFileRef[];
   projectPins: ProjectPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
   projectSearchIncompleteEvidence: string;
 }): ExploreProbeFindings {
   const activity = decideUnitActivity({
     facts: { kind: 'pnpmStore' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
   const installedEvidence = formatInstalledEvidence({
     installedVersions: params.offers.installedVersions,

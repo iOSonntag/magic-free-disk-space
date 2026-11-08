@@ -1,21 +1,66 @@
+import type { DriveRoot } from '../path/driveRoot.js';
 import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
+import type { EnvironmentLocation, EnvironmentLocationAtRoot } from './environmentLocation.js';
+import {
+  findEnvironmentLocationPaths,
+  resolveEnvironmentLocation,
+  resolveEnvironmentLocations,
+} from './environmentLocation.js';
+
+/** Windows' two AppData folders of the user, which may lie outside the home folder. */
+export type AppDataDirs = { localDir: AbsolutePath; roamingDir: AbsolutePath };
+
+/**
+ * The known folders of Windows the tool reads, each named after its `FOLDERID`. Known Folder Move
+ * and Folder Redirection can move them anywhere, such as into OneDrive.
+ */
+export type WindowsKnownFolder =
+  | 'desktop'
+  | 'documents'
+  | 'downloads'
+  | 'videos'
+  | 'music'
+  | 'pictures'
+  | 'localAppDataLow'
+  | 'skyDrive';
+
+/** The path Windows names for each known folder; `null` for one it names none for. */
+export type WindowsKnownFolderPaths = Record<WindowsKnownFolder, AbsolutePath | null>;
+
+/** The folder of the system's own caches that macOS keeps per user, such as for Metal shaders. */
+export type PlatformFoldersDarwin = { kind: 'darwin'; userCacheDir: AbsolutePath };
+
+/** The AppData folders and the known folders of Windows, which keeps its caches in LocalAppData. */
+export type PlatformFoldersWin32 = {
+  kind: 'win32';
+  appDataDirs: AppDataDirs;
+  knownFolderPaths: WindowsKnownFolderPaths;
+};
+
+/** The folders of the run that only its platform has. */
+export type PlatformFolders = PlatformFoldersDarwin | PlatformFoldersWin32;
+
+/** The POSIX modes that keep a folder and a file the tool writes to its user alone. */
+export type OwnerOnlyModes = { directoryMode: number; fileMode: number };
 
 export type Environment = {
   nowMs: number;
-  /** The effective user, never root: the environment refuses to start as root. */
+  /**
+   * The effective user, never root: the environment refuses to start as root, and on Windows with
+   * an elevated token.
+   */
   user: UserIdentity;
   pathRules: PathRules;
   homeDir: AbsolutePath;
   tempDir: AbsolutePath;
-  /** The per-user folder of the system's own caches, such as macOS's Metal shader caches. */
-  userCacheDir: AbsolutePath;
+  platformFolders: PlatformFolders;
   /** The folders the platform's apps are installed in, whether they exist or not. */
   applicationDirs: AbsolutePath[];
-  /** The roots of the file system, which are refused as a whole. */
-  protectedRootPaths: AbsolutePath[];
+  /** The root of each fixed drive of Windows, each with its Recycle Bin; empty on macOS. */
+  fixedDriveRoots: DriveRoot[];
   /** Real paths under which a removal is allowed. */
   allowedRealRoots: string[];
   /** Real paths that are refused as a whole; their children may still go. */
@@ -35,8 +80,26 @@ export type Environment = {
   deletionLogPath: string;
   /** The folder of the bridge's preference file. */
   preferencesDir: AbsolutePath;
+  /**
+   * The modes of the folders and files the tool writes; `null` on Windows, whose files take the
+   * access list of the profile folder they lie in instead.
+   */
+  ownerOnlyModes: OwnerOnlyModes | null;
 };
 
+/**
+ * The folders of a run a location is resolved below, by their paths or by their real paths, with
+ * the rules of the platform's paths.
+ */
+export type EnvironmentFolders = Pick<
+  Environment,
+  'pathRules' | 'homeDir' | 'tempDir' | 'platformFolders'
+>;
+
+/**
+ * The environment of a run from the values its platform read. Throws for a location below a
+ * folder its platform does not have, which is a bug of the platform's lists.
+ */
 export function buildEnvironment(params: {
   nowMs: number;
   user: UserIdentity;
@@ -45,39 +108,59 @@ export function buildEnvironment(params: {
   homeRealPath: AbsolutePath;
   tempDir: AbsolutePath;
   tempRealPath: AbsolutePath;
-  userCacheDir: AbsolutePath;
-  userCacheRealPath: AbsolutePath;
+  platformFolders: PlatformFolders;
+  /** The real paths of `platformFolders`, of the same platform. */
+  platformRealFolders: PlatformFolders;
   /** The folders the platform's apps are installed in, whether they exist or not. */
   applicationDirs: AbsolutePath[];
   /** The real paths of the platform's app folders that exist. */
   applicationRealPaths: AbsolutePath[];
+  /**
+   * The roots of the file system, which are refused as a whole: `/` on macOS, and on Windows the
+   * root of each fixed drive, one per drive.
+   */
   protectedRootPaths: AbsolutePath[];
+  fixedDriveRoots: DriveRoot[];
   /**
-   * Root-like folders below the home folder, which are never removed as a whole, one name per
-   * level; the empty list is the home folder itself.
+   * Root-like folders, which are never removed as a whole; one in a known folder Windows names no
+   * path for is left out.
    */
-  protectedHomeDirNames: string[][];
+  protectedLocations: EnvironmentLocation[];
   /**
-   * Folders below the home folder that are never removed, neither whole nor in part, one name per
-   * level.
+   * Real paths the platform resolved itself that are never removed as a whole, such as OneDrive's.
    */
-  sensitiveHomeDirNames: string[][];
-  /** Folders inside a sensitive folder that may still go, whole and in part, one name per level. */
-  sensitiveExceptionHomeDirNames: string[][];
-  /** The cloud folders below the home folder where only an evict is allowed, one name per level. */
-  evictHomeDirNames: string[][];
-  /** The folder of the deletion log below the home folder, one name per level. */
-  deletionLogHomeDirNames: string[];
-  /** The folder of the bridge's preference file below the home folder, one name per level. */
-  preferencesHomeDirNames: string[];
+  protectedFolderRealPaths: AbsolutePath[];
+  /** Folders that are never removed, neither whole nor in part. */
+  sensitiveLocations: EnvironmentLocationAtRoot[];
+  /** Folders inside a sensitive folder that may still go, whole and in part. */
+  sensitiveExceptionLocations: EnvironmentLocationAtRoot[];
+  /** The cloud folders where only an evict is allowed. */
+  evictLocations: EnvironmentLocationAtRoot[];
+  /** The folder of the deletion log. */
+  deletionLogLocation: EnvironmentLocationAtRoot;
+  /** The folder of the bridge's preference file. */
+  preferencesLocation: EnvironmentLocationAtRoot;
+  ownerOnlyModes: OwnerOnlyModes | null;
 }): Environment {
-  function joinHomeRealPath(names: string[]): string {
-    return joinAbsolutePath({
-      rules: params.pathRules,
-      parentPath: params.homeRealPath,
-      names: names,
-    });
-  }
+  const folders: EnvironmentFolders = {
+    pathRules: params.pathRules,
+    homeDir: params.homeDir,
+    tempDir: params.tempDir,
+    platformFolders: params.platformFolders,
+  };
+  const realFolders: EnvironmentFolders = {
+    pathRules: params.pathRules,
+    homeDir: params.homeRealPath,
+    tempDir: params.tempRealPath,
+    platformFolders: params.platformRealFolders,
+  };
+  const platformBaseRealPaths = listPlatformBaseDirs({
+    platformFolders: params.platformRealFolders,
+  });
+  const protectedLocationRealPaths = findEnvironmentLocationPaths({
+    folders: realFolders,
+    locations: params.protectedLocations,
+  });
 
   return {
     nowMs: params.nowMs,
@@ -85,37 +168,68 @@ export function buildEnvironment(params: {
     pathRules: params.pathRules,
     homeDir: params.homeDir,
     tempDir: params.tempDir,
-    userCacheDir: params.userCacheDir,
+    platformFolders: params.platformFolders,
     applicationDirs: params.applicationDirs,
-    protectedRootPaths: params.protectedRootPaths,
+    fixedDriveRoots: params.fixedDriveRoots,
     allowedRealRoots: [
       params.homeRealPath,
       params.tempRealPath,
-      params.userCacheRealPath,
+      ...platformBaseRealPaths,
       ...params.applicationRealPaths,
     ],
+    // Never deduplicated: `checkEnvironmentRoots` leaves out the temporary folder's own entry once,
+    // so a protected folder that is the temporary folder too is refused by its own entry.
     protectedRealPaths: [
-      ...params.protectedHomeDirNames.map(joinHomeRealPath),
+      ...protectedLocationRealPaths,
+      ...params.protectedFolderRealPaths,
       params.tempRealPath,
-      params.userCacheRealPath,
+      ...platformBaseRealPaths,
       ...params.protectedRootPaths,
     ],
-    sensitiveRealPaths: [
-      ...params.sensitiveHomeDirNames.map(joinHomeRealPath),
-      joinHomeRealPath(params.deletionLogHomeDirNames),
-      joinHomeRealPath(params.preferencesHomeDirNames),
-    ],
-    sensitiveExceptionRealPaths: params.sensitiveExceptionHomeDirNames.map(joinHomeRealPath),
-    evictRealRoots: params.evictHomeDirNames.map(joinHomeRealPath),
+    sensitiveRealPaths: resolveEnvironmentLocations({
+      folders: realFolders,
+      locations: [
+        ...params.sensitiveLocations,
+        params.deletionLogLocation,
+        params.preferencesLocation,
+      ],
+    }),
+    sensitiveExceptionRealPaths: resolveEnvironmentLocations({
+      folders: realFolders,
+      locations: params.sensitiveExceptionLocations,
+    }),
+    evictRealRoots: resolveEnvironmentLocations({
+      folders: realFolders,
+      locations: params.evictLocations,
+    }),
     deletionLogPath: joinAbsolutePath({
       rules: params.pathRules,
-      parentPath: params.homeDir,
-      names: [...params.deletionLogHomeDirNames, 'deletions.jsonl'],
+      parentPath: resolveEnvironmentLocation({
+        folders: folders,
+        location: params.deletionLogLocation,
+      }),
+      names: ['deletions.jsonl'],
     }),
-    preferencesDir: joinAbsolutePath({
-      rules: params.pathRules,
-      parentPath: params.homeDir,
-      names: params.preferencesHomeDirNames,
+    preferencesDir: resolveEnvironmentLocation({
+      folders: folders,
+      location: params.preferencesLocation,
     }),
+    ownerOnlyModes: params.ownerOnlyModes,
   };
+}
+
+/**
+ * The base folders only the platform has, each an allowed root that is refused as a whole: macOS'
+ * folder of the system's caches, and Windows' two AppData folders.
+ */
+function listPlatformBaseDirs(params: { platformFolders: PlatformFolders }): AbsolutePath[] {
+  switch (params.platformFolders.kind) {
+    case 'darwin':
+      return [params.platformFolders.userCacheDir];
+    case 'win32':
+      return [
+        params.platformFolders.appDataDirs.localDir,
+        params.platformFolders.appDataDirs.roamingDir,
+      ];
+  }
 }

@@ -6,10 +6,12 @@ import type {
 } from '../../src/explore/exploreProbe.js';
 import type { ExploreProbeFindings, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import type { Result } from '../../src/result.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { FixtureRoot } from './fixtureRoot.js';
 import { loadTestEnvironment, withFixtureRoot } from './fixtureRoot.js';
 import { buildTestProbePlatform } from './probePlatformFixtures.js';
+import { buildHostRunningProcesses } from './runningProcessesFixtures.js';
 
 /** How long a test probe run may take before its deadline. */
 const TEST_PROBE_RUN_DURATION_MS = 10_000;
@@ -21,11 +23,14 @@ export type FixtureHome = { fixtureRoot: FixtureRoot; environment: Environment }
 type TestProbeRunParams = {
   environment: Environment;
   /** `null` for processes that could not be read; no process runs when it is left out. */
-  processCommands?: string[] | null;
+  runningProcesses?: RunningProcesses | null;
   platform?: ExploreProbePlatform;
   staleCutoffMs?: number;
   unusedCutoffMs?: number;
 };
+
+/** The running processes of a test probe run, for a test that sets only those. */
+export type TestProbeRunProcesses = Pick<TestProbeRunParams, 'runningProcesses'>;
 
 /** A unit of the kind `TKind`. */
 export type ExploreUnitOfKind<TKind extends ExploreUnit['kind']> = Extract<
@@ -55,13 +60,16 @@ export async function withFixtureHome(params: {
 
 /**
  * A probe run over `environment` with the test platform, due ten seconds from now. No process
- * runs unless `processCommands` names one, and each cutoff left out is 0.
+ * runs unless `runningProcesses` names one, and each cutoff left out is 0.
  */
 export function buildTestProbeRun(params: TestProbeRunParams): ExploreProbeRun {
   return {
     environment: params.environment,
     platform: params.platform ?? buildTestProbePlatform(),
-    processCommands: params.processCommands === undefined ? [] : params.processCommands,
+    runningProcesses:
+      params.runningProcesses === undefined
+        ? buildHostRunningProcesses({ commandLines: [], imagePaths: [] })
+        : params.runningProcesses,
     deadlineMs: Date.now() + TEST_PROBE_RUN_DURATION_MS,
     unusedCutoffMs: params.unusedCutoffMs ?? 0,
     staleCutoffMs: params.staleCutoffMs ?? 0,

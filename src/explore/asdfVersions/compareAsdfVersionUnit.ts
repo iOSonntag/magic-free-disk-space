@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreToolUnitAsdfVersion } from '../exploreUnit.js';
@@ -13,7 +14,7 @@ export function compareAsdfVersionUnit(params: {
   unit: ExploreToolUnitAsdfVersion;
   state: AsdfState;
   toolPins: ToolPins;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const offers = decideAsdfVersionOffers({ state: params.state, toolPins: params.toolPins });
   const isStillOffered = offers.offers.some(
@@ -29,6 +30,6 @@ export function compareAsdfVersionUnit(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'versionFolder', folderPath: params.unit.installPath },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

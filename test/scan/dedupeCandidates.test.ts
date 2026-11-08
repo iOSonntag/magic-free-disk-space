@@ -1,8 +1,7 @@
-import { expect, test } from 'bun:test';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { describe, expect, test } from 'bun:test';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
@@ -10,17 +9,20 @@ import {
   buildTestInstallersCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
 
 const HUGGING_FACE_HUB_PATH = '/home/.cache/huggingface/hub';
 const JETBRAINS_CACHES_PATH = '/home/Library/Caches/JetBrains';
 const OUTDATED_IDE_CACHE_PATH = `${JETBRAINS_CACHES_PATH}/IntelliJIdea2024.1`;
 
-describeAwaitingWin32Platform('dedupeCandidates', () => {
+const home = buildExampleHome({ text: '/home' });
+
+describe('dedupeCandidates', () => {
   test('skips a tool item whose footprint lies inside an earlier offer', () => {
     const earlier = buildOfferDecision({ path: '/home/.local/share/mise', realPath: '/x' });
     const toolOffer: CandidateDecision = {
       kind: 'offer',
-      candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
+      candidate: buildTestToolCandidate({ home: home, version: '20.1.0' }),
     };
 
     expect(dedupe({ decisions: [earlier, toolOffer] })).toEqual([
@@ -36,7 +38,7 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
   test('skips a later offer inside the footprint of a kept tool item', () => {
     const toolOffer: CandidateDecision = {
       kind: 'offer',
-      candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
+      candidate: buildTestToolCandidate({ home: home, version: '20.1.0' }),
     };
     const inside = buildOfferDecision({
       path: '/home/.local/share/mise/installs/node/20.1.0/bin',
@@ -61,7 +63,7 @@ describeAwaitingWin32Platform('dedupeCandidates', () => {
     };
     const toolOffer: CandidateDecision = {
       kind: 'offer',
-      candidate: buildTestToolCandidate({ homeDir: '/home', version: '20.1.0' }),
+      candidate: buildTestToolCandidate({ home: home, version: '20.1.0' }),
     };
 
     expect(dedupe({ decisions: [skip, toolOffer] })[1]).toEqual({
@@ -392,7 +394,7 @@ function dedupe(params: {
   reservedEntryPaths?: string[];
 }): CandidateDecision[] {
   return dedupeCandidates({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     decisions: params.decisions,
     reservedEntryPaths: params.reservedEntryPaths ?? [],
   });

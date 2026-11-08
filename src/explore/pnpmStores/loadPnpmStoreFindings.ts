@@ -1,4 +1,5 @@
-import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
+import type { CatalogLocation } from '../../catalog/catalog.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
 import type { ProjectPins } from '../projectPins/projectPins.js';
 import { listToolPinFileRefs, selectToolPins } from '../projectPins/selectToolPins.js';
@@ -9,24 +10,28 @@ import { loadPnpmStoreState } from './loadPnpmStoreState.js';
 import { PNPM_PIN_FILE_KINDS, toolPinsToPnpmPins } from './parsePnpmPins.js';
 
 /**
- * The store-version folders of the store at `storeRootPathNames` below the home folder that
- * neither an installed pnpm nor one a project pins uses, and that hold no global virtual store.
+ * The store-version folders of the store at `storeLocation` that neither an installed pnpm nor one
+ * a project pins uses, and that hold no global virtual store. A platform without that store, a
+ * `null` location, finds none.
  */
 export async function loadPnpmStoreFindings(params: {
   run: ExploreProbeRun;
   projectPins: ProjectPins;
-  storeRootPathNames: string[];
+  storeLocation: CatalogLocation | null;
 }): Promise<ExploreProbeFilesResult> {
+  if (params.storeLocation === null) {
+    return { kind: 'succeeded', value: { findings: [], isComplete: true } };
+  }
+
   const toolPins = selectToolPins({ pins: params.projectPins.files, kinds: PNPM_PIN_FILE_KINDS });
 
   if (toolPins.kind === 'failed') {
     return toolPins;
   }
 
-  const storeRoot = joinAbsolutePath({
-    rules: params.run.environment.pathRules,
-    parentPath: params.run.environment.homeDir,
-    names: params.storeRootPathNames,
+  const storeRoot = resolveEnvironmentLocation({
+    folders: params.run.environment,
+    location: params.storeLocation,
   });
   const storeState = await loadPnpmStoreState({
     pathRules: params.run.environment.pathRules,
@@ -43,9 +48,8 @@ export async function loadPnpmStoreFindings(params: {
   }
 
   const installState = await loadPnpmInstallState({
-    pathRules: params.run.environment.pathRules,
-    homeDir: params.run.environment.homeDir,
-    pnpmHomes: params.run.platform.explore.pnpmHomes,
+    environment: params.run.environment,
+    places: params.run.platform.explore.pnpmInstallPlaces,
     homebrewPrefixPaths: params.run.platform.homebrewPrefixPaths,
     privacyDenialCode: params.run.platform.privacyDenialCode,
   });
@@ -67,7 +71,7 @@ export async function loadPnpmStoreFindings(params: {
       storeRoot: storeRoot,
       pinFiles: listToolPinFileRefs({ toolPins: toolPins.value }),
       projectPins: params.projectPins,
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
       projectSearchIncompleteEvidence: params.run.platform.explore.projectSearchIncompleteEvidence,
     }),
   };

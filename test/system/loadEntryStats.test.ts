@@ -1,9 +1,8 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EntryStats } from '../../src/system/loadEntryStats.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -28,7 +27,7 @@ async function loadEntryStatsOrThrow(params: { path: string }): Promise<EntrySta
   return result.value;
 }
 
-describeAwaitingWin32Platform('loadEntryStats', () => {
+describe('loadEntryStats', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

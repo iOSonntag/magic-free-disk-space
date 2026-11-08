@@ -1,14 +1,14 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type {
   RemovalOutcome,
   RemovalOutcomeCodedKind,
   RemovalRun,
 } from '../../src/delete/deleteCandidates.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildDeletedFacts } from '../../src/report/buildDeletedFacts.js';
 import { formatDeletionLogLine } from '../../src/report/formatDeletionLog.js';
 import { formatRemovalRun } from '../../src/report/formatRemovalRun.js';
 import type { EvictTarget, RemovalTargets } from '../../src/scan/candidate.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestEngineCandidate,
@@ -19,6 +19,7 @@ import {
   buildTestEvictCandidate,
   buildTestEvictTarget,
 } from '../support/evictCandidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
   buildProtocolFixtureReport,
@@ -33,14 +34,14 @@ function buildRun(params: { outcomes: RemovalOutcome[] }): RemovalRun {
   return { outcomes: params.outcomes, journalFailure: null };
 }
 
-describeAwaitingWin32Platform('buildDeletedFacts', () => {
+describe('buildDeletedFacts', () => {
   test('gives the deleted event of the protocol fixture for the run it shows', async () => {
     const run = buildProtocolFixtureRun();
 
     expect<unknown>({
       kind: 'deleted',
       lines: [
-        ...formatRemovalRun({ run: run }),
+        ...formatRemovalRun({ run: run, texts: darwinPlatform.report }),
         formatDeletionLogLine({ logPath: PROTOCOL_FIXTURE_LOG_PATH }),
       ],
       ...buildDeletedFacts({
@@ -69,7 +70,10 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
         freedBytes: kind === 'removed' ? 4096 : 0,
       }),
     );
-    const toolCandidate = buildTestToolCandidate({ homeDir: '/fixture', version: '20.1.0' });
+    const toolCandidate = buildTestToolCandidate({
+      home: buildExampleHome({ text: '/fixture' }),
+      version: '20.1.0',
+    });
     const run = buildRun({
       outcomes: [
         ...codedOutcomes,
@@ -151,6 +155,34 @@ describeAwaitingWin32Platform('buildDeletedFacts', () => {
     ]);
     expect(facts.freedBytes).toBe(3000);
     expect(facts.availableBytesAfter).toBeNull();
+  });
+
+  test('words a path left partly in place as partly removed once it freed any, else as failed', () => {
+    const freedSome = buildTestCandidate({ path: 'C:\\fixture\\cache', allocatedBytes: 8192 });
+    const freedNone = buildTestCandidate({ path: 'C:\\fixture\\held', allocatedBytes: 4096 });
+
+    const facts = buildDeletedFacts({
+      run: buildRun({
+        outcomes: [
+          {
+            candidate: freedSome,
+            freedBytes: 6144,
+            outcome: 'partlyRemoved',
+            stayedEntryCount: 2,
+          },
+          { candidate: freedNone, freedBytes: 0, outcome: 'partlyRemoved', stayedEntryCount: 1 },
+        ],
+      }),
+      ranked: [freedSome, freedNone],
+      availableBytesAfter: null,
+      logPath: LOG_PATH,
+    });
+
+    expect(facts.outcomes.map((outcome) => [outcome.outcome, outcome.reasonKey])).toEqual([
+      ['partlyRemoved', 'partlyRemoved'],
+      ['failed', 'partlyRemoved'],
+    ]);
+    expect(facts.freedBytes).toBe(6144);
   });
 
   test('words an iCloud folder whose evict took 9 files and left 1 changed as partly removed', () => {

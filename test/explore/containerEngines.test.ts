@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { buildEngineFindings } from '../../src/explore/engines/buildEngineFindings.js';
+import { buildEngineProbe } from '../../src/explore/engines/buildEngineProbe.js';
 import { callEngineUnit } from '../../src/explore/engines/callEngineUnit.js';
 import { isEngineUnitUnchanged } from '../../src/explore/engines/isEngineUnitUnchanged.js';
 import { loadEngineFindings } from '../../src/explore/engines/loadEngineFindings.js';
@@ -18,7 +19,7 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -27,8 +28,12 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { joinBelowHome } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
+import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import type { FakeEngine } from './engineFixtures.js';
 import {
   buildBuildRecord,
@@ -53,8 +58,8 @@ const ANONYMOUS_VOLUME_NAME = 'a'.repeat(64);
 const TEST_ENGINE: ContainerEngineFixed = {
   kind: 'fixed',
   engineName: 'Docker Desktop',
-  socketPaths: [['engine.sock']],
-  diskImagePath: ['disk.img'],
+  socketPaths: [{ root: 'home', path: 'engine.sock' }],
+  diskImagePath: { root: 'home', path: 'disk.img' },
 };
 
 function parseUsage(answer: unknown): EngineDiskUsage {
@@ -240,7 +245,7 @@ describe('buildEngineFindings', () => {
       place: buildFakeUnitPlace({ homeDir: '/Users/example' }),
       usage: parseUsage(buildMixedUsageAnswer()),
       nowMs: NOW_MS,
-      processCommands: [],
+      runningProcesses: buildRunningCommandLines([]),
     });
 
     expect(
@@ -321,7 +326,7 @@ describe('buildEngineFindings', () => {
           }),
         ),
         nowMs: NOW_MS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual([]);
   });
@@ -336,7 +341,7 @@ describe('buildEngineFindings', () => {
           }),
         ),
         nowMs: NOW_MS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual([]);
   });
@@ -503,7 +508,30 @@ describe('isEngineUnitUnchanged', () => {
   });
 });
 
-describeAwaitingWin32Platform('the engine probe and its removal over a fake engine', () => {
+describe('the engine probe on a platform without the engine', () => {
+  test('answers socketMissing, as for an engine whose socket is missing', async () => {
+    const probe = buildEngineProbe('dockerDesktopEngine');
+
+    expect(
+      await probe.loadFindings(
+        buildTestProbeRun({
+          environment: exampleWin32Environment,
+          platform: buildTestProbePlatform({
+            explore: {
+              containerEngines: {
+                ...hostPlatform.explore.containerEngines,
+                dockerDesktopEngine: null,
+              },
+            },
+          }),
+        }),
+      ),
+    ).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
+  });
+});
+
+// The fake engine serves on a Unix socket, as the engines of macOS do.
+describeOnPosix('the engine probe and its removal over a fake engine', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let socketPath: AbsolutePath;
@@ -511,7 +539,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
   beforeEach(async () => {
     fixtureRoot = await createFixtureRoot();
     environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-    socketPath = buildTestAbsolutePath({ text: join(environment.homeDir, 'engine.sock') });
+    socketPath = joinBelowHome({ home: environment, path: 'engine.sock' });
   });
 
   afterEach(async () => {
@@ -530,7 +558,13 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
     const findings = await loadEngineFindings({
       run: buildRun(),
       engineProbeId: 'dockerDesktopEngine',
-      engine: { ...TEST_ENGINE, socketPaths: [['missing.sock'], ['also-missing.sock']] },
+      engine: {
+        ...TEST_ENGINE,
+        socketPaths: [
+          { root: 'home', path: 'missing.sock' },
+          { root: 'home', path: 'also-missing.sock' },
+        ],
+      },
     });
 
     expect(findings).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
@@ -549,7 +583,11 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
         engineProbeId: 'dockerDesktopEngine',
         engine: {
           ...TEST_ENGINE,
-          socketPaths: [['missing.sock'], ['plain.sock'], ['engine.sock']],
+          socketPaths: [
+            { root: 'home', path: 'missing.sock' },
+            { root: 'home', path: 'plain.sock' },
+            { root: 'home', path: 'engine.sock' },
+          ],
         },
       });
 
@@ -711,8 +749,8 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
   describe("Colima's profiles", () => {
     const colima = CONTAINER_ENGINES.colimaEngine;
 
-    function buildColimaPath(names: string[]): AbsolutePath {
-      return buildTestAbsolutePath({ text: join(environment.homeDir, '.colima', ...names) });
+    function buildColimaPath(path: string): AbsolutePath {
+      return joinBelowHome({ home: environment, path: `.colima/${path}` });
     }
 
     /** Serves a fake engine in the profile's folder with one unused volume named after it. */
@@ -720,10 +758,10 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
       folderName: string;
       usage?: unknown;
     }): Promise<FakeEngine> {
-      await createFixtureDirectory({ path: buildColimaPath([params.folderName]) });
+      await createFixtureDirectory({ path: buildColimaPath(params.folderName) });
 
       return startFakeEngine({
-        socketPath: buildColimaPath([params.folderName, 'docker.sock']),
+        socketPath: buildColimaPath(`${params.folderName}/docker.sock`),
         usage:
           params.usage ??
           buildDiskUsageAnswer({
@@ -758,8 +796,8 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
       ];
 
       try {
-        await createFixtureDirectory({ path: buildColimaPath(['stopped']) });
-        await writeFixtureTextFile({ path: buildColimaPath(['ssh_config']), text: '' });
+        await createFixtureDirectory({ path: buildColimaPath('stopped') });
+        await writeFixtureTextFile({ path: buildColimaPath('ssh_config'), text: '' });
 
         const findings = getEngineFindings(
           await loadEngineFindings({
@@ -772,13 +810,13 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
         expect(listVolumePlaces(findings)).toEqual([
           [
             'default-data',
-            buildColimaPath(['default', 'docker.sock']),
-            buildColimaPath(['_lima', '_disks', 'colima', 'datadisk']),
+            buildColimaPath('default/docker.sock'),
+            buildColimaPath('_lima/_disks/colima/datadisk'),
           ],
           [
             'work-data',
-            buildColimaPath(['work', 'docker.sock']),
-            buildColimaPath(['_lima', '_disks', 'colima-work', 'datadisk']),
+            buildColimaPath('work/docker.sock'),
+            buildColimaPath('_lima/_disks/colima-work/datadisk'),
           ],
         ]);
         expect(findings.isComplete).toBe(true);
@@ -825,7 +863,7 @@ describeAwaitingWin32Platform('the engine probe and its removal over a fake engi
 
       expect(await loadColima()).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
 
-      await createFixtureDirectory({ path: buildColimaPath(['default']) });
+      await createFixtureDirectory({ path: buildColimaPath('default') });
 
       expect(await loadColima()).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
     });

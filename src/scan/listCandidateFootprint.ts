@@ -11,6 +11,9 @@ export function listCandidateFootprint(candidate: Candidate): string[] {
     case 'deleteUnitPaths':
     case 'evictUnitFiles':
       return candidate.removal.targets.map((target) => target.path);
+    // A bin's path is its own folder at the drive root, inside which no other item lies.
+    case 'emptyRecycleBin':
+      return [candidate.path];
     case 'runTool':
       return listUnitPaths(candidate.removal.unit);
     case 'callEngine':
@@ -27,6 +30,7 @@ export function listProbedTargetPaths(candidate: Candidate): string[] {
     case 'deletePaths':
     case 'runTool':
     case 'callEngine':
+    case 'emptyRecycleBin':
       return [];
   }
 }

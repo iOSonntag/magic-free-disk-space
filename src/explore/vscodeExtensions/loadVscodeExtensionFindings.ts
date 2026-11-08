@@ -7,8 +7,8 @@ export async function loadVscodeExtensionFindings(
   run: ExploreProbeRun,
 ): Promise<ExploreProbeFilesResult> {
   const state = await loadVscodeExtensionState({
-    pathRules: run.environment.pathRules,
-    homeDir: run.environment.homeDir,
+    environment: run.environment,
+    profilesRoot: run.platform.explore.vscodeProfilesRoot,
     privacyDenialCode: run.platform.privacyDenialCode,
   });
 
@@ -20,7 +20,7 @@ export async function loadVscodeExtensionFindings(
     kind: 'succeeded',
     value: buildVscodeExtensionFindings({
       state: state.value,
-      processCommands: run.processCommands,
+      runningProcesses: run.runningProcesses,
     }),
   };
 }

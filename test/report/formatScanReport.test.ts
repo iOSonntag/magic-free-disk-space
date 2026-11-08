@@ -1,19 +1,24 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
+import type { ReportTexts } from '../../src/report/reportTexts.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
 import { buildTestVscodeExtensionCandidate } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
+import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+import { countTestCloudOnlyEntries, EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const TEXTS = darwinPlatform.report;
+
+const fixtureHome = buildExampleHome({ text: '/fixture/home' });
 
 const fullDiskAccessLine =
   '- Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
@@ -40,17 +45,21 @@ function buildAdvice(params: {
   });
 }
 
-/** The lines the CLI prints for `report`, with no disk read, as when its volume cannot be read. */
-function formatReport(params: { report: ScanReport }): string[] {
+/**
+ * The lines the CLI prints for `report`, worded by `texts` or those of macOS, with no disk read, as
+ * when its volume cannot be read.
+ */
+function formatReport(params: { report: ScanReport; texts?: ReportTexts }): string[] {
   return formatScanReport({
     report: params.report,
-    texts: TEXTS,
-    homeDir: '/fixture/home',
+    texts: params.texts ?? TEXTS,
+    pathRules: fixtureHome.pathRules,
+    homeDir: fixtureHome.homeDir,
     disk: null,
   });
 }
 
-describeAwaitingWin32Platform('formatScanReport', () => {
+describe('formatScanReport', () => {
   test('says that nothing was found for an empty report', () => {
     expect(formatReport({ report: EMPTY_REPORT })).toEqual(['Nothing to delete was found.']);
   });
@@ -171,6 +180,46 @@ describeAwaitingWin32Platform('formatScanReport', () => {
       '   /fixture/runtimes',
       '   Installed simulator runtimes.',
       '   Remove the runtimes you no longer need with xcrun simctl runtime delete.',
+    ]);
+  });
+
+  test('lists the installed apps of advice unnumbered after Explore, each with its size or none', () => {
+    const lines = formatReport({
+      texts: win32Platform.report,
+      report: {
+        ...EMPTY_REPORT,
+        appAdvice: {
+          apps: [
+            {
+              displayName: 'Example Editor',
+              installFolderPath: buildTestWindowsPath({
+                text: 'C:\\Program Files\\Example Editor',
+              }),
+              estimatedBytes: 2 * 1024 ** 3,
+            },
+            { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
+          ],
+          installedAppsPageName: 'Settings > Apps',
+        },
+        skipped: [{ path: 'C:\\fixture\\a', reason: 'belowSizeThreshold' }],
+      },
+    });
+
+    expect(lines).toEqual([
+      'Nothing to delete was found.',
+      '',
+      'Installed apps:',
+      'Uninstall the apps you no longer use in Settings > Apps; this tool never deletes an app.',
+      '- 2.1 GB [review] Example Editor',
+      '   C:\\Program Files\\Example Editor',
+      '   Installed on this PC, as Settings > Apps lists it.',
+      '   Uninstall it in Settings > Apps if you no longer use it.',
+      '- size unknown [review] Example Tool',
+      '   Installed on this PC, as Settings > Apps lists it.',
+      '   Uninstall it in Settings > Apps if you no longer use it.',
+      '',
+      'Skipped 1 item:',
+      '- too small to matter: 1',
     ]);
   });
 
@@ -379,7 +428,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
 
   test('lists the Explore items last, numbered on, with their evidence and command', () => {
     const toolCandidate = buildTestToolCandidate({
-      homeDir: '/fixture/home',
+      home: fixtureHome,
       version: '20.1.0',
       allocatedBytes: 2048,
     });
@@ -428,7 +477,7 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
-        candidates: [buildTestDartToolCandidate({ homeDir: '/fixture/home' })],
+        candidates: [buildTestDartToolCandidate({ home: fixtureHome })],
       },
     });
 
@@ -439,7 +488,9 @@ describeAwaitingWin32Platform('formatScanReport', () => {
     const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
-        candidates: [buildTestVscodeExtensionCandidate({ homeDir: '/Users/example' })],
+        candidates: [
+          buildTestVscodeExtensionCandidate({ home: buildExampleHome({ text: '/Users/example' }) }),
+        ],
       },
     });
 
@@ -481,7 +532,13 @@ describeAwaitingWin32Platform('formatScanReport', () => {
             isComplete: true,
           }),
         ],
+        appAdvice: null,
         skipped: [{ path: '/fixture/b', reason: 'ownerRunning' }],
+        cloudOnlyEntries: countTestCloudOnlyEntries({
+          pathRules: POSIX_PATH_RULES,
+          cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
+          entryPaths: ['/fixture/home/cloud-a', '/fixture/home/cloud-b'],
+        }),
         issues: [
           { path: '/fixture/c', reason: 'unexpected', detail: 'EIO' },
           { path: '/fixture/bin/mise', reason: 'toolUntrusted', detail: 'foreignOwner' },

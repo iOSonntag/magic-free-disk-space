@@ -1,4 +1,4 @@
-import { normalize } from 'node:path';
+import { isNormalPath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -48,7 +48,11 @@ function parseHomebrewCleanupRemoval(params: {
   const pathText = match?.[1];
   const sizeText = match?.[2];
 
-  if (pathText === undefined || sizeText === undefined || normalize(pathText) !== pathText) {
+  if (
+    pathText === undefined ||
+    sizeText === undefined ||
+    !isNormalPath({ rules: params.pathRules, text: pathText })
+  ) {
     return null;
   }
 

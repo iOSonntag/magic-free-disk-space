@@ -5,6 +5,7 @@ export const moduleBoundary = {
   imports: [],
   readsTablesOf: [],
   exposes: [
+    'driveRoot.ts',
     'formatHomeRelativePath.ts',
     'isOverlappingPath.ts',
     'isSameOrInsidePath.ts',

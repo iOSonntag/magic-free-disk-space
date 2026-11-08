@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { RemovalOutcomeKind, RemovalRun } from '../../src/delete/deleteCandidates.js';
@@ -15,9 +15,17 @@ import type {
   ExploreToolUnitSimulatorDevice,
 } from '../../src/explore/exploreUnit.js';
 import { listUnitPaths } from '../../src/explore/exploreUnit.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import type { Candidate, RemovalTarget } from '../../src/scan/candidate.js';
+import type { Result } from '../../src/result.js';
+import type {
+  Candidate,
+  RecycleBinContent,
+  RemovalOwner,
+  RemovalTarget,
+} from '../../src/scan/candidate.js';
+import type { EntryPlacement } from '../../src/system/entryReads.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
+import type { SystemCallFailure } from '../../src/system/systemCallFailure.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
   buildDeviceDataPath,
@@ -35,17 +43,16 @@ import {
   FIXTURE_PROFILE_ID,
   OBSOLETE_FOLDER_NAME,
   OLDER_FOLDER_NAME,
-  VSCODE_APP_COMMAND,
+  runningVscodeProcesses,
   VSCODE_FOLDER_SIZE_BYTES,
 } from '../explore/vscodeExtensionFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestProbedCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { createTestJournal } from '../support/deletionJournalFixtures.js';
+import { createTestJournal, loadTestJournalLines } from '../support/deletionJournalFixtures.js';
 import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -56,19 +63,29 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import {
+  buildExampleHome,
+  buildTestHostPath,
+  buildTestWindowsImageName,
+} from '../support/parsedValueFixtures.js';
+import { buildTestRecycleBinCandidate, hostPlatform } from '../support/platformFixtures.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import {
+  buildRunningCommandLines,
+  buildRunningImagePaths,
+} from '../support/runningProcessesFixtures.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
 
 const SIMULATOR_APP_COMMAND =
   '/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator';
 
-/** The macOS slices a deletion reads, with the probe facts of the tests. */
+/** The host's slices a deletion reads, with the probe facts of the tests. */
 const DELETION_PLATFORM = {
-  delete: darwinPlatform.delete,
+  delete: hostPlatform.delete,
   probePlatform: buildTestProbePlatform(),
-  entryReads: darwinPlatform.system.entryReads,
+  entryReads: hostPlatform.system.entryReads,
 };
 
 let fixtureRoot: FixtureRoot;
@@ -85,11 +102,16 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** A loader that answers `processCommands` on every read. */
-function buildProcessCommandsLoader(
-  processCommands: string[] | null,
-): () => Promise<string[] | null> {
-  return async () => processCommands;
+/**
+ * A loader that answers the processes of `commandLines`, as macOS lists them, on every read;
+ * `null` for a list that could not be read.
+ */
+function buildCommandLinesLoader(
+  commandLines: string[] | null,
+): () => Promise<RunningProcesses | null> {
+  const runningProcesses = buildRunningCommandLines(commandLines);
+
+  return async () => runningProcesses;
 }
 
 /** The target at `path` with the identity it has now, as the scanner reads it. */
@@ -104,14 +126,17 @@ async function scanTarget(path: string): Promise<RemovalTarget> {
 }
 
 /** Scans a fixture path the way the scanner does, so the candidate carries its real identity. */
-async function scanCandidate(path: string, ownerBundlePaths: string[] = []): Promise<Candidate> {
+async function scanCandidate(
+  path: string,
+  owner: RemovalOwner = { kind: 'none' },
+): Promise<Candidate> {
   return buildTestCandidate({
     path: path,
     title: 'Fixture item',
     removal: {
       kind: 'deletePaths',
       targets: [await scanTarget(path)],
-      ownerBundlePaths: ownerBundlePaths,
+      owner: owner,
     },
   });
 }
@@ -133,6 +158,7 @@ function buildFailingRemoval(params: {
   failure: string;
 }): DeletePlatform {
   return {
+    ...hostPlatform.delete,
     removeTree: async () => {
       if (params.removedPath !== null) {
         await rm(params.removedPath, { recursive: true });
@@ -143,19 +169,49 @@ function buildFailingRemoval(params: {
   };
 }
 
+/**
+ * Scans the folder `selected` and deletes it while the entry reads place it as `placement`, with a
+ * removal that only records each path it is asked to remove; gives the run and those paths.
+ */
+async function deleteWithPlacementOf(params: {
+  selected: string;
+  placement: EntryPlacement;
+}): Promise<{ run: RemovalRun; removedPaths: string[] }> {
+  const scanned = await scanCandidate(params.selected);
+  const removedPaths: string[] = [];
+  const run = await deleteCandidates({
+    candidates: [scanned],
+    journal: await createFixtureRootJournal(),
+    loadKnownRunningProcesses: buildCommandLinesLoader([]),
+    environment: environment,
+    ...DELETION_PLATFORM,
+    delete: {
+      ...DELETION_PLATFORM.delete,
+      removeTree: async (tree) => {
+        removedPaths.push(tree.path);
+
+        return { kind: 'failed', failure: `The folder ${tree.path} was removed.` };
+      },
+    },
+    entryReads: {
+      ...DELETION_PLATFORM.entryReads,
+      loadEntryPlacement: (entry) =>
+        entry.path === params.selected
+          ? params.placement
+          : DELETION_PLATFORM.entryReads.loadEntryPlacement(entry),
+    },
+    clock: () => NOW_MS,
+  });
+
+  return { run: run, removedPaths: removedPaths };
+}
+
 /** A journal of the deletions in the fixture root's own log. */
 function createFixtureRootJournal(): Promise<DeletionJournal> {
   return createTestJournal({
     logPath: join(fixtureRoot.rootDir, 'deletions.jsonl'),
     nowMs: NOW_MS,
   });
-}
-
-async function loadJournalLines(journal: DeletionJournal): Promise<unknown[]> {
-  return (await readFile(journal.logPath, 'utf8'))
-    .trimEnd()
-    .split('\n')
-    .map((line) => JSON.parse(line));
 }
 
 /** A journal that records the first `successCount` entries and then fails, as a full disk would. */
@@ -228,10 +284,7 @@ async function createToolCandidate(params: {
   version: string;
   buildCommandBody: (installPath: string) => string;
 }): Promise<Candidate> {
-  const candidate = buildTestToolCandidate({
-    homeDir: fixtureRoot.homeDir,
-    version: params.version,
-  });
+  const candidate = buildTestToolCandidate({ home: environment, version: params.version });
   const unit = readToolUnit(candidate);
 
   await createFolderWithFile(candidate.path);
@@ -305,7 +358,7 @@ function buildExpectedToolIntent(params: { candidate: Candidate; version: string
   };
 }
 
-describeAwaitingWin32Platform('deleteCandidates', () => {
+describe('deleteCandidates', () => {
   test('deletes exactly the given items and records intent before outcome', async () => {
     const selected = await createCacheFolder('selected');
     const sibling = await createCacheFolder('sibling');
@@ -316,12 +369,12 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [selectedCandidate],
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
-    const journalLines = await loadJournalLines(journal);
+    const journalLines = await loadTestJournalLines({ logPath: journal.logPath });
 
     expect(run).toEqual({
       outcomes: [
@@ -358,7 +411,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       const run = await deleteCandidates({
         candidates: [await scanCandidate(selected)],
         journal: await createFixtureRootJournal(),
-        loadProcessCommands: buildProcessCommandsLoader([]),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
         clock: () => NOW_MS,
@@ -380,13 +433,38 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [scanned],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
+    expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
+  });
+
+  test('leaves a folder alone that went online only after the scan, and never removes it', async () => {
+    const selected = await createCacheFolder('evicted');
+    const { run, removedPaths } = await deleteWithPlacementOf({
+      selected: selected,
+      placement: { kind: 'cloudOnly' },
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
+    expect(removedPaths).toEqual([]);
+    expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
+  });
+
+  test('leaves a folder alone whose placement cannot be read, and names the code of the read', async () => {
+    // As a folder on Windows whose attributes cannot be read, which may be another volume mounted.
+    const selected = await createCacheFolder('unplaced');
+    const { run, removedPaths } = await deleteWithPlacementOf({
+      selected: selected,
+      placement: { kind: 'unread', code: 'EIO' },
+    });
+
+    expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'EIO', freedBytes: 0 });
+    expect(removedPaths).toEqual([]);
     expect(await isPresent(join(selected, 'nested/blob.bin'))).toBe(true);
   });
 
@@ -403,7 +481,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       const run = await deleteCandidates({
         candidates: [scanned],
         journal: await createFixtureRootJournal(),
-        loadProcessCommands: buildProcessCommandsLoader([]),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
         environment: environment,
         ...DELETION_PLATFORM,
         clock: () => NOW_MS,
@@ -425,7 +503,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -449,7 +527,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -470,7 +548,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: buildFailingRemoval({
@@ -501,7 +579,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: buildFailingRemoval({ removedPath: null, failure: 'EBUSY' }),
@@ -518,7 +596,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       delete: buildFailingRemoval({ removedPath: selected, failure: 'EIO' }),
@@ -544,7 +622,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -571,7 +649,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: candidates,
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -587,14 +665,17 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const appCache = await createCacheFolder('app-cache');
     const ownerless = await createCacheFolder('ownerless');
     const candidates = [
-      await scanCandidate(appCache, ['/Applications/Example.app']),
+      await scanCandidate(appCache, {
+        kind: 'bundles',
+        bundlePaths: ['/Applications/Example.app'],
+      }),
       await scanCandidate(ownerless),
     ];
 
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([
+      loadKnownRunningProcesses: buildCommandLinesLoader([
         '/Applications/Example.app/Contents/MacOS/Example',
       ]),
       environment: environment,
@@ -606,33 +687,93 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     expect(await isPresent(join(appCache, 'nested/blob.bin'))).toBe(true);
   });
 
+  test('leaves an item alone whose Windows program started after the scan, by folder or name', async () => {
+    const editorCache = await createCacheFolder('editor-cache');
+    const toolCache = await createCacheFolder('tool-cache');
+    const idleCache = await createCacheFolder('idle-cache');
+    const candidates = [
+      await scanCandidate(editorCache, {
+        kind: 'executable',
+        imageNames: [buildTestWindowsImageName({ text: 'other.exe' })],
+        installFolderPath: buildTestHostPath({ text: join(fixtureRoot.rootDir, 'Example Editor') }),
+      }),
+      await scanCandidate(toolCache, {
+        kind: 'executable',
+        imageNames: [buildTestWindowsImageName({ text: 'tool.exe' })],
+        installFolderPath: null,
+      }),
+      await scanCandidate(idleCache, {
+        kind: 'executable',
+        imageNames: [buildTestWindowsImageName({ text: 'idle.exe' })],
+        installFolderPath: null,
+      }),
+    ];
+
+    const run = await deleteCandidates({
+      candidates: candidates,
+      journal: await createFixtureRootJournal(),
+      loadKnownRunningProcesses: async () =>
+        buildRunningImagePaths([
+          join(fixtureRoot.rootDir, 'Example Editor', 'bin', 'editor.exe'),
+          join(fixtureRoot.rootDir, 'Tools', 'tool.exe'),
+        ]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual([
+      'ownerRunning',
+      'ownerRunning',
+      'removed',
+    ]);
+    expect(await isPresent(join(editorCache, 'nested/blob.bin'))).toBe(true);
+    expect(await isPresent(join(toolCache, 'nested/blob.bin'))).toBe(true);
+  });
+
   test('withholds every owned item when the process list cannot be read', async () => {
     const appCache = await createCacheFolder('app-cache');
+    const programCache = await createCacheFolder('program-cache');
+    const unbundledCache = await createCacheFolder('unbundled-cache');
     const ownerless = await createCacheFolder('ownerless');
     const candidates = [
-      await scanCandidate(appCache, ['/Applications/Example.app']),
+      await scanCandidate(appCache, {
+        kind: 'bundles',
+        bundlePaths: ['/Applications/Example.app'],
+      }),
+      await scanCandidate(programCache, {
+        kind: 'executable',
+        imageNames: [buildTestWindowsImageName({ text: 'tool.exe' })],
+        installFolderPath: null,
+      }),
+      // An owner whose bundle no app carries is withheld too, as the scan decides it.
+      await scanCandidate(unbundledCache, { kind: 'bundles', bundlePaths: [] }),
       await scanCandidate(ownerless),
     ];
 
     const run = await deleteCandidates({
       candidates: candidates,
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader(null),
+      loadKnownRunningProcesses: buildCommandLinesLoader(null),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
     });
 
-    expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual(['ownerRunning', 'removed']);
+    expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual([
+      'ownerRunning',
+      'ownerRunning',
+      'ownerRunning',
+      'removed',
+    ]);
     expect(await isPresent(appCache)).toBe(true);
+    expect(await isPresent(programCache)).toBe(true);
+    expect(await isPresent(unbundledCache)).toBe(true);
   });
 
   test('records the tool intent first and runs no tool when it cannot be recorded', async () => {
     const pathItem = await createCacheFolder('after-tool');
-    const toolCandidate = buildTestToolCandidate({
-      homeDir: fixtureRoot.homeDir,
-      version: '20.1.0',
-    });
+    const toolCandidate = buildTestToolCandidate({ home: environment, version: '20.1.0' });
     const pathCandidate = await scanCandidate(pathItem);
     const entries: JournalEntry[] = [];
 
@@ -641,7 +782,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -676,11 +817,11 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const entries: JournalEntry[] = [];
 
     await deleteCandidates({
-      candidates: [buildTestDartToolCandidate({ homeDir: fixtureRoot.homeDir })],
+      candidates: [buildTestDartToolCandidate({ home: environment })],
       journal: buildRefusingJournal({ entries: entries }),
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -693,7 +834,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
     const run = await deleteCandidates({
       candidates: [],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -703,7 +844,7 @@ describeAwaitingWin32Platform('deleteCandidates', () => {
   });
 });
 
-describeAwaitingWin32Platform('deleteCandidates with a tool item', () => {
+describeWithFakeTools('deleteCandidates with a tool item', () => {
   test('records the intent and then the outcome of a completed run', async () => {
     const candidate = await createToolCandidate({
       version: '20.1.0',
@@ -721,7 +862,7 @@ process.exit(0);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -737,7 +878,7 @@ process.exit(0);`,
       ],
       journalFailure: null,
     });
-    expect((await loadJournalLines(journal)).slice(1)).toEqual([
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1)).toEqual([
       buildExpectedToolIntent({ candidate: candidate, version: '20.1.0' }),
       {
         kind: 'toolOutcome',
@@ -765,7 +906,7 @@ process.exit(0);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -780,7 +921,7 @@ process.exit(0);`,
       ],
       journalFailure: null,
     });
-    expect((await loadJournalLines(journal)).slice(1)).toEqual([
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1)).toEqual([
       buildExpectedToolIntent({ candidate: candidate, version: '18.0.0' }),
       { kind: 'toolOutcome', atMs: NOW_MS, path: candidate.path, outcome: 'changedSinceScan' },
     ]);
@@ -804,7 +945,7 @@ process.exit(1);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
 
@@ -819,7 +960,7 @@ process.exit(1);`,
       ],
       journalFailure: null,
     });
-    expect((await loadJournalLines(journal)).slice(1)).toEqual([
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1)).toEqual([
       buildExpectedToolIntent({ candidate: candidate, version: '20.1.0' }),
       {
         kind: 'toolOutcome',
@@ -854,10 +995,10 @@ process.exit(0);`,
       journal: journal,
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       clock: () => NOW_MS,
     });
-    const journalLines = await loadJournalLines(journal);
+    const journalLines = await loadTestJournalLines({ logPath: journal.logPath });
 
     expect(run).toEqual({
       outcomes: [
@@ -890,7 +1031,10 @@ process.exit(0);`,
   test('reads the processes afresh for a tool item, so a simulator started meanwhile stays', async () => {
     const pathItem = await createCacheFolder('before-simulator');
     const simulatorCandidate = await createSimulatorCandidate();
-    const processReads: (string[] | null)[] = [[], [SIMULATOR_APP_COMMAND]];
+    const processReads = [
+      buildRunningCommandLines([]),
+      buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
+    ];
     let readCount = 0;
 
     const run = await deleteCandidates({
@@ -898,10 +1042,10 @@ process.exit(0);`,
       journal: await createFixtureRootJournal(),
       environment: environment,
       ...DELETION_PLATFORM,
-      loadProcessCommands: async () => {
+      loadKnownRunningProcesses: async () => {
         readCount += 1;
 
-        return processReads[readCount - 1] ?? [];
+        return processReads[readCount - 1] ?? buildRunningCommandLines([]);
       },
       clock: () => NOW_MS,
     });
@@ -914,12 +1058,12 @@ process.exit(0);`,
   });
 });
 
-describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder', () => {
+describe('deleteCandidates with a VS Code extension folder', () => {
   /** The obsolete folder of the fixture installation, scanned with the identity it has. */
   async function scanVscodeCandidate(): Promise<Candidate> {
-    await createVscodeInstallation({ homeDir: environment.homeDir });
+    await createVscodeInstallation({ folders: environment });
 
-    const candidate = buildTestVscodeExtensionCandidate({ homeDir: environment.homeDir });
+    const candidate = buildTestVscodeExtensionCandidate({ home: environment });
 
     if (candidate.removal.kind !== 'deleteUnitPaths') {
       throw new Error('The obsolete folder should be scanned as the paths of a unit.');
@@ -933,12 +1077,12 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 
   async function deleteVscodeCandidate(params: {
     candidate: Candidate;
-    loadProcessCommands: () => Promise<string[] | null>;
+    loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   }): Promise<RemovalRun> {
     return deleteCandidates({
       candidates: [params.candidate],
       journal: await createFixtureRootJournal(),
-      loadProcessCommands: params.loadProcessCommands,
+      loadKnownRunningProcesses: params.loadKnownRunningProcesses,
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -951,7 +1095,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     const run = await deleteCandidates({
       candidates: [candidate],
       journal: journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -968,7 +1112,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
       ],
       journalFailure: null,
     });
-    expect(await loadJournalLines(journal)).toEqual([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toEqual([
       expect.objectContaining({ kind: 'sessionStart' }),
       {
         kind: 'intent',
@@ -981,9 +1125,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     ]);
     expect(await isPresent(candidate.path)).toBe(false);
     expect(
-      await isPresent(
-        join(buildVscodeExtensionsPath({ homeDir: environment.homeDir }), OLDER_FOLDER_NAME),
-      ),
+      await isPresent(join(buildVscodeExtensionsPath({ home: environment }), OLDER_FOLDER_NAME)),
     ).toBe(true);
   });
 
@@ -992,12 +1134,13 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 
     await writeFixtureTextFile({
       path: join(
-        buildVscodeProfilesPath({ homeDir: environment.homeDir }),
+        buildVscodeProfilesPath({ folders: environment }),
         FIXTURE_PROFILE_ID,
         'extensions.json',
       ),
       text: buildVscodeRegistryText({
-        extensionsPath: buildVscodeExtensionsPath({ homeDir: environment.homeDir }),
+        pathRules: environment.pathRules,
+        extensionsPath: buildVscodeExtensionsPath({ home: environment }),
         folderNames: [OBSOLETE_FOLDER_NAME],
         form: 'locationOnly',
       }),
@@ -1005,7 +1148,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
@@ -1014,15 +1157,15 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 
   test('reads the processes afresh, so VS Code started after the confirmation keeps it', async () => {
     const candidate = await scanVscodeCandidate();
-    const processReads: string[][] = [[], [VSCODE_APP_COMMAND]];
+    const processReads = [buildRunningCommandLines([]), runningVscodeProcesses];
     let readCount = 0;
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: async () => {
+      loadKnownRunningProcesses: async () => {
         readCount += 1;
 
-        return processReads[readCount - 1] ?? [];
+        return processReads[readCount - 1] ?? buildRunningCommandLines([]);
       },
     });
 
@@ -1036,14 +1179,11 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     async () => {
       const candidate = await scanVscodeCandidate();
 
-      await chmod(
-        join(buildVscodeExtensionsPath({ homeDir: environment.homeDir }), 'extensions.json'),
-        0o000,
-      );
+      await chmod(join(buildVscodeExtensionsPath({ home: environment }), 'extensions.json'), 0o000);
 
       const run = await deleteVscodeCandidate({
         candidate: candidate,
-        loadProcessCommands: buildProcessCommandsLoader([]),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
       });
 
       expect(run.outcomes[0]).toMatchObject({
@@ -1057,17 +1197,14 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
 
   testOnPosix('reports any other failed read of a registry as failed with its code', async () => {
     const candidate = await scanVscodeCandidate();
-    const registryPath = join(
-      buildVscodeExtensionsPath({ homeDir: environment.homeDir }),
-      'extensions.json',
-    );
+    const registryPath = join(buildVscodeExtensionsPath({ home: environment }), 'extensions.json');
 
     await rm(registryPath);
     await symlink(registryPath, registryPath);
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'ELOOP', freedBytes: 0 });
@@ -1078,14 +1215,11 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
     const candidate = await scanVscodeCandidate();
 
     await rm(candidate.path, { recursive: true });
-    await createVscodeExtensionFolders({
-      homeDir: environment.homeDir,
-      folderNames: [OBSOLETE_FOLDER_NAME],
-    });
+    await createVscodeExtensionFolders({ home: environment, folderNames: [OBSOLETE_FOLDER_NAME] });
 
     const run = await deleteVscodeCandidate({
       candidate: candidate,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
@@ -1093,7 +1227,7 @@ describeAwaitingWin32Platform('deleteCandidates with a VS Code extension folder'
   });
 });
 
-describeAwaitingWin32Platform('deleteCandidates with an item of several targets', () => {
+describe('deleteCandidates with an item of several targets', () => {
   /** An item shown at the caches folder that goes as two of its folders, each scanned as it is. */
   async function scanTwoTargetsCandidate(params: {
     firstPath: string;
@@ -1109,7 +1243,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
       removal: {
         kind: 'deletePaths',
         targets: [await scanTarget(params.firstPath), await scanTarget(params.secondPath)],
-        ownerBundlePaths: [],
+        owner: { kind: 'none' },
       },
     });
   }
@@ -1121,7 +1255,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
     return deleteCandidates({
       candidates: [params.candidate],
       journal: params.journal,
-      loadProcessCommands: buildProcessCommandsLoader([]),
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
       ...DELETION_PLATFORM,
       clock: () => NOW_MS,
@@ -1148,7 +1282,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
         code: null,
       },
     ]);
-    expect(await loadJournalLines(journal)).toEqual([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toEqual([
       expect.objectContaining({ kind: 'sessionStart' }),
       {
         kind: 'intent',
@@ -1184,7 +1318,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
       outcome: 'changedSinceScan',
       freedBytes: secondBytes,
     });
-    expect(await loadJournalLines(journal)).toMatchObject([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toMatchObject([
       { kind: 'sessionStart' },
       { kind: 'intent', targetPaths: [firstPath, secondPath] },
       { kind: 'outcome', path: firstPath, outcome: 'changedSinceScan' },
@@ -1192,6 +1326,41 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
     ]);
     expect(await isPresent(join(firstPath, 'nested/blob.bin'))).toBe(true);
     expect(await isPresent(secondPath)).toBe(false);
+  });
+
+  test('counts the entries that stayed in every target left in part', async () => {
+    const firstPath = await createCacheFolder('held-first');
+    const secondPath = await createCacheFolder('held-second');
+    const candidate = await scanTwoTargetsCandidate({
+      firstPath: firstPath,
+      secondPath: secondPath,
+    });
+    const journal = await createFixtureRootJournal();
+
+    // The fake removal leaves each whole tree, as when every file of it was held open.
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: journal,
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: {
+        ...DELETION_PLATFORM.delete,
+        removeTree: async (tree) => ({
+          kind: 'succeeded',
+          value: { kind: 'partlyRemoved', stayedEntryCount: tree.path === firstPath ? 2 : 3 },
+        }),
+      },
+      clock: () => NOW_MS,
+    });
+
+    expect(run.outcomes).toMatchObject([{ outcome: 'partlyRemoved', stayedEntryCount: 5 }]);
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toMatchObject([
+      { kind: 'sessionStart' },
+      { kind: 'intent', targetPaths: [firstPath, secondPath] },
+      { kind: 'outcome', path: firstPath, outcome: 'partlyRemoved', stayedEntryCount: 2 },
+      { kind: 'outcome', path: secondPath, outcome: 'partlyRemoved', stayedEntryCount: 3 },
+    ]);
   });
 
   test('is removed when a target was gone already and the other deleted, counting only what this run deleted', async () => {
@@ -1210,7 +1379,7 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
 
     expect(secondBytes).toBeLessThan(candidate.allocatedBytes);
     expect(run.outcomes[0]).toMatchObject({ outcome: 'removed', freedBytes: secondBytes });
-    expect(await loadJournalLines(journal)).toMatchObject([
+    expect(await loadTestJournalLines({ logPath: journal.logPath })).toMatchObject([
       { kind: 'sessionStart' },
       { kind: 'intent' },
       { kind: 'outcome', path: firstPath, outcome: 'alreadyGone' },
@@ -1238,10 +1407,267 @@ describeAwaitingWin32Platform('deleteCandidates with an item of several targets'
   });
 });
 
-describeAwaitingWin32Platform('isUnremovedOutcome', () => {
-  test('is true only for the outcomes that left their item through a failure', () => {
+describe('deleteCandidates with a Recycle Bin', () => {
+  // Made up, not the code of Windows, so the deletion is seen to take it from its platform.
+  const nothingToEmptyCode = 0x8000abcd;
+
+  const scannedContent: RecycleBinContent = { sizeBytes: 8192, itemCount: 3 };
+
+  const emptyContent: RecycleBinContent = { sizeBytes: 0, itemCount: 0 };
+
+  const recycleBinCandidate = buildTestRecycleBinCandidate({
+    driveRootText: 'C:\\',
+    scannedContent: scannedContent,
+  });
+
+  /**
+   * Runs the deletion of the bin and a path item after it with a fake Recycle Bin that answers
+   * `counts` in turn, one for each count, and empties as `emptied` says; gives the drive roots it
+   * was asked to empty and how often it was counted.
+   */
+  async function deleteWithFakeBin(params: {
+    counts: Result<RecycleBinContent, SystemCallFailure>[];
+    emptied: Result<null, SystemCallFailure>;
+  }): Promise<{
+    run: RemovalRun;
+    emptiedRoots: string[];
+    countedTimes: number;
+    journal: DeletionJournal;
+  }> {
+    const emptiedRoots: string[] = [];
+    let countedTimes = 0;
+    const journal = await createFixtureRootJournal();
+    const next = await createCacheFolder('after-bin');
+    const run = await deleteCandidates({
+      candidates: [recycleBinCandidate, await scanCandidate(next)],
+      journal: journal,
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: {
+        ...DELETION_PLATFORM.delete,
+        trash: {
+          kind: 'recycleBins',
+          loadRecycleBin: () => {
+            const count = params.counts[countedTimes];
+            countedTimes += 1;
+
+            if (count === undefined) {
+              throw new Error('The fake Recycle Bin was counted more often than the test gave.');
+            }
+
+            return count;
+          },
+          emptyRecycleBin: (emptyParams) => {
+            emptiedRoots.push(emptyParams.driveRoot);
+
+            return params.emptied;
+          },
+          nothingToEmptyCode: nothingToEmptyCode,
+        },
+      },
+      clock: () => NOW_MS,
+    });
+
+    return {
+      run: run,
+      emptiedRoots: emptiedRoots,
+      countedTimes: countedTimes,
+      journal: journal,
+    };
+  }
+
+  test('empties a bin that still holds what the scan counted, records it, and goes on', async () => {
+    const { run, emptiedRoots, countedTimes, journal } = await deleteWithFakeBin({
+      counts: [{ kind: 'succeeded', value: scannedContent }],
+      emptied: { kind: 'succeeded', value: null },
+    });
+
+    expect(emptiedRoots).toEqual(['C:\\']);
+    expect(countedTimes).toBe(1);
+    expect(run.outcomes).toEqual([
+      {
+        candidate: recycleBinCandidate,
+        freedBytes: 8192,
+        outcome: 'removed',
+        code: null,
+      },
+      expect.objectContaining({ outcome: 'removed' }),
+    ]);
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).slice(1, 3)).toEqual([
+      {
+        kind: 'intent',
+        atMs: NOW_MS,
+        path: 'C:\\$Recycle.Bin',
+        allocatedBytes: 8192,
+        targetPaths: ['C:\\$Recycle.Bin'],
+      },
+      { kind: 'outcome', atMs: NOW_MS, path: 'C:\\$Recycle.Bin', outcome: 'removed', code: null },
+    ]);
+  });
+
+  test('leaves a bin alone that gained or lost items since the scan', async () => {
+    for (const freshContent of [
+      { sizeBytes: 8192, itemCount: 4 },
+      { sizeBytes: 12_288, itemCount: 3 },
+    ]) {
+      const { run, emptiedRoots } = await deleteWithFakeBin({
+        counts: [{ kind: 'succeeded', value: freshContent }],
+        emptied: { kind: 'succeeded', value: null },
+      });
+
+      expect(emptiedRoots).toEqual([]);
+      expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual([
+        'changedSinceScan',
+        'removed',
+      ]);
+    }
+  });
+
+  test('reports a bin emptied since the scan as already gone, never emptying it', async () => {
+    const { run, emptiedRoots } = await deleteWithFakeBin({
+      counts: [{ kind: 'succeeded', value: emptyContent }],
+      emptied: { kind: 'succeeded', value: null },
+    });
+
+    expect(emptiedRoots).toEqual([]);
+    expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual(['alreadyGone', 'removed']);
+  });
+
+  test('reports a failed count or a failed emptying with its code in hex, and goes on', async () => {
+    const counted = await deleteWithFakeBin({
+      counts: [{ kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: 0x80070005 } }],
+      emptied: { kind: 'succeeded', value: null },
+    });
+    const emptied = await deleteWithFakeBin({
+      counts: [{ kind: 'succeeded', value: scannedContent }],
+      emptied: { kind: 'failed', failure: { call: 'SHEmptyRecycleBinW', code: 0x80070020 } },
+    });
+
+    expect(counted.emptiedRoots).toEqual([]);
+    expect(counted.run.outcomes).toMatchObject([
+      { outcome: 'failed', code: '0x80070005', freedBytes: 0 },
+      { outcome: 'removed' },
+    ]);
+    expect(emptied.countedTimes).toBe(1);
+    expect(emptied.run.outcomes).toMatchObject([
+      { outcome: 'failed', code: '0x80070020', freedBytes: 0 },
+      { outcome: 'removed' },
+    ]);
+  });
+
+  test('reports a bin another program emptied after the fresh count as already gone', async () => {
+    const { run, emptiedRoots, countedTimes, journal } = await deleteWithFakeBin({
+      counts: [
+        { kind: 'succeeded', value: scannedContent },
+        { kind: 'succeeded', value: emptyContent },
+      ],
+      emptied: {
+        kind: 'failed',
+        failure: { call: 'SHEmptyRecycleBinW', code: nothingToEmptyCode },
+      },
+    });
+
+    expect(emptiedRoots).toEqual(['C:\\']);
+    expect(countedTimes).toBe(2);
+    expect(run.outcomes).toMatchObject([
+      { outcome: 'alreadyGone', code: null, freedBytes: 0 },
+      { outcome: 'removed' },
+    ]);
+    expect((await loadTestJournalLines({ logPath: journal.logPath }))[2]).toEqual({
+      kind: 'outcome',
+      atMs: NOW_MS,
+      path: 'C:\\$Recycle.Bin',
+      outcome: 'alreadyGone',
+      code: null,
+    });
+  });
+
+  test('fails a bin that holds items after its emptying found nothing, with the code of the emptying', async () => {
+    for (const after of [
+      { kind: 'succeeded', value: scannedContent },
+      { kind: 'succeeded', value: { sizeBytes: 4096, itemCount: 1 } },
+      { kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: 0x80070005 } },
+    ] satisfies Result<RecycleBinContent, SystemCallFailure>[]) {
+      const { run, countedTimes } = await deleteWithFakeBin({
+        counts: [{ kind: 'succeeded', value: scannedContent }, after],
+        emptied: {
+          kind: 'failed',
+          failure: { call: 'SHEmptyRecycleBinW', code: nothingToEmptyCode },
+        },
+      });
+
+      expect(countedTimes).toBe(2);
+      expect(run.outcomes).toMatchObject([
+        { outcome: 'failed', code: '0x8000ABCD', freedBytes: 0 },
+        { outcome: 'removed' },
+      ]);
+    }
+  });
+
+  test('throws for a bin on a platform whose trash is a folder, where no scan offers one', async () => {
+    await expect(
+      deleteCandidates({
+        candidates: [recycleBinCandidate],
+        journal: await createFixtureRootJournal(),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
+        environment: environment,
+        ...DELETION_PLATFORM,
+        delete: { ...DELETION_PLATFORM.delete, trash: { kind: 'catalogFolder' } },
+        clock: () => NOW_MS,
+      }),
+    ).rejects.toThrow('A Recycle Bin candidate reached a platform whose trash is a folder.');
+  });
+});
+
+describe('deleteCandidates with a path left partly in place', () => {
+  test('measures what stayed, records the count of the entries left, and frees only the rest', async () => {
+    const selected = await createCacheFolder('held');
+    const candidate = { ...(await scanCandidate(selected)), allocatedBytes: 1_000_000_000 };
+    const journal = await createFixtureRootJournal();
+
+    // The fake removal leaves the whole tree, as when every file of it was held open.
+    const run = await deleteCandidates({
+      candidates: [candidate],
+      journal: journal,
+      loadKnownRunningProcesses: buildCommandLinesLoader([]),
+      environment: environment,
+      ...DELETION_PLATFORM,
+      delete: {
+        ...DELETION_PLATFORM.delete,
+        removeTree: async () => ({
+          kind: 'succeeded',
+          value: { kind: 'partlyRemoved', stayedEntryCount: 2 },
+        }),
+      },
+      clock: () => NOW_MS,
+    });
+    const leftBytes = await loadMeasuredAllocatedBytes({ paths: [selected] });
+
+    expect(leftBytes).toBeGreaterThan(0);
+    expect(run.outcomes).toEqual([
+      {
+        candidate: candidate,
+        freedBytes: 1_000_000_000 - leftBytes,
+        outcome: 'partlyRemoved',
+        stayedEntryCount: 2,
+      },
+    ]);
+    expect((await loadTestJournalLines({ logPath: journal.logPath })).at(-1)).toEqual({
+      kind: 'outcome',
+      atMs: NOW_MS,
+      path: selected,
+      outcome: 'partlyRemoved',
+      stayedEntryCount: 2,
+    });
+  });
+});
+
+describe('isUnremovedOutcome', () => {
+  test('is true only for the outcomes that left their item or part of it through a failure', () => {
     const kinds: RemovalOutcomeKind[] = [
       'removed',
+      'partlyRemoved',
       'alreadyGone',
       'changedSinceScan',
       'ownerRunning',
@@ -1253,14 +1679,19 @@ describeAwaitingWin32Platform('isUnremovedOutcome', () => {
       'engineNotRunning',
     ];
 
-    expect(kinds.filter(isUnremovedOutcome)).toEqual(['permissionDenied', 'failed', 'toolFailed']);
+    expect(kinds.filter(isUnremovedOutcome)).toEqual([
+      'partlyRemoved',
+      'permissionDenied',
+      'failed',
+      'toolFailed',
+    ]);
   });
 });
 
-describeAwaitingWin32Platform('toolCandidateRunToRemoval', () => {
+describe('toolCandidateRunToRemoval', () => {
   const TOOL_PATH = '/Users/tester/.local/share/mise/installs/node/20.1.0';
   const toolCandidate = buildTestToolCandidate({
-    homeDir: '/Users/tester',
+    home: buildExampleHome({ text: '/Users/tester' }),
     version: '20.1.0',
     allocatedBytes: 8192,
   });

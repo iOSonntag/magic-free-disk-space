@@ -8,7 +8,8 @@ import type { FileFailure } from './loadFileIdentity.js';
  * `permissionDenied` is a denial by the file's own permissions.
  */
 export type ReadFailure = {
-  reason: 'privacyDenied' | 'permissionDenied' | 'unexpected';
+  /** `inUse` is another program holding the entry open. */
+  reason: 'privacyDenied' | 'permissionDenied' | 'inUse' | 'unexpected';
   code: string;
 };
 
@@ -52,6 +53,8 @@ export function decideReadFailure(params: {
           code: params.failure.code,
         },
       };
+    case 'inUse':
+      return { kind: 'failed', failure: { reason: 'inUse', code: params.failure.code } };
     case 'unexpected':
       return { kind: 'failed', failure: { reason: 'unexpected', code: params.failure.code } };
   }

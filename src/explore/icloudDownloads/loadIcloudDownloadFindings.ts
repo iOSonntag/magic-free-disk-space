@@ -1,3 +1,4 @@
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
@@ -43,10 +44,9 @@ export async function loadIcloudDownloadFindings(
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
-  const rootPath = joinAbsolutePath({
-    rules: run.environment.pathRules,
-    parentPath: run.environment.homeDir,
-    names: run.platform.explore.icloudDriveRoot,
+  const rootPath = resolveEnvironmentLocation({
+    folders: run.environment,
+    location: run.platform.explore.icloudDriveRoot,
   });
   const places = await loadIcloudPlaces({ run: run, rootPath: rootPath });
 
@@ -132,16 +132,33 @@ async function loadIcloudPlaces(params: {
   return { kind: 'succeeded', value: places };
 }
 
+/**
+ * No place in a folder kept in the cloud only, whose listing would download it, or in a link. A
+ * folder that cannot be placed is listed, as one on disk.
+ */
 async function loadCloudDocsPlaces(params: {
   run: ExploreProbeToolRun;
   folderPath: AbsolutePath;
 }): Promise<Result<IcloudPlace[], ExploreFileUnreadable>> {
-  if (
-    params.run.platform.entryReads.isEntryEvicted({ path: params.folderPath, kind: 'directory' })
-  ) {
-    return { kind: 'succeeded', value: [] };
-  }
+  const placement = params.run.platform.entryReads.loadEntryPlacement({
+    path: params.folderPath,
+    kind: 'directory',
+  });
 
+  switch (placement.kind) {
+    case 'cloudOnly':
+    case 'link':
+      return { kind: 'succeeded', value: [] };
+    case 'onDisk':
+    case 'unread':
+      return loadListedCloudDocsPlaces(params);
+  }
+}
+
+async function loadListedCloudDocsPlaces(params: {
+  run: ExploreProbeToolRun;
+  folderPath: AbsolutePath;
+}): Promise<Result<IcloudPlace[], ExploreFileUnreadable>> {
   const entries = await loadExploreDirectoryEntries({
     path: params.folderPath,
     privacyDenialCode: params.run.platform.privacyDenialCode,
@@ -224,7 +241,7 @@ function buildIcloudFinding(params: {
     displayPath: params.place.folderPath,
     activity: decideUnitActivity({
       facts: { kind: 'untouchedFiles' },
-      processCommands: params.run.processCommands,
+      runningProcesses: params.run.runningProcesses,
     }),
   };
 }

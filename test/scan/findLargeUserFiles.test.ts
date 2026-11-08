@@ -1,13 +1,16 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
+import type { PathRules } from '../../src/path/pathRules.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import type { UserFileFinding } from '../../src/scan/findLargeUserFiles.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
+import type { UserFileFinding, UserFilePackageFolders } from '../../src/scan/findLargeUserFiles.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
-import type { EntryReads } from '../../src/system/entryReads.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import type { EntryReads, EntryRef } from '../../src/system/entryReads.js';
+import type { EvictedEntryRecorder } from '../../src/system/walkDirectoryTree.js';
 import { buildTestEntryReads, loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -16,6 +19,8 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
+import { hostPathRules } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const MIN_ALLOCATED_BYTES = 1024 * 1024;
@@ -25,21 +30,27 @@ const TEST_MODIFIED_MS = 1_600_000_000_000;
 const FAR_FUTURE_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
 
 async function findFiles(params: {
+  pathRules?: PathRules;
   rootDirs: string[];
+  packageFolders?: UserFilePackageFolders;
   deadlineMs?: number;
   entryReads?: EntryReads;
+  recordEvictedEntry?: EvictedEntryRecorder;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   return findLargeUserFiles({
+    pathRules: params.pathRules ?? hostPathRules,
     rootDirs: params.rootDirs,
+    packageFolders: params.packageFolders ?? hostPlatform.scan.userFilePackageFolders,
     artifactRules: PROJECT_ARTIFACT_RULES,
     minAllocatedBytes: MIN_ALLOCATED_BYTES,
     deadlineMs: params.deadlineMs ?? FAR_FUTURE_DEADLINE_MS,
-    entryReads: params.entryReads ?? darwinPlatform.system.entryReads,
-    privacyDenialCode: darwinPlatform.system.privacyDenialCode,
+    entryReads: params.entryReads ?? hostPlatform.system.entryReads,
+    recordEvictedEntry: params.recordEvictedEntry ?? null,
+    privacyDenialCode: hostPlatform.system.privacyDenialCode,
   });
 }
 
-describeAwaitingWin32Platform('findLargeUserFiles', () => {
+describe('findLargeUserFiles', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -122,7 +133,10 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([loosePath]);
   });
@@ -150,6 +164,84 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
     expect(result.findings.map((finding) => finding.path)).toEqual([unmarkedPath]);
   });
 
+  test('an artifact folder and its marker in another case are skipped under the rules of Windows, and searched under those of POSIX', async () => {
+    const artifactFilePath = join(fixtureRoot.homeDir, 'Documents/app/Build/outputs/app.apk');
+    await createFixtureFile({
+      path: artifactFilePath,
+      sizeBytes: LARGE_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+    await createFixtureFile({
+      path: join(fixtureRoot.homeDir, 'Documents/app/BUILD.GRADLE'),
+      sizeBytes: SMALL_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+    const rootDirs = [join(fixtureRoot.homeDir, 'Documents')];
+
+    const win32Result = await findFiles({ pathRules: WIN32_PATH_RULES, rootDirs: rootDirs });
+    const posixResult = await findFiles({ pathRules: POSIX_PATH_RULES, rootDirs: rootDirs });
+
+    expect(win32Result.findings).toEqual([]);
+    expect(posixResult.findings.map((finding) => finding.path)).toEqual([artifactFilePath]);
+  });
+
+  test('a folder or file the entry reads call a link is not searched or found, and a root file they call one has the kind of a link', async () => {
+    // As a mounted folder or another reparse point on Windows, which lstat calls a folder or a
+    // file. The decision skips a finding of a link.
+    const mountedDir = join(fixtureRoot.homeDir, 'Documents/mounted');
+    const insidePath = join(mountedDir, 'inside.bin');
+    const reparseFilePath = join(fixtureRoot.homeDir, 'Documents/reparse.bin');
+    const plainPath = join(fixtureRoot.homeDir, 'Documents/plain.bin');
+
+    for (const path of [insidePath, reparseFilePath, plainPath]) {
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents'), reparseFilePath],
+      entryReads: buildTestEntryReads({
+        privateBytes: LARGE_FILE_BYTES,
+        linkPaths: [mountedDir, reparseFilePath],
+      }),
+    });
+
+    expect(result.issues).toEqual([]);
+    expect(
+      result.findings.map((finding) => ({ path: finding.path, kind: finding.identity.kind })),
+    ).toEqual([
+      { path: plainPath, kind: 'file' },
+      { path: reparseFilePath, kind: 'symbolicLink' },
+    ]);
+  });
+
+  test('records each entry its walk leaves unread in the cloud', async () => {
+    const cloudDir = join(fixtureRoot.homeDir, 'Documents/cloud');
+    await createFixtureFile({
+      path: join(cloudDir, 'clip.mov'),
+      sizeBytes: LARGE_FILE_BYTES,
+      modifiedMs: TEST_MODIFIED_MS,
+    });
+    const recordedEntries: EntryRef[] = [];
+
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      entryReads: buildTestEntryReads({
+        privateBytes: LARGE_FILE_BYTES,
+        cloudOnlyPaths: [cloudDir],
+      }),
+      recordEvictedEntry: (entry) => {
+        recordedEntries.push(entry);
+      },
+    });
+
+    expect(result.findings).toEqual([]);
+    expect(recordedEntries).toEqual([{ path: cloudDir, kind: 'directory' }]);
+  });
+
   test('a file inside a package folder is not found', async () => {
     const originalsDir = join(fixtureRoot.homeDir, 'Pictures/Photos.photoslibrary/originals');
     await createFixtureDirectory({ path: originalsDir });
@@ -159,7 +251,10 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
+    const result = await findFiles({
+      rootDirs: [fixtureRoot.homeDir],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
@@ -173,7 +268,10 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       modifiedMs: TEST_MODIFIED_MS,
     });
 
-    const result = await findFiles({ rootDirs: [fixtureRoot.homeDir] });
+    const result = await findFiles({
+      rootDirs: [fixtureRoot.homeDir],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result).toEqual({ findings: [], issues: [] });
   });
@@ -196,6 +294,7 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
 
     const result = await findFiles({
       rootDirs: [join(fixtureRoot.homeDir, 'Movies'), join(fixtureRoot.homeDir, 'Documents')],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
     });
 
     expect(result).toEqual({ findings: [], issues: [] });
@@ -213,9 +312,42 @@ describeAwaitingWin32Platform('findLargeUserFiles', () => {
       });
     }
 
-    const result = await findFiles({ rootDirs: [join(fixtureRoot.homeDir, 'Documents')] });
+    const result = await findFiles({
+      rootDirs: [join(fixtureRoot.homeDir, 'Documents')],
+      packageFolders: darwinPlatform.scan.userFilePackageFolders,
+    });
 
     expect(result.findings.map((finding) => finding.path)).toEqual([localizedPath, versionPath]);
+  });
+
+  test('a folder named with an extension is searched, as a root too, on Windows', async () => {
+    const releasePath = join(fixtureRoot.homeDir, 'Downloads/Movie.2023.x264-GROUP/movie.mkv');
+    const archivePath = join(fixtureRoot.homeDir, 'Documents/Archive.old/disk.vhdx');
+    const movedRootDir = join(fixtureRoot.homeDir, 'Media.Videos');
+    const movedRootPath = join(movedRootDir, 'clip.mp4');
+
+    for (const path of [releasePath, archivePath, movedRootPath]) {
+      await createFixtureFile({
+        path: path,
+        sizeBytes: LARGE_FILE_BYTES,
+        modifiedMs: TEST_MODIFIED_MS,
+      });
+    }
+
+    const result = await findFiles({
+      rootDirs: [
+        join(fixtureRoot.homeDir, 'Documents'),
+        join(fixtureRoot.homeDir, 'Downloads'),
+        movedRootDir,
+      ],
+      packageFolders: win32Platform.scan.userFilePackageFolders,
+    });
+
+    expect(result.findings.map((finding) => finding.path)).toEqual([
+      archivePath,
+      releasePath,
+      movedRootPath,
+    ]);
   });
 
   testOnPosix('a symbolic link to a large file is not followed', async () => {

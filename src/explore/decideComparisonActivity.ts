@@ -1,4 +1,5 @@
 import type { ResultFailed } from '../result.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
 import type { UnitActivityFacts } from './decideUnitActivity.js';
 import { decideUnitActivity } from './decideUnitActivity.js';
 import type { ExploreFileUnreadable, ExploreProbeFailure } from './exploreUnit.js';
@@ -25,7 +26,7 @@ export type PathUnitRecheck = UnitComparison | ResultFailed<ExploreFileUnreadabl
  */
 export function decideComparisonActivity(params: {
   facts: UnitActivityFacts;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const activity = decideUnitActivity(params);
 

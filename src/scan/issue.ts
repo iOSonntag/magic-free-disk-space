@@ -5,7 +5,13 @@ import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
 /** A place the scan could not read in full; `detail` is the text of the error, as is. */
 export type ScanIssuePlace = {
   path: string;
-  reason: 'privacyDenied' | 'permissionDenied' | 'unexpected' | 'commandFailed' | 'walkStopped';
+  reason:
+    | 'privacyDenied'
+    | 'permissionDenied'
+    | 'inUse'
+    | 'unexpected'
+    | 'commandFailed'
+    | 'walkStopped';
   detail: string;
 };
 

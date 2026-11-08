@@ -1,6 +1,10 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
+import type {
+  ToolCommandFailureEndedBySignal,
+  ToolCommandFailureExitedWithError,
+} from '../../src/tools/runToolCommand.js';
 import {
   buildToolArguments,
   runToolCommand,
@@ -8,10 +12,10 @@ import {
   TOOL_MAX_OUTPUT_BYTES,
 } from '../../src/tools/runToolCommand.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot, waitUntilPresent } from '../support/fixtureRoot.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
@@ -42,6 +46,7 @@ async function runFakeTool(params: {
     homeDir: fixtureRoot.homeDir,
     tempDir: fixtureRoot.tempDir,
     timeoutMs: params.timeoutMs ?? 10_000,
+    processes: hostPlatform.tools.processes,
   });
 }
 
@@ -88,19 +93,53 @@ async function loadPid(path: string): Promise<number> {
   return Number.parseInt(await readFile(path, 'utf8'), 10);
 }
 
-async function waitUntilPresent(path: string): Promise<void> {
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    if (await isPresent(path)) {
-      return;
-    }
-
-    await Bun.sleep(20);
+/**
+ * The entries the fixed environment of a mise run holds on `platformName`, given the fixture's
+ * folders, its tool folder, and the `SystemRoot` Windows passes on.
+ */
+function buildExpectedMiseEnvironmentLines(params: {
+  platformName: NodeJS.Platform;
+  fixtureRoot: FixtureRoot;
+  toolFolderPath: string;
+  systemRoot: string;
+}): string[] {
+  if (params.platformName !== 'win32') {
+    return [
+      `HOME=${params.fixtureRoot.homeDir}`,
+      `TMPDIR=${params.fixtureRoot.tempDir}`,
+      'LANG=en_US.UTF-8',
+      `PATH=${params.toolFolderPath}:/usr/bin:/bin:/usr/sbin:/sbin`,
+      'MISE_OFFLINE=1',
+    ];
   }
 
-  throw new Error(`${path} did not appear.`);
+  return [
+    `USERPROFILE=${params.fixtureRoot.homeDir}`,
+    `TEMP=${params.fixtureRoot.tempDir}`,
+    `TMP=${params.fixtureRoot.tempDir}`,
+    `SystemRoot=${params.systemRoot}`,
+    `PATH=${params.toolFolderPath};${params.systemRoot}\\System32;${params.systemRoot}`,
+    'MISE_OFFLINE=1',
+  ];
 }
 
-describeAwaitingWin32Platform('runToolCommand', () => {
+/**
+ * How a run that `stopRunningTools` ended fails on `platformName`: Windows ends the processes of a
+ * tool's job with an exit code, never a signal.
+ */
+function buildExpectedStopFailure(params: {
+  platformName: NodeJS.Platform;
+}):
+  | Pick<ToolCommandFailureEndedBySignal, 'reason' | 'signal'>
+  | Pick<ToolCommandFailureExitedWithError, 'reason'> {
+  if (params.platformName === 'win32') {
+    return { reason: 'exitedWithError' };
+  }
+
+  return { reason: 'endedBySignal', signal: 'SIGKILL' };
+}
+
+describe('runToolCommand', () => {
   test('returns the output and the stderr tail of a run that exits with 0', async () => {
     const result = await runFakeTool({
       name: 'xcrun',
@@ -223,15 +262,15 @@ for (;;) {
         return;
       }
 
-      const lines = result.value.stdoutText.split('\n');
+      const lines = result.value.stdoutText.split(/\r?\n/);
+      const expectedLines = buildExpectedMiseEnvironmentLines({
+        platformName: process.platform,
+        fixtureRoot: fixtureRoot,
+        toolFolderPath: join(fixtureRoot.rootDir, 'bin'),
+        systemRoot: process.env.SystemRoot ?? '',
+      });
 
-      expect(lines).toContain(`HOME=${fixtureRoot.homeDir}`);
-      expect(lines).toContain(`TMPDIR=${fixtureRoot.tempDir}`);
-      expect(lines).toContain('LANG=en_US.UTF-8');
-      expect(lines).toContain(
-        `PATH=${join(fixtureRoot.rootDir, 'bin')}:/usr/bin:/bin:/usr/sbin:/sbin`,
-      );
-      expect(lines).toContain('MISE_OFFLINE=1');
+      expect(lines).toEqual(expect.arrayContaining(expectedLines));
       expect(result.value.stdoutText).not.toContain('MAGIC_FREE_DISK_SPACE_TEST_MARKER');
     } finally {
       delete process.env.MAGIC_FREE_DISK_SPACE_TEST_MARKER;
@@ -247,36 +286,33 @@ for (;;) {
     });
   });
 
-  testOnPosix(
-    'stopRunningTools kills a running tool and what it started, and the run settles',
-    async () => {
-      const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
-      const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
-      // The tool's pid file is written last and moved into place whole, so it marks both as ready.
-      const run = runFakeTool({
-        name: 'xcrun',
-        body: `import { spawn } from 'node:child_process';
+  test('stopRunningTools kills a running tool and what it started, and the run settles', async () => {
+    const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
+    const grandchildPidFile = join(fixtureRoot.tempDir, 'grandchild.pid');
+    // The tool's pid file is written last and moved into place whole, so it marks both as ready.
+    const run = runFakeTool({
+      name: 'xcrun',
+      body: `import { spawn } from 'node:child_process';
 import { renameSync, writeFileSync } from 'node:fs';
 ${buildStartGrandchildBody(grandchildPidFile)}
 writeFileSync(${JSON.stringify(`${toolPidFile}.partial`)}, String(process.pid));
 renameSync(${JSON.stringify(`${toolPidFile}.partial`)}, ${JSON.stringify(toolPidFile)});
 await Bun.sleep(60_000);`,
-        timeoutMs: 60_000,
-      });
+      timeoutMs: 60_000,
+    });
 
-      await waitUntilPresent(toolPidFile);
-      stopRunningTools();
+    await waitUntilPresent(toolPidFile);
+    stopRunningTools();
 
-      const result = await run;
+    const result = await run;
 
-      expect(result).toMatchObject({
-        kind: 'failed',
-        failure: { reason: 'endedBySignal', signal: 'SIGKILL' },
-      });
-      expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
-      expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
-    },
-  );
+    expect(result).toMatchObject({
+      kind: 'failed',
+      failure: buildExpectedStopFailure({ platformName: process.platform }),
+    });
+    expect(await waitUntilProcessGone(await loadPid(toolPidFile))).toBe(true);
+    expect(await waitUntilProcessGone(await loadPid(grandchildPidFile))).toBe(true);
+  });
 
   test('puts the leading argument of dart before the arguments', async () => {
     const result = await runFakeTool({
@@ -314,6 +350,7 @@ await Bun.sleep(60_000);`,
       homeDir: fixtureRoot.homeDir,
       tempDir: fixtureRoot.tempDir,
       timeoutMs: 5_000,
+      processes: hostPlatform.tools.processes,
     });
 
     expect(result.kind).toBe('failed');

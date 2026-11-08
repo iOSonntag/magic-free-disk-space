@@ -7,7 +7,9 @@ export const moduleBoundary = {
   exposes: [
     'buildEnvironment.ts',
     'checkEnvironmentRoots.ts',
+    'environmentLocation.ts',
     'environmentPlatform.ts',
     'findTargetRefusal.ts',
+    'loadEnvironmentRealPath.ts',
   ],
 } satisfies ModuleBoundary;

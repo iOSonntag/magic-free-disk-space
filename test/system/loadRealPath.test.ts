@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { realpath, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadRealPath } from '../../src/system/loadRealPath.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -11,7 +10,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
-describeAwaitingWin32Platform('loadRealPath', () => {
+describe('loadRealPath', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

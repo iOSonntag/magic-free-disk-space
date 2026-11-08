@@ -10,7 +10,7 @@ import {
   startExploreProbeScan,
   startExploreProbes,
 } from '../../src/explore/startExploreProbes.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -20,7 +20,8 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
   buildDartGcDryRunText,
@@ -133,7 +134,7 @@ function buildProbeScan(params: Partial<ExploreProbeStart>): ExploreProbeScan {
   return startExploreProbeScan(buildProbeStart(params));
 }
 
-describeAwaitingWin32Platform('startExploreProbes', () => {
+describeWithFakeTools('startExploreProbes', () => {
   test('finds the units of every tool with the activity of each, all judged', async () => {
     const tools = await createWorkingTools();
 
@@ -173,7 +174,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
     const probes = startExploreProbes(
       buildProbeStart({
         toolInstallLocations: buildFixtureToolLocations(tools),
-        processCommands: Promise.resolve(null),
+        runningProcesses: Promise.resolve(null),
       }),
     );
 
@@ -191,12 +192,12 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
 
   test('runs no tool before the processes are read', async () => {
     const tools = await createWorkingTools();
-    const processCommands = Promise.withResolvers<string[] | null>();
+    const runningProcesses = Promise.withResolvers<RunningProcesses | null>();
 
     const probes = startExploreProbes(
       buildProbeStart({
         toolInstallLocations: buildFixtureToolLocations(tools),
-        processCommands: processCommands.promise,
+        runningProcesses: runningProcesses.promise,
       }),
     );
 
@@ -206,7 +207,7 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       expect(await isPresent(buildMarkerPath({ name: name }))).toBe(false);
     }
 
-    processCommands.resolve([]);
+    runningProcesses.resolve(buildRunningCommandLines([]));
 
     expect((await probes.outcomes.simulatorDevices).kind).toBe('probed');
     expect((await probes.outcomes.dartPubCache).kind).toBe('probed');
@@ -380,7 +381,13 @@ describeAwaitingWin32Platform('startExploreProbes', () => {
       setTimeout(resolve, timeoutMs + EXPLORE_PROBE_DEADLINE_GRACE_MS + 200);
     });
     const pinnedProjectPins = buildTestProjectPins({
-      files: [buildTestPinFileText({ path: '/work/app/.nvmrc', kind: 'nvmrc', text: '22\n' })],
+      files: [
+        buildTestPinFileText({
+          path: buildTestAbsolutePath({ text: '/work/app/.nvmrc' }),
+          kind: 'nvmrc',
+          text: '22\n',
+        }),
+      ],
     });
     const builtProjectPins: ProjectPins[] = [];
 

@@ -1,9 +1,14 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import {
+  buildAndroidEmulatorFindings,
+  buildAndroidSystemImageFindings,
+} from '../../src/explore/android/buildAndroidFindings.js';
 import { compareAndroidAvdUnit } from '../../src/explore/android/compareAndroidAvdUnit.js';
 import { compareAndroidPathUnit } from '../../src/explore/android/compareAndroidPathUnit.js';
+import { decideAndroidSystemImageOffers } from '../../src/explore/android/decideAndroidPackageOffers.js';
 import {
   loadAndroidAvdFindings,
   loadAndroidEmulatorFindings,
@@ -15,21 +20,26 @@ import type {
   AndroidAvdPresent,
   AndroidSdkState,
 } from '../../src/explore/android/loadAndroidSdkState.js';
-import { loadAndroidSdkState } from '../../src/explore/android/loadAndroidSdkState.js';
+import {
+  loadAndroidSdkState,
+  parseAndroidImageSysdir,
+} from '../../src/explore/android/loadAndroidSdkState.js';
 import { parseAndroidIniText } from '../../src/explore/android/parseAndroidIniText.js';
 import { parseAndroidPackagePath } from '../../src/explore/android/parseAndroidPackagePath.js';
 import { recheckAndroidAvdUnit } from '../../src/explore/android/recheckAndroidAvdUnit.js';
+import type { UnitComparison } from '../../src/explore/decideComparisonActivity.js';
 import type {
   ExploreFinding,
   ExplorePathUnitAndroidEmulator,
+  ExplorePathUnitAndroidPackage,
   ExplorePathUnitAndroidSystemImage,
   ExploreProbeFindings,
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
+import { formatHomeRelativePath } from '../../src/path/formatHomeRelativePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -37,10 +47,15 @@ import {
   loadTestEnvironment,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath, buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
+import {
+  buildTestAbsolutePath,
+  buildTestAndroidAvdName,
+  buildTestWindowsPath,
+} from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun, getProbeFindings, getUnitOfKind } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   ANDROID_EMULATOR_PROCESS_COMMAND,
   ANDROID_OLD_USE_MS,
@@ -64,27 +79,25 @@ const NOT_JUDGED: ExploreProbeFindings = { findings: [], isComplete: false };
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
-let homeDir: AbsolutePath;
 let sdkRoot: AbsolutePath;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  homeDir = environment.homeDir;
-  sdkRoot = buildAndroidSdkRoot({ homeDir: homeDir });
+  sdkRoot = buildAndroidSdkRoot({ folders: environment });
 });
 
 afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** The load of the Android state below the fixture home, at the SDK root of macOS. */
+/** The load of the Android state below the fixture home, at the SDK root of the host. */
 function buildStateLoad(): Parameters<typeof loadAndroidSdkState>[0] {
   const platform = buildTestProbePlatform();
 
   return {
-    pathRules: DARWIN_PATH_RULES,
-    homeDir: homeDir,
+    pathRules: environment.pathRules,
+    homeDir: environment.homeDir,
     sdkRoots: buildSdkRoots(),
     privacyDenialCode: platform.privacyDenialCode,
   };
@@ -102,11 +115,11 @@ type AndroidProbeAnswers = {
 };
 
 async function loadAndroidProbeAnswers(
-  processCommands: string[] | null = [],
+  commandLines: string[] | null = [],
 ): Promise<AndroidProbeAnswers> {
   const run = buildTestProbeRun({
     environment: environment,
-    processCommands: processCommands,
+    runningProcesses: buildRunningCommandLines(commandLines),
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
   });
 
@@ -127,13 +140,13 @@ function listUnits(findings: ExploreProbeFindings): ExploreFinding['unit'][] {
   return findings.findings.map((finding) => finding.unit);
 }
 
-function buildRecheckRun(processCommands: string[] | null) {
+function buildRecheckRun(commandLines: string[] | null) {
   return {
     tool: tool,
     environment: environment,
     platform: buildTestProbePlatform(),
     deadlineMs: Date.now() + 10_000,
-    processCommands: processCommands,
+    runningProcesses: buildRunningCommandLines(commandLines),
   };
 }
 
@@ -147,7 +160,7 @@ async function loadFreshState() {
   return state.value;
 }
 
-describeAwaitingWin32Platform('parseAndroidIniText and parseAndroidPackagePath', () => {
+describe('parseAndroidIniText and parseAndroidPackagePath', () => {
   test('reads keys with and without spaces around the equals sign', () => {
     const values = parseAndroidIniText({ text: 'path=/a/b.avd\nhw.cpu.arch = arm64\nno line\n' });
 
@@ -168,7 +181,122 @@ describeAwaitingWin32Platform('parseAndroidIniText and parseAndroidPackagePath',
   });
 });
 
-describeAwaitingWin32Platform('the Android probes without an SDK', () => {
+describe('parseAndroidImageSysdir', () => {
+  test('keeps the sysdir as written on macOS, and null for an empty one', () => {
+    expect(
+      parseAndroidImageSysdir({
+        pathRules: POSIX_PATH_RULES,
+        text: 'system-images/android-35/google_apis/arm64-v8a/',
+      }),
+    ).toBe('system-images/android-35/google_apis/arm64-v8a/');
+    expect(parseAndroidImageSysdir({ pathRules: POSIX_PATH_RULES, text: '' })).toBeNull();
+  });
+
+  test('separates the names by either separator on Windows, and joins them by a backslash', () => {
+    for (const text of [
+      'system-images/android-35/google_apis/arm64-v8a/',
+      'system-images\\android-35\\google_apis\\arm64-v8a\\',
+      'system-images\\android-35/google_apis\\\\arm64-v8a',
+    ]) {
+      expect(parseAndroidImageSysdir({ pathRules: WIN32_PATH_RULES, text: text })).toBe(
+        'system-images\\android-35\\google_apis\\arm64-v8a',
+      );
+    }
+  });
+
+  test('is null on Windows for a sysdir with no name', () => {
+    for (const text of ['', '/', '\\\\']) {
+      expect(parseAndroidImageSysdir({ pathRules: WIN32_PATH_RULES, text: text })).toBeNull();
+    }
+  });
+});
+
+describe('decideAndroidSystemImageOffers', () => {
+  test('keeps an image whose folder an AVD names in another case on Windows', () => {
+    const windowsSdkRoot = buildTestWindowsPath({
+      text: 'C:\\Users\\tester\\AppData\\Local\\Android\\Sdk',
+    });
+    const avd: AndroidAvdPresent = {
+      kind: 'present',
+      iniPath: buildTestWindowsPath({ text: 'C:\\Users\\tester\\.android\\avd\\Pixel.ini' }),
+      name: buildTestAndroidAvdName({ text: 'Pixel' }),
+      avdPath: buildTestWindowsPath({ text: 'C:\\Users\\tester\\.android\\avd\\Pixel.avd' }),
+      imageSysdir: parseAndroidImageSysdir({
+        pathRules: WIN32_PATH_RULES,
+        text: 'System-Images\\android-35\\Google_APIs\\x86_64\\',
+      }),
+      lastUsedAtMs: ANDROID_OLD_USE_MS,
+    };
+    const state: AndroidSdkState = {
+      pathRules: WIN32_PATH_RULES,
+      sdks: [
+        {
+          sdkRoot: windowsSdkRoot,
+          systemImages: [
+            {
+              kind: 'parsed',
+              folderPath: buildTestWindowsPath({
+                text: `${windowsSdkRoot}\\system-images\\android-35\\google_apis\\x86_64`,
+              }),
+              packagePath: 'system-images;android-35;google_apis;x86_64',
+            },
+          ],
+          emulator: null,
+        },
+      ],
+      avds: [avd],
+    };
+
+    expect(decideAndroidSystemImageOffers(state)).toEqual({ offers: [], isComplete: true });
+  });
+});
+
+describe('the texts of the Android package findings', () => {
+  const avdHomeCases = [
+    {
+      pathRules: POSIX_PATH_RULES,
+      homeDir: buildTestAbsolutePath({ text: '/Users/tester' }),
+      avdHomeText: '~/.android/avd',
+    },
+    {
+      pathRules: WIN32_PATH_RULES,
+      homeDir: buildTestWindowsPath({ text: 'C:\\Users\\tester' }),
+      avdHomeText: '~\\.android\\avd',
+    },
+  ];
+
+  for (const avdHomeCase of avdHomeCases) {
+    test(`name the folder of the AVDs as ${avdHomeCase.avdHomeText}`, () => {
+      const packageFindingsInput = {
+        pathRules: avdHomeCase.pathRules,
+        homeDir: avdHomeCase.homeDir,
+        offers: {
+          offers: [
+            {
+              sdkRoot: avdHomeCase.homeDir,
+              folderPath: avdHomeCase.homeDir,
+              packagePath: 'emulator',
+            },
+          ],
+          isComplete: true,
+        },
+        runningProcesses: buildRunningCommandLines([]),
+      };
+      const [image] = buildAndroidSystemImageFindings(packageFindingsInput).findings;
+      const [emulator] = buildAndroidEmulatorFindings(packageFindingsInput).findings;
+
+      expect(image?.explanation).toBe(
+        `A system image of the Android SDK that no AVD in ${avdHomeCase.avdHomeText} uses. AVDs moved elsewhere, such as by \`ANDROID_AVD_HOME\`, are not seen here. A deleted image downloads again when an AVD needs it.`,
+      );
+      expect(emulator?.explanation).toBe(
+        `The Android emulator of the SDK, which only runs AVDs, while ${avdHomeCase.avdHomeText} holds none. AVDs moved elsewhere, such as by \`ANDROID_AVD_HOME\`, are not seen here. A deleted emulator downloads again when an AVD needs it.`,
+      );
+      expect(emulator?.evidenceLines[0]).toBe(`No AVD exists in ${avdHomeCase.avdHomeText}.`);
+    });
+  }
+});
+
+describe('the Android probes without an SDK', () => {
   test('judge nothing to offer without the SDK and without ~/.android/avd', async () => {
     expect(await loadAndroidProbeAnswers()).toEqual({
       avds: JUDGED_EMPTY,
@@ -179,7 +307,7 @@ describeAwaitingWin32Platform('the Android probes without an SDK', () => {
 
   test('leave the AVD probe not judged while ~/.android/avd holds an ini', async () => {
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -193,14 +321,14 @@ describeAwaitingWin32Platform('the Android probes without an SDK', () => {
   });
 });
 
-describeAwaitingWin32Platform('the Android probes with an SDK', () => {
+describe('the Android probes with an SDK', () => {
   test('without ~/.android/avd judge the AVDs empty and hold back images and the emulator', async () => {
     await writeAndroidSystemImage({
       sdkRoot: sdkRoot,
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
 
     expect(await loadAndroidProbeAnswers()).toEqual({
       avds: JUDGED_EMPTY,
@@ -215,8 +343,8 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    const emulatorPath = await writeAndroidEmulator({ homeDir: homeDir });
-    await createAndroidAvdHome({ homeDir: homeDir });
+    const emulatorPath = await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
 
     const answers = await loadAndroidProbeAnswers();
 
@@ -244,7 +372,13 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     ]);
     expect(emulator?.risk).toBe('review');
     expect(emulator?.title).toBe('Android emulator package');
-    expect(emulator?.evidenceLines[0]).toBe('No AVD exists in ~/.android/avd.');
+    const avdHomeText = formatHomeRelativePath({
+      rules: environment.pathRules,
+      path: buildAndroidAvdHome({ home: environment }),
+      homeDir: environment.homeDir,
+    });
+
+    expect(emulator?.evidenceLines[0]).toBe(`No AVD exists in ${avdHomeText}.`);
     expect(image?.regeneration).toBe(
       'The SDK Manager of Android Studio installs it again, as does `sdkmanager "system-images;android-35;google_apis;arm64-v8a"`.',
     );
@@ -269,15 +403,15 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
       platform: 'android-34',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     const old = await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel_Old',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
     });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel_Recent',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -305,9 +439,14 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     expect(answers.avds.findings[0]?.title).toBe('Android emulator Pixel_Old');
     expect(answers.avds.findings[0]?.risk).toBe('careful');
     expect(answers.avds.findings[0]?.displayPath).toBe(old.avdPath);
+    const imageSysdir = parseAndroidImageSysdir({
+      pathRules: environment.pathRules,
+      text: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
+    });
+
     expect(answers.avds.findings[0]?.evidenceLines).toEqual([
       'Last used on 2020-09-13, by the dates of its emulator files.',
-      'It runs the system image system-images/android-35/google_apis/arm64-v8a/.',
+      `It runs the system image ${imageSysdir}.`,
     ]);
     expect(answers.systemImages).toEqual({
       findings: [expect.objectContaining({ displayPath: unusedImagePath })],
@@ -323,7 +462,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-34', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -347,7 +486,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
     await mkdir(unparsablePath, { recursive: true });
     await writeFile(join(unparsablePath, 'package.xml'), '<repository/>');
     await mkdir(join(sdkRoot, 'system-images', 'a', 'b', 'c'), { recursive: true });
-    await createAndroidAvdHome({ homeDir: homeDir });
+    await createAndroidAvdHome({ home: environment });
 
     const answers = await loadAndroidProbeAnswers();
 
@@ -360,14 +499,14 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   test('read an image folder whose package.xml is no file as not judged', async () => {
     const folderPath = join(sdkRoot, 'system-images', 'x', 'y', 'z');
     await mkdir(join(folderPath, 'package.xml'), { recursive: true });
-    await createAndroidAvdHome({ homeDir: homeDir });
+    await createAndroidAvdHome({ home: environment });
 
     expect((await loadAndroidProbeAnswers()).systemImages).toEqual(NOT_JUDGED);
   });
 
   test('leave the emulator not judged when its package.xml does not parse, and absent without it', async () => {
-    const emulatorPath = await writeAndroidEmulator({ homeDir: homeDir });
-    await createAndroidAvdHome({ homeDir: homeDir });
+    const emulatorPath = await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
     await writeFile(join(emulatorPath, 'package.xml'), 'garbage');
 
     expect((await loadAndroidProbeAnswers()).emulator).toEqual(NOT_JUDGED);
@@ -383,10 +522,10 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ homeDir: homeDir });
-    await createAndroidAvdHome({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
     await writeFile(
-      join(buildAndroidAvdHome({ homeDir: homeDir }), 'Pixel.ini'),
+      join(buildAndroidAvdHome({ home: environment }), 'Pixel.ini'),
       'target=android-35\n',
     );
 
@@ -398,8 +537,10 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose ini is no file not judged', async () => {
-    await writeAndroidEmulator({ homeDir: homeDir });
-    await mkdir(join(buildAndroidAvdHome({ homeDir: homeDir }), 'Pixel.ini'), { recursive: true });
+    await writeAndroidEmulator({ folders: environment });
+    await mkdir(join(buildAndroidAvdHome({ home: environment }), 'Pixel.ini'), {
+      recursive: true,
+    });
 
     expect(await loadAndroidProbeAnswers()).toEqual({
       avds: NOT_JUDGED,
@@ -415,7 +556,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     const avd = await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-34', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -436,7 +577,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -455,7 +596,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
       abi: 'arm64-v8a',
     });
     const avd = await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -469,9 +610,9 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD with none of its last-use files not judged', async () => {
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     const avd = await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -483,9 +624,9 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose name could start an option not judged, with no unit', async () => {
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: '-rf',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -498,9 +639,9 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose config.ini names no image not judged, with no unit', async () => {
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -510,9 +651,9 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   test('leave an AVD whose ini names a folder not named *.avd not judged, though its config.ini names an image', async () => {
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Old',
       folderName: 'notes',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
@@ -523,9 +664,9 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 
   testOnPosix('fail with fileUnreadable on a denied read, naming the file', async () => {
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     const avd = await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: null,
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -552,7 +693,7 @@ describeAwaitingWin32Platform('the Android probes with an SDK', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
+describe('compareAndroidAvdUnit', () => {
   function buildAvdUnit(): ExploreToolUnitAndroidAvd {
     return {
       kind: 'androidAvd',
@@ -582,27 +723,41 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     avds: AndroidAvd[] | null;
   }): AndroidSdkState {
     return {
+      pathRules: POSIX_PATH_RULES,
       sdks: [{ sdkRoot: params.unit.sdkRoot, systemImages: [], emulator: null }],
       avds: params.avds,
     };
+  }
+
+  /** The comparison while no process runs. */
+  function compareIdleAvd(params: {
+    unit: ExploreToolUnitAndroidAvd;
+    state: AndroidSdkState;
+  }): UnitComparison {
+    return compareAndroidAvdUnit({
+      unit: params.unit,
+      state: params.state,
+      runningProcesses: buildRunningCommandLines([]),
+    });
   }
 
   test('answers unchanged while the AVD is listed in its SDK at the same paths, name, and last use', () => {
     const unit = buildAvdUnit();
     const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-      kind: 'unchanged',
-    });
+    expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'unchanged' });
   });
 
   test('answers busy while an emulator runs, and without processes', () => {
     const unit = buildAvdUnit();
     const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
 
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
+      null,
+    ]) {
       expect(
-        compareAndroidAvdUnit({ unit: unit, state: state, processCommands: processCommands }),
+        compareAndroidAvdUnit({ unit: unit, state: state, runningProcesses: runningProcesses }),
       ).toEqual({ kind: 'busy' });
     }
   });
@@ -612,9 +767,7 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     const usedAgain = { ...buildListedAvd({ unit: unit }), lastUsedAtMs: ANDROID_RECENT_USE_MS };
     const state = buildAvdState({ unit: unit, avds: [usedAgain] });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-      kind: 'changed',
-    });
+    expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'changed' });
   });
 
   test('answers changed once no AVD lists it, or ~/.android/avd is absent', () => {
@@ -623,9 +776,7 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     for (const avds of [[], null]) {
       const state = buildAvdState({ unit: unit, avds: avds });
 
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'changed',
-      });
+      expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'changed' });
     }
   });
 
@@ -642,9 +793,7 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     for (const avd of [missing, unlocated]) {
       const state = buildAvdState({ unit: unit, avds: [avd] });
 
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'changed',
-      });
+      expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'changed' });
     }
   });
 
@@ -662,9 +811,7 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     for (const avd of differingAvds) {
       const state = buildAvdState({ unit: unit, avds: [avd] });
 
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'changed',
-      });
+      expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'changed' });
     }
   });
 
@@ -675,9 +822,7 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
       avds: [{ ...buildListedAvd({ unit: unit }), imageSysdir: null }],
     });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-      kind: 'changed',
-    });
+    expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'changed' });
   });
 
   test('answers changed for a folder not named *.avd, though its config.ini names an image', () => {
@@ -685,9 +830,7 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     const unit = { ...buildAvdUnit(), avdPath: notesPath };
     const state = buildAvdState({ unit: unit, avds: [buildListedAvd({ unit: unit })] });
 
-    expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-      kind: 'changed',
-    });
+    expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'changed' });
   });
 
   test('answers changed without the SDK, or with the AVD in another SDK root', () => {
@@ -695,23 +838,25 @@ describeAwaitingWin32Platform('compareAndroidAvdUnit', () => {
     const avds = [buildListedAvd({ unit: unit })];
     const otherSdkRoot = buildTestAbsolutePath({ text: '/Users/example/Other/sdk' });
     const states: AndroidSdkState[] = [
-      { sdks: [], avds: avds },
-      { sdks: [{ sdkRoot: otherSdkRoot, systemImages: [], emulator: null }], avds: avds },
+      { pathRules: POSIX_PATH_RULES, sdks: [], avds: avds },
+      {
+        pathRules: POSIX_PATH_RULES,
+        sdks: [{ sdkRoot: otherSdkRoot, systemImages: [], emulator: null }],
+        avds: avds,
+      },
     ];
 
     for (const state of states) {
-      expect(compareAndroidAvdUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'changed',
-      });
+      expect(compareIdleAvd({ unit: unit, state: state })).toEqual({ kind: 'changed' });
     }
   });
 });
 
-describeAwaitingWin32Platform('recheckAndroidAvdUnit', () => {
+describe('recheckAndroidAvdUnit', () => {
   async function createOfferedAvd(): Promise<ExploreToolUnitAndroidAvd> {
-    await writeAndroidEmulator({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_OLD_USE_MS,
@@ -731,9 +876,9 @@ describeAwaitingWin32Platform('recheckAndroidAvdUnit', () => {
   test('answers busy while an emulator runs, and without processes', async () => {
     const unit = await createOfferedAvd();
 
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const commandLines of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
       expect(
-        await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun(processCommands) }),
+        await recheckAndroidAvdUnit({ unit: unit, run: buildRecheckRun(commandLines) }),
       ).toEqual({ kind: 'busy' });
     }
   });
@@ -749,7 +894,7 @@ describeAwaitingWin32Platform('recheckAndroidAvdUnit', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
+describe('compareAndroidPathUnit', () => {
   async function createOfferedPackages(): Promise<{
     image: ExplorePathUnitAndroidSystemImage;
     emulator: ExplorePathUnitAndroidEmulator;
@@ -759,8 +904,8 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
       platform: 'android-35',
       abi: 'arm64-v8a',
     });
-    await writeAndroidEmulator({ homeDir: homeDir });
-    await createAndroidAvdHome({ homeDir: homeDir });
+    await writeAndroidEmulator({ folders: environment });
+    await createAndroidAvdHome({ home: environment });
     const answers = await loadAndroidProbeAnswers();
 
     return {
@@ -769,14 +914,24 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     };
   }
 
+  /** The comparison while no process runs. */
+  function compareIdlePathUnit(params: {
+    unit: ExplorePathUnitAndroidPackage;
+    state: AndroidSdkState;
+  }): UnitComparison {
+    return compareAndroidPathUnit({
+      unit: params.unit,
+      state: params.state,
+      runningProcesses: buildRunningCommandLines([]),
+    });
+  }
+
   test('answers unchanged while still no AVD names the image and no AVD exists', async () => {
     const units = await createOfferedPackages();
     const state = await loadFreshState();
 
     for (const unit of [units.image, units.emulator]) {
-      expect(compareAndroidPathUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'unchanged',
-      });
+      expect(compareIdlePathUnit({ unit: unit, state: state })).toEqual({ kind: 'unchanged' });
     }
   });
 
@@ -784,10 +939,13 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     const units = await createOfferedPackages();
     const state = await loadFreshState();
 
-    for (const processCommands of [[ANDROID_EMULATOR_PROCESS_COMMAND], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([ANDROID_EMULATOR_PROCESS_COMMAND]),
+      null,
+    ]) {
       for (const unit of [units.image, units.emulator]) {
         expect(
-          compareAndroidPathUnit({ unit: unit, state: state, processCommands: processCommands }),
+          compareAndroidPathUnit({ unit: unit, state: state, runningProcesses: runningProcesses }),
         ).toEqual({ kind: 'busy' });
       }
     }
@@ -796,7 +954,7 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
   test('answers changed once an AVD names the image, which also makes the emulator used', async () => {
     const units = await createOfferedPackages();
     await writeAndroidAvd({
-      homeDir: homeDir,
+      home: environment,
       name: 'Pixel',
       imageSysdir: buildAndroidImageSysdir({ platform: 'android-35', abi: 'arm64-v8a' }),
       lastUsedAtMs: ANDROID_RECENT_USE_MS,
@@ -804,9 +962,7 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     const state = await loadFreshState();
 
     for (const unit of [units.image, units.emulator]) {
-      expect(compareAndroidPathUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'changed',
-      });
+      expect(compareIdlePathUnit({ unit: unit, state: state })).toEqual({ kind: 'changed' });
     }
   });
 
@@ -817,9 +973,7 @@ describeAwaitingWin32Platform('compareAndroidPathUnit', () => {
     const state = await loadFreshState();
 
     for (const unit of [units.image, units.emulator]) {
-      expect(compareAndroidPathUnit({ unit: unit, state: state, processCommands: [] })).toEqual({
-        kind: 'changed',
-      });
+      expect(compareIdlePathUnit({ unit: unit, state: state })).toEqual({ kind: 'changed' });
     }
   });
 });

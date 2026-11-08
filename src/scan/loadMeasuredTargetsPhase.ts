@@ -3,8 +3,9 @@ import type { PathRules } from '../path/pathRules.js';
 import type { ConcurrencyLimit } from '../system/createConcurrencyLimit.js';
 import type { EntryReads } from '../system/entryReads.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
-import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import { loadPlacedFileIdentity } from '../system/loadPlacedFileIdentity.js';
 import { toNonEmpty } from '../system/nonEmptyList.js';
+import type { EvictedEntryRecorder } from '../system/walkDirectoryTree.js';
 import { buildFailureIssues } from './buildReadIssue.js';
 import type { CandidateDecision, RemovalTarget, TargetsMeasurement } from './candidate.js';
 import { loadPathMeasurement } from './loadPathMeasurement.js';
@@ -18,18 +19,18 @@ export type FoundTarget = { path: string };
 export type TargetsCarve = { pathRules: PathRules; carvedPaths: string[] };
 
 /**
- * Reads the identity of each found path, measures those that are there as one tally, and decides
- * with the measurement. A path that vanished is no target; when none is left, the phase adds
- * nothing. A path that cannot be read adds an issue and the phase no decision, since the offer
- * would not be whole. An offer holding another mounted volume becomes a skip. With a `carve`, a
- * target keeps its identity while the tally leaves out each carved subtree inside it.
+ * Reads each found path as `entryReads` place it, measures those that are there as one tally, and
+ * decides with it. A vanished path is no target, and the phase adds nothing when none is left. An
+ * unreadable path adds an issue and no decision; an offer with another mounted volume is skipped.
  */
 export function loadMeasuredTargetsPhase<TFound extends FoundTarget>(params: {
   found: [TFound, ...TFound[]];
+  /** The tally leaves out each carved subtree inside a target, which keeps its identity. */
   carve: TargetsCarve | null;
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
   decide: (measurement: TargetsMeasurement<TFound & RemovalTarget>) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {
@@ -37,7 +38,10 @@ export function loadMeasuredTargetsPhase<TFound extends FoundTarget>(params: {
     const reads = await Promise.all(
       params.found.map(async (found) => ({
         found: found,
-        identity: await loadFileIdentity({ path: found.path }),
+        identity: await loadPlacedFileIdentity({
+          path: found.path,
+          entryReads: params.entryReads,
+        }),
       })),
     );
     const issues = reads.flatMap((read) =>
@@ -74,6 +78,7 @@ export function loadMeasuredTargetsPhase<TFound extends FoundTarget>(params: {
           : await listUncarvedPaths({ paths: targetPaths, carve: params.carve }),
       deadlineMs: Date.now() + params.measureTimeoutMs,
       entryReads: params.entryReads,
+      recordEvictedEntry: params.recordEvictedEntry,
     });
 
     // No target could be read right after its identity was: each vanished or changed meanwhile.

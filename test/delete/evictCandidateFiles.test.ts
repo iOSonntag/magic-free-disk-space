@@ -1,4 +1,4 @@
-import { expect } from 'bun:test';
+import { describe, expect } from 'bun:test';
 import { readFile, realpath, rm, truncate, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RecordedRemoval } from '../../src/delete/deleteCandidates.js';
@@ -6,12 +6,12 @@ import { evictCandidateFiles } from '../../src/delete/evictCandidateFiles.js';
 import type { EvictTarget } from '../../src/scan/candidate.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { loadEntryAllocatedBytes } from '../support/entryReadsFixtures.js';
 import { buildTestEvictCandidate } from '../support/evictCandidateFixtures.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureFile, loadTestEnvironment, withFixtureRoot } from '../support/fixtureRoot.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
@@ -100,11 +100,12 @@ async function evictTestCandidateFiles(params: {
     candidate: candidate,
     removal: candidate.removal,
     environment: await loadTestEnvironment({ fixtureRoot: params.fixtureRoot, nowMs: NOW_MS }),
+    toolProcesses: hostPlatform.tools.processes,
     clock: () => NOW_MS,
   });
 }
 
-describeAwaitingWin32Platform('evictCandidateFiles with a fake brctl', () => {
+describe('evictCandidateFiles with a fake brctl', () => {
   testOnPosix('evicts each unchanged file by its own call and frees its blocks', async () => {
     await withFixtureRoot({
       run: async (fixtureRoot) => {

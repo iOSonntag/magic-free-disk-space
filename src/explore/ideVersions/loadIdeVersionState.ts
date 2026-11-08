@@ -1,3 +1,5 @@
+import type { EnvironmentFolders } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -38,8 +40,7 @@ export type IdeVersionFolder = IdeVersionFolderPlain | IdeVersionFolderSettings;
 
 /** Reads every version folder of every root, for the probe and the recheck of its units. */
 export async function loadIdeVersionState(params: {
-  pathRules: PathRules;
-  homeDir: AbsolutePath;
+  environment: EnvironmentFolders;
   roots: IdeVersionRoots;
   privacyDenialCode: string | null;
 }): Promise<Result<IdeVersionFolder[], ExploreFileUnreadable>> {
@@ -47,14 +48,10 @@ export async function loadIdeVersionState(params: {
   const kinds: (keyof IdeVersionRoots)[] = ['caches', 'logs', 'settings'];
 
   for (const kind of kinds) {
-    for (const rootNames of params.roots[kind]) {
+    for (const root of params.roots[kind]) {
       const rootFolders = await loadRootFolders({
-        pathRules: params.pathRules,
-        rootPath: joinAbsolutePath({
-          rules: params.pathRules,
-          parentPath: params.homeDir,
-          names: rootNames,
-        }),
+        pathRules: params.environment.pathRules,
+        rootPath: resolveEnvironmentLocation({ folders: params.environment, location: root }),
         kind: kind,
         privacyDenialCode: params.privacyDenialCode,
       });

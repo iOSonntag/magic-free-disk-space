@@ -1,6 +1,7 @@
 import type { FileHandle } from 'node:fs/promises';
-import { mkdir, open } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import type { OwnerOnlyModes } from '../environment/buildEnvironment.js';
 import type {
   ExploreEngineUnit,
   ExploreProbeFailure,
@@ -8,6 +9,7 @@ import type {
   ExploreToolUnit,
 } from '../explore/exploreUnit.js';
 import type { Result } from '../result.js';
+import { createDirectory } from '../system/createDirectory.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import type { RemovalOutcomeCodedKind } from './deleteCandidates.js';
 import type { ToolCandidateSkipReason } from './runToolCandidate.js';
@@ -30,6 +32,15 @@ export type JournalEntryOutcome = {
   path: string;
   outcome: RemovalOutcomeCodedKind;
   code: string | null;
+};
+
+/** The target of a deleted item is gone but for `stayedEntryCount` entries, after the deletion. */
+export type JournalEntryOutcomePartlyRemoved = {
+  kind: 'outcome';
+  atMs: number;
+  path: string;
+  outcome: 'partlyRemoved';
+  stayedEntryCount: number;
 };
 
 /** Before the files of a folder are evicted; their copies stay with the cloud. */
@@ -123,6 +134,7 @@ export type JournalEntry =
   | JournalEntrySessionStart
   | JournalEntryIntent
   | JournalEntryOutcome
+  | JournalEntryOutcomePartlyRemoved
   | JournalEntryToolIntent
   | JournalEntryToolOutcomeRemoved
   | JournalEntryToolOutcomeSkipped
@@ -145,19 +157,28 @@ export type DeletionJournal = {
   append(params: { entry: JournalEntry }): Promise<Result<null, JournalFailure>>;
 };
 
-/** Creates the log folder and writes the session start, so a journal that cannot record fails here. */
+/**
+ * Creates the log folder and writes the session start, so a journal that cannot record fails here.
+ * Creates the folder and the log with `ownerOnlyModes`, or with the system's defaults for `null`.
+ */
 export async function createDeletionJournal(params: {
   logPath: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
   nowMs: number;
 }): Promise<Result<DeletionJournal, JournalFailure>> {
-  const directoryCreated = await createJournalDirectory({ path: dirname(params.logPath) });
+  const directoryCreated = await createJournalDirectory({
+    path: dirname(params.logPath),
+    ownerOnlyModes: params.ownerOnlyModes,
+  });
 
   if (directoryCreated.kind === 'failed') {
     return directoryCreated;
   }
 
+  const fileMode = params.ownerOnlyModes?.fileMode ?? null;
   const sessionStarted = await appendJournalEntry({
     logPath: params.logPath,
+    fileMode: fileMode,
     entry: { kind: 'sessionStart', atMs: params.nowMs },
   });
 
@@ -170,7 +191,11 @@ export async function createDeletionJournal(params: {
     value: {
       logPath: params.logPath,
       append: (appendParams) =>
-        appendJournalEntry({ logPath: params.logPath, entry: appendParams.entry }),
+        appendJournalEntry({
+          logPath: params.logPath,
+          fileMode: fileMode,
+          entry: appendParams.entry,
+        }),
     },
   };
 }
@@ -181,24 +206,33 @@ export function formatJournalLine(params: { entry: JournalEntry }): string {
 
 async function createJournalDirectory(params: {
   path: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
 }): Promise<Result<null, JournalFailure>> {
-  try {
-    await mkdir(params.path, { recursive: true, mode: 0o700 });
+  const directoryCreated = await createDirectory({
+    path: params.path,
+    ownerOnlyModes: params.ownerOnlyModes,
+  });
 
-    return { kind: 'succeeded', value: null };
-  } catch (error) {
+  if (directoryCreated.kind === 'failed') {
     return {
       kind: 'failed',
-      failure: { reason: 'directoryUnavailable', path: params.path, code: getErrorCode(error) },
+      failure: {
+        reason: 'directoryUnavailable',
+        path: params.path,
+        code: directoryCreated.failure.code,
+      },
     };
   }
+
+  return directoryCreated;
 }
 
 async function appendJournalEntry(params: {
   logPath: string;
+  fileMode: number | null;
   entry: JournalEntry;
 }): Promise<Result<null, JournalFailure>> {
-  const opened = await openJournalFile({ logPath: params.logPath });
+  const opened = await openJournalFile({ logPath: params.logPath, fileMode: params.fileMode });
 
   if (opened.kind === 'failed') {
     return opened;
@@ -211,11 +245,13 @@ async function appendJournalEntry(params: {
   });
 }
 
+/** `fileMode` `null` creates the log with the system's default. */
 async function openJournalFile(params: {
   logPath: string;
+  fileMode: number | null;
 }): Promise<Result<FileHandle, JournalFailure>> {
   try {
-    const handle = await open(params.logPath, 'a', 0o600);
+    const handle = await open(params.logPath, 'a', params.fileMode ?? undefined);
 
     return { kind: 'succeeded', value: handle };
   } catch (error) {

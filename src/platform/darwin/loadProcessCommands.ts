@@ -2,10 +2,11 @@ import type { Result } from '../../result.js';
 import type { CommandFailure } from '../../system/loadCommandOutput.js';
 import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import { parseProcessCommandLines } from '../../system/parseProcessCommandLines.js';
+import type { RunningProcessesCommandLines } from '../../system/systemPlatform.js';
 
 export async function loadProcessCommands(params: {
   commandTimeoutMs: number;
-}): Promise<Result<string[], CommandFailure>> {
+}): Promise<Result<RunningProcessesCommandLines, CommandFailure>> {
   const outputResult = await loadCommandOutput({
     command: 'ps',
     args: ['-axww', '-o', 'command='],
@@ -18,5 +19,5 @@ export async function loadProcessCommands(params: {
 
   const commandLines = parseProcessCommandLines({ stdoutText: outputResult.value });
 
-  return { kind: 'succeeded', value: commandLines };
+  return { kind: 'succeeded', value: { kind: 'commandLines', commandLines: commandLines } };
 }

@@ -1,43 +1,86 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoots.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
-import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
+import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import type { UserIdentity } from '../../src/system/userIdentity.js';
+import {
+  buildTestUserIdentity,
+  buildTestWindowsUser,
+  exampleWindowsUser,
+} from '../support/parsedValueFixtures.js';
 
-const USER_ID = 501;
+const user = buildTestUserIdentity({ uid: 501 });
 const HOME = '/Users/tester';
 const TEMP = '/private/var/folders/xy/abc/T';
 
+const WINDOWS_HOME = 'C:\\Users\\tester';
+const WINDOWS_TEMP = 'C:\\Users\\tester\\AppData\\Local\\Temp';
+const WINDOWS_DOCUMENTS = 'D:\\Documents';
+const windowsProtectedRealPaths = [
+  'C:\\',
+  'D:\\',
+  WINDOWS_HOME,
+  'C:\\Users\\tester\\AppData\\Local',
+  WINDOWS_DOCUMENTS,
+];
+
 function check(params: {
-  userId?: number;
+  user?: UserIdentity;
   homeRealPath?: string;
-  homeOwnerId?: number;
+  homeOwner?: UserIdentity;
   tempRealPath?: string;
-}) {
+}): EnvironmentFailure | null {
   return checkEnvironmentRoots({
-    pathRules: DARWIN_PATH_RULES,
-    user: buildTestUserIdentity({ uid: params.userId ?? USER_ID }),
+    pathRules: POSIX_PATH_RULES,
+    user: params.user ?? user,
     homeRealPath: params.homeRealPath ?? HOME,
-    homeOwnerId: params.homeOwnerId ?? USER_ID,
+    homeOwner: params.homeOwner ?? user,
     tempRealPath: params.tempRealPath ?? TEMP,
+    tempPlacement: 'apartFromHome',
+    protectedRealPaths: [],
   });
 }
 
-describeAwaitingWin32Platform('checkEnvironmentRoots', () => {
+/**
+ * The check on the protected folders as an environment lists them: with the entry the temporary
+ * folder adds for itself.
+ */
+function checkOnWindows(params: {
+  homeOwner?: UserIdentity;
+  tempRealPath?: string;
+}): EnvironmentFailure | null {
+  const tempRealPath = params.tempRealPath ?? WINDOWS_TEMP;
+
+  return checkEnvironmentRoots({
+    pathRules: WIN32_PATH_RULES,
+    user: exampleWindowsUser,
+    homeRealPath: WINDOWS_HOME,
+    homeOwner: params.homeOwner ?? exampleWindowsUser,
+    tempRealPath: tempRealPath,
+    tempPlacement: 'belowHome',
+    protectedRealPaths: [...windowsProtectedRealPaths, tempRealPath],
+  });
+}
+
+describe('checkEnvironmentRoots', () => {
   test('accepts an own home and the per-user temporary folder', () => {
     expect(check({})).toBeNull();
   });
 
   test('refuses root', () => {
-    expect(check({ userId: 0, homeOwnerId: 0 })).toEqual({ reason: 'runAsRoot' });
+    const root = buildTestUserIdentity({ uid: 0 });
+
+    expect(check({ user: root, homeOwner: root })).toEqual({ reason: 'runAsRoot' });
   });
 
   test('refuses a home folder that belongs to someone else, such as the disk root', () => {
-    expect(check({ homeRealPath: '/', homeOwnerId: 0 })).toEqual({
+    expect(check({ homeRealPath: '/', homeOwner: buildTestUserIdentity({ uid: 0 }) })).toEqual({
       reason: 'homeNotOwned',
       path: '/',
     });
-    expect(check({ homeRealPath: '/Users/other', homeOwnerId: 502 })).toEqual({
+    expect(
+      check({ homeRealPath: '/Users/other', homeOwner: buildTestUserIdentity({ uid: 502 }) }),
+    ).toEqual({
       reason: 'homeNotOwned',
       path: '/Users/other',
     });
@@ -54,5 +97,53 @@ describeAwaitingWin32Platform('checkEnvironmentRoots', () => {
 
   test('accepts a temporary folder whose name only starts like the home', () => {
     expect(check({ tempRealPath: '/Users/tester-tmp' })).toBeNull();
+  });
+});
+
+describe('checkEnvironmentRoots on Windows', () => {
+  test('accepts an own profile and the temporary folder below its LocalAppData', () => {
+    expect(checkOnWindows({})).toBeNull();
+  });
+
+  test('refuses a profile that another account owns, such as the Administrators group', () => {
+    expect(
+      checkOnWindows({ homeOwner: buildTestWindowsUser({ sidText: 'S-1-5-32-544' }) }),
+    ).toEqual({ reason: 'profileNotOwned', path: WINDOWS_HOME });
+  });
+
+  test('refuses a temporary folder that is the profile or holds it, in any case', () => {
+    for (const tempRealPath of [WINDOWS_HOME, 'c:\\users\\TESTER', 'C:\\Users', 'C:\\']) {
+      expect(checkOnWindows({ tempRealPath: tempRealPath })).toEqual({
+        reason: 'tempOverlapsHome',
+        path: tempRealPath,
+      });
+    }
+  });
+
+  test('refuses a temporary folder that is a fixed drive root', () => {
+    expect(checkOnWindows({ tempRealPath: 'd:\\' })).toEqual({
+      reason: 'tempHoldsProtectedFolder',
+      path: 'd:\\',
+    });
+  });
+
+  test('refuses a temporary folder that is the root of a drive that is not fixed', () => {
+    expect(checkOnWindows({ tempRealPath: 'E:\\' })).toEqual({
+      reason: 'tempHoldsProtectedFolder',
+      path: 'E:\\',
+    });
+  });
+
+  test('refuses a temporary folder that is a protected folder or holds one', () => {
+    for (const tempRealPath of [WINDOWS_DOCUMENTS, 'd:\\documents', 'C:\\Users\\tester\\AppData']) {
+      expect(checkOnWindows({ tempRealPath: tempRealPath })).toEqual({
+        reason: 'tempHoldsProtectedFolder',
+        path: tempRealPath,
+      });
+    }
+  });
+
+  test('accepts a temporary folder below a protected folder', () => {
+    expect(checkOnWindows({ tempRealPath: 'D:\\Documents\\Temp' })).toBeNull();
   });
 });

@@ -1,9 +1,8 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { ExploreEngineUnitPlace, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import { formatExploreUnitKey } from '../../src/explore/formatExploreUnitKey.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestAbsolutePath,
   buildTestAndroidAvdName,
@@ -403,7 +402,7 @@ const ALL_UNIT_KEYS: { unit: ExploreUnit; key: string }[] = [
   ...NEIGHBOUR_UNIT_KEYS,
 ];
 
-describeAwaitingWin32Platform('formatExploreUnitKey', () => {
+describe('formatExploreUnitKey', () => {
   test('names a tool unit by what its tool knows it by, and a path unit by its folder', () => {
     expect(ALL_UNIT_KEYS.map((unitKey) => formatExploreUnitKey({ unit: unitKey.unit }))).toEqual(
       ALL_UNIT_KEYS.map((unitKey) => unitKey.key),

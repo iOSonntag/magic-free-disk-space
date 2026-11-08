@@ -1,19 +1,20 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { chmod, mkdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import type { BridgeEnd, BridgeEvent } from '../../src/bridge/runBridge.js';
 import { runBridge } from '../../src/bridge/runBridge.js';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
+import { formatHomeRelativePath } from '../../src/path/formatHomeRelativePath.js';
 import type { PreferencesSaveFailure } from '../../src/preferences/preferencesFile.js';
+import { formatDeletionWarningLines } from '../../src/report/formatDeletionConfirmation.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
 import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
 import type { VolumeSpace } from '../../src/system/volumeSpace.js';
 import type { LatestReleaseFetchResult } from '../../src/update/fetchLatestReleaseVersion.js';
 import type { ReleaseVersion } from '../../src/update/releaseVersion.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
@@ -24,9 +25,12 @@ import {
   createFixtureFile,
   createFixtureRoot,
   deleteFixtureRoot,
+  listFixturePathsBesideLog,
   loadTestEnvironment,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestPlatform } from '../support/platformFixtures.js';
+import { joinBelowHome } from '../support/parsedValueFixtures.js';
+import { buildTestPlatform, hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { loadProtocolFixtureEvents } from '../support/protocolFixture.js';
 
@@ -123,14 +127,11 @@ async function createSizedFile(params: { path: string; mib: number }): Promise<v
   await createFixtureFile({ path: params.path, sizeBytes: params.mib * MIB, modifiedMs: NOW_MS });
 }
 
-/** Every file and folder under the fixture root, except the log folder a deletion creates. */
 async function listFixturePaths(): Promise<string[]> {
-  const entries = await readdir(fixtureRoot.rootDir, { recursive: true });
-
-  return entries
-    .map((entry) => relative(fixtureRoot.rootDir, join(fixtureRoot.rootDir, entry)))
-    .filter((path) => !path.startsWith('home/Library/Logs'))
-    .toSorted();
+  return listFixturePathsBesideLog({
+    fixtureRoot: fixtureRoot,
+    deletionLogPath: environment.deletionLogPath,
+  });
 }
 
 /** The time of every entry of the deletion log, in the order written. */
@@ -388,10 +389,11 @@ function listRecordShapeMismatches(params: {
   );
 }
 
-describeAwaitingWin32Platform('runBridge', () => {
+describe('runBridge', () => {
   test('scans and answers with the view of the scan, numbered top to bottom', async () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
+    const toolCachePath = joinBelowHome({ home: environment, path: 'Library/Caches/ToolCache' });
 
     const progressEvents = events.flatMap((event) => (event.kind === 'progress' ? [event] : []));
 
@@ -433,12 +435,16 @@ describeAwaitingWin32Platform('runBridge', () => {
           items: [
             {
               number: 1,
-              key: `catalog:tool-cache:${environment.homeDir}/Library/Caches/ToolCache`,
+              key: `catalog:tool-cache:${toolCachePath}`,
               title: 'Tool cache',
               riskText: 'safe',
               sizeText: '4.2 MB',
               group: 'safe',
-              displayPath: '~/Library/Caches/ToolCache',
+              displayPath: formatHomeRelativePath({
+                rules: environment.pathRules,
+                path: toolCachePath,
+                homeDir: environment.homeDir,
+              }),
             },
           ],
           checkGroup: {
@@ -550,15 +556,12 @@ describeAwaitingWin32Platform('runBridge', () => {
       'deleted',
       'failed',
     ]);
-    const appCacheKey = `catalog:app-cache:${environment.homeDir}/Library/Caches/AppCache`;
+    const appCachePath = joinBelowHome({ home: environment, path: 'Library/Caches/AppCache' });
+    const appCacheKey = `catalog:app-cache:${appCachePath}`;
 
     expect(answers[1]).toMatchObject({
       planId: 1,
-      warningLines: [
-        'This cannot be undone: the items do not go to the Trash.',
-        'Type DELETE to delete them permanently.',
-        'Anything else cancels.',
-      ],
+      warningLines: formatDeletionWarningLines({ texts: hostPlatform.report }),
       items: [
         {
           number: 2,
@@ -716,7 +719,9 @@ describeAwaitingWin32Platform('runBridge', () => {
   });
 
   test('a log that cannot be created deletes nothing and keeps the scan', async () => {
-    await writeFile(join(fixtureRoot.homeDir, 'Library/Logs'), 'a file where the folder belongs');
+    const logFolderPath = dirname(environment.deletionLogPath);
+
+    await writeFixtureTextFile({ path: logFolderPath, text: 'a file where the folder belongs' });
 
     const before = await listFixturePaths();
     const { events } = await runBridgeWithLines({

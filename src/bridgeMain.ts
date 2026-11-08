@@ -3,9 +3,10 @@ import { runBridge } from './bridge/runBridge.js';
 import { darwinPlatform } from './platform/darwin/darwinPlatform.js';
 import type { Platform } from './platform/platform.js';
 import { parsePlatformId } from './platform/platform.js';
+import { win32Platform } from './platform/win32/win32Platform.js';
 import { loadPreferences, saveIsUpdateCheckEnabled } from './preferences/preferencesFile.js';
 import { formatUnsupportedPlatform } from './report/formatEnvironmentFailure.js';
-import { stopRunningToolsOnProcessEnd } from './tools/runToolCommand.js';
+import { runStoppingToolsOnProcessEnd } from './tools/runToolCommand.js';
 import { fetchLatestReleaseVersion } from './update/fetchLatestReleaseVersion.js';
 import { LATEST_RELEASE_API_URL, LATEST_RELEASE_FETCH_TIMEOUT_MS } from './update/githubRelease.js';
 import type { ReleaseVersion } from './update/releaseVersion.js';
@@ -46,14 +47,22 @@ async function main(): Promise<number> {
     case 'darwin':
       return runBridgeOnPlatform({ platform: darwinPlatform });
     case 'win32':
-      return refuseUnsupportedPlatform();
+      return runBridgeOnPlatform({ platform: win32Platform });
   }
 }
 
-/** Runs the bridge with the platform's slices, its tools stopped on every end of the process. */
-async function runBridgeOnPlatform(params: { platform: Platform }): Promise<number> {
-  stopRunningToolsOnProcessEnd({ processEndSignals: params.platform.tools.processEndSignals });
+/**
+ * Runs the bridge with the platform's slices, its tools stopped on every end of the process: once
+ * its input closed it ends, and no listener left keeps the process running.
+ */
+function runBridgeOnPlatform(params: { platform: Platform }): Promise<number> {
+  return runStoppingToolsOnProcessEnd({
+    processEndSignals: params.platform.tools.processEndSignals,
+    run: () => runBridgeToEnd({ platform: params.platform }),
+  });
+}
 
+async function runBridgeToEnd(params: { platform: Platform }): Promise<number> {
   const releaseVersion = getReleaseVersion();
   const end = await runBridge({
     io: createBridgeIo(),

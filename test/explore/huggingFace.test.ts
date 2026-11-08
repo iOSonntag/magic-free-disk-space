@@ -25,7 +25,6 @@ import { parseHuggingFaceRepoFolderName } from '../../src/explore/huggingFace/pa
 import { recheckHuggingFaceUnit } from '../../src/explore/huggingFace/recheckHuggingFaceUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -35,13 +34,16 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import type { TestProbeRunProcesses } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
   getProbeFindings,
   getUnitOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -91,10 +93,9 @@ async function withHubFixture(params: {
   });
 }
 
-async function loadFindings(params: {
-  environment: Environment;
-  processCommands?: string[] | null;
-}): Promise<ExploreProbeFindings> {
+async function loadFindings(
+  params: TestProbeRunProcesses & { environment: Environment },
+): Promise<ExploreProbeFindings> {
   return getProbeFindings(await loadHuggingFaceRepoFindings(buildTestProbeRun(params)));
 }
 
@@ -344,9 +345,13 @@ describe('compareHuggingFaceUnit', () => {
       ],
     });
 
-    expect(compareHuggingFaceUnit({ unit: unit, repo: repo, processCommands: [] })).toEqual({
-      kind: 'unchanged',
-    });
+    expect(
+      compareHuggingFaceUnit({
+        unit: unit,
+        repo: repo,
+        runningProcesses: buildRunningCommandLines([]),
+      }),
+    ).toEqual({ kind: 'unchanged' });
   });
 });
 
@@ -383,7 +388,7 @@ describe('buildHuggingFaceRepoFindings', () => {
           }),
         ],
         partialCutoffMs: NOW_MS - DAY_MS,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }).findings.map((finding) => finding.evidenceLines);
     }
 
@@ -407,7 +412,8 @@ describe('formatHuggingFaceRepoName', () => {
   });
 });
 
-describeAwaitingWin32Platform('loadHuggingFaceRepoFindings', () => {
+// A snapshot links its files to the blobs by symbolic links.
+describeOnPosix('loadHuggingFaceRepoFindings', () => {
   test('splits a repository into its current revisions, its detached ones, and its stale partials', async () => {
     await withHubFixture({
       run: async (fixture) => {
@@ -515,7 +521,9 @@ describeAwaitingWin32Platform('loadHuggingFaceRepoFindings', () => {
 
         const probed = await loadFindings({
           environment: fixture.environment,
-          processCommands: ['/opt/homebrew/bin/hf download example-org/example-model'],
+          runningProcesses: buildRunningCommandLines([
+            '/opt/homebrew/bin/hf download example-org/example-model',
+          ]),
         });
 
         expect(probed.findings.map((finding) => finding.activity)).toEqual([
@@ -528,7 +536,8 @@ describeAwaitingWin32Platform('loadHuggingFaceRepoFindings', () => {
   });
 });
 
-describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
+// A snapshot links its files to the blobs by symbolic links.
+describeOnPosix('recheckHuggingFaceUnit', () => {
   test('is unchanged while the repository holds the same paths, and busy while the CLI runs', async () => {
     await withHubFixture({
       run: async (fixture) => {
@@ -542,12 +551,12 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
         ];
 
         for (const unit of units) {
-          function recheck(processCommands: string[] | null): Promise<PathUnitRecheck> {
+          function recheck(commandLines: string[] | null): Promise<PathUnitRecheck> {
             return recheckHuggingFaceUnit({
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              processCommands: processCommands,
+              runningProcesses: buildRunningCommandLines(commandLines),
             });
           }
 
@@ -580,7 +589,7 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
             unit: partial,
             environment: dayLater,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           }),
         ).toEqual({ kind: 'unchanged' });
       },
@@ -609,7 +618,7 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              processCommands: [],
+              runningProcesses: buildRunningCommandLines([]),
             }),
           ).toEqual({ kind: 'changed' });
         }
@@ -637,7 +646,7 @@ describeAwaitingWin32Platform('recheckHuggingFaceUnit', () => {
             unit: partial,
             environment: fixture.environment,
             platform: buildTestProbePlatform(),
-            processCommands: [],
+            runningProcesses: buildRunningCommandLines([]),
           }),
         ).toEqual({ kind: 'changed' });
       },

@@ -15,7 +15,6 @@ import { join } from 'node:path';
 import type { PackageConfigTracking } from '../../src/tools/decidePackageConfigTracking.js';
 import { PACKAGE_CONFIG_CANDIDATES_MAX_COUNT } from '../../src/tools/decidePackageConfigTracking.js';
 import { loadPackageConfigTracking } from '../../src/tools/loadPackageConfigTracking.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
 import {
@@ -86,7 +85,7 @@ async function createUntrackedProject(projectRoot: string): Promise<string> {
   return await createDartTool(projectRoot);
 }
 
-describeAwaitingWin32Platform('loadPackageConfigTracking', () => {
+describe('loadPackageConfigTracking', () => {
   test('returns untracked for a repository whose index does not name the package config', async () => {
     const dartToolPath = await createUntrackedProject(join(fixtureRoot.rootDir, 'app'));
 
@@ -283,23 +282,31 @@ describeAwaitingWin32Platform('loadPackageConfigTracking', () => {
       expect(tracking).toBe('tracked');
     });
 
-    test('returns tracked for an entry with a sigma where the project has a final sigma', async () => {
-      const tracking = await loadTrackingOfRepository({
-        projectFolderName: `x${String.fromCodePoint(0x3c2)}`,
-        indexedPath: `x${String.fromCodePoint(0x3c3)}/${PACKAGE_CONFIG_PATH}`,
-      });
+    // NTFS folds case by its upcase table, one letter to one, which keeps a final sigma apart from
+    // a sigma, and `ß` apart from `ss`.
+    testOnPosix(
+      'returns tracked for an entry with a sigma where the project has a final sigma',
+      async () => {
+        const tracking = await loadTrackingOfRepository({
+          projectFolderName: `x${String.fromCodePoint(0x3c2)}`,
+          indexedPath: `x${String.fromCodePoint(0x3c3)}/${PACKAGE_CONFIG_PATH}`,
+        });
 
-      expect(tracking).toBe('tracked');
-    });
+        expect(tracking).toBe('tracked');
+      },
+    );
 
-    test('returns tracked for an entry with a sharp s where the project has ss', async () => {
-      const tracking = await loadTrackingOfRepository({
-        projectFolderName: 'strasse',
-        indexedPath: `stra${String.fromCodePoint(0xdf)}e/${PACKAGE_CONFIG_PATH}`,
-      });
+    testOnPosix(
+      'returns tracked for an entry with a sharp s where the project has ss',
+      async () => {
+        const tracking = await loadTrackingOfRepository({
+          projectFolderName: 'strasse',
+          indexedPath: `stra${String.fromCodePoint(0xdf)}e/${PACKAGE_CONFIG_PATH}`,
+        });
 
-      expect(tracking).toBe('tracked');
-    });
+        expect(tracking).toBe('tracked');
+      },
+    );
   });
 
   test('returns unknown for a split index, with a link extension', async () => {

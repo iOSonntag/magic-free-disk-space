@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { parseMacBundleId } from '../../catalog/catalogOwner.js';
 import type { SystemApp } from '../../scan/scanPlatform.js';
 
@@ -31,7 +30,7 @@ function buildSystemApp(params: {
   bundleId: string;
 }): SystemApp {
   return {
-    bundlePath: join(SYSTEM_APPLICATIONS_DIR, params.bundleName),
+    bundlePath: `${SYSTEM_APPLICATIONS_DIR}/${params.bundleName}`,
     displayName: params.displayName,
     bundleId: parseMacBundleId({ text: params.bundleId }),
   };

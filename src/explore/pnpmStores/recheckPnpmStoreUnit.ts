@@ -1,4 +1,5 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitPnpmStore } from '../exploreUnit.js';
@@ -14,7 +15,7 @@ export async function recheckPnpmStoreUnit(params: {
   unit: ExplorePathUnitPnpmStore;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const storeState = await loadPnpmStoreState({
     pathRules: params.environment.pathRules,
@@ -27,9 +28,8 @@ export async function recheckPnpmStoreUnit(params: {
   }
 
   const installState = await loadPnpmInstallState({
-    pathRules: params.environment.pathRules,
-    homeDir: params.environment.homeDir,
-    pnpmHomes: params.platform.explore.pnpmHomes,
+    environment: params.environment,
+    places: params.platform.explore.pnpmInstallPlaces,
     homebrewPrefixPaths: params.platform.homebrewPrefixPaths,
     privacyDenialCode: params.platform.privacyDenialCode,
   });
@@ -53,6 +53,6 @@ export async function recheckPnpmStoreUnit(params: {
     storeState: storeState.value,
     installState: installState.value,
     pins: toolPinsToPnpmPins({ toolPins: toolPins.value }),
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

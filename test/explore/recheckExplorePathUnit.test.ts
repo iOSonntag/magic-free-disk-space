@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -11,7 +11,9 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
+import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   BETA_CURRENT_FOLDER_NAME,
   buildObsoleteVscodeUnit,
@@ -24,36 +26,36 @@ import {
   FIXTURE_PROFILE_ID,
   LISTED_OBSOLETE_FOLDER_NAME,
   OBSOLETE_FOLDER_NAME,
-  VSCODE_APP_COMMAND,
+  runningVscodeProcesses,
 } from './vscodeExtensionFixtures.js';
 
 let fixtureRoot: FixtureRoot;
 let environment: Environment;
-let extensionsPath: string;
+let extensionsPath: AbsolutePath;
 
 beforeEach(async () => {
   fixtureRoot = await createFixtureRoot();
   environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-  extensionsPath = buildVscodeExtensionsPath({ homeDir: environment.homeDir });
-  await createVscodeInstallation({ homeDir: environment.homeDir });
+  extensionsPath = buildVscodeExtensionsPath({ home: environment });
+  await createVscodeInstallation({ folders: environment });
 });
 
 afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', () => {
+describe('recheckExplorePathUnit of a VS Code extension', () => {
   test('answers unchanged while the folder is unlisted and its reason still holds', async () => {
     for (const unit of [
-      buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
-      buildOlderVscodeUnit({ homeDir: environment.homeDir }),
+      buildObsoleteVscodeUnit({ home: environment }),
+      buildOlderVscodeUnit({ home: environment }),
     ]) {
       expect(
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'unchanged' });
     }
@@ -62,11 +64,12 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
   test('answers changed once a profile lists the folder', async () => {
     await writeFixtureTextFile({
       path: join(
-        buildVscodeProfilesPath({ homeDir: environment.homeDir }),
+        buildVscodeProfilesPath({ folders: environment }),
         FIXTURE_PROFILE_ID,
         'extensions.json',
       ),
       text: buildVscodeRegistryText({
+        pathRules: environment.pathRules,
         extensionsPath: extensionsPath,
         folderNames: [BETA_CURRENT_FOLDER_NAME, LISTED_OBSOLETE_FOLDER_NAME, OBSOLETE_FOLDER_NAME],
         form: 'locationOnly',
@@ -75,10 +78,10 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
 
     expect(
       await recheckExplorePathUnit({
-        unit: buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
+        unit: buildObsoleteVscodeUnit({ home: environment }),
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
@@ -91,15 +94,15 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
     await rm(join(extensionsPath, BETA_CURRENT_FOLDER_NAME), { recursive: true });
 
     for (const unit of [
-      buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
-      buildOlderVscodeUnit({ homeDir: environment.homeDir }),
+      buildObsoleteVscodeUnit({ home: environment }),
+      buildOlderVscodeUnit({ home: environment }),
     ]) {
       expect(
         await recheckExplorePathUnit({
           unit: unit,
           environment: environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }
@@ -110,16 +113,16 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
 
     expect(
       await recheckExplorePathUnit({
-        unit: buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
+        unit: buildObsoleteVscodeUnit({ home: environment }),
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
 
   test('answers changed once the folder or the whole extensions folder is gone', async () => {
-    const unit = buildObsoleteVscodeUnit({ homeDir: environment.homeDir });
+    const unit = buildObsoleteVscodeUnit({ home: environment });
 
     await rm(unit.folderPath, { recursive: true });
 
@@ -128,7 +131,7 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
 
@@ -139,20 +142,20 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'changed' });
   });
 
   test('answers busy while VS Code runs or when the processes are unknown', async () => {
-    const unit = buildObsoleteVscodeUnit({ homeDir: environment.homeDir });
+    const unit = buildObsoleteVscodeUnit({ home: environment });
 
     expect(
       await recheckExplorePathUnit({
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [VSCODE_APP_COMMAND],
+        runningProcesses: runningVscodeProcesses,
       }),
     ).toEqual({ kind: 'busy' });
     expect(
@@ -160,22 +163,22 @@ describeAwaitingWin32Platform('recheckExplorePathUnit of a VS Code extension', (
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: null,
+        runningProcesses: null,
       }),
     ).toEqual({ kind: 'busy' });
   });
 
-  test('answers failed with the path and the failure of a denied read', async () => {
+  testOnPosix('answers failed with the path and the failure of a denied read', async () => {
     const registryPath = join(extensionsPath, 'extensions.json');
 
     await chmod(registryPath, 0o000);
 
     expect(
       await recheckExplorePathUnit({
-        unit: buildObsoleteVscodeUnit({ homeDir: environment.homeDir }),
+        unit: buildObsoleteVscodeUnit({ home: environment }),
         environment: environment,
         platform: buildTestProbePlatform(),
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({
       kind: 'failed',

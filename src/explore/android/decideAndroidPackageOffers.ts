@@ -1,5 +1,7 @@
-import { resolve } from 'node:path';
+import { toComparablePathText } from '../../path/isSameOrInsidePath.js';
+import { resolveAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { AndroidAvd, AndroidSdk, AndroidSdkState } from './loadAndroidSdkState.js';
 
 /** A package folder of the SDK that a probe offers, with the id its `package.xml` names. */
@@ -33,17 +35,23 @@ export function decideAndroidSystemImageOffers(state: AndroidSdkState): AndroidP
   const offers: AndroidPackageOffer[] = [];
 
   for (const sdk of state.sdks) {
-    const namedFolderPaths = listAndroidAvdImageFolderPaths({
+    const namedFolderTexts = listComparableAvdImageFolderTexts({
+      pathRules: state.pathRules,
       sdkRoot: sdk.sdkRoot,
       avds: state.avds,
     });
 
-    if (namedFolderPaths === null) {
+    if (namedFolderTexts === null) {
       return NOT_JUDGED;
     }
 
     for (const packageFolder of sdk.systemImages) {
-      if (packageFolder.kind === 'parsed' && !namedFolderPaths.has(packageFolder.folderPath)) {
+      if (
+        packageFolder.kind === 'parsed' &&
+        !namedFolderTexts.has(
+          toComparablePathText({ rules: state.pathRules, text: packageFolder.folderPath }),
+        )
+      ) {
         offers.push({
           sdkRoot: sdk.sdkRoot,
           folderPath: packageFolder.folderPath,
@@ -132,21 +140,36 @@ function decideAndroidSdkEmulatorOffer(params: { sdk: AndroidSdk }): AndroidSdkE
   }
 }
 
-/** The image folder each AVD names, resolved in the SDK; `null` when one AVD's image is unknown. */
-function listAndroidAvdImageFolderPaths(params: {
+/**
+ * The image folder each AVD names, resolved in the SDK, as `pathRules` compare paths; `null` when
+ * one AVD's image is unknown or names no path.
+ */
+function listComparableAvdImageFolderTexts(params: {
+  pathRules: PathRules;
   sdkRoot: AbsolutePath;
   avds: AndroidAvd[];
 }): Set<string> | null {
-  const folderPaths = new Set<string>();
+  const folderTexts = new Set<string>();
 
   for (const avd of params.avds) {
     if (avd.kind !== 'present' || avd.imageSysdir === null) {
       return null;
     }
 
-    // `resolve` drops the trailing slash the SDK writes, such as `system-images/android-35/…/`.
-    folderPaths.add(resolve(params.sdkRoot, avd.imageSysdir));
+    // The resolve drops the trailing separator the SDK writes, such as
+    // `system-images/android-35/…/`.
+    const folderPath = resolveAbsolutePath({
+      rules: params.pathRules,
+      basePath: params.sdkRoot,
+      text: avd.imageSysdir,
+    });
+
+    if (folderPath.kind === 'failed') {
+      return null;
+    }
+
+    folderTexts.add(toComparablePathText({ rules: params.pathRules, text: folderPath.value }));
   }
 
-  return folderPaths;
+  return folderTexts;
 }

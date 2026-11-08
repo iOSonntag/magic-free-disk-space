@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreEngineUnitPlace, ExploreFinding, UnitActivity } from '../exploreUnit.js';
 import { formatCountText, formatDaySpan } from '../formatLimitTexts.js';
@@ -32,13 +33,13 @@ export function buildEngineFindings(params: {
   place: EngineUnitPlace;
   usage: EngineDiskUsage;
   nowMs: number;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding[] {
   const facts = {
     place: params.place,
     activity: decideUnitActivity({
       facts: { kind: 'engine' },
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
     }),
   };
 

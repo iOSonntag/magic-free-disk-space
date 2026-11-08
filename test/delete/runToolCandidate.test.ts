@@ -13,6 +13,7 @@ import { listUnitPaths } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import type { ProbeCommandName } from '../explore/probeFakeTools.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
@@ -25,7 +26,6 @@ import {
   buildSimulatorDeviceListJson,
   UNAVAILABLE_DEVICE_UDID,
 } from '../explore/probeOutputFixtures.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { loadMeasuredAllocatedBytes } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -37,8 +37,9 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
-import { testOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
 const TIMEOUT_MS = 10_000;
 
@@ -191,11 +192,11 @@ function buildRemoveCommands(paths: AbsolutePath[]): string {
   return paths.map((path) => buildRemoveFolderBody(path)).join('\n');
 }
 
-async function loadNoProcessCommands(): Promise<string[] | null> {
-  return [];
+async function loadNoRunningProcesses(): Promise<RunningProcesses | null> {
+  return buildRunningCommandLines([]);
 }
 
-describeAwaitingWin32Platform('runToolCandidate', () => {
+describeWithFakeTools('runToolCandidate', () => {
   test('runs the command of an unchanged unit and reports the measured drop', async () => {
     const unit = await createMiseUnit('20.1.0');
 
@@ -214,7 +215,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -247,7 +248,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -285,7 +286,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -302,7 +303,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -326,7 +327,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -354,7 +355,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -381,7 +382,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -405,7 +406,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: async () => [SIMULATOR_APP_COMMAND],
+      loadKnownRunningProcesses: async () => buildRunningCommandLines([SIMULATOR_APP_COMMAND]),
       timeoutMs: TIMEOUT_MS,
     });
     const whileProcessesUnknown = await runToolCandidate({
@@ -413,7 +414,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: async () => null,
+      loadKnownRunningProcesses: async () => null,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -438,7 +439,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -467,7 +468,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -495,7 +496,7 @@ process.exit(3);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: TIMEOUT_MS,
     });
     const allocatedBytesAfter = await loadMeasuredAllocatedBytes({ paths: listUnitPaths(unit) });
@@ -532,13 +533,14 @@ process.exit(0);`,
         environment: environment,
         probePlatform: buildTestProbePlatform(),
         entryReads: darwinPlatform.system.entryReads,
-        loadProcessCommands: loadNoProcessCommands,
+        loadKnownRunningProcesses: loadNoRunningProcesses,
         timeoutMs: TIMEOUT_MS,
       });
       const measurementAfter = await loadPathMeasurement({
         paths: listUnitPaths(unit),
         deadlineMs: Date.now() + 60_000,
         entryReads: darwinPlatform.system.entryReads,
+        recordEvictedEntry: null,
       });
 
       expect(measurementAfter.isComplete).toBe(false);
@@ -562,7 +564,7 @@ process.exit(0);`,
       environment: environment,
       probePlatform: buildTestProbePlatform(),
       entryReads: darwinPlatform.system.entryReads,
-      loadProcessCommands: loadNoProcessCommands,
+      loadKnownRunningProcesses: loadNoRunningProcesses,
       timeoutMs: 300,
     });
 

@@ -10,9 +10,6 @@ import {
   loadExploreFolderNames,
   loadExploreRealPath,
 } from '../../src/explore/loadExploreRead.js';
-import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -20,12 +17,17 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import {
+  buildTestHostPath,
+  hostPathRules,
+  otherPathRules,
+} from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
-const PRIVACY_DENIAL_CODE = darwinPlatform.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = hostPlatform.system.privacyDenialCode;
 
-describeAwaitingWin32Platform('loadExploreRead', () => {
+describe('loadExploreRead', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {
@@ -292,24 +294,24 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         await writeFile(filePath, '');
 
         const linked = await loadExploreRealPath({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: hostPathRules,
           path: linkPath,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
         const missing = await loadExploreRealPath({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: hostPathRules,
           path: join(fixtureRoot.homeDir, 'gone'),
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
         const underFile = await loadExploreRealPath({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: hostPathRules,
           path: join(filePath, 'child'),
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
 
         expect(linked).toEqual({
           kind: 'succeeded',
-          value: buildTestAbsolutePath({ text: await realpath(folderPath) }),
+          value: buildTestHostPath({ text: await realpath(folderPath) }),
         });
         expect(missing).toEqual({ kind: 'succeeded', value: null });
         expect(underFile).toEqual({ kind: 'succeeded', value: null });
@@ -326,7 +328,7 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
 
         try {
           const realPath = await loadExploreRealPath({
-            pathRules: DARWIN_PATH_RULES,
+            pathRules: hostPathRules,
             path: childPath,
             privacyDenialCode: PRIVACY_DENIAL_CODE,
           });
@@ -344,5 +346,22 @@ describeAwaitingWin32Platform('loadExploreRead', () => {
         }
       },
     );
+
+    test('fails as fileUnreadable at its path when its real path is no absolute path under the rules', async () => {
+      expect(
+        await loadExploreRealPath({
+          pathRules: otherPathRules,
+          path: fixtureRoot.homeDir,
+          privacyDenialCode: PRIVACY_DENIAL_CODE,
+        }),
+      ).toEqual({
+        kind: 'failed',
+        failure: {
+          reason: 'fileUnreadable',
+          path: fixtureRoot.homeDir,
+          failure: { reason: 'unexpected', code: 'notAbsolute' },
+        },
+      });
+    });
   });
 });

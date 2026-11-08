@@ -7,15 +7,15 @@ import type { IdeVersionRoots } from '../../explore/explorePlatform.js';
  */
 export const IDE_VERSION_ROOTS: IdeVersionRoots = {
   caches: [
-    ['Library', 'Caches', 'JetBrains'],
-    ['Library', 'Caches', 'Google'],
+    { root: 'home', path: 'Library/Caches/JetBrains' },
+    { root: 'home', path: 'Library/Caches/Google' },
   ],
   logs: [
-    ['Library', 'Logs', 'JetBrains'],
-    ['Library', 'Logs', 'Google'],
+    { root: 'home', path: 'Library/Logs/JetBrains' },
+    { root: 'home', path: 'Library/Logs/Google' },
   ],
   settings: [
-    ['Library', 'Application Support', 'JetBrains'],
-    ['Library', 'Application Support', 'Google'],
+    { root: 'home', path: 'Library/Application Support/JetBrains' },
+    { root: 'home', path: 'Library/Application Support/Google' },
   ],
 };

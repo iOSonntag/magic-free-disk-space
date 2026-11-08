@@ -1,3 +1,7 @@
+import type {
+  EnvironmentLocationAtRoot,
+  LocationRoot,
+} from '../environment/environmentLocation.js';
 import type { CatalogOwner } from './catalogOwner.js';
 
 export type Risk = 'safe' | 'review' | 'careful' | 'never';
@@ -37,8 +41,13 @@ export type CandidateCategory =
   | 'leftovers'
   | 'userFiles';
 
-/** The folder an entry's path lies below; `userCache` is the per-user folder of the system's caches. */
-export type CatalogRoot = 'home' | 'temp' | 'userCache' | 'absolute';
+/** The folder a catalog path is named below, as a fixed location of the environment names it. */
+export type CatalogRoot = LocationRoot;
+
+/**
+ * A folder or file the catalog names, always at a fixed place of the run, never in a known folder.
+ */
+export type CatalogLocation = EnvironmentLocationAtRoot;
 
 /** The apps an advice may open, by a key only the app maps to the app itself. */
 export type OpenableApp =
@@ -209,7 +218,7 @@ export type CatalogEntry = {
   regeneration: string;
   risk: Risk;
   root: CatalogRoot;
-  /** Relative to the root for home, temp, and user cache; the full path for absolute. */
+  /** As a `CatalogLocation` names it: relative to the root, or whole for `absolute`. */
   path: string;
   selection: CatalogSelection;
   ageRule: CatalogAgeRule;

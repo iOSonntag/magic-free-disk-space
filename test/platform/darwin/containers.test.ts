@@ -79,8 +79,8 @@ describe('CONTAINER_ENTRIES', () => {
       }),
     ).toEqual(
       engineProbeIds.map((engineProbeId) => [
-        'home',
-        CONTAINER_ENGINES[engineProbeId].diskImagePath.join('/'),
+        CONTAINER_ENGINES[engineProbeId].diskImagePath.root,
+        CONTAINER_ENGINES[engineProbeId].diskImagePath.path,
         'containerEngines',
       ]),
     );

@@ -7,9 +7,11 @@ import { SCAN_LIMITS } from '../scan/limits.js';
 import type { PathMeasurement } from '../scan/loadPathMeasurement.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
 import type { EntryReads } from '../system/entryReads.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
 import type { LocatedTool } from '../tools/findTrustedTool.js';
 import { loadTrustedTool } from '../tools/findTrustedTool.js';
 import { runToolCommand } from '../tools/runToolCommand.js';
+import type { ToolProcessPlatform } from '../tools/toolsPlatform.js';
 
 export const TOOL_RUN_TIMEOUT_MS = 600_000;
 
@@ -40,7 +42,7 @@ export type ToolCandidateRun =
 /**
  * Runs the unit's command once its tool passes the trust check again and `recheckExploreUnit`
  * finds the unit unchanged and idle with that fresh tool, with the processes
- * `loadProcessCommands` reads right before the recheck. The unit is measured first, so
+ * `loadKnownRunningProcesses` reads right before the recheck. The unit is measured first, so
  * `freedBytes`, the drop of its measured size, holds nothing the recheck itself added; the
  * command runs right after the recheck. `freedBytes` is 0 when the measurement after the
  * command is incomplete.
@@ -52,13 +54,14 @@ export async function runToolCandidate(params: {
   probePlatform: ExploreProbePlatform;
   /** The system slice's entry reads, for the measurements before and after the command. */
   entryReads: EntryReads;
-  loadProcessCommands: () => Promise<string[] | null>;
+  loadKnownRunningProcesses: () => Promise<RunningProcesses | null>;
   timeoutMs: number;
 }): Promise<ToolCandidateRun> {
   const before = await loadPathMeasurement({
     paths: listUnitPaths(params.unit),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
   const trustedTool = await loadTrustedTool({
     name: params.unit.tool.name,
@@ -75,7 +78,7 @@ export async function runToolCandidate(params: {
     tool: trustedTool.value,
     environment: params.environment,
     platform: params.probePlatform,
-    processCommands: await params.loadProcessCommands(),
+    runningProcesses: await params.loadKnownRunningProcesses(),
     timeoutMs: SCAN_LIMITS.toolProbeTimeoutMs,
   });
 
@@ -91,6 +94,7 @@ export async function runToolCandidate(params: {
         unit: params.unit,
         tool: trustedTool.value,
         environment: params.environment,
+        toolProcesses: params.probePlatform.toolProcesses,
         entryReads: params.entryReads,
         before: before,
         timeoutMs: params.timeoutMs,
@@ -103,6 +107,7 @@ async function runCheckedUnitCommand(params: {
   unit: ExploreToolUnit;
   tool: LocatedTool;
   environment: Environment;
+  toolProcesses: ToolProcessPlatform;
   entryReads: EntryReads;
   before: PathMeasurement;
   timeoutMs: number;
@@ -113,11 +118,13 @@ async function runCheckedUnitCommand(params: {
     homeDir: params.environment.homeDir,
     tempDir: params.environment.tempDir,
     timeoutMs: params.timeoutMs,
+    processes: params.toolProcesses,
   });
   const after = await loadPathMeasurement({
     paths: listUnitPaths(params.unit),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
   const freedBytes = getMeasuredFreedBytes({
     beforeBytes: params.before.allocatedBytes,

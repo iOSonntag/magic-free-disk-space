@@ -1,7 +1,14 @@
 import { lstat } from 'node:fs/promises';
+import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import { loadFileAttributes } from '../../src/platform/win32/win32Api.js';
+import {
+  formatSystemCallCode,
+  formatSystemCallFailure,
+} from '../../src/system/systemCallFailure.js';
 
 /** A thrown error as its raw fields, such as `code=EPERM errno=-4048 syscall=rm`. */
-export const describeThrownError = (error: unknown): string => {
+function describeThrownError(error: unknown): string {
   if (!(error instanceof Error)) {
     return `threw ${String(error)}`;
   }
@@ -15,7 +22,7 @@ export const describeThrownError = (error: unknown): string => {
   }
 
   return `failed ${fields.join(' ')}`;
-};
+}
 
 /** The observation the call returns, or the error it threw described as one; never throws. */
 export const observeSafely = async (observe: () => Promise<string> | string): Promise<string> => {
@@ -33,45 +40,37 @@ export const loadLstatText = async (path: string): Promise<string> => {
   return `isSymbolicLink=${stats.isSymbolicLink()} isDirectory=${stats.isDirectory()} isFile=${stats.isFile()}`;
 };
 
-/** A GitHub notice workflow command with the message escaped as the runner requires. */
-export const formatNoticeCommand = (params: { title: string; message: string }): string => {
-  const escapedMessage = params.message
-    .replaceAll('%', '%25')
-    .replaceAll('\r', '%0D')
-    .replaceAll('\n', '%0A');
+/**
+ * The attributes win32Api.ts reads for the path, in hex, or the call and the code it failed with.
+ */
+export function loadAttributesText(path: string): string {
+  const absolutePath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: path });
 
-  return `::notice title=${params.title}::${escapedMessage}`;
-};
-
-/** Each JSON line of a probe's stdout as `key: value` lines; any other line as `stdout: …`. */
-export const formatProbeOutputLines = (stdout: string): string[] => {
-  const lines = stdout.split(/\r?\n/).filter((line) => line.trim() !== '');
-
-  return lines.flatMap((line) => {
-    const parsed = parseJsonObject(line);
-
-    if (parsed === null) {
-      return [`stdout: ${line}`];
-    }
-
-    return Object.entries(parsed).map(([key, value]) => {
-      return `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`;
-    });
-  });
-};
-
-/** The line parsed as a JSON object, or `null` when it is no JSON object. */
-export const parseJsonObject = (line: string): Record<string, unknown> | null => {
-  try {
-    const parsed: unknown = JSON.parse(line);
-
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return null;
-    }
-
-    // A non-null, non-array object, which JSON.parse only yields as a plain record.
-    return parsed as Record<string, unknown>;
-  } catch {
-    return null;
+  if (absolutePath.kind === 'failed') {
+    return `no drive path: ${absolutePath.failure}`;
   }
-};
+
+  const attributes = loadFileAttributes({ path: absolutePath.value });
+
+  if (attributes.kind === 'failed') {
+    return formatSystemCallFailure({ failure: attributes.failure });
+  }
+
+  return formatSystemCallCode({ code: attributes.value });
+}
+
+/** Each nonblank line of a probe's stdout, parsed as JSON, or as it came when it is no JSON. */
+export function parseProbeLines(stdout: string): unknown[] {
+  return stdout
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '')
+    .map((line) => {
+      try {
+        const parsed: unknown = JSON.parse(line);
+
+        return parsed;
+      } catch {
+        return line;
+      }
+    });
+}

@@ -1,9 +1,8 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { decideAppCandidate } from '../../src/scan/decideAppCandidate.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import type { InstalledApp } from '../../src/scan/scanPlatform.js';
 import type { FileKind } from '../../src/system/loadFileIdentity.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMeasurement } from '../support/candidateFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 import { buildTestUserIdentity } from '../support/parsedValueFixtures.js';
@@ -40,7 +39,7 @@ function decide(params: {
   });
 }
 
-describeAwaitingWin32Platform('decideAppCandidate', () => {
+describe('decideAppCandidate', () => {
   test('offers a large unused app as review with its last use date', () => {
     const decision = decide({});
 

@@ -2,12 +2,12 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadFullDiskAccess } from '../../../src/platform/darwin/loadFullDiskAccess.js';
-import { describeAwaitingWin32Platform } from '../../support/awaitsWin32Platform.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../../support/fixtureRoot.js';
 import { testOnPosix } from '../../support/posixOnly.js';
 
-describeAwaitingWin32Platform('loadFullDiskAccess', () => {
+describeOnDarwin('loadFullDiskAccess', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

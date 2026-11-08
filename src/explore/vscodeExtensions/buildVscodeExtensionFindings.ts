@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import { compareDottedVersions } from '../compareDottedVersions.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type {
@@ -31,7 +32,7 @@ const VSCODE_EXTENSION_REASONS: ExplorePathUnitVscodeExtensionReason[] = [
  */
 export function buildVscodeExtensionFindings(params: {
   state: VscodeExtensionState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   switch (params.state.kind) {
     case 'noExtensions':
@@ -39,14 +40,14 @@ export function buildVscodeExtensionFindings(params: {
     case 'installed':
       return buildInstalledExtensionFindings({
         state: params.state,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       });
   }
 }
 
 function buildInstalledExtensionFindings(params: {
   state: VscodeExtensionStateInstalled;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreProbeFindings {
   if (params.state.listedFolderNames === null) {
     return { findings: [], isComplete: false };
@@ -63,7 +64,7 @@ function buildInstalledExtensionFindings(params: {
       buildVscodeExtensionFinding({
         folder: folder,
         offer: offer,
-        processCommands: params.processCommands,
+        runningProcesses: params.runningProcesses,
       }),
     ];
   });
@@ -145,7 +146,7 @@ function findNewestVersion(params: {
 function buildVscodeExtensionFinding(params: {
   folder: VscodeExtensionFolder;
   offer: VscodeExtensionOffer;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): ExploreFinding {
   return {
     unit: {
@@ -166,7 +167,7 @@ function buildVscodeExtensionFinding(params: {
     displayPath: params.folder.path,
     activity: decideUnitActivity({
       facts: { kind: 'vscodeExtension' },
-      processCommands: params.processCommands,
+      runningProcesses: params.runningProcesses,
     }),
   };
 }

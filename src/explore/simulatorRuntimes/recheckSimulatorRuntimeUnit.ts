@@ -1,3 +1,4 @@
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { UnitComparison, UnitRecheck } from '../decideComparisonActivity.js';
 import { decideComparisonActivity } from '../decideComparisonActivity.js';
 import type { ExploreUnitRecheckRun } from '../exploreProbe.js';
@@ -23,7 +24,7 @@ export async function recheckSimulatorRuntimeUnit(params: {
   return compareSimulatorRuntime({
     unit: params.unit,
     state: state.value,
-    processCommands: params.run.processCommands,
+    runningProcesses: params.run.runningProcesses,
   });
 }
 
@@ -35,7 +36,7 @@ export async function recheckSimulatorRuntimeUnit(params: {
 export function compareSimulatorRuntime(params: {
   unit: ExploreToolUnitSimulatorRuntime;
   state: SimulatorRuntimeState;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): UnitComparison {
   const runtime = params.state.runtimes.find(
     (listed) => listed.runtimeId === params.unit.runtimeId,
@@ -57,6 +58,6 @@ export function compareSimulatorRuntime(params: {
 
   return decideComparisonActivity({
     facts: { kind: 'simulatorRuntime' },
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }

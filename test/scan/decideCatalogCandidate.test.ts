@@ -1,11 +1,10 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { TargetsMeasurement } from '../../src/scan/candidate.js';
 import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import {
   buildTestCatalogEntry,
   buildTestTargetsMeasurement,
@@ -32,7 +31,7 @@ function decide(params: {
     measurement:
       params.measurement ?? buildTestTargetsMeasurement({ path: PATH, allocatedBytes: 5 * MIB }),
     owner: buildTestCatalogOwner({ bundleId: params.ownerBundleId ?? null }),
-    ownerBundlePaths: ['/Applications/Example.app'],
+    removalOwner: { kind: 'bundles', bundlePaths: ['/Applications/Example.app'] },
     ownerState: params.ownerState ?? 'stopped',
     ownerAppName: 'Example',
     isOwnerUninstalled: params.isOwnerUninstalled ?? false,
@@ -42,7 +41,7 @@ function decide(params: {
   });
 }
 
-describeAwaitingWin32Platform('decideCatalogCandidate', () => {
+describe('decideCatalogCandidate', () => {
   test('offers a large entry with its catalog texts, its entry id, and its owner app', () => {
     const decision = decide({});
 
@@ -66,7 +65,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
         removal: {
           kind: 'deletePaths',
           targets: [{ path: PATH, identity: expect.any(Object) }],
-          ownerBundlePaths: ['/Applications/Example.app'],
+          owner: { kind: 'bundles', bundlePaths: ['/Applications/Example.app'] },
         },
       },
     });
@@ -209,7 +208,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
       },
     });
     const carvedPaths = buildCarvedPaths({
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       entry: entry,
       path: PATH,
     });
@@ -222,7 +221,7 @@ describeAwaitingWin32Platform('decideCatalogCandidate', () => {
   test('carves nothing for an entry that is no advice', () => {
     expect(
       buildCarvedPaths({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         entry: buildTestCatalogEntry({}),
         path: PATH,
       }),

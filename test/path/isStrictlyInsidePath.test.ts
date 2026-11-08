@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { isStrictlyInsidePath } from '../../src/path/isStrictlyInsidePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 
-const RULES = DARWIN_PATH_RULES;
+const RULES = POSIX_PATH_RULES;
 
 describe('isStrictlyInsidePath', () => {
   test('a path is strictly inside each of its ancestors', () => {
@@ -20,5 +20,22 @@ describe('isStrictlyInsidePath', () => {
     expect(isStrictlyInsidePath({ rules: RULES, path: '/a/bc', parentPath: '/a/b' })).toBe(false);
     expect(isStrictlyInsidePath({ rules: RULES, path: '/a/c', parentPath: '/a/b' })).toBe(false);
     expect(isStrictlyInsidePath({ rules: RULES, path: '/a', parentPath: '/a/b' })).toBe(false);
+  });
+
+  test('on Windows a path that differs from its parent only by case is the same, not inside', () => {
+    expect(
+      isStrictlyInsidePath({
+        rules: WIN32_PATH_RULES,
+        path: 'c:\\users\\TESTER',
+        parentPath: 'C:\\Users\\tester',
+      }),
+    ).toBe(false);
+    expect(
+      isStrictlyInsidePath({
+        rules: WIN32_PATH_RULES,
+        path: 'c:\\users\\TESTER\\Downloads',
+        parentPath: 'C:\\Users\\tester',
+      }),
+    ).toBe(true);
   });
 });

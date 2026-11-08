@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ExplorePathUnitFvmVersion } from '../../src/explore/exploreUnit.js';
@@ -13,9 +13,8 @@ import type {
 } from '../../src/explore/projectPins/projectPins.js';
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, joinBelowHome } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
@@ -25,6 +24,7 @@ import {
   listUnitsOfKind,
   withFixtureHome,
 } from '../support/probeRunFixtures.js';
+import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   buildTestPinFileText,
   buildTestPinText,
@@ -36,10 +36,14 @@ const VALUE_VERSIONS_PATH = '/Users/example/fvm/versions';
 const UNPINNED: ToolPins = { kind: 'texts', files: [] };
 
 function buildFvmrcText(params: { text: string }): ProjectPinFileText {
-  return buildTestPinText({ path: '/Users/example/app/.fvmrc', kind: 'fvmrc', text: params.text });
+  return buildTestPinText({
+    path: buildTestAbsolutePath({ text: '/Users/example/app/.fvmrc' }),
+    kind: 'fvmrc',
+    text: params.text,
+  });
 }
 
-describeAwaitingWin32Platform('parseFvmrcPins', () => {
+describe('parseFvmrcPins', () => {
   test('reads flutterSdkVersion before flutter, and each flavor', () => {
     expect(
       parseFvmrcPins({
@@ -60,7 +64,7 @@ describeAwaitingWin32Platform('parseFvmrcPins', () => {
   });
 });
 
-describeAwaitingWin32Platform('compareFvmVersionUnit', () => {
+describe('compareFvmVersionUnit', () => {
   const unit: ExplorePathUnitFvmVersion = {
     kind: 'fvmVersion',
     version: '3.10.0',
@@ -85,7 +89,7 @@ describeAwaitingWin32Platform('compareFvmVersionUnit', () => {
         unit: unit,
         state: buildValueState({ folderPath: unit.folderPath, globalVersion: '3.22.0' }),
         toolPins: UNPINNED,
-        processCommands: [],
+        runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual({ kind: 'unchanged' });
   });
@@ -119,27 +123,30 @@ describeAwaitingWin32Platform('compareFvmVersionUnit', () => {
           unit: unit,
           state: entry.state,
           toolPins: entry.toolPins,
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         }),
       ).toEqual({ kind: 'changed' });
     }
   });
 
   test('is busy while a process runs from its folder, or the processes are unknown', () => {
-    for (const processCommands of [[`${unit.folderPath}/bin/cache/dart-sdk/bin/dart run`], null]) {
+    for (const runningProcesses of [
+      buildRunningCommandLines([`${unit.folderPath}/bin/cache/dart-sdk/bin/dart run`]),
+      null,
+    ]) {
       expect(
         compareFvmVersionUnit({
           unit: unit,
           state: buildValueState({ folderPath: unit.folderPath, globalVersion: null }),
           toolPins: UNPINNED,
-          processCommands: processCommands,
+          runningProcesses: runningProcesses,
         }),
       ).toEqual({ kind: 'busy' });
     }
   });
 });
 
-describeAwaitingWin32Platform('loadFvmVersionFindings and recheckFvmVersionUnit', () => {
+describe('loadFvmVersionFindings and recheckFvmVersionUnit', () => {
   function buildVersionsPath(home: FixtureHome): string {
     return join(home.fixtureRoot.homeDir, 'fvm', 'versions');
   }
@@ -153,7 +160,7 @@ describeAwaitingWin32Platform('loadFvmVersionFindings and recheckFvmVersionUnit'
 
   function buildFvmrc(params: { home: FixtureHome; text: string }): ProjectPinFile {
     return buildTestPinFileText({
-      path: join(params.home.fixtureRoot.homeDir, 'code', 'app', '.fvmrc'),
+      path: joinBelowHome({ home: params.home.environment, path: 'code/app/.fvmrc' }),
       kind: 'fvmrc',
       text: params.text,
     });
@@ -238,7 +245,7 @@ describeAwaitingWin32Platform('loadFvmVersionFindings and recheckFvmVersionUnit'
           unit: unit,
           environment: home.environment,
           platform: buildTestProbePlatform(),
-          processCommands: [],
+          runningProcesses: buildRunningCommandLines([]),
         };
 
         expect(await recheckFvmVersionUnit(recheck)).toEqual({ kind: 'unchanged' });

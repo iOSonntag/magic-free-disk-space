@@ -19,7 +19,7 @@ export async function loadSimulatorRuntimeFindings(
     tool: run.tool,
     state: state.value,
     unusedCutoffMs: run.unusedCutoffMs,
-    processCommands: run.processCommands,
+    runningProcesses: run.runningProcesses,
   });
 
   return { kind: 'succeeded', value: { findings: findings, isComplete: true } };

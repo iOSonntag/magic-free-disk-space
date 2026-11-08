@@ -4,7 +4,7 @@ import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js'
 import type { DeletePlatform } from '../delete/deletePlatform.js';
 import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
-import type { Environment } from '../environment/buildEnvironment.js';
+import type { Environment, OwnerOnlyModes } from '../environment/buildEnvironment.js';
 import type { EnvironmentPlatform } from '../environment/environmentPlatform.js';
 import type { ExplorePlatform } from '../explore/explorePlatform.js';
 import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
@@ -151,6 +151,7 @@ type BridgeContext = {
   /** Never throws. */
   saveIsUpdateCheckEnabled: (params: {
     preferencesDir: string;
+    ownerOnlyModes: OwnerOnlyModes | null;
     isEnabled: boolean;
   }) => Promise<Result<null, PreferencesSaveFailure>>;
 };
@@ -194,6 +195,7 @@ export async function runBridge(params: BridgeContext): Promise<BridgeEnd> {
       context: params,
       homeDir: startEnvironment.value.homeDir,
       preferencesDir: startEnvironment.value.preferencesDir,
+      ownerOnlyModes: startEnvironment.value.ownerOnlyModes,
       line: line,
       state: state,
       nextPlanId: lastPlanId + 1,
@@ -216,6 +218,8 @@ async function answerRequestLine(params: {
   homeDir: string;
   /** The preferences folder of the environment the bridge started in. */
   preferencesDir: string;
+  /** The modes of the files that environment writes. */
+  ownerOnlyModes: OwnerOnlyModes | null;
   line: string;
   state: BridgeState;
   nextPlanId: number;
@@ -262,6 +266,7 @@ async function answerRequestLine(params: {
       return answerSetUpdateCheck({
         context: params.context,
         preferencesDir: params.preferencesDir,
+        ownerOnlyModes: params.ownerOnlyModes,
         state: params.state,
         isEnabled: parsed.value.isEnabled,
       });
@@ -297,11 +302,13 @@ async function answerCheckUpdate(params: {
 async function answerSetUpdateCheck(params: {
   context: BridgeContext;
   preferencesDir: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
   state: BridgeState;
   isEnabled: boolean;
 }): Promise<BridgeStep> {
   const saved = await params.context.saveIsUpdateCheckEnabled({
     preferencesDir: params.preferencesDir,
+    ownerOnlyModes: params.ownerOnlyModes,
     isEnabled: params.isEnabled,
   });
 
@@ -356,6 +363,7 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
         report: report,
         fullDiskAccessHolder: 'app',
         texts: params.context.texts,
+        pathRules: environment.value.pathRules,
         homeDir: environment.value.homeDir,
         disk: disk,
       }),
@@ -495,7 +503,7 @@ async function answerDelete(params: {
     answer: {
       kind: 'deleted',
       lines: [
-        ...formatRemovalRun({ run: removal.value.run }),
+        ...formatRemovalRun({ run: removal.value.run, texts: params.context.texts }),
         formatDeletionLogLine({ logPath: removal.value.logPath }),
       ],
       ...buildDeletedFacts({

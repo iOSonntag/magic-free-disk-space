@@ -25,7 +25,7 @@ export async function loadHuggingFaceRepoFindings(
     value: buildHuggingFaceRepoFindings({
       repos: repos.value,
       partialCutoffMs: run.environment.nowMs - HUGGING_FACE_PARTIAL_UNTOUCHED_MS,
-      processCommands: run.processCommands,
+      runningProcesses: run.runningProcesses,
     }),
   };
 }

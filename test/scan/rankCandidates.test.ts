@@ -1,10 +1,10 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { CandidateCategory } from '../../src/catalog/catalog.js';
 import { rankByPlace, rankBySize } from '../../src/scan/rankCandidates.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
 
-describeAwaitingWin32Platform('rankBySize', () => {
+describe('rankBySize', () => {
   test('orders items by allocated bytes, largest first', () => {
     const small = { path: '/a/small', allocatedBytes: 10 };
     const medium = { path: '/a/medium', allocatedBytes: 50 };
@@ -39,7 +39,7 @@ describeAwaitingWin32Platform('rankBySize', () => {
   });
 });
 
-describeAwaitingWin32Platform('rankByPlace', () => {
+describe('rankByPlace', () => {
   test('orders every section top to bottom, whatever the sizes', () => {
     const categoriesTopToBottom: CandidateCategory[] = [
       'temporary',
@@ -128,7 +128,11 @@ describeAwaitingWin32Platform('rankByPlace', () => {
   });
 
   test('ranks Explore last, even a safe item larger than all others', () => {
-    const tool = buildTestToolCandidate({ homeDir: '/a', version: '20.1.0', allocatedBytes: 5000 });
+    const tool = buildTestToolCandidate({
+      home: buildExampleHome({ text: '/a' }),
+      version: '20.1.0',
+      allocatedBytes: 5000,
+    });
     const trashReview = buildTestCandidate({
       path: '/a/trash',
       category: 'trash',

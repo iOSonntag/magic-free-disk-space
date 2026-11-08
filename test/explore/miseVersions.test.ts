@@ -1,13 +1,12 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { buildMiseVersionFindings } from '../../src/explore/miseVersions/buildMiseVersionFindings.js';
 import {
   parseMisePrunableVersions,
   parseMiseToolName,
   parseMiseToolVersion,
 } from '../../src/explore/miseVersions/parseMisePrunableVersions.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
-import { describeAwaitingWin32Platform } from '../support/awaitsWin32Platform.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
 import {
   buildMiseInstallPath,
@@ -27,7 +26,7 @@ const nodeInstallPath = buildMiseInstallPath({
   version: '20.1.0',
 });
 
-describeAwaitingWin32Platform('parseMiseToolName and parseMiseToolVersion', () => {
+describe('parseMiseToolName and parseMiseToolVersion', () => {
   test('pass the names and versions mise prints', () => {
     expect(parseMiseToolName({ text: 'aqua:cli/cli' })).toEqual({
       kind: 'succeeded',
@@ -44,11 +43,11 @@ describeAwaitingWin32Platform('parseMiseToolName and parseMiseToolVersion', () =
   });
 });
 
-describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
+describe('parseMisePrunableVersions', () => {
   test('reads each prunable version with its install path', () => {
     expect(
       parseMisePrunableVersions({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: buildMisePrunableJson({ homeDir: FIXTURE_HOME_DIR }),
       }),
     ).toEqual({
@@ -69,7 +68,7 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
   });
 
   test('reads no versions from an empty object', () => {
-    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: '{}' })).toEqual({
+    expect(parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: '{}' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -77,7 +76,7 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
 
   test('rejects text that is no JSON', () => {
     expect(
-      parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+      parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage' }).kind,
     ).toBe('failed');
   });
 
@@ -86,7 +85,7 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
       node: [{ version: '--all', install_path: nodeInstallPath }],
     });
 
-    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });
@@ -94,21 +93,22 @@ describeAwaitingWin32Platform('parseMisePrunableVersions', () => {
   test('rejects a version without an absolute install path', () => {
     const text = JSON.stringify({ node: [{ version: '20.1.0', install_path: 'node/20.1.0' }] });
 
-    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });
 });
 
-describeAwaitingWin32Platform('buildMiseVersionFindings', () => {
+describe('buildMiseVersionFindings', () => {
   test('offers each version with its install path shown with ~', () => {
     const findings = buildMiseVersionFindings({
       tool: tool,
       versions: [
         { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
       ],
+      pathRules: POSIX_PATH_RULES,
       homeDir: FIXTURE_HOME_DIR,
-      processCommands: null,
+      runningProcesses: null,
     });
 
     expect(findings).toHaveLength(1);

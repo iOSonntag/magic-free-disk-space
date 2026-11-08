@@ -3,10 +3,18 @@ import type { CatalogEntry } from '../catalog/catalog.js';
 import type {
   CatalogOwner,
   CatalogOwnerBundleIdFamily,
+  CatalogOwnerExecutable,
   MacBundleId,
 } from '../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
+import type { EnvironmentFolders } from '../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../environment/environmentLocation.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
+import type { RunningProcesses } from '../system/systemPlatform.js';
+import type { RemovalOwner, RemovalOwnerBundles, RemovalOwnerExecutable } from './candidate.js';
+import { isExecutableOwnerRunning } from './isExecutableOwnerRunning.js';
 import type { InstalledApp, SystemApp } from './scanPlatform.js';
 
 export type OwnerState = 'running' | 'stopped' | 'unknown';
@@ -56,20 +64,26 @@ export function isAppleBundleId(params: { bundleId: MacBundleId }): boolean {
 }
 
 /**
- * Returns the owner of the path: the entry's owner for a `path` or a `profileFolders` entry; for a
- * `children` entry the child's own name when it is a bundle id, else the installed app named like
- * the child. `null` when no app owns it.
+ * Returns the owner of the path: the entry's owner for a `path` or a `profileFolders` entry, and
+ * for a `children` entry that names one; else, for a `children` entry, the child's own name when
+ * it is a bundle id, else the installed app named like the child. `null` when no app owns it.
  */
 export function resolveTargetOwner(params: {
   entry: CatalogEntry;
   path: string;
   installedApps: InstalledApp[];
 }): CatalogOwner | null {
+  const entryOwnerApp = params.entry.owner === null ? null : params.entry.owner.app;
+
   switch (params.entry.selection.kind) {
     case 'path':
     case 'profileFolders':
-      return params.entry.owner === null ? null : params.entry.owner.app;
+      return entryOwnerApp;
     case 'children':
+      if (entryOwnerApp !== null) {
+        return entryOwnerApp;
+      }
+
       return resolveChildOwner({ path: params.path, installedApps: params.installedApps });
   }
 }
@@ -127,6 +141,8 @@ function isOwnerApp(params: { owner: CatalogOwner; app: InstalledApp }): boolean
 
       return isFamilyBundleId({ family: params.owner, bundleId: appBundleId });
     }
+    case 'executable':
+      return false;
   }
 }
 
@@ -137,6 +153,8 @@ function isOwnerSystemApp(params: { owner: CatalogOwner; app: SystemApp }): bool
       return params.app.bundleId === params.owner.bundleId;
     case 'bundleIdFamily':
       return isFamilyBundleId({ family: params.owner, bundleId: params.app.bundleId });
+    case 'executable':
+      return false;
   }
 }
 
@@ -172,7 +190,8 @@ export function findOwnerBundlePaths(params: {
 
 /**
  * True when an owner is set and neither a system app nor an app of the complete list of installed
- * apps is it; false for no owner, and while the list is incomplete, since it may miss the owner.
+ * apps is it; false for no owner, for a Windows program, which no app bundle is, and while the
+ * list is incomplete, since it may miss the owner.
  */
 export function isOwnerUninstalled(params: {
   owner: CatalogOwner | null;
@@ -182,7 +201,7 @@ export function isOwnerUninstalled(params: {
 }): boolean {
   const owner = params.owner;
 
-  if (owner === null || !params.isInstalledAppListComplete) {
+  if (owner === null || owner.kind === 'executable' || !params.isInstalledAppListComplete) {
     return false;
   }
 
@@ -248,40 +267,136 @@ function findOwnerInstalledAppName(params: {
 
       return app?.displayName ?? null;
     }
+    case 'executable':
+      return null;
   }
 }
 
 /**
- * Returns `stopped` for no owner, `unknown` for any owner while the process list is missing,
- * `stopped` for an owner that no installed or system app is, and `running` when a process runs
- * from the bundle of any app that is the owner.
+ * The owner whose running process withholds the path, at the scan and again right before its
+ * deletion: the bundles of the installed and system apps that are a bundle owner, as
+ * `findOwnerBundlePaths` tells them, or the program of an executable owner.
  */
-export function resolveOwnerState(params: {
+export function buildRemovalOwner(params: {
   owner: CatalogOwner | null;
+  environment: EnvironmentFolders;
   installedApps: InstalledApp[];
   systemApps: SystemApp[];
-  processCommands: string[] | null;
-}): OwnerState {
+}): RemovalOwner {
   if (params.owner === null) {
+    return { kind: 'none' };
+  }
+
+  switch (params.owner.kind) {
+    case 'bundleId':
+    case 'bundleIdFamily':
+      return {
+        kind: 'bundles',
+        bundlePaths: findOwnerBundlePaths({
+          owner: params.owner,
+          installedApps: params.installedApps,
+          systemApps: params.systemApps,
+        }),
+      };
+    case 'executable':
+      return {
+        kind: 'executable',
+        imageNames: params.owner.imageNames,
+        installFolderPath: resolveInstallFolderPath({
+          owner: params.owner,
+          environment: params.environment,
+        }),
+      };
+  }
+}
+
+/**
+ * Decides whether an owner runs, at the scan and before the deletion: `stopped` for no owner,
+ * `unknown` for an owner while the processes cannot be listed, else `running` when a process runs
+ * from one of its app bundles or runs its program.
+ */
+export function resolveRemovalOwnerState(params: {
+  owner: RemovalOwner;
+  pathRules: PathRules;
+  runningProcesses: RunningProcesses | null;
+}): OwnerState {
+  if (params.owner.kind === 'none') {
     return 'stopped';
   }
 
-  if (params.processCommands === null) {
+  if (params.runningProcesses === null) {
     return 'unknown';
   }
 
-  const isRunning = isAnyBundleRunning({
-    bundlePaths: findOwnerBundlePaths({
-      owner: params.owner,
-      installedApps: params.installedApps,
-      systemApps: params.systemApps,
-    }),
-    processCommands: params.processCommands,
-  });
+  switch (params.owner.kind) {
+    case 'bundles':
+      return resolveBundlesOwnerState({
+        owner: params.owner,
+        runningProcesses: params.runningProcesses,
+      });
+    case 'executable':
+      return resolveExecutableOwnerState({
+        owner: params.owner,
+        pathRules: params.pathRules,
+        runningProcesses: params.runningProcesses,
+      });
+  }
+}
 
-  if (isRunning) {
-    return 'running';
+function resolveBundlesOwnerState(params: {
+  owner: RemovalOwnerBundles;
+  runningProcesses: RunningProcesses;
+}): OwnerState {
+  // A bundle-id-shaped child name names a bundle owner on Windows too, where no app carries it.
+  if (params.owner.bundlePaths.length === 0) {
+    return 'stopped';
   }
 
-  return 'stopped';
+  switch (params.runningProcesses.kind) {
+    case 'commandLines':
+      return isAnyBundleRunning({
+        bundlePaths: params.owner.bundlePaths,
+        commandLines: params.runningProcesses.commandLines,
+      })
+        ? 'running'
+        : 'stopped';
+    // Only macOS has an app bundle, so no list of Windows processes can tell whether one runs.
+    case 'imagePaths':
+      return 'unknown';
+  }
+}
+
+function resolveExecutableOwnerState(params: {
+  owner: RemovalOwnerExecutable;
+  pathRules: PathRules;
+  runningProcesses: RunningProcesses;
+}): OwnerState {
+  switch (params.runningProcesses.kind) {
+    // Only Windows names an executable owner, so no list of macOS processes meets one.
+    case 'commandLines':
+      return 'unknown';
+    case 'imagePaths':
+      return isExecutableOwnerRunning({
+        pathRules: params.pathRules,
+        imageNames: params.owner.imageNames,
+        installFolderPath: params.owner.installFolderPath,
+        processImagePaths: params.runningProcesses.imagePaths,
+      })
+        ? 'running'
+        : 'stopped';
+  }
+}
+
+function resolveInstallFolderPath(params: {
+  owner: CatalogOwnerExecutable;
+  environment: EnvironmentFolders;
+}): AbsolutePath | null {
+  if (params.owner.installFolder === null) {
+    return null;
+  }
+
+  return resolveEnvironmentLocation({
+    folders: params.environment,
+    location: params.owner.installFolder,
+  });
 }

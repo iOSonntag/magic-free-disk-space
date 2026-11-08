@@ -1,8 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { posix } from 'node:path';
+import { join } from 'node:path';
+import type { EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { updateModifiedMs } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import type { HomeFolder } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath, joinBelowHome } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 
 /** A last use before `ANDROID_UNUSED_CUTOFF_MS`. */
 export const ANDROID_OLD_USE_MS = 1_600_000_000_000;
@@ -15,12 +19,16 @@ export const ANDROID_RECENT_USE_MS = 1_800_000_000_000;
 export const ANDROID_EMULATOR_PROCESS_COMMAND =
   '/Users/example/Library/Android/sdk/emulator/qemu/darwin-aarch64/qemu-system-aarch64 -avd Pixel';
 
-export function buildAndroidSdkRoot(params: { homeDir: string }): AbsolutePath {
-  return buildTestAbsolutePath({ text: posix.join(params.homeDir, 'Library', 'Android', 'sdk') });
+/** The SDK where the host's Android Studio installs it below the fixture home. */
+export function buildAndroidSdkRoot(params: { folders: EnvironmentFolders }): AbsolutePath {
+  return resolveEnvironmentLocation({
+    folders: params.folders,
+    location: hostPlatform.explore.androidSdkRoot,
+  });
 }
 
-export function buildAndroidAvdHome(params: { homeDir: string }): string {
-  return posix.join(params.homeDir, '.android', 'avd');
+export function buildAndroidAvdHome(params: { home: HomeFolder }): AbsolutePath {
+  return joinBelowHome({ home: params.home, path: '.android/avd' });
 }
 
 /** The sysdir an AVD's `config.ini` names for `writeAndroidSystemImage` of the same parts. */
@@ -29,8 +37,8 @@ export function buildAndroidImageSysdir(params: { platform: string; abi: string 
 }
 
 /** Creates `~/.android/avd`, empty, so the folder exists with no AVD. */
-export async function createAndroidAvdHome(params: { homeDir: string }): Promise<void> {
-  await mkdir(buildAndroidAvdHome(params), { recursive: true });
+export async function createAndroidAvdHome(params: { home: HomeFolder }): Promise<void> {
+  await mkdir(buildAndroidAvdHome({ home: params.home }), { recursive: true });
 }
 
 /**
@@ -39,16 +47,16 @@ export async function createAndroidAvdHome(params: { homeDir: string }): Promise
  * are dated `lastUsedAtMs`.
  */
 export async function writeAndroidAvd(params: {
-  homeDir: string;
+  home: HomeFolder;
   name: string;
   folderName?: string;
   imageSysdir: string | null;
   lastUsedAtMs: number;
 }): Promise<{ iniPath: AbsolutePath; avdPath: AbsolutePath }> {
-  const avdHome = buildAndroidAvdHome(params);
+  const avdHome = buildAndroidAvdHome({ home: params.home });
   const folderName = params.folderName ?? `${params.name}.avd`;
-  const avdPath = posix.join(avdHome, folderName);
-  const iniPath = posix.join(avdHome, `${params.name}.ini`);
+  const avdPath = join(avdHome, folderName);
+  const iniPath = join(avdHome, `${params.name}.ini`);
   const configLines = ['AvdId=Example', 'abi.type=arm64-v8a'];
 
   if (params.imageSysdir !== null) {
@@ -60,20 +68,20 @@ export async function writeAndroidAvd(params: {
     iniPath,
     `avd.ini.encoding=UTF-8\npath=${avdPath}\npath.rel=avd/${folderName}\ntarget=android-35\n`,
   );
-  await writeFile(posix.join(avdPath, 'config.ini'), `${configLines.join('\n')}\n`);
-  await writeFile(posix.join(avdPath, 'hardware-qemu.ini'), 'hw.cpu.arch = arm64\n');
+  await writeFile(join(avdPath, 'config.ini'), `${configLines.join('\n')}\n`);
+  await writeFile(join(avdPath, 'hardware-qemu.ini'), 'hw.cpu.arch = arm64\n');
   await updateModifiedMs({
-    path: posix.join(avdPath, 'config.ini'),
+    path: join(avdPath, 'config.ini'),
     modifiedMs: params.lastUsedAtMs,
   });
   await updateModifiedMs({
-    path: posix.join(avdPath, 'hardware-qemu.ini'),
+    path: join(avdPath, 'hardware-qemu.ini'),
     modifiedMs: params.lastUsedAtMs,
   });
 
   return {
-    iniPath: buildTestAbsolutePath({ text: iniPath }),
-    avdPath: buildTestAbsolutePath({ text: avdPath }),
+    iniPath: buildTestHostPath({ text: iniPath }),
+    avdPath: buildTestHostPath({ text: avdPath }),
   };
 }
 
@@ -83,7 +91,7 @@ export async function writeAndroidSystemImage(params: {
   platform: string;
   abi: string;
 }): Promise<AbsolutePath> {
-  const folderPath = posix.join(
+  const folderPath = join(
     params.sdkRoot,
     'system-images',
     params.platform,
@@ -93,26 +101,28 @@ export async function writeAndroidSystemImage(params: {
 
   await mkdir(folderPath, { recursive: true });
   await writeFile(
-    posix.join(folderPath, 'package.xml'),
+    join(folderPath, 'package.xml'),
     buildAndroidPackageXml({
       packagePath: `system-images;${params.platform};google_apis;${params.abi}`,
     }),
   );
 
-  return buildTestAbsolutePath({ text: folderPath });
+  return buildTestHostPath({ text: folderPath });
 }
 
 /** Writes `<sdk>/emulator/package.xml`; returns the folder. */
-export async function writeAndroidEmulator(params: { homeDir: string }): Promise<AbsolutePath> {
-  const folderPath = posix.join(buildAndroidSdkRoot(params), 'emulator');
+export async function writeAndroidEmulator(params: {
+  folders: EnvironmentFolders;
+}): Promise<AbsolutePath> {
+  const folderPath = join(buildAndroidSdkRoot({ folders: params.folders }), 'emulator');
 
   await mkdir(folderPath, { recursive: true });
   await writeFile(
-    posix.join(folderPath, 'package.xml'),
+    join(folderPath, 'package.xml'),
     buildAndroidPackageXml({ packagePath: 'emulator' }),
   );
 
-  return buildTestAbsolutePath({ text: folderPath });
+  return buildTestHostPath({ text: folderPath });
 }
 
 /**
@@ -120,19 +130,23 @@ export async function writeAndroidEmulator(params: { homeDir: string }): Promise
  * `platforms;<folderName>`; returns the folder.
  */
 export async function writeAndroidPlatform(params: {
-  homeDir: string;
+  folders: EnvironmentFolders;
   folderName: string;
   packagePath?: string;
 }): Promise<AbsolutePath> {
-  const folderPath = posix.join(buildAndroidSdkRoot(params), 'platforms', params.folderName);
+  const folderPath = join(
+    buildAndroidSdkRoot({ folders: params.folders }),
+    'platforms',
+    params.folderName,
+  );
 
   await mkdir(folderPath, { recursive: true });
   await writeFile(
-    posix.join(folderPath, 'package.xml'),
+    join(folderPath, 'package.xml'),
     buildAndroidPackageXml({ packagePath: params.packagePath ?? `platforms;${params.folderName}` }),
   );
 
-  return buildTestAbsolutePath({ text: folderPath });
+  return buildTestHostPath({ text: folderPath });
 }
 
 export function buildAndroidPackageXml(params: { packagePath: string }): string {

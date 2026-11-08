@@ -1,4 +1,5 @@
 import type { Environment } from '../../environment/buildEnvironment.js';
+import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { PathUnitRecheck } from '../decideComparisonActivity.js';
 import type { ExploreProbePlatform } from '../exploreProbe.js';
 import type { ExplorePathUnitClaudeTranscripts } from '../exploreUnit.js';
@@ -10,7 +11,7 @@ export async function recheckClaudeTranscriptsUnit(params: {
   unit: ExplorePathUnitClaudeTranscripts;
   environment: Environment;
   platform: ExploreProbePlatform;
-  processCommands: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): Promise<PathUnitRecheck> {
   const project = await loadClaudeProjectState({
     pathRules: params.environment.pathRules,
@@ -25,6 +26,6 @@ export async function recheckClaudeTranscriptsUnit(params: {
   return compareClaudeTranscriptsUnit({
     unit: params.unit,
     project: project.value,
-    processCommands: params.processCommands,
+    runningProcesses: params.runningProcesses,
   });
 }
