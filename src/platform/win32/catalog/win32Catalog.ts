@@ -6,6 +6,7 @@ import type {
   EnvironmentLocationAtRoot,
 } from '../../../environment/environmentLocation.js';
 import type { ExplorePlatform } from '../../../explore/explorePlatform.js';
+import { androidSdkRoot } from './androidSdk.js';
 import { WIN32_CATALOG_ENTRIES } from './catalogEntries.js';
 import { PNPM_INSTALL_PLACES, PNPM_STORE_ROOT } from './pnpmHomes.js';
 import { WIN32_PROTECTED_LOCATIONS, WIN32_SENSITIVE_LOCATIONS } from './protectedPaths.js';
@@ -86,7 +87,7 @@ export const WIN32_CATALOG: Win32Catalog = {
     pnpmInstallPlaces: PNPM_INSTALL_PLACES,
     pnpmStoreRoot: PNPM_STORE_ROOT,
     pnpmXdgStoreRoot: null,
-    androidSdkRoot: { root: 'localAppData', path: 'Android/Sdk' },
+    androidSdkRoot: androidSdkRoot,
     // A second Android SDK that Flutter's settings name is not read on Windows yet.
     flutterSettingsPaths: [],
     vscodeProfilesRoot: { root: 'roamingAppData', path: 'Code/User/profiles' },

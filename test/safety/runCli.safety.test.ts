@@ -18,6 +18,7 @@ import {
   listFixturePathsBesideLog,
   loadTestEnvironment,
   updateModifiedMs,
+  writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestPlatform } from '../support/platformFixtures.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
@@ -308,8 +309,7 @@ describe('runCli safety', () => {
   test('stops with exit 4 and deletes nothing when the log cannot be created', async () => {
     const logFolderPath = dirname(environment.deletionLogPath);
 
-    await mkdir(dirname(logFolderPath), { recursive: true });
-    await writeFile(logFolderPath, 'a file where the folder belongs');
+    await writeFixtureTextFile({ path: logFolderPath, text: 'a file where the folder belongs' });
 
     const before = await listFixturePaths();
     const { exitCode, io } = await runWithInput({ argv: [], inputLines: ['1-3', 'DELETE'] });

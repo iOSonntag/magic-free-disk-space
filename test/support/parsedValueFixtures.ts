@@ -123,11 +123,11 @@ export function buildTestUserIdentity(params: { uid: number }): UserIdentity {
   };
 }
 
-export function buildTestWindowsSid(params: { text: string }): WindowsSid {
+function buildTestWindowsSid(params: { text: string }): WindowsSid {
   return unwrapFixtureValue({ parsed: parseWindowsSid(params), text: params.text });
 }
 
-/** A Windows user by its SID, such as `S-1-5-21-1-2-3-1001`. */
+/** A Windows user by its SID. */
 export function buildTestWindowsUser(params: { sidText: string }): UserIdentity {
   return { kind: 'windows', sid: buildTestWindowsSid({ text: params.sidText }) };
 }

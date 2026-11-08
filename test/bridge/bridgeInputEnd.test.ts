@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { runChildProcess } from '../support/fixtureCommand.js';
 import { INPUT_ENDED_LINE } from './bridgeInputEndFixture.js';
 
 const fixturePath = join(import.meta.dir, 'bridgeInputEndFixture.ts');
@@ -11,28 +12,18 @@ describe('the bridge once its input closes', () => {
   test(
     'reads every request, then ends on its own with its listeners released',
     async () => {
-      const fixture = Bun.spawn([process.execPath, fixturePath], {
-        stdin: 'pipe',
-        stdout: 'pipe',
-        stderr: 'ignore',
+      const run = await runChildProcess({
+        command: [process.execPath, fixturePath],
+        stdin: new TextEncoder().encode('{"kind":"first"}\n\n{"kind":"second"}\n'),
+        timeoutMs: EXIT_TIMEOUT_MS,
       });
-      fixture.stdin.write('{"kind":"first"}\n\n{"kind":"second"}\n');
-      await fixture.stdin.end();
 
-      const stdout = new Response(fixture.stdout).text();
-      const outcome = await Promise.race([
-        fixture.exited.then(() => 'exited' as const),
-        Bun.sleep(EXIT_TIMEOUT_MS).then(() => 'timedOut' as const),
-      ]);
-
-      if (outcome === 'timedOut') {
-        fixture.kill();
-      }
-
-      await fixture.exited;
-
-      expect({ outcome: outcome, exitCode: fixture.exitCode, stdout: await stdout }).toEqual({
-        outcome: 'exited',
+      expect({
+        timedOut: run.timedOut,
+        exitCode: run.exitCode,
+        stdout: new TextDecoder().decode(run.stdout),
+      }).toEqual({
+        timedOut: false,
         exitCode: 0,
         stdout: `${INPUT_ENDED_LINE} after 2 requests\n`,
       });

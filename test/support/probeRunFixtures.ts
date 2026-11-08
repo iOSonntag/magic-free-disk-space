@@ -11,7 +11,7 @@ import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { FixtureRoot } from './fixtureRoot.js';
 import { loadTestEnvironment, withFixtureRoot } from './fixtureRoot.js';
 import { buildTestProbePlatform } from './probePlatformFixtures.js';
-import { buildRunningCommandLines } from './runningProcessesFixtures.js';
+import { buildHostNoRunningProcesses } from './runningProcessesFixtures.js';
 
 /** How long a test probe run may take before its deadline. */
 const TEST_PROBE_RUN_DURATION_MS = 10_000;
@@ -65,7 +65,7 @@ export function buildTestProbeRun(params: TestProbeRunParams): ExploreProbeRun {
     platform: params.platform ?? buildTestProbePlatform(),
     runningProcesses:
       params.runningProcesses === undefined
-        ? buildRunningCommandLines([])
+        ? buildHostNoRunningProcesses()
         : params.runningProcesses,
     deadlineMs: Date.now() + TEST_PROBE_RUN_DURATION_MS,
     unusedCutoffMs: params.unusedCutoffMs ?? 0,

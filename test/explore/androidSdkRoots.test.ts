@@ -23,7 +23,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath, joinBelowHome } from '../support/parsedValueFixtures.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import {
@@ -119,9 +119,7 @@ describe('loadAndroidSdkRoots', () => {
 
   function buildLocalProperties(sdkDir: string): ProjectPinFile {
     return buildTestPinFileText({
-      path: buildTestHostPath({
-        text: join(fixtureRoot.homeDir, 'code', 'app', 'android', 'local.properties'),
-      }),
+      path: joinBelowHome({ home: environment, path: 'code/app/android/local.properties' }),
       kind: 'androidLocalProperties',
       text: `sdk.dir=${sdkDir}\n`,
     });

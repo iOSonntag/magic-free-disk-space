@@ -19,6 +19,7 @@ import {
   buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
+import { listNumberedViewItems } from '../support/numberedViewItems.js';
 import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
@@ -89,17 +90,6 @@ function buildView(params: {
     homeDir: home.homeDir,
     disk: params.disk ?? null,
   });
-}
-
-/** Every number of the view, top to bottom as the app and the CLI show them. */
-function listNumbersTopToBottom(params: { view: ScanView }): number[] {
-  const sectionNumbers = params.view.sections.flatMap((section) => [
-    ...section.items.map((item) => item.number),
-    ...(section.checkGroup?.items ?? []).map((item) => item.number),
-  ]);
-  const exploreNumbers = (params.view.explore?.items ?? []).map((item) => item.number);
-
-  return [...sectionNumbers, ...exploreNumbers];
 }
 
 describe('buildScanView', () => {
@@ -837,7 +827,9 @@ describe('buildScanView', () => {
 
     const view = buildView({ report: report });
 
-    expect(listNumbersTopToBottom({ view: view })).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(listNumberedViewItems({ view: view }).map((item) => item.number)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
     expect(view.sections.map((section) => section.titleText)).toEqual([
       'Caches',
       'Projects',

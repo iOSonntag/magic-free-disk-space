@@ -14,7 +14,7 @@ import type {
 import type { ToolPins } from '../../src/explore/projectPins/selectToolPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath, buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, joinBelowHome } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
@@ -156,9 +156,7 @@ describe('loadFvmVersionFindings and recheckFvmVersionUnit', () => {
 
   function buildFvmrc(params: { home: FixtureHome; text: string }): ProjectPinFile {
     return buildTestPinFileText({
-      path: buildTestHostPath({
-        text: join(params.home.fixtureRoot.homeDir, 'code', 'app', '.fvmrc'),
-      }),
+      path: joinBelowHome({ home: params.home.environment, path: 'code/app/.fvmrc' }),
       kind: 'fvmrc',
       text: params.text,
     });

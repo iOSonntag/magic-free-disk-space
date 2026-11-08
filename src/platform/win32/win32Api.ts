@@ -688,7 +688,7 @@ export function setFileAttributes(params: {
  * The size and item count of the Recycle Bin of the drive whose root is `driveRoot`, such as
  * `C:\`. The HRESULT of a failure is its code.
  */
-export function loadRecycleBinCount(params: {
+export function loadRecycleBinContent(params: {
   driveRoot: DriveRoot;
 }): Result<RecycleBinContent, Win32CallFailure> {
   shell32 ??= openShell32();

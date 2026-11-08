@@ -28,7 +28,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath, joinBelowHome } from '../support/parsedValueFixtures.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
@@ -539,7 +539,7 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
   beforeEach(async () => {
     fixtureRoot = await createFixtureRoot();
     environment = await loadTestEnvironment({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
-    socketPath = buildTestHostPath({ text: join(environment.homeDir, 'engine.sock') });
+    socketPath = joinBelowHome({ home: environment, path: 'engine.sock' });
   });
 
   afterEach(async () => {

@@ -7,7 +7,7 @@ import { listDriveRootTexts } from '../../../src/platform/win32/listDriveRoots.j
 import {
   emptyRecycleBin,
   loadLogicalDrives,
-  loadRecycleBinCount,
+  loadRecycleBinContent,
 } from '../../../src/platform/win32/win32Api.js';
 import { win32Platform } from '../../../src/platform/win32/win32Platform.js';
 import { buildTestDriveRoot } from '../../support/parsedValueFixtures.js';
@@ -23,7 +23,7 @@ const FIRST_FAILURE_HRESULT = 0x80000000;
 const isRecycleBinProbeOptedIn = process.env.MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE === '1';
 
 /** The root of the drive of the temporary folder, whose bin the probes count and empty. */
-function buildHostDriveRoot(): DriveRoot {
+function loadHostDriveRoot(): DriveRoot {
   return buildTestDriveRoot({ text: parse(tmpdir()).root });
 }
 
@@ -59,7 +59,7 @@ function getNothingToEmptyCode(): number {
 
 describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () => {
   test('SHQueryRecycleBinW counts the bin of the drive of the temporary folder', () => {
-    const content = loadRecycleBinCount({ driveRoot: buildHostDriveRoot() });
+    const content = loadRecycleBinContent({ driveRoot: loadHostDriveRoot() });
 
     expect(content.kind).toBe('succeeded');
 
@@ -70,7 +70,7 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
   });
 
   test('SHQueryRecycleBinW fails with its HRESULT for a drive that is not there', () => {
-    const content = loadRecycleBinCount({ driveRoot: findAbsentDriveRoot() });
+    const content = loadRecycleBinContent({ driveRoot: findAbsentDriveRoot() });
 
     expect(content).toEqual({
       kind: 'failed',
@@ -91,7 +91,7 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
     });
 
     test('SHEmptyRecycleBinW empties the bin of a binned file, then finds nothing to empty', async () => {
-      const driveRoot = buildHostDriveRoot();
+      const driveRoot = loadHostDriveRoot();
       const filePath = join(folder, 'binned.txt');
       await writeFile(filePath, 'a file for the Recycle Bin');
       // The path goes through the environment, so no text of it is read as PowerShell.
@@ -107,7 +107,7 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
 
       expect(binned.exitCode).toBe(0);
 
-      const before = loadRecycleBinCount({ driveRoot: driveRoot });
+      const before = loadRecycleBinContent({ driveRoot: driveRoot });
 
       expect(before).toMatchObject({ kind: 'succeeded' });
       expect(before.kind === 'succeeded' && before.value.itemCount > 0).toBe(true);
@@ -115,7 +115,7 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
         kind: 'succeeded',
         value: null,
       });
-      expect(loadRecycleBinCount({ driveRoot: driveRoot })).toEqual({
+      expect(loadRecycleBinContent({ driveRoot: driveRoot })).toEqual({
         kind: 'succeeded',
         value: { sizeBytes: 0, itemCount: 0 },
       });

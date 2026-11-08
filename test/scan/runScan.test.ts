@@ -259,6 +259,10 @@ describe('buildCloudOnlyEntryTally', () => {
       cloudOnlyEntries: win32Platform.scan.cloudOnlyEntries,
     });
 
+    if (tally.recordEvictedEntry === null) {
+      throw new Error('The tally of Windows records no cloud-only entry.');
+    }
+
     tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Clips', kind: 'directory' });
     tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\clip.mov', kind: 'file' });
     tally.recordEvictedEntry({ path: 'C:\\Users\\me\\OneDrive\\Clips', kind: 'directory' });
@@ -271,8 +275,7 @@ describe('buildCloudOnlyEntryTally', () => {
       cloudOnlyEntries: darwinPlatform.scan.cloudOnlyEntries,
     });
 
-    tally.recordEvictedEntry({ path: '/Users/me/Library/Mobile Documents/clip.mov', kind: 'file' });
-
+    expect(tally.recordEvictedEntry).toBeNull();
     expect(tally.getCloudOnlyEntryCount()).toBeNull();
   });
 });

@@ -9,7 +9,7 @@ import { loadFullDiskAccess, WIN32_PRIVACY_DENIAL_CODE } from './readRules.js';
 import { removeTree, win32EntryReads } from './removeTree.js';
 import { WIN32_REPORT_TEXTS } from './reportTexts.js';
 import { win32ToolProcesses } from './toolProcesses.js';
-import { emptyRecycleBin, loadRecycleBinCount } from './win32Api.js';
+import { emptyRecycleBin, loadRecycleBinContent } from './win32Api.js';
 
 /** `E_UNEXPECTED`, what `SHEmptyRecycleBinW` answers for a bin that holds nothing to empty. */
 const E_UNEXPECTED_HRESULT = 0x8000ffff;
@@ -59,7 +59,7 @@ export const win32Platform: Platform = {
       regeneration: 'A deleted file does not come back.',
       risk: 'careful',
       binFolderName: '$Recycle.Bin',
-      loadRecycleBin: loadRecycleBinCount,
+      loadRecycleBin: loadRecycleBinContent,
     },
     cloudOnlyEntries: { kind: 'counted', cloudStoreName: 'OneDrive' },
     // Xcode exists only on macOS.
@@ -72,7 +72,7 @@ export const win32Platform: Platform = {
     removeTree: removeTree,
     trash: {
       kind: 'recycleBins',
-      loadRecycleBin: loadRecycleBinCount,
+      loadRecycleBin: loadRecycleBinContent,
       emptyRecycleBin: emptyRecycleBin,
       nothingToEmptyCode: E_UNEXPECTED_HRESULT,
     },

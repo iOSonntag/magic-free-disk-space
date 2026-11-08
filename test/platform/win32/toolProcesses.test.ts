@@ -3,6 +3,7 @@ import {
   buildWin32BaseEnvironment,
   win32ToolProcesses,
 } from '../../../src/platform/win32/toolProcesses.js';
+import type { StartedTool } from '../../../src/tools/toolsPlatform.js';
 
 describe('buildWin32BaseEnvironment', () => {
   test('holds the profile, the temporary folder, SystemRoot, and its folders after the tool folder', () => {
@@ -41,7 +42,7 @@ describe('buildWin32BaseEnvironment', () => {
 
 describe.skipIf(process.platform !== 'win32')('a Windows tool in its job', () => {
   /** Starts a Bun child that runs until something ends it, in a job of its own. */
-  function startIdleTool() {
+  function startIdleTool(): StartedTool {
     const started = win32ToolProcesses.startTool({
       path: process.execPath,
       args: ['-e', 'setInterval(() => {}, 1_000)'],
@@ -61,10 +62,7 @@ describe.skipIf(process.platform !== 'win32')('a Windows tool in its job', () =>
   }
 
   /** The exit code of the tool once it ended, or `null` when it still runs after `timeoutMs`. */
-  function waitForExit(params: {
-    tool: ReturnType<typeof startIdleTool>;
-    timeoutMs: number;
-  }): Promise<number | null> {
+  function waitForExit(params: { tool: StartedTool; timeoutMs: number }): Promise<number | null> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => resolve(null), params.timeoutMs);
 

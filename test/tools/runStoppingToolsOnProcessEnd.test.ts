@@ -1,20 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getErrorCode } from '../../src/system/getErrorCode.js';
 import type { ProcessEndSignal } from '../../src/tools/toolsPlatform.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot, waitUntilPresent } from '../support/fixtureRoot.js';
 import { describeOnPosix } from '../support/posixOnly.js';
-import {
-  FIXTURE_SIGNAL_EXIT_CODES,
-  waitUntilPresent,
-} from './runStoppingToolsOnProcessEndFixture.js';
+import { FIXTURE_SIGNAL_EXIT_CODES } from './runStoppingToolsOnProcessEndFixture.js';
 import { RUN_REJECTION_MESSAGE } from './runStoppingToolsOnProcessEndRejectionFixture.js';
 
-const FIXTURE_SCRIPT_PATH = join(import.meta.dir, 'runStoppingToolsOnProcessEndFixture.ts');
+const fixtureScriptPath = join(import.meta.dir, 'runStoppingToolsOnProcessEndFixture.ts');
 
-const REJECTION_FIXTURE_SCRIPT_PATH = join(
+const rejectionFixtureScriptPath = join(
   import.meta.dir,
   'runStoppingToolsOnProcessEndRejectionFixture.ts',
 );
@@ -70,13 +67,15 @@ async function waitUntilProcessGone(pid: number): Promise<boolean> {
 
 const signals: ProcessEndSignal[] = ['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGTERM'];
 
-describe('runStoppingToolsOnProcessEnd', () => {
+// On Windows the fixture compiles its fake tool for seconds past this limit, and the Job Object
+// that kills the tool on close would pass the test without the rejection's stop.
+describeOnPosix('runStoppingToolsOnProcessEnd', () => {
   test('stops the running tool when the run rejects', async () => {
     const toolPidFile = join(fixtureRoot.tempDir, 'tool.pid');
     const script = Bun.spawn(
       [
         process.execPath,
-        REJECTION_FIXTURE_SCRIPT_PATH,
+        rejectionFixtureScriptPath,
         fixtureRoot.rootDir,
         fixtureRoot.homeDir,
         fixtureRoot.tempDir,
@@ -105,7 +104,7 @@ describeOnPosix('runStoppingToolsOnProcessEnd on a signal', () => {
     const script = Bun.spawn(
       [
         process.execPath,
-        FIXTURE_SCRIPT_PATH,
+        fixtureScriptPath,
         fixtureRoot.rootDir,
         fixtureRoot.homeDir,
         fixtureRoot.tempDir,

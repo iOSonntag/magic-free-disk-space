@@ -1,3 +1,4 @@
+import { parseDriveRoot } from '../path/driveRoot.js';
 import { isPossiblySameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
@@ -14,7 +15,7 @@ export type TempPlacement = 'apartFromHome' | 'belowHome';
  * user who runs it, inside that user's own home, and treats the whole temporary folder as
  * expendable, so it refuses root, a home of another user, a temporary folder that is the home or
  * holds it, or lies in it where the platform keeps it apart from the home, and a temporary folder
- * that is or holds a protected folder.
+ * that is a drive root, of any drive, or is or holds a protected folder.
  */
 export function checkEnvironmentRoots(params: {
   pathRules: PathRules;
@@ -56,6 +57,7 @@ export function checkEnvironmentRoots(params: {
   }
 
   if (
+    parseDriveRoot({ rules: params.pathRules, text: params.tempRealPath }).kind === 'succeeded' ||
     params.protectedRealPaths.some((protectedRealPath) =>
       isPossiblySameOrInsidePath({
         rules: params.pathRules,

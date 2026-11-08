@@ -53,7 +53,7 @@ async function loadPhase(params: {
     measureTimeoutMs: 10_000,
     runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
     entryReads: params.entryReads ?? hostPlatform.system.entryReads,
-    recordEvictedEntry: () => undefined,
+    recordEvictedEntry: null,
     privacyDenialCode: hostPlatform.system.privacyDenialCode,
     decide: async (measurement): Promise<CandidateDecision> => {
       measurements.push(measurement);

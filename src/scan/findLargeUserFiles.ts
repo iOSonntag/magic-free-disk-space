@@ -66,7 +66,7 @@ export async function findLargeUserFiles(params: {
   minAllocatedBytes: number;
   deadlineMs: number;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   const artifactRulesByName = groupArtifactRulesByName({
@@ -195,7 +195,7 @@ async function loadUserFileFindings(params: {
   minAllocatedBytes: number;
   deadlineMs: number;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   issues: ScanIssue[];
   privacyDenialCode: string | null;
 }): Promise<UserFileFinding[]> {

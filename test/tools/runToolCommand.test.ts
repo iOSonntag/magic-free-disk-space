@@ -10,7 +10,7 @@ import {
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
+import { createFixtureRoot, deleteFixtureRoot, waitUntilPresent } from '../support/fixtureRoot.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
@@ -87,18 +87,6 @@ writeFileSync(${JSON.stringify(pidFile)}, String(grandchild.pid));`;
 
 async function loadPid(path: string): Promise<number> {
   return Number.parseInt(await readFile(path, 'utf8'), 10);
-}
-
-async function waitUntilPresent(path: string): Promise<void> {
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    if (await isPresent(path)) {
-      return;
-    }
-
-    await Bun.sleep(20);
-  }
-
-  throw new Error(`${path} did not appear.`);
 }
 
 /**

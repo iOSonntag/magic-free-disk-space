@@ -41,7 +41,7 @@ import {
   buildTestAbsolutePath,
   buildTestAsdfToolName,
   buildTestAsdfToolVersion,
-  buildTestHostPath,
+  joinBelowHome,
 } from '../support/parsedValueFixtures.js';
 import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
@@ -440,11 +440,11 @@ describeWithFakeTools('the asdf probe and recheck against a fixture home', () =>
   }
 
   async function writePinFile(params: { text: string }): Promise<AbsolutePath> {
-    const path = join(environment.homeDir, 'project', '.tool-versions');
+    const path = joinBelowHome({ home: environment, path: 'project/.tool-versions' });
 
     await writeFixtureTextFile({ path: path, text: params.text });
 
-    return buildTestHostPath({ text: path });
+    return path;
   }
 
   async function createAsdf(): Promise<string> {

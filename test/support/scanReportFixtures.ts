@@ -22,8 +22,10 @@ export function countTestCloudOnlyEntries(params: {
 }): CloudOnlyEntryCount | null {
   const tally = buildCloudOnlyEntryTally({ cloudOnlyEntries: params.cloudOnlyEntries });
 
-  for (const entryPath of params.entryPaths) {
-    tally.recordEvictedEntry({ path: entryPath, kind: 'file' });
+  if (tally.recordEvictedEntry !== null) {
+    for (const entryPath of params.entryPaths) {
+      tally.recordEvictedEntry({ path: entryPath, kind: 'file' });
+    }
   }
 
   return tally.getCloudOnlyEntryCount();

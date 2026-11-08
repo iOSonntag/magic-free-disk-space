@@ -6,11 +6,14 @@ import {
   resolveEnvironmentLocations,
 } from '../../src/environment/environmentLocation.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import {
   exampleDarwinEnvironment,
   exampleWin32Environment,
+  exampleWin32EnvironmentParams,
 } from '../support/environmentFixtures.js';
+import { buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
 describe('resolveEnvironmentLocation', () => {
   test('joins the names of a location below the home or the temporary folder of macOS', () => {
@@ -219,6 +222,30 @@ describe('findEnvironmentLocationPaths', () => {
       'C:\\Users\\tester\\Desktop',
       'C:\\Users\\tester\\OneDrive\\Documents',
       'C:\\Users\\tester\\Downloads',
+    ]);
+  });
+
+  test('resolves the four known folders of the user files of Windows, in their order', () => {
+    const knownFolderPaths = {
+      ...exampleWin32EnvironmentParams.knownFolderPaths,
+      videos: buildTestWindowsPath({ text: 'D:\\Videos' }),
+    };
+    const environment = buildWin32Environment({
+      ...exampleWin32EnvironmentParams,
+      knownFolderPaths: knownFolderPaths,
+      knownFolderRealPaths: knownFolderPaths,
+    });
+
+    expect<string[]>(
+      findEnvironmentLocationPaths({
+        folders: environment,
+        locations: win32Platform.scan.userFileRoots,
+      }),
+    ).toEqual([
+      'C:\\Users\\tester\\Desktop',
+      'C:\\Users\\tester\\OneDrive\\Documents',
+      'C:\\Users\\tester\\Downloads',
+      'D:\\Videos',
     ]);
   });
 

@@ -44,7 +44,7 @@ export type CatalogOwner =
   | CatalogOwnerExecutable;
 
 /** Characters Windows allows in no file name. */
-const WINDOWS_FORBIDDEN_NAME_PATTERN = /[\\/:*?"<>|]/;
+const windowsForbiddenNamePattern = /[\\/:*?"<>|]/;
 
 /**
  * The one maker of a `MacBundleId`, from the text an Info.plist names. An empty id stays an id, so
@@ -63,7 +63,7 @@ export function parseWindowsImageName(params: {
     params.text === '' ||
     params.text === '.' ||
     params.text === '..' ||
-    WINDOWS_FORBIDDEN_NAME_PATTERN.test(params.text)
+    windowsForbiddenNamePattern.test(params.text)
   ) {
     return { kind: 'failed', failure: 'not a file name' };
   }

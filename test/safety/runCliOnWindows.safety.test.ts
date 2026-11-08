@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { isSamePath } from '../../src/path/isSameOrInsidePath.js';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
-import { buildScanView } from '../../src/report/buildScanView.js';
 import { runTestCli } from '../support/cliRunFixtures.js';
 import { loadTestJournalLines } from '../support/deletionJournalFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -14,12 +13,14 @@ import {
   isSameOrBelowPathBelowRoot,
   listFixturePathsBesideLog,
 } from '../support/fixtureRoot.js';
+import { listNumberedViewItems } from '../support/numberedViewItems.js';
 import { getWin32RecycleBinScanTrash } from '../support/platformFixtures.js';
 import { runTestScanOnPlatform } from '../support/scanRunFixtures.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 import type { WindowsFixtureHome } from '../support/windowsFixtureHome.js';
 import {
   buildWindowsFixturePlatform,
+  buildWindowsFixtureScanView,
   createWindowsFixtureHome,
 } from '../support/windowsFixtureHome.js';
 
@@ -57,16 +58,13 @@ describe.skipIf(process.platform !== 'win32')(
           join(driveRoot, getWin32RecycleBinScanTrash().binFolderName),
         );
         const approvedPaths = [...approvedFixturePaths, ...approvedBinPaths];
-        const scannedView = buildScanView({
+        const scannedView = buildWindowsFixtureScanView({
           report: await runTestScanOnPlatform({
             environment: home.environment,
             platform: platform,
           }),
-          fullDiskAccessHolder: 'terminal',
-          texts: platform.report,
-          pathRules: home.environment.pathRules,
-          homeDir: home.environment.homeDir,
-          disk: null,
+          environment: home.environment,
+          platform: platform,
         });
         const approvedNumbers = approvedPaths.map((path) =>
           findItemNumber({ view: scannedView, path: path }),
@@ -132,14 +130,7 @@ describe.skipIf(process.platform !== 'win32')(
 
 /** The number the command line shows for the item at `path`, as the view of its scan numbers it. */
 function findItemNumber(params: { view: ScanView; path: string }): number {
-  const items = [
-    ...params.view.sections.flatMap((section) => [
-      ...section.items,
-      ...(section.checkGroup?.items ?? []),
-    ]),
-    ...(params.view.explore?.items ?? []),
-  ];
-  const item = items.find(
+  const item = listNumberedViewItems({ view: params.view }).find(
     (candidate) =>
       candidate.revealPath !== null &&
       isSamePath({ rules: WIN32_PATH_RULES, path: candidate.revealPath, otherPath: params.path }),

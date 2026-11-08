@@ -114,7 +114,7 @@ function walkTestProjects(params: {
       cloudOnlyPaths: params.cloudOnlyPaths ?? [],
       linkPaths: params.linkPaths ?? [],
     }),
-    recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
+    recordEvictedEntry: params.recordEvictedEntry ?? null,
     privacyDenialCode: hostPlatform.system.privacyDenialCode,
   });
 }

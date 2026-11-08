@@ -59,7 +59,7 @@ export async function walkProjects(params: {
   maxDepth: number;
   deadlineMs: number;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ProjectWalk> {
   const artifactRulesByName = groupArtifactRulesByName({
@@ -157,7 +157,9 @@ export async function walkProjects(params: {
     },
     // An evicted entry is no read failure, yet a pin file below it or in it stays unknown.
     onEvictedEntrySkipped: (entry) => {
-      params.recordEvictedEntry(entry);
+      if (params.recordEvictedEntry !== null) {
+        params.recordEvictedEntry(entry);
+      }
 
       if (
         entry.kind === 'directory' ||

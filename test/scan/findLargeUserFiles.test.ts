@@ -41,7 +41,7 @@ async function findFiles(params: {
     minAllocatedBytes: MIN_ALLOCATED_BYTES,
     deadlineMs: params.deadlineMs ?? FAR_FUTURE_DEADLINE_MS,
     entryReads: params.entryReads ?? hostPlatform.system.entryReads,
-    recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
+    recordEvictedEntry: params.recordEvictedEntry ?? null,
     privacyDenialCode: hostPlatform.system.privacyDenialCode,
   });
 }

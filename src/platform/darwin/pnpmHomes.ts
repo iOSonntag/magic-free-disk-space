@@ -4,6 +4,7 @@ import type { PnpmInstallPlaces } from '../../explore/explorePlatform.js';
 import { MISE_INSTALLS_PATH_NAMES } from '../../explore/miseVersions/miseInstallsRoot.js';
 import { NVM_NODE_VERSIONS_PATH_NAMES } from '../../explore/nvmVersions/nvmVersionsRoot.js';
 import { PNPM_TOOL_NAME } from '../../explore/pnpmStores/pnpmToolName.js';
+import { buildHomeLocation } from './buildHomeLocation.js';
 
 const PNPM_STORE_FOLDER_NAME = 'store';
 
@@ -57,9 +58,4 @@ export const PNPM_XDG_STORE_ROOT: CatalogLocation = buildPnpmHomeEntry({
 
 function buildPnpmHomeEntry(params: { home: CatalogLocation; name: string }): CatalogLocation {
   return { root: params.home.root, path: `${params.home.path}/${params.name}` };
-}
-
-/** The place below the home folder at the folder names `names`. */
-function buildHomeLocation(params: { names: string[] }): CatalogLocation {
-  return { root: 'home', path: params.names.join('/') };
 }

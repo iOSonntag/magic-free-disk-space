@@ -32,7 +32,7 @@ export function loadMeasuredTargetsPhase<TFound extends FoundTarget>(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
   decide: (measurement: TargetsMeasurement<TFound & RemovalTarget>) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {

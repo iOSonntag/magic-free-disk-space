@@ -8,7 +8,7 @@ import {
 } from '../../src/system/systemCallFailure.js';
 
 /** A thrown error as its raw fields, such as `code=EPERM errno=-4048 syscall=rm`. */
-export const describeThrownError = (error: unknown): string => {
+function describeThrownError(error: unknown): string {
   if (!(error instanceof Error)) {
     return `threw ${String(error)}`;
   }
@@ -22,7 +22,7 @@ export const describeThrownError = (error: unknown): string => {
   }
 
   return `failed ${fields.join(' ')}`;
-};
+}
 
 /** The observation the call returns, or the error it threw described as one; never throws. */
 export const observeSafely = async (observe: () => Promise<string> | string): Promise<string> => {

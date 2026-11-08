@@ -158,7 +158,7 @@ function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
     runItemMeasurement: runItemMeasurement,
     entryReads: hostPlatform.system.entryReads,
-    recordEvictedEntry: () => undefined,
+    recordEvictedEntry: null,
     privacyDenialCode: hostPlatform.system.privacyDenialCode,
   });
 }
@@ -215,7 +215,7 @@ describe('loadExplorePhase', () => {
         measureTimeoutMs: MEASURE_TIMEOUT_MS,
         runItemMeasurement: runItemMeasurement,
         entryReads: hostPlatform.system.entryReads,
-        recordEvictedEntry: () => undefined,
+        recordEvictedEntry: null,
         privacyDenialCode: hostPlatform.system.privacyDenialCode,
       });
 
@@ -283,7 +283,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: hostPlatform.system.entryReads,
-      recordEvictedEntry: () => undefined,
+      recordEvictedEntry: null,
       privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 
@@ -321,7 +321,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: hostPlatform.system.entryReads,
-      recordEvictedEntry: () => undefined,
+      recordEvictedEntry: null,
       privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 
@@ -515,7 +515,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: hostPlatform.system.entryReads,
-      recordEvictedEntry: () => undefined,
+      recordEvictedEntry: null,
       privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 
@@ -546,7 +546,7 @@ describe('loadExplorePhase', () => {
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
       entryReads: hostPlatform.system.entryReads,
-      recordEvictedEntry: () => undefined,
+      recordEvictedEntry: null,
       privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 

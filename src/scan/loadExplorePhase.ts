@@ -60,7 +60,7 @@ export async function loadExplorePhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const entryPhases = await Promise.all(
@@ -101,7 +101,7 @@ async function loadExploreEntryPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ExplorePhase> {
   const outcome = await params.outcome;
@@ -196,7 +196,7 @@ async function loadExploreFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   switch (params.finding.activity) {
@@ -222,7 +222,7 @@ async function loadIdleFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   const unit = params.finding.unit;
@@ -283,7 +283,7 @@ async function loadToolFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
 }): Promise<ScanPhase> {
   const measurement = await params.runItemMeasurement(() =>
     loadPathMeasurement({
@@ -315,7 +315,7 @@ function loadPathFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   const unitPaths = toNonEmpty(listUnitPaths(params.unit));
@@ -355,7 +355,7 @@ function loadEvictFindingPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   return loadTargetsFindingPhase({
@@ -392,7 +392,7 @@ function loadTargetsFindingPhase<TFound extends FoundTarget>(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
 }): Promise<ScanPhase> {
   return loadMeasuredTargetsPhase({

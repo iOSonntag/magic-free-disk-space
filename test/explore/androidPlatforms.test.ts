@@ -33,7 +33,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath, buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, joinBelowHome } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
@@ -439,12 +439,16 @@ async function loadAndroidProbeOutcomes(params: {
   };
 }
 
-function buildHomeGradlePath(): AbsolutePath {
-  return buildTestHostPath({ text: join(environment.homeDir, 'code', 'app', 'build.gradle') });
+function buildHomeGradlePath(params: { environment: Environment }): AbsolutePath {
+  return joinBelowHome({ home: params.environment, path: 'code/app/build.gradle' });
 }
 
-function buildHomeGradlePin(text: string): ProjectPinFile {
-  return buildTestPinFileText({ path: buildHomeGradlePath(), kind: 'gradle', text: text });
+function buildHomeGradlePin(params: { environment: Environment; text: string }): ProjectPinFile {
+  return buildTestPinFileText({
+    path: buildHomeGradlePath({ environment: params.environment }),
+    kind: 'gradle',
+    text: params.text,
+  });
 }
 
 describe('startExploreProbes with the Android platform probe', () => {
@@ -456,7 +460,9 @@ describe('startExploreProbes with the Android platform probe', () => {
     await writeAndroidPlatform({ environment: environment, folderName: 'android-35' });
 
     const outcomes = await loadAndroidProbeOutcomes({
-      pinFiles: [buildHomeGradlePin('android {\n  compileSdk 35\n}\n')],
+      pinFiles: [
+        buildHomeGradlePin({ environment: environment, text: 'android {\n  compileSdk 35\n}\n' }),
+      ],
     });
 
     expect(outcomes.platforms).toEqual({
@@ -468,7 +474,7 @@ describe('startExploreProbes with the Android platform probe', () => {
             sdkRoot: buildAndroidSdkRoot({ environment: environment }),
             folderPath: unpinnedPath,
             apiLevel: 34,
-            pinFiles: [{ path: buildHomeGradlePath(), kind: 'gradle' }],
+            pinFiles: [{ path: buildHomeGradlePath({ environment: environment }), kind: 'gradle' }],
           },
           risk: 'careful',
           activity: 'idle',
@@ -484,11 +490,9 @@ describe('startExploreProbes with the Android platform probe', () => {
 
     const outcomes = await loadAndroidProbeOutcomes({
       pinFiles: [
-        buildHomeGradlePin('android { compileSdk 34 }\n'),
+        buildHomeGradlePin({ environment: environment, text: 'android { compileSdk 34 }\n' }),
         buildTestPinFileText({
-          path: buildTestHostPath({
-            text: join(environment.homeDir, 'code', 'other', 'build.gradle.kts'),
-          }),
+          path: joinBelowHome({ home: environment, path: 'code/other/build.gradle.kts' }),
           kind: 'gradle',
           text: 'android {\n  compileSdk = 35\n}\n',
         }),
@@ -502,8 +506,14 @@ describe('startExploreProbes with the Android platform probe', () => {
     await writeAndroidPlatform({ environment: environment, folderName: 'android-34' });
 
     for (const pinFile of [
-      buildHomeGradlePin('android {\n  compileSdkVersion flutter.compileSdkVersion\n}\n'),
-      buildTestPinFileUnfit({ path: buildHomeGradlePath(), kind: 'gradle' }),
+      buildHomeGradlePin({
+        environment: environment,
+        text: 'android {\n  compileSdkVersion flutter.compileSdkVersion\n}\n',
+      }),
+      buildTestPinFileUnfit({
+        path: buildHomeGradlePath({ environment: environment }),
+        kind: 'gradle',
+      }),
     ]) {
       expect((await loadAndroidProbeOutcomes({ pinFiles: [pinFile] })).platforms).toEqual({
         kind: 'probed',
@@ -562,7 +572,7 @@ describe('startExploreProbes with the Android platform probe', () => {
 
   test('answers unreadable on an unreadable Gradle file', async () => {
     await writeAndroidPlatform({ environment: environment, folderName: 'android-34' });
-    const gradlePath = buildHomeGradlePath();
+    const gradlePath = buildHomeGradlePath({ environment: environment });
 
     const outcomes = await loadAndroidProbeOutcomes({
       pinFiles: [buildTestPinFileUnreadable({ path: gradlePath, kind: 'gradle' })],
@@ -585,7 +595,7 @@ describe('recheckExplorePathUnit with an Android platform unit', () => {
       environment: environment,
       folderName: 'android-34',
     });
-    const gradlePath = buildHomeGradlePath();
+    const gradlePath = buildHomeGradlePath({ environment: environment });
     await writeFixtureTextFile({ path: gradlePath, text: 'android {\n  compileSdk 35\n}\n' });
 
     return {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../../src/catalog/catalog.js';
 import type { EnvironmentLocation } from '../../../src/environment/environmentLocation.js';
 import {
-  findEnvironmentLocationPath,
+  findEnvironmentLocationPaths,
   resolveEnvironmentLocation,
 } from '../../../src/environment/environmentLocation.js';
 import { isSameOrInsidePath } from '../../../src/path/isSameOrInsidePath.js';
@@ -133,16 +133,12 @@ describe('WIN32_CATALOG', () => {
   });
 
   test('keeps every browser cache inside the first profile, which stays guarded with its folder of profiles', () => {
-    const userDataPaths = WIN32_CATALOG.protectedLocations
-      .filter((location) => location.path.endsWith('/User Data'))
-      .flatMap((location) => {
-        const path = findEnvironmentLocationPath({
-          folders: exampleWin32Environment,
-          location: location,
-        });
-
-        return path === null ? [] : [path];
-      });
+    const userDataPaths = findEnvironmentLocationPaths({
+      folders: exampleWin32Environment,
+      locations: WIN32_CATALOG.protectedLocations.filter((location) =>
+        location.path.endsWith('/User Data'),
+      ),
+    });
     const unguardedProfilePaths = userDataPaths
       .map((userDataPath) => buildDefaultProfilePath({ userDataPath: userDataPath }))
       .filter((profilePath) => !exampleWin32Environment.protectedRealPaths.includes(profilePath));
@@ -156,7 +152,11 @@ describe('WIN32_CATALOG', () => {
   });
 });
 
-/** Every location of the catalog: entries, install folders, probes, file roots, guarded folders. */
+/**
+ * The locations at a fixed root of the catalog: the entries with their install folders, pnpm's
+ * places, the Android SDK, VS Code's profiles, and the file roots and guarded folders outside a
+ * known folder. It skips the explore fields Windows leaves empty or null, such as `ideVersionRoots`.
+ */
 function listNamedLocations(): NamedLocation[] {
   const entryLocations = WIN32_CATALOG.entries.flatMap((entry) => {
     const installFolder =

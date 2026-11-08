@@ -767,6 +767,22 @@ describe('loadPnpmInstallState', () => {
       });
     });
 
+    test("reads the pnpm.exe of winget's portable package as an install of no known version", async () => {
+      const wingetExePath = buildWindowsPlacePath({
+        environment: environment,
+        location: {
+          root: 'localAppData',
+          path: 'Microsoft/WinGet/Packages/pnpm.pnpm_Microsoft.Winget.Source_8wekyb3d8bbwe/pnpm.exe',
+        },
+      });
+      await writeFixtureTextFile({ path: wingetExePath, text: WINDOWS_EXECUTABLE_TEXT });
+
+      expect(await loadWindowsInstallState()).toEqual({
+        kind: 'succeeded',
+        value: { installs: [{ kind: 'unparsed', path: wingetExePath }] },
+      });
+    });
+
     test('counts the pnpm.cmd and pnpm.ps1 shims in pnpm home for nothing', async () => {
       await writeFixtureTextFile({
         path: buildWindowsPlacePath({
@@ -1454,13 +1470,10 @@ for (const probeCase of probeCases) {
             storeRoot: storeRoot,
             storeFolderName: 'v10',
             packageName: packageName,
-            linkPath: join(
-              buildPnpmHomePath({
-                environment: environment,
-                names: ['global/5/node_modules'],
-              }),
-              packageName,
-            ),
+            linkPath: buildPnpmHomePath({
+              environment: environment,
+              names: ['global/5/node_modules', packageName],
+            }),
           });
 
           expect(await loadOfferedVersions({ files: [] })).toEqual({
@@ -1732,7 +1745,7 @@ for (const probeCase of probeCases) {
     }
 
     describe.skipIf(process.platform !== 'win32')("at pnpm's places of Windows", () => {
-      /** The folder of pnpm 10 at `location`, in a folder of pnpm versions. */
+      /** Creates the version folder at `location`. */
       function createPnpmVersionFolder(params: { location: CatalogLocation }): Promise<void> {
         return createFixtureDirectory({
           path: resolveEnvironmentLocation({ folders: environment, location: params.location }),
@@ -1754,43 +1767,29 @@ for (const probeCase of probeCases) {
         {
           place: "corepack's v1 folder in the local AppData",
           createInstall: () =>
-            createFixtureDirectory({
-              path: resolveEnvironmentLocation({
-                folders: environment,
-                location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
-              }),
+            createPnpmVersionFolder({
+              location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
             }),
         },
         {
           place: "corepack's folder in the local AppData",
           createInstall: () =>
-            createFixtureDirectory({
-              path: resolveEnvironmentLocation({
-                folders: environment,
-                location: { root: 'localAppData', path: 'node/corepack/pnpm/10.14.0' },
-              }),
+            createPnpmVersionFolder({
+              location: { root: 'localAppData', path: 'node/corepack/pnpm/10.14.0' },
             }),
         },
         {
           place: "npm's globals in the roaming AppData",
           createInstall: () =>
-            writePnpmPackage({
-              packageFolder: resolveEnvironmentLocation({
-                folders: environment,
-                location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
-              }),
-              version: '10.14.0',
+            writePnpm10Package({
+              location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
             }),
         },
         {
           place: "npm's globals of @pnpm/exe in the roaming AppData",
           createInstall: () =>
-            writePnpmPackage({
-              packageFolder: resolveEnvironmentLocation({
-                folders: environment,
-                location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
-              }),
-              version: '10.14.0',
+            writePnpm10Package({
+              location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
             }),
         },
         {

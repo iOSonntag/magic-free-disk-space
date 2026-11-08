@@ -3,7 +3,6 @@ import type { ToolCommandResult } from '../../src/tools/runToolCommand.js';
 import { runStoppingToolsOnProcessEnd, runToolCommand } from '../../src/tools/runToolCommand.js';
 import type { ProcessEndSignal } from '../../src/tools/toolsPlatform.js';
 import { createFakeTool } from '../support/fakeTool.js';
-import { isPresent } from '../support/fixtureRoot.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 
 /** Codes no signal's default action gives, so an exit with one proves the listener ran. */
@@ -43,18 +42,6 @@ await Bun.sleep(60_000);`,
     timeoutMs: 60_000,
     processes: hostPlatform.tools.processes,
   });
-}
-
-export async function waitUntilPresent(path: string): Promise<void> {
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    if (await isPresent(path)) {
-      return;
-    }
-
-    await Bun.sleep(20);
-  }
-
-  throw new Error(`${path} did not appear.`);
 }
 
 /** Parses the root, home, and temp folder and the pid file from the arguments of a fixture. */

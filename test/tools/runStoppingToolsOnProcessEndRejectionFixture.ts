@@ -1,10 +1,7 @@
 import { runStoppingToolsOnProcessEnd } from '../../src/tools/runToolCommand.js';
+import { waitUntilPresent } from '../support/fixtureRoot.js';
 import { hostPlatform } from '../support/platformFixtures.js';
-import {
-  parseFixtureArguments,
-  runPidWritingTool,
-  waitUntilPresent,
-} from './runStoppingToolsOnProcessEndFixture.js';
+import { parseFixtureArguments, runPidWritingTool } from './runStoppingToolsOnProcessEndFixture.js';
 
 /** The message of the rejection the fixture's run ends with while its tool still runs. */
 export const RUN_REJECTION_MESSAGE = 'The run rejected while its tool still ran.';

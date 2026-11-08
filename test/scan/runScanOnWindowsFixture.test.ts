@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sep } from 'node:path';
-import { buildScanView } from '../../src/report/buildScanView.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import { placeCandidate } from '../../src/scan/placeCandidate.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
@@ -11,6 +10,7 @@ import { runTestScanOnPlatform } from '../support/scanRunFixtures.js';
 import type { WindowsFixtureHome, WindowsFixturePlatform } from '../support/windowsFixtureHome.js';
 import {
   buildWindowsFixturePlatform,
+  buildWindowsFixtureScanView,
   createWindowsFixtureHome,
   windowsFixtureAdvisedApps,
   windowsFixtureRecycleBinContent,
@@ -123,12 +123,13 @@ describe.skipIf(process.platform !== 'win32')(
       );
     });
 
-    test('lists an obsolete VS Code extension, a pnpm store no pnpm uses, and an Android system image no device uses under Explore', () => {
+    test('lists an obsolete VS Code extension, a pnpm store no pnpm uses, an Android system image no device uses, and an Android platform no project pins under Explore', () => {
       expect(listExplorePaths({ report: report })).toEqual(
         [
           home.paths.vscodeExtensionPath,
           home.paths.pnpmStorePath,
           home.paths.androidSystemImagePath,
+          home.paths.androidPlatformPath,
         ].toSorted(),
       );
     });
@@ -153,13 +154,10 @@ describe.skipIf(process.platform !== 'win32')(
     });
 
     test('advises uninstalling each installed app in Settings > Apps, and offers none for deletion', () => {
-      const view = buildScanView({
+      const view = buildWindowsFixtureScanView({
         report: report,
-        fullDiskAccessHolder: 'terminal',
-        texts: fixturePlatform.platform.report,
-        pathRules: home.environment.pathRules,
-        homeDir: home.environment.homeDir,
-        disk: null,
+        environment: home.environment,
+        platform: fixturePlatform.platform,
       });
 
       expect(report.appAdvice).toEqual({

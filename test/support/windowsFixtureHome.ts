@@ -8,8 +8,11 @@ import type { DriveRoot } from '../../src/path/driveRoot.js';
 import { isSameOrInsidePath } from '../../src/path/isSameOrInsidePath.js';
 import type { Platform } from '../../src/platform/platform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
+import type { ScanView } from '../../src/report/buildScanView.js';
+import { buildScanView } from '../../src/report/buildScanView.js';
 import type { RecycleBinContent } from '../../src/scan/candidate.js';
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
+import type { ScanReport } from '../../src/scan/runScan.js';
 import type { AdvisedApp, RecycleBinLoad } from '../../src/scan/scanPlatform.js';
 import type { FixtureRoot } from './fixtureRoot.js';
 import {
@@ -39,6 +42,7 @@ export type WindowsFixturePaths = {
   vscodeExtensionPath: string;
   pnpmStorePath: string;
   androidSystemImagePath: string;
+  androidPlatformPath: string;
   largeFilePath: string;
 };
 
@@ -69,7 +73,7 @@ export const windowsFixtureAdvisedApps: AdvisedApp[] = [
 ];
 
 /** The image paths of the running processes: new Teams runs; classic Teams, Chrome and Edge do not. */
-export const windowsFixtureRunningImagePaths = [
+const windowsFixtureRunningImagePaths = [
   'C:\\Windows\\explorer.exe',
   'C:\\Program Files\\WindowsApps\\MSTeams_25031.805.3440.5290_x64__8wekyb3d8bbwe\\ms-teams.exe',
 ];
@@ -84,10 +88,11 @@ const fixtureItemBytes = 2 * SCAN_LIMITS.minOfferedBytes;
 const FIXTURE_AGE_DAYS = 400;
 const VSCODE_EXTENSION_FOLDER_NAME = 'contoso.formatter-1.2.0';
 const ANDROID_SYSTEM_IMAGE_PACKAGE_PATH = 'system-images;android-34;google_apis;x86_64';
+const ANDROID_PLATFORM_PACKAGE_PATH = 'platforms;android-33';
 
 /**
  * Creates a home in `fixtureRoot` laid out as a Windows profile, with the Downloads known folder,
- * an item for each section of the scan, three Explore items, and the files beside them that no
+ * an item for each section of the scan, four Explore items, and the files beside them that no
  * section offers.
  * Call it on Windows only.
  */
@@ -137,6 +142,12 @@ export async function createWindowsFixtureHome(params: {
       'Android',
       'Sdk',
       ...ANDROID_SYSTEM_IMAGE_PACKAGE_PATH.split(';'),
+    ),
+    androidPlatformPath: join(
+      localAppDataDir,
+      'Android',
+      'Sdk',
+      ...ANDROID_PLATFORM_PACKAGE_PATH.split(';'),
     ),
     largeFilePath: join(homeDir, 'Downloads', 'recording-2024.mp4'),
   };
@@ -211,6 +222,11 @@ export async function createWindowsFixtureHome(params: {
   });
   // The emulator has no virtual device, so none uses the image.
   await mkdir(join(homeDir, '.android', 'avd'), { recursive: true });
+  // No Gradle file of a project pins a compileSdk, so none pins the platform.
+  await writeFixtureTextFile({
+    path: join(paths.androidPlatformPath, 'package.xml'),
+    text: `<localPackage path="${ANDROID_PLATFORM_PACKAGE_PATH}" obsolete="false"/>\n`,
+  });
 
   await createFixtureFile({
     path: paths.largeFilePath,
@@ -233,7 +249,7 @@ export function buildWindowsFixturePlatform(params: {
   const leftOutEntries = win32Platform.catalog.entries.filter(
     (entry) => !isEntryInsideFixture({ entry: entry, environment: params.environment }),
   );
-  const fakeRecycleBins = createFakeRecycleBins(windowsFixtureRecycleBinContent);
+  const fakeRecycleBins = buildFakeRecycleBins(windowsFixtureRecycleBinContent);
   const platform = buildTestWin32Platform({
     loadAdvisedApps: async () => ({ apps: windowsFixtureAdvisedApps, issues: [] }),
     loadRecycleBin: fakeRecycleBins.loadRecycleBin,
@@ -255,6 +271,22 @@ export function buildWindowsFixturePlatform(params: {
     leftOutEntryIds: leftOutEntries.map((entry) => entry.id),
     emptiedDriveRoots: fakeRecycleBins.emptiedDriveRoots,
   };
+}
+
+/** The view the command line shows in a terminal for `report`, a scan of the fixture home. */
+export function buildWindowsFixtureScanView(params: {
+  report: ScanReport;
+  environment: Environment;
+  platform: Platform;
+}): ScanView {
+  return buildScanView({
+    report: params.report,
+    fullDiskAccessHolder: 'terminal',
+    texts: params.platform.report,
+    pathRules: params.environment.pathRules,
+    homeDir: params.environment.homeDir,
+    disk: null,
+  });
 }
 
 async function createOldFile(params: { path: string; oldMs: number }): Promise<void> {
@@ -297,7 +329,7 @@ function isEntryInsideFixture(params: { entry: CatalogEntry; environment: Enviro
 }
 
 /** Bins that hold `content` on every drive until a deletion empties one, which then holds none. */
-function createFakeRecycleBins(content: RecycleBinContent): FakeRecycleBins {
+function buildFakeRecycleBins(content: RecycleBinContent): FakeRecycleBins {
   const emptiedDriveRoots: DriveRoot[] = [];
 
   return {

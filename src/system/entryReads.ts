@@ -22,12 +22,14 @@ type EntryPlacementLink = { kind: 'link' };
  */
 type EntryPlacementUnread = { kind: 'unread'; code: string };
 
-/** Where an entry's content lies, beyond what lstat tells. */
-export type EntryPlacement =
+/** Where an entry's content lies, as a read that succeeded tells it. */
+export type EntryPlacementRead =
   | EntryPlacementOnDisk
   | EntryPlacementCloudOnly
-  | EntryPlacementLink
-  | EntryPlacementUnread;
+  | EntryPlacementLink;
+
+/** Where an entry's content lies, beyond what lstat tells. */
+export type EntryPlacement = EntryPlacementRead | EntryPlacementUnread;
 
 /** Places one entry with one read of the system. Never throws. */
 export type EntryPlacementLoad = (entry: EntryRef) => EntryPlacement;

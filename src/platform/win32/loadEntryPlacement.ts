@@ -1,6 +1,6 @@
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import { WIN32_PATH_RULES } from '../../path/pathRules.js';
-import type { EntryPlacement, EntryRef } from '../../system/entryReads.js';
+import type { EntryPlacement, EntryPlacementRead, EntryRef } from '../../system/entryReads.js';
 import { formatEntryCallFailure } from './formatEntryCallFailure.js';
 import { loadFileAttributes } from './win32Api.js';
 
@@ -42,7 +42,7 @@ export function loadEntryPlacement(params: EntryRef): EntryPlacement {
  * for any other reparse point, else `onDisk`. A recall bit wins, so a placeholder that shows its
  * reparse point is never removed as a link, which would delete it from its cloud store.
  */
-export function decideEntryPlacement(params: { attributes: number }): EntryPlacement {
+export function decideEntryPlacement(params: { attributes: number }): EntryPlacementRead {
   if (
     (params.attributes & (FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_RECALL_ON_OPEN)) !==
     0

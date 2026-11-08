@@ -121,6 +121,13 @@ describe('checkEnvironmentRoots on Windows', () => {
     });
   });
 
+  test('refuses a temporary folder that is the root of a drive that is not fixed', () => {
+    expect(checkOnWindows({ tempRealPath: 'E:\\' })).toEqual({
+      reason: 'tempHoldsProtectedFolder',
+      path: 'E:\\',
+    });
+  });
+
   test('refuses a temporary folder that is a protected folder or holds one', () => {
     for (const tempRealPath of [WINDOWS_DOCUMENTS, 'd:\\documents', 'C:\\Users\\tester\\AppData']) {
       expect(checkOnWindows({ tempRealPath: tempRealPath })).toEqual({

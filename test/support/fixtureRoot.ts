@@ -43,7 +43,7 @@ type TestFolder = { path: AbsolutePath; realPath: AbsolutePath };
 export type TestKnownFolder = { folder: WindowsKnownFolder; pathBelowHome: string };
 
 /** Windows names no path for a known folder that a fixture did not create. */
-export const noKnownFolderPaths: WindowsKnownFolderPaths = {
+const noKnownFolderPaths: WindowsKnownFolderPaths = {
   desktop: null,
   documents: null,
   downloads: null,
@@ -293,6 +293,19 @@ export async function isPresent(path: string): Promise<boolean> {
     () => true,
     () => false,
   );
+}
+
+/** Resolves once anything is at `path`, as `isPresent` reads it; throws when nothing came within 5 s. */
+export async function waitUntilPresent(path: string): Promise<void> {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
+    if (await isPresent(path)) {
+      return;
+    }
+
+    await Bun.sleep(20);
+  }
+
+  throw new Error(`${path} did not appear.`);
 }
 
 /** Sets the modified time of a file or directory. Call it after a directory's children exist: adding a child changes it. */

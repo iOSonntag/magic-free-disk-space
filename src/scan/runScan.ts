@@ -5,7 +5,6 @@ import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { Environment } from '../environment/buildEnvironment.js';
 import {
   findEnvironmentLocationPaths,
-  resolveEnvironmentLocation,
   resolveEnvironmentLocations,
 } from '../environment/environmentLocation.js';
 import type { ExplorePlatform, IdeVersionRoots } from '../explore/explorePlatform.js';
@@ -145,7 +144,8 @@ export type CloudOnlyEntryCount = {
 
 /** Takes the entries the scan's walks leave unread in the cloud store, and counts them. */
 export type CloudOnlyEntryTally = {
-  recordEvictedEntry: EvictedEntryRecorder;
+  /** `null` on a platform that counts none. */
+  recordEvictedEntry: EvictedEntryRecorder | null;
   /** The count of the entries recorded so far; `null` on a platform that counts none. */
   getCloudOnlyEntryCount: () => CloudOnlyEntryCount | null;
 };
@@ -178,8 +178,11 @@ type ScanContext = {
   activeXcodeBundlePath: Result<string | null, CommandFailure>;
   /** The system slice's entry reads, asked by every walk and measurement of the scan. */
   entryReads: EntryReads;
-  /** Takes each entry a walk of the scan leaves unread because its content is in the cloud only. */
-  recordEvictedEntry: EvictedEntryRecorder;
+  /**
+   * Takes each entry a walk of the scan leaves unread because its content is in the cloud only;
+   * `null` on a platform that counts none.
+   */
+  recordEvictedEntry: EvictedEntryRecorder | null;
   /** The system slice's code of a privacy denial, for every issue of a failed read. */
   privacyDenialCode: string | null;
   /** The folders searched for large files, from the scan slice. */
@@ -213,11 +216,10 @@ export async function runScan(params: {
   onProgress: (progress: ScanProgress) => void;
 }): Promise<ScanReport> {
   // Known from the start, so the first `found` already leaves out what a probe reserves.
-  const reservedEntryPaths = params.catalog.entries.flatMap((entry) =>
-    entry.removal.kind === 'explore'
-      ? [resolveEnvironmentLocation({ folders: params.environment, location: entry })]
-      : [],
-  );
+  const reservedEntryPaths = resolveEnvironmentLocations({
+    folders: params.environment,
+    locations: params.catalog.entries.filter((entry) => entry.removal.kind === 'explore'),
+  });
   // The probe of the IDE versions takes folders outside its entry, in the roots of every version.
   const knownClaimPaths = [
     ...reservedEntryPaths,
@@ -458,7 +460,7 @@ export function buildCloudOnlyEntryTally(params: {
 }): CloudOnlyEntryTally {
   switch (params.cloudOnlyEntries.kind) {
     case 'notCounted':
-      return { recordEvictedEntry: () => undefined, getCloudOnlyEntryCount: () => null };
+      return { recordEvictedEntry: null, getCloudOnlyEntryCount: () => null };
     case 'counted': {
       const cloudStoreName = params.cloudOnlyEntries.cloudStoreName;
       const entryPaths = new Set<string>();

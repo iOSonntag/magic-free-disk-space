@@ -54,7 +54,7 @@ async function loadActivity(params: {
     maxEntries: params.maxEntries ?? 10_000,
     deadlineMs: params.deadlineMs ?? Date.now() + TEST_WALK_DURATION_MS,
     entryReads: params.entryReads ?? hostPlatform.system.entryReads,
-    recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
+    recordEvictedEntry: params.recordEvictedEntry ?? null,
   });
 }
 

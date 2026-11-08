@@ -16,7 +16,7 @@ export function loadMeasuredPhase(params: {
   measureTimeoutMs: number;
   runItemMeasurement: ConcurrencyLimit;
   entryReads: EntryReads;
-  recordEvictedEntry: EvictedEntryRecorder;
+  recordEvictedEntry: EvictedEntryRecorder | null;
   privacyDenialCode: string | null;
   decide: (measurement: Measurement) => Promise<CandidateDecision>;
 }): Promise<ScanPhase> {

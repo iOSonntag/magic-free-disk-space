@@ -6,9 +6,9 @@ const PNPM_HOME: CatalogLocation = { root: 'localAppData', path: 'pnpm' };
 
 /**
  * Where pnpm is installed on Windows, each place at the default of its tool: pnpm's home,
- * corepack's cache, the pnpm that Volta and Scoop install, mise's installs, npm's prefixes of the
- * official installer, of Scoop and of Volta's packages, and the node versions of nvm-windows, fnm,
- * Volta and mise. npm installs a global package in `<prefix>\node_modules` on Windows, with no `lib`.
+ * corepack's cache, the pnpm that Volta, Scoop and winget install, mise's installs, npm's prefixes
+ * of the official installer, of Scoop and of Volta's packages, and the node versions of
+ * nvm-windows, fnm, Volta and mise. npm installs a global package in `<prefix>\node_modules` on Windows, with no `lib`.
  */
 export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
   homes: [PNPM_HOME],
@@ -28,6 +28,11 @@ export const PNPM_INSTALL_PLACES: PnpmInstallPlaces = {
   launchers: [
     buildPnpmHomeEntry({ path: 'pnpm.exe' }),
     buildPnpmHomeEntry({ path: 'bin/pnpm.exe' }),
+    // winget installs a portable package in a folder of its own and hard-links the command beside it.
+    {
+      root: 'localAppData',
+      path: 'Microsoft/WinGet/Packages/pnpm.pnpm_Microsoft.Winget.Source_8wekyb3d8bbwe/pnpm.exe',
+    },
   ],
   npmPrefixes: [
     { root: 'roamingAppData', path: 'npm' },

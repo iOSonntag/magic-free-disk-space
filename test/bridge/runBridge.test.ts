@@ -6,7 +6,11 @@ import { runBridge } from '../../src/bridge/runBridge.js';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
+import { formatHomeRelativePath } from '../../src/path/formatHomeRelativePath.js';
+import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
+import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { PreferencesSaveFailure } from '../../src/preferences/preferencesFile.js';
+import { formatDeletionWarningLines } from '../../src/report/formatDeletionConfirmation.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
 import type { Result } from '../../src/result.js';
 import type { FullDiskAccess } from '../../src/system/fullDiskAccess.js';
@@ -27,7 +31,7 @@ import {
   loadTestEnvironment,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { buildTestPlatform } from '../support/platformFixtures.js';
+import { buildTestPlatform, hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { loadProtocolFixtureEvents } from '../support/protocolFixture.js';
 
@@ -386,10 +390,20 @@ function listRecordShapeMismatches(params: {
   );
 }
 
+/** The path of `names` below the fixture home, joined as the host's platform joins it. */
+function buildHomeEntryPath(params: { names: string[] }): AbsolutePath {
+  return joinAbsolutePath({
+    rules: environment.pathRules,
+    parentPath: environment.homeDir,
+    names: params.names,
+  });
+}
+
 describe('runBridge', () => {
   test('scans and answers with the view of the scan, numbered top to bottom', async () => {
     const { end, events } = await runBridgeWithLines({ lines: [SCAN_LINE] });
     const answers = findAnswers({ events: events });
+    const toolCachePath = buildHomeEntryPath({ names: ['Library', 'Caches', 'ToolCache'] });
 
     const progressEvents = events.flatMap((event) => (event.kind === 'progress' ? [event] : []));
 
@@ -431,12 +445,16 @@ describe('runBridge', () => {
           items: [
             {
               number: 1,
-              key: `catalog:tool-cache:${environment.homeDir}/Library/Caches/ToolCache`,
+              key: `catalog:tool-cache:${toolCachePath}`,
               title: 'Tool cache',
               riskText: 'safe',
               sizeText: '4.2 MB',
               group: 'safe',
-              displayPath: '~/Library/Caches/ToolCache',
+              displayPath: formatHomeRelativePath({
+                rules: environment.pathRules,
+                path: toolCachePath,
+                homeDir: environment.homeDir,
+              }),
             },
           ],
           checkGroup: {
@@ -548,15 +566,11 @@ describe('runBridge', () => {
       'deleted',
       'failed',
     ]);
-    const appCacheKey = `catalog:app-cache:${environment.homeDir}/Library/Caches/AppCache`;
+    const appCacheKey = `catalog:app-cache:${buildHomeEntryPath({ names: ['Library', 'Caches', 'AppCache'] })}`;
 
     expect(answers[1]).toMatchObject({
       planId: 1,
-      warningLines: [
-        'This cannot be undone: the items do not go to the Trash.',
-        'Type DELETE to delete them permanently.',
-        'Anything else cancels.',
-      ],
+      warningLines: formatDeletionWarningLines({ texts: hostPlatform.report }),
       items: [
         {
           number: 2,

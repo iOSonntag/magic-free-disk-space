@@ -11,7 +11,7 @@ import {
 } from './parsedValueFixtures.js';
 
 /** The values a Windows environment is built of, for a test that varies one of them. */
-export type Win32EnvironmentParams = Parameters<typeof buildWin32Environment>[0];
+type Win32EnvironmentParams = Parameters<typeof buildWin32Environment>[0];
 
 /** A macOS environment of example paths below `/Users/tester`, the same on every host. */
 export const exampleDarwinEnvironment: Environment = buildTestMacEnvironment();

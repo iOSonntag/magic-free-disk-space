@@ -27,11 +27,7 @@ export function joinAbsolutePath(params: {
 
   const path = parseAbsolutePath({
     rules: params.rules,
-    text: joinUnderRules({
-      rules: params.rules,
-      parentPath: params.parentPath,
-      names: params.names,
-    }),
+    text: selectPathModule(params.rules).join(params.parentPath, ...params.names),
   });
 
   if (path.kind === 'failed') {
@@ -52,7 +48,7 @@ export function resolveAbsolutePath(params: {
 }): Result<AbsolutePath, 'not an absolute path'> {
   return parseAbsolutePath({
     rules: params.rules,
-    text: resolveUnderRules({ rules: params.rules, basePath: params.basePath, text: params.text }),
+    text: selectPathModule(params.rules).resolve(params.basePath, params.text),
   });
 }
 
@@ -72,22 +68,6 @@ function getNameSeparatorPattern(rules: PathRules): RegExp {
     case 'win32':
       return /[\\/]/;
   }
-}
-
-function resolveUnderRules(params: {
-  rules: PathRules;
-  basePath: AbsolutePath;
-  text: string;
-}): string {
-  return selectPathModule(params.rules).resolve(params.basePath, params.text);
-}
-
-function joinUnderRules(params: {
-  rules: PathRules;
-  parentPath: AbsolutePath;
-  names: string[];
-}): string {
-  return selectPathModule(params.rules).join(params.parentPath, ...params.names);
 }
 
 /** The path functions of the platform the rules are of, never the host's. */

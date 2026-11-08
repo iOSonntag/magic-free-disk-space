@@ -21,6 +21,7 @@ import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parsePosixUid } from '../../system/userIdentity.js';
 import { ICLOUD_DRIVE_ROOT } from './appleDataRoots.js';
+import { buildHomeLocation } from './buildHomeLocation.js';
 import {
   PROTECTED_HOME_DIR_NAMES,
   SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
@@ -197,24 +198,21 @@ export function buildDarwinEnvironment(params: {
     protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
     // macOS mounts every volume below its one root, so no drive has a root of its own.
     fixedDriveRoots: [],
-    protectedLocations: toHomeLocations({ nameLists: PROTECTED_HOME_DIR_NAMES }),
+    protectedLocations: PROTECTED_HOME_DIR_NAMES.map((names) =>
+      buildHomeLocation({ names: names }),
+    ),
     protectedFolderRealPaths: [],
-    sensitiveLocations: toHomeLocations({ nameLists: SENSITIVE_HOME_DIR_NAMES }),
-    sensitiveExceptionLocations: toHomeLocations({
-      nameLists: SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
-    }),
+    sensitiveLocations: SENSITIVE_HOME_DIR_NAMES.map((names) =>
+      buildHomeLocation({ names: names }),
+    ),
+    sensitiveExceptionLocations: SENSITIVE_EXCEPTION_HOME_DIR_NAMES.map((names) =>
+      buildHomeLocation({ names: names }),
+    ),
     evictLocations: [ICLOUD_DRIVE_ROOT],
     deletionLogLocation: DARWIN_DELETION_LOG_LOCATION,
     preferencesLocation: DARWIN_PREFERENCES_LOCATION,
     ownerOnlyModes: DARWIN_OWNER_ONLY_MODES,
   });
-}
-
-/** Each list of names below the home folder, one name per level, as a location in the home folder. */
-function toHomeLocations(params: { nameLists: string[][] }): EnvironmentLocationAtRoot[] {
-  return params.nameLists.map(
-    (names): EnvironmentLocationAtRoot => ({ root: 'home', path: names.join('/') }),
-  );
 }
 
 /** A path of macOS this file spells out; throws for one that is not absolute, which is a bug. */

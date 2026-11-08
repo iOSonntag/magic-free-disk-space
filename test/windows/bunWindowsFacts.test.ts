@@ -31,6 +31,7 @@ import {
 import type { Result } from '../../src/result.js';
 import { formatSystemCallFailure } from '../../src/system/systemCallFailure.js';
 import { parseWindowsSid } from '../../src/system/userIdentity.js';
+import { runChildProcess } from '../support/fixtureCommand.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import {
   FILE_ATTRIBUTE_DIRECTORY,
@@ -93,13 +94,6 @@ const knownFolderVariables = [
   { folder: 'roamingAppData', variableName: 'APPDATA' },
 ] as const;
 
-type ChildRun = {
-  exitCode: number | null;
-  timedOut: boolean;
-  stdout: Uint8Array;
-  stderr: string;
-};
-
 /** The value of a call that succeeded; throws with the call and its code for one that failed. */
 function unwrapCall<TValue>(result: Result<TValue, Win32CallFailure>): TValue {
   if (result.kind === 'failed') {
@@ -112,43 +106,6 @@ function unwrapCall<TValue>(result: Result<TValue, Win32CallFailure>): TValue {
 /** The attributes win32Api.ts reads for the host path. */
 function loadAttributes(path: string): number {
   return unwrapCall(loadFileAttributes({ path: buildTestHostPath({ text: path }) }));
-}
-
-async function runChildProcess(params: {
-  command: string[];
-  stdin: Uint8Array | null;
-  timeoutMs: number;
-}): Promise<ChildRun> {
-  const child = Bun.spawn(params.command, {
-    stdin: params.stdin === null ? 'ignore' : 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-
-  if (params.stdin !== null && typeof child.stdin !== 'number' && child.stdin !== undefined) {
-    child.stdin.write(params.stdin);
-    await child.stdin.end();
-  }
-
-  const stdoutPromise = new Response(child.stdout).bytes();
-  const stderrPromise = new Response(child.stderr).text();
-  const outcome = await Promise.race([
-    child.exited.then(() => 'exited' as const),
-    Bun.sleep(params.timeoutMs).then(() => 'timedOut' as const),
-  ]);
-
-  if (outcome === 'timedOut') {
-    child.kill();
-  }
-
-  await child.exited;
-
-  return {
-    exitCode: child.exitCode,
-    timedOut: outcome === 'timedOut',
-    stdout: await stdoutPromise,
-    stderr: await stderrPromise,
-  };
 }
 
 describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', () => {
@@ -388,7 +345,11 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
       const stages = parseProbeLines(new TextDecoder().decode(run.stdout));
 
       expect(stages).toContainEqual(
-        expect.objectContaining({ stage: 'cloud-only file', placement: { kind: 'cloudOnly' } }),
+        expect.objectContaining({
+          stage: 'cloud-only file',
+          placement: { kind: 'cloudOnly' },
+          lstat: 'isSymbolicLink=false isDirectory=false isFile=true',
+        }),
       );
       expect(stages).toContainEqual(
         expect.objectContaining({ stage: 'cloud-only folder', placement: { kind: 'onDisk' } }),

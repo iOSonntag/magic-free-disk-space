@@ -3,15 +3,14 @@ import type { CatalogPlatform } from '../../src/catalog/catalogPlatform.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import type { Platform } from '../../src/platform/platform.js';
-import type { Result } from '../../src/result.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ScanProgress, ScanReport } from '../../src/scan/runScan.js';
 import { runScan } from '../../src/scan/runScan.js';
 import type { EntryReads } from '../../src/system/entryReads.js';
-import type { RunningProcesses, RunningProcessesFailure } from '../../src/system/systemPlatform.js';
+import type { RunningProcessesResult } from '../../src/system/systemPlatform.js';
 import { TOOL_INSTALL_LOCATIONS_NONE } from './candidateFixtures.js';
 import { buildTestPlatform } from './platformFixtures.js';
-import { buildRunningCommandLines } from './runningProcessesFixtures.js';
+import { buildHostNoRunningProcesses } from './runningProcessesFixtures.js';
 
 /**
  * Scans the fixture home of `environment` through the host's platform with only `catalogEntries`
@@ -22,13 +21,13 @@ import { buildRunningCommandLines } from './runningProcessesFixtures.js';
 export function runTestScan(params: {
   environment: Environment;
   catalogEntries: CatalogEntry[];
-  runningProcesses?: Result<RunningProcesses, RunningProcessesFailure>;
+  runningProcesses?: RunningProcessesResult;
   entryReads?: EntryReads;
   onProgress?: (progress: ScanProgress) => void;
 }): Promise<ScanReport> {
   const runningProcesses = params.runningProcesses ?? {
     kind: 'succeeded',
-    value: buildRunningCommandLines([]),
+    value: buildHostNoRunningProcesses(),
   };
   const platform = buildTestPlatform({
     catalogEntries: params.catalogEntries,

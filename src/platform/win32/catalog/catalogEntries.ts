@@ -3,7 +3,9 @@ import type { WindowsImageName } from '../../../catalog/catalogOwner.js';
 import { parseWindowsImageName } from '../../../catalog/catalogOwner.js';
 import { SCAN_LIMITS } from '../../../scan/limits.js';
 import { mapNonEmpty } from '../../../system/nonEmptyList.js';
+import { buildAndroidSdkLocation } from './androidSdk.js';
 import { PNPM_STORE_ROOT } from './pnpmHomes.js';
+import { teamsCacheFolder, teamsClassicCacheFolder } from './teamsCaches.js';
 
 /** Brave, installed for the user or for every user of this PC. */
 const braveOwner = buildExecutableOwner({ imageNames: ['brave.exe'], installFolder: null });
@@ -67,8 +69,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
       'The system images that Android emulators start from, one for each Android version and CPU type.',
     regeneration: 'An image comes back only when you install it again in the SDK Manager.',
     risk: 'review',
-    root: 'localAppData',
-    path: 'Android/Sdk/system-images',
+    ...buildAndroidSdkLocation({ path: 'system-images' }),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,
@@ -86,8 +87,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     explanation: 'The Android platform versions that apps are built against.',
     regeneration: 'A version comes back only when you install it again in the SDK Manager.',
     risk: 'review',
-    root: 'localAppData',
-    path: 'Android/Sdk/platforms',
+    ...buildAndroidSdkLocation({ path: 'platforms' }),
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
     owner: null,
@@ -650,8 +650,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     explanation: 'Cache and diagnostic logs of Microsoft Teams; quit Teams first.',
     regeneration: 'Teams builds its cache again on its next start, but the logs do not come back.',
     risk: 'review',
-    root: 'localAppData',
-    path: 'Packages/MSTeams_8wekyb3d8bbwe/LocalCache/Microsoft/MSTeams',
+    ...teamsCacheFolder,
     selection: { kind: 'children' },
     ageRule: { kind: 'none' },
     owner: teamsOwner,
@@ -664,8 +663,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     explanation: 'Cache and diagnostic logs of classic Microsoft Teams; quit Teams first.',
     regeneration: 'Teams builds its cache again on its next start, but the logs do not come back.',
     risk: 'review',
-    root: 'roamingAppData',
-    path: 'Microsoft/Teams',
+    ...teamsClassicCacheFolder,
     selection: { kind: 'children' },
     ageRule: { kind: 'none' },
     owner: teamsClassicOwner,
