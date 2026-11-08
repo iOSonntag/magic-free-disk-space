@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Magic Space",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/app",
+      "program": "${workspaceFolder}/app/lib/main.dart",
+      "deviceId": "macos",
+    }
+  ]
+}
