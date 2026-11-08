@@ -256,7 +256,8 @@ describe('walkDirectoryTree', () => {
   });
 
   test('never lists a folder swapped for a link after its visit', async () => {
-    // As a folder replaced by a junction on Windows, whose listing would walk the junction's target.
+    // As a folder replaced by a junction on Windows, whose listing would walk the junction's
+    // target.
     const folderPath = join(treeRoot, 'b');
 
     const walk = await collectEntries({

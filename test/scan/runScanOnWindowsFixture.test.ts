@@ -187,7 +187,9 @@ describeOnWindows('a scan of a Windows fixture home over the Windows catalog', (
   });
 });
 
-/** The paths of the items listed in `section` itself, without the Explore items of its categories. */
+/**
+ * The paths of the items listed in `section` itself, without the Explore items of its categories.
+ */
 function listSectionPaths(params: { report: ScanReport; section: ConsumerSection }): string[] {
   return params.report.candidates
     .filter((candidate) => {

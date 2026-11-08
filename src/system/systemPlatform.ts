@@ -27,7 +27,10 @@ export type RunningProcesses = RunningProcessesCommandLines | RunningProcessesIm
 /** The running processes as listed, or why they could not be. */
 export type RunningProcessesResult = Result<RunningProcesses, RunningProcessesFailure>;
 
-/** Lists the running processes; `commandTimeoutMs` bounds a listing that runs a command. Never throws. */
+/**
+ * Lists the running processes; `commandTimeoutMs` bounds a listing that runs a command. Never
+ * throws.
+ */
 export type RunningProcessesLoad = (params: {
   commandTimeoutMs: number;
 }) => Promise<RunningProcessesResult>;

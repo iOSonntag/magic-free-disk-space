@@ -5,7 +5,9 @@ import {
   parseProcessEntry,
 } from '../../../src/platform/win32/processEntry.js';
 
-/** A filled `PROCESSENTRY32W` with `processId` at 8 and `exeFileName` at 44, as Toolhelp writes it. */
+/**
+ * A filled `PROCESSENTRY32W` with `processId` at 8 and `exeFileName` at 44, as Toolhelp writes it.
+ */
 function buildFilledEntry(params: { processId: number; exeFileName: string }): Uint8Array {
   const bytes = createProcessEntryBuffer();
 

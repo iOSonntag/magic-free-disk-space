@@ -47,7 +47,7 @@ export function hasSymbolicLinkTarget(measurement: TargetsMeasurement): boolean 
 export type EvictTarget = RemovalTarget & { modifiedMs: number; accessedMs: number };
 
 /** No program owns the item, so no running process withholds it. */
-export type RemovalOwnerNone = { kind: 'none' };
+type RemovalOwnerNone = { kind: 'none' };
 
 /** The macOS app bundles whose running process withholds the item; none withholds nothing. */
 export type RemovalOwnerBundles = { kind: 'bundles'; bundlePaths: string[] };

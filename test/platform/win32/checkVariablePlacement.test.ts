@@ -17,6 +17,15 @@ function buildTempCheck(params: { variableName: string; reading: VariableReading
   };
 }
 
+/** A TEMP check whose expected folder is a link Windows names at `tempPath` to `D:\Scratch`. */
+function buildLinkedTempCheck(params: { readingText: string }): VariableCheck {
+  return {
+    variableName: 'TEMP',
+    reading: buildResolvedReading({ text: params.readingText }),
+    expectedFolder: { path: tempPath, realPath: buildTestWindowsPath({ text: 'D:\\Scratch' }) },
+  };
+}
+
 function buildResolvedReading(params: { text: string }): VariableReading {
   return { kind: 'resolved', realPath: buildTestWindowsPath({ text: params.text }) };
 }
@@ -66,6 +75,21 @@ describe('checkVariablePlacement', () => {
         }),
       ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: tempPath });
     }
+  });
+
+  test('compares the real path of the expected folder and names the path Windows gives it', () => {
+    expect(
+      checkVariablePlacement({
+        pathRules: WIN32_PATH_RULES,
+        checks: [buildLinkedTempCheck({ readingText: 'd:\\scratch' })],
+      }),
+    ).toBeNull();
+    expect(
+      checkVariablePlacement({
+        pathRules: WIN32_PATH_RULES,
+        checks: [buildLinkedTempCheck({ readingText: tempPath })],
+      }),
+    ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: tempPath });
   });
 
   test('refuses a variable whose folder does not resolve', () => {

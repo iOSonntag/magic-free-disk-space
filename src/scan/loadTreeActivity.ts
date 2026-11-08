@@ -21,7 +21,10 @@ export async function loadTreeActivity(params: {
   maxEntries: number;
   deadlineMs: number;
   entryReads: EntryReads;
-  /** Takes each entry the walk leaves unread because its content is in the cloud only; `null` for none. */
+  /**
+   * Takes each entry the walk leaves unread because its content is in the cloud only; `null` for
+   * none.
+   */
   recordEvictedEntry: EvictedEntryRecorder | null;
 }): Promise<ActivityProbe> {
   const rootStats = await loadEntryStats({ path: params.path });

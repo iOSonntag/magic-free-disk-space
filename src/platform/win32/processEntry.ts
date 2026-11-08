@@ -1,4 +1,6 @@
-/** One process of a Toolhelp snapshot: its id, and the file name of its image, such as `Code.exe`. */
+/**
+ * One process of a Toolhelp snapshot: its id, and the file name of its image, such as `Code.exe`.
+ */
 export type ProcessEntry = { processId: number; exeFileName: string };
 
 /**

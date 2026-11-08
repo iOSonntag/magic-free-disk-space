@@ -4,7 +4,8 @@ import type { EnvironmentFolders } from '../../src/environment/buildEnvironment.
 import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { updateModifiedMs } from '../support/fixtureRoot.js';
-import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import type { HomeFolder } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath, joinBelowHome } from '../support/parsedValueFixtures.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 
 /** A last use before `ANDROID_UNUSED_CUTOFF_MS`. */
@@ -26,8 +27,8 @@ export function buildAndroidSdkRoot(params: { environment: EnvironmentFolders })
   });
 }
 
-export function buildAndroidAvdHome(params: { environment: EnvironmentFolders }): string {
-  return join(params.environment.homeDir, '.android', 'avd');
+export function buildAndroidAvdHome(params: { home: HomeFolder }): AbsolutePath {
+  return joinBelowHome({ home: params.home, path: '.android/avd' });
 }
 
 /** The sysdir an AVD's `config.ini` names for `writeAndroidSystemImage` of the same parts. */
@@ -39,7 +40,7 @@ export function buildAndroidImageSysdir(params: { platform: string; abi: string 
 export async function createAndroidAvdHome(params: {
   environment: EnvironmentFolders;
 }): Promise<void> {
-  await mkdir(buildAndroidAvdHome(params), { recursive: true });
+  await mkdir(buildAndroidAvdHome({ home: params.environment }), { recursive: true });
 }
 
 /**
@@ -54,7 +55,7 @@ export async function writeAndroidAvd(params: {
   imageSysdir: string | null;
   lastUsedAtMs: number;
 }): Promise<{ iniPath: AbsolutePath; avdPath: AbsolutePath }> {
-  const avdHome = buildAndroidAvdHome(params);
+  const avdHome = buildAndroidAvdHome({ home: params.environment });
   const folderName = params.folderName ?? `${params.name}.avd`;
   const avdPath = join(avdHome, folderName);
   const iniPath = join(avdHome, `${params.name}.ini`);

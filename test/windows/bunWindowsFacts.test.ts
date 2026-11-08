@@ -58,14 +58,16 @@ const COMPILED_PROBE_TEST_TIMEOUT_MS = 300_000;
 const ECHO_LINE = 'Größe – 🧹';
 
 /**
- * Set to `1` to run the cloud placeholder probe, which registers a sync root of the Cloud Files
- * API on this machine for the time of the probe; the Windows runners of the tests set it.
+ * Whether the run opted in through `MAGIC_FREE_DISK_SPACE_CLOUD_PROBE=1` to the cloud placeholder
+ * probe, which registers a sync root of the Cloud Files API on this machine for the time of the
+ * probe; the Windows runners of the tests opt in.
  */
 const isCloudProbeOptedIn = process.env.MAGIC_FREE_DISK_SPACE_CLOUD_PROBE === '1';
 
 /**
- * `off` in the run the workflow turns long paths off for, which then proves the setting took
- * effect; unset in every other run, which asserts nothing about the setting.
+ * Whether this is the run the workflow turns long paths off for
+ * (`MAGIC_FREE_DISK_SPACE_LONG_PATHS=off`), which then proves the setting took effect; every other
+ * run asserts nothing about the setting.
  */
 const isLongPathsOffRun = process.env.MAGIC_FREE_DISK_SPACE_LONG_PATHS === 'off';
 

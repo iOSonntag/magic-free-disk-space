@@ -85,7 +85,10 @@ export function buildTestPlatform(params: {
   };
 }
 
-/** The Recycle Bins as the scan of Windows measures them; throws if Windows ever measures its trash otherwise. */
+/**
+ * The Recycle Bins as the scan of Windows measures them; throws if Windows ever measures its trash
+ * otherwise.
+ */
 export function getWin32RecycleBinScanTrash(): ScanPlatformTrashRecycleBins {
   const trash = win32Platform.scan.trash;
 
@@ -96,7 +99,10 @@ export function getWin32RecycleBinScanTrash(): ScanPlatformTrashRecycleBins {
   return trash;
 }
 
-/** The Recycle Bins as the deletion of Windows empties them; throws if Windows ever empties its trash otherwise. */
+/**
+ * The Recycle Bins as the deletion of Windows empties them; throws if Windows ever empties its
+ * trash otherwise.
+ */
 export function getWin32RecycleBinDeleteTrash(): DeletePlatformTrashRecycleBins {
   const trash = win32Platform.delete.trash;
 

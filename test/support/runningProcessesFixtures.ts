@@ -19,7 +19,10 @@ export function buildHostRunningProcesses(params: {
   return buildRunningCommandLines(params.commandLines);
 }
 
-/** The processes as macOS lists them, by their command lines; `null` stays `null`, a run whose processes could not be listed. */
+/**
+ * The processes as macOS lists them, by their command lines; `null` stays `null`, a run whose
+ * processes could not be listed.
+ */
 export function buildRunningCommandLines(commandLines: string[]): RunningProcessesCommandLines;
 export function buildRunningCommandLines(
   commandLines: string[] | null,
@@ -34,7 +37,10 @@ export function buildRunningCommandLines(
   return { kind: 'commandLines', commandLines: commandLines };
 }
 
-/** The processes as Windows lists them, by the paths of their images; `null` stays `null`, a run whose processes could not be listed. */
+/**
+ * The processes as Windows lists them, by the paths of their images; `null` stays `null`, a run
+ * whose processes could not be listed.
+ */
 export function buildRunningImagePaths(imagePaths: string[]): RunningProcessesImagePaths;
 export function buildRunningImagePaths(
   imagePaths: string[] | null,

@@ -35,7 +35,7 @@ export type EntryPlacement = EntryPlacementRead | EntryPlacementUnread;
  * Places one entry with one read of the system. A failed read answers `unread`; it throws only for
  * a broken invariant of the system, such as a C library that gives no address of `errno`.
  */
-export type EntryPlacementLoad = (entry: EntryRef) => EntryPlacement;
+type EntryPlacementLoad = (entry: EntryRef) => EntryPlacement;
 
 /** The reads of one entry beyond its stats that the platform answers, for walks and measurements. */
 export type EntryReads = {

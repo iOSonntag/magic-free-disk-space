@@ -53,7 +53,10 @@ afterEach(async () => {
   await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
 });
 
-/** A probe run over the fixture environment, where no process runs unless `runningProcesses` names one. */
+/**
+ * A probe run over the fixture environment, where no process runs unless `runningProcesses` names
+ * one.
+ */
 function buildRun(params: TestProbeRunProcesses = {}): ExploreProbeRun {
   return buildTestProbeRun({ environment: environment, ...params });
 }

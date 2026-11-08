@@ -12,7 +12,7 @@ import { pnpmInstallPlaces, pnpmStoreRoot } from './pnpmHomes.js';
 import { WIN32_PROTECTED_LOCATIONS, WIN32_SENSITIVE_LOCATIONS } from './protectedPaths.js';
 
 /** The data of Windows the run takes beside what it reads from the system. */
-export type Win32Catalog = {
+type Win32Catalog = {
   /** The caches and leftovers the scan measures, each at its location. */
   entries: CatalogEntry[];
   /**

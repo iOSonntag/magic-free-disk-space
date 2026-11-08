@@ -120,7 +120,9 @@ function walkTestProjects(params: {
   });
 }
 
-/** The path of each artifact the walk found, in its order, with the name of the rule that found it. */
+/**
+ * The path of each artifact the walk found, in its order, with the name of the rule that found it.
+ */
 function listArtifactNamesAndPaths(params: {
   walk: ProjectWalk;
 }): { artifactPath: string; artifactName: string }[] {

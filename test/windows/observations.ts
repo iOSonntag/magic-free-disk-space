@@ -40,7 +40,9 @@ export const loadLstatText = async (path: string): Promise<string> => {
   return `isSymbolicLink=${stats.isSymbolicLink()} isDirectory=${stats.isDirectory()} isFile=${stats.isFile()}`;
 };
 
-/** The attributes win32Api.ts reads for the path, in hex, or the call and the code it failed with. */
+/**
+ * The attributes win32Api.ts reads for the path, in hex, or the call and the code it failed with.
+ */
 export function loadAttributesText(path: string): string {
   const absolutePath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: path });
 

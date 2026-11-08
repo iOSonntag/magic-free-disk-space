@@ -26,6 +26,10 @@ describe('isExecutableOwnerRunning', () => {
     ).toBe(true);
   });
 
+  test('is true for a process that gives only the file name of its image', () => {
+    expect(isSlackRunning({ installFolder: 'named', processImagePaths: ['SLACK.EXE'] })).toBe(true);
+  });
+
   test('is true for a process that runs from the install folder, in any case', () => {
     expect(
       isSlackRunning({

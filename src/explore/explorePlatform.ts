@@ -63,7 +63,9 @@ export type PnpmInstallPlaces = {
    * a script starting with `#!` that runs a pnpm of a place read on its own.
    */
   launchers: CatalogLocation[];
-  /** npm's prefixes at fixed places; Homebrew's prefixes and each node version's are prefixes too. */
+  /**
+   * npm's prefixes at fixed places; Homebrew's prefixes and each node version's are prefixes too.
+   */
   npmPrefixes: CatalogLocation[];
   /** The folder of npm's global packages below a prefix, by its names. */
   npmGlobalFolderNames: string[];

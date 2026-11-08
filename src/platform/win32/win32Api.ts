@@ -15,7 +15,7 @@ declare const windowsHandleBrand: unique symbol;
 export type WindowsHandle = bigint & { [windowsHandleBrand]: true };
 
 /** The calls of Windows below whose failure a caller reads. */
-export type Win32CallName =
+type Win32CallName =
   | 'AssignProcessToJobObject'
   | 'ConvertSidToStringSidW'
   | 'CreateJobObjectW'
@@ -122,7 +122,9 @@ export type RegistryView = 'shared' | 'bits64' | 'bits32';
 /** The two hives the Uninstall keys live in. */
 export type RegistryHive = 'currentUser' | 'localMachine';
 
-/** The values of one Uninstall subkey, each `null` where the subkey lacks it or holds another type. */
+/**
+ * The values of one Uninstall subkey, each `null` where the subkey lacks it or holds another type.
+ */
 export type UninstallKeyValues = {
   keyName: string;
   displayName: string | null;

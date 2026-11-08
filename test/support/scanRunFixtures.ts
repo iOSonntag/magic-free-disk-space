@@ -54,7 +54,10 @@ export function runTestScan(params: {
   });
 }
 
-/** Scans the fixture home of `environment` through `platform` as it is, with the default ages of the command line. */
+/**
+ * Scans the fixture home of `environment` through `platform` as it is, with the default ages of the
+ * command line.
+ */
 export function runTestScanOnPlatform(params: {
   environment: Environment;
   platform: Platform;

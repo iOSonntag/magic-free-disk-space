@@ -194,7 +194,7 @@ export function decideUnitActivity(params: {
       return decideProcessActivity({
         runningProcesses: params.runningProcesses,
         isOwnerCommandLine: (commandLine) => commandLine.includes(folderPathPrefix),
-        // Windows explores no asdf or nvm versions.
+        // Windows explores no version folders.
         isOwnerImagePath: null,
       });
     }

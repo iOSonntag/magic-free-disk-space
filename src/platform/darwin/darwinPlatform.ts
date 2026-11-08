@@ -25,6 +25,8 @@ import { TOOL_INSTALL_LOCATIONS } from './toolInstallLocations.js';
 import { darwinToolProcesses } from './toolProcesses.js';
 import { vscodeProfilesRoot } from './vscodeProfilesRoot.js';
 
+const XCODE_BUNDLE_ID_PREFIX = 'com.apple.dt.Xcode';
+
 /** Everything the app takes from macOS; the entry points hand each module its slice. */
 export const darwinPlatform: Platform = {
   environment: { loadEnvironment: loadEnvironment },
@@ -49,7 +51,7 @@ export const darwinPlatform: Platform = {
       appSection: 'offerUnusedApps',
       loadInstalledApps: loadInstalledApps,
       orphanLocations: ORPHAN_LOCATIONS,
-      xcodeBundleIdPrefix: 'com.apple.dt.Xcode',
+      xcodeBundleIdPrefix: XCODE_BUNDLE_ID_PREFIX,
     },
     systemApps: DARWIN_SYSTEM_APPS,
     // The Trash is the catalog's entry `.Trash`.

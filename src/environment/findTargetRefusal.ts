@@ -134,7 +134,7 @@ function findEvictRefusal(params: {
   return null;
 }
 
-/** Whether `realPath` is absolute as the platform of the environment spells a path. */
+/** Whether `realPath` is absolute as `rules` spell a path. */
 function isAbsoluteRealPath(params: { rules: PathRules; realPath: string }): boolean {
   return parseAbsolutePath({ rules: params.rules, text: params.realPath }).kind === 'succeeded';
 }

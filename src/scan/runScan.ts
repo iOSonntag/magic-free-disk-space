@@ -129,7 +129,9 @@ export type ScanReport = {
    */
   appAdvice: AppAdvice | null;
   skipped: SkippedItem[];
-  /** `null` on a platform whose scan counts no entry whose content lives only in the cloud store. */
+  /**
+   * `null` on a platform whose scan counts no entry whose content lives only in the cloud store.
+   */
   cloudOnlyEntries: CloudOnlyEntryCount | null;
   issues: ScanIssue[];
 };

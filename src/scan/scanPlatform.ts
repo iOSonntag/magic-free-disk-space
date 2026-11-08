@@ -92,7 +92,9 @@ export type ScanPlatformAppsOffered = {
   }) => Promise<{ apps: InstalledApp[]; issues: ScanIssue[] }>;
   /** The places an app keeps data in, which stay behind once the app is removed. */
   orphanLocations: OrphanLocation[];
-  /** The bundle id of Xcode and of its versions, each of which is protected while it may be active. */
+  /**
+   * The bundle id of Xcode and of its versions, each of which is protected while it may be active.
+   */
   xcodeBundleIdPrefix: string;
 };
 
@@ -124,7 +126,7 @@ export type AppAdvice = { apps: AdvisedApp[]; installedAppsPageName: string };
 export type ScanPlatformApps = ScanPlatformAppsOffered | ScanPlatformAppsAdvised;
 
 /** The trash is a folder the catalog names with its other entries, as `~/.Trash` on macOS. */
-export type ScanPlatformTrashCatalogFolder = { kind: 'catalogFolder' };
+type ScanPlatformTrashCatalogFolder = { kind: 'catalogFolder' };
 
 /** What each drive's Recycle Bin is as an item: its texts, its risk, and the folder of the bin. */
 export type RecycleBinDescription = {
@@ -145,7 +147,9 @@ export type ScanPlatformTrashRecycleBins = RecycleBinDescription & {
   loadRecycleBin: RecycleBinLoad;
 };
 
-/** What the Recycle Bin of the drive at `driveRoot` holds, or the call that failed. Never throws. */
+/**
+ * What the Recycle Bin of the drive at `driveRoot` holds, or the call that failed. Never throws.
+ */
 export type RecycleBinLoad = (params: {
   driveRoot: DriveRoot;
 }) => Result<RecycleBinContent, SystemCallFailure>;
@@ -154,19 +158,21 @@ export type RecycleBinLoad = (params: {
 export type ScanPlatformTrash = ScanPlatformTrashCatalogFolder | ScanPlatformTrashRecycleBins;
 
 /** The scan counts no entry whose content lives only in the cloud store, as on macOS. */
-export type ScanPlatformCloudOnlyEntriesNotCounted = { kind: 'notCounted' };
+type ScanPlatformCloudOnlyEntriesNotCounted = { kind: 'notCounted' };
 
 /**
  * The scan counts each entry its walks leave unread because its content lives only in the cloud
  * store among the skipped items, as on Windows.
  */
-export type ScanPlatformCloudOnlyEntriesCounted = {
+type ScanPlatformCloudOnlyEntriesCounted = {
   kind: 'counted';
   /** The cloud store, as in "in OneDrive, not on this PC". */
   cloudStoreName: string;
 };
 
-/** Whether the scan counts the entries it leaves unread because their content is in the cloud only. */
+/**
+ * Whether the scan counts the entries it leaves unread because their content is in the cloud only.
+ */
 export type ScanPlatformCloudOnlyEntries =
   | ScanPlatformCloudOnlyEntriesNotCounted
   | ScanPlatformCloudOnlyEntriesCounted;

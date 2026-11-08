@@ -17,7 +17,7 @@ import type { AdvisedApp, RecycleBinLoad } from '../../src/scan/scanPlatform.js'
 import type { FixtureRoot } from './fixtureRoot.js';
 import {
   createFixtureFile,
-  loadTestWin32Environment,
+  createTestWin32Environment,
   updateModifiedMs,
   writeFixtureTextFile,
 } from './fixtureRoot.js';
@@ -25,7 +25,9 @@ import { buildTestWindowsPath } from './parsedValueFixtures.js';
 import { buildTestWin32Platform, loadEmptyRecycleBin } from './platformFixtures.js';
 import { buildRunningImagePaths } from './runningProcessesFixtures.js';
 
-/** The paths of the items a Windows fixture home holds, each named for what the scan makes of it. */
+/**
+ * The paths of the items a Windows fixture home holds, each named for what the scan makes of it.
+ */
 export type WindowsFixturePaths = {
   staleTempFilePath: string;
   staleTempFolderPath: string;
@@ -72,7 +74,9 @@ export const windowsFixtureAdvisedApps: AdvisedApp[] = [
   { displayName: 'Fabrikam Notes', installFolderPath: null, estimatedBytes: null },
 ];
 
-/** The image paths of the running processes: new Teams runs; classic Teams, Chrome and Edge do not. */
+/**
+ * The image paths of the running processes: new Teams runs; classic Teams, Chrome and Edge do not.
+ */
 const windowsFixtureRunningImagePaths = [
   'C:\\Windows\\explorer.exe',
   'C:\\Program Files\\WindowsApps\\MSTeams_25031.805.3440.5290_x64__8wekyb3d8bbwe\\ms-teams.exe',
@@ -100,7 +104,7 @@ export async function createWindowsFixtureHome(params: {
   fixtureRoot: FixtureRoot;
   nowMs: number;
 }): Promise<WindowsFixtureHome> {
-  const environment = await loadTestWin32Environment({
+  const environment = await createTestWin32Environment({
     fixtureRoot: params.fixtureRoot,
     nowMs: params.nowMs,
     knownFolders: [{ folder: 'downloads', pathBelowHome: 'Downloads' }],

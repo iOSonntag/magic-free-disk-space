@@ -3,6 +3,7 @@ import type { ExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ExploreProbeFailure } from '../explore/exploreUnit.js';
 import { buildUnitRunArguments, listEngineUnitIds } from '../explore/exploreUnit.js';
 import { recheckExplorePathUnit } from '../explore/recheckExploreUnit.js';
+import type { PathRules } from '../path/pathRules.js';
 import type {
   Candidate,
   CandidateRemovalDeletePaths,
@@ -260,7 +261,7 @@ async function removeCandidate(params: {
       return deletePathsCandidate({
         candidate: params.candidate,
         removal: params.candidate.removal,
-        environment: params.environment,
+        pathRules: params.environment.pathRules,
         delete: params.delete,
         entryReads: params.entryReads,
         runningProcesses: params.runningProcesses,
@@ -397,7 +398,7 @@ export function toolCandidateRunToRemoval(params: {
 async function deletePathsCandidate(params: {
   candidate: Candidate;
   removal: CandidateRemovalDeletePaths;
-  environment: Environment;
+  pathRules: PathRules;
   delete: DeletePlatform;
   entryReads: EntryReads;
   runningProcesses: RunningProcesses | null;
@@ -405,7 +406,7 @@ async function deletePathsCandidate(params: {
 }): Promise<RecordedRemoval> {
   const ownerState = resolveRemovalOwnerState({
     owner: params.removal.owner,
-    pathRules: params.environment.pathRules,
+    pathRules: params.pathRules,
     runningProcesses: params.runningProcesses,
   });
 
@@ -655,7 +656,9 @@ async function listPresentTargetPaths(params: { targets: RemovalTarget[] }): Pro
   return presentPaths;
 }
 
-/** Whether a target whose identity could not be read is still there, as all but a missing one are. */
+/**
+ * Whether a target whose identity could not be read is still there, as all but a missing one are.
+ */
 function isPresentDespiteFailure(failure: FileFailure): boolean {
   switch (failure.reason) {
     case 'missing':

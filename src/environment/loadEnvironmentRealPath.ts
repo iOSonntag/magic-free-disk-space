@@ -27,7 +27,10 @@ export async function loadEnvironmentRealPath(params: {
   });
 }
 
-/** Parses `text` as an absolute path under `pathRules`; unresolvable at `failurePath` when it is not one. */
+/**
+ * Parses `text` as an absolute path under `pathRules`; unresolvable at `failurePath` when it is not
+ * one.
+ */
 export function parseEnvironmentPath(params: {
   pathRules: PathRules;
   text: string;

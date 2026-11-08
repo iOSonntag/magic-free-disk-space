@@ -1,6 +1,8 @@
 import type { WindowsKnownFolder } from '../../environment/buildEnvironment.js';
 
-/** A known folder the run reads: the three that make its environment, or one it reads beside them. */
+/**
+ * A known folder the run reads: the three that make its environment, or one it reads beside them.
+ */
 export type RunKnownFolder = 'profile' | 'localAppData' | 'roamingAppData' | WindowsKnownFolder;
 
 /** The `KNOWNFOLDERID` of each known folder, as Microsoft's list of `FOLDERID_*` writes it. */

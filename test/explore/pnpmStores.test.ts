@@ -123,7 +123,8 @@ function buildPnpmHomePath(params: { folders: EnvironmentFolders; names: string[
 
 /**
  * The folders of the fixture environment with Windows' AppData folders below its home, where the
- * fixture environment of Windows has them, so the places of Windows resolve and are read on any host.
+ * fixture environment of Windows has them, so the places of Windows resolve and are read on any
+ * host.
  */
 function buildWindowsFixtureFolders(params: { folders: EnvironmentFolders }): EnvironmentFolders {
   return {
@@ -149,7 +150,10 @@ function buildWindowsPlacePath(params: {
   });
 }
 
-/** How pnpm lies at a place: in folders named by its versions, or as one package with its package.json. */
+/**
+ * How pnpm lies at a place: in folders named by its versions, or as one package with its
+ * package.json.
+ */
 type PnpmInstallLayout = 'versionFolders' | 'packageFolder';
 
 /** A place of Windows where pnpm installs, by the words a test title names it with. */
@@ -261,7 +265,9 @@ const windowsPnpmInstallPlaces = {
   },
 } satisfies Record<string, WindowsPnpmInstallPlace>;
 
-/** Installs pnpm `version` at `installPlace` below `folders`, and answers the path of the install. */
+/**
+ * Installs pnpm `version` at `installPlace` below `folders`, and answers the path of the install.
+ */
 async function createWindowsPnpmInstall(params: {
   folders: EnvironmentFolders;
   installPlace: WindowsPnpmInstallPlace;
@@ -1854,7 +1860,8 @@ for (const probeCase of probeCases) {
         createUnreadablePlace: async () => {
           const packagePath = join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/pnpm');
           await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
-          // The probe reads each node's folder at its real path, as the fixture root may lie below a link.
+          // The probe reads each node's folder at its real path, as the fixture root may lie below
+          // a link.
           const packageRealPath = await realpath(packagePath);
           await chmod(packagePath, 0o000);
 

@@ -374,7 +374,7 @@ describe('the Android probes with an SDK', () => {
     expect(emulator?.title).toBe('Android emulator package');
     const avdHomeText = formatHomeRelativePath({
       rules: environment.pathRules,
-      path: buildAndroidAvdHome({ environment: environment }),
+      path: buildAndroidAvdHome({ home: environment }),
       homeDir: environment.homeDir,
     });
 
@@ -525,7 +525,7 @@ describe('the Android probes with an SDK', () => {
     await writeAndroidEmulator({ environment: environment });
     await createAndroidAvdHome({ environment: environment });
     await writeFile(
-      join(buildAndroidAvdHome({ environment: environment }), 'Pixel.ini'),
+      join(buildAndroidAvdHome({ home: environment }), 'Pixel.ini'),
       'target=android-35\n',
     );
 
@@ -538,7 +538,7 @@ describe('the Android probes with an SDK', () => {
 
   test('leave an AVD whose ini is no file not judged', async () => {
     await writeAndroidEmulator({ environment: environment });
-    await mkdir(join(buildAndroidAvdHome({ environment: environment }), 'Pixel.ini'), {
+    await mkdir(join(buildAndroidAvdHome({ home: environment }), 'Pixel.ini'), {
       recursive: true,
     });
 

@@ -479,10 +479,13 @@ function parseRegistryEntryFolderPath(params: {
     return { kind: 'failed', failure: 'an entry names no folder' };
   }
 
-  return parseFolderPath({
-    pathRules: params.pathRules,
-    text: parseLocationUriPath({ pathRules: params.pathRules, uriPath: location.path }),
-  });
+  const filePath = parseLocationUriPath({ pathRules: params.pathRules, uriPath: location.path });
+
+  if (filePath === null) {
+    return { kind: 'failed', failure: 'an entry names no folder' };
+  }
+
+  return parseFolderPath({ pathRules: params.pathRules, text: filePath });
 }
 
 /**
@@ -501,12 +504,11 @@ function parseLocationUriPath(params: { pathRules: PathRules; uriPath: string })
 
 function parseFolderPath(params: {
   pathRules: PathRules;
-  text: string | null;
+  text: string;
 }): Result<AbsolutePath, string> {
-  const folderPath =
-    params.text === null ? null : parseAbsolutePath({ rules: params.pathRules, text: params.text });
+  const folderPath = parseAbsolutePath({ rules: params.pathRules, text: params.text });
 
-  if (folderPath === null || folderPath.kind === 'failed') {
+  if (folderPath.kind === 'failed') {
     return { kind: 'failed', failure: 'an entry names no folder' };
   }
 

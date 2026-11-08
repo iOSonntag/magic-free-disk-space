@@ -188,7 +188,9 @@ export async function loadPnpmInstallState(params: {
   };
 }
 
-/** The folders that hold one folder per pnpm version, the platform's own and each home's `.tools`. */
+/**
+ * The folders that hold one folder per pnpm version, the platform's own and each home's `.tools`.
+ */
 function listPnpmVersionsRoots(params: {
   pathRules: PathRules;
   pnpmVersionsRootPaths: AbsolutePath[];

@@ -4,7 +4,10 @@ import type { EntryPlacement, EntryPlacementRead, EntryRef } from '../../system/
 import { formatEntryCallFailure } from './formatEntryCallFailure.js';
 import { loadFileAttributes } from './win32Api.js';
 
-/** Reading the content of an entry with this attribute downloads it, as OneDrive's online-only files. */
+/**
+ * Reading the content of an entry with this attribute downloads it, as OneDrive's online-only
+ * files.
+ */
 const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000;
 
 /** Opening an entry with this attribute downloads it, as a folder OneDrive has not listed yet. */

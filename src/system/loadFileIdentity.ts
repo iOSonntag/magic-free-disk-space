@@ -37,7 +37,9 @@ export function loadFileIdentity(params: {
   return loadFileIdentityOfKind({ path: params.path, decideKind: (lstatKind) => lstatKind });
 }
 
-/** `loadFileIdentity`, of the kind `decideKind` makes of lstat's; the real path follows that kind. */
+/**
+ * `loadFileIdentity`, of the kind `decideKind` makes of lstat's; the real path follows that kind.
+ */
 export async function loadFileIdentityOfKind(params: {
   path: string;
   decideKind: (lstatKind: FileKind) => FileKind;

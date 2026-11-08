@@ -44,7 +44,9 @@ export type CandidateCategory =
 /** The folder a catalog path is named below, as a fixed location of the environment names it. */
 export type CatalogRoot = LocationRoot;
 
-/** A folder or file the catalog names, always at a fixed place of the run, never in a known folder. */
+/**
+ * A folder or file the catalog names, always at a fixed place of the run, never in a known folder.
+ */
 export type CatalogLocation = EnvironmentLocationAtRoot;
 
 /** The apps an advice may open, by a key only the app maps to the app itself. */

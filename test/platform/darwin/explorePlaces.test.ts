@@ -15,7 +15,7 @@ import { exampleDarwinEnvironment } from '../../support/environmentFixtures.js';
  * profiles folder, its default disk image, and the disk image of a profile `work`.
  */
 function listEnginePlacePaths(params: {
-  environment: EnvironmentFolders;
+  folders: EnvironmentFolders;
   engine: ContainerEngine | null;
 }): string[] {
   if (params.engine === null) {
@@ -25,12 +25,12 @@ function listEnginePlacePaths(params: {
   switch (params.engine.kind) {
     case 'fixed':
       return resolveEnvironmentLocations({
-        folders: params.environment,
+        folders: params.folders,
         locations: [...params.engine.socketPaths, params.engine.diskImagePath],
       });
     case 'profiles':
       return resolveEnvironmentLocations({
-        folders: params.environment,
+        folders: params.folders,
         locations: [
           params.engine.profilesRoot,
           params.engine.diskImagePath,
@@ -47,15 +47,15 @@ describe("darwin's explore places", () => {
 
     expect({
       dockerDesktopEngine: listEnginePlacePaths({
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         engine: engines.dockerDesktopEngine,
       }),
       orbStackEngine: listEnginePlacePaths({
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         engine: engines.orbStackEngine,
       }),
       colimaEngine: listEnginePlacePaths({
-        environment: exampleDarwinEnvironment,
+        folders: exampleDarwinEnvironment,
         engine: engines.colimaEngine,
       }),
     }).toEqual({

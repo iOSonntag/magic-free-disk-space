@@ -19,7 +19,7 @@ import type {
 } from '../../src/environment/buildEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
-import type { ResolvedFolder } from '../../src/platform/win32/loadEnvironment.js';
+import type { ResolvedFolder } from '../../src/platform/win32/checkVariablePlacement.js';
 import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import {
   buildTestAbsolutePath,
@@ -97,7 +97,7 @@ export async function loadTestEnvironment(params: {
   nowMs: number;
 }): Promise<Environment> {
   if (process.platform === 'win32') {
-    return loadTestWin32Environment({
+    return createTestWin32Environment({
       fixtureRoot: params.fixtureRoot,
       nowMs: params.nowMs,
       knownFolders: [],
@@ -128,7 +128,7 @@ export async function loadTestEnvironment(params: {
  * The environment of a run on Windows, with its folders in the fixture root and each of
  * `knownFolders` created below the fixture home. Call it on Windows only.
  */
-export async function loadTestWin32Environment(params: {
+export async function createTestWin32Environment(params: {
   fixtureRoot: FixtureRoot;
   nowMs: number;
   knownFolders: TestKnownFolder[];
@@ -143,7 +143,8 @@ export async function loadTestWin32Environment(params: {
 
   return buildWin32Environment({
     nowMs: params.nowMs,
-    // A made-up user serves: the owner of a fixture is never read on Windows, where no tool is trusted.
+    // A made-up user serves: the owner of a fixture is never read on Windows, where no tool is
+    // trusted.
     user: exampleWindowsUser,
     home: home,
     temp: temp,
@@ -276,7 +277,10 @@ export function buildPathBelowRoot(params: { rootDir: string; path: string }): s
   return relative(params.rootDir, params.path).split(sep).join('/');
 }
 
-/** Whether `path` is `parentPath` or lies below it, both written as `buildPathBelowRoot` writes them. */
+/**
+ * Whether `path` is `parentPath` or lies below it, both written as `buildPathBelowRoot` writes
+ * them.
+ */
 export function isSameOrBelowPathBelowRoot(params: { path: string; parentPath: string }): boolean {
   return params.path === params.parentPath || params.path.startsWith(`${params.parentPath}/`);
 }
@@ -289,7 +293,10 @@ export async function isPresent(path: string): Promise<boolean> {
   );
 }
 
-/** Resolves once anything is at `path`, as `isPresent` reads it; throws when nothing came within 5 s. */
+/**
+ * Resolves once anything is at `path`, as `isPresent` reads it; throws when nothing came within 5
+ * s.
+ */
 export async function waitUntilPresent(path: string): Promise<void> {
   for (let attempt = 0; attempt < 250; attempt += 1) {
     if (await isPresent(path)) {

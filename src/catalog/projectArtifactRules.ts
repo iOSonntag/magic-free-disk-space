@@ -240,7 +240,9 @@ export const PROJECT_ARTIFACT_RULES: ProjectArtifactRule[] = [
   },
 ];
 
-/** The folder is the artifact of `rule`, the first rule of its name whose marker stands beside it. */
+/**
+ * The folder is the artifact of `rule`, the first rule of its name whose marker stands beside it.
+ */
 type ArtifactFolderMatchArtifact = { kind: 'artifact'; rule: ProjectArtifactRule };
 
 /**
@@ -261,7 +263,9 @@ type ArtifactFolderMatch =
   | ArtifactFolderMatchUnmarked
   | ArtifactFolderMatchNoRule;
 
-/** Matches folders to the artifact rules it was built from, under the path rules it was built for. */
+/**
+ * Matches folders to the artifact rules it was built from, under the path rules it was built for.
+ */
 type ArtifactFolderMatcher = {
   /**
    * What the rules make of the folder named `name`, whose project folder holds `siblingNames`,

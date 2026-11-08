@@ -46,7 +46,9 @@ const hasIdeVersionRoots = Object.values(hostPlatform.explore.ideVersionRoots).s
   (roots) => roots.length > 0,
 );
 
-/** A temporary home with the roots of IDE versions it fills, where the host's catalog keeps them. */
+/**
+ * A temporary home with the roots of IDE versions it fills, where the host's catalog keeps them.
+ */
 type IdeFixture = {
   environment: Environment;
   jetBrainsCachesPath: AbsolutePath;

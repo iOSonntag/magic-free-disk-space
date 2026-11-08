@@ -327,12 +327,11 @@ describe('loading the pins', () => {
   });
 
   async function createTrackedConfigLink(params: {
-    trackedConfigsPath: string;
     name: string;
     targetPath: string;
   }): Promise<void> {
-    await createFixtureDirectory({ path: params.trackedConfigsPath });
-    await symlink(params.targetPath, join(params.trackedConfigsPath, params.name));
+    await createFixtureDirectory({ path: trackedConfigsPath });
+    await symlink(params.targetPath, join(trackedConfigsPath, params.name));
   }
 
   describe('loadProjectPinFiles', () => {
@@ -435,32 +434,26 @@ describe('loading the pins', () => {
       await writeFixtureTextFile({ path: join(npmProjectPath, 'package.json'), text: '{}' });
       await writeFixtureTextFile({ path: join(npmProjectPath, 'notes.txt'), text: '' });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'a1',
         targetPath: join(worktreePath, 'mise.toml'),
       });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'b2',
         targetPath: globalConfigPath,
       });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'c3',
         targetPath: join(pnpmProjectPath, 'package.json'),
       });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'd4',
         targetPath: join(npmProjectPath, 'package.json'),
       });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'e5',
         targetPath: join(npmProjectPath, 'notes.txt'),
       });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'f6',
         targetPath: join(fixtureRoot.homeDir, 'gone', 'mise.toml'),
       });
@@ -507,7 +500,6 @@ describe('loading the pins', () => {
       const miseConfigPath = buildTestHostPath({ text: join(homeRealPath, 'app', 'mise.toml') });
       await writeFixtureTextFile({ path: miseConfigPath, text: '[tools]\n' });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'a1',
         targetPath: miseConfigPath,
       });
@@ -560,7 +552,6 @@ describe('loading the pins', () => {
       const lockedPath = join(fixtureRoot.homeDir, 'locked');
       await writeFixtureTextFile({ path: join(lockedPath, 'app', 'mise.toml'), text: '[tools]\n' });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'a1',
         targetPath: join(lockedPath, 'app', 'mise.toml'),
       });
@@ -592,7 +583,6 @@ describe('loading the pins', () => {
       const projectPath = join(fixtureRoot.homeDir, 'app');
       await writeFixtureTextFile({ path: join(projectPath, 'package.json'), text: '{}' });
       await createTrackedConfigLink({
-        trackedConfigsPath: trackedConfigsPath,
         name: 'a1',
         targetPath: join(projectPath, 'package.json'),
       });

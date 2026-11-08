@@ -59,7 +59,9 @@ type CloudOnlyRemovalEnd = { kind: 'cloudOnly' };
 /** A file's or a link's removal ends as an entry's does, or finds it kept online only. */
 type LeafRemovalEnd = EntryRemovalEnd | CloudOnlyRemovalEnd;
 
-/** A folder's removal ends as an entry's does, finds it kept online only, or still holds entries. */
+/**
+ * A folder's removal ends as an entry's does, finds it kept online only, or still holds entries.
+ */
 type DirectoryRemovalEnd = EntryRemovalEnd | CloudOnlyRemovalEnd | { kind: 'notEmpty' };
 
 /**

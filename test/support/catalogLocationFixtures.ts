@@ -7,7 +7,9 @@ import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 
 const KEBAB_CASE_ID_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-/** The ids of the entries that another entry also holds or that are not in kebab case, each once. */
+/**
+ * The ids of the entries that another entry also holds or that are not in kebab case, each once.
+ */
 export function listMisnamedCatalogIds(params: { entries: CatalogEntry[] }): string[] {
   const ids = params.entries.map((entry) => entry.id);
 

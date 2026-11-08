@@ -126,7 +126,9 @@ export function buildEnvironment(params: {
    * path for is left out.
    */
   protectedLocations: EnvironmentLocation[];
-  /** Real paths the platform resolved itself that are never removed as a whole, such as OneDrive's. */
+  /**
+   * Real paths the platform resolved itself that are never removed as a whole, such as OneDrive's.
+   */
   protectedFolderRealPaths: AbsolutePath[];
   /** Folders that are never removed, neither whole nor in part. */
   sensitiveLocations: EnvironmentLocationAtRoot[];

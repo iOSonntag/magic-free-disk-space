@@ -2,7 +2,9 @@ import type { EnvironmentFailure } from '../../environment/environmentPlatform.j
 import { isSamePath } from '../../path/isSameOrInsidePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
-import type { ResolvedFolder } from './loadEnvironment.js';
+
+/** A folder of the run by the path Windows names for it and by its real path. */
+export type ResolvedFolder = { path: AbsolutePath; realPath: AbsolutePath };
 
 /** What a variable that names a folder of the run holds, as the loader read it. */
 export type VariableReading =

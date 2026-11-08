@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { EnvironmentFailure } from '../../../src/environment/environmentPlatform.js';
 import type { AbsolutePath } from '../../../src/path/parseAbsolutePath.js';
-import type { ResolvedFolder } from '../../../src/platform/win32/loadEnvironment.js';
+import type { ResolvedFolder } from '../../../src/platform/win32/checkVariablePlacement.js';
 import {
   buildWin32Environment,
   checkWin32EnvironmentRoots,

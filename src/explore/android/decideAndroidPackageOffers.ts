@@ -157,7 +157,8 @@ function listComparableAvdImageFolderTexts(params: {
       return null;
     }
 
-    // The resolve drops the trailing separator the SDK writes, such as `system-images/android-35/…/`.
+    // The resolve drops the trailing separator the SDK writes, such as
+    // `system-images/android-35/…/`.
     const folderPath = resolveAbsolutePath({
       rules: params.pathRules,
       basePath: params.sdkRoot,

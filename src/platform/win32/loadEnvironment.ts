@@ -19,7 +19,7 @@ import type { Result } from '../../result.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parseWindowsSid } from '../../system/userIdentity.js';
 import { WIN32_CATALOG } from './catalog/win32Catalog.js';
-import type { VariableReading } from './checkVariablePlacement.js';
+import type { ResolvedFolder, VariableReading } from './checkVariablePlacement.js';
 import { checkVariablePlacement } from './checkVariablePlacement.js';
 import type { RunKnownFolder } from './knownFolderIds.js';
 import { buildGuidBytes, knownFolderIds } from './knownFolderIds.js';
@@ -66,9 +66,6 @@ const ONE_DRIVE_ACCOUNTS_KEY_PATH = 'Software\\Microsoft\\OneDrive\\Accounts';
 
 /** The value of an account's key that holds the root of the account. */
 const ONE_DRIVE_USER_FOLDER_VALUE_NAME = 'UserFolder';
-
-/** A folder of the run by the path Windows names for it and by its real path. */
-export type ResolvedFolder = { path: AbsolutePath; realPath: AbsolutePath };
 
 /** The user of the token of this process, and whether the token is elevated. */
 type TokenFacts = { user: UserIdentity; isElevated: boolean };
@@ -213,7 +210,9 @@ export type Win32EnvironmentValues = {
   localAppData: ResolvedFolder;
   roamingAppData: ResolvedFolder;
   knownFolderPaths: WindowsKnownFolderPaths;
-  /** The real path of each known folder; `null` for one Windows names no path for or that is gone. */
+  /**
+   * The real path of each known folder; `null` for one Windows names no path for or that is gone.
+   */
   knownFolderRealPaths: WindowsKnownFolderPaths;
   /** The root of each fixed drive, each refused as a whole and each with its Recycle Bin. */
   fixedDriveRoots: DriveRoot[];
@@ -368,7 +367,9 @@ async function loadRequiredKnownFolder(params: {
   return { kind: 'succeeded', value: { path: path.value, realPath: realPath.value } };
 }
 
-/** The path Windows names for each known folder; `null` for one it names none or no drive path for. */
+/**
+ * The path Windows names for each known folder; `null` for one it names none or no drive path for.
+ */
 function loadKnownFolderPaths(): WindowsKnownFolderPaths {
   return {
     desktop: loadOptionalKnownFolderPath({ folder: 'desktop' }),
@@ -512,7 +513,10 @@ async function loadVariableReading(params: { name: string }): Promise<VariableRe
   return { kind: 'resolved', realPath: realPath.value };
 }
 
-/** The value of the environment variable; `null` when it is unset or empty, which Windows treats alike. */
+/**
+ * The value of the environment variable; `null` when it is unset or empty, which Windows treats
+ * alike.
+ */
 function getSetVariable(params: { name: string }): string | null {
   const value = process.env[params.name];
 
