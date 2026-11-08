@@ -43,10 +43,12 @@ import type { Result } from '../../src/result.js';
 import { testOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
+  buildTestWin32AppDataDirs,
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
   loadTestEnvironment,
+  noKnownFolderPaths,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import {
@@ -122,22 +124,8 @@ function buildWindowsFixtureFolders(params: { environment: Environment }): Envir
     tempDir: params.environment.tempDir,
     platformFolders: {
       kind: 'win32',
-      appDataDirs: {
-        localDir: buildTestHostPath({ text: join(params.environment.homeDir, 'AppData', 'Local') }),
-        roamingDir: buildTestHostPath({
-          text: join(params.environment.homeDir, 'AppData', 'Roaming'),
-        }),
-      },
-      knownFolderPaths: {
-        desktop: null,
-        documents: null,
-        downloads: null,
-        videos: null,
-        music: null,
-        pictures: null,
-        localAppDataLow: null,
-        skyDrive: null,
-      },
+      appDataDirs: buildTestWin32AppDataDirs({ homeDir: params.environment.homeDir }),
+      knownFolderPaths: noKnownFolderPaths,
     },
   };
 }

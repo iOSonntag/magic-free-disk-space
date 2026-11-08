@@ -5,14 +5,17 @@ import {
   loadEnvironmentRealPath,
   loadExistingRealPaths,
 } from '../../src/environment/loadEnvironmentRealPath.js';
-import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath, hostPathRules } from '../support/parsedValueFixtures.js';
+import {
+  buildTestHostPath,
+  hostPathRules,
+  otherPathRules,
+} from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
@@ -48,11 +51,8 @@ describe('loadEnvironmentRealPath', () => {
   });
 
   test('is unresolvable at the path when its real path is no absolute path under the rules', async () => {
-    // The rules of the other platform, under which no real path of the host is absolute.
-    const otherRules = hostPathRules === WIN32_PATH_RULES ? POSIX_PATH_RULES : WIN32_PATH_RULES;
-
     expect(
-      await loadEnvironmentRealPath({ pathRules: otherRules, path: fixtureRoot.homeDir }),
+      await loadEnvironmentRealPath({ pathRules: otherPathRules, path: fixtureRoot.homeDir }),
     ).toEqual({
       kind: 'failed',
       failure: { reason: 'unresolvable', path: fixtureRoot.homeDir, code: 'notAbsolute' },

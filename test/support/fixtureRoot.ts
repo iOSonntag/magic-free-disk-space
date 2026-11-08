@@ -12,12 +12,14 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, sep } from 'node:path';
 import type {
+  AppDataDirs,
   Environment,
   WindowsKnownFolder,
   WindowsKnownFolderPaths,
 } from '../../src/environment/buildEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironment.js';
+import type { ResolvedFolder } from '../../src/platform/win32/loadEnvironment.js';
 import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import {
   buildTestAbsolutePath,
@@ -35,14 +37,11 @@ export type FixtureRoot = {
   applicationDir: AbsolutePath;
 };
 
-/** A folder of a fixture environment by its path and its real path. */
-type TestFolder = { path: AbsolutePath; realPath: AbsolutePath };
-
 /** A known folder of Windows that a fixture creates below its home, at `pathBelowHome`. */
-export type TestKnownFolder = { folder: WindowsKnownFolder; pathBelowHome: string };
+type TestKnownFolder = { folder: WindowsKnownFolder; pathBelowHome: string };
 
 /** Windows names no path for a known folder that a fixture did not create. */
-const noKnownFolderPaths: WindowsKnownFolderPaths = {
+export const noKnownFolderPaths: WindowsKnownFolderPaths = {
   desktop: null,
   documents: null,
   downloads: null,
@@ -140,6 +139,7 @@ export async function loadTestWin32Environment(params: {
     homeDir: home.path,
     knownFolders: params.knownFolders,
   });
+  const appDataDirs = buildTestWin32AppDataDirs({ homeDir: home.path });
 
   return buildWin32Environment({
     nowMs: params.nowMs,
@@ -147,17 +147,24 @@ export async function loadTestWin32Environment(params: {
     user: exampleWindowsUser,
     home: home,
     temp: temp,
-    localAppData: await createTestFolder({
-      path: buildTestHostPath({ text: join(home.path, 'AppData', 'Local') }),
-    }),
-    roamingAppData: await createTestFolder({
-      path: buildTestHostPath({ text: join(home.path, 'AppData', 'Roaming') }),
-    }),
+    localAppData: await createTestFolder({ path: appDataDirs.localDir }),
+    roamingAppData: await createTestFolder({ path: appDataDirs.roamingDir }),
     knownFolderPaths: knownFolderPaths.paths,
     knownFolderRealPaths: knownFolderPaths.realPaths,
     fixedDriveRoots: [buildTestDriveRoot({ text: parse(params.fixtureRoot.rootDir).root })],
     oneDriveRealPaths: [],
   });
+}
+
+/**
+ * Windows' local and roaming AppData folders below `homeDir`, by their paths alone: no folder is
+ * made.
+ */
+export function buildTestWin32AppDataDirs(params: { homeDir: AbsolutePath }): AppDataDirs {
+  return {
+    localDir: buildTestHostPath({ text: join(params.homeDir, 'AppData', 'Local') }),
+    roamingDir: buildTestHostPath({ text: join(params.homeDir, 'AppData', 'Roaming') }),
+  };
 }
 
 /**
@@ -317,14 +324,14 @@ async function loadFixtureParentDir(): Promise<string> {
   return tmpdir();
 }
 
-async function loadTestFolder(params: { path: AbsolutePath }): Promise<TestFolder> {
+async function loadTestFolder(params: { path: AbsolutePath }): Promise<ResolvedFolder> {
   return {
     path: params.path,
     realPath: buildTestHostPath({ text: await realpath(params.path) }),
   };
 }
 
-async function createTestFolder(params: { path: string }): Promise<TestFolder> {
+async function createTestFolder(params: { path: string }): Promise<ResolvedFolder> {
   await mkdir(params.path, { recursive: true });
 
   return loadTestFolder({ path: buildTestHostPath({ text: params.path }) });

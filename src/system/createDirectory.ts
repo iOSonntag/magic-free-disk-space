@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import type { Result } from '../result.js';
 import { getErrorCode } from './getErrorCode.js';
 
-export type DirectoryCreateFailure = { code: string };
+type DirectoryCreateFailure = { code: string };
 
 /**
  * Creates the folder and every missing parent with the directory mode of `ownerOnlyModes`, or with

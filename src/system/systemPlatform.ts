@@ -6,7 +6,7 @@ import type { SystemCallFailure } from './systemCallFailure.js';
 import type { VolumeSpace } from './volumeSpace.js';
 
 /** A call of the operating system that listed the processes failed, with its error code. */
-export type ProcessListingCallFailure = { reason: 'callFailed' } & SystemCallFailure;
+type ProcessListingCallFailure = { reason: 'callFailed' } & SystemCallFailure;
 
 /** Why the processes could not be listed: by the command that lists them, or by a system call. */
 export type RunningProcessesFailure = CommandFailure | ProcessListingCallFailure;

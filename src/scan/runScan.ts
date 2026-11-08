@@ -143,7 +143,7 @@ export type CloudOnlyEntryCount = {
 };
 
 /** Takes the entries the scan's walks leave unread in the cloud store, and counts them. */
-export type CloudOnlyEntryTally = {
+type CloudOnlyEntryTally = {
   recordEvictedEntry: EvictedEntryRecorder;
   /** The count of the entries recorded so far. */
   getCloudOnlyEntryCount: () => CloudOnlyEntryCount;

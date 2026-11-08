@@ -297,7 +297,7 @@ export function loadDiskFreeSpace(params: {
 
   const availableBytes = new BigUint64Array(1);
   const capacityBytes = new BigUint64Array(1);
-  // A UNC folder must end with a backslash; a drive folder may.
+  // GetDiskFreeSpaceExW takes the folder in its documented form, with a trailing backslash.
   const folderText = params.folderPath.endsWith('\\')
     ? params.folderPath
     : `${params.folderPath}\\`;

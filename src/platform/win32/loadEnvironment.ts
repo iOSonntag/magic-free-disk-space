@@ -68,7 +68,7 @@ const ONE_DRIVE_ACCOUNTS_KEY_PATH = 'Software\\Microsoft\\OneDrive\\Accounts';
 const ONE_DRIVE_USER_FOLDER_VALUE_NAME = 'UserFolder';
 
 /** A folder of the run by the path Windows names for it and by its real path. */
-type ResolvedFolder = { path: AbsolutePath; realPath: AbsolutePath };
+export type ResolvedFolder = { path: AbsolutePath; realPath: AbsolutePath };
 
 /** The user of the token of this process, and whether the token is elevated. */
 type TokenFacts = { user: UserIdentity; isElevated: boolean };
@@ -206,8 +206,8 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   return { kind: 'succeeded', value: environment };
 }
 
-/** The environment of a run on Windows: the values read for the run, with the facts of Windows. */
-export function buildWin32Environment(params: {
+/** The values a run on Windows reads, from which `buildWin32Environment` builds its environment. */
+export type Win32EnvironmentValues = {
   nowMs: number;
   user: UserIdentity;
   home: ResolvedFolder;
@@ -221,7 +221,10 @@ export function buildWin32Environment(params: {
   fixedDriveRoots: DriveRoot[];
   /** The real paths of the OneDrive roots that exist. */
   oneDriveRealPaths: AbsolutePath[];
-}): Environment {
+};
+
+/** The environment of a run on Windows: the values read for the run, with the facts of Windows. */
+export function buildWin32Environment(params: Win32EnvironmentValues): Environment {
   return buildEnvironment({
     nowMs: params.nowMs,
     user: params.user,
@@ -292,10 +295,10 @@ function loadTokenFacts(): Result<TokenFacts, EnvironmentFailure> {
   }
 
   try {
-    const isElevated = loadTokenElevation({ token: token.value });
+    const elevation = loadTokenElevation({ token: token.value });
 
-    if (isElevated.kind === 'failed') {
-      return buildCallFailure({ failure: isElevated.failure });
+    if (elevation.kind === 'failed') {
+      return buildCallFailure({ failure: elevation.failure });
     }
 
     const sidText = loadTokenUserSid({ token: token.value });
@@ -314,7 +317,7 @@ function loadTokenFacts(): Result<TokenFacts, EnvironmentFailure> {
       return user;
     }
 
-    return { kind: 'succeeded', value: { user: user.value, isElevated: isElevated.value } };
+    return { kind: 'succeeded', value: { user: user.value, isElevated: elevation.value } };
   } finally {
     closeHandle({ handle: token.value });
   }

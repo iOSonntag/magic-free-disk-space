@@ -749,8 +749,8 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
   describe("Colima's profiles", () => {
     const colima = CONTAINER_ENGINES.colimaEngine;
 
-    function buildColimaPath(names: string[]): AbsolutePath {
-      return joinBelowHome({ home: environment, path: ['.colima', ...names].join('/') });
+    function buildColimaPath(path: string): AbsolutePath {
+      return joinBelowHome({ home: environment, path: `.colima/${path}` });
     }
 
     /** Serves a fake engine in the profile's folder with one unused volume named after it. */
@@ -758,10 +758,10 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
       folderName: string;
       usage?: unknown;
     }): Promise<FakeEngine> {
-      await createFixtureDirectory({ path: buildColimaPath([params.folderName]) });
+      await createFixtureDirectory({ path: buildColimaPath(params.folderName) });
 
       return startFakeEngine({
-        socketPath: buildColimaPath([params.folderName, 'docker.sock']),
+        socketPath: buildColimaPath(`${params.folderName}/docker.sock`),
         usage:
           params.usage ??
           buildDiskUsageAnswer({
@@ -796,8 +796,8 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
       ];
 
       try {
-        await createFixtureDirectory({ path: buildColimaPath(['stopped']) });
-        await writeFixtureTextFile({ path: buildColimaPath(['ssh_config']), text: '' });
+        await createFixtureDirectory({ path: buildColimaPath('stopped') });
+        await writeFixtureTextFile({ path: buildColimaPath('ssh_config'), text: '' });
 
         const findings = getEngineFindings(
           await loadEngineFindings({
@@ -810,13 +810,13 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
         expect(listVolumePlaces(findings)).toEqual([
           [
             'default-data',
-            buildColimaPath(['default', 'docker.sock']),
-            buildColimaPath(['_lima', '_disks', 'colima', 'datadisk']),
+            buildColimaPath('default/docker.sock'),
+            buildColimaPath('_lima/_disks/colima/datadisk'),
           ],
           [
             'work-data',
-            buildColimaPath(['work', 'docker.sock']),
-            buildColimaPath(['_lima', '_disks', 'colima-work', 'datadisk']),
+            buildColimaPath('work/docker.sock'),
+            buildColimaPath('_lima/_disks/colima-work/datadisk'),
           ],
         ]);
         expect(findings.isComplete).toBe(true);
@@ -863,7 +863,7 @@ describeOnPosix('the engine probe and its removal over a fake engine', () => {
 
       expect(await loadColima()).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
 
-      await createFixtureDirectory({ path: buildColimaPath(['default']) });
+      await createFixtureDirectory({ path: buildColimaPath('default') });
 
       expect(await loadColima()).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });
     });

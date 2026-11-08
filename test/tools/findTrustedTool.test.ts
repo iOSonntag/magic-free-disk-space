@@ -41,8 +41,8 @@ async function createMise(params: { folder: string; mode?: number }): Promise<st
   });
 }
 
-// Trust rests on the POSIX owner and mode of a binary; a Windows user trusts none, as the last
-// suite shows.
+// Trust rests on the POSIX owner and mode of a binary; a Windows user trusts none, as the suite
+// "findTrustedTool for a Windows user" shows.
 describe('findTrustedTool', () => {
   testOnPosix('returns the real path of a trusted binary', async () => {
     const path = await createMise({ folder: 'trusted' });

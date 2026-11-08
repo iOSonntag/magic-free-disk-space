@@ -29,6 +29,10 @@ export function buildLocationBelow(params: {
   location: EnvironmentLocationAtRoot;
   path: string;
 }): EnvironmentLocationAtRoot {
+  if (params.location.path === '') {
+    return { root: params.location.root, path: params.path };
+  }
+
   return { root: params.location.root, path: `${params.location.path}/${params.path}` };
 }
 

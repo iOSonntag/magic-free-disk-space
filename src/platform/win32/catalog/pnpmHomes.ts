@@ -5,11 +5,15 @@ import type { PnpmInstallPlaces } from '../../../explore/explorePlatform.js';
 /** pnpm's home on Windows, `%LOCALAPPDATA%\pnpm`. */
 const pnpmHome: CatalogLocation = { root: 'localAppData', path: 'pnpm' };
 
+const voltaImage: CatalogLocation = { root: 'localAppData', path: 'Volta/tools/image' };
+
+const miseInstalls: CatalogLocation = { root: 'localAppData', path: 'mise/installs' };
+
 /**
  * Where pnpm is installed on Windows, each place at the default of its tool: pnpm's home,
  * corepack's cache, the pnpm that Volta, Scoop and winget install, mise's installs, npm's prefixes
  * of the official installer, of Scoop and of Volta's packages, and the node versions of
- * nvm-windows, fnm, Volta and mise. npm installs a global package in `<prefix>\node_modules` on Windows, with no `lib`.
+ * nvm-windows, fnm, Volta and mise.
  */
 export const pnpmInstallPlaces: PnpmInstallPlaces = {
   homes: [pnpmHome],
@@ -19,17 +23,18 @@ export const pnpmInstallPlaces: PnpmInstallPlaces = {
   ],
   pnpmVersionsRoots: [
     // `volta install pnpm` unpacks each version with its `package.json` at the version's folder.
-    { root: 'localAppData', path: 'Volta/tools/image/pnpm' },
+    buildLocationBelow({ location: voltaImage, path: 'pnpm' }),
     // Scoop keeps each version's folder until `scoop cleanup`, and the junction `current`.
     { root: 'home', path: 'scoop/apps/pnpm' },
   ],
-  miseInstallsRoots: [{ root: 'localAppData', path: 'mise/installs' }],
+  miseInstallsRoots: [miseInstalls],
   // The standalone executable. The `pnpm.cmd` and `pnpm.ps1` shims beside it run the pnpm of
   // `.tools` or `global`, which the probe reads on its own, as it does a `#!` launcher.
   launchers: [
     buildLocationBelow({ location: pnpmHome, path: 'pnpm.exe' }),
     buildLocationBelow({ location: pnpmHome, path: 'bin/pnpm.exe' }),
-    // winget installs a portable package in a folder of its own and hard-links the command beside it.
+    // winget installs a portable package in a folder of its own and hard-links the command
+    // beside it.
     {
       root: 'localAppData',
       path: 'Microsoft/WinGet/Packages/pnpm.pnpm_Microsoft.Winget.Source_8wekyb3d8bbwe/pnpm.exe',
@@ -41,9 +46,10 @@ export const pnpmInstallPlaces: PnpmInstallPlaces = {
     { root: 'home', path: 'scoop/persist/nodejs/bin' },
     { root: 'home', path: 'scoop/persist/nodejs-lts/bin' },
     // Volta installs each global package below a prefix of its own.
-    { root: 'localAppData', path: 'Volta/tools/image/packages/pnpm' },
-    { root: 'localAppData', path: 'Volta/tools/image/packages/@pnpm/exe' },
+    buildLocationBelow({ location: voltaImage, path: 'packages/pnpm' }),
+    buildLocationBelow({ location: voltaImage, path: 'packages/@pnpm/exe' }),
   ],
+  // npm installs a global package in `<prefix>\node_modules` on Windows, with no `lib`.
   npmGlobalFolderNames: ['node_modules'],
   nodeVersionsRoots: [
     // nvm-windows 2, then 1.2, then the releases before 1.2.
@@ -56,8 +62,8 @@ export const pnpmInstallPlaces: PnpmInstallPlaces = {
       prefixNames: ['installation'],
     },
     { location: { root: 'home', path: '.fnm/node-versions' }, prefixNames: ['installation'] },
-    { location: { root: 'localAppData', path: 'Volta/tools/image/node' }, prefixNames: [] },
-    { location: { root: 'localAppData', path: 'mise/installs/node' }, prefixNames: [] },
+    { location: buildLocationBelow({ location: voltaImage, path: 'node' }), prefixNames: [] },
+    { location: buildLocationBelow({ location: miseInstalls, path: 'node' }), prefixNames: [] },
   ],
 };
 

@@ -10,7 +10,6 @@ import {
   loadExploreFolderNames,
   loadExploreRealPath,
 } from '../../src/explore/loadExploreRead.js';
-import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -18,7 +17,11 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath, hostPathRules } from '../support/parsedValueFixtures.js';
+import {
+  buildTestHostPath,
+  hostPathRules,
+  otherPathRules,
+} from '../support/parsedValueFixtures.js';
 import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
@@ -345,12 +348,9 @@ describe('loadExploreRead', () => {
     );
 
     test('fails as fileUnreadable at its path when its real path is no absolute path under the rules', async () => {
-      // The rules of the other platform, under which no real path of the host is absolute.
-      const otherRules = hostPathRules === WIN32_PATH_RULES ? POSIX_PATH_RULES : WIN32_PATH_RULES;
-
       expect(
         await loadExploreRealPath({
-          pathRules: otherRules,
+          pathRules: otherPathRules,
           path: fixtureRoot.homeDir,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         }),

@@ -137,7 +137,7 @@ describe('decideUninstallApps', () => {
 });
 
 /** Writes one value of a registry key through `reg.exe`, the key made if missing, or fails the test. */
-function addRegistryValue(params: {
+function saveRegistryValue(params: {
   key: string;
   name: string;
   type: 'REG_SZ' | 'REG_DWORD';
@@ -224,7 +224,7 @@ describeOnWindows('the Uninstall keys of Windows', () => {
         { key: componentKey, name: 'UninstallString', type: 'REG_SZ', data: 'x.exe' },
         { key: componentKey, name: 'SystemComponent', type: 'REG_DWORD', data: '1' },
       ] as const) {
-        addRegistryValue(value);
+        saveRegistryValue(value);
       }
 
       expect(

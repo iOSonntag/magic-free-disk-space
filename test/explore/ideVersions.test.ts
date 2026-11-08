@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { Environment, EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import type { IdeVersionRoots } from '../../src/explore/explorePlatform.js';
@@ -49,20 +49,20 @@ const hasIdeVersionRoots = Object.values(hostPlatform.explore.ideVersionRoots).s
 /** A temporary home with the roots of IDE versions it fills, where the host's catalog keeps them. */
 type IdeFixture = {
   environment: Environment;
-  jetBrainsCachesPath: string;
-  jetBrainsLogsPath: string;
-  jetBrainsSettingsPath: string;
-  googleCachesPath: string;
+  jetBrainsCachesPath: AbsolutePath;
+  jetBrainsLogsPath: AbsolutePath;
+  jetBrainsSettingsPath: AbsolutePath;
+  googleCachesPath: AbsolutePath;
   bundlePath: string;
   ideCommand: string;
 };
 
 /** The root of the IDE versions of `kind` the host's catalog keeps for the IDEs of `vendor`. */
 function buildIdeVersionRootPath(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   kind: keyof IdeVersionRoots;
   vendor: 'JetBrains' | 'Google';
-}): string {
+}): AbsolutePath {
   const root = hostPlatform.explore.ideVersionRoots[params.kind].find((location) =>
     location.path.endsWith(`/${params.vendor}`),
   );

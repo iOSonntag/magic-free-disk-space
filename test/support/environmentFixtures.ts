@@ -2,6 +2,7 @@ import type {
   Environment,
   WindowsKnownFolderPaths,
 } from '../../src/environment/buildEnvironment.js';
+import type { Win32EnvironmentValues } from '../../src/platform/win32/loadEnvironment.js';
 import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import { buildTestMacEnvironment } from './fixtureRoot.js';
 import {
@@ -9,9 +10,6 @@ import {
   buildTestWindowsPath,
   exampleWindowsUser,
 } from './parsedValueFixtures.js';
-
-/** The values a Windows environment is built of, for a test that varies one of them. */
-type Win32EnvironmentParams = Parameters<typeof buildWin32Environment>[0];
 
 /** A macOS environment of example paths below `/Users/tester`, the same on every host. */
 export const exampleDarwinEnvironment: Environment = buildTestMacEnvironment();
@@ -32,7 +30,7 @@ const exampleWin32KnownFolderPaths: WindowsKnownFolderPaths = {
  * The values of a Windows environment of example paths below `C:\Users\tester`, the same on every
  * host: Documents moved into OneDrive, as Known Folder Move does, and no Videos folder.
  */
-export const exampleWin32EnvironmentParams: Win32EnvironmentParams = {
+export const exampleWin32EnvironmentParams: Win32EnvironmentValues = {
   nowMs: 0,
   user: exampleWindowsUser,
   home: {

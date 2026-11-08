@@ -61,6 +61,10 @@ import { parsePosixUid, parseWindowsSid } from '../../src/system/userIdentity.js
 export const hostPathRules: PathRules =
   process.platform === 'win32' ? WIN32_PATH_RULES : POSIX_PATH_RULES;
 
+/** The rules of the other operating system, under which no path the host names is absolute. */
+export const otherPathRules: PathRules =
+  process.platform === 'win32' ? POSIX_PATH_RULES : WIN32_PATH_RULES;
+
 /** An example macOS path, such as `/Users/test/Library`, the same on every host. */
 export function buildTestAbsolutePath(params: { text: string }): AbsolutePath {
   return unwrapFixtureValue({

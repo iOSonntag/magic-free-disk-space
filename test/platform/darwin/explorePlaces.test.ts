@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Environment } from '../../../src/environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../../src/environment/buildEnvironment.js';
 import {
   resolveEnvironmentLocation,
   resolveEnvironmentLocations,
@@ -15,7 +15,7 @@ import { exampleDarwinEnvironment } from '../../support/environmentFixtures.js';
  * profiles folder, its default disk image, and the disk image of a profile `work`.
  */
 function listEnginePlacePaths(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
   engine: ContainerEngine | null;
 }): string[] {
   if (params.engine === null) {
@@ -146,7 +146,7 @@ describe("darwin's explore places", () => {
     ]);
   });
 
-  test("resolves pnpm's install places to those its loader named before", () => {
+  test("resolves pnpm's install places to their folders", () => {
     const places = darwinPlatform.explore.pnpmInstallPlaces;
 
     expect<Record<string, string[]>>({

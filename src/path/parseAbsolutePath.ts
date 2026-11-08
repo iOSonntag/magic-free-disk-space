@@ -7,6 +7,12 @@ declare const absolutePathBrand: unique symbol;
 /** A path that `parseAbsolutePath` checked: absolute, so it never reads as an option. */
 export type AbsolutePath = string & { [absolutePathBrand]: true };
 
+/**
+ * The code of a failed read whose real path `parseAbsolutePath` refuses under the rules of the run,
+ * as a network share is no drive path of Windows.
+ */
+export const NOT_ABSOLUTE_CODE = 'notAbsolute';
+
 /** A Windows path rooted at a drive letter, such as `C:\` or `c:/`. */
 const win32DriveRootPattern = /^[A-Za-z]:[\\/]/;
 

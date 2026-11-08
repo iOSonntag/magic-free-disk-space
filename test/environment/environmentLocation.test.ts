@@ -25,6 +25,13 @@ describe('buildLocationBelow', () => {
       }),
     ).toEqual({ root: 'localAppData', path: 'Android/Sdk/system-images/android-34' });
   });
+
+  test('names a place below the root itself by its own path', () => {
+    expect(buildLocationBelow({ location: { root: 'home', path: '' }, path: '.ssh' })).toEqual({
+      root: 'home',
+      path: '.ssh',
+    });
+  });
 });
 
 describe('resolveEnvironmentLocation', () => {

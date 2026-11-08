@@ -4,7 +4,7 @@ import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js'
 import type { Result } from '../../src/result.js';
 
 /** The drive root of `text` widened to its text, which the brand only marks as checked. */
-function parseWindowsText(params: { text: string }): Result<string, string> {
+function parseWindowsDriveRoot(params: { text: string }): Result<string, string> {
   return parseDriveRoot({ rules: WIN32_PATH_RULES, text: params.text });
 }
 
@@ -17,7 +17,7 @@ describe('parseDriveRoot', () => {
     ];
 
     for (const parseCase of cases) {
-      expect(parseWindowsText({ text: parseCase.text })).toEqual({
+      expect(parseWindowsDriveRoot({ text: parseCase.text })).toEqual({
         kind: 'succeeded',
         value: parseCase.value,
       });
@@ -25,7 +25,7 @@ describe('parseDriveRoot', () => {
   });
 
   test('refuses the empty root, which the shell would take for every drive', () => {
-    expect(parseWindowsText({ text: '' })).toEqual({
+    expect(parseWindowsDriveRoot({ text: '' })).toEqual({
       kind: 'failed',
       failure: 'not a drive root',
     });
@@ -45,7 +45,7 @@ describe('parseDriveRoot', () => {
       'C:\\ ',
       '/',
     ]) {
-      expect(parseWindowsText({ text: text })).toEqual({
+      expect(parseWindowsDriveRoot({ text: text })).toEqual({
         kind: 'failed',
         failure: 'not a drive root',
       });

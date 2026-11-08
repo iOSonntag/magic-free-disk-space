@@ -85,6 +85,10 @@ describe('WIN32_CATALOG', () => {
     expect(forbiddenExcludedNames).toEqual([]);
   });
 
+  test('leaves AppData out of the project search', () => {
+    expect(WIN32_CATALOG.projectSearchExcludedNames).toContain('AppData');
+  });
+
   test("keeps VS Code's profiles under Code in RoamingAppData", () => {
     expect(WIN32_CATALOG.explore.vscodeProfilesRoot).toEqual({
       root: 'roamingAppData',

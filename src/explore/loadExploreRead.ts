@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
-import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
+import { NOT_ABSOLUTE_CODE, parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { Result } from '../result.js';
 import { getErrorCode } from '../system/getErrorCode.js';
@@ -145,7 +145,7 @@ export async function loadExploreRealPath(
       failure: {
         reason: 'fileUnreadable',
         path: params.path,
-        failure: { reason: 'unexpected', code: 'notAbsolute' },
+        failure: { reason: 'unexpected', code: NOT_ABSOLUTE_CODE },
       },
     };
   }

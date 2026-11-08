@@ -1,4 +1,4 @@
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type { EnvironmentFolders } from '../../src/environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { ExplorePathUnitVscodeExtension } from '../../src/explore/exploreUnit.js';
 import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
@@ -53,7 +53,7 @@ export function buildVscodeExtensionsPath(params: { home: HomeFolder }): Absolut
 }
 
 /** VS Code's folder of profiles where the host's platform keeps it. */
-export function buildVscodeProfilesPath(params: { environment: Environment }): AbsolutePath {
+export function buildVscodeProfilesPath(params: { environment: EnvironmentFolders }): AbsolutePath {
   return resolveEnvironmentLocation({
     folders: params.environment,
     location: hostPlatform.explore.vscodeProfilesRoot,
@@ -139,7 +139,7 @@ export async function createVscodeExtensionFolders(params: {
  * marking alpha 1.0.0 and gamma.
  */
 export async function createVscodeInstallation(params: {
-  environment: Environment;
+  environment: EnvironmentFolders;
 }): Promise<void> {
   const extensionsPath = buildVscodeExtensionsPath({ home: params.environment });
 

@@ -33,6 +33,25 @@ describe('formatEnvironmentFailure', () => {
     ).toBe(
       'The temporary folder D:\\ is or holds a drive root or a folder this tool never deletes, so nothing in it can count as temporary.',
     );
+    expect(formatEnvironmentFailure({ failure: { reason: 'runElevated' } })).toBe(
+      'Start this tool without "Run as administrator": it deletes in the user folder of the account that runs it.',
+    );
+    expect(
+      formatEnvironmentFailure({
+        failure: { reason: 'profileNotOwned', path: 'C:\\Users\\tester' },
+      }),
+    ).toBe('The user folder C:\\Users\\tester does not belong to your Windows account.');
+    expect(
+      formatEnvironmentFailure({
+        failure: {
+          reason: 'variableElsewhere',
+          variableName: 'TEMP',
+          path: 'C:\\Users\\tester\\AppData\\Local\\Temp',
+        },
+      }),
+    ).toBe(
+      'The environment variable TEMP does not point to C:\\Users\\tester\\AppData\\Local\\Temp, the folder Windows keeps for your account. Start this tool from a normal session of your account.',
+    );
   });
 
   test('names a failed call of the system by its name and its code in hex, never as a path', () => {
