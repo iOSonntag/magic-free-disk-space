@@ -3,7 +3,8 @@ import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import type { EntryReads } from '../../system/entryReads.js';
-import { isEntryEvicted } from './isEntryEvicted.js';
+import { formatSystemCallFailure } from '../../system/systemCallFailure.js';
+import { loadEntryPlacement } from './loadEntryPlacement.js';
 import { WIN32_PATH_RULES } from './loadEnvironment.js';
 import { loadPrivateBytes } from './loadPrivateBytes.js';
 import type { EntryAttributeAccess } from './removeTreeEntries.js';
@@ -30,7 +31,7 @@ const WIN32_ENTRY_ATTRIBUTES: EntryAttributeAccess = {
 };
 
 const WIN32_ENTRY_READS: EntryReads = {
-  isEntryEvicted: isEntryEvicted,
+  loadEntryPlacement: loadEntryPlacement,
   loadPrivateBytes: loadPrivateBytes,
 };
 
@@ -55,10 +56,14 @@ export async function removeTree(params: { path: string }): Promise<Result<TreeR
   });
 }
 
-/** The failed call as the code the deletion reads: a POSIX name where Bun has one, else its own. */
+/**
+ * The failed call as the code the deletion reads: a POSIX name where Bun has one, else the call
+ * with its code, as every failed call of the system reads.
+ */
 export function formatEntryCallFailure(params: { failure: Win32CallFailure }): string {
   return (
-    ERROR_CODE_NAMES.get(params.failure.code) ?? `${params.failure.call} ${params.failure.code}`
+    ERROR_CODE_NAMES.get(params.failure.code) ??
+    formatSystemCallFailure({ failure: params.failure })
   );
 }
 

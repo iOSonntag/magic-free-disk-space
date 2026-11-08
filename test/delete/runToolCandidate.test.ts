@@ -542,6 +542,7 @@ process.exit(0);`,
         paths: listUnitPaths(unit),
         deadlineMs: Date.now() + 60_000,
         entryReads: darwinPlatform.system.entryReads,
+        recordEvictedEntry: null,
       });
 
       expect(measurementAfter.isComplete).toBe(false);

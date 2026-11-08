@@ -7,23 +7,23 @@ import type {
   Candidate,
   CandidateRemovalDeletePaths,
   CandidateRemovalDeleteUnitPaths,
-  CandidateRemovalEmptyRecycleBin,
   RemovalTarget,
   RemovalTargets,
 } from '../scan/candidate.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
 import { getMeasuredFreedBytes, loadPathMeasurement } from '../scan/loadPathMeasurement.js';
 import { resolveRemovalOwnerState } from '../scan/resolveOwnerState.js';
-import type { EntryReads } from '../system/entryReads.js';
-import type { FileIdentity } from '../system/loadFileIdentity.js';
-import { loadFileIdentity } from '../system/loadFileIdentity.js';
+import type { EntryPlacement, EntryReads } from '../system/entryReads.js';
+import type { FileFailure, FileIdentity } from '../system/loadFileIdentity.js';
+import { getFileFailure, loadFileIdentity } from '../system/loadFileIdentity.js';
 import { mapNonEmpty, mapNonEmptyInTurn } from '../system/nonEmptyList.js';
 import type { ReadFailure } from '../system/readFailure.js';
 import type { RunningProcesses } from '../system/systemPlatform.js';
 import { callEngineCandidate } from './callEngineCandidate.js';
 import { decideTargetsOutcome } from './decideTargetsOutcome.js';
-import type { DeletePlatform, DeletePlatformTrash, TreeRemoval } from './deletePlatform.js';
+import type { DeletePlatform, TreeRemoval } from './deletePlatform.js';
 import type { DeletionJournal, JournalEntry, JournalFailure } from './deletionJournal.js';
+import { emptyRecycleBinCandidate } from './emptyRecycleBinCandidate.js';
 import { evictCandidateFiles } from './evictCandidateFiles.js';
 import { fileFailureToOutcome } from './fileFailureToOutcome.js';
 import type { ToolCandidateRun } from './runToolCandidate.js';
@@ -89,8 +89,6 @@ export type RemovalRun = {
   outcomes: RemovalOutcome[];
   journalFailure: JournalFailure | null;
 };
-
-const PERMISSION_DENIED_CODES = ['EACCES', 'EPERM'];
 
 /** Whether the outcome left its item in place through a failure, which the run reports. */
 export function isUnremovedOutcome(kind: RemovalOutcomeKind): boolean {
@@ -434,79 +432,6 @@ async function deletePathsCandidate(params: {
 }
 
 /**
- * Empties the Recycle Bin of the drive only while a fresh count still finds what the scan
- * counted; anything thrown away since would go unseen. The system empties the bin as one unit,
- * which frees its scanned size; one entry at the bin's path.
- */
-function emptyRecycleBinCandidate(params: {
-  candidate: Candidate;
-  removal: CandidateRemovalEmptyRecycleBin;
-  trash: DeletePlatformTrash;
-  clock: () => number;
-}): RecordedRemoval {
-  const emptying = emptyScannedRecycleBin({ removal: params.removal, trash: params.trash });
-
-  return {
-    outcome: {
-      candidate: params.candidate,
-      freedBytes: emptying.outcome === 'removed' ? params.candidate.allocatedBytes : 0,
-      outcome: emptying.outcome,
-      code: emptying.code,
-    },
-    outcomeEntries: [
-      {
-        kind: 'outcome',
-        atMs: params.clock(),
-        path: params.candidate.path,
-        outcome: emptying.outcome,
-        code: emptying.code,
-      },
-    ],
-  };
-}
-
-/** What emptying the bin made of it, with the error text of a failed count or emptying. */
-function emptyScannedRecycleBin(params: {
-  removal: CandidateRemovalEmptyRecycleBin;
-  trash: DeletePlatformTrash;
-}): { outcome: RemovalOutcomeCodedKind; code: string | null } {
-  switch (params.trash.kind) {
-    // A platform whose trash is a folder has no Recycle Bin to empty.
-    case 'catalogFolder':
-      return { outcome: 'failed', code: null };
-    case 'recycleBins': {
-      const driveRootPath = params.removal.driveRootPath;
-      const content = params.trash.loadRecycleBin({ driveRootPath: driveRootPath });
-
-      if (content.kind === 'failed') {
-        return { outcome: 'failed', code: content.failure };
-      }
-
-      if (content.value.itemCount === 0) {
-        return { outcome: 'alreadyGone', code: null };
-      }
-
-      const scanned = params.removal.scannedContent;
-
-      if (
-        content.value.itemCount !== scanned.itemCount ||
-        content.value.sizeBytes !== scanned.sizeBytes
-      ) {
-        return { outcome: 'changedSinceScan', code: null };
-      }
-
-      const emptied = params.trash.emptyRecycleBin({ driveRootPath: driveRootPath });
-
-      if (emptied.kind === 'failed') {
-        return { outcome: 'failed', code: emptied.failure };
-      }
-
-      return { outcome: 'removed', code: null };
-    }
-  }
-}
-
-/**
  * Deletes the unit's paths only while a fresh recheck, with the processes read right before,
  * still offers the unit for the same reason, and each path's identity still matches the scan.
  */
@@ -709,6 +634,7 @@ async function loadPresentTargetsBytes(params: {
     paths: presentPaths,
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
 
   return present.allocatedBytes;
@@ -721,12 +647,24 @@ async function listPresentTargetPaths(params: { targets: RemovalTarget[] }): Pro
   for (const target of params.targets) {
     const identity = await loadFileIdentity({ path: target.path });
 
-    if (identity.kind === 'succeeded' || identity.failure.reason !== 'missing') {
+    if (identity.kind === 'succeeded' || isPresentDespiteFailure(identity.failure)) {
       presentPaths.push(target.path);
     }
   }
 
   return presentPaths;
+}
+
+/** Whether a target whose identity could not be read is still there, as all but a missing one are. */
+function isPresentDespiteFailure(failure: FileFailure): boolean {
+  switch (failure.reason) {
+    case 'missing':
+      return false;
+    case 'permissionDenied':
+    case 'inUse':
+    case 'unexpected':
+      return true;
+  }
 }
 
 /**
@@ -764,12 +702,12 @@ async function deleteScannedTarget(params: {
     };
   }
 
-  if (
-    params.entryReads.isEntryEvicted({
-      path: params.target.path,
-      kind: params.target.identity.kind,
-    })
-  ) {
+  const placement = params.entryReads.loadEntryPlacement({
+    path: params.target.path,
+    kind: params.target.identity.kind,
+  });
+
+  if (isLeftByCloudStore(placement)) {
     return {
       path: params.target.path,
       atMs: params.clock(),
@@ -792,10 +730,37 @@ async function deleteScannedTarget(params: {
   return {
     path: params.target.path,
     atMs: params.clock(),
-    outcome: PERMISSION_DENIED_CODES.includes(removed.failure) ? 'permissionDenied' : 'failed',
+    outcome: removalFailureToOutcomeKind(getFileFailure({ code: removed.failure })),
     code: removed.failure,
     deleteRan: true,
   };
+}
+
+/**
+ * Whether a cloud store took the target's content since the scan, which leaves only its
+ * placeholder here. A link is removed as itself, never followed, as a target on disk is.
+ */
+function isLeftByCloudStore(placement: EntryPlacement): boolean {
+  switch (placement) {
+    case 'cloudOnly':
+      return true;
+    case 'onDisk':
+    case 'link':
+      return false;
+  }
+}
+
+/** What a removal that ran and failed makes of its target, by the reason of the system's code. */
+function removalFailureToOutcomeKind(failure: FileFailure): RemovalOutcomeCodedKind {
+  switch (failure.reason) {
+    case 'permissionDenied':
+      return 'permissionDenied';
+    // The removal ran, so part of the target may be gone: only a refusal names its own outcome.
+    case 'missing':
+    case 'inUse':
+    case 'unexpected':
+      return 'failed';
+  }
 }
 
 function treeRemovalToTargetOutcome(params: {
@@ -861,6 +826,7 @@ async function loadTargetsOutcome(params: {
     paths: params.targetOutcomes.map((targetOutcome) => targetOutcome.path),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
 
   return buildStayedTargetOutcome({

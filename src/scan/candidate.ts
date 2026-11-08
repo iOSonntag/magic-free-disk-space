@@ -6,6 +6,7 @@ import type {
   ExplorePathUnit,
   ExploreToolUnit,
 } from '../explore/exploreUnit.js';
+import type { DriveRoot } from '../path/driveRoot.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
 import type {
@@ -81,7 +82,7 @@ export type RecycleBinContent = { sizeBytes: number; itemCount: number };
  */
 export type CandidateRemovalEmptyRecycleBin = {
   kind: 'emptyRecycleBin';
-  driveRootPath: AbsolutePath;
+  driveRoot: DriveRoot;
   scannedContent: RecycleBinContent;
 };
 
@@ -163,7 +164,7 @@ export type CandidateProbed = CandidateListing & {
   evidenceLines: string[];
 };
 
-/** The Recycle Bin of one fixed drive, with the drive root as its path. */
+/** The Recycle Bin of one fixed drive, with the bin's folder at the drive root as its path. */
 export type CandidateRecycleBin = CandidateListing & {
   origin: CandidateOriginRecycleBin;
   removal: CandidateRemovalEmptyRecycleBin;

@@ -28,9 +28,9 @@ describe('formatEntryCallFailure', () => {
     }
   });
 
-  test('names any other code by its call and its number', () => {
+  test('names any other code by its call and its code in hex, as every failed call reads', () => {
     expect(formatEntryCallFailure({ failure: { call: 'SetFileAttributesW', code: 87 } })).toBe(
-      'SetFileAttributesW 87',
+      'SetFileAttributesW failed with 0x00000057',
     );
   });
 });

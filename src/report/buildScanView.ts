@@ -21,7 +21,7 @@ import {
   placeCandidate,
 } from '../scan/placeCandidate.js';
 import type { ScanProgress, ScanReport, SkippedItem } from '../scan/runScan.js';
-import type { AdvisedApp } from '../scan/scanPlatform.js';
+import type { AppAdvice } from '../scan/scanPlatform.js';
 import type { VolumeSpace } from '../system/volumeSpace.js';
 import type { ToolDistrustDetail } from '../tools/decideToolTrust.js';
 import { formatBytes, formatSizeText, formatTotalSizeText } from './formatBytes.js';
@@ -220,14 +220,6 @@ const ADVICE_GROUP_TITLE_TEXT = 'Handle these yourself; this tool never deletes 
 
 const APP_ADVICE_TITLE_TEXT = 'Installed apps';
 
-// Only Windows lists its apps as advice, so the words are its own.
-const APP_ADVICE_INTRO_TEXT =
-  'Uninstall the apps you no longer use in Settings > Apps; this tool never deletes an app.';
-
-const APP_ADVICE_EXPLANATION_TEXT = 'Installed on this PC, as Settings > Apps lists it.';
-
-const APP_ADVICE_ADVICE_TEXT = 'Uninstall it in Settings > Apps if you no longer use it.';
-
 /** An app whose installer wrote no size. */
 const APP_SIZE_UNKNOWN_TEXT = 'size unknown';
 
@@ -400,20 +392,28 @@ export function buildScanView(params: {
       ...buildPrivateSizeFallbackNotices({ report: params.report, texts: params.texts }),
     ],
     sectionTotals: sectionTotalViews,
-    appAdvice: buildAppAdviceView({ apps: params.report.appAdvice }),
+    appAdvice: buildAppAdviceView({ appAdvice: params.report.appAdvice, texts: params.texts }),
   };
 }
 
-/** Each app with the size the system estimates for it, and its install folder where it names one. */
-function buildAppAdviceView(params: { apps: AdvisedApp[] }): AppAdviceView | null {
-  if (params.apps.length === 0) {
+/**
+ * Each app with the size the system estimates for it, and its install folder where it names one;
+ * `null` on a platform that offers its apps, and when the system lists none.
+ */
+function buildAppAdviceView(params: {
+  appAdvice: AppAdvice | null;
+  texts: ReportTexts;
+}): AppAdviceView | null {
+  if (params.appAdvice === null || params.appAdvice.apps.length === 0) {
     return null;
   }
 
+  const pageName = params.appAdvice.installedAppsPageName;
+
   return {
     titleText: APP_ADVICE_TITLE_TEXT,
-    introText: APP_ADVICE_INTRO_TEXT,
-    items: params.apps.map((app) => ({
+    introText: `Uninstall the apps you no longer use in ${pageName}; this tool never deletes an app.`,
+    items: params.appAdvice.apps.map((app) => ({
       title: formatDisplayText({ text: app.displayName }),
       risk: 'review',
       riskText: riskTexts.review,
@@ -423,8 +423,14 @@ function buildAppAdviceView(params: { apps: AdvisedApp[] }): AppAdviceView | nul
         ...(app.installFolderPath === null
           ? []
           : [buildDetailLine({ kind: 'path', text: app.installFolderPath })]),
-        buildDetailLine({ kind: 'explanation', text: APP_ADVICE_EXPLANATION_TEXT }),
-        buildDetailLine({ kind: 'advice', text: APP_ADVICE_ADVICE_TEXT }),
+        buildDetailLine({
+          kind: 'explanation',
+          text: `Installed on ${params.texts.computerPhrase}, as ${pageName} lists it.`,
+        }),
+        buildDetailLine({
+          kind: 'advice',
+          text: `Uninstall it in ${pageName} if you no longer use it.`,
+        }),
       ],
     })),
   };

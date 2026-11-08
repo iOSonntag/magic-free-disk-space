@@ -19,7 +19,7 @@ import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
 import { loadCommandOutput } from '../../system/loadCommandOutput.js';
 import type { UserIdentity } from '../../system/userIdentity.js';
 import { parsePosixUid } from '../../system/userIdentity.js';
-import { ICLOUD_DRIVE_ROOT_PATH_NAMES } from './appleDataRoots.js';
+import { ICLOUD_DRIVE_ROOT } from './appleDataRoots.js';
 import {
   PROTECTED_HOME_DIR_NAMES,
   SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
@@ -191,13 +191,15 @@ export function buildDarwinEnvironment(params: {
     applicationDirs: params.applicationDirs,
     applicationRealPaths: params.applicationRealPaths,
     protectedRootPaths: DARWIN_PROTECTED_ROOT_PATHS,
+    // macOS mounts every volume below its one root, so no drive has a root of its own.
+    fixedDriveRoots: [],
     protectedLocations: toHomeLocations({ nameLists: PROTECTED_HOME_DIR_NAMES }),
     protectedFolderRealPaths: [],
     sensitiveLocations: toHomeLocations({ nameLists: SENSITIVE_HOME_DIR_NAMES }),
     sensitiveExceptionLocations: toHomeLocations({
       nameLists: SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
     }),
-    evictLocations: toHomeLocations({ nameLists: [ICLOUD_DRIVE_ROOT_PATH_NAMES] }),
+    evictLocations: [ICLOUD_DRIVE_ROOT],
     deletionLogLocation: DARWIN_DELETION_LOG_LOCATION,
     preferencesLocation: DARWIN_PREFERENCES_LOCATION,
     ownerOnlyModes: DARWIN_OWNER_ONLY_MODES,

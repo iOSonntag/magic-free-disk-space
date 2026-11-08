@@ -44,16 +44,18 @@ describe('buildScanReport', () => {
       estimatedBytes: 2048,
     };
 
+    const appAdvice = { apps: [app], installedAppsPageName: 'Settings > Apps' };
+
     const report = buildScanReport({
       decisions: decisions,
-      appAdvice: [app],
+      appAdvice: appAdvice,
       evictedEntryCount: 3,
       issues: [issue],
     });
 
     expect(report.candidates).toEqual([large, small]);
     expect(report.advice.map((item) => item.path)).toEqual(['/opt/tool']);
-    expect(report.appAdvice).toEqual([app]);
+    expect(report.appAdvice).toEqual(appAdvice);
     expect(report.skipped).toEqual([{ path: '/home/held', reason: 'ownerRunning' }]);
     expect(report.evictedEntryCount).toBe(3);
     expect(report.issues).toEqual([issue]);
@@ -80,7 +82,7 @@ describe('buildScanReport', () => {
 
     const report = buildScanReport({
       decisions: buildOffers([toolSmall, safeSmall, toolLarge, careful, safeLarge]),
-      appAdvice: [],
+      appAdvice: null,
       evictedEntryCount: 0,
       issues: [],
     });
@@ -128,7 +130,7 @@ describe('buildScanReport', () => {
 
     const report = buildScanReport({
       decisions: buildOffers([trashSafe, appNever, toolSafe, appSafe, projectReview, cacheSafe]),
-      appAdvice: [],
+      appAdvice: null,
       evictedEntryCount: 0,
       issues: [],
     });

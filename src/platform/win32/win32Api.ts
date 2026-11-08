@@ -1,9 +1,9 @@
 import type { Pointer } from 'bun:ffi';
 import { dlopen, FFIType, ptr, read, toArrayBuffer } from 'bun:ffi';
+import type { DriveRoot } from '../../path/driveRoot.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
 import type { SystemCallFailure } from '../../system/systemCallFailure.js';
-import type { DriveRoot } from './driveRoot.js';
 import type { ProcessEntry } from './processEntry.js';
 import { createProcessEntryBuffer, parseProcessEntry } from './processEntry.js';
 

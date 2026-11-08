@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildUninstallKeyIssue,
   decideUninstallApps,
   loadAdvisedApps,
   UNINSTALL_KEY_SOURCES,
@@ -130,6 +131,21 @@ function addRegistryValue(params: {
     throw new Error(`reg add failed: ${result.stderr.toString()}`);
   }
 }
+
+describe('buildUninstallKeyIssue', () => {
+  test('names the key by its hive and the failed call with its code in hex', () => {
+    expect(
+      buildUninstallKeyIssue({
+        source: { hive: 'localMachine', view: 'bits64', keyPath: 'Software\\Example\\Uninstall' },
+        failure: { call: 'RegOpenKeyExW', code: 5 },
+      }),
+    ).toEqual({
+      path: 'HKEY_LOCAL_MACHINE\\Software\\Example\\Uninstall',
+      reason: 'unexpected',
+      detail: 'RegOpenKeyExW failed with 0x00000005',
+    });
+  });
+});
 
 describe.skipIf(process.platform !== 'win32')('the Uninstall keys of Windows', () => {
   test('opens the key of the machine in its 64-bit and its 32-bit view', () => {

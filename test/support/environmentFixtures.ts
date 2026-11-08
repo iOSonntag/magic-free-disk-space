@@ -4,7 +4,11 @@ import type {
 } from '../../src/environment/buildEnvironment.js';
 import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import { buildTestMacEnvironment } from './fixtureRoot.js';
-import { buildTestWindowsPath, buildTestWindowsUser } from './parsedValueFixtures.js';
+import {
+  buildTestDriveRoot,
+  buildTestWindowsPath,
+  buildTestWindowsUser,
+} from './parsedValueFixtures.js';
 
 /** The values a Windows environment is built of, for a test that varies one of them. */
 export type Win32EnvironmentParams = Parameters<typeof buildWin32Environment>[0];
@@ -49,7 +53,7 @@ export const EXAMPLE_WIN32_ENVIRONMENT_PARAMS: Win32EnvironmentParams = {
   },
   knownFolderPaths: EXAMPLE_WIN32_KNOWN_FOLDER_PATHS,
   knownFolderRealPaths: EXAMPLE_WIN32_KNOWN_FOLDER_PATHS,
-  fixedDriveRoots: [buildTestWindowsPath({ text: 'C:\\' }), buildTestWindowsPath({ text: 'D:\\' })],
+  fixedDriveRoots: [buildTestDriveRoot({ text: 'C:\\' }), buildTestDriveRoot({ text: 'D:\\' })],
   oneDriveRealPaths: [buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive' })],
 };
 

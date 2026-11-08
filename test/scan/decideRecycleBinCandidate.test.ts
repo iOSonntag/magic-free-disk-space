@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { WIN32_PATH_RULES } from '../../src/platform/win32/loadEnvironment.js';
 import { decideRecycleBinCandidate } from '../../src/scan/decideRecycleBinCandidate.js';
 import type { ScanPlatformTrashRecycleBins } from '../../src/scan/scanPlatform.js';
-import { buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+import { buildTestDriveRoot } from '../support/parsedValueFixtures.js';
 
 const MIB = 1_048_576;
 
@@ -12,16 +12,18 @@ const TRASH: ScanPlatformTrashRecycleBins = {
   explanation: 'Files you deleted on this drive.',
   regeneration: 'A deleted file does not come back.',
   risk: 'careful',
-  loadRecycleBin: () => ({ kind: 'failed', failure: 'not read in this test' }),
+  binFolderName: '$Recycle.Bin',
+  // The decision reads no bin; the count is the scan's.
+  loadRecycleBin: () => ({ kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: 0 } }),
 };
 
-const DRIVE_ROOT_PATH = buildTestWindowsPath({ text: 'D:\\' });
+const DRIVE_ROOT = buildTestDriveRoot({ text: 'D:\\' });
 
 function decide(params: { sizeBytes: number; itemCount: number }) {
   return decideRecycleBinCandidate({
     pathRules: WIN32_PATH_RULES,
     trash: TRASH,
-    driveRootPath: DRIVE_ROOT_PATH,
+    driveRoot: DRIVE_ROOT,
     content: { sizeBytes: params.sizeBytes, itemCount: params.itemCount },
     minOfferedBytes: 10 * MIB,
   });
@@ -49,12 +51,24 @@ describe('decideRecycleBinCandidate', () => {
           appName: null,
           removal: {
             kind: 'emptyRecycleBin',
-            driveRootPath: DRIVE_ROOT_PATH,
+            driveRoot: DRIVE_ROOT,
             scannedContent: { sizeBytes: 50 * MIB, itemCount: 3 },
           },
         },
       },
     ]);
+  });
+
+  test('takes the folder of the bin from the platform', () => {
+    expect(
+      decideRecycleBinCandidate({
+        pathRules: WIN32_PATH_RULES,
+        trash: { ...TRASH, binFolderName: 'RECYCLER' },
+        driveRoot: DRIVE_ROOT,
+        content: { sizeBytes: MIB, itemCount: 1 },
+        minOfferedBytes: 10 * MIB,
+      }),
+    ).toEqual([{ kind: 'skip', path: 'D:\\RECYCLER', reason: 'belowSizeThreshold' }]);
   });
 
   test('skips a bin below the size an item needs, at its folder', () => {

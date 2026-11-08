@@ -1,3 +1,4 @@
+import type { DriveRoot } from '../path/driveRoot.js';
 import { joinAbsolutePath } from '../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
@@ -54,11 +55,8 @@ export type Environment = {
   platformFolders: PlatformFolders;
   /** The folders the platform's apps are installed in, whether they exist or not. */
   applicationDirs: AbsolutePath[];
-  /**
-   * The roots of the file system, which are refused as a whole: `/` on macOS, and on Windows the
-   * root of each fixed drive, one per drive.
-   */
-  protectedRootPaths: AbsolutePath[];
+  /** The root of each fixed drive of Windows, each with its Recycle Bin; empty on macOS. */
+  fixedDriveRoots: DriveRoot[];
   /** Real paths under which a removal is allowed. */
   allowedRealRoots: string[];
   /** Real paths that are refused as a whole; their children may still go. */
@@ -113,7 +111,12 @@ export function buildEnvironment(params: {
   applicationDirs: AbsolutePath[];
   /** The real paths of the platform's app folders that exist. */
   applicationRealPaths: AbsolutePath[];
+  /**
+   * The roots of the file system, which are refused as a whole: `/` on macOS, and on Windows the
+   * root of each fixed drive, one per drive.
+   */
   protectedRootPaths: AbsolutePath[];
+  fixedDriveRoots: DriveRoot[];
   /**
    * Root-like folders, which are never removed as a whole; one in a known folder Windows names no
    * path for is left out.
@@ -162,7 +165,7 @@ export function buildEnvironment(params: {
     tempDir: params.tempDir,
     platformFolders: params.platformFolders,
     applicationDirs: params.applicationDirs,
-    protectedRootPaths: params.protectedRootPaths,
+    fixedDriveRoots: params.fixedDriveRoots,
     allowedRealRoots: [
       params.homeRealPath,
       params.tempRealPath,

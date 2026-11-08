@@ -44,6 +44,8 @@ import type {
   VagrantBoxProvider,
   VagrantBoxVersion,
 } from '../../src/explore/vagrantBoxes/vagrantBoxNames.js';
+import type { DriveRoot } from '../../src/path/driveRoot.js';
+import { parseDriveRoot } from '../../src/path/driveRoot.js';
 import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
@@ -80,6 +82,14 @@ export function buildTestHostPath(params: { text: string }): AbsolutePath {
 export function buildTestWindowsPath(params: { text: string }): AbsolutePath {
   return unwrapFixtureValue({
     parsed: parseAbsolutePath({ rules: WIN32_PATH_RULES, text: params.text }),
+    text: params.text,
+  });
+}
+
+/** The root of a Windows drive, such as `C:\`, under the Windows rules on every host. */
+export function buildTestDriveRoot(params: { text: string }): DriveRoot {
+  return unwrapFixtureValue({
+    parsed: parseDriveRoot({ rules: WIN32_PATH_RULES, text: params.text }),
     text: params.text,
   });
 }

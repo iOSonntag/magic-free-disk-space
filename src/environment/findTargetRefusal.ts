@@ -1,4 +1,4 @@
-import { mayBeSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isPossiblySameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import { isStrictlyInsidePath } from '../path/isStrictlyInsidePath.js';
 import { parseAbsolutePath } from '../path/parseAbsolutePath.js';
 import type { FileIdentity } from '../system/loadFileIdentity.js';
@@ -145,7 +145,7 @@ function getEvictRootPlacement(params: {
   realPath: string;
 }): EvictRootPlacement {
   const isRootOrHolder = params.environment.evictRealRoots.some((evictRoot) =>
-    mayBeSameOrInsidePath({
+    isPossiblySameOrInsidePath({
       rules: params.environment.pathRules,
       path: evictRoot,
       parentPath: params.realPath,
@@ -157,7 +157,7 @@ function getEvictRootPlacement(params: {
   }
 
   const isStrictlyInside = params.environment.evictRealRoots.some((evictRoot) =>
-    mayBeSameOrInsidePath({
+    isPossiblySameOrInsidePath({
       rules: params.environment.pathRules,
       path: params.realPath,
       parentPath: evictRoot,

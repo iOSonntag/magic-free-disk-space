@@ -182,14 +182,17 @@ describe('formatScanReport', () => {
       texts: WIN32_REPORT_TEXTS,
       report: {
         ...EMPTY_REPORT,
-        appAdvice: [
-          {
-            displayName: 'Example Editor',
-            installFolderPath: 'C:\\Program Files\\Example Editor',
-            estimatedBytes: 2 * 1024 ** 3,
-          },
-          { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
-        ],
+        appAdvice: {
+          apps: [
+            {
+              displayName: 'Example Editor',
+              installFolderPath: 'C:\\Program Files\\Example Editor',
+              estimatedBytes: 2 * 1024 ** 3,
+            },
+            { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
+          ],
+          installedAppsPageName: 'Settings > Apps',
+        },
         skipped: [{ path: 'C:\\fixture\\a', reason: 'belowSizeThreshold' }],
       },
       homeDir: 'C:\\Users\\fixture',
@@ -523,7 +526,7 @@ describe('formatScanReport', () => {
             isComplete: true,
           }),
         ],
-        appAdvice: [],
+        appAdvice: null,
         skipped: [{ path: '/fixture/b', reason: 'ownerRunning' }],
         evictedEntryCount: 2,
         issues: [

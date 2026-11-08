@@ -4,7 +4,14 @@ import type { Platform } from '../../src/platform/platform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { Result } from '../../src/result.js';
 import type { RecycleBinContent } from '../../src/scan/candidate.js';
+import type { SystemCallFailure } from '../../src/system/systemCallFailure.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
+
+/** `E_FAIL`, the HRESULT of a call that failed for no reason it names. */
+const E_FAIL_HRESULT = 0x80004005;
+
+/** `E_UNEXPECTED`, what Windows answers when emptying a bin that holds nothing. */
+const E_UNEXPECTED_HRESULT = 0x8000ffff;
 
 /**
  * The Windows platform for a test: the installed apps of the PC and its Recycle Bins stay unread,
@@ -15,13 +22,18 @@ const TEST_WIN32_PLATFORM: Platform = {
   ...win32Platform,
   scan: {
     ...win32Platform.scan,
-    apps: { appSection: 'adviseOnly', loadAdvisedApps: async () => ({ apps: [], issues: [] }) },
+    apps: {
+      appSection: 'adviseOnly',
+      loadAdvisedApps: async () => ({ apps: [], issues: [] }),
+      installedAppsPageName: 'Settings > Apps',
+    },
     trash: {
       kind: 'recycleBins',
       title: 'Recycle Bin',
       explanation: 'A test bin.',
       regeneration: 'None.',
       risk: 'careful',
+      binFolderName: '$Recycle.Bin',
       loadRecycleBin: loadEmptyRecycleBin,
     },
   },
@@ -30,7 +42,12 @@ const TEST_WIN32_PLATFORM: Platform = {
     trash: {
       kind: 'recycleBins',
       loadRecycleBin: loadEmptyRecycleBin,
-      emptyRecycleBin: () => ({ kind: 'failed', failure: 'a test never empties a Recycle Bin' }),
+      // A test never empties a Recycle Bin: the call fails as `E_FAIL` would.
+      emptyRecycleBin: () => ({
+        kind: 'failed',
+        failure: { call: 'SHEmptyRecycleBinW', code: E_FAIL_HRESULT },
+      }),
+      nothingToEmptyCode: E_UNEXPECTED_HRESULT,
     },
   },
 };
@@ -59,6 +76,6 @@ export function buildTestPlatform(params: {
   };
 }
 
-function loadEmptyRecycleBin(): Result<RecycleBinContent, string> {
+function loadEmptyRecycleBin(): Result<RecycleBinContent, SystemCallFailure> {
   return { kind: 'succeeded', value: { sizeBytes: 0, itemCount: 0 } };
 }

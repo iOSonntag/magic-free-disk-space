@@ -2,12 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
-import { emptyDriveRecycleBin, loadRecycleBin } from '../../../src/platform/win32/recycleBin.js';
-import { loadLogicalDrives } from '../../../src/platform/win32/win32Api.js';
-import { buildTestHostPath, buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
+import type { DriveRoot } from '../../../src/path/driveRoot.js';
+import {
+  emptyRecycleBin,
+  loadLogicalDrives,
+  loadRecycleBinCount,
+} from '../../../src/platform/win32/win32Api.js';
+import { win32Platform } from '../../../src/platform/win32/win32Platform.js';
+import { buildTestDriveRoot } from '../../support/parsedValueFixtures.js';
 
-/** An HRESULT as the shell writes it, such as `0x80070003`. */
-const HRESULT_PATTERN = /^0x[0-9A-F]{8}$/;
+/** The lowest code of a failed HRESULT, read as unsigned. */
+const FIRST_FAILURE_HRESULT = 0x80000000;
 
 /**
  * Set to `1` to run the probe that empties the Recycle Bin of the drive of the temporary folder,
@@ -16,25 +21,13 @@ const HRESULT_PATTERN = /^0x[0-9A-F]{8}$/;
  */
 const IS_RECYCLE_BIN_PROBE_OPTED_IN = process.env.MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE === '1';
 
-describe('the Recycle Bin of a path that is no drive root', () => {
-  test('is neither read nor emptied, before any call of the shell', () => {
-    for (const text of ['C:\\Users', 'C:\\$Recycle.Bin', 'D:\\Data\\']) {
-      const path = buildTestWindowsPath({ text: text });
-
-      expect(loadRecycleBin({ driveRootPath: path })).toEqual({
-        kind: 'failed',
-        failure: 'notDriveRoot',
-      });
-      expect(emptyDriveRecycleBin({ driveRootPath: path })).toEqual({
-        kind: 'failed',
-        failure: 'notDriveRoot',
-      });
-    }
-  });
-});
+/** The root of the drive of the temporary folder, whose bin the probes count and empty. */
+function buildHostDriveRoot(): DriveRoot {
+  return buildTestDriveRoot({ text: parse(tmpdir()).root });
+}
 
 /** The root of a drive letter no drive of this machine has, from `Z` down. */
-function findAbsentDriveRoot(): string {
+function findAbsentDriveRoot(): DriveRoot {
   const logicalDrives = loadLogicalDrives();
 
   if (logicalDrives.kind === 'failed') {
@@ -43,18 +36,28 @@ function findAbsentDriveRoot(): string {
 
   for (let index = 25; index >= 0; index -= 1) {
     if ((logicalDrives.value & (1 << index)) === 0) {
-      return `${String.fromCharCode(65 + index)}:\\`;
+      return buildTestDriveRoot({ text: `${String.fromCharCode(65 + index)}:\\` });
     }
   }
 
   throw new Error('Every drive letter is taken.');
 }
 
-describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () => {
-  const driveRootPath = buildTestHostPath({ text: parse(tmpdir()).root });
+/** The code the deletion of Windows reads as a bin that held nothing to empty. */
+function loadNothingToEmptyCode(): number {
+  const trash = win32Platform.delete.trash;
 
+  switch (trash.kind) {
+    case 'catalogFolder':
+      throw new Error('The trash of Windows is its Recycle Bins.');
+    case 'recycleBins':
+      return trash.nothingToEmptyCode;
+  }
+}
+
+describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () => {
   test('SHQueryRecycleBinW counts the bin of the drive of the temporary folder', () => {
-    const content = loadRecycleBin({ driveRootPath: driveRootPath });
+    const content = loadRecycleBinCount({ driveRoot: buildHostDriveRoot() });
 
     expect(content.kind).toBe('succeeded');
 
@@ -64,12 +67,14 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
     }
   });
 
-  test('SHQueryRecycleBinW fails with an HRESULT for a drive that is not there', () => {
-    const content = loadRecycleBin({
-      driveRootPath: buildTestHostPath({ text: findAbsentDriveRoot() }),
-    });
+  test('SHQueryRecycleBinW fails with its HRESULT for a drive that is not there', () => {
+    const content = loadRecycleBinCount({ driveRoot: findAbsentDriveRoot() });
 
-    expect(content).toEqual({ kind: 'failed', failure: expect.stringMatching(HRESULT_PATTERN) });
+    expect(content).toEqual({
+      kind: 'failed',
+      failure: { call: 'SHQueryRecycleBinW', code: expect.any(Number) },
+    });
+    expect(content.kind === 'failed' && content.failure.code >= FIRST_FAILURE_HRESULT).toBe(true);
   });
 
   describe.skipIf(!IS_RECYCLE_BIN_PROBE_OPTED_IN)('on a throwaway machine', () => {
@@ -83,7 +88,8 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
       await rm(folder, { recursive: true, force: true });
     });
 
-    test('SHEmptyRecycleBinW empties the bin of the drive that holds a binned file', async () => {
+    test('SHEmptyRecycleBinW empties the bin of a binned file, then finds nothing to empty', async () => {
+      const driveRoot = buildHostDriveRoot();
       const filePath = join(folder, 'binned.txt');
       await writeFile(filePath, 'a file for the Recycle Bin');
       // The path goes through the environment, so no text of it is read as PowerShell.
@@ -99,17 +105,21 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
 
       expect(binned.exitCode).toBe(0);
 
-      const before = loadRecycleBin({ driveRootPath: driveRootPath });
+      const before = loadRecycleBinCount({ driveRoot: driveRoot });
 
       expect(before).toMatchObject({ kind: 'succeeded' });
       expect(before.kind === 'succeeded' && before.value.itemCount > 0).toBe(true);
-      expect(emptyDriveRecycleBin({ driveRootPath: driveRootPath })).toEqual({
+      expect(emptyRecycleBin({ driveRoot: driveRoot })).toEqual({
         kind: 'succeeded',
         value: null,
       });
-      expect(loadRecycleBin({ driveRootPath: driveRootPath })).toEqual({
+      expect(loadRecycleBinCount({ driveRoot: driveRoot })).toEqual({
         kind: 'succeeded',
         value: { sizeBytes: 0, itemCount: 0 },
+      });
+      expect(emptyRecycleBin({ driveRoot: driveRoot })).toEqual({
+        kind: 'failed',
+        failure: { call: 'SHEmptyRecycleBinW', code: loadNothingToEmptyCode() },
       });
     });
   });

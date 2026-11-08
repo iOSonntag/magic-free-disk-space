@@ -20,6 +20,7 @@ import { buildDarwinEnvironment } from '../../src/platform/darwin/loadEnvironmen
 import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import {
   buildTestAbsolutePath,
+  buildTestDriveRoot,
   buildTestHostPath,
   buildTestUserIdentity,
   buildTestWindowsUser,
@@ -110,7 +111,7 @@ export async function loadTestEnvironment(params: {
       roamingAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Roaming') }),
       knownFolderPaths: NO_KNOWN_FOLDER_PATHS,
       knownFolderRealPaths: NO_KNOWN_FOLDER_PATHS,
-      fixedDriveRoots: [buildTestHostPath({ text: parse(params.fixtureRoot.rootDir).root })],
+      fixedDriveRoots: [buildTestDriveRoot({ text: parse(params.fixtureRoot.rootDir).root })],
       oneDriveRealPaths: [],
     });
   }

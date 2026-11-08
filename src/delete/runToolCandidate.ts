@@ -61,6 +61,7 @@ export async function runToolCandidate(params: {
     paths: listUnitPaths(params.unit),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
   const trustedTool = await loadTrustedTool({
     name: params.unit.tool.name,
@@ -123,6 +124,7 @@ async function runCheckedUnitCommand(params: {
     paths: listUnitPaths(params.unit),
     deadlineMs: Date.now() + SCAN_LIMITS.measureTimeoutMs,
     entryReads: params.entryReads,
+    recordEvictedEntry: null,
   });
   const freedBytes = getMeasuredFreedBytes({
     beforeBytes: params.before.allocatedBytes,

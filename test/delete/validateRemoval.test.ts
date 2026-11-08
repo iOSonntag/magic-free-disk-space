@@ -12,7 +12,7 @@ import {
 } from '../support/candidateFixtures.js';
 import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
-import { buildTestAbsolutePath, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+import { buildTestAbsolutePath, buildTestDriveRoot } from '../support/parsedValueFixtures.js';
 
 const ENVIRONMENT = buildTestMacEnvironment();
 
@@ -59,7 +59,7 @@ function buildRecycleBinCandidate(params: {
     origin: { kind: 'recycleBin' },
     removal: {
       kind: 'emptyRecycleBin',
-      driveRootPath: buildTestWindowsPath({ text: params.driveRootText }),
+      driveRoot: buildTestDriveRoot({ text: params.driveRootText }),
       scannedContent: { sizeBytes: 4096, itemCount: 2 },
     },
   };

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  isPossiblySameOrInsidePath,
   isSameEntryName,
   isSameOrInsidePath,
   isSamePath,
-  mayBeSameOrInsidePath,
   toComparablePathText,
 } from '../../src/path/isSameOrInsidePath.js';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
@@ -48,17 +48,17 @@ describe('isSameOrInsidePath', () => {
   });
 });
 
-describe('mayBeSameOrInsidePath', () => {
+describe('isPossiblySameOrInsidePath', () => {
   test('matches a POSIX path that differs only by case, as a refusal needs', () => {
     expect(
-      mayBeSameOrInsidePath({
+      isPossiblySameOrInsidePath({
         rules: RULES,
         path: '/users/TESTER/x',
         parentPath: '/Users/tester',
       }),
     ).toBe(true);
     expect(
-      mayBeSameOrInsidePath({
+      isPossiblySameOrInsidePath({
         rules: RULES,
         path: '/Users/tester2',
         parentPath: '/Users/tester',
@@ -68,7 +68,7 @@ describe('mayBeSameOrInsidePath', () => {
 
   test('matches a Windows path without case, by whole names', () => {
     expect(
-      mayBeSameOrInsidePath({
+      isPossiblySameOrInsidePath({
         rules: WIN32_PATH_RULES,
         path: 'c:\\users\\TESTER',
         parentPath: 'C:\\Users',

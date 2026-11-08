@@ -2,9 +2,10 @@ import type { CatalogLocation, Risk } from '../catalog/catalog.js';
 import type { MacBundleId } from '../catalog/catalogOwner.js';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { WindowsKnownFolder } from '../environment/buildEnvironment.js';
-import type { AbsolutePath } from '../path/parseAbsolutePath.js';
+import type { DriveRoot } from '../path/driveRoot.js';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
+import type { SystemCallFailure } from '../system/systemCallFailure.js';
 import type { RecycleBinContent } from './candidate.js';
 import type { ScanIssue } from './issue.js';
 
@@ -111,7 +112,12 @@ export type ScanPlatformAppsAdvised = {
   appSection: 'adviseOnly';
   /** Failures are returned as issues. Never throws. */
   loadAdvisedApps: () => Promise<{ apps: AdvisedApp[]; issues: ScanIssue[] }>;
+  /** The page of the system that lists the apps and uninstalls them, such as `Settings > Apps`. */
+  installedAppsPageName: string;
 };
+
+/** The apps of a platform whose apps are advice only, with the page that uninstalls them. */
+export type AppAdvice = { apps: AdvisedApp[]; installedAppsPageName: string };
 
 /** How the scan treats the platform's apps. */
 export type ScanPlatformApps = ScanPlatformAppsOffered | ScanPlatformAppsAdvised;
@@ -120,8 +126,8 @@ export type ScanPlatformApps = ScanPlatformAppsOffered | ScanPlatformAppsAdvised
 export type ScanPlatformTrashCatalogFolder = { kind: 'catalogFolder' };
 
 /**
- * Each root of the file system has a Recycle Bin, which the system counts and empties as one unit,
- * as each fixed drive on Windows; the texts and the risk are those of each bin's item.
+ * Each fixed drive has a Recycle Bin, which the system counts and empties as one unit, as on
+ * Windows; the texts and the risk are those of each bin's item.
  */
 export type ScanPlatformTrashRecycleBins = {
   kind: 'recycleBins';
@@ -129,14 +135,15 @@ export type ScanPlatformTrashRecycleBins = {
   explanation: string;
   regeneration: string;
   risk: Risk;
-  /** What the bin of the drive holds; a failure is the text of its error code. Never throws. */
+  /** The folder at the root of a drive that holds the drive's bin, such as `$Recycle.Bin`. */
+  binFolderName: string;
   loadRecycleBin: RecycleBinLoad;
 };
 
-/** What the Recycle Bin of the drive at `driveRootPath` holds. Never throws. */
+/** What the Recycle Bin of the drive at `driveRoot` holds, or the call that failed. Never throws. */
 export type RecycleBinLoad = (params: {
-  driveRootPath: AbsolutePath;
-}) => Result<RecycleBinContent, string>;
+  driveRoot: DriveRoot;
+}) => Result<RecycleBinContent, SystemCallFailure>;
 
 /** Where the platform keeps the files its user deleted. */
 export type ScanPlatformTrash = ScanPlatformTrashCatalogFolder | ScanPlatformTrashRecycleBins;

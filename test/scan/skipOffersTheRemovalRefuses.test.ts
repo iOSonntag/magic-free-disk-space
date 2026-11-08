@@ -13,7 +13,7 @@ import {
   buildTestEvictTarget,
 } from '../support/evictCandidateFixtures.js';
 import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
-import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+import { buildExampleHome, buildTestDriveRoot } from '../support/parsedValueFixtures.js';
 
 const HOME_DIR = '/Users/example';
 
@@ -179,7 +179,7 @@ function buildRecycleBinCandidate(params: { driveRootText: string }): CandidateR
     origin: { kind: 'recycleBin' },
     removal: {
       kind: 'emptyRecycleBin',
-      driveRootPath: buildTestWindowsPath({ text: params.driveRootText }),
+      driveRoot: buildTestDriveRoot({ text: params.driveRootText }),
       scannedContent: { sizeBytes: 4096, itemCount: 2 },
     },
   };

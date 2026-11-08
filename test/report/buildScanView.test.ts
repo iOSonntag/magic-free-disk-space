@@ -17,7 +17,7 @@ import {
   buildTestEngineCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
+import { buildExampleHome, buildTestDriveRoot } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
   buildProtocolFixtureReport,
@@ -71,7 +71,7 @@ function buildRankedReport(params: {
 
   return buildScanReport({
     decisions: [...offers, ...advice],
-    appAdvice: [],
+    appAdvice: null,
     evictedEntryCount: 0,
     issues: params.issues ?? [],
   });
@@ -125,14 +125,17 @@ describe('buildScanView', () => {
       texts: WIN32_REPORT_TEXTS,
       report: {
         ...EMPTY_REPORT,
-        appAdvice: [
-          {
-            displayName: 'Example\u001b[2J Editor',
-            installFolderPath: 'C:\\Program Files\\Example Editor',
-            estimatedBytes: 3 * MB,
-          },
-          { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
-        ],
+        appAdvice: {
+          apps: [
+            {
+              displayName: 'Example\u001b[2J Editor',
+              installFolderPath: 'C:\\Program Files\\Example Editor',
+              estimatedBytes: 3 * MB,
+            },
+            { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
+          ],
+          installedAppsPageName: 'Settings > Apps',
+        },
       },
       fullDiskAccessHolder: 'app',
       homeDir: HOME_DIR,
@@ -178,6 +181,48 @@ describe('buildScanView', () => {
         },
       ],
     });
+  });
+
+  test('words the installed apps by the page the platform names and the computer of its texts', () => {
+    const view = buildView({
+      report: {
+        ...EMPTY_REPORT,
+        appAdvice: {
+          apps: [{ displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null }],
+          installedAppsPageName: 'Example Programs',
+        },
+      },
+    });
+
+    expect(view.appAdvice).toEqual({
+      titleText: 'Installed apps',
+      introText:
+        'Uninstall the apps you no longer use in Example Programs; this tool never deletes an app.',
+      items: [
+        {
+          title: 'Example Tool',
+          risk: 'review',
+          riskText: 'review',
+          sizeText: 'size unknown',
+          detailLines: [
+            { kind: 'explanation', text: 'Installed on this Mac, as Example Programs lists it.' },
+            { kind: 'advice', text: 'Uninstall it in Example Programs if you no longer use it.' },
+          ],
+        },
+      ],
+    });
+  });
+
+  test('shows no installed apps on a platform that offers its apps, nor for an empty list', () => {
+    expect(buildView({ report: { ...EMPTY_REPORT, appAdvice: null } }).appAdvice).toBeNull();
+    expect(
+      buildView({
+        report: {
+          ...EMPTY_REPORT,
+          appAdvice: { apps: [], installedAppsPageName: 'Settings > Apps' },
+        },
+      }).appAdvice,
+    ).toBeNull();
   });
 
   testOnDarwin(
@@ -274,7 +319,7 @@ describe('buildScanView', () => {
             appName: null,
             removal: {
               kind: 'emptyRecycleBin',
-              driveRootPath: buildTestWindowsPath({ text: 'C:\\' }),
+              driveRoot: buildTestDriveRoot({ text: 'C:\\' }),
               scannedContent: { sizeBytes: 2 * MB, itemCount: 3 },
             },
           },

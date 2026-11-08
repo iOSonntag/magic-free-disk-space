@@ -98,7 +98,11 @@ describe('buildWin32Environment', () => {
       'C:\\',
       'D:\\',
     ]);
-    expect<string[]>(ENVIRONMENT.protectedRootPaths).toEqual(['C:\\', 'D:\\']);
+  });
+
+  test('lists each fixed drive, whose Recycle Bin the scan counts, from the list it refuses', () => {
+    expect<string[]>(ENVIRONMENT.fixedDriveRoots).toEqual(['C:\\', 'D:\\']);
+    expect<string[]>(ENVIRONMENT.protectedRealPaths.slice(-2)).toEqual(ENVIRONMENT.fixedDriveRoots);
   });
 
   test('refuses a moved known folder at its real path, and leaves out one whose real path is gone', () => {

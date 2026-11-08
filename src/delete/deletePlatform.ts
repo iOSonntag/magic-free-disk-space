@@ -1,6 +1,7 @@
-import type { AbsolutePath } from '../path/parseAbsolutePath.js';
+import type { DriveRoot } from '../path/driveRoot.js';
 import type { Result } from '../result.js';
 import type { RecycleBinLoad } from '../scan/scanPlatform.js';
+import type { SystemCallFailure } from '../system/systemCallFailure.js';
 
 /** The whole tree is gone. */
 export type TreeRemovalRemoved = { kind: 'removed' };
@@ -21,11 +22,13 @@ export type DeletePlatformTrashCatalogFolder = { kind: 'catalogFolder' };
 export type DeletePlatformTrashRecycleBins = {
   kind: 'recycleBins';
   loadRecycleBin: RecycleBinLoad;
+  /** Empties the bin of the drive at `driveRoot` as one unit, without asking. Never throws. */
+  emptyRecycleBin: (params: { driveRoot: DriveRoot }) => Result<null, SystemCallFailure>;
   /**
-   * Empties the bin of the drive at `driveRootPath`, which must be a drive root: the system would
-   * take an empty root for every drive. A failure is the text of its error code. Never throws.
+   * The code `emptyRecycleBin` fails with for a bin that holds nothing, as one another program
+   * emptied since the fresh count; `E_UNEXPECTED` on Windows.
    */
-  emptyRecycleBin: (params: { driveRootPath: AbsolutePath }) => Result<null, string>;
+  nothingToEmptyCode: number;
 };
 
 export type DeletePlatformTrash = DeletePlatformTrashCatalogFolder | DeletePlatformTrashRecycleBins;

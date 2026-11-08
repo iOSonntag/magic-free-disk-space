@@ -7,6 +7,8 @@ import {
   loadEnvironmentRealPath,
   loadExistingRealPaths,
 } from '../../environment/loadEnvironmentRealPath.js';
+import type { DriveRoot } from '../../path/driveRoot.js';
+import { parseDriveRoot } from '../../path/driveRoot.js';
 import { isSameOrInsidePath } from '../../path/isSameOrInsidePath.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
@@ -172,11 +174,11 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   // Each fixed drive's root is refused as a whole; a home on no listed drive would leave its own
   // drive root unguarded.
   if (
-    !fixedDriveRoots.value.some((rootPath) =>
+    !fixedDriveRoots.value.some((driveRoot) =>
       isSameOrInsidePath({
         rules: WIN32_PATH_RULES,
         path: home.value.realPath,
-        parentPath: rootPath,
+        parentPath: driveRoot,
       }),
     )
   ) {
@@ -221,8 +223,8 @@ export function buildWin32Environment(params: {
   knownFolderPaths: WindowsKnownFolderPaths;
   /** The real path of each known folder; `null` for one Windows names no path for or that is gone. */
   knownFolderRealPaths: WindowsKnownFolderPaths;
-  /** The root of each fixed drive, each refused as a whole. */
-  fixedDriveRoots: AbsolutePath[];
+  /** The root of each fixed drive, each refused as a whole and each with its Recycle Bin. */
+  fixedDriveRoots: DriveRoot[];
   /** The real paths of the OneDrive roots that exist. */
   oneDriveRealPaths: AbsolutePath[];
 }): Environment {
@@ -251,6 +253,7 @@ export function buildWin32Environment(params: {
     applicationDirs: [],
     applicationRealPaths: [],
     protectedRootPaths: params.fixedDriveRoots,
+    fixedDriveRoots: params.fixedDriveRoots,
     protectedLocations: WIN32_CATALOG.protectedLocations,
     protectedFolderRealPaths: params.oneDriveRealPaths,
     sensitiveLocations: WIN32_CATALOG.sensitiveLocations,
@@ -453,24 +456,24 @@ function listOneDriveRootPaths(params: { skyDrivePath: AbsolutePath | null }): A
 }
 
 /** The root of each fixed drive, from the drives in use and the type of each. */
-function loadFixedDriveRoots(): Result<AbsolutePath[], EnvironmentFailure> {
+function loadFixedDriveRoots(): Result<DriveRoot[], EnvironmentFailure> {
   const logicalDrives = loadLogicalDrives();
 
   if (logicalDrives.kind === 'failed') {
     return buildCallFailure({ failure: logicalDrives.failure });
   }
 
-  const rootPaths = listDriveRootTexts({ logicalDrives: logicalDrives.value }).flatMap(
+  const driveRoots = listDriveRootTexts({ logicalDrives: logicalDrives.value }).flatMap(
     (rootText) => {
-      const rootPath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: rootText });
+      const driveRoot = parseDriveRoot({ rules: WIN32_PATH_RULES, text: rootText });
 
-      return rootPath.kind === 'succeeded' ? [rootPath.value] : [];
+      return driveRoot.kind === 'succeeded' ? [driveRoot.value] : [];
     },
   );
 
   return {
     kind: 'succeeded',
-    value: rootPaths.filter((rootPath) => loadDriveType({ rootPath: rootPath }) === DRIVE_FIXED),
+    value: driveRoots.filter((driveRoot) => loadDriveType({ rootPath: driveRoot }) === DRIVE_FIXED),
   };
 }
 

@@ -30,7 +30,11 @@ describe('buildDarwinEnvironment', () => {
       '/private/var/folders/xy/abc/C',
       '/Applications',
     ]);
-    expect<string[]>(ENVIRONMENT.protectedRootPaths).toEqual(['/']);
+  });
+
+  test('has no drive root of its own, so no Recycle Bin, and refuses its one root as a whole', () => {
+    expect(ENVIRONMENT.fixedDriveRoots).toEqual([]);
+    expect(ENVIRONMENT.protectedRealPaths.at(-1)).toBe('/');
   });
 
   test('names iCloud Drive as its one cloud folder, below the home', () => {
@@ -46,7 +50,7 @@ describe('buildDarwinEnvironment', () => {
       tempDir: '/var/folders/xy/abc/T',
       platformFolders: { kind: 'darwin', userCacheDir: '/var/folders/xy/abc/C' },
       applicationDirs: ['/Applications'],
-      protectedRootPaths: ['/'],
+      fixedDriveRoots: [],
       allowedRealRoots: [
         '/Users/tester',
         '/private/var/folders/xy/abc/T',

@@ -1,4 +1,4 @@
-import { isSameOrInsidePath, mayBeSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isPossiblySameOrInsidePath, isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { Environment } from './buildEnvironment.js';
 
 /**
@@ -14,7 +14,7 @@ export function isTouchingProtectedPath(params: {
     ...params.environment.protectedRealPaths,
     ...params.environment.sensitiveRealPaths,
   ].some((protectedPath) =>
-    mayBeSameOrInsidePath({
+    isPossiblySameOrInsidePath({
       rules: params.environment.pathRules,
       path: protectedPath,
       parentPath: params.realPath,
@@ -26,7 +26,7 @@ export function isTouchingProtectedPath(params: {
   }
 
   const isInsideSensitivePath = params.environment.sensitiveRealPaths.some((sensitivePath) =>
-    mayBeSameOrInsidePath({
+    isPossiblySameOrInsidePath({
       rules: params.environment.pathRules,
       path: params.realPath,
       parentPath: sensitivePath,

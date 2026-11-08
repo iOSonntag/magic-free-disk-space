@@ -24,6 +24,7 @@ import type {
   RemovalTarget,
 } from '../../src/scan/candidate.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
+import type { SystemCallFailure } from '../../src/system/systemCallFailure.js';
 import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import { buildRemoveFolderBody, createUnitRunFakeTool } from '../explore/probeFakeTools.js';
 import {
@@ -64,9 +65,9 @@ import {
 } from '../support/fixtureRoot.js';
 import {
   buildExampleHome,
+  buildTestDriveRoot,
   buildTestHostPath,
   buildTestWindowsImageName,
-  buildTestWindowsPath,
 } from '../support/parsedValueFixtures.js';
 import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
@@ -434,7 +435,10 @@ describe('deleteCandidates', () => {
       },
       entryReads: {
         ...DELETION_PLATFORM.entryReads,
-        isEntryEvicted: (candidate) => candidate.path === selected,
+        loadEntryPlacement: (entry) =>
+          entry.path === selected
+            ? 'cloudOnly'
+            : DELETION_PLATFORM.entryReads.loadEntryPlacement(entry),
       },
       clock: () => NOW_MS,
     });
@@ -1353,9 +1357,14 @@ describe('deleteCandidates with an item of several targets', () => {
 });
 
 describe('deleteCandidates with a Recycle Bin', () => {
-  const DRIVE_ROOT_PATH = buildTestWindowsPath({ text: 'C:\\' });
+  const DRIVE_ROOT = buildTestDriveRoot({ text: 'C:\\' });
+
+  /** What the fake bin's emptying fails with for a bin that holds nothing, as Windows' does. */
+  const NOTHING_TO_EMPTY_CODE = 0x8000ffff;
 
   const SCANNED_CONTENT: RecycleBinContent = { sizeBytes: 8192, itemCount: 3 };
+
+  const EMPTY_CONTENT: RecycleBinContent = { sizeBytes: 0, itemCount: 0 };
 
   const RECYCLE_BIN_CANDIDATE: CandidateRecycleBin = {
     ...buildTestCandidate({
@@ -1369,20 +1378,27 @@ describe('deleteCandidates with a Recycle Bin', () => {
     origin: { kind: 'recycleBin' },
     removal: {
       kind: 'emptyRecycleBin',
-      driveRootPath: DRIVE_ROOT_PATH,
+      driveRoot: DRIVE_ROOT,
       scannedContent: SCANNED_CONTENT,
     },
   };
 
   /**
-   * Runs the deletion of the bin and a path item after it with a fake Recycle Bin that counts
-   * `freshContent` and empties as `emptied` says, and gives the drive roots it was asked to empty.
+   * Runs the deletion of the bin and a path item after it with a fake Recycle Bin that answers
+   * `counts` in turn, one for each count, and empties as `emptied` says; gives the drive roots it
+   * was asked to empty and how often it was counted.
    */
   async function deleteWithFakeBin(params: {
-    freshContent: Result<RecycleBinContent, string>;
-    emptied: Result<null, string>;
-  }): Promise<{ run: RemovalRun; emptiedRoots: string[]; journal: DeletionJournal }> {
+    counts: Result<RecycleBinContent, SystemCallFailure>[];
+    emptied: Result<null, SystemCallFailure>;
+  }): Promise<{
+    run: RemovalRun;
+    emptiedRoots: string[];
+    countedTimes: number;
+    journal: DeletionJournal;
+  }> {
     const emptiedRoots: string[] = [];
+    let countedTimes = 0;
     const journal = await createFixtureRootJournal();
     const next = await createCacheFolder('after-bin');
     const run = await deleteCandidates({
@@ -1395,27 +1411,43 @@ describe('deleteCandidates with a Recycle Bin', () => {
         ...DELETION_PLATFORM.delete,
         trash: {
           kind: 'recycleBins',
-          loadRecycleBin: () => params.freshContent,
+          loadRecycleBin: () => {
+            const count = params.counts[countedTimes];
+            countedTimes += 1;
+
+            if (count === undefined) {
+              throw new Error('The fake Recycle Bin was counted more often than the test gave.');
+            }
+
+            return count;
+          },
           emptyRecycleBin: (emptyParams) => {
-            emptiedRoots.push(emptyParams.driveRootPath);
+            emptiedRoots.push(emptyParams.driveRoot);
 
             return params.emptied;
           },
+          nothingToEmptyCode: NOTHING_TO_EMPTY_CODE,
         },
       },
       clock: () => NOW_MS,
     });
 
-    return { run: run, emptiedRoots: emptiedRoots, journal: journal };
+    return {
+      run: run,
+      emptiedRoots: emptiedRoots,
+      countedTimes: countedTimes,
+      journal: journal,
+    };
   }
 
   test('empties a bin that still holds what the scan counted, records it, and goes on', async () => {
-    const { run, emptiedRoots, journal } = await deleteWithFakeBin({
-      freshContent: { kind: 'succeeded', value: SCANNED_CONTENT },
+    const { run, emptiedRoots, countedTimes, journal } = await deleteWithFakeBin({
+      counts: [{ kind: 'succeeded', value: SCANNED_CONTENT }],
       emptied: { kind: 'succeeded', value: null },
     });
 
     expect(emptiedRoots).toEqual(['C:\\']);
+    expect(countedTimes).toBe(1);
     expect(run.outcomes).toEqual([
       {
         candidate: RECYCLE_BIN_CANDIDATE,
@@ -1443,7 +1475,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
       { sizeBytes: 12_288, itemCount: 3 },
     ]) {
       const { run, emptiedRoots } = await deleteWithFakeBin({
-        freshContent: { kind: 'succeeded', value: freshContent },
+        counts: [{ kind: 'succeeded', value: freshContent }],
         emptied: { kind: 'succeeded', value: null },
       });
 
@@ -1457,7 +1489,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
 
   test('reports a bin emptied since the scan as already gone, never emptying it', async () => {
     const { run, emptiedRoots } = await deleteWithFakeBin({
-      freshContent: { kind: 'succeeded', value: { sizeBytes: 0, itemCount: 0 } },
+      counts: [{ kind: 'succeeded', value: EMPTY_CONTENT }],
       emptied: { kind: 'succeeded', value: null },
     });
 
@@ -1465,25 +1497,75 @@ describe('deleteCandidates with a Recycle Bin', () => {
     expect(run.outcomes.map((outcome) => outcome.outcome)).toEqual(['alreadyGone', 'removed']);
   });
 
-  test('reports a failed count or a failed emptying with its error text, and goes on', async () => {
+  test('reports a failed count or a failed emptying with its code in hex, and goes on', async () => {
     const counted = await deleteWithFakeBin({
-      freshContent: { kind: 'failed', failure: 'HRESULT 0x80070005' },
+      counts: [{ kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: 0x80070005 } }],
       emptied: { kind: 'succeeded', value: null },
     });
     const emptied = await deleteWithFakeBin({
-      freshContent: { kind: 'succeeded', value: SCANNED_CONTENT },
-      emptied: { kind: 'failed', failure: 'HRESULT 0x80070020' },
+      counts: [{ kind: 'succeeded', value: SCANNED_CONTENT }],
+      emptied: { kind: 'failed', failure: { call: 'SHEmptyRecycleBinW', code: 0x80070020 } },
     });
 
     expect(counted.emptiedRoots).toEqual([]);
     expect(counted.run.outcomes).toMatchObject([
-      { outcome: 'failed', code: 'HRESULT 0x80070005', freedBytes: 0 },
+      { outcome: 'failed', code: '0x80070005', freedBytes: 0 },
       { outcome: 'removed' },
     ]);
+    expect(emptied.countedTimes).toBe(1);
     expect(emptied.run.outcomes).toMatchObject([
-      { outcome: 'failed', code: 'HRESULT 0x80070020', freedBytes: 0 },
+      { outcome: 'failed', code: '0x80070020', freedBytes: 0 },
       { outcome: 'removed' },
     ]);
+  });
+
+  test('reports a bin another program emptied after the fresh count as already gone', async () => {
+    const { run, emptiedRoots, countedTimes, journal } = await deleteWithFakeBin({
+      counts: [
+        { kind: 'succeeded', value: SCANNED_CONTENT },
+        { kind: 'succeeded', value: EMPTY_CONTENT },
+      ],
+      emptied: {
+        kind: 'failed',
+        failure: { call: 'SHEmptyRecycleBinW', code: NOTHING_TO_EMPTY_CODE },
+      },
+    });
+
+    expect(emptiedRoots).toEqual(['C:\\']);
+    expect(countedTimes).toBe(2);
+    expect(run.outcomes).toMatchObject([
+      { outcome: 'alreadyGone', code: null, freedBytes: 0 },
+      { outcome: 'removed' },
+    ]);
+    expect((await loadJournalLines(journal))[2]).toEqual({
+      kind: 'outcome',
+      atMs: NOW_MS,
+      path: 'C:\\$Recycle.Bin',
+      outcome: 'alreadyGone',
+      code: null,
+    });
+  });
+
+  test('fails a bin that holds items after its emptying found nothing, with the code of the emptying', async () => {
+    for (const after of [
+      { kind: 'succeeded', value: SCANNED_CONTENT },
+      { kind: 'succeeded', value: { sizeBytes: 4096, itemCount: 1 } },
+      { kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: 0x80070005 } },
+    ] satisfies Result<RecycleBinContent, SystemCallFailure>[]) {
+      const { run, countedTimes } = await deleteWithFakeBin({
+        counts: [{ kind: 'succeeded', value: SCANNED_CONTENT }, after],
+        emptied: {
+          kind: 'failed',
+          failure: { call: 'SHEmptyRecycleBinW', code: NOTHING_TO_EMPTY_CODE },
+        },
+      });
+
+      expect(countedTimes).toBe(2);
+      expect(run.outcomes).toMatchObject([
+        { outcome: 'failed', code: '0x8000FFFF', freedBytes: 0 },
+        { outcome: 'removed' },
+      ]);
+    }
   });
 
   test('fails a bin on a platform whose trash is a folder, never emptying anything', async () => {

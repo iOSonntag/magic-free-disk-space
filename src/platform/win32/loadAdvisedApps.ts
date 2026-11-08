@@ -2,7 +2,13 @@ import { toComparablePathText } from '../../path/isSameOrInsidePath.js';
 import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { ScanIssue } from '../../scan/issue.js';
 import type { AdvisedApp } from '../../scan/scanPlatform.js';
-import type { RegistryHive, RegistryView, UninstallKeyValues } from './win32Api.js';
+import { formatSystemCallFailure } from '../../system/systemCallFailure.js';
+import type {
+  RegistryHive,
+  RegistryView,
+  UninstallKeyValues,
+  Win32CallFailure,
+} from './win32Api.js';
 import { loadUninstallKeyValues } from './win32Api.js';
 
 /** One key whose subkeys each describe an installed app, in one view of the registry. */
@@ -50,11 +56,7 @@ export async function loadAdvisedApps(params: {
     });
 
     if (values.kind === 'failed') {
-      issues.push({
-        path: `${HIVE_NAMES[source.hive]}\\${source.keyPath}`,
-        reason: 'unexpected',
-        detail: `${values.failure.call} ${values.failure.code}`,
-      });
+      issues.push(buildUninstallKeyIssue({ source: source, failure: values.failure }));
 
       continue;
     }
@@ -63,6 +65,18 @@ export async function loadAdvisedApps(params: {
   }
 
   return { apps: decideUninstallApps({ keyValues: keyValues }), issues: issues };
+}
+
+/** The issue of a key that could not be read, at the key's full path, with the call that failed. */
+export function buildUninstallKeyIssue(params: {
+  source: UninstallKeySource;
+  failure: Win32CallFailure;
+}): ScanIssue {
+  return {
+    path: `${HIVE_NAMES[params.source.hive]}\\${params.source.keyPath}`,
+    reason: 'unexpected',
+    detail: formatSystemCallFailure({ failure: params.failure }),
+  };
 }
 
 /**

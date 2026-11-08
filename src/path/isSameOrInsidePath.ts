@@ -22,7 +22,7 @@ export function isSameOrInsidePath(params: {
  * platform: a macOS volume usually ignores case too. A refusal takes this looser match, which only
  * refuses more.
  */
-export function mayBeSameOrInsidePath(params: {
+export function isPossiblySameOrInsidePath(params: {
   rules: PathRules;
   path: string;
   parentPath: string;

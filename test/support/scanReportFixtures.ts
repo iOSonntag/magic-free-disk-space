@@ -4,7 +4,7 @@ export const EMPTY_REPORT: ScanReport = {
   candidates: [],
   safeNumbers: [],
   advice: [],
-  appAdvice: [],
+  appAdvice: null,
   skipped: [],
   evictedEntryCount: 0,
   issues: [],

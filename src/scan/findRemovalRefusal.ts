@@ -10,7 +10,7 @@ export type RemovalTargetRefusal = { path: string; reason: TargetRefusalReason }
  * The first target of a delete or an evict that `findTargetRefusal` refuses, in target order;
  * `null` when it refuses none, and for a tool or an engine, which removes what it owns itself. A
  * Recycle Bin, which the system empties, is refused at its drive root unless the environment
- * lists that root.
+ * lists that root among its fixed drives.
  */
 export function findRemovalRefusal(params: {
   environment: Environment;
@@ -34,11 +34,11 @@ export function findRemovalRefusal(params: {
     case 'callEngine':
       return null;
     case 'emptyRecycleBin':
-      if (params.environment.protectedRootPaths.includes(params.removal.driveRootPath)) {
+      if (params.environment.fixedDriveRoots.includes(params.removal.driveRoot)) {
         return null;
       }
 
-      return { path: params.removal.driveRootPath, reason: 'outsideAllowedRoot' };
+      return { path: params.removal.driveRoot, reason: 'outsideAllowedRoot' };
   }
 }
 

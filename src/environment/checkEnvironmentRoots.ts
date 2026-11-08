@@ -1,4 +1,4 @@
-import { mayBeSameOrInsidePath } from '../path/isSameOrInsidePath.js';
+import { isPossiblySameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
 import type { EnvironmentFailure } from './environmentPlatform.js';
@@ -34,7 +34,7 @@ export function checkEnvironmentRoots(params: {
   }
 
   if (
-    mayBeSameOrInsidePath({
+    isPossiblySameOrInsidePath({
       rules: params.pathRules,
       path: params.homeRealPath,
       parentPath: params.tempRealPath,
@@ -86,7 +86,7 @@ function isTempRefusedInHome(params: {
 }): boolean {
   switch (params.tempPlacement) {
     case 'apartFromHome':
-      return mayBeSameOrInsidePath({
+      return isPossiblySameOrInsidePath({
         rules: params.pathRules,
         path: params.tempRealPath,
         parentPath: params.homeRealPath,
