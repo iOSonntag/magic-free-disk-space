@@ -109,14 +109,18 @@ describeOnWindows('the removal of a tree on NTFS', () => {
     const filePath = join(innerPath, 'locked.txt');
     await mkdir(innerPath, { recursive: true });
     await writeFile(filePath, 'text');
-    setFileAttributes({
-      path: buildTestHostPath({ text: filePath }),
-      attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE,
-    });
-    setFileAttributes({
-      path: buildTestHostPath({ text: innerPath }),
-      attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY,
-    });
+    expect(
+      setFileAttributes({
+        path: buildTestHostPath({ text: filePath }),
+        attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE,
+      }),
+    ).toEqual({ kind: 'succeeded', value: null });
+    expect(
+      setFileAttributes({
+        path: buildTestHostPath({ text: innerPath }),
+        attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY,
+      }),
+    ).toEqual({ kind: 'succeeded', value: null });
 
     expect(await removeTree({ path: treePath })).toEqual({
       kind: 'succeeded',
@@ -172,10 +176,12 @@ describeOnWindows('the removal of a tree on NTFS', () => {
     await writeFile(join(targetPath, 'kept.txt'), 'kept');
     await mkdir(treePath);
     await writeFile(readOnlyPath, 'text');
-    setFileAttributes({
-      path: buildTestHostPath({ text: readOnlyPath }),
-      attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE,
-    });
+    expect(
+      setFileAttributes({
+        path: buildTestHostPath({ text: readOnlyPath }),
+        attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE,
+      }),
+    ).toEqual({ kind: 'succeeded', value: null });
     await symlink(targetPath, junctionPath, 'junction');
     await writeFile(heldPath, 'held');
     const holder = await holdFile({ path: heldPath });

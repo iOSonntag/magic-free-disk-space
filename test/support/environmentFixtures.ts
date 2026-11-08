@@ -37,7 +37,7 @@ export const exampleWin32EnvironmentValues: Win32EnvironmentValues = {
     path: buildTestWindowsPath({ text: 'C:\\Users\\tester' }),
     realPath: buildTestWindowsPath({ text: 'C:\\Users\\tester' }),
   },
-  temp: {
+  tempFolder: {
     path: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Local\\Temp' }),
     realPath: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Local\\Temp' }),
   },

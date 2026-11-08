@@ -282,12 +282,11 @@ export function buildWindowsFixturePlatform(params: {
 export function buildWindowsFixtureScanView(params: {
   report: ScanReport;
   home: HomeFolder;
-  platform: Platform;
 }): ScanView {
   return buildScanView({
     report: params.report,
     fullDiskAccessHolder: 'terminal',
-    texts: params.platform.report,
+    texts: win32Platform.report,
     pathRules: params.home.pathRules,
     homeDir: params.home.homeDir,
     disk: null,

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
 import type {
+  FolderVariableName,
   VariableCheck,
   VariableReading,
 } from '../../../src/platform/win32/checkVariablePlacement.js';
@@ -9,7 +10,10 @@ import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
 const tempPath = buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Local\\Temp' });
 
-function buildTempCheck(params: { variableName: string; reading: VariableReading }): VariableCheck {
+function buildTempCheck(params: {
+  variableName: FolderVariableName;
+  reading: VariableReading;
+}): VariableCheck {
   return {
     variableName: params.variableName,
     reading: params.reading,

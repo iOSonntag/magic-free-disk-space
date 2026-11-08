@@ -58,7 +58,7 @@ export type RemovalOwnerBundles = { kind: 'bundles'; bundlePaths: string[] };
  */
 export type RemovalOwnerExecutable = {
   kind: 'executable';
-  imageNames: WindowsImageName[];
+  imageNames: [WindowsImageName, ...WindowsImageName[]];
   /** `null` when its install folder is unknown, so only the image names tell. */
   installFolderPath: AbsolutePath | null;
 };

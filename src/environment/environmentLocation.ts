@@ -51,10 +51,9 @@ export type EnvironmentLocationInKnownFolder = {
 export type EnvironmentLocation = EnvironmentLocationAtRoot | EnvironmentLocationInKnownFolder;
 
 /**
- * The absolute path of a fixed location below the folders, which may be the paths or the real
- * paths of the run's folders. Throws for a `userCache` root on Windows, an AppData root on macOS,
- * a whole path that is not absolute, and a name that is no entry, each a bug of the platform's
- * data.
+ * The absolute path of a fixed location below `folders`, their paths or their real paths. Throws
+ * for a `userCache` root on Windows, an AppData root on macOS, a whole path that is not absolute,
+ * and a name that is no entry: each a bug of the platform's data.
  */
 export function resolveEnvironmentLocation(params: {
   folders: EnvironmentFolders;

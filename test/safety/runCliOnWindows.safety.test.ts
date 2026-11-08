@@ -66,7 +66,6 @@ describeOnWindows(
             platform: platform,
           }),
           home: home.environment,
-          platform: platform,
         });
         const approvedNumbers = approvedPaths.map((path) =>
           getItemNumber({ view: scannedView, path: path }),

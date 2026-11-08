@@ -105,7 +105,7 @@ export async function loadTestEnvironment(params: {
   }
 
   const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
-  const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
+  const tempFolder = await loadTestFolder({ path: params.fixtureRoot.tempDir });
   const userCache = await loadTestFolder({ path: params.fixtureRoot.userCacheDir });
   const application = await loadTestFolder({ path: params.fixtureRoot.applicationDir });
 
@@ -115,8 +115,8 @@ export async function loadTestEnvironment(params: {
     user: buildTestUserIdentity({ uid: process.getuid?.() ?? 0 }),
     homeDir: home.path,
     homeRealPath: home.realPath,
-    tempDir: temp.path,
-    tempRealPath: temp.realPath,
+    tempDir: tempFolder.path,
+    tempRealPath: tempFolder.realPath,
     userCacheDir: userCache.path,
     userCacheRealPath: userCache.realPath,
     applicationDirs: [application.path],
@@ -134,7 +134,7 @@ export async function createTestWin32Environment(params: {
   knownFolders: TestKnownFolder[];
 }): Promise<Environment> {
   const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
-  const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
+  const tempFolder = await loadTestFolder({ path: params.fixtureRoot.tempDir });
   const knownFolderPaths = await createTestKnownFolders({
     homeDir: home.path,
     knownFolders: params.knownFolders,
@@ -147,7 +147,7 @@ export async function createTestWin32Environment(params: {
     // trusted.
     user: exampleWindowsUser,
     home: home,
-    temp: temp,
+    tempFolder: tempFolder,
     localAppData: await createTestFolder({ path: appDataDirs.localDir }),
     roamingAppData: await createTestFolder({ path: appDataDirs.roamingDir }),
     knownFolderPaths: knownFolderPaths.paths,

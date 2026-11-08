@@ -12,9 +12,12 @@ export type VariableReading =
   | { kind: 'resolved'; realPath: AbsolutePath }
   | { kind: 'unresolvable' };
 
+/** The environment variables that name a folder of the run. */
+export type FolderVariableName = 'USERPROFILE' | 'TMP' | 'TEMP';
+
 /** A variable, what it holds, and the folder Windows keeps for it. */
 export type VariableCheck = {
-  variableName: string;
+  variableName: FolderVariableName;
   reading: VariableReading;
   expectedFolder: ResolvedFolder;
 };

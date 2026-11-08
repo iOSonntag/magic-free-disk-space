@@ -148,12 +148,12 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
     pathRules: WIN32_PATH_RULES,
     paths: listOneDriveRootPaths({ skyDrivePath: knownFolderPaths.skyDrive }),
   });
-  const temp: ResolvedFolder = { path: tempDir, realPath: tempRealPath.value };
+  const tempFolder: ResolvedFolder = { path: tempDir, realPath: tempRealPath.value };
   const environment = buildWin32Environment({
     nowMs: Date.now(),
     user: token.value.user,
     home: home.value,
-    temp: temp,
+    tempFolder: tempFolder,
     localAppData: localAppData.value,
     roamingAppData: roamingAppData.value,
     knownFolderPaths: knownFolderPaths,
@@ -184,12 +184,12 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
       {
         variableName: 'TMP',
         reading: await loadVariableReading({ name: 'TMP' }),
-        expectedFolder: temp,
+        expectedFolder: tempFolder,
       },
       {
         variableName: 'TEMP',
         reading: await loadVariableReading({ name: 'TEMP' }),
-        expectedFolder: temp,
+        expectedFolder: tempFolder,
       },
     ],
   });
@@ -206,7 +206,7 @@ export type Win32EnvironmentValues = {
   nowMs: number;
   user: UserIdentity;
   home: ResolvedFolder;
-  temp: ResolvedFolder;
+  tempFolder: ResolvedFolder;
   localAppData: ResolvedFolder;
   roamingAppData: ResolvedFolder;
   knownFolderPaths: WindowsKnownFolderPaths;
@@ -228,8 +228,8 @@ export function buildWin32Environment(params: Win32EnvironmentValues): Environme
     pathRules: WIN32_PATH_RULES,
     homeDir: params.home.path,
     homeRealPath: params.home.realPath,
-    tempDir: params.temp.path,
-    tempRealPath: params.temp.realPath,
+    tempDir: params.tempFolder.path,
+    tempRealPath: params.tempFolder.realPath,
     platformFolders: {
       kind: 'win32',
       appDataDirs: { localDir: params.localAppData.path, roamingDir: params.roamingAppData.path },
@@ -320,7 +320,10 @@ function loadTokenFacts(): Result<TokenFacts, EnvironmentFailure> {
   }
 }
 
-/** The owner of the folder at `path` as a user; unresolvable when it cannot be read. */
+/**
+ * The owner of the folder at `path` as a user: the failed call when it cannot be read, and
+ * unresolvable for an owner that is no SID.
+ */
 function loadOwner(params: { path: AbsolutePath }): Result<UserIdentity, EnvironmentFailure> {
   const sidText = loadFileOwnerSid({ path: params.path });
 

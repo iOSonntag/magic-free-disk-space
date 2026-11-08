@@ -671,10 +671,9 @@ function isPresentDespiteFailure(failure: FileFailure): boolean {
 }
 
 /**
- * Deletes the target only while its identity still matches the scan and its content is still on
- * this computer: one a cloud store took since the scan keeps only its placeholder here, and
- * deleting that would delete the file in the cloud. One whose placement cannot be read stays,
- * with the code of that read.
+ * Deletes the target only while its identity matches the scan and its content is still on this
+ * computer, since deleting a cloud placeholder deletes the file in the cloud. A target whose
+ * placement cannot be read stays, with the code of that read.
  */
 async function deleteScannedTarget(params: {
   target: RemovalTarget;

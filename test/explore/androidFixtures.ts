@@ -114,7 +114,7 @@ export async function writeAndroidSystemImage(params: {
 export async function writeAndroidEmulator(params: {
   folders: EnvironmentFolders;
 }): Promise<AbsolutePath> {
-  const folderPath = join(buildAndroidSdkRoot(params), 'emulator');
+  const folderPath = join(buildAndroidSdkRoot({ folders: params.folders }), 'emulator');
 
   await mkdir(folderPath, { recursive: true });
   await writeFile(
@@ -134,7 +134,11 @@ export async function writeAndroidPlatform(params: {
   folderName: string;
   packagePath?: string;
 }): Promise<AbsolutePath> {
-  const folderPath = join(buildAndroidSdkRoot(params), 'platforms', params.folderName);
+  const folderPath = join(
+    buildAndroidSdkRoot({ folders: params.folders }),
+    'platforms',
+    params.folderName,
+  );
 
   await mkdir(folderPath, { recursive: true });
   await writeFile(

@@ -21,8 +21,7 @@ const NOT_JUDGED: AndroidPackageOffers = { offers: [], isComplete: false };
 /**
  * The system image folders that no AVD's `image.sysdir.1` names, at the scan and at the recheck
  * alike. An AVD names its image relative to an SDK it does not record, so it names that image in
- * every SDK, and names it as the state's path rules compare names, so case-blind on Windows.
- * Nothing is judged while `~/.android/avd` is absent or any AVD's image cannot be read.
+ * every SDK. Nothing is judged while `~/.android/avd` is absent or any AVD's image cannot be read.
  */
 export function decideAndroidSystemImageOffers(state: AndroidSdkState): AndroidPackageOffers {
   if (state.sdks.length === 0) {

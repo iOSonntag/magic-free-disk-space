@@ -11,7 +11,7 @@ import type { PathRules } from '../path/pathRules.js';
  */
 export function isExecutableOwnerRunning(params: {
   pathRules: PathRules;
-  imageNames: WindowsImageName[];
+  imageNames: [WindowsImageName, ...WindowsImageName[]];
   installFolderPath: AbsolutePath | null;
   processImagePaths: string[];
 }): boolean {

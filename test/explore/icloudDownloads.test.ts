@@ -102,7 +102,10 @@ function buildRun(params: {
   staleCutoffMs?: number;
 }): ExploreProbeToolRun {
   const platform = buildTestProbePlatform({
-    explore: params.hasIcloudDrive === false ? { icloudDriveRoot: null } : {},
+    explore: {
+      icloudDriveRoot:
+        params.hasIcloudDrive === false ? null : hostPlatform.explore.icloudDriveRoot,
+    },
   });
   const evictedPaths = params.evictedPaths ?? [];
 

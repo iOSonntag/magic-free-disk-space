@@ -156,7 +156,6 @@ describeOnWindows('a scan of a Windows fixture home over the Windows catalog', (
     const view = buildWindowsFixtureScanView({
       report: report,
       home: home.environment,
-      platform: fixturePlatform.platform,
     });
 
     expect(report.appAdvice).toEqual({

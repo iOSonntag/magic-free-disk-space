@@ -9,14 +9,14 @@ import {
 import { exampleWin32EnvironmentValues } from '../../support/environmentFixtures.js';
 import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
-/** The check as Windows runs it: on the protected list of the environment built for `temp`. */
+/** The check as Windows runs it: on the protected list of the environment made for `tempFolder`. */
 function checkWin32Environment(params: {
-  temp: ResolvedFolder;
+  tempFolder: ResolvedFolder;
   oneDriveRealPaths: AbsolutePath[];
 }): EnvironmentFailure | null {
   const environment = buildWin32Environment({
     ...exampleWin32EnvironmentValues,
-    temp: params.temp,
+    tempFolder: params.tempFolder,
     oneDriveRealPaths: params.oneDriveRealPaths,
   });
 
@@ -24,7 +24,7 @@ function checkWin32Environment(params: {
     environment: environment,
     homeRealPath: exampleWin32EnvironmentValues.home.realPath,
     homeOwner: exampleWin32EnvironmentValues.user,
-    tempRealPath: params.temp.realPath,
+    tempRealPath: params.tempFolder.realPath,
   });
 }
 
@@ -32,7 +32,7 @@ describe('checkWin32EnvironmentRoots', () => {
   test('accepts the temporary folder, whose own entry the list holds', () => {
     expect(
       checkWin32Environment({
-        temp: exampleWin32EnvironmentValues.temp,
+        tempFolder: exampleWin32EnvironmentValues.tempFolder,
         oneDriveRealPaths: exampleWin32EnvironmentValues.oneDriveRealPaths,
       }),
     ).toBeNull();
@@ -43,7 +43,7 @@ describe('checkWin32EnvironmentRoots', () => {
 
     expect(
       checkWin32Environment({
-        temp: { path: oneDriveRoot, realPath: oneDriveRoot },
+        tempFolder: { path: oneDriveRoot, realPath: oneDriveRoot },
         oneDriveRealPaths: [oneDriveRoot],
       }),
     ).toEqual({ reason: 'tempHoldsProtectedFolder', path: 'D:\\OneDrive' });

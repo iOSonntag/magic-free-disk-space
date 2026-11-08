@@ -694,7 +694,7 @@ describe('deleteCandidates', () => {
     const candidates = [
       await scanCandidate(editorCache, {
         kind: 'executable',
-        imageNames: [],
+        imageNames: [buildTestWindowsImageName({ text: 'other.exe' })],
         installFolderPath: buildTestHostPath({ text: join(fixtureRoot.rootDir, 'Example Editor') }),
       }),
       await scanCandidate(toolCache, {
