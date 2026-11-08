@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, rename, symlink } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import {
   ACTIVE_ROOT_FILES_MAX_COUNT,
   isFlutterRootApartFromProject,
@@ -379,14 +379,14 @@ describe('isFlutterRootApartFromProject', () => {
   test('accepts disjoint paths, a shared name prefix included', () => {
     expect(
       isFlutterRootApartFromProject({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         flutterRoot: '/sdk/flutter',
         projectRoot: '/p/app',
       }),
     ).toBe(true);
     expect(
       isFlutterRootApartFromProject({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         flutterRoot: '/p/app-sdk',
         projectRoot: '/p/app',
       }),
@@ -396,21 +396,21 @@ describe('isFlutterRootApartFromProject', () => {
   test('rejects equal paths and a path inside the other', () => {
     expect(
       isFlutterRootApartFromProject({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         flutterRoot: '/p/app',
         projectRoot: '/p/app',
       }),
     ).toBe(false);
     expect(
       isFlutterRootApartFromProject({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         flutterRoot: '/p/app/flutter',
         projectRoot: '/p/app',
       }),
     ).toBe(false);
     expect(
       isFlutterRootApartFromProject({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         flutterRoot: '/p',
         projectRoot: '/p/app',
       }),

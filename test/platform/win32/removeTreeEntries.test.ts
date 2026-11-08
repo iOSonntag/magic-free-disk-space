@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { EntryAttributeAccess } from '../../../src/platform/win32/removeTreeEntries.js';
 import {
   decideEntryRemovalEnd,
+  MAX_CONCURRENT_REMOVALS,
   removeTreeEntries,
 } from '../../../src/platform/win32/removeTreeEntries.js';
 import type { Result } from '../../../src/result.js';
@@ -19,7 +20,19 @@ const ENTRY_READS = buildTestEntryReads({ privateBytes: null });
 
 const FILE_ATTRIBUTE_READONLY = 0x1;
 
-const MAX_CONCURRENT_REMOVALS = 16;
+const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
+
+const FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x40000;
+
+const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000;
+
+/** The attributes a fake access answers from, and the calls it records. */
+type FakeAttributeState = {
+  attributesByPath: Map<string, number>;
+  failures: Map<string, string>;
+  loadedPaths: string[];
+  saves: { path: string; attributes: number }[];
+};
 
 /**
  * Attributes a test sets by path, normal for any other; a path of `failures` fails its every call
@@ -33,37 +46,47 @@ function buildFakeAttributes(params: {
   loadedPaths: string[];
   saves: { path: string; attributes: number }[];
 } {
-  const attributesByPath = params.attributesByPath ?? new Map<string, number>();
-  const failures = params.failures ?? new Map<string, string>();
-  const loadedPaths: string[] = [];
-  const saves: { path: string; attributes: number }[] = [];
+  const state: FakeAttributeState = {
+    attributesByPath: params.attributesByPath ?? new Map<string, number>(),
+    failures: params.failures ?? new Map<string, string>(),
+    loadedPaths: [],
+    saves: [],
+  };
 
-  function load(call: { path: string }): Result<number, string> {
-    loadedPaths.push(call.path);
+  return {
+    access: buildFakeAttributeAccess(state),
+    loadedPaths: state.loadedPaths,
+    saves: state.saves,
+  };
+}
 
-    const failure = failures.get(call.path);
+function buildFakeAttributeAccess(state: FakeAttributeState): EntryAttributeAccess {
+  function load(params: { path: string }): Result<number, string> {
+    state.loadedPaths.push(params.path);
+
+    const failure = state.failures.get(params.path);
 
     if (failure !== undefined) {
       return { kind: 'failed', failure: failure };
     }
 
-    return { kind: 'succeeded', value: attributesByPath.get(call.path) ?? 0 };
+    return { kind: 'succeeded', value: state.attributesByPath.get(params.path) ?? 0 };
   }
 
-  function save(call: { path: string; attributes: number }): Result<null, string> {
-    const failure = failures.get(call.path);
+  function save(params: { path: string; attributes: number }): Result<null, string> {
+    const failure = state.failures.get(params.path);
 
     if (failure !== undefined) {
       return { kind: 'failed', failure: failure };
     }
 
-    saves.push(call);
-    attributesByPath.set(call.path, call.attributes);
+    state.saves.push(params);
+    state.attributesByPath.set(params.path, params.attributes);
 
     return { kind: 'succeeded', value: null };
   }
 
-  return { access: { load: load, save: save }, loadedPaths: loadedPaths, saves: saves };
+  return { load: load, save: save };
 }
 
 /** Removes the host path `path` under the host's rules, with no entry evicted unless given. */
@@ -251,6 +274,93 @@ describe('removeTreeEntries', () => {
     ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
     expect(await readFile(unplacedPath, 'utf8')).toBe('top');
     expect(await isPresent(join(treePath, 'a'))).toBe(false);
+  });
+
+  test('leaves a file it could not place that reads as kept online only right before its removal', async () => {
+    // As a OneDrive placeholder, whose removal would delete the file from its cloud store.
+    const unplacedPath = join(treePath, 'top.bin');
+    const { access } = buildFakeAttributes({
+      attributesByPath: new Map([[unplacedPath, FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS]]),
+    });
+
+    expect(
+      await removeTestTree({
+        path: treePath,
+        attributes: access,
+        entryReads: buildTestEntryReads({
+          privateBytes: null,
+          unreadCodes: new Map([[unplacedPath, 'EBUSY']]),
+        }),
+      }),
+    ).toEqual({ kind: 'succeeded', value: { kind: 'partlyRemoved', stayedEntryCount: 1 } });
+    expect(await readFile(unplacedPath, 'utf8')).toBe('top');
+    expect(await isPresent(join(treePath, 'a'))).toBe(false);
+  });
+
+  test('removes a file it could not place that reads as a link right before its removal as a link, its read-only bit kept', async () => {
+    const unplacedPath = join(treePath, 'top.bin');
+    const { access, saves } = buildFakeAttributes({
+      attributesByPath: new Map([
+        [unplacedPath, FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_READONLY],
+      ]),
+    });
+
+    expect(
+      await removeTestTree({
+        path: treePath,
+        attributes: access,
+        entryReads: buildTestEntryReads({
+          privateBytes: null,
+          unreadCodes: new Map([[unplacedPath, 'EBUSY']]),
+        }),
+      }),
+    ).toEqual({ kind: 'succeeded', value: { kind: 'removed' } });
+    expect(await isPresent(treePath)).toBe(false);
+    expect(saves).toEqual([]);
+  });
+
+  test('leaves a root file that reads as kept online only right before its removal', async () => {
+    const filePath = join(treePath, 'top.bin');
+    const { access } = buildFakeAttributes({
+      attributesByPath: new Map([[filePath, FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS]]),
+    });
+
+    expect(await removeTestTree({ path: filePath, attributes: access })).toEqual({
+      kind: 'succeeded',
+      value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
+    });
+    expect(await readFile(filePath, 'utf8')).toBe('top');
+  });
+
+  test('leaves a folder that reads as kept online only right before its removal, and counts it alone', async () => {
+    const evictedFolderPath = join(treePath, 'a', 'b');
+    const { access } = buildFakeAttributes({
+      attributesByPath: new Map([[evictedFolderPath, FILE_ATTRIBUTE_RECALL_ON_OPEN | 0x10]]),
+    });
+
+    expect(await removeTestTree({ path: treePath, attributes: access })).toEqual({
+      kind: 'succeeded',
+      value: { kind: 'partlyRemoved', stayedEntryCount: 1 },
+    });
+    expect((await stat(evictedFolderPath)).isDirectory()).toBe(true);
+    expect(await isPresent(join(evictedFolderPath, 'leaf.bin'))).toBe(false);
+    expect(await isPresent(join(treePath, 'top.bin'))).toBe(false);
+  });
+
+  test('removes a folder that reads as a link right before its removal with its read-only bit kept', async () => {
+    const linkedFolderPath = join(treePath, 'a', 'b');
+    const { access, saves } = buildFakeAttributes({
+      attributesByPath: new Map([
+        [linkedFolderPath, FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_READONLY | 0x10],
+      ]),
+    });
+
+    expect(await removeTestTree({ path: treePath, attributes: access })).toEqual({
+      kind: 'succeeded',
+      value: { kind: 'removed' },
+    });
+    expect(await isPresent(treePath)).toBe(false);
+    expect(saves).toEqual([]);
   });
 
   test('leaves a file another program holds open and goes on with the rest', async () => {

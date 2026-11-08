@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
-import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../environment/environmentLocation.js';
 import { isSameOrInsidePath } from '../path/isSameOrInsidePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import { loadDirectoryNames } from '../system/loadDirectoryNames.js';
@@ -47,7 +47,7 @@ export async function findCatalogTargets(params: {
   const earlierEntryPaths: string[] = [];
 
   for (const entry of params.entries) {
-    const path = resolveCatalogLocation({ environment: params.environment, location: entry });
+    const path = resolveEnvironmentLocation({ folders: params.environment, location: entry });
     const entryTargets = await findEntryTargets({
       entry: entry,
       path: path,

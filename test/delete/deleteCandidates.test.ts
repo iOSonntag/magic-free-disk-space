@@ -18,11 +18,11 @@ import { listUnitPaths } from '../../src/explore/exploreUnit.js';
 import type { Result } from '../../src/result.js';
 import type {
   Candidate,
-  CandidateRecycleBin,
   RecycleBinContent,
   RemovalOwner,
   RemovalTarget,
 } from '../../src/scan/candidate.js';
+import type { EntryPlacement } from '../../src/system/entryReads.js';
 import { loadFileIdentity } from '../../src/system/loadFileIdentity.js';
 import type { SystemCallFailure } from '../../src/system/systemCallFailure.js';
 import type { RunningProcesses } from '../../src/system/systemPlatform.js';
@@ -43,13 +43,14 @@ import {
   FIXTURE_PROFILE_ID,
   OBSOLETE_FOLDER_NAME,
   OLDER_FOLDER_NAME,
+  runningVscodeProcesses,
   VSCODE_FOLDER_SIZE_BYTES,
-  VSCODE_HOST_PROCESS,
 } from '../explore/vscodeExtensionFixtures.js';
 import {
   buildTestCandidate,
   buildTestDartToolCandidate,
   buildTestProbedCandidate,
+  buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
 import { createTestJournal } from '../support/deletionJournalFixtures.js';
@@ -65,12 +66,11 @@ import {
 } from '../support/fixtureRoot.js';
 import {
   buildExampleHome,
-  buildTestDriveRoot,
   buildTestHostPath,
   buildTestWindowsImageName,
 } from '../support/parsedValueFixtures.js';
 import { HOST_PLATFORM } from '../support/platformFixtures.js';
-import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
   buildRunningCommandLines,
@@ -110,7 +110,7 @@ afterEach(async () => {
 function buildCommandLinesLoader(
   commandLines: string[] | null,
 ): () => Promise<RunningProcesses | null> {
-  const runningProcesses = commandLines === null ? null : buildRunningCommandLines(commandLines);
+  const runningProcesses = buildRunningCommandLines(commandLines);
 
   return async () => runningProcesses;
 }
@@ -168,6 +168,43 @@ function buildFailingRemoval(params: {
       return { kind: 'failed', failure: params.failure };
     },
   };
+}
+
+/**
+ * Scans the folder `selected` and deletes it while the entry reads place it as `placement`, with a
+ * removal that only records each path it is asked to remove; gives the run and those paths.
+ */
+async function deleteWithPlacementOf(params: {
+  selected: string;
+  placement: EntryPlacement;
+}): Promise<{ run: RemovalRun; removedPaths: string[] }> {
+  const scanned = await scanCandidate(params.selected);
+  const removedPaths: string[] = [];
+  const run = await deleteCandidates({
+    candidates: [scanned],
+    journal: await createFixtureRootJournal(),
+    loadKnownRunningProcesses: buildCommandLinesLoader([]),
+    environment: environment,
+    ...DELETION_PLATFORM,
+    delete: {
+      ...DELETION_PLATFORM.delete,
+      removeTree: async (tree) => {
+        removedPaths.push(tree.path);
+
+        return { kind: 'failed', failure: `The folder ${tree.path} was removed.` };
+      },
+    },
+    entryReads: {
+      ...DELETION_PLATFORM.entryReads,
+      loadEntryPlacement: (entry) =>
+        entry.path === params.selected
+          ? params.placement
+          : DELETION_PLATFORM.entryReads.loadEntryPlacement(entry),
+    },
+    clock: () => NOW_MS,
+  });
+
+  return { run: run, removedPaths: removedPaths };
 }
 
 /** A journal of the deletions in the fixture root's own log. */
@@ -416,31 +453,9 @@ describe('deleteCandidates', () => {
 
   test('leaves a folder alone that went online only after the scan, and never removes it', async () => {
     const selected = await createCacheFolder('evicted');
-    const scanned = await scanCandidate(selected);
-    const removedPaths: string[] = [];
-
-    const run = await deleteCandidates({
-      candidates: [scanned],
-      journal: await createFixtureRootJournal(),
-      loadKnownRunningProcesses: buildCommandLinesLoader([]),
-      environment: environment,
-      ...DELETION_PLATFORM,
-      delete: {
-        ...DELETION_PLATFORM.delete,
-        removeTree: async (params) => {
-          removedPaths.push(params.path);
-
-          return { kind: 'failed', failure: 'The evicted folder was removed.' };
-        },
-      },
-      entryReads: {
-        ...DELETION_PLATFORM.entryReads,
-        loadEntryPlacement: (entry) =>
-          entry.path === selected
-            ? { kind: 'cloudOnly' }
-            : DELETION_PLATFORM.entryReads.loadEntryPlacement(entry),
-      },
-      clock: () => NOW_MS,
+    const { run, removedPaths } = await deleteWithPlacementOf({
+      selected: selected,
+      placement: { kind: 'cloudOnly' },
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'changedSinceScan', freedBytes: 0 });
@@ -451,31 +466,9 @@ describe('deleteCandidates', () => {
   test('leaves a folder alone whose placement cannot be read, and names the code of the read', async () => {
     // As a folder on Windows whose attributes cannot be read, which may be another volume mounted.
     const selected = await createCacheFolder('unplaced');
-    const scanned = await scanCandidate(selected);
-    const removedPaths: string[] = [];
-
-    const run = await deleteCandidates({
-      candidates: [scanned],
-      journal: await createFixtureRootJournal(),
-      loadKnownRunningProcesses: buildCommandLinesLoader([]),
-      environment: environment,
-      ...DELETION_PLATFORM,
-      delete: {
-        ...DELETION_PLATFORM.delete,
-        removeTree: async (params) => {
-          removedPaths.push(params.path);
-
-          return { kind: 'failed', failure: 'The unplaced folder was removed.' };
-        },
-      },
-      entryReads: {
-        ...DELETION_PLATFORM.entryReads,
-        loadEntryPlacement: (entry) =>
-          entry.path === selected
-            ? { kind: 'unread', code: 'EIO' }
-            : DELETION_PLATFORM.entryReads.loadEntryPlacement(entry),
-      },
-      clock: () => NOW_MS,
+    const { run, removedPaths } = await deleteWithPlacementOf({
+      selected: selected,
+      placement: { kind: 'unread', code: 'EIO' },
     });
 
     expect(run.outcomes[0]).toMatchObject({ outcome: 'failed', code: 'EIO', freedBytes: 0 });
@@ -859,8 +852,7 @@ describe('deleteCandidates', () => {
   });
 });
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('deleteCandidates with a tool item', () => {
+describeWithFakeTools('deleteCandidates with a tool item', () => {
   test('records the intent and then the outcome of a completed run', async () => {
     const candidate = await createToolCandidate({
       version: '20.1.0',
@@ -1173,10 +1165,7 @@ describe('deleteCandidates with a VS Code extension folder', () => {
 
   test('reads the processes afresh, so VS Code started after the confirmation keeps it', async () => {
     const candidate = await scanVscodeCandidate();
-    const processReads = [
-      buildRunningCommandLines([]),
-      buildRunningCommandLines([VSCODE_HOST_PROCESS]),
-    ];
+    const processReads = [buildRunningCommandLines([]), runningVscodeProcesses];
     let readCount = 0;
 
     const run = await deleteVscodeCandidate({
@@ -1392,31 +1381,17 @@ describe('deleteCandidates with an item of several targets', () => {
 });
 
 describe('deleteCandidates with a Recycle Bin', () => {
-  const DRIVE_ROOT = buildTestDriveRoot({ text: 'C:\\' });
+  // Made up, not the code of Windows, so the deletion is seen to take it from its platform.
+  const nothingToEmptyCode = 0x8000abcd;
 
-  /** What the fake bin's emptying fails with for a bin that holds nothing, as Windows' does. */
-  const NOTHING_TO_EMPTY_CODE = 0x8000ffff;
+  const scannedContent: RecycleBinContent = { sizeBytes: 8192, itemCount: 3 };
 
-  const SCANNED_CONTENT: RecycleBinContent = { sizeBytes: 8192, itemCount: 3 };
+  const emptyContent: RecycleBinContent = { sizeBytes: 0, itemCount: 0 };
 
-  const EMPTY_CONTENT: RecycleBinContent = { sizeBytes: 0, itemCount: 0 };
-
-  const RECYCLE_BIN_CANDIDATE: CandidateRecycleBin = {
-    ...buildTestCandidate({
-      path: 'C:\\$Recycle.Bin',
-      title: 'Recycle Bin (C:)',
-      category: 'trash',
-      risk: 'careful',
-      allocatedBytes: SCANNED_CONTENT.sizeBytes,
-      entryCount: SCANNED_CONTENT.itemCount,
-    }),
-    origin: { kind: 'recycleBin' },
-    removal: {
-      kind: 'emptyRecycleBin',
-      driveRoot: DRIVE_ROOT,
-      scannedContent: SCANNED_CONTENT,
-    },
-  };
+  const recycleBinCandidate = buildTestRecycleBinCandidate({
+    driveRootText: 'C:\\',
+    scannedContent: scannedContent,
+  });
 
   /**
    * Runs the deletion of the bin and a path item after it with a fake Recycle Bin that answers
@@ -1437,7 +1412,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
     const journal = await createFixtureRootJournal();
     const next = await createCacheFolder('after-bin');
     const run = await deleteCandidates({
-      candidates: [RECYCLE_BIN_CANDIDATE, await scanCandidate(next)],
+      candidates: [recycleBinCandidate, await scanCandidate(next)],
       journal: journal,
       loadKnownRunningProcesses: buildCommandLinesLoader([]),
       environment: environment,
@@ -1461,7 +1436,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
 
             return params.emptied;
           },
-          nothingToEmptyCode: NOTHING_TO_EMPTY_CODE,
+          nothingToEmptyCode: nothingToEmptyCode,
         },
       },
       clock: () => NOW_MS,
@@ -1477,7 +1452,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
 
   test('empties a bin that still holds what the scan counted, records it, and goes on', async () => {
     const { run, emptiedRoots, countedTimes, journal } = await deleteWithFakeBin({
-      counts: [{ kind: 'succeeded', value: SCANNED_CONTENT }],
+      counts: [{ kind: 'succeeded', value: scannedContent }],
       emptied: { kind: 'succeeded', value: null },
     });
 
@@ -1485,7 +1460,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
     expect(countedTimes).toBe(1);
     expect(run.outcomes).toEqual([
       {
-        candidate: RECYCLE_BIN_CANDIDATE,
+        candidate: recycleBinCandidate,
         freedBytes: 8192,
         outcome: 'removed',
         code: null,
@@ -1524,7 +1499,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
 
   test('reports a bin emptied since the scan as already gone, never emptying it', async () => {
     const { run, emptiedRoots } = await deleteWithFakeBin({
-      counts: [{ kind: 'succeeded', value: EMPTY_CONTENT }],
+      counts: [{ kind: 'succeeded', value: emptyContent }],
       emptied: { kind: 'succeeded', value: null },
     });
 
@@ -1538,7 +1513,7 @@ describe('deleteCandidates with a Recycle Bin', () => {
       emptied: { kind: 'succeeded', value: null },
     });
     const emptied = await deleteWithFakeBin({
-      counts: [{ kind: 'succeeded', value: SCANNED_CONTENT }],
+      counts: [{ kind: 'succeeded', value: scannedContent }],
       emptied: { kind: 'failed', failure: { call: 'SHEmptyRecycleBinW', code: 0x80070020 } },
     });
 
@@ -1557,12 +1532,12 @@ describe('deleteCandidates with a Recycle Bin', () => {
   test('reports a bin another program emptied after the fresh count as already gone', async () => {
     const { run, emptiedRoots, countedTimes, journal } = await deleteWithFakeBin({
       counts: [
-        { kind: 'succeeded', value: SCANNED_CONTENT },
-        { kind: 'succeeded', value: EMPTY_CONTENT },
+        { kind: 'succeeded', value: scannedContent },
+        { kind: 'succeeded', value: emptyContent },
       ],
       emptied: {
         kind: 'failed',
-        failure: { call: 'SHEmptyRecycleBinW', code: NOTHING_TO_EMPTY_CODE },
+        failure: { call: 'SHEmptyRecycleBinW', code: nothingToEmptyCode },
       },
     });
 
@@ -1583,38 +1558,38 @@ describe('deleteCandidates with a Recycle Bin', () => {
 
   test('fails a bin that holds items after its emptying found nothing, with the code of the emptying', async () => {
     for (const after of [
-      { kind: 'succeeded', value: SCANNED_CONTENT },
+      { kind: 'succeeded', value: scannedContent },
       { kind: 'succeeded', value: { sizeBytes: 4096, itemCount: 1 } },
       { kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: 0x80070005 } },
     ] satisfies Result<RecycleBinContent, SystemCallFailure>[]) {
       const { run, countedTimes } = await deleteWithFakeBin({
-        counts: [{ kind: 'succeeded', value: SCANNED_CONTENT }, after],
+        counts: [{ kind: 'succeeded', value: scannedContent }, after],
         emptied: {
           kind: 'failed',
-          failure: { call: 'SHEmptyRecycleBinW', code: NOTHING_TO_EMPTY_CODE },
+          failure: { call: 'SHEmptyRecycleBinW', code: nothingToEmptyCode },
         },
       });
 
       expect(countedTimes).toBe(2);
       expect(run.outcomes).toMatchObject([
-        { outcome: 'failed', code: '0x8000FFFF', freedBytes: 0 },
+        { outcome: 'failed', code: '0x8000ABCD', freedBytes: 0 },
         { outcome: 'removed' },
       ]);
     }
   });
 
-  test('fails a bin on a platform whose trash is a folder, never emptying anything', async () => {
-    const run = await deleteCandidates({
-      candidates: [RECYCLE_BIN_CANDIDATE],
-      journal: await createFixtureRootJournal(),
-      loadKnownRunningProcesses: buildCommandLinesLoader([]),
-      environment: environment,
-      ...DELETION_PLATFORM,
-      delete: { ...DELETION_PLATFORM.delete, trash: { kind: 'catalogFolder' } },
-      clock: () => NOW_MS,
-    });
-
-    expect(run.outcomes).toMatchObject([{ outcome: 'failed', code: null, freedBytes: 0 }]);
+  test('throws for a bin on a platform whose trash is a folder, where no scan offers one', async () => {
+    await expect(
+      deleteCandidates({
+        candidates: [recycleBinCandidate],
+        journal: await createFixtureRootJournal(),
+        loadKnownRunningProcesses: buildCommandLinesLoader([]),
+        environment: environment,
+        ...DELETION_PLATFORM,
+        delete: { ...DELETION_PLATFORM.delete, trash: { kind: 'catalogFolder' } },
+        clock: () => NOW_MS,
+      }),
+    ).rejects.toThrow('A Recycle Bin candidate reached a platform whose trash is a folder.');
   });
 });
 

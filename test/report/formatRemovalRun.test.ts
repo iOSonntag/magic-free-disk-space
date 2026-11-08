@@ -5,6 +5,8 @@ import type {
   RemovalOutcomePartlyRemoved,
   RemovalOutcomeToolFailed,
 } from '../../src/delete/deleteCandidates.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { WIN32_REPORT_TEXTS } from '../../src/platform/win32/reportTexts.js';
 import { formatAvailableSpaceLine, formatRemovalRun } from '../../src/report/formatRemovalRun.js';
 import {
   buildTestCandidate,
@@ -14,7 +16,10 @@ import {
 
 describe('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
-    const lines = formatRemovalRun({ run: { outcomes: [], journalFailure: null } });
+    const lines = formatRemovalRun({
+      run: { outcomes: [], journalFailure: null },
+      texts: darwinPlatform.report,
+    });
 
     expect(lines).toEqual(['Freed about 0 B in 0 items.']);
   });
@@ -37,6 +42,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -75,6 +81,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -103,6 +110,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -124,6 +132,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines.some((line) => line.includes(cleaned.path))).toBe(false);
@@ -147,6 +156,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: WIN32_REPORT_TEXTS,
     });
 
     expect(lines).toEqual([
@@ -155,6 +165,22 @@ describe('formatRemovalRun', () => {
       'Freed about 6.1 KB in 0 items.',
       '2 items could not be deleted.',
     ]);
+  });
+
+  test('names the operating system of the platform as the one that refused a partly deleted entry', () => {
+    const lines = formatRemovalRun({
+      run: {
+        outcomes: [
+          buildPartlyRemovedOutcome({ path: '/fixture/cache', freedBytes: 0, stayedEntryCount: 1 }),
+        ],
+        journalFailure: null,
+      },
+      texts: darwinPlatform.report,
+    });
+
+    expect(lines[0]).toBe(
+      '- partly deleted: /fixture/cache (1 entry stayed, in use by another program, kept only online, or refused by macOS; 0 B freed)',
+    );
   });
 
   test('omits the summary lines that do not apply', () => {
@@ -166,6 +192,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -209,6 +236,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -256,6 +284,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines.slice(0, 3)).toEqual([
@@ -281,6 +310,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines[0]).toBe(
@@ -301,6 +331,7 @@ describe('formatRemovalRun', () => {
         outcomes: [],
         journalFailure: { reason: 'writeFailed', path: '/fixture/log.jsonl', code: 'EIO' },
       },
+      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([

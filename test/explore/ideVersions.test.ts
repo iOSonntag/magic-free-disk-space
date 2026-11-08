@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { chmod, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
+import type { IdeVersionRoots } from '../../src/explore/explorePlatform.js';
 import type {
   ExploreFoundPaths,
   ExplorePathUnitIdeVersionFolder,
@@ -16,6 +18,7 @@ import { recheckIdeVersionUnit } from '../../src/explore/ideVersions/recheckIdeV
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
@@ -38,12 +41,38 @@ const NEW_STUDIO = 'AndroidStudio2024.2';
 
 const VALUE_LIBRARY_PATH = '/Users/example/Library';
 
+/** Whether the host's catalog names any folder of IDE versions. */
+const hasIdeVersionRoots = Object.values(HOST_PLATFORM.explore.ideVersionRoots).some(
+  (roots) => roots.length > 0,
+);
+
+/** A temporary home with the roots of IDE versions it fills, where the host's catalog keeps them. */
 type IdeFixture = {
   environment: Environment;
-  libraryPath: string;
+  jetBrainsCachesPath: string;
+  jetBrainsLogsPath: string;
+  jetBrainsSettingsPath: string;
+  googleCachesPath: string;
   bundlePath: string;
   ideCommand: string;
 };
+
+/** The root of the IDE versions of `kind` the host's catalog keeps for the IDEs of `vendor`. */
+function buildIdeVersionRootPath(params: {
+  environment: Environment;
+  kind: keyof IdeVersionRoots;
+  vendor: 'JetBrains' | 'Google';
+}): string {
+  const root = HOST_PLATFORM.explore.ideVersionRoots[params.kind].find((location) =>
+    location.path.endsWith(`/${params.vendor}`),
+  );
+
+  if (root === undefined) {
+    throw new Error(`The platform has no ${params.kind} folder of ${params.vendor}.`);
+  }
+
+  return resolveEnvironmentLocation({ folders: params.environment, location: root });
+}
 
 /** Builds a temporary home and app folder, hands them to `run`, and removes them afterwards. */
 async function withIdeHome(params: { run: (fixture: IdeFixture) => Promise<void> }): Promise<void> {
@@ -54,7 +83,26 @@ async function withIdeHome(params: { run: (fixture: IdeFixture) => Promise<void>
 
       await params.run({
         environment: home.environment,
-        libraryPath: join(home.environment.homeDir, 'Library'),
+        jetBrainsCachesPath: buildIdeVersionRootPath({
+          environment: home.environment,
+          kind: 'caches',
+          vendor: 'JetBrains',
+        }),
+        jetBrainsLogsPath: buildIdeVersionRootPath({
+          environment: home.environment,
+          kind: 'logs',
+          vendor: 'JetBrains',
+        }),
+        jetBrainsSettingsPath: buildIdeVersionRootPath({
+          environment: home.environment,
+          kind: 'settings',
+          vendor: 'JetBrains',
+        }),
+        googleCachesPath: buildIdeVersionRootPath({
+          environment: home.environment,
+          kind: 'caches',
+          vendor: 'Google',
+        }),
         bundlePath: bundlePath,
         ideCommand: `${bundlePath}/Contents/MacOS/idea`,
       });
@@ -70,8 +118,7 @@ async function loadFindings(params: {
     await loadIdeVersionFindings(
       buildTestProbeRun({
         environment: params.fixture.environment,
-        runningProcesses:
-          params.commandLines === null ? null : buildRunningCommandLines(params.commandLines),
+        runningProcesses: buildRunningCommandLines(params.commandLines),
       }),
     ),
   );
@@ -90,31 +137,19 @@ function buildValuePath(...names: string[]): AbsolutePath {
  * Studio versions with caches; one PyCharm version; and a JetBrains folder that is no version.
  */
 async function createIdeFolders(fixture: IdeFixture): Promise<void> {
-  const library = fixture.libraryPath;
-
   for (const version of [OLD_IDEA, NEW_IDEA]) {
-    await writeFile({ path: join(library, 'Caches', 'JetBrains', version, 'index', 'data') });
-    await writeFile({ path: join(library, 'Logs', 'JetBrains', version, 'idea.log') });
-    await writeFile({
-      path: join(library, 'Application Support', 'JetBrains', version, 'options', 'ui.xml'),
-    });
+    await writeFile({ path: join(fixture.jetBrainsCachesPath, version, 'index', 'data') });
+    await writeFile({ path: join(fixture.jetBrainsLogsPath, version, 'idea.log') });
+    await writeFile({ path: join(fixture.jetBrainsSettingsPath, version, 'options', 'ui.xml') });
   }
 
-  await writeFile({
-    path: join(library, 'Application Support', 'JetBrains', OLD_IDEA, 'plugins', 'a', 'a.jar'),
-  });
-  await writeFile({
-    path: join(library, 'Application Support', 'JetBrains', OLD_IDEA, 'idea.vmoptions'),
-  });
-  await writeFile({
-    path: join(library, 'Application Support', 'JetBrains', 'PyCharm2024.1', 'x'),
-  });
-  await writeFile({
-    path: join(library, 'Application Support', 'JetBrains', 'consentOptions', 'x'),
-  });
+  await writeFile({ path: join(fixture.jetBrainsSettingsPath, OLD_IDEA, 'plugins', 'a', 'a.jar') });
+  await writeFile({ path: join(fixture.jetBrainsSettingsPath, OLD_IDEA, 'idea.vmoptions') });
+  await writeFile({ path: join(fixture.jetBrainsSettingsPath, 'PyCharm2024.1', 'x') });
+  await writeFile({ path: join(fixture.jetBrainsSettingsPath, 'consentOptions', 'x') });
 
   for (const version of [OLD_STUDIO, NEW_STUDIO]) {
-    await writeFile({ path: join(library, 'Caches', 'Google', version, 'data') });
+    await writeFile({ path: join(fixture.googleCachesPath, version, 'data') });
   }
 }
 
@@ -310,7 +345,7 @@ describe('compareIdeVersionUnit', () => {
   });
 });
 
-describe('loadIdeVersionFindings', () => {
+describe.skipIf(!hasIdeVersionRoots)('loadIdeVersionFindings', () => {
   test('offers the caches, logs, plugins, and settings of each version a newer one outdates', async () => {
     await withIdeHome({
       run: async (fixture) => {
@@ -339,12 +374,7 @@ describe('loadIdeVersionFindings', () => {
           findings: await loadFindings({ fixture: fixture, commandLines: [] }),
           kind: 'ideVersionFolder',
         });
-        const settingsPath = join(
-          fixture.libraryPath,
-          'Application Support',
-          'JetBrains',
-          OLD_IDEA,
-        );
+        const settingsPath = join(fixture.jetBrainsSettingsPath, OLD_IDEA);
         const plugins = units.find((unit) => unit.folderKind === 'plugins');
         const settings = units.find((unit) => unit.folderKind === 'settings');
 
@@ -476,7 +506,7 @@ describe('loadIdeVersionFindings', () => {
   });
 });
 
-describe('recheckIdeVersionUnit', () => {
+describe.skipIf(!hasIdeVersionRoots)('recheckIdeVersionUnit', () => {
   test('is unchanged while the version is still outdated, and busy while it runs', async () => {
     await withIdeHome({
       run: async (fixture) => {
@@ -497,8 +527,7 @@ describe('recheckIdeVersionUnit', () => {
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              runningProcesses:
-                commandLines === null ? null : buildRunningCommandLines(commandLines),
+              runningProcesses: buildRunningCommandLines(commandLines),
             });
           }
 
@@ -528,10 +557,8 @@ describe('recheckIdeVersionUnit', () => {
           throw new Error('The probe did not offer the expected folders.');
         }
 
-        await rm(join(fixture.libraryPath, 'Caches', 'Google', NEW_STUDIO), { recursive: true });
-        await writeFile({
-          path: join(fixture.libraryPath, 'Application Support', 'JetBrains', OLD_IDEA, 'new.xml'),
-        });
+        await rm(join(fixture.googleCachesPath, NEW_STUDIO), { recursive: true });
+        await writeFile({ path: join(fixture.jetBrainsSettingsPath, OLD_IDEA, 'new.xml') });
 
         for (const unit of [studio, settings]) {
           expect(

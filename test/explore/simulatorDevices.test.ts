@@ -4,8 +4,7 @@ import {
   parseSimulatorDeviceList,
   parseSimulatorDeviceUdid,
 } from '../../src/explore/simulatorDevices/parseSimulatorDeviceList.js';
-import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
@@ -21,7 +20,7 @@ const tool: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 
 function parseFixtureDevices() {
   const parsed = parseSimulatorDeviceList({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     stdoutText: buildSimulatorDeviceListJson({ homeDir: FIXTURE_HOME_DIR }),
   });
 
@@ -46,16 +45,6 @@ describe('parseSimulatorDeviceUdid', () => {
   test('rejects any other text', () => {
     expect(parseSimulatorDeviceUdid({ text: '--all' }).kind).toBe('failed');
     expect(parseSimulatorDeviceUdid({ text: `${UNAVAILABLE_DEVICE_UDID} ` }).kind).toBe('failed');
-  });
-});
-
-describe('parseAbsolutePath', () => {
-  test('passes an absolute path and rejects a relative one', () => {
-    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: '/Users/example/data' }).kind).toBe(
-      'succeeded',
-    );
-    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: 'data' }).kind).toBe('failed');
-    expect(parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: '-rf' }).kind).toBe('failed');
   });
 });
 
@@ -94,22 +83,21 @@ describe('parseSimulatorDeviceList', () => {
         },
       });
 
-      expect(
-        parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind,
-      ).toBe('succeeded');
+      expect(parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
+        'succeeded',
+      );
     }
   });
 
   test('rejects text that is no JSON', () => {
     expect(
-      parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+      parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage' }).kind,
     ).toBe('failed');
   });
 
   test('rejects JSON without a devices object', () => {
     expect(
-      parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: '{"runtimes":[]}' })
-        .kind,
+      parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: '{"runtimes":[]}' }).kind,
     ).toBe('failed');
   });
 
@@ -128,7 +116,7 @@ describe('parseSimulatorDeviceList', () => {
       },
     });
 
-    expect(parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });
@@ -148,7 +136,7 @@ describe('parseSimulatorDeviceList', () => {
       },
     });
 
-    expect(parseSimulatorDeviceList({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseSimulatorDeviceList({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });

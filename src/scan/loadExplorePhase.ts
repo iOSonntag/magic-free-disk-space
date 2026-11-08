@@ -1,6 +1,6 @@
 import type { CandidateCategory, CatalogEntry, ExploreProbeId } from '../catalog/catalog.js';
-import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../environment/environmentLocation.js';
 import type {
   ExploreEngineUnit,
   ExploreEvictUnit,
@@ -163,7 +163,7 @@ async function loadExploreEntryPhase(params: {
       };
     case 'timedOut': {
       const deadlineIssue: ScanIssue = {
-        path: resolveCatalogLocation({ environment: params.environment, location: params.entry }),
+        path: resolveEnvironmentLocation({ folders: params.environment, location: params.entry }),
         reason: 'walkStopped',
         detail: 'deadline',
       };

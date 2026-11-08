@@ -3,6 +3,7 @@ import type { MacBundleId } from '../catalog/catalogOwner.js';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
 import type { EnvironmentLocation } from '../environment/environmentLocation.js';
 import type { DriveRoot } from '../path/driveRoot.js';
+import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { Result } from '../result.js';
 import type { CommandFailure } from '../system/loadCommandOutput.js';
 import type { SystemCallFailure } from '../system/systemCallFailure.js';
@@ -98,8 +99,8 @@ export type ScanPlatformAppsOffered = {
 /** An app the system lists as installed, which the scan only advises about. */
 export type AdvisedApp = {
   displayName: string;
-  /** `null` when the system names no install folder for it. */
-  installFolderPath: string | null;
+  /** `null` when the system names no install folder for it, or none that is an absolute path. */
+  installFolderPath: AbsolutePath | null;
   /** The size the system estimates for it; `null` when it gives none. */
   estimatedBytes: number | null;
 };

@@ -2,6 +2,7 @@ import type { CatalogEntry, CatalogEntryOwner, CatalogLocation } from '../../../
 import type { WindowsImageName } from '../../../catalog/catalogOwner.js';
 import { parseWindowsImageName } from '../../../catalog/catalogOwner.js';
 import { SCAN_LIMITS } from '../../../scan/limits.js';
+import { mapNonEmpty } from '../../../system/nonEmptyList.js';
 
 /** Brave, installed for the user or for every user of this PC. */
 const BRAVE_OWNER = buildExecutableOwner({ imageNames: ['brave.exe'], installFolder: null });
@@ -716,10 +717,7 @@ function buildExecutableOwner(params: {
   return {
     app: {
       kind: 'executable',
-      imageNames: [
-        parseImageNameLiteral({ text: params.imageNames[0] }),
-        ...params.imageNames.slice(1).map((text) => parseImageNameLiteral({ text: text })),
-      ],
+      imageNames: mapNonEmpty(params.imageNames, (text) => parseImageNameLiteral({ text: text })),
       installFolder: params.installFolder,
     },
     uninstalledAdvice: null,

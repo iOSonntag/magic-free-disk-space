@@ -45,9 +45,9 @@ function emptyScannedRecycleBin(params: {
   trash: DeletePlatformTrash;
 }): RecycleBinEmptying {
   switch (params.trash.kind) {
-    // A platform whose trash is a folder has no Recycle Bin to empty.
+    // Only a platform with Recycle Bins scans a Recycle Bin candidate.
     case 'catalogFolder':
-      return { outcome: 'failed', code: null };
+      throw new Error('A Recycle Bin candidate reached a platform whose trash is a folder.');
     case 'recycleBins':
       return emptyUnchangedRecycleBin({ removal: params.removal, trash: params.trash });
   }

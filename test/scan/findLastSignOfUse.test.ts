@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { buildSignOfUsePaths, findLastSignOfUse } from '../../src/scan/findLastSignOfUse.js';
+import { describeOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -18,7 +19,7 @@ const MIDDLE_MS = 1_650_000_000_000;
 const NEWEST_MS = 1_700_000_000_000;
 
 // The places of a macOS app's use, which only the scan of unused macOS apps reads.
-describe.skipIf(process.platform !== 'darwin')('buildSignOfUsePaths', () => {
+describeOnDarwin('buildSignOfUsePaths', () => {
   test('lists the bundle id places and the display-name place, in and outside the container', () => {
     const paths = buildSignOfUsePaths({
       homeDir: '/fixture/home',
@@ -53,7 +54,7 @@ describe.skipIf(process.platform !== 'darwin')('buildSignOfUsePaths', () => {
   });
 });
 
-describe.skipIf(process.platform !== 'darwin')('findLastSignOfUse', () => {
+describeOnDarwin('findLastSignOfUse', () => {
   let fixtureRoot: FixtureRoot;
 
   beforeEach(async () => {

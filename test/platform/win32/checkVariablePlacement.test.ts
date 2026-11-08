@@ -18,7 +18,7 @@ function buildTempCheck(params: { variableName: string; reading: VariableReading
   };
 }
 
-function resolvedTo(params: { text: string }): VariableReading {
+function buildResolvedReading(params: { text: string }): VariableReading {
   return { kind: 'resolved', realPath: buildTestWindowsPath({ text: params.text }) };
 }
 
@@ -31,7 +31,7 @@ describe('checkVariablePlacement', () => {
           buildTempCheck({ variableName: 'TMP', reading: { kind: 'unset' } }),
           buildTempCheck({
             variableName: 'TEMP',
-            reading: resolvedTo({ text: 'c:\\users\\TESTER\\appdata\\local\\temp' }),
+            reading: buildResolvedReading({ text: 'c:\\users\\TESTER\\appdata\\local\\temp' }),
           }),
         ],
       }),
@@ -43,7 +43,10 @@ describe('checkVariablePlacement', () => {
       checkVariablePlacement({
         pathRules: WIN32_PATH_RULES,
         checks: [
-          buildTempCheck({ variableName: 'TMP', reading: resolvedTo({ text: 'D:\\Scratch' }) }),
+          buildTempCheck({
+            variableName: 'TMP',
+            reading: buildResolvedReading({ text: 'D:\\Scratch' }),
+          }),
           buildTempCheck({ variableName: 'TEMP', reading: { kind: 'unresolvable' } }),
         ],
       }),
@@ -58,7 +61,9 @@ describe('checkVariablePlacement', () => {
       expect(
         checkVariablePlacement({
           pathRules: WIN32_PATH_RULES,
-          checks: [buildTempCheck({ variableName: 'TEMP', reading: resolvedTo({ text: text }) })],
+          checks: [
+            buildTempCheck({ variableName: 'TEMP', reading: buildResolvedReading({ text: text }) }),
+          ],
         }),
       ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: TEMP_PATH });
     }

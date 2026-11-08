@@ -24,7 +24,7 @@ import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.j
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -77,7 +77,7 @@ function buildApiLevelPins(...apiLevels: number[]): AndroidCompileSdkPins {
 
 function buildExamplePlatformPath(folderName: string): AbsolutePath {
   return joinAbsolutePath({
-    rules: DARWIN_PATH_RULES,
+    rules: POSIX_PATH_RULES,
     parentPath: EXAMPLE_SDK_ROOT,
     names: ['platforms', folderName],
   });

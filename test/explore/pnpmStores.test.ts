@@ -1,12 +1,13 @@
+import type { Test } from 'bun:test';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import type { CatalogLocation } from '../../src/catalog/catalog.js';
-import { resolveCatalogLocation } from '../../src/catalog/resolveCatalogLocation.js';
-import type {
-  Environment,
-  WindowsKnownFolderPaths,
-} from '../../src/environment/buildEnvironment.js';
+import type { Environment } from '../../src/environment/buildEnvironment.js';
+import {
+  resolveEnvironmentLocation,
+  resolveEnvironmentLocations,
+} from '../../src/environment/environmentLocation.js';
 import type { ExploreProbePlatform } from '../../src/explore/exploreProbe.js';
 import type {
   ExploreFileUnreadable,
@@ -34,11 +35,14 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
+import { PNPM_XDG_STORE_ROOT } from '../../src/platform/darwin/pnpmHomes.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
 import type { Result } from '../../src/result.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
+  buildTestWin32PlatformFolders,
   createFixtureDirectory,
   createFixtureRoot,
   deleteFixtureRoot,
@@ -73,22 +77,6 @@ const NO_INSTALLS: PnpmInstallState = { installs: [] };
 
 const PNPM_11_INSTALL_ID = '1375b-1a0a4cad7f8';
 
-// asdf, mise, nvm, corepack's cache, Homebrew, the XDG home, and the launcher script keep pnpm at
-// places of macOS; the places of Windows have tests of their own.
-const testOnDarwin = test.skipIf(process.platform !== 'darwin');
-
-/** The fixture environment of Windows names no known folder, and no place of pnpm lies in one. */
-const NO_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
-  desktop: null,
-  documents: null,
-  downloads: null,
-  videos: null,
-  music: null,
-  pictures: null,
-  localAppDataLow: null,
-  skyDrive: null,
-};
-
 /** A standalone executable of Windows, which starts with `MZ` and is no script. */
 const WINDOWS_EXECUTABLE_TEXT = 'MZ executable';
 
@@ -110,9 +98,10 @@ afterEach(async () => {
 
 /** pnpm's homes of the probe platform, in the fixture environment. */
 function resolvePnpmHomePaths(): AbsolutePath[] {
-  return probePlatform.explore.pnpmInstallPlaces.homes.map((location) =>
-    resolveCatalogLocation({ environment: environment, location: location }),
-  );
+  return resolveEnvironmentLocations({
+    folders: environment,
+    locations: probePlatform.explore.pnpmInstallPlaces.homes,
+  });
 }
 
 /** A path below pnpm's own home of the host, the first of its homes, in the fixture environment. */
@@ -127,27 +116,20 @@ function buildPnpmHomePath(...names: string[]): string {
 }
 
 /**
- * The fixture environment with the AppData folders of Windows below its home, where the fixture
- * environment of Windows keeps them, so the places of Windows resolve and are read on any host.
+ * The fixture environment with the folders of the fixture environment of Windows below its home,
+ * so the places of Windows resolve and are read on any host.
  */
 function buildWindowsFolderEnvironment(): Environment {
   return {
     ...environment,
-    platformFolders: {
-      kind: 'win32',
-      appDataDirs: {
-        localDir: buildTestHostPath({ text: join(homeDir, 'AppData', 'Local') }),
-        roamingDir: buildTestHostPath({ text: join(homeDir, 'AppData', 'Roaming') }),
-      },
-      knownFolderPaths: NO_KNOWN_FOLDER_PATHS,
-    },
+    platformFolders: buildTestWin32PlatformFolders({ homeDir: homeDir }),
   };
 }
 
 /** The path of `location` in the environment of `buildWindowsFolderEnvironment`. */
 function buildWindowsPlacePath(params: { location: CatalogLocation }): AbsolutePath {
-  return resolveCatalogLocation({
-    environment: buildWindowsFolderEnvironment(),
+  return resolveEnvironmentLocation({
+    folders: buildWindowsFolderEnvironment(),
     location: params.location,
   });
 }
@@ -162,8 +144,8 @@ async function createStoreFolders(params: {
   storeRoot: CatalogLocation;
   folderNames: string[];
 }): Promise<AbsolutePath> {
-  const storeRoot = resolveCatalogLocation({
-    environment: environment,
+  const storeRoot = resolveEnvironmentLocation({
+    folders: environment,
     location: params.storeRoot,
   });
 
@@ -969,20 +951,23 @@ for (const probeCase of probeCases) {
       });
     });
 
+    // asdf, mise, nvm, corepack's cache, Homebrew, the XDG home, and the launcher script keep pnpm
+    // at places of macOS, so their rows run on macOS alone; the places of Windows have tests of
+    // their own.
     const installPlaces: {
       place: string;
-      isMacOsPlace: boolean;
+      testOfPlace: Test<[]>;
       createInstall: () => Promise<void>;
     }[] = [
       {
         place: 'asdf',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createInstall: () =>
           createFixtureDirectory({ path: join(homeDir, '.asdf/installs/pnpm/10.8.1') }),
       },
       {
         place: 'mise',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createInstall: () =>
           createFixtureDirectory({
             path: join(homeDir, '.local/share/mise/installs/pnpm/10.22.0'),
@@ -990,31 +975,31 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'corepack v1',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createInstall: () =>
           createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/v1/pnpm/10.14.0') }),
       },
       {
         place: 'corepack',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createInstall: () =>
           createFixtureDirectory({ path: join(homeDir, '.cache/node/corepack/pnpm/10.14.0') }),
       },
       {
         place: "pnpm's .tools",
-        isMacOsPlace: false,
+        testOfPlace: test,
         createInstall: () =>
           createFixtureDirectory({ path: buildPnpmHomePath('.tools/pnpm/10.22.0') }),
       },
       {
         place: "pnpm's .tools of @pnpm/exe",
-        isMacOsPlace: false,
+        testOfPlace: test,
         createInstall: () =>
           createFixtureDirectory({ path: buildPnpmHomePath('.tools/@pnpm+exe/10.22.0') }),
       },
       {
         place: "pnpm's global folder",
-        isMacOsPlace: false,
+        testOfPlace: test,
         createInstall: () =>
           writePnpmPackage({
             packageFolder: buildPnpmHomePath('global/5/node_modules/pnpm'),
@@ -1023,7 +1008,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'the npm globals of an asdf node',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createInstall: () =>
           writePnpmPackage({
             packageFolder: join(homeDir, '.asdf/installs/nodejs/22.1.0/lib/node_modules/pnpm'),
@@ -1032,7 +1017,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'the npm globals of a mise node',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createInstall: () =>
           writePnpmPackage({
             packageFolder: join(
@@ -1044,7 +1029,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'the npm globals of an nvm node',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createInstall: () =>
           writePnpmPackage({
             packageFolder: join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/pnpm'),
@@ -1054,17 +1039,18 @@ for (const probeCase of probeCases) {
     ];
 
     for (const installPlace of installPlaces) {
-      const testOfPlace = installPlace.isMacOsPlace ? testOnDarwin : test;
+      installPlace.testOfPlace(
+        `keeps a store version a pnpm in ${installPlace.place} uses`,
+        async () => {
+          await createStore({ folderNames: ['v3', 'v10'] });
+          await installPlace.createInstall();
 
-      testOfPlace(`keeps a store version a pnpm in ${installPlace.place} uses`, async () => {
-        await createStore({ folderNames: ['v3', 'v10'] });
-        await installPlace.createInstall();
-
-        expect(await loadOfferedVersions({ files: [] })).toEqual({
-          storeVersions: ['v3'],
-          isComplete: false,
-        });
-      });
+          expect(await loadOfferedVersions({ files: [] })).toEqual({
+            storeVersions: ['v3'],
+            isComplete: false,
+          });
+        },
+      );
     }
 
     testOnDarwin(
@@ -1119,26 +1105,24 @@ for (const probeCase of probeCases) {
 
     const exePackagePlaces: {
       place: string;
-      isMacOsPlace: boolean;
+      testOfPlace: Test<[]>;
       buildPackageFolder: () => string;
     }[] = [
       {
         place: "pnpm's global folder",
-        isMacOsPlace: false,
+        testOfPlace: test,
         buildPackageFolder: () => buildPnpmHomePath('global/5/node_modules/@pnpm/exe'),
       },
       {
         place: 'the npm globals of an nvm node',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         buildPackageFolder: () =>
           join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/@pnpm/exe'),
       },
     ];
 
     for (const exePlace of exePackagePlaces) {
-      const testOfPlace = exePlace.isMacOsPlace ? testOnDarwin : test;
-
-      testOfPlace(`offers nothing beside a @pnpm/exe in ${exePlace.place}`, async () => {
+      exePlace.testOfPlace(`offers nothing beside a @pnpm/exe in ${exePlace.place}`, async () => {
         await createStore({ folderNames: ['v10'] });
         await writePnpmPackage({
           packageFolder: exePlace.buildPackageFolder(),
@@ -1180,13 +1164,13 @@ for (const probeCase of probeCases) {
 
     const pnpmHomeInstallCases: {
       place: string;
-      isMacOsPlace: boolean;
+      testOfPlace: Test<[]>;
       storeFolderName: string;
       createInstall: () => Promise<void>;
     }[] = [
       {
         place: "the global folder of pnpm's XDG home",
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         storeFolderName: 'v10',
         createInstall: () =>
           writePnpmPackage({
@@ -1196,7 +1180,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: '.tools/pnpm-exe beside its launcher script',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         storeFolderName: 'v10',
         createInstall: async () => {
           await writeFixtureTextFile({
@@ -1211,7 +1195,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: "an install folder of pnpm 11's global layout",
-        isMacOsPlace: false,
+        testOfPlace: test,
         storeFolderName: 'v11',
         createInstall: () =>
           writePnpmPackage({
@@ -1221,7 +1205,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: "an install folder of pnpm 11's global layout as @pnpm/exe",
-        isMacOsPlace: false,
+        testOfPlace: test,
         storeFolderName: 'v11',
         createInstall: () =>
           writePnpmPackage({
@@ -1236,17 +1220,18 @@ for (const probeCase of probeCases) {
     ];
 
     for (const homeInstallCase of pnpmHomeInstallCases) {
-      const testOfPlace = homeInstallCase.isMacOsPlace ? testOnDarwin : test;
+      homeInstallCase.testOfPlace(
+        `offers nothing beside a pnpm in ${homeInstallCase.place}`,
+        async () => {
+          await createStore({ folderNames: [homeInstallCase.storeFolderName] });
+          await homeInstallCase.createInstall();
 
-      testOfPlace(`offers nothing beside a pnpm in ${homeInstallCase.place}`, async () => {
-        await createStore({ folderNames: [homeInstallCase.storeFolderName] });
-        await homeInstallCase.createInstall();
-
-        expect(await loadOfferedVersions({ files: [] })).toEqual({
-          storeVersions: [],
-          isComplete: false,
-        });
-      });
+          expect(await loadOfferedVersions({ files: [] })).toEqual({
+            storeVersions: [],
+            isComplete: false,
+          });
+        },
+      );
     }
 
     for (const packageName of ['some-cli', '@scope/some-cli']) {
@@ -1473,12 +1458,12 @@ for (const probeCase of probeCases) {
 
     const unreadableInstallPlaces: {
       place: string;
-      isMacOsPlace: boolean;
+      testOfPlace: Test<[]>;
       createUnreadablePlace: () => Promise<string>;
     }[] = [
       {
         place: "corepack's folder of pnpm",
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createUnreadablePlace: async () => {
           const corepackPnpmPath = join(homeDir, '.cache/node/corepack/v1/pnpm');
           await createFixtureDirectory({ path: corepackPnpmPath });
@@ -1489,7 +1474,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: "pnpm's .tools",
-        isMacOsPlace: false,
+        testOfPlace: testOnPosix,
         createUnreadablePlace: async () => {
           const toolsPath = buildPnpmHomePath('.tools/pnpm');
           await createFixtureDirectory({ path: toolsPath });
@@ -1500,7 +1485,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: 'the launcher in pnpm home',
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createUnreadablePlace: async () => {
           const launcherPath = buildPnpmHomePath('pnpm');
           await writeFixtureTextFile({ path: launcherPath, text: '#!/bin/sh\n' });
@@ -1511,7 +1496,7 @@ for (const probeCase of probeCases) {
       },
       {
         place: "the npm globals' pnpm of an nvm node",
-        isMacOsPlace: true,
+        testOfPlace: testOnDarwin,
         createUnreadablePlace: async () => {
           const packagePath = join(homeDir, '.nvm/versions/node/v22.1.0/lib/node_modules/pnpm');
           await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
@@ -1523,9 +1508,7 @@ for (const probeCase of probeCases) {
     ];
 
     for (const unreadablePlace of unreadableInstallPlaces) {
-      const testOfPlace = unreadablePlace.isMacOsPlace ? testOnDarwin : testOnPosix;
-
-      testOfPlace(
+      unreadablePlace.testOfPlace(
         `answers unreadable, offering nothing, at ${unreadablePlace.place} it cannot read`,
         async () => {
           await createStore({ folderNames: ['v3'] });
@@ -1541,13 +1524,17 @@ for (const probeCase of probeCases) {
     }
 
     describe.skipIf(process.platform !== 'win32')("at pnpm's places of Windows", () => {
+      /** The path of `location` in the fixture environment of Windows the probe reads. */
+      function buildProbedPlacePath(params: { location: CatalogLocation }): AbsolutePath {
+        return resolveEnvironmentLocation({ folders: environment, location: params.location });
+      }
+
       const windowsInstallPlaces: { place: string; createInstall: () => Promise<void> }[] = [
         {
           place: "corepack's v1 folder in the local AppData",
           createInstall: () =>
             createFixtureDirectory({
-              path: resolveCatalogLocation({
-                environment: environment,
+              path: buildProbedPlacePath({
                 location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
               }),
             }),
@@ -1556,8 +1543,7 @@ for (const probeCase of probeCases) {
           place: "corepack's folder in the local AppData",
           createInstall: () =>
             createFixtureDirectory({
-              path: resolveCatalogLocation({
-                environment: environment,
+              path: buildProbedPlacePath({
                 location: { root: 'localAppData', path: 'node/corepack/pnpm/10.14.0' },
               }),
             }),
@@ -1566,8 +1552,7 @@ for (const probeCase of probeCases) {
           place: "npm's globals in the roaming AppData",
           createInstall: () =>
             writePnpmPackage({
-              packageFolder: resolveCatalogLocation({
-                environment: environment,
+              packageFolder: buildProbedPlacePath({
                 location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
               }),
               version: '10.14.0',
@@ -1577,8 +1562,7 @@ for (const probeCase of probeCases) {
           place: "npm's globals of @pnpm/exe in the roaming AppData",
           createInstall: () =>
             writePnpmPackage({
-              packageFolder: resolveCatalogLocation({
-                environment: environment,
+              packageFolder: buildProbedPlacePath({
                 location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
               }),
               version: '10.14.0',
@@ -1602,10 +1586,7 @@ for (const probeCase of probeCases) {
         test(`offers nothing and is not judged beside the standalone ${exePath}`, async () => {
           await createStore({ folderNames: ['v10'] });
           await writeFixtureTextFile({
-            path: resolveCatalogLocation({
-              environment: environment,
-              location: { root: 'localAppData', path: exePath },
-            }),
+            path: buildProbedPlacePath({ location: { root: 'localAppData', path: exePath } }),
             text: WINDOWS_EXECUTABLE_TEXT,
           });
 
@@ -1621,10 +1602,7 @@ for (const probeCase of probeCases) {
 
         for (const shimPath of ['pnpm/pnpm.cmd', 'pnpm/pnpm.ps1']) {
           await writeFixtureTextFile({
-            path: resolveCatalogLocation({
-              environment: environment,
-              location: { root: 'localAppData', path: shimPath },
-            }),
+            path: buildProbedPlacePath({ location: { root: 'localAppData', path: shimPath } }),
             text: '@SETLOCAL\r\n',
           });
         }
@@ -1642,7 +1620,7 @@ describe.skipIf(HOST_PLATFORM.explore.pnpmXdgStoreRoot !== null)(
   'the probe pnpmStoresXdg where pnpm has no XDG store',
   () => {
     test('is judged with no findings beside a store of the XDG layout', async () => {
-      await createFixtureDirectory({ path: join(homeDir, '.local/share/pnpm/store/v3') });
+      await createStoreFolders({ storeRoot: PNPM_XDG_STORE_ROOT, folderNames: ['v3'] });
 
       const probes = startExploreProbes(
         buildTestProbeStart({ environment: environment, platform: probePlatform }),

@@ -1,7 +1,7 @@
 import { basename, dirname, posix } from 'node:path';
 import type { CatalogLocation } from '../../catalog/catalog.js';
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath, resolveAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
@@ -76,14 +76,13 @@ export async function loadVscodeExtensionState(params: {
   profilesRoot: CatalogLocation;
   privacyDenialCode: string | null;
 }): Promise<Result<VscodeExtensionState, ExploreFileUnreadable>> {
-  const pathRules = params.environment.pathRules;
   const extensionsPath = joinAbsolutePath({
-    rules: pathRules,
+    rules: params.environment.pathRules,
     parentPath: params.environment.homeDir,
     names: EXTENSIONS_FOLDER_NAMES,
   });
   const folders = await loadExtensionFolders({
-    pathRules: pathRules,
+    pathRules: params.environment.pathRules,
     extensionsPath: extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -97,7 +96,7 @@ export async function loadVscodeExtensionState(params: {
   }
 
   const extensionsRealPath = await loadExploreRealPath({
-    pathRules: pathRules,
+    pathRules: params.environment.pathRules,
     path: extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
   });
@@ -111,9 +110,9 @@ export async function loadVscodeExtensionState(params: {
   }
 
   const listedFolderNames = await loadListedFolderNames({
-    pathRules: pathRules,
-    profilesPath: resolveCatalogLocation({
-      environment: params.environment,
+    pathRules: params.environment.pathRules,
+    profilesPath: resolveEnvironmentLocation({
+      folders: params.environment,
       location: params.profilesRoot,
     }),
     extensionsPath: extensionsPath,
@@ -126,7 +125,7 @@ export async function loadVscodeExtensionState(params: {
   }
 
   const obsoleteFolderNames = await loadObsoleteFolderNames({
-    pathRules: pathRules,
+    pathRules: params.environment.pathRules,
     extensionsPath: extensionsPath,
     privacyDenialCode: params.privacyDenialCode,
   });

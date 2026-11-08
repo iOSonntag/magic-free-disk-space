@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { realpath } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { POSIX_PATH_RULES } from '../../../src/path/pathRules.js';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
-import { DARWIN_PATH_RULES } from '../../../src/platform/darwin/loadEnvironment.js';
 import { findTrustedTool } from '../../../src/tools/findTrustedTool.js';
 import type { ToolLocation } from '../../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../../support/fakeTool.js';
@@ -49,7 +49,7 @@ describeOnPosix('the rustup locations of macOS', () => {
     const found = await findTrustedTool({
       name: 'rustup',
       locations: rebaseUnderFixtureRoot(darwinPlatform.tools.installLocations.rustup),
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
       user: buildTestUserIdentity({ uid: process.getuid?.() ?? 0 }),
     });

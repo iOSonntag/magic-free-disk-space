@@ -1,4 +1,4 @@
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { toNonEmpty } from '../../system/nonEmptyList.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
@@ -22,8 +22,8 @@ export async function loadMailDownloadFindings(
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
-  const folderPath = resolveCatalogLocation({
-    environment: run.environment,
+  const folderPath = resolveEnvironmentLocation({
+    folders: run.environment,
     location: run.platform.explore.mailDownloadsRoot,
   });
   const folderStats = await loadExploreEntryStats({

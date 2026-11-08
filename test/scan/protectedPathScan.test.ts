@@ -1,10 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { HomeFixtureFile } from '../platform/darwin/catalogScan.js';
 import { withScannedCatalogHome } from '../platform/darwin/catalogScan.js';
-
-const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
+import { describeOnDarwin } from '../support/darwinOnly.js';
 
 /** The files below the fixture home: the deletion log, an app's log, and a preview. */
 const HOME_FILES: HomeFixtureFile[] = [

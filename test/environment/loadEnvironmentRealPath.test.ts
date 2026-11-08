@@ -5,8 +5,7 @@ import {
   loadEnvironmentRealPath,
   loadExistingRealPaths,
 } from '../../src/environment/loadEnvironmentRealPath.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -16,17 +15,17 @@ import {
 import { buildTestHostPath, HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
+let fixtureRoot: FixtureRoot;
+
+beforeEach(async () => {
+  fixtureRoot = await createFixtureRoot();
+});
+
+afterEach(async () => {
+  await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
+});
+
 describe('loadEnvironmentRealPath', () => {
-  let fixtureRoot: FixtureRoot;
-
-  beforeEach(async () => {
-    fixtureRoot = await createFixtureRoot();
-  });
-
-  afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  });
-
   testOnPosix('resolves a link to the folder it points to', async () => {
     const folderPath = join(fixtureRoot.homeDir, 'folder');
     const linkPath = buildTestHostPath({ text: join(fixtureRoot.homeDir, 'link') });
@@ -52,7 +51,7 @@ describe('loadEnvironmentRealPath', () => {
 
   test('is unresolvable at the path when its real path is no absolute path under the rules', async () => {
     // The rules of the other platform, under which no real path of the host is absolute.
-    const otherRules = process.platform === 'win32' ? DARWIN_PATH_RULES : WIN32_PATH_RULES;
+    const otherRules = process.platform === 'win32' ? POSIX_PATH_RULES : WIN32_PATH_RULES;
 
     expect(
       await loadEnvironmentRealPath({ pathRules: otherRules, path: fixtureRoot.homeDir }),
@@ -64,16 +63,6 @@ describe('loadEnvironmentRealPath', () => {
 });
 
 describe('loadExistingRealPaths', () => {
-  let fixtureRoot: FixtureRoot;
-
-  beforeEach(async () => {
-    fixtureRoot = await createFixtureRoot();
-  });
-
-  afterEach(async () => {
-    await deleteFixtureRoot({ fixtureRoot: fixtureRoot });
-  });
-
   test('keeps the real path of each folder that is there, in their order', async () => {
     const realPaths = await loadExistingRealPaths({
       pathRules: HOST_PATH_RULES,

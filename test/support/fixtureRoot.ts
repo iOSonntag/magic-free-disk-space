@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, sep } from 'node:path';
 import type {
   Environment,
+  PlatformFoldersWin32,
   WindowsKnownFolder,
   WindowsKnownFolderPaths,
 } from '../../src/environment/buildEnvironment.js';
@@ -45,7 +46,7 @@ const TEST_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
 export type TestKnownFolder = { folder: WindowsKnownFolder; pathBelowHome: string };
 
 /** Windows names no path for a known folder that a fixture did not create. */
-const NO_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
+export const noKnownFolderPaths: WindowsKnownFolderPaths = {
   desktop: null,
   documents: null,
   downloads: null,
@@ -141,6 +142,7 @@ export async function loadTestWin32Environment(params: {
 }): Promise<Environment> {
   const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
   const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
+  const appDataDirs = buildTestWin32PlatformFolders({ homeDir: home.path }).appDataDirs;
   const knownFolderPaths = await createTestKnownFolders({
     homeDir: home.path,
     knownFolders: params.knownFolders,
@@ -151,13 +153,28 @@ export async function loadTestWin32Environment(params: {
     user: buildTestWindowsUser({ sidText: TEST_WINDOWS_SID_TEXT }),
     home: home,
     temp: temp,
-    localAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Local') }),
-    roamingAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Roaming') }),
+    localAppData: await createTestFolder({ path: appDataDirs.localDir }),
+    roamingAppData: await createTestFolder({ path: appDataDirs.roamingDir }),
     knownFolderPaths: knownFolderPaths.paths,
     knownFolderRealPaths: knownFolderPaths.realPaths,
     fixedDriveRoots: [buildTestDriveRoot({ text: parse(params.fixtureRoot.rootDir).root })],
     oneDriveRealPaths: [],
   });
+}
+
+/**
+ * The platform folders of Windows below the fixture home `homeDir`: the AppData folders where
+ * `loadTestWin32Environment` creates them, and no known folder. Creates nothing on disk.
+ */
+export function buildTestWin32PlatformFolders(params: { homeDir: string }): PlatformFoldersWin32 {
+  return {
+    kind: 'win32',
+    appDataDirs: {
+      localDir: buildTestHostPath({ text: join(params.homeDir, 'AppData', 'Local') }),
+      roamingDir: buildTestHostPath({ text: join(params.homeDir, 'AppData', 'Roaming') }),
+    },
+    knownFolderPaths: noKnownFolderPaths,
+  };
 }
 
 /**
@@ -243,22 +260,35 @@ export async function listFixturePathsBesideLog(params: {
   fixtureRoot: FixtureRoot;
   deletionLogPath: string;
 }): Promise<string[]> {
-  const rootDir = params.fixtureRoot.rootDir;
-  const entries = await readdir(rootDir, { recursive: true });
+  const entries = await readdir(params.fixtureRoot.rootDir, { recursive: true });
   const logFolderPath = buildPathBelowRoot({
-    rootDir: rootDir,
+    rootDir: params.fixtureRoot.rootDir,
     path: dirname(params.deletionLogPath),
   });
 
   return entries
-    .map((entry) => buildPathBelowRoot({ rootDir: rootDir, path: join(rootDir, entry) }))
+    .map((entry) =>
+      buildPathBelowRoot({
+        rootDir: params.fixtureRoot.rootDir,
+        path: join(params.fixtureRoot.rootDir, entry),
+      }),
+    )
     .filter(
       (path) =>
-        path !== logFolderPath &&
-        !path.startsWith(`${logFolderPath}/`) &&
-        !logFolderPath.startsWith(`${path}/`),
+        !isSameOrBelowPathBelowRoot({ path: path, parentPath: logFolderPath }) &&
+        !isSameOrBelowPathBelowRoot({ path: logFolderPath, parentPath: path }),
     )
     .toSorted();
+}
+
+/** The path of `path` below `rootDir`, with `/` between its names on every host. */
+export function buildPathBelowRoot(params: { rootDir: string; path: string }): string {
+  return relative(params.rootDir, params.path).split(sep).join('/');
+}
+
+/** Whether `path` is `parentPath` or lies below it, both written as `buildPathBelowRoot` writes them. */
+export function isSameOrBelowPathBelowRoot(params: { path: string; parentPath: string }): boolean {
+  return params.path === params.parentPath || params.path.startsWith(`${params.parentPath}/`);
 }
 
 /** Whether anything is at `path`; a symbolic link counts itself, whatever its target. */
@@ -279,10 +309,6 @@ export async function updateModifiedMs(params: {
   await utimes(params.path, modifiedSeconds, modifiedSeconds);
 }
 
-function buildPathBelowRoot(params: { rootDir: string; path: string }): string {
-  return relative(params.rootDir, params.path).split(sep).join('/');
-}
-
 async function loadTestFolder(params: { path: AbsolutePath }): Promise<TestFolder> {
   return {
     path: params.path,
@@ -300,8 +326,8 @@ async function createTestKnownFolders(params: {
   homeDir: AbsolutePath;
   knownFolders: TestKnownFolder[];
 }): Promise<{ paths: WindowsKnownFolderPaths; realPaths: WindowsKnownFolderPaths }> {
-  const paths: WindowsKnownFolderPaths = { ...NO_KNOWN_FOLDER_PATHS };
-  const realPaths: WindowsKnownFolderPaths = { ...NO_KNOWN_FOLDER_PATHS };
+  const paths: WindowsKnownFolderPaths = { ...noKnownFolderPaths };
+  const realPaths: WindowsKnownFolderPaths = { ...noKnownFolderPaths };
 
   for (const knownFolder of params.knownFolders) {
     const folder = await createTestFolder({

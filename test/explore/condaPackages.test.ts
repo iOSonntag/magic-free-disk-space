@@ -5,7 +5,7 @@ import { parseCondaCleanDryRun } from '../../src/explore/condaPackages/parseCond
 import { recheckCondaUnit } from '../../src/explore/condaPackages/recheckCondaUnit.js';
 import type { ExploreToolUnitCondaPackages } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -45,7 +45,7 @@ describe('parseCondaCleanDryRun', () => {
   test('joins each listed name to its package folder', () => {
     expect(
       parseCondaCleanDryRun({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: buildDryRunText({
           tarballs: ['numpy-1.26.0-py311.conda'],
           packages: ['numpy-1.25.0-py311'],
@@ -67,12 +67,10 @@ describe('parseCondaCleanDryRun', () => {
 }
 `;
 
-    expect(parseCondaCleanDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: stdoutText })).toEqual(
-      {
-        kind: 'succeeded',
-        value: { tarballPaths: [], packagePaths: [buildPkgsPath('a-1-0')] },
-      },
-    );
+    expect(parseCondaCleanDryRun({ pathRules: POSIX_PATH_RULES, stdoutText: stdoutText })).toEqual({
+      kind: 'succeeded',
+      value: { tarballPaths: [], packagePaths: [buildPkgsPath('a-1-0')] },
+    });
   });
 
   test('fails on other text, a relative folder, or a name with a separator', () => {
@@ -86,7 +84,7 @@ describe('parseCondaCleanDryRun', () => {
 
     for (const stdoutText of stdoutTexts) {
       expect(
-        parseCondaCleanDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: stdoutText }).kind,
+        parseCondaCleanDryRun({ pathRules: POSIX_PATH_RULES, stdoutText: stdoutText }).kind,
       ).toBe('failed');
     }
   });

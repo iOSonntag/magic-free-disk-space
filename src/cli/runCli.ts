@@ -244,7 +244,7 @@ async function runInteractiveDeletion(params: {
     io: params.io,
     lines: [
       '',
-      ...formatRemovalRun({ run: run }),
+      ...formatRemovalRun({ run: run, texts: params.texts }),
       ...(diskAfter === null
         ? []
         : [formatAvailableSpaceLine({ availableBytes: diskAfter.availableBytes })]),

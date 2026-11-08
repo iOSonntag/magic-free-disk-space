@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoots.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { UserIdentity } from '../../src/system/userIdentity.js';
 import { buildTestUserIdentity, buildTestWindowsUser } from '../support/parsedValueFixtures.js';
 
-const USER = buildTestUserIdentity({ uid: 501 });
+const user = buildTestUserIdentity({ uid: 501 });
 const HOME = '/Users/tester';
 const TEMP = '/private/var/folders/xy/abc/T';
 
-const WINDOWS_USER = buildTestWindowsUser({ sidText: 'S-1-5-21-1000-2000-3000-1001' });
+const windowsUser = buildTestWindowsUser({ sidText: 'S-1-5-21-1000-2000-3000-1001' });
 const WINDOWS_HOME = 'C:\\Users\\tester';
 const WINDOWS_TEMP = 'C:\\Users\\tester\\AppData\\Local\\Temp';
 
@@ -18,23 +18,26 @@ function check(params: {
   homeRealPath?: string;
   homeOwner?: UserIdentity;
   tempRealPath?: string;
-}) {
+}): EnvironmentFailure | null {
   return checkEnvironmentRoots({
-    pathRules: DARWIN_PATH_RULES,
-    user: params.user ?? USER,
+    pathRules: POSIX_PATH_RULES,
+    user: params.user ?? user,
     homeRealPath: params.homeRealPath ?? HOME,
-    homeOwner: params.homeOwner ?? USER,
+    homeOwner: params.homeOwner ?? user,
     tempRealPath: params.tempRealPath ?? TEMP,
     tempPlacement: 'apartFromHome',
   });
 }
 
-function checkOnWindows(params: { homeOwner?: UserIdentity; tempRealPath?: string }) {
+function checkOnWindows(params: {
+  homeOwner?: UserIdentity;
+  tempRealPath?: string;
+}): EnvironmentFailure | null {
   return checkEnvironmentRoots({
     pathRules: WIN32_PATH_RULES,
-    user: WINDOWS_USER,
+    user: windowsUser,
     homeRealPath: WINDOWS_HOME,
-    homeOwner: params.homeOwner ?? WINDOWS_USER,
+    homeOwner: params.homeOwner ?? windowsUser,
     tempRealPath: params.tempRealPath ?? WINDOWS_TEMP,
     tempPlacement: 'belowHome',
   });

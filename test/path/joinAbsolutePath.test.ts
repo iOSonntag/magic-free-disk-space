@@ -4,22 +4,21 @@ import {
   listPathNames,
   resolveAbsolutePath,
 } from '../../src/path/joinAbsolutePath.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { buildTestAbsolutePath, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
 describe('joinAbsolutePath', () => {
   test('joins each name as one folder level below the parent', () => {
     expect(
       joinAbsolutePath({
-        rules: DARWIN_PATH_RULES,
+        rules: POSIX_PATH_RULES,
         parentPath: buildTestAbsolutePath({ text: '/Users/example' }),
         names: ['Library', 'Android', 'sdk'],
       }),
     ).toBe(buildTestAbsolutePath({ text: '/Users/example/Library/Android/sdk' }));
     expect(
       joinAbsolutePath({
-        rules: DARWIN_PATH_RULES,
+        rules: POSIX_PATH_RULES,
         parentPath: buildTestAbsolutePath({ text: '/opt/homebrew/Cellar/' }),
         names: ['python@3.12'],
       }),
@@ -31,7 +30,7 @@ describe('joinAbsolutePath', () => {
 
     for (const name of ['', '.', '..', 'wget/1.21.4', '../wget']) {
       expect(() =>
-        joinAbsolutePath({ rules: DARWIN_PATH_RULES, parentPath: parentPath, names: [name] }),
+        joinAbsolutePath({ rules: POSIX_PATH_RULES, parentPath: parentPath, names: [name] }),
       ).toThrow();
     }
   });
@@ -39,7 +38,7 @@ describe('joinAbsolutePath', () => {
   test('keeps a backslash in a POSIX name, where it is no separator', () => {
     expect(
       joinAbsolutePath({
-        rules: DARWIN_PATH_RULES,
+        rules: POSIX_PATH_RULES,
         parentPath: buildTestAbsolutePath({ text: '/tmp' }),
         names: ['a\\b'],
       }),
@@ -79,13 +78,13 @@ describe('resolveAbsolutePath', () => {
     const basePath = buildTestAbsolutePath({ text: '/Users/example/.vscode/extensions' });
 
     expect(
-      resolveAbsolutePath({ rules: DARWIN_PATH_RULES, basePath: basePath, text: '../argv.json' }),
+      resolveAbsolutePath({ rules: POSIX_PATH_RULES, basePath: basePath, text: '../argv.json' }),
     ).toEqual({
       kind: 'succeeded',
       value: buildTestAbsolutePath({ text: '/Users/example/.vscode/argv.json' }),
     });
     expect(
-      resolveAbsolutePath({ rules: DARWIN_PATH_RULES, basePath: basePath, text: '/opt/ext' }),
+      resolveAbsolutePath({ rules: POSIX_PATH_RULES, basePath: basePath, text: '/opt/ext' }),
     ).toEqual({ kind: 'succeeded', value: buildTestAbsolutePath({ text: '/opt/ext' }) });
   });
 
@@ -112,7 +111,7 @@ describe('resolveAbsolutePath', () => {
 
 describe('listPathNames', () => {
   test('splits a POSIX path at each slash alone, without the empty names', () => {
-    expect(listPathNames({ rules: DARWIN_PATH_RULES, path: '/Users//example/a\\b/' })).toEqual([
+    expect(listPathNames({ rules: POSIX_PATH_RULES, path: '/Users//example/a\\b/' })).toEqual([
       'Users',
       'example',
       'a\\b',

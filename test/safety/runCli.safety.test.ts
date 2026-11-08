@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import { runCli } from '../../src/cli/runCli.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
 import {
   buildTestCatalogEntry,
   TOOL_INSTALL_LOCATIONS_NONE,
 } from '../support/candidateFixtures.js';
+import { runTestCli } from '../support/cliRunFixtures.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureFile,
@@ -19,14 +20,11 @@ import {
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
 import { buildTestPlatform } from '../support/platformFixtures.js';
-import { PROTOCOL_FIXTURE_DISK } from '../support/protocolFixtureScan.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 
 const MIB = 1_048_576;
 const NOW_MS = Date.now();
 const OLD_MS = NOW_MS - 400 * 86_400_000;
-
-const testOnDarwin = test.skipIf(process.platform !== 'darwin');
 
 // The catalog of these tests: home and temp entries only, so no test reads a real system folder.
 const TEST_CATALOG: CatalogEntry[] = [
@@ -123,24 +121,13 @@ async function runWithInput(params: {
     isTerminal: params.isTerminal ?? true,
     inputLines: params.inputLines,
   });
-  const platform = buildTestPlatform({
-    catalogEntries: TEST_CATALOG,
-    toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
-  });
-  const exitCode = await runCli({
+  const exitCode = await runTestCli({
     argv: params.argv,
     environment: environment,
-    catalog: platform.catalog,
-    tools: platform.tools,
-    scan: platform.scan,
-    // A fixed disk, so no test reads the volume it runs on.
-    system: {
-      ...platform.system,
-      loadVolumeSpace: async () => PROTOCOL_FIXTURE_DISK,
-    },
-    delete: platform.delete,
-    explore: platform.explore,
-    texts: platform.report,
+    platform: buildTestPlatform({
+      catalogEntries: TEST_CATALOG,
+      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+    }),
     io: io,
   });
 
@@ -303,20 +290,13 @@ describe('runCli safety', () => {
       return 'DELETE';
     };
 
-    const platform = buildTestPlatform({
-      catalogEntries: TEST_CATALOG,
-      toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
-    });
-    const exitCode = await runCli({
+    const exitCode = await runTestCli({
       argv: [],
       environment: environment,
-      catalog: platform.catalog,
-      tools: platform.tools,
-      scan: platform.scan,
-      system: platform.system,
-      delete: platform.delete,
-      explore: platform.explore,
-      texts: platform.report,
+      platform: buildTestPlatform({
+        catalogEntries: TEST_CATALOG,
+        toolInstallLocations: TOOL_INSTALL_LOCATIONS_NONE,
+      }),
       io: io,
     });
 

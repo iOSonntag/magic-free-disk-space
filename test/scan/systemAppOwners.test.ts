@@ -1,17 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { deleteCandidates } from '../../src/delete/deleteCandidates.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
+import { describeOnDarwin } from '../support/darwinOnly.js';
 import { createTestJournal } from '../support/deletionJournalFixtures.js';
 import { createFixtureFile, isPresent } from '../support/fixtureRoot.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { withFixtureHome } from '../support/probeRunFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
-
-const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
 
 /** The time of every scan and delete, half a year after the previews were written. */
 const NOW_MS = Date.UTC(2026, 6, 1);

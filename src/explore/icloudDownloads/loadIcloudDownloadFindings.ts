@@ -1,4 +1,4 @@
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
@@ -44,8 +44,8 @@ export async function loadIcloudDownloadFindings(
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
-  const rootPath = resolveCatalogLocation({
-    environment: run.environment,
+  const rootPath = resolveEnvironmentLocation({
+    folders: run.environment,
     location: run.platform.explore.icloudDriveRoot,
   });
   const places = await loadIcloudPlaces({ run: run, rootPath: rootPath });

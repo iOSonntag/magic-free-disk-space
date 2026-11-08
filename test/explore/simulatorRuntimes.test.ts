@@ -12,7 +12,7 @@ import type { SimulatorRuntimeState } from '../../src/explore/simulatorRuntimes/
 import { parseSimulatorRuntimeList } from '../../src/explore/simulatorRuntimes/parseSimulatorRuntimeList.js';
 import { compareSimulatorRuntime } from '../../src/explore/simulatorRuntimes/recheckSimulatorRuntimeUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -20,7 +20,7 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
-import { describeOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
@@ -55,11 +55,11 @@ const tool: LocatedTool = { name: 'xcrun', path: '/usr/bin/xcrun' };
 
 function parseFixtureState(): SimulatorRuntimeState {
   const runtimes = parseSimulatorRuntimeList({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     stdoutText: buildSimulatorRuntimeListJson(),
   });
   const devices = parseSimulatorDeviceList({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     stdoutText: buildSimulatorDeviceListJson({ homeDir: FIXTURE_HOME_DIR }),
   });
 
@@ -115,7 +115,7 @@ describe('parseSimulatorRuntimeList', () => {
   });
 
   test('reads an empty list', () => {
-    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '{}' })).toEqual({
+    expect(parseSimulatorRuntimeList({ pathRules: POSIX_PATH_RULES, stdoutText: '{}' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -123,9 +123,9 @@ describe('parseSimulatorRuntimeList', () => {
 
   test('rejects text that is no JSON object', () => {
     expect(
-      parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+      parseSimulatorRuntimeList({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage' }).kind,
     ).toBe('failed');
-    expect(parseSimulatorRuntimeList({ pathRules: DARWIN_PATH_RULES, stdoutText: '[]' }).kind).toBe(
+    expect(parseSimulatorRuntimeList({ pathRules: POSIX_PATH_RULES, stdoutText: '[]' }).kind).toBe(
       'failed',
     );
   });
@@ -142,7 +142,7 @@ describe('parseSimulatorRuntimeList', () => {
 
       expect(
         parseSimulatorRuntimeList({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: POSIX_PATH_RULES,
           stdoutText: JSON.stringify({ [runtimeId]: entry }),
         }).kind,
       ).toBe('failed');
@@ -162,7 +162,7 @@ describe('parseSimulatorRuntimeList', () => {
     for (const value of [entry, relativeEntry]) {
       expect(
         parseSimulatorRuntimeList({
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: POSIX_PATH_RULES,
           stdoutText: JSON.stringify({ [OFFERED_RUNTIME_ID]: value }),
         }).kind,
       ).toBe('failed');
@@ -328,8 +328,7 @@ describe('compareSimulatorRuntime', () => {
   });
 });
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('the simulator runtime probe with a fake xcrun', () => {
+describeWithFakeTools('the simulator runtime probe with a fake xcrun', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

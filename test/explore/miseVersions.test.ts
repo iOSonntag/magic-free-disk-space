@@ -5,7 +5,7 @@ import {
   parseMiseToolName,
   parseMiseToolVersion,
 } from '../../src/explore/miseVersions/parseMisePrunableVersions.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
 import {
@@ -47,7 +47,7 @@ describe('parseMisePrunableVersions', () => {
   test('reads each prunable version with its install path', () => {
     expect(
       parseMisePrunableVersions({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: buildMisePrunableJson({ homeDir: FIXTURE_HOME_DIR }),
       }),
     ).toEqual({
@@ -68,7 +68,7 @@ describe('parseMisePrunableVersions', () => {
   });
 
   test('reads no versions from an empty object', () => {
-    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: '{}' })).toEqual({
+    expect(parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: '{}' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -76,7 +76,7 @@ describe('parseMisePrunableVersions', () => {
 
   test('rejects text that is no JSON', () => {
     expect(
-      parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage' }).kind,
+      parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage' }).kind,
     ).toBe('failed');
   });
 
@@ -85,7 +85,7 @@ describe('parseMisePrunableVersions', () => {
       node: [{ version: '--all', install_path: nodeInstallPath }],
     });
 
-    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });
@@ -93,7 +93,7 @@ describe('parseMisePrunableVersions', () => {
   test('rejects a version without an absolute install path', () => {
     const text = JSON.stringify({ node: [{ version: '20.1.0', install_path: 'node/20.1.0' }] });
 
-    expect(parseMisePrunableVersions({ pathRules: DARWIN_PATH_RULES, stdoutText: text }).kind).toBe(
+    expect(parseMisePrunableVersions({ pathRules: POSIX_PATH_RULES, stdoutText: text }).kind).toBe(
       'failed',
     );
   });

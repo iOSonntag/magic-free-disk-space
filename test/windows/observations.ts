@@ -2,6 +2,10 @@ import { lstat } from 'node:fs/promises';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { loadFileAttributes } from '../../src/platform/win32/win32Api.js';
+import {
+  formatSystemCallCode,
+  formatSystemCallFailure,
+} from '../../src/system/systemCallFailure.js';
 
 /** A thrown error as its raw fields, such as `code=EPERM errno=-4048 syscall=rm`. */
 export const describeThrownError = (error: unknown): string => {
@@ -36,11 +40,6 @@ export const loadLstatText = async (path: string): Promise<string> => {
   return `isSymbolicLink=${stats.isSymbolicLink()} isDirectory=${stats.isDirectory()} isFile=${stats.isFile()}`;
 };
 
-/** An HRESULT or a set of attribute bits as unsigned hex of 8 digits. */
-export function formatHex(value: number): string {
-  return `0x${(value >>> 0).toString(16).padStart(8, '0')}`;
-}
-
 /** The attributes win32Api.ts reads for the path, in hex, or the call and the code it failed with. */
 export function loadAttributesText(path: string): string {
   const absolutePath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: path });
@@ -52,10 +51,10 @@ export function loadAttributesText(path: string): string {
   const attributes = loadFileAttributes({ path: absolutePath.value });
 
   if (attributes.kind === 'failed') {
-    return `${attributes.failure.call} failed with ${attributes.failure.code}`;
+    return formatSystemCallFailure({ failure: attributes.failure });
   }
 
-  return formatHex(attributes.value);
+  return formatSystemCallCode({ code: attributes.value });
 }
 
 /** Each nonblank line of a probe's stdout, parsed as JSON, or as it came when it is no JSON. */

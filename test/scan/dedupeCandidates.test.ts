@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { CandidateDecision } from '../../src/scan/candidate.js';
 import { dedupeCandidates } from '../../src/scan/dedupeCandidates.js';
 import {
@@ -394,7 +394,7 @@ function dedupe(params: {
   reservedEntryPaths?: string[];
 }): CandidateDecision[] {
   return dedupeCandidates({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     decisions: params.decisions,
     reservedEntryPaths: params.reservedEntryPaths ?? [],
   });

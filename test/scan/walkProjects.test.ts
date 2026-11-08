@@ -10,9 +10,8 @@ import type {
 } from '../../src/explore/projectPins/projectPins.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { PathRules } from '../../src/path/pathRules.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
-import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
 import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
@@ -119,6 +118,16 @@ function walkTestProjects(params: {
   });
 }
 
+/** The path of each artifact the walk found, in its order, with the name of the rule that found it. */
+function listArtifactNamesAndPaths(params: {
+  walk: ProjectWalk;
+}): { artifactPath: string; artifactName: string }[] {
+  return params.walk.artifacts.map((finding) => ({
+    artifactPath: finding.artifactPath,
+    artifactName: finding.rule.artifactName,
+  }));
+}
+
 describe('walkProjects', () => {
   let fixtureRoot: FixtureRoot;
 
@@ -168,15 +177,10 @@ describe('walkProjects', () => {
 
     const result = await walkTestProjects({
       homeDir: fixtureRoot.homeDir,
-      rules: WIN32_CATALOG.projectArtifactRules,
+      rules: win32Platform.scan.projectArtifactRules,
     });
 
-    expect(
-      result.artifacts.map((finding) => ({
-        artifactPath: finding.artifactPath,
-        artifactName: finding.rule.artifactName,
-      })),
-    ).toEqual([
+    expect(listArtifactNamesAndPaths({ walk: result })).toEqual([
       { artifactPath: join(projectPath, 'bin'), artifactName: 'bin' },
       { artifactPath: join(projectPath, 'obj'), artifactName: 'obj' },
     ]);
@@ -188,15 +192,10 @@ describe('walkProjects', () => {
     const result = await walkTestProjects({
       pathRules: WIN32_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      rules: WIN32_CATALOG.projectArtifactRules,
+      rules: win32Platform.scan.projectArtifactRules,
     });
 
-    expect(
-      result.artifacts.map((finding) => ({
-        artifactPath: finding.artifactPath,
-        artifactName: finding.rule.artifactName,
-      })),
-    ).toEqual([
+    expect(listArtifactNamesAndPaths({ walk: result })).toEqual([
       { artifactPath: join(projectPath, 'Bin'), artifactName: 'bin' },
       { artifactPath: join(projectPath, 'OBJ'), artifactName: 'obj' },
     ]);
@@ -206,9 +205,9 @@ describe('walkProjects', () => {
     await createUpperCaseDotnetProject({ fixtureRoot: fixtureRoot });
 
     const result = await walkTestProjects({
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       homeDir: fixtureRoot.homeDir,
-      rules: WIN32_CATALOG.projectArtifactRules,
+      rules: win32Platform.scan.projectArtifactRules,
     });
 
     expect(result.artifacts).toEqual([]);
@@ -223,7 +222,7 @@ describe('walkProjects', () => {
 
     const result = await walkTestProjects({
       homeDir: fixtureRoot.homeDir,
-      rules: WIN32_CATALOG.projectArtifactRules,
+      rules: win32Platform.scan.projectArtifactRules,
     });
 
     expect(result.artifacts.map((finding) => finding.artifactPath)).toEqual([
@@ -552,21 +551,18 @@ describe('walkProjects', () => {
     }
 
     const result = await walkTestProjects({ homeDir: fixtureRoot.homeDir });
+    const projectsInPathOrder = projects.toSorted((left, right) =>
+      join(left.folder, left.artifact) < join(right.folder, right.artifact) ? -1 : 1,
+    );
 
-    expect(
-      result.artifacts.map((finding) => [
-        finding.artifactPath,
-        finding.rule.artifactName,
-        finding.rule.risk,
-      ]),
-    ).toEqual(
-      projects
-        .map((project) => [
-          join(fixtureRoot.homeDir, project.folder, project.artifact),
-          project.artifact,
-          project.risk,
-        ])
-        .toSorted((left, right) => ((left[0] ?? '') < (right[0] ?? '') ? -1 : 1)),
+    expect(listArtifactNamesAndPaths({ walk: result })).toEqual(
+      projectsInPathOrder.map((project) => ({
+        artifactPath: join(fixtureRoot.homeDir, project.folder, project.artifact),
+        artifactName: project.artifact,
+      })),
+    );
+    expect(result.artifacts.map((finding) => finding.rule.risk)).toEqual(
+      projectsInPathOrder.map((project) => project.risk),
     );
   });
 

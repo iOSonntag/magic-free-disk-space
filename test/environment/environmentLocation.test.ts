@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   findEnvironmentLocationPath,
   resolveEnvironmentLocation,
+  resolveEnvironmentLocations,
 } from '../../src/environment/environmentLocation.js';
 import {
   EXAMPLE_DARWIN_ENVIRONMENT,
@@ -9,6 +10,69 @@ import {
 } from '../support/environmentFixtures.js';
 
 describe('resolveEnvironmentLocation', () => {
+  test('joins the names of a location below the home or the temporary folder of macOS', () => {
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        location: { root: 'home', path: 'Library/Caches/com.example.app' },
+      }),
+    ).toBe('/Users/tester/Library/Caches/com.example.app');
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        location: { root: 'temp', path: 'com.example.cache' },
+      }),
+    ).toBe('/var/folders/xy/abc/T/com.example.cache');
+  });
+
+  test('joins the names below the user cache folder of macOS', () => {
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        location: { root: 'userCache', path: 'com.apple.example/Cache' },
+      }),
+    ).toBe('/var/folders/xy/abc/C/com.apple.example/Cache');
+  });
+
+  test('joins the names below each AppData folder of Windows with backslashes', () => {
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_WIN32_ENVIRONMENT,
+        location: { root: 'localAppData', path: 'pnpm/store' },
+      }),
+    ).toBe('C:\\Users\\tester\\AppData\\Local\\pnpm\\store');
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_WIN32_ENVIRONMENT,
+        location: { root: 'roamingAppData', path: 'Code/User/profiles' },
+      }),
+    ).toBe('C:\\Users\\tester\\AppData\\Roaming\\Code\\User\\profiles');
+  });
+
+  test('resolves an empty path to the root itself', () => {
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        location: { root: 'home', path: '' },
+      }),
+    ).toBe('/Users/tester');
+  });
+
+  test('takes a whole path as the rules of the platform parse it', () => {
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        location: { root: 'absolute', path: '/Library/Caches/com.example.app' },
+      }),
+    ).toBe('/Library/Caches/com.example.app');
+    expect<string>(
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_WIN32_ENVIRONMENT,
+        location: { root: 'absolute', path: 'c:/ProgramData/Example' },
+      }),
+    ).toBe('C:\\ProgramData\\Example');
+  });
+
   test('names the platform and the folder it lacks when a location lies below that folder', () => {
     expect(() =>
       resolveEnvironmentLocation({
@@ -19,15 +83,61 @@ describe('resolveEnvironmentLocation', () => {
     expect(() =>
       resolveEnvironmentLocation({
         folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        location: { root: 'localAppData', path: 'pnpm' },
+      }),
+    ).toThrow('A location lies below a folder of Windows on macOS.');
+    expect(() =>
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
         location: { root: 'roamingAppData', path: 'Code' },
       }),
     ).toThrow('A location lies below a folder of Windows on macOS.');
+  });
+
+  test('throws for a whole path that is not absolute and for a name that is no entry', () => {
     expect(() =>
       resolveEnvironmentLocation({
         folders: EXAMPLE_DARWIN_ENVIRONMENT,
         location: { root: 'absolute', path: 'Library/Caches' },
       }),
     ).toThrow('The location Library/Caches is not absolute.');
+    expect(() =>
+      resolveEnvironmentLocation({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        location: { root: 'home', path: 'Library/../..' },
+      }),
+    ).toThrow('".." is no entry name to join below a folder.');
+  });
+});
+
+describe('resolveEnvironmentLocations', () => {
+  test('resolves each location below its root, in the order of the locations', () => {
+    expect<string[]>(
+      resolveEnvironmentLocations({
+        folders: EXAMPLE_WIN32_ENVIRONMENT,
+        locations: [
+          { root: 'roamingAppData', path: 'Code/User/profiles' },
+          { root: 'home', path: '' },
+          { root: 'localAppData', path: 'pnpm/store' },
+        ],
+      }),
+    ).toEqual([
+      'C:\\Users\\tester\\AppData\\Roaming\\Code\\User\\profiles',
+      'C:\\Users\\tester',
+      'C:\\Users\\tester\\AppData\\Local\\pnpm\\store',
+    ]);
+  });
+
+  test('throws as resolveEnvironmentLocation does for a location among them', () => {
+    expect(() =>
+      resolveEnvironmentLocations({
+        folders: EXAMPLE_DARWIN_ENVIRONMENT,
+        locations: [
+          { root: 'home', path: 'Library' },
+          { root: 'localAppData', path: 'pnpm' },
+        ],
+      }),
+    ).toThrow('A location lies below a folder of Windows on macOS.');
   });
 });
 

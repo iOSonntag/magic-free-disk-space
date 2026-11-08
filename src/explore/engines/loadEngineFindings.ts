@@ -1,6 +1,6 @@
 import type { EngineProbeId } from '../../catalog/catalog.js';
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
@@ -157,8 +157,8 @@ async function loadFixedEngineSockets(params: {
   engine: ContainerEngineFixed;
 }): Promise<EngineSocket[]> {
   for (const socketLocation of params.engine.socketPaths) {
-    const socketPath = resolveCatalogLocation({
-      environment: params.environment,
+    const socketPath = resolveEnvironmentLocation({
+      folders: params.environment,
       location: socketLocation,
     });
 
@@ -166,8 +166,8 @@ async function loadFixedEngineSockets(params: {
       return [
         {
           socketPath: socketPath,
-          diskImagePath: resolveCatalogLocation({
-            environment: params.environment,
+          diskImagePath: resolveEnvironmentLocation({
+            folders: params.environment,
             location: params.engine.diskImagePath,
           }),
         },
@@ -186,8 +186,8 @@ async function loadProfileEngineSockets(params: {
   environment: Environment;
   engine: ContainerEngineProfiles;
 }): Promise<EngineSocket[]> {
-  const profilesRootPath = resolveCatalogLocation({
-    environment: params.environment,
+  const profilesRootPath = resolveEnvironmentLocation({
+    folders: params.environment,
     location: params.engine.profilesRoot,
   });
   const entries = await loadDirectoryEntries({ path: profilesRootPath });
@@ -223,8 +223,8 @@ async function loadProfileEngineSockets(params: {
     if (await isPathPresent({ path: socketPath })) {
       sockets.push({
         socketPath: socketPath,
-        diskImagePath: resolveCatalogLocation({
-          environment: params.environment,
+        diskImagePath: resolveEnvironmentLocation({
+          folders: params.environment,
           location: params.engine.buildDiskImagePath(profileName),
         }),
       });

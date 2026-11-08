@@ -1,26 +1,27 @@
 import { describe, expect, test } from 'bun:test';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import type { PathRules } from '../../src/path/pathRules.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { Result } from '../../src/result.js';
 
-function parseText(params: { rules: 'posix' | 'win32'; text: string }): Result<string, string> {
-  return parseAbsolutePath({
-    rules: params.rules === 'posix' ? DARWIN_PATH_RULES : WIN32_PATH_RULES,
-    text: params.text,
-  });
+/** The parse of `text` widened to its text, which the brand only marks as checked. */
+function parseText(params: { rules: PathRules; text: string }): Result<string, string> {
+  return parseAbsolutePath({ rules: params.rules, text: params.text });
 }
 
 describe('parseAbsolutePath', () => {
   test('takes an absolute POSIX path as it is', () => {
     for (const text of ['/', '/Users/tester/../x', '/a//b/']) {
-      expect(parseText({ rules: 'posix', text: text })).toEqual({ kind: 'succeeded', value: text });
+      expect(parseText({ rules: POSIX_PATH_RULES, text: text })).toEqual({
+        kind: 'succeeded',
+        value: text,
+      });
     }
   });
 
   test('refuses a relative POSIX path and one that reads as an option', () => {
     for (const text of ['', 'Users', './x', '-rf', 'C:\\Users']) {
-      expect(parseText({ rules: 'posix', text: text }).kind).toBe('failed');
+      expect(parseText({ rules: POSIX_PATH_RULES, text: text }).kind).toBe('failed');
     }
   });
 
@@ -32,7 +33,7 @@ describe('parseAbsolutePath', () => {
     ];
 
     for (const parseCase of cases) {
-      expect(parseText({ rules: 'win32', text: parseCase.text })).toEqual({
+      expect(parseText({ rules: WIN32_PATH_RULES, text: parseCase.text })).toEqual({
         kind: 'succeeded',
         value: parseCase.value,
       });
@@ -52,13 +53,17 @@ describe('parseAbsolutePath', () => {
       'Users',
       '',
     ]) {
-      expect(parseText({ rules: 'win32', text: text }).kind).toBe('failed');
+      expect(parseText({ rules: WIN32_PATH_RULES, text: text }).kind).toBe('failed');
     }
   });
 
   test('refuses a path that holds a NUL character under either rules', () => {
-    expect(parseText({ rules: 'win32', text: 'C:\\Users\\tester\0\\AppData' }).kind).toBe('failed');
-    expect(parseText({ rules: 'win32', text: 'C:\\\0' }).kind).toBe('failed');
-    expect(parseText({ rules: 'posix', text: '/Users/tester\0/Library' }).kind).toBe('failed');
+    for (const parseCase of [
+      { rules: WIN32_PATH_RULES, text: 'C:\\Users\\tester\0\\AppData' },
+      { rules: WIN32_PATH_RULES, text: 'C:\\\0' },
+      { rules: POSIX_PATH_RULES, text: '/Users/tester\0/Library' },
+    ]) {
+      expect(parseText(parseCase).kind).toBe('failed');
+    }
   });
 });

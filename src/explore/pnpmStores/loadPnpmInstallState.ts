@@ -1,7 +1,6 @@
 import { basename } from 'node:path';
-import type { CatalogLocation } from '../../catalog/catalog.js';
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocations } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -75,20 +74,20 @@ export async function loadPnpmInstallState(params: {
   homebrewPrefixPaths: AbsolutePath[];
   privacyDenialCode: string | null;
 }): Promise<Result<PnpmInstallState, ExploreFileUnreadable>> {
-  const pnpmHomePaths = resolvePlacePaths({
-    environment: params.environment,
+  const pnpmHomePaths = resolveEnvironmentLocations({
+    folders: params.environment,
     locations: params.places.homes,
   });
-  const corepackRootPaths = resolvePlacePaths({
-    environment: params.environment,
+  const corepackRootPaths = resolveEnvironmentLocations({
+    folders: params.environment,
     locations: params.places.corepackRoots,
   });
-  const npmPrefixPaths = resolvePlacePaths({
-    environment: params.environment,
+  const npmPrefixPaths = resolveEnvironmentLocations({
+    folders: params.environment,
     locations: params.places.npmPrefixes,
   });
-  const launcherPaths = resolvePlacePaths({
-    environment: params.environment,
+  const launcherPaths = resolveEnvironmentLocations({
+    folders: params.environment,
     locations: params.places.launchers,
   });
   const misePnpmRoots = await loadMisePnpmVersionsRoots({
@@ -176,15 +175,6 @@ export async function loadPnpmInstallState(params: {
       installs: [...folderInstalls.value, ...packageInstalls.value, ...standaloneInstalls.value],
     },
   };
-}
-
-function resolvePlacePaths(params: {
-  environment: Environment;
-  locations: CatalogLocation[];
-}): AbsolutePath[] {
-  return params.locations.map((location) =>
-    resolveCatalogLocation({ environment: params.environment, location: location }),
-  );
 }
 
 function listHomePnpmVersionsRoots(params: {

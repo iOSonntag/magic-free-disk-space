@@ -1,5 +1,5 @@
 import type { CatalogLocation } from '../../catalog/catalog.js';
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import type { ExploreProbeFilesResult, ExploreProbeRun } from '../exploreProbe.js';
 import type { ProjectPins } from '../projectPins/projectPins.js';
 import { listToolPinFileRefs, selectToolPins } from '../projectPins/selectToolPins.js';
@@ -29,8 +29,8 @@ export async function loadPnpmStoreFindings(params: {
     return toolPins;
   }
 
-  const storeRoot = resolveCatalogLocation({
-    environment: params.run.environment,
+  const storeRoot = resolveEnvironmentLocation({
+    folders: params.run.environment,
     location: params.storeLocation,
   });
   const storeState = await loadPnpmStoreState({

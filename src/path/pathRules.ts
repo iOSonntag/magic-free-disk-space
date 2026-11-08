@@ -13,5 +13,8 @@ export type PathRulesWin32 = { rootForm: 'win32'; separator: '\\' };
  */
 export type PathRules = PathRulesPosix | PathRulesWin32;
 
+/** The rules of every POSIX path, whatever platform runs. */
+export const POSIX_PATH_RULES: PathRulesPosix = { rootForm: 'posix', separator: '/' };
+
 /** The rules of every Windows path, whatever platform runs. */
 export const WIN32_PATH_RULES: PathRulesWin32 = { rootForm: 'win32', separator: '\\' };

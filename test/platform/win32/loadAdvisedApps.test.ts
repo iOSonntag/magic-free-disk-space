@@ -7,9 +7,10 @@ import {
 } from '../../../src/platform/win32/loadAdvisedApps.js';
 import type { UninstallKeyValues } from '../../../src/platform/win32/win32Api.js';
 import { loadUninstallKeyValues } from '../../../src/platform/win32/win32Api.js';
+import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
 /** The values of an Uninstall subkey of an app Settings > Apps lists, with `overrides` on top. */
-function buildKeyValues(overrides: Partial<UninstallKeyValues> = {}): UninstallKeyValues {
+function buildKeyValues(overrides: Partial<UninstallKeyValues>): UninstallKeyValues {
   return {
     keyName: 'ExampleApp',
     displayName: 'Example App',
@@ -28,7 +29,7 @@ describe('decideUninstallApps', () => {
     expect(decideUninstallApps({ keyValues: [buildKeyValues({ estimatedSize: 2048 })] })).toEqual([
       {
         displayName: 'Example App',
-        installFolderPath: 'C:\\Program Files\\Example',
+        installFolderPath: buildTestWindowsPath({ text: 'C:\\Program Files\\Example' }),
         estimatedBytes: 2048 * 1024,
       },
     ]);
@@ -77,11 +78,30 @@ describe('decideUninstallApps', () => {
         keyValues: [
           buildKeyValues({ displayName: 'Quoted', installLocation: '"C:\\Tools\\Quoted\\"' }),
           buildKeyValues({ displayName: 'Root', installLocation: 'D:\\' }),
+          buildKeyValues({ displayName: 'Slashed', installLocation: 'e:/Tools/Slashed/' }),
           buildKeyValues({ displayName: 'None', installLocation: '' }),
           buildKeyValues({ displayName: 'Missing', installLocation: null }),
         ],
       }).map((app) => app.installFolderPath),
-    ).toEqual(['C:\\Tools\\Quoted', 'D:\\', null, null]);
+    ).toEqual([
+      buildTestWindowsPath({ text: 'C:\\Tools\\Quoted' }),
+      buildTestWindowsPath({ text: 'D:\\' }),
+      buildTestWindowsPath({ text: 'E:\\Tools\\Slashed' }),
+      null,
+      null,
+    ]);
+  });
+
+  test('names no install folder for a text that is no absolute Windows path', () => {
+    expect(
+      decideUninstallApps({
+        keyValues: [
+          buildKeyValues({ displayName: 'Relative', installLocation: 'Tools\\Relative' }),
+          buildKeyValues({ displayName: 'Drive relative', installLocation: 'C:Tools' }),
+          buildKeyValues({ displayName: 'Share', installLocation: '\\\\server\\apps\\Share' }),
+        ],
+      }).map((app) => app.installFolderPath),
+    ).toEqual([null, null, null]);
   });
 
   test('takes a size of 0 for none', () => {
@@ -103,12 +123,12 @@ describe('decideUninstallApps', () => {
     ).toEqual([
       {
         displayName: 'Example App',
-        installFolderPath: 'C:\\Program Files\\Example',
+        installFolderPath: buildTestWindowsPath({ text: 'C:\\Program Files\\Example' }),
         estimatedBytes: 100 * 1024,
       },
       {
         displayName: 'Example App',
-        installFolderPath: 'C:\\Other\\Example',
+        installFolderPath: buildTestWindowsPath({ text: 'C:\\Other\\Example' }),
         estimatedBytes: 300 * 1024,
       },
     ]);
@@ -191,7 +211,7 @@ describe.skipIf(process.platform !== 'win32')('the Uninstall keys of Windows', (
         apps: [
           {
             displayName: 'Fixture App',
-            installFolderPath: 'C:\\Fixture\\App',
+            installFolderPath: buildTestWindowsPath({ text: 'C:\\Fixture\\App' }),
             estimatedBytes: 2048 * 1024,
           },
         ],

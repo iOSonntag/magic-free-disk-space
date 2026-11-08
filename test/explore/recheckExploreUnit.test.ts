@@ -26,7 +26,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
-import { describeOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import type { ProbeCommandName } from './probeFakeTools.js';
@@ -236,8 +236,7 @@ describe('compareMiseVersion', () => {
   });
 });
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('recheckExploreUnit', () => {
+describeWithFakeTools('recheckExploreUnit', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

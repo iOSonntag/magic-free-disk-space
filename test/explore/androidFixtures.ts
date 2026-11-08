@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { resolveCatalogLocation } from '../../src/catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
@@ -20,8 +20,8 @@ export const ANDROID_EMULATOR_PROCESS_COMMAND =
 
 /** The SDK where the host's Android Studio installs it below the fixture home. */
 export function buildAndroidSdkRoot(params: { environment: Environment }): AbsolutePath {
-  return resolveCatalogLocation({
-    environment: params.environment,
+  return resolveEnvironmentLocation({
+    folders: params.environment,
     location: HOST_PLATFORM.explore.androidSdkRoot,
   });
 }

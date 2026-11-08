@@ -40,10 +40,7 @@ export function isSameEntryName(params: {
   name: string;
   otherName: string;
 }): boolean {
-  return (
-    toComparablePathText({ rules: params.rules, text: params.name }) ===
-    toComparablePathText({ rules: params.rules, text: params.otherName })
-  );
+  return isSamePathText({ rules: params.rules, text: params.name, otherText: params.otherName });
 }
 
 /**
@@ -51,10 +48,7 @@ export function isSameEntryName(params: {
  * Windows.
  */
 export function isSamePath(params: { rules: PathRules; path: string; otherPath: string }): boolean {
-  return (
-    toComparablePathText({ rules: params.rules, text: params.path }) ===
-    toComparablePathText({ rules: params.rules, text: params.otherPath })
-  );
+  return isSamePathText({ rules: params.rules, text: params.path, otherText: params.otherPath });
 }
 
 /**
@@ -68,6 +62,13 @@ export function toComparablePathText(params: { rules: PathRules; text: string })
     case 'win32':
       return foldCase(params.text);
   }
+}
+
+function isSamePathText(params: { rules: PathRules; text: string; otherText: string }): boolean {
+  return (
+    toComparablePathText({ rules: params.rules, text: params.text }) ===
+    toComparablePathText({ rules: params.rules, text: params.otherText })
+  );
 }
 
 function foldCase(text: string): string {

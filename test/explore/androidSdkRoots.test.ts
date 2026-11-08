@@ -14,10 +14,6 @@ import type { ProjectPinFile } from '../../src/explore/projectPins/projectPins.j
 import type { ExploreProbesStarted } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import {
-  ANDROID_SDK_ROOT,
-  FLUTTER_SETTINGS_PATHS,
-} from '../../src/platform/darwin/androidSdkRoot.js';
 import type { Result } from '../../src/result.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -28,6 +24,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import {
   ANDROID_RECENT_USE_MS,
@@ -135,8 +132,8 @@ describe('loadAndroidSdkRoots', () => {
   ): Promise<Result<AndroidSdkRoot[], ExploreFileUnreadable>> {
     return loadAndroidSdkRoots({
       environment: environment,
-      androidSdkRoot: ANDROID_SDK_ROOT,
-      flutterSettingsPaths: FLUTTER_SETTINGS_PATHS,
+      androidSdkRoot: HOST_PLATFORM.explore.androidSdkRoot,
+      flutterSettingsPaths: HOST_PLATFORM.explore.flutterSettingsPaths,
       pinFiles: files,
       privacyDenialCode: null,
     });

@@ -155,8 +155,7 @@ function recheck(params: {
     unit: params.unit,
     environment: params.environment,
     platform: buildTestProbePlatform(),
-    runningProcesses:
-      params.commandLines === null ? null : buildRunningCommandLines(params.commandLines),
+    runningProcesses: buildRunningCommandLines(params.commandLines),
   });
 }
 

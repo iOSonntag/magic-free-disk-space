@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { WIN32_REPORT_TEXTS } from '../../src/platform/win32/reportTexts.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanProgressView, buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
@@ -15,9 +15,11 @@ import {
   buildTestAdvice,
   buildTestCandidate,
   buildTestEngineCandidate,
+  buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { buildExampleHome, buildTestDriveRoot } from '../support/parsedValueFixtures.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
+import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
   buildProtocolFixtureReport,
@@ -33,10 +35,6 @@ const TEXTS = darwinPlatform.report;
 const HOME_DIR = PROTOCOL_FIXTURE_HOME_DIR;
 
 const HOME = buildExampleHome({ text: HOME_DIR });
-
-// The fixture of the bridge's events is the scan of a macOS home, and a path below a home reads
-// as `~/…` only with the separator of macOS, which the display path takes from the host.
-const testOnDarwin = test.skipIf(process.platform !== 'darwin');
 
 function buildAdvice(params: {
   path: string;
@@ -98,6 +96,9 @@ function listNumbersTopToBottom(params: { view: ScanView }): number[] {
   return [...sectionNumbers, ...exploreNumbers];
 }
 
+// Some tests run on macOS only: the fixture of the bridge's events is the scan of a macOS home,
+// and a path below a home reads as `~/…` only with the separator of macOS, which the display path
+// takes from the host.
 describe('buildScanView', () => {
   test('shows an empty scan as its summary alone, with the disk it read', () => {
     expect(buildView({ report: EMPTY_REPORT, disk: PROTOCOL_FIXTURE_DISK })).toEqual({
@@ -122,14 +123,16 @@ describe('buildScanView', () => {
 
   test('shows the installed apps of advice beside the sections, unnumbered, with what is known', () => {
     const view = buildScanView({
-      texts: WIN32_REPORT_TEXTS,
+      texts: win32Platform.report,
       report: {
         ...EMPTY_REPORT,
         appAdvice: {
           apps: [
             {
               displayName: 'Example\u001b[2J Editor',
-              installFolderPath: 'C:\\Program Files\\Example Editor',
+              installFolderPath: buildTestWindowsPath({
+                text: 'C:\\Program Files\\Example Editor',
+              }),
               estimatedBytes: 3 * MB,
             },
             { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },
@@ -253,7 +256,7 @@ describe('buildScanView', () => {
 
   test('names OneDrive and this PC for the entries left in the cloud store on Windows', () => {
     const view = buildScanView({
-      texts: WIN32_REPORT_TEXTS,
+      texts: win32Platform.report,
       report: { ...EMPTY_REPORT, evictedEntryCount: 1 },
       fullDiskAccessHolder: 'app',
       homeDir: HOME_DIR,
@@ -298,33 +301,13 @@ describe('buildScanView', () => {
   });
 
   test('shows the Recycle Bin of a drive as an item of the Recycle Bin section, with no command', () => {
+    const candidate = buildTestRecycleBinCandidate({
+      driveRootText: 'C:\\',
+      scannedContent: { sizeBytes: 2 * MB, itemCount: 3 },
+    });
     const view = buildScanView({
-      texts: WIN32_REPORT_TEXTS,
-      report: buildRankedReport({
-        candidates: [
-          {
-            path: 'C:\\$Recycle.Bin',
-            title: 'Recycle Bin (C:)',
-            category: 'trash',
-            risk: 'careful',
-            origin: { kind: 'recycleBin' },
-            explanation: 'Files you deleted.',
-            regeneration: 'None.',
-            allocatedBytes: 2 * MB,
-            entryCount: 3,
-            isComplete: true,
-            privateSizeFallbackCount: 0,
-            lastUsedAtMs: null,
-            downloadedAtMs: null,
-            appName: null,
-            removal: {
-              kind: 'emptyRecycleBin',
-              driveRoot: buildTestDriveRoot({ text: 'C:\\' }),
-              scannedContent: { sizeBytes: 2 * MB, itemCount: 3 },
-            },
-          },
-        ],
-      }),
+      texts: win32Platform.report,
+      report: buildRankedReport({ candidates: [candidate] }),
       fullDiskAccessHolder: 'app',
       homeDir: HOME_DIR,
       disk: null,
@@ -349,8 +332,8 @@ describe('buildScanView', () => {
               sizeText: '2.0 MB',
               detailLines: [
                 { kind: 'path', text: 'C:\\$Recycle.Bin' },
-                { kind: 'explanation', text: 'Files you deleted.' },
-                { kind: 'regeneration', text: 'None.' },
+                { kind: 'explanation', text: candidate.explanation },
+                { kind: 'regeneration', text: candidate.regeneration },
               ],
               sectionKey: 'trash',
               group: 'careful',

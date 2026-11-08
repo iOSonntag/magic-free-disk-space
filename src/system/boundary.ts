@@ -6,6 +6,7 @@ export const moduleBoundary = {
   readsTablesOf: [],
   exposes: [
     'createConcurrencyLimit.ts',
+    'createDirectory.ts',
     'entryReads.ts',
     'fullDiskAccess.ts',
     'getErrorCode.ts',

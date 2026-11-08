@@ -15,26 +15,46 @@ export const WIN32_TOOL_PROCESSES: ToolProcessPlatform = {
   startTool: startTool,
 };
 
-/**
- * The profile and the temporary folder of the run, and `SystemRoot`, without which a program
- * cannot load the libraries of Windows, with the system's folders in `PATH`.
- */
-export function buildBaseEnvironment(params: {
+/** The base environment of a tool, with the `SystemRoot` of the app's own environment. */
+function buildBaseEnvironment(params: {
   toolFolderPath: string;
   homeDir: string;
   tempDir: string;
 }): Record<string, string> {
-  const systemRoot = process.env.SystemRoot;
-  const systemEntries: Record<string, string> =
-    systemRoot === undefined ? {} : { SystemRoot: systemRoot };
-  const systemPathDirs = systemRoot === undefined ? [] : [`${systemRoot}\\System32`, systemRoot];
+  return buildWin32BaseEnvironment({
+    toolFolderPath: params.toolFolderPath,
+    homeDir: params.homeDir,
+    tempDir: params.tempDir,
+    systemRoot: process.env.SystemRoot ?? null,
+  });
+}
+
+/**
+ * The profile and the temporary folder of the run, and `SystemRoot`, without which a program
+ * cannot load the libraries of Windows, with the system's folders in `PATH` after the tool
+ * folder; the tool folder alone for a `systemRoot` of `null`.
+ */
+export function buildWin32BaseEnvironment(params: {
+  toolFolderPath: string;
+  homeDir: string;
+  tempDir: string;
+  systemRoot: string | null;
+}): Record<string, string> {
+  if (params.systemRoot === null) {
+    return {
+      USERPROFILE: params.homeDir,
+      TEMP: params.tempDir,
+      TMP: params.tempDir,
+      PATH: params.toolFolderPath,
+    };
+  }
 
   return {
     USERPROFILE: params.homeDir,
     TEMP: params.tempDir,
     TMP: params.tempDir,
-    ...systemEntries,
-    PATH: [params.toolFolderPath, ...systemPathDirs].join(';'),
+    SystemRoot: params.systemRoot,
+    PATH: [params.toolFolderPath, `${params.systemRoot}\\System32`, params.systemRoot].join(';'),
   };
 }
 

@@ -1,40 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  buildBaseEnvironment,
+  buildWin32BaseEnvironment,
   WIN32_TOOL_PROCESSES,
 } from '../../../src/platform/win32/toolProcesses.js';
 
-/** Runs `run` with `SystemRoot` set to `value`, or unset for `undefined`, and restores it after. */
-function withSystemRoot<T>(params: { value: string | undefined; run: () => T }): T {
-  const saved = process.env.SystemRoot;
-
-  try {
-    if (params.value === undefined) {
-      delete process.env.SystemRoot;
-    } else {
-      process.env.SystemRoot = params.value;
-    }
-
-    return params.run();
-  } finally {
-    if (saved === undefined) {
-      delete process.env.SystemRoot;
-    } else {
-      process.env.SystemRoot = saved;
-    }
-  }
-}
-
-describe('the base environment of a Windows tool', () => {
+describe('buildWin32BaseEnvironment', () => {
   test('holds the profile, the temporary folder, SystemRoot, and its folders after the tool folder', () => {
-    const environment = withSystemRoot({
-      value: 'C:\\Windows',
-      run: () =>
-        buildBaseEnvironment({
-          toolFolderPath: 'C:\\Tools\\mise',
-          homeDir: 'C:\\Users\\tester',
-          tempDir: 'C:\\Users\\tester\\AppData\\Local\\Temp',
-        }),
+    const environment = buildWin32BaseEnvironment({
+      toolFolderPath: 'C:\\Tools\\mise',
+      homeDir: 'C:\\Users\\tester',
+      tempDir: 'C:\\Users\\tester\\AppData\\Local\\Temp',
+      systemRoot: 'C:\\Windows',
     });
 
     expect(environment).toEqual({
@@ -47,14 +23,11 @@ describe('the base environment of a Windows tool', () => {
   });
 
   test('holds the tool folder alone in PATH when SystemRoot is unset', () => {
-    const environment = withSystemRoot({
-      value: undefined,
-      run: () =>
-        buildBaseEnvironment({
-          toolFolderPath: 'C:\\Tools\\mise',
-          homeDir: 'C:\\Users\\tester',
-          tempDir: 'C:\\Temp',
-        }),
+    const environment = buildWin32BaseEnvironment({
+      toolFolderPath: 'C:\\Tools\\mise',
+      homeDir: 'C:\\Users\\tester',
+      tempDir: 'C:\\Temp',
+      systemRoot: null,
     });
 
     expect(environment).toEqual({
@@ -73,7 +46,7 @@ describe.skipIf(process.platform !== 'win32')('a Windows tool in its job', () =>
       path: process.execPath,
       args: ['-e', 'setInterval(() => {}, 1_000)'],
       cwd: process.cwd(),
-      env: buildBaseEnvironment({
+      env: WIN32_TOOL_PROCESSES.buildBaseEnvironment({
         toolFolderPath: process.cwd(),
         homeDir: process.cwd(),
         tempDir: process.cwd(),

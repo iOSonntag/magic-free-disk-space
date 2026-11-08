@@ -292,7 +292,7 @@ describe('loadPackageConfigTracking', () => {
     });
 
     // NTFS folds case letter by letter by its upcase table, so there `ß` never matches `ss`.
-    test.skipIf(process.platform === 'win32')(
+    testOnPosix(
       'returns tracked for an entry with a sharp s where the project has ss',
       async () => {
         const tracking = await loadTrackingOfRepository({

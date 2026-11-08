@@ -162,8 +162,6 @@ function gatherToolCompletion(params: {
   tool: StartedTool;
   timeoutMs: number;
 }): Promise<ToolCommandResult> {
-  const child = params.tool.process;
-
   return new Promise((resolve) => {
     const stdoutChunks: Buffer[] = [];
     let stdoutBytes = 0;
@@ -192,7 +190,7 @@ function gatherToolCompletion(params: {
       });
     }, params.timeoutMs);
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    params.tool.process.stdout.on('data', (chunk: Buffer) => {
       if (settled) {
         return;
       }
@@ -216,22 +214,22 @@ function gatherToolCompletion(params: {
       stdoutChunks.push(chunk);
     });
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    params.tool.process.stderr.on('data', (chunk: Buffer) => {
       stderrTail = keepStderrTail(Buffer.concat([stderrTail, chunk]));
     });
 
     // A spawn error leaves no process; an error of a started tool may leave some.
-    child.on('error', (error) => {
+    params.tool.process.on('error', (error) => {
       params.tool.stop();
       settle({ kind: 'failed', failure: { reason: 'spawnFailed', message: error.message } });
     });
 
     // A process the tool left behind would hold the streams open; stopping it lets them close.
-    child.on('exit', () => {
+    params.tool.process.on('exit', () => {
       params.tool.stop();
     });
 
-    child.on('close', (exitCode, signal) => {
+    params.tool.process.on('close', (exitCode, signal) => {
       settle(
         toolEndToResult({
           exitCode: exitCode,

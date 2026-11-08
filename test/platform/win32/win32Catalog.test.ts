@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../../src/catalog/catalog.js';
-import { resolveCatalogLocation } from '../../../src/catalog/resolveCatalogLocation.js';
 import type { EnvironmentLocation } from '../../../src/environment/environmentLocation.js';
-import { findEnvironmentLocationPath } from '../../../src/environment/environmentLocation.js';
+import {
+  findEnvironmentLocationPath,
+  resolveEnvironmentLocation,
+} from '../../../src/environment/environmentLocation.js';
 import { isSameOrInsidePath } from '../../../src/path/isSameOrInsidePath.js';
+import { isStrictlyInsidePath } from '../../../src/path/isStrictlyInsidePath.js';
 import { joinAbsolutePath } from '../../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../../src/path/parseAbsolutePath.js';
 import { WIN32_CATALOG } from '../../../src/platform/win32/catalog/win32Catalog.js';
@@ -180,7 +183,11 @@ function isOfferingGuardedPath(params: { entry: CatalogEntry; guardedPath: strin
         parentPath: entryPath,
       });
     case 'children':
-      return isStrictlyInsidePath({ path: params.guardedPath, parentPath: entryPath });
+      return isStrictlyInsidePath({
+        rules: ENVIRONMENT.pathRules,
+        path: params.guardedPath,
+        parentPath: entryPath,
+      });
   }
 }
 
@@ -210,23 +217,9 @@ function isMisplacedBrowserCache(params: {
   return (
     params.entry.selection.kind !== 'path' ||
     !isStrictlyInsidePath({
+      rules: ENVIRONMENT.pathRules,
       path: entryPath,
       parentPath: buildDefaultProfilePath({ userDataPath: userDataPath }),
-    })
-  );
-}
-
-function isStrictlyInsidePath(params: { path: string; parentPath: string }): boolean {
-  return (
-    isSameOrInsidePath({
-      rules: ENVIRONMENT.pathRules,
-      path: params.path,
-      parentPath: params.parentPath,
-    }) &&
-    !isSameOrInsidePath({
-      rules: ENVIRONMENT.pathRules,
-      path: params.parentPath,
-      parentPath: params.path,
     })
   );
 }
@@ -240,5 +233,5 @@ function buildDefaultProfilePath(params: { userDataPath: AbsolutePath }): Absolu
 }
 
 function resolveEntryPath(params: { entry: CatalogEntry }): AbsolutePath {
-  return resolveCatalogLocation({ environment: ENVIRONMENT, location: params.entry });
+  return resolveEnvironmentLocation({ folders: ENVIRONMENT, location: params.entry });
 }

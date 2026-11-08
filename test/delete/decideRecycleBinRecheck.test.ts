@@ -2,13 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { decideRecycleBinRecheck } from '../../src/delete/decideRecycleBinRecheck.js';
 import type { RecycleBinContent } from '../../src/scan/candidate.js';
 
-const SCANNED: RecycleBinContent = { sizeBytes: 8192, itemCount: 3 };
+const scannedContent: RecycleBinContent = { sizeBytes: 8192, itemCount: 3 };
 
 describe('decideRecycleBinRecheck', () => {
   test('keeps a bin unchanged that holds what the scan counted', () => {
-    expect(decideRecycleBinRecheck({ scanned: SCANNED, current: { ...SCANNED } })).toBe(
-      'unchanged',
-    );
+    expect(
+      decideRecycleBinRecheck({ scanned: scannedContent, current: { ...scannedContent } }),
+    ).toBe('unchanged');
   });
 
   test('takes a bin that holds no item for already gone, whatever size it reports', () => {
@@ -16,7 +16,9 @@ describe('decideRecycleBinRecheck', () => {
       { sizeBytes: 0, itemCount: 0 },
       { sizeBytes: 4096, itemCount: 0 },
     ]) {
-      expect(decideRecycleBinRecheck({ scanned: SCANNED, current: current })).toBe('alreadyGone');
+      expect(decideRecycleBinRecheck({ scanned: scannedContent, current: current })).toBe(
+        'alreadyGone',
+      );
     }
   });
 
@@ -27,7 +29,7 @@ describe('decideRecycleBinRecheck', () => {
       { sizeBytes: 12_288, itemCount: 3 },
       { sizeBytes: 4096, itemCount: 3 },
     ]) {
-      expect(decideRecycleBinRecheck({ scanned: SCANNED, current: current })).toBe(
+      expect(decideRecycleBinRecheck({ scanned: scannedContent, current: current })).toBe(
         'changedSinceScan',
       );
     }

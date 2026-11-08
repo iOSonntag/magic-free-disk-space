@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadEntryPlacement } from '../../../src/platform/darwin/hasDatalessFlag.js';
+import { loadEntryPlacement } from '../../../src/platform/darwin/loadEntryPlacement.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../../support/fixtureRoot.js';
 import { describeOnPosix } from '../../support/posixOnly.js';

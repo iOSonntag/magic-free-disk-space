@@ -6,6 +6,7 @@ import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { CatalogTarget } from '../../src/scan/findCatalogTargets.js';
 import { findCatalogTargets } from '../../src/scan/findCatalogTargets.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -20,9 +21,6 @@ import { testOnPosix } from '../support/posixOnly.js';
 const TEST_NOW_MS = 1_700_000_000_000;
 
 const PRIVACY_DENIAL_CODE = HOST_PLATFORM.system.privacyDenialCode;
-
-// Only macOS has a per-user folder of the system's caches; Windows keeps its caches in AppData.
-const testOnDarwin = test.skipIf(process.platform !== 'darwin');
 
 describe('findCatalogTargets', () => {
   let fixtureRoot: FixtureRoot;
@@ -143,6 +141,7 @@ describe('findCatalogTargets', () => {
     });
   });
 
+  // Only macOS has a per-user folder of the system's caches; Windows keeps its caches in AppData.
   testOnDarwin('a user cache entry lies below the user cache folder', async () => {
     const metalDir = join(fixtureRoot.userCacheDir, 'com.example.app', 'com.apple.metal');
     await createFixtureDirectory({ path: metalDir });

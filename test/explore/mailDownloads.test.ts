@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { utimes } from 'node:fs/promises';
 import { join } from 'node:path';
-import { resolveCatalogLocation } from '../../src/catalog/resolveCatalogLocation.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadMailDownloadFindings } from '../../src/explore/mailDownloads/loadMailDownloadFindings.js';
 import { recheckMailDownloadsUnit } from '../../src/explore/mailDownloads/recheckMailDownloadsUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
-import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
+import { HOST_PLATFORM } from '../support/platformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
@@ -25,14 +25,17 @@ const OLD_MS = NOW_MS - 90 * DAY_MS;
 const FILE_SIZE_BYTES = 4096;
 const MAIL_COMMAND = '/System/Applications/Mail.app/Contents/MacOS/Mail';
 
+/** Runs a suite only on a host whose catalog names the folder Mail saves its attachments in. */
+const describeWithMailDownloads = describe.skipIf(HOST_PLATFORM.explore.mailDownloadsRoot === null);
+
 function getMailDownloadsPath(home: FixtureHome): string {
-  const root = buildTestProbePlatform().explore.mailDownloadsRoot;
+  const root = HOST_PLATFORM.explore.mailDownloadsRoot;
 
   if (root === null) {
     throw new Error('The platform has no Mail Downloads folder.');
   }
 
-  return resolveCatalogLocation({ environment: home.environment, location: root });
+  return resolveEnvironmentLocation({ folders: home.environment, location: root });
 }
 
 /**
@@ -48,7 +51,7 @@ async function createMailFile(params: { path: string; accessedMs?: number }): Pr
   });
 }
 
-describe('the Mail Downloads probe', () => {
+describeWithMailDownloads('the Mail Downloads probe', () => {
   test('finds the attachment copies saved and read before the cutoff and never changed', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -150,8 +153,10 @@ describe('the Mail Downloads probe', () => {
       },
     });
   });
+});
 
-  test('says the place is missing without the folder', async () => {
+describe('the Mail Downloads probe without its folder', () => {
+  test('says the place is missing', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
@@ -165,7 +170,7 @@ describe('the Mail Downloads probe', () => {
   });
 });
 
-describe('recheckMailDownloadsUnit', () => {
+describeWithMailDownloads('recheckMailDownloadsUnit', () => {
   test('finds a unit unchanged, then changed once a file was opened or changed', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,
@@ -188,7 +193,7 @@ describe('recheckMailDownloadsUnit', () => {
             unit: unit,
             environment: run.environment,
             platform: run.platform,
-            runningProcesses: commandLines === null ? null : buildRunningCommandLines(commandLines),
+            runningProcesses: buildRunningCommandLines(commandLines),
           });
         }
 

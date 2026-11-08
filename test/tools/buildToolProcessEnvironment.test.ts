@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { DARWIN_TOOL_PROCESSES } from '../../src/platform/darwin/toolProcesses.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildToolProcessEnvironment } from '../../src/tools/buildToolProcessEnvironment.js';
 
 describe('buildToolProcessEnvironment', () => {
@@ -8,7 +8,7 @@ describe('buildToolProcessEnvironment', () => {
       tool: { name: 'xcrun', path: '/usr/bin/xcrun' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
-      processes: DARWIN_TOOL_PROCESSES,
+      processes: darwinPlatform.tools.processes,
     });
 
     expect(environment).toEqual({
@@ -24,7 +24,7 @@ describe('buildToolProcessEnvironment', () => {
       tool: { name: 'mise', path: '/opt/homebrew/Cellar/mise/1.0.0/bin/mise' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
-      processes: DARWIN_TOOL_PROCESSES,
+      processes: darwinPlatform.tools.processes,
     });
 
     expect(environment).toEqual({
@@ -41,7 +41,7 @@ describe('buildToolProcessEnvironment', () => {
       tool: { name: 'dart', path: '/sdk/flutter/bin/cache/dart-sdk/bin/dart' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
-      processes: DARWIN_TOOL_PROCESSES,
+      processes: darwinPlatform.tools.processes,
     });
 
     expect(Object.keys(environment).toSorted()).toEqual(['HOME', 'LANG', 'PATH', 'TMPDIR']);
@@ -52,13 +52,13 @@ describe('buildToolProcessEnvironment', () => {
       tool: { name: 'brewAppleSilicon', path: '/opt/homebrew/bin/brew' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
-      processes: DARWIN_TOOL_PROCESSES,
+      processes: darwinPlatform.tools.processes,
     });
     const intel = buildToolProcessEnvironment({
       tool: { name: 'brewIntel', path: '/usr/local/bin/brew' },
       homeDir: '/fixture/home',
       tempDir: '/fixture/tmp',
-      processes: DARWIN_TOOL_PROCESSES,
+      processes: darwinPlatform.tools.processes,
     });
 
     expect(appleSilicon.HOMEBREW_NO_COLOR).toBe('1');

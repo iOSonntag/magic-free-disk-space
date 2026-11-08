@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { chmod, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { CatalogLocation } from '../../src/catalog/catalog.js';
+import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadDownloadsInstallerFindings } from '../../src/explore/downloadsInstallers/loadDownloadsInstallerFindings.js';
 import { recheckDownloadsUnit } from '../../src/explore/downloadsInstallers/recheckDownloadsUnit.js';
+import type { ExploreProbePlatform } from '../../src/explore/exploreProbe.js';
 import type { ExploreFinding, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
 import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
@@ -26,8 +30,32 @@ const STALE_CUTOFF_MS = NOW_MS - 30 * DAY_MS;
 const OLD_MS = NOW_MS - 90 * DAY_MS;
 const FILE_SIZE_BYTES = 4096;
 
+/**
+ * Runs only on macOS a test of a running browser: a browser counts as running by its app bundle,
+ * which only the catalog of macOS names.
+ */
+const testWithBrowserBundles = testOnDarwin;
+
+/** The Downloads folder the probe platform of these tests names, on every host. */
+const fixtureDownloadsRoot: CatalogLocation = { root: 'home', path: 'Downloads' };
+
+/** The probe platform of the host with its Downloads folder at `downloadsRoot`. */
+function buildDownloadsProbePlatform(params: {
+  downloadsRoot: CatalogLocation | null;
+}): ExploreProbePlatform {
+  const probePlatform = buildTestProbePlatform();
+
+  return {
+    ...probePlatform,
+    explore: { ...probePlatform.explore, downloadsRoot: params.downloadsRoot },
+  };
+}
+
 function getDownloadsPath(home: FixtureHome): string {
-  return join(home.fixtureRoot.homeDir, 'Downloads');
+  return resolveEnvironmentLocation({
+    folders: home.environment,
+    location: fixtureDownloadsRoot,
+  });
 }
 
 /** Writes a file last changed at `modifiedMs`, by default long ago. */
@@ -86,7 +114,11 @@ describe('the Downloads probe', () => {
 
           const probed = getProbeFindings(
             await loadDownloadsInstallerFindings(
-              buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
+              buildTestProbeRun({
+                environment: home.environment,
+                platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+                staleCutoffMs: STALE_CUTOFF_MS,
+              }),
             ),
           );
           const installers = getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' });
@@ -160,6 +192,7 @@ describe('the Downloads probe', () => {
           await loadDownloadsInstallerFindings(
             buildTestProbeRun({
               environment: home.environment,
+              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
               staleCutoffMs: STALE_CUTOFF_MS,
               unusedCutoffMs: NOW_MS - 180 * DAY_MS,
             }),
@@ -186,7 +219,11 @@ describe('the Downloads probe', () => {
 
         expect(
           await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({
+              environment: home.environment,
+              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+              staleCutoffMs: STALE_CUTOFF_MS,
+            }),
           ),
         ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
       },
@@ -206,7 +243,11 @@ describe('the Downloads probe', () => {
 
         const probed = getProbeFindings(
           await loadDownloadsInstallerFindings({
-            ...buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
+            ...buildTestProbeRun({
+              environment: home.environment,
+              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+              staleCutoffMs: STALE_CUTOFF_MS,
+            }),
             deadlineMs: Date.now() - 1,
           }),
         );
@@ -231,7 +272,11 @@ describe('the Downloads probe', () => {
 
         expect(
           await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({
+              environment: home.environment,
+              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+              staleCutoffMs: STALE_CUTOFF_MS,
+            }),
           ),
         ).toMatchObject({
           kind: 'failed',
@@ -241,63 +286,71 @@ describe('the Downloads probe', () => {
     });
   });
 
-  test('tells a partial download busy while a browser of its family runs, an installer never', async () => {
-    await withFixtureHome({
-      nowMs: NOW_MS,
-      run: async (home) => {
-        const downloads = getDownloadsPath(home);
+  testWithBrowserBundles(
+    'tells a partial download busy while a browser of its family runs, an installer never',
+    async () => {
+      await withFixtureHome({
+        nowMs: NOW_MS,
+        run: async (home) => {
+          const downloads = getDownloadsPath(home);
 
-        await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
-        await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
+          await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
+          await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
 
-        const findings = getProbeFindings(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
-              staleCutoffMs: STALE_CUTOFF_MS,
-            }),
-          ),
-        ).findings;
+          const findings = getProbeFindings(
+            await loadDownloadsInstallerFindings(
+              buildTestProbeRun({
+                environment: home.environment,
+                platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+                runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
+                staleCutoffMs: STALE_CUTOFF_MS,
+              }),
+            ),
+          ).findings;
 
-        expect(findFinding({ findings: findings, kind: 'downloadsIncomplete' })?.activity).toBe(
-          'busy',
-        );
-        expect(findFinding({ findings: findings, kind: 'downloadsInstallers' })?.activity).toBe(
-          'idle',
-        );
-      },
-    });
-  });
+          expect(findFinding({ findings: findings, kind: 'downloadsIncomplete' })?.activity).toBe(
+            'busy',
+          );
+          expect(findFinding({ findings: findings, kind: 'downloadsInstallers' })?.activity).toBe(
+            'idle',
+          );
+        },
+      });
+    },
+  );
 
-  test('offers a partial download of Firefox while only Chrome runs', async () => {
-    await withFixtureHome({
-      nowMs: NOW_MS,
-      run: async (home) => {
-        const downloads = getDownloadsPath(home);
+  testWithBrowserBundles(
+    'offers a partial download of Firefox while only Chrome runs',
+    async () => {
+      await withFixtureHome({
+        nowMs: NOW_MS,
+        run: async (home) => {
+          const downloads = getDownloadsPath(home);
 
-        await createDownloadsFile({ path: join(downloads, 'Big.iso.part') });
+          await createDownloadsFile({ path: join(downloads, 'Big.iso.part') });
 
-        const findings = getProbeFindings(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
-              staleCutoffMs: STALE_CUTOFF_MS,
-            }),
-          ),
-        ).findings;
+          const findings = getProbeFindings(
+            await loadDownloadsInstallerFindings(
+              buildTestProbeRun({
+                environment: home.environment,
+                platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+                runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
+                staleCutoffMs: STALE_CUTOFF_MS,
+              }),
+            ),
+          ).findings;
 
-        expect(findings).toMatchObject([
-          {
-            title: 'Unfinished downloads of Firefox',
-            activity: 'idle',
-            unit: { kind: 'downloadsIncomplete', browserFamily: 'firefox' },
-          },
-        ]);
-      },
-    });
-  });
+          expect(findings).toMatchObject([
+            {
+              title: 'Unfinished downloads of Firefox',
+              activity: 'idle',
+              unit: { kind: 'downloadsIncomplete', browserFamily: 'firefox' },
+            },
+          ]);
+        },
+      });
+    },
+  );
 
   test('says the place is missing without a Downloads folder', async () => {
     await withFixtureHome({
@@ -305,7 +358,11 @@ describe('the Downloads probe', () => {
       run: async (home) => {
         expect(
           await loadDownloadsInstallerFindings(
-            buildTestProbeRun({ environment: home.environment, staleCutoffMs: STALE_CUTOFF_MS }),
+            buildTestProbeRun({
+              environment: home.environment,
+              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+              staleCutoffMs: STALE_CUTOFF_MS,
+            }),
           ),
         ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
       },
@@ -315,16 +372,11 @@ describe('the Downloads probe', () => {
 
 describe('the Downloads probe on a platform without a fixed Downloads place', () => {
   test('says the place is missing', async () => {
-    const probePlatform = buildTestProbePlatform();
-
     expect(
       await loadDownloadsInstallerFindings(
         buildTestProbeRun({
           environment: EXAMPLE_WIN32_ENVIRONMENT,
-          platform: {
-            ...probePlatform,
-            explore: { ...probePlatform.explore, downloadsRoot: null },
-          },
+          platform: buildDownloadsProbePlatform({ downloadsRoot: null }),
         }),
       ),
     ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
@@ -343,6 +395,7 @@ describe('recheckDownloadsUnit', () => {
 
         const run = buildTestProbeRun({
           environment: home.environment,
+          platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
           staleCutoffMs: STALE_CUTOFF_MS,
         });
         const unit = getUnitOfKind({
@@ -372,47 +425,51 @@ describe('recheckDownloadsUnit', () => {
     });
   });
 
-  test('finds a partial download busy while a browser of its family runs, unchanged while another runs', async () => {
-    await withFixtureHome({
-      nowMs: NOW_MS,
-      run: async (home) => {
-        const downloads = getDownloadsPath(home);
+  testWithBrowserBundles(
+    'finds a partial download busy while a browser of its family runs, unchanged while another runs',
+    async () => {
+      await withFixtureHome({
+        nowMs: NOW_MS,
+        run: async (home) => {
+          const downloads = getDownloadsPath(home);
 
-        await createDownloadsFile({ path: join(downloads, 'A.part') });
+          await createDownloadsFile({ path: join(downloads, 'A.part') });
 
-        const run = buildTestProbeRun({
-          environment: home.environment,
-          staleCutoffMs: STALE_CUTOFF_MS,
-        });
-        const unit = getUnitOfKind({
-          findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
-          kind: 'downloadsIncomplete',
-        });
-        const firefoxCommand = join(
-          home.fixtureRoot.applicationDir,
-          'Firefox.app',
-          'Contents',
-          'MacOS',
-          'firefox',
-        );
+          const run = buildTestProbeRun({
+            environment: home.environment,
+            platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
+            staleCutoffMs: STALE_CUTOFF_MS,
+          });
+          const unit = getUnitOfKind({
+            findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
+            kind: 'downloadsIncomplete',
+          });
+          const firefoxCommand = join(
+            home.fixtureRoot.applicationDir,
+            'Firefox.app',
+            'Contents',
+            'MacOS',
+            'firefox',
+          );
 
-        const outcomes = [
-          await recheckDownloadsUnit({
-            unit: unit,
-            environment: run.environment,
-            platform: run.platform,
-            runningProcesses: buildRunningCommandLines([firefoxCommand]),
-          }),
-          await recheckDownloadsUnit({
-            unit: unit,
-            environment: run.environment,
-            platform: run.platform,
-            runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
-          }),
-        ];
+          const outcomes = [
+            await recheckDownloadsUnit({
+              unit: unit,
+              environment: run.environment,
+              platform: run.platform,
+              runningProcesses: buildRunningCommandLines([firefoxCommand]),
+            }),
+            await recheckDownloadsUnit({
+              unit: unit,
+              environment: run.environment,
+              platform: run.platform,
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
+            }),
+          ];
 
-        expect(outcomes).toEqual([{ kind: 'busy' }, { kind: 'unchanged' }]);
-      },
-    });
-  });
+          expect(outcomes).toEqual([{ kind: 'busy' }, { kind: 'unchanged' }]);
+        },
+      });
+    },
+  );
 });

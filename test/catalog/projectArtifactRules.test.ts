@@ -1,10 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { ProjectArtifactRule } from '../../src/catalog/projectArtifactRules.js';
 import { findMarkedArtifactRule } from '../../src/catalog/projectArtifactRules.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 
-const BIN_RULE: ProjectArtifactRule = {
+const binRule: ProjectArtifactRule = {
   artifactName: 'bin',
   markers: [{ kind: 'fileSuffix', suffix: '.csproj' }],
   unmarkedFolder: 'walked',
@@ -14,7 +13,7 @@ const BIN_RULE: ProjectArtifactRule = {
   risk: 'safe',
 };
 
-const NODE_MODULES_RULE: ProjectArtifactRule = {
+const nodeModulesRule: ProjectArtifactRule = {
   artifactName: 'node_modules',
   markers: [{ kind: 'fileName', name: 'package.json' }],
   unmarkedFolder: 'skipped',
@@ -24,60 +23,60 @@ const NODE_MODULES_RULE: ProjectArtifactRule = {
   risk: 'review',
 };
 
-const RULES = [BIN_RULE, NODE_MODULES_RULE];
+const artifactRules = [binRule, nodeModulesRule];
 
 describe('findMarkedArtifactRule', () => {
   test('matches a folder and its marker in another case under the rules of Windows, as the catalog names its rule', () => {
     expect(
       findMarkedArtifactRule({
         pathRules: WIN32_PATH_RULES,
-        rules: RULES,
+        rules: artifactRules,
         name: 'Bin',
         projectEntryNames: new Set(['Bin', 'Foo.CSPROJ']),
       }),
-    ).toBe(BIN_RULE);
+    ).toBe(binRule);
     expect(
       findMarkedArtifactRule({
         pathRules: WIN32_PATH_RULES,
-        rules: RULES,
+        rules: artifactRules,
         name: 'NODE_MODULES',
         projectEntryNames: new Set(['NODE_MODULES', 'Package.JSON']),
       }),
-    ).toBe(NODE_MODULES_RULE);
+    ).toBe(nodeModulesRule);
   });
 
   test('matches names only exactly under the rules of POSIX', () => {
     expect(
       findMarkedArtifactRule({
-        pathRules: DARWIN_PATH_RULES,
-        rules: RULES,
+        pathRules: POSIX_PATH_RULES,
+        rules: artifactRules,
         name: 'Bin',
         projectEntryNames: new Set(['Bin', 'Foo.csproj']),
       }),
     ).toBeNull();
     expect(
       findMarkedArtifactRule({
-        pathRules: DARWIN_PATH_RULES,
-        rules: RULES,
+        pathRules: POSIX_PATH_RULES,
+        rules: artifactRules,
         name: 'node_modules',
         projectEntryNames: new Set(['node_modules', 'Package.json']),
       }),
     ).toBeNull();
     expect(
       findMarkedArtifactRule({
-        pathRules: DARWIN_PATH_RULES,
-        rules: RULES,
+        pathRules: POSIX_PATH_RULES,
+        rules: artifactRules,
         name: 'bin',
         projectEntryNames: new Set(['bin', 'Foo.csproj']),
       }),
-    ).toBe(BIN_RULE);
+    ).toBe(binRule);
   });
 
   test('takes no suffix alone as a marker, in any case', () => {
     expect(
       findMarkedArtifactRule({
         pathRules: WIN32_PATH_RULES,
-        rules: RULES,
+        rules: artifactRules,
         name: 'bin',
         projectEntryNames: new Set(['bin', '.CSPROJ']),
       }),

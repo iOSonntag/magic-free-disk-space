@@ -26,7 +26,7 @@ import {
   FIXTURE_PROFILE_ID,
   LISTED_OBSOLETE_FOLDER_NAME,
   OBSOLETE_FOLDER_NAME,
-  VSCODE_HOST_PROCESS,
+  runningVscodeProcesses,
 } from './vscodeExtensionFixtures.js';
 
 let fixtureRoot: FixtureRoot;
@@ -155,7 +155,7 @@ describe('recheckExplorePathUnit of a VS Code extension', () => {
         unit: unit,
         environment: environment,
         platform: buildTestProbePlatform(),
-        runningProcesses: buildRunningCommandLines([VSCODE_HOST_PROCESS]),
+        runningProcesses: runningVscodeProcesses,
       }),
     ).toEqual({ kind: 'busy' });
     expect(

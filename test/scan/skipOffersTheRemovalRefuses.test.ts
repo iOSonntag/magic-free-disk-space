@@ -1,19 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import type {
-  Candidate,
-  CandidateDecision,
-  CandidateRecycleBin,
-  SkipReason,
-} from '../../src/scan/candidate.js';
+import type { Candidate, CandidateDecision, SkipReason } from '../../src/scan/candidate.js';
 import { skipOffersTheRemovalRefuses } from '../../src/scan/skipOffersTheRemovalRefuses.js';
-import { buildTestCandidate, buildTestToolCandidate } from '../support/candidateFixtures.js';
+import {
+  buildTestCandidate,
+  buildTestRecycleBinCandidate,
+  buildTestToolCandidate,
+} from '../support/candidateFixtures.js';
 import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
 import {
   buildTestEvictCandidate,
   buildTestEvictTarget,
 } from '../support/evictCandidateFixtures.js';
 import { buildTestPathEnvironment } from '../support/fixtureRoot.js';
-import { buildExampleHome, buildTestDriveRoot } from '../support/parsedValueFixtures.js';
+import { buildExampleHome } from '../support/parsedValueFixtures.js';
 
 const HOME_DIR = '/Users/example';
 
@@ -153,7 +152,7 @@ describe('skipOffersTheRemovalRefuses', () => {
       decisions: ['D:\\', 'E:\\'].map(
         (driveRootText): CandidateDecision => ({
           kind: 'offer',
-          candidate: buildRecycleBinCandidate({ driveRootText: driveRootText }),
+          candidate: buildTestRecycleBinCandidate({ driveRootText: driveRootText }),
         }),
       ),
     });
@@ -166,21 +165,3 @@ describe('skipOffersTheRemovalRefuses', () => {
     });
   });
 });
-
-/** The Recycle Bin of the drive at `driveRootText`, as the scan offers it. */
-function buildRecycleBinCandidate(params: { driveRootText: string }): CandidateRecycleBin {
-  return {
-    ...buildTestCandidate({
-      path: `${params.driveRootText}$Recycle.Bin`,
-      title: 'Recycle Bin',
-      category: 'trash',
-      risk: 'careful',
-    }),
-    origin: { kind: 'recycleBin' },
-    removal: {
-      kind: 'emptyRecycleBin',
-      driveRoot: buildTestDriveRoot({ text: params.driveRootText }),
-      scannedContent: { sizeBytes: 4096, itemCount: 2 },
-    },
-  };
-}

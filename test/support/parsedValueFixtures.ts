@@ -50,8 +50,7 @@ import { joinAbsolutePath } from '../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import type { PathRules } from '../../src/path/pathRules.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { Result } from '../../src/result.js';
 import type { UserIdentity, WindowsSid } from '../../src/system/userIdentity.js';
 import { parsePosixUid, parseWindowsSid } from '../../src/system/userIdentity.js';
@@ -60,12 +59,12 @@ import { parsePosixUid, parseWindowsSid } from '../../src/system/userIdentity.js
 
 /** The rules of the operating system that runs the tests, for the paths it names itself. */
 export const HOST_PATH_RULES: PathRules =
-  process.platform === 'win32' ? WIN32_PATH_RULES : DARWIN_PATH_RULES;
+  process.platform === 'win32' ? WIN32_PATH_RULES : POSIX_PATH_RULES;
 
 /** An example macOS path, such as `/Users/test/Library`, the same on every host. */
 export function buildTestAbsolutePath(params: { text: string }): AbsolutePath {
   return unwrapFixtureValue({
-    parsed: parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text }),
+    parsed: parseAbsolutePath({ rules: POSIX_PATH_RULES, text: params.text }),
     text: params.text,
   });
 }
@@ -98,15 +97,15 @@ export function buildTestDriveRoot(params: { text: string }): DriveRoot {
  * A home folder with the rules its paths follow: the environment of a test on the fixture root,
  * which the host names, or an example one.
  */
-export type FixtureHome = { pathRules: PathRules; homeDir: AbsolutePath };
+export type HomeFolder = { pathRules: PathRules; homeDir: AbsolutePath };
 
 /** An example macOS home, such as `/Users/example`, the same on every host. */
-export function buildExampleHome(params: { text: string }): FixtureHome {
-  return { pathRules: DARWIN_PATH_RULES, homeDir: buildTestAbsolutePath({ text: params.text }) };
+export function buildExampleHome(params: { text: string }): HomeFolder {
+  return { pathRules: POSIX_PATH_RULES, homeDir: buildTestAbsolutePath({ text: params.text }) };
 }
 
 /** The path of `path`, written with `/`, below the home, joined under the home's rules. */
-export function joinBelowHome(params: { home: FixtureHome; path: string }): AbsolutePath {
+export function joinBelowHome(params: { home: HomeFolder; path: string }): AbsolutePath {
   return joinAbsolutePath({
     rules: params.home.pathRules,
     parentPath: params.home.homeDir,

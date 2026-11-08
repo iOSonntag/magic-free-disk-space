@@ -6,10 +6,9 @@ import {
   isSamePath,
   toComparablePathText,
 } from '../../src/path/isSameOrInsidePath.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 
-const RULES = DARWIN_PATH_RULES;
+const RULES = POSIX_PATH_RULES;
 
 describe('isSameOrInsidePath', () => {
   test('a path is inside itself and its ancestors', () => {

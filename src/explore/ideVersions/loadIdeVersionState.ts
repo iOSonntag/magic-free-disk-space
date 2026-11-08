@@ -1,5 +1,5 @@
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -51,7 +51,7 @@ export async function loadIdeVersionState(params: {
     for (const root of params.roots[kind]) {
       const rootFolders = await loadRootFolders({
         pathRules: params.environment.pathRules,
-        rootPath: resolveCatalogLocation({ environment: params.environment, location: root }),
+        rootPath: resolveEnvironmentLocation({ folders: params.environment, location: root }),
         kind: kind,
         privacyDenialCode: params.privacyDenialCode,
       });

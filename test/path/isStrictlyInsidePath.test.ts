@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { isStrictlyInsidePath } from '../../src/path/isStrictlyInsidePath.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 
-const RULES = DARWIN_PATH_RULES;
+const RULES = POSIX_PATH_RULES;
 
 describe('isStrictlyInsidePath', () => {
   test('a path is strictly inside each of its ancestors', () => {

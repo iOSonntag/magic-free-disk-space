@@ -51,7 +51,7 @@ const ECHO_LINE = 'Größe – 🧹';
  * Set to `1` to run the cloud placeholder probe, which registers a sync root of the Cloud Files
  * API on this machine for the time of the probe; the Windows runners of the tests set it.
  */
-const IS_CLOUD_PROBE_OPTED_IN = process.env.MAGIC_FREE_DISK_SPACE_CLOUD_PROBE === '1';
+const isCloudProbeOptedIn = process.env.MAGIC_FREE_DISK_SPACE_CLOUD_PROBE === '1';
 
 /** The longest path a W function takes without its `\\?\` form while long paths are off. */
 const MAX_PATH = 260;
@@ -66,7 +66,7 @@ const DRIVE_FIXED = 3;
 const NO_KNOWN_FOLDER_ID = '00000000-0000-0000-0000-000000000000';
 
 /** An attribute text of loadAttributesText: the call succeeded. */
-const ATTRIBUTES_HEX_PATTERN = /^0x[0-9a-f]{8}$/;
+const ATTRIBUTES_HEX_PATTERN = /^0x[0-9A-F]{8}$/;
 
 // The flags the release compiles the bridge with, so the probe runs as the bridge does.
 const COMPILED_PROBE_BUILD_FLAGS = [
@@ -368,7 +368,7 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
     COMPILED_PROBE_TEST_TIMEOUT_MS,
   );
 
-  test.skipIf(!IS_CLOUD_PROBE_OPTED_IN)(
+  test.skipIf(!isCloudProbeOptedIn)(
     'a cloud-only file of the Cloud Files API reads as evicted, a populated folder as on this PC',
     async () => {
       const syncRoot = join(folder, 'syncRoot');

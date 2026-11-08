@@ -1,4 +1,6 @@
 import { toComparablePathText } from '../../path/isSameOrInsidePath.js';
+import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import { WIN32_PATH_RULES } from '../../path/pathRules.js';
 import type { ScanIssue } from '../../scan/issue.js';
 import type { AdvisedApp } from '../../scan/scanPlatform.js';
@@ -140,14 +142,24 @@ function toAdvisedApp(params: { values: UninstallKeyValues }): AdvisedApp | null
 }
 
 /**
- * The install folder without the quotes or the trailing backslash installers write around it;
- * `null` for none.
+ * The install folder without the quotes or the trailing backslash installers write around it, a
+ * drive root with its backslash; `null` for none, and for a text that is no absolute Windows path.
  */
-function parseInstallFolderPath(params: { text: string | null }): string | null {
+function parseInstallFolderPath(params: { text: string | null }): AbsolutePath | null {
   const unquoted = (params.text ?? '').trim().replace(/^"(.*)"$/, '$1');
-  const folderPath = /^[A-Za-z]:\\$/.test(unquoted) ? unquoted : unquoted.replace(/\\+$/, '');
+  const folderPath = parseAbsolutePath({
+    rules: WIN32_PATH_RULES,
+    text: unquoted.replace(/[\\/]+$/, ''),
+  });
 
-  return folderPath === '' ? null : folderPath;
+  if (folderPath.kind === 'succeeded') {
+    return folderPath.value;
+  }
+
+  // A drive root, which is no absolute path without its backslash.
+  const driveRootPath = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: unquoted });
+
+  return driveRootPath.kind === 'succeeded' ? driveRootPath.value : null;
 }
 
 /** A size of 0 is an installer that wrote none. */

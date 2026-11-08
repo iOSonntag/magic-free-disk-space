@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { USER_FILE_ROOTS } from '../../src/platform/darwin/scanHomeFolders.js';
-import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { resolveUserFileRootPaths } from '../../src/scan/resolveUserFileRootPaths.js';
 import {
   EXAMPLE_DARWIN_ENVIRONMENT,
@@ -10,7 +10,10 @@ import {
 describe('resolveUserFileRootPaths', () => {
   test('resolves the folders of macOS below the home, in their order', () => {
     expect<string[]>(
-      resolveUserFileRootPaths({ environment: EXAMPLE_DARWIN_ENVIRONMENT, roots: USER_FILE_ROOTS }),
+      resolveUserFileRootPaths({
+        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        roots: darwinPlatform.scan.userFileRoots,
+      }),
     ).toEqual([
       '/Users/tester/Desktop',
       '/Users/tester/Documents',
@@ -23,7 +26,7 @@ describe('resolveUserFileRootPaths', () => {
     expect<string[]>(
       resolveUserFileRootPaths({
         environment: EXAMPLE_WIN32_ENVIRONMENT,
-        roots: WIN32_CATALOG.userFileRoots,
+        roots: win32Platform.scan.userFileRoots,
       }),
     ).toEqual([
       'C:\\Users\\tester\\Desktop',

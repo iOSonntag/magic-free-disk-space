@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import type { DriveRoot } from '../../../src/path/driveRoot.js';
+import { listDriveRootTexts } from '../../../src/platform/win32/listDriveRoots.js';
 import {
   emptyRecycleBin,
   loadLogicalDrives,
@@ -19,14 +20,14 @@ const FIRST_FAILURE_HRESULT = 0x80000000;
  * every file in it, so it runs only on a throwaway machine, such as the Windows runner of the
  * tests.
  */
-const IS_RECYCLE_BIN_PROBE_OPTED_IN = process.env.MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE === '1';
+const isRecycleBinProbeOptedIn = process.env.MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE === '1';
 
 /** The root of the drive of the temporary folder, whose bin the probes count and empty. */
 function buildHostDriveRoot(): DriveRoot {
   return buildTestDriveRoot({ text: parse(tmpdir()).root });
 }
 
-/** The root of a drive letter no drive of this machine has, from `Z` down. */
+/** The root of the last drive letter no drive of this machine has. */
 function findAbsentDriveRoot(): DriveRoot {
   const logicalDrives = loadLogicalDrives();
 
@@ -34,17 +35,18 @@ function findAbsentDriveRoot(): DriveRoot {
     throw new Error('GetLogicalDrives failed.');
   }
 
-  for (let index = 25; index >= 0; index -= 1) {
-    if ((logicalDrives.value & (1 << index)) === 0) {
-      return buildTestDriveRoot({ text: `${String.fromCharCode(65 + index)}:\\` });
-    }
+  const absentRootTexts = listDriveRootTexts({ logicalDrives: ~logicalDrives.value });
+  const lastAbsentRootText = absentRootTexts.at(-1);
+
+  if (lastAbsentRootText === undefined) {
+    throw new Error('Every drive letter is taken.');
   }
 
-  throw new Error('Every drive letter is taken.');
+  return buildTestDriveRoot({ text: lastAbsentRootText });
 }
 
 /** The code the deletion of Windows reads as a bin that held nothing to empty. */
-function loadNothingToEmptyCode(): number {
+function getNothingToEmptyCode(): number {
   const trash = win32Platform.delete.trash;
 
   switch (trash.kind) {
@@ -77,7 +79,7 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
     expect(content.kind === 'failed' && content.failure.code >= FIRST_FAILURE_HRESULT).toBe(true);
   });
 
-  describe.skipIf(!IS_RECYCLE_BIN_PROBE_OPTED_IN)('on a throwaway machine', () => {
+  describe.skipIf(!isRecycleBinProbeOptedIn)('on a throwaway machine', () => {
     let folder: string;
 
     beforeEach(async () => {
@@ -119,7 +121,7 @@ describe.skipIf(process.platform !== 'win32')('the Recycle Bin of Windows', () =
       });
       expect(emptyRecycleBin({ driveRoot: driveRoot })).toEqual({
         kind: 'failed',
-        failure: { call: 'SHEmptyRecycleBinW', code: loadNothingToEmptyCode() },
+        failure: { call: 'SHEmptyRecycleBinW', code: getNothingToEmptyCode() },
       });
     });
   });

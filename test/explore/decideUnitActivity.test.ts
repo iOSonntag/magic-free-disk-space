@@ -129,8 +129,11 @@ const RUSTUP_TOOLCHAIN_PATH = buildTestAbsolutePath({
   text: `${RUSTUP_TOOLCHAINS_PATH}/nightly-aarch64-apple-darwin`,
 });
 
-/** Each unit kind whose busy rule reads the processes, while no probe of Windows reaches it. */
-const FACTS_UNEXPLORED_ON_WINDOWS: UnitActivityFacts[] = [
+/**
+ * Each unit kind whose busy rule reads the processes by their command lines alone, with no rule
+ * for an image path.
+ */
+const factsWithoutImagePathRule: UnitActivityFacts[] = [
   { kind: 'simulatorDevice', state: 'Shutdown' },
   { kind: 'simulatorRuntime' },
   { kind: 'homebrew' },
@@ -252,8 +255,8 @@ describe('decideUnitActivity', () => {
     }
   });
 
-  test('a unit no probe of Windows reaches is unknown beside the images Windows lists', () => {
-    for (const facts of FACTS_UNEXPLORED_ON_WINDOWS) {
+  test('a unit without a rule for an image path is unknown beside the images Windows lists', () => {
+    for (const facts of factsWithoutImagePathRule) {
       expect(
         decideUnitActivity({
           facts: facts,

@@ -20,7 +20,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
 import {
@@ -134,8 +134,7 @@ function buildProbeScan(params: Partial<ExploreProbeStart>): ExploreProbeScan {
   return startExploreProbeScan(buildProbeStart(params));
 }
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('startExploreProbes', () => {
+describeWithFakeTools('startExploreProbes', () => {
   test('finds the units of every tool with the activity of each, all judged', async () => {
     const tools = await createWorkingTools();
 

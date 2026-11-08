@@ -1,22 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import type { CatalogLocation } from '../../../src/catalog/catalog.js';
-import { resolveCatalogLocation } from '../../../src/catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../../src/environment/buildEnvironment.js';
+import {
+  resolveEnvironmentLocation,
+  resolveEnvironmentLocations,
+} from '../../../src/environment/environmentLocation.js';
 import type { ContainerEngine } from '../../../src/explore/explorePlatform.js';
 import { formatExploreUnitKey } from '../../../src/explore/formatExploreUnitKey.js';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
 import { buildVolumeName } from '../../explore/engineFixtures.js';
 import { buildTestMacEnvironment } from '../../support/fixtureRoot.js';
-
-/** The paths of the locations, as plain texts to compare with the paths of before. */
-function resolvePlaces(params: {
-  environment: Environment;
-  locations: CatalogLocation[];
-}): string[] {
-  return params.locations.map((location) =>
-    resolveCatalogLocation({ environment: params.environment, location: location }),
-  );
-}
 
 /**
  * Every place an engine names: a fixed engine's sockets and disk image; a profile engine's
@@ -32,13 +24,13 @@ function listEnginePlacePaths(params: {
 
   switch (params.engine.kind) {
     case 'fixed':
-      return resolvePlaces({
-        environment: params.environment,
+      return resolveEnvironmentLocations({
+        folders: params.environment,
         locations: [...params.engine.socketPaths, params.engine.diskImagePath],
       });
     case 'profiles':
-      return resolvePlaces({
-        environment: params.environment,
+      return resolveEnvironmentLocations({
+        folders: params.environment,
         locations: [
           params.engine.profilesRoot,
           params.engine.diskImagePath,
@@ -99,12 +91,12 @@ describe("darwin's explore places", () => {
           kind: 'engineVolume',
           engineProbeId: 'dockerDesktopEngine',
           engineName: engine.engineName,
-          socketPath: resolveCatalogLocation({
-            environment: environment,
+          socketPath: resolveEnvironmentLocation({
+            folders: environment,
             location: engine.socketPaths[0],
           }),
-          diskImagePath: resolveCatalogLocation({
-            environment: environment,
+          diskImagePath: resolveEnvironmentLocation({
+            folders: environment,
             location: engine.diskImagePath,
           }),
           sizeBytes: 1,
@@ -118,10 +110,10 @@ describe("darwin's explore places", () => {
     const environment = buildTestMacEnvironment();
     const roots = darwinPlatform.explore.ideVersionRoots;
 
-    expect({
-      caches: resolvePlaces({ environment: environment, locations: roots.caches }),
-      logs: resolvePlaces({ environment: environment, locations: roots.logs }),
-      settings: resolvePlaces({ environment: environment, locations: roots.settings }),
+    expect<Record<string, string[]>>({
+      caches: resolveEnvironmentLocations({ folders: environment, locations: roots.caches }),
+      logs: resolveEnvironmentLocations({ folders: environment, locations: roots.logs }),
+      settings: resolveEnvironmentLocations({ folders: environment, locations: roots.settings }),
     }).toEqual({
       caches: ['/Users/tester/Library/Caches/JetBrains', '/Users/tester/Library/Caches/Google'],
       logs: ['/Users/tester/Library/Logs/JetBrains', '/Users/tester/Library/Logs/Google'],
@@ -141,7 +133,7 @@ describe("darwin's explore places", () => {
       folderRoots.map((location): string | null =>
         location === null
           ? null
-          : resolveCatalogLocation({ environment: environment, location: location }),
+          : resolveEnvironmentLocation({ folders: environment, location: location }),
       ),
     ).toEqual([
       '/Users/tester/Library/Mobile Documents',
@@ -154,11 +146,17 @@ describe("darwin's explore places", () => {
     const environment = buildTestMacEnvironment();
     const places = darwinPlatform.explore.pnpmInstallPlaces;
 
-    expect({
-      homes: resolvePlaces({ environment: environment, locations: places.homes }),
-      corepackRoots: resolvePlaces({ environment: environment, locations: places.corepackRoots }),
-      launchers: resolvePlaces({ environment: environment, locations: places.launchers }),
-      npmPrefixes: resolvePlaces({ environment: environment, locations: places.npmPrefixes }),
+    expect<Record<string, string[]>>({
+      homes: resolveEnvironmentLocations({ folders: environment, locations: places.homes }),
+      corepackRoots: resolveEnvironmentLocations({
+        folders: environment,
+        locations: places.corepackRoots,
+      }),
+      launchers: resolveEnvironmentLocations({ folders: environment, locations: places.launchers }),
+      npmPrefixes: resolveEnvironmentLocations({
+        folders: environment,
+        locations: places.npmPrefixes,
+      }),
       npmGlobalFolderNames: places.npmGlobalFolderNames,
     }).toEqual({
       homes: ['/Users/tester/Library/pnpm', '/Users/tester/.local/share/pnpm'],

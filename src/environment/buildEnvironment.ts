@@ -4,7 +4,11 @@ import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import type { UserIdentity } from '../system/userIdentity.js';
 import type { EnvironmentLocation, EnvironmentLocationAtRoot } from './environmentLocation.js';
-import { findEnvironmentLocationPath, resolveEnvironmentLocation } from './environmentLocation.js';
+import {
+  findEnvironmentLocationPath,
+  resolveEnvironmentLocation,
+  resolveEnvironmentLocations,
+} from './environmentLocation.js';
 
 /** Windows' two AppData folders of the user, which may lie outside the home folder. */
 export type AppDataDirs = { localDir: AbsolutePath; roamingDir: AbsolutePath };
@@ -179,7 +183,7 @@ export function buildEnvironment(params: {
       ...platformBaseRealPaths,
       ...params.protectedRootPaths,
     ],
-    sensitiveRealPaths: resolveLocations({
+    sensitiveRealPaths: resolveEnvironmentLocations({
       folders: realFolders,
       locations: [
         ...params.sensitiveLocations,
@@ -187,11 +191,14 @@ export function buildEnvironment(params: {
         params.preferencesLocation,
       ],
     }),
-    sensitiveExceptionRealPaths: resolveLocations({
+    sensitiveExceptionRealPaths: resolveEnvironmentLocations({
       folders: realFolders,
       locations: params.sensitiveExceptionLocations,
     }),
-    evictRealRoots: resolveLocations({ folders: realFolders, locations: params.evictLocations }),
+    evictRealRoots: resolveEnvironmentLocations({
+      folders: realFolders,
+      locations: params.evictLocations,
+    }),
     deletionLogPath: joinAbsolutePath({
       rules: params.pathRules,
       parentPath: resolveEnvironmentLocation({
@@ -206,15 +213,6 @@ export function buildEnvironment(params: {
     }),
     ownerOnlyModes: params.ownerOnlyModes,
   };
-}
-
-function resolveLocations(params: {
-  folders: EnvironmentFolders;
-  locations: EnvironmentLocationAtRoot[];
-}): AbsolutePath[] {
-  return params.locations.map((location) =>
-    resolveEnvironmentLocation({ folders: params.folders, location: location }),
-  );
 }
 
 /**

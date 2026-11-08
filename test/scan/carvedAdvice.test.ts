@@ -1,13 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import { SCAN_LIMITS } from '../../src/scan/limits.js';
+import { describeOnDarwin } from '../support/darwinOnly.js';
 import { createFixtureFile, loadTestEnvironment, withFixtureRoot } from '../support/fixtureRoot.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
-
-const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
 
 // Both are large enough to offer, and the snippet is smaller than the previews.
 const PREVIEWS_FILE_BYTES = 4 * SCAN_LIMITS.minOfferedBytes;

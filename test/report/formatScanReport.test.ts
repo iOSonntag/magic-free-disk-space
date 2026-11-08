@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { WIN32_REPORT_TEXTS } from '../../src/platform/win32/reportTexts.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
 import type { Advice } from '../../src/scan/candidate.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
@@ -11,7 +11,7 @@ import {
   buildTestDartToolCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { buildExampleHome } from '../support/parsedValueFixtures.js';
+import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const TEXTS = darwinPlatform.report;
@@ -179,14 +179,16 @@ describe('formatScanReport', () => {
 
   test('lists the installed apps of advice unnumbered after Explore, each with its size or none', () => {
     const lines = formatScanReport({
-      texts: WIN32_REPORT_TEXTS,
+      texts: win32Platform.report,
       report: {
         ...EMPTY_REPORT,
         appAdvice: {
           apps: [
             {
               displayName: 'Example Editor',
-              installFolderPath: 'C:\\Program Files\\Example Editor',
+              installFolderPath: buildTestWindowsPath({
+                text: 'C:\\Program Files\\Example Editor',
+              }),
               estimatedBytes: 2 * 1024 ** 3,
             },
             { displayName: 'Example Tool', installFolderPath: null, estimatedBytes: null },

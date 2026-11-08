@@ -3,8 +3,7 @@ import { chmod, link, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PROJECT_ARTIFACT_RULES } from '../../src/catalog/projectArtifactRules.js';
 import type { PathRules } from '../../src/path/pathRules.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { UserFileFinding } from '../../src/scan/findLargeUserFiles.js';
 import { findLargeUserFiles } from '../../src/scan/findLargeUserFiles.js';
 import type { ScanIssue } from '../../src/scan/issue.js';
@@ -173,7 +172,7 @@ describe('findLargeUserFiles', () => {
     const rootDirs = [join(fixtureRoot.homeDir, 'Documents')];
 
     const win32Result = await findFiles({ pathRules: WIN32_PATH_RULES, rootDirs: rootDirs });
-    const posixResult = await findFiles({ pathRules: DARWIN_PATH_RULES, rootDirs: rootDirs });
+    const posixResult = await findFiles({ pathRules: POSIX_PATH_RULES, rootDirs: rootDirs });
 
     expect(win32Result.findings).toEqual([]);
     expect(posixResult.findings.map((finding) => finding.path)).toEqual([artifactFilePath]);

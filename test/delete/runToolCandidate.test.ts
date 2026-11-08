@@ -37,7 +37,7 @@ import {
 } from '../support/fixtureRoot.js';
 import { writeDartVersionFile } from '../support/flutterSdkFixtures.js';
 import { buildTestMiseToolName, buildTestMiseToolVersion } from '../support/parsedValueFixtures.js';
-import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 
@@ -196,9 +196,7 @@ async function loadNoRunningProcesses(): Promise<RunningProcesses | null> {
   return buildRunningCommandLines([]);
 }
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide; no tool is
-// trusted on Windows.
-describeOnPosix('runToolCandidate', () => {
+describeWithFakeTools('runToolCandidate', () => {
   test('runs the command of an unchanged unit and reports the measured drop', async () => {
     const unit = await createMiseUnit('20.1.0');
 

@@ -15,8 +15,10 @@ import type {
   CandidateListing,
   CandidateMatched,
   CandidateProbed,
+  CandidateRecycleBin,
   CandidateRemovalDeletePaths,
   CandidateRemovalProbed,
+  RecycleBinContent,
   RemovalTarget,
   RemovalTargets,
   TargetsMeasurement,
@@ -25,13 +27,15 @@ import type { Measurement } from '../../src/scan/loadPathMeasurement.js';
 import type { FileIdentity, FileKind } from '../../src/system/loadFileIdentity.js';
 import { mapNonEmpty } from '../../src/system/nonEmptyList.js';
 import type { ToolInstallLocations } from '../../src/tools/toolInstallLocations.js';
-import type { FixtureHome } from './parsedValueFixtures.js';
+import type { HomeFolder } from './parsedValueFixtures.js';
 import {
   buildTestAbsolutePath,
+  buildTestDriveRoot,
   buildTestMiseToolName,
   buildTestMiseToolVersion,
   joinBelowHome,
 } from './parsedValueFixtures.js';
+import { getWin32RecycleBinScanTrash } from './platformFixtures.js';
 
 let nextTestIno = 1000n;
 
@@ -202,7 +206,7 @@ export function buildTestRemovalOutcome(params: {
 
 /** A tool item of a mise version below the home; its tool path is made up and never runs. */
 export function buildTestToolCandidate(params: {
-  home: FixtureHome;
+  home: HomeFolder;
   version: string;
   risk?: Risk;
   allocatedBytes?: number;
@@ -239,7 +243,7 @@ export function buildTestToolCandidate(params: {
  * The tool item of the Dart pub cache below the home, whose tool has leading arguments; its tool
  * path is made up and never runs.
  */
-export function buildTestDartToolCandidate(params: { home: FixtureHome }): Candidate {
+export function buildTestDartToolCandidate(params: { home: HomeFolder }): Candidate {
   const cachePath = joinBelowHome({ home: params.home, path: '.pub-cache' });
 
   return buildTestProbedCandidate({
@@ -378,6 +382,39 @@ export function buildTestEngineCandidate(params: {
     },
     evidenceLines: ['Docker Desktop reports these records unused.'],
   });
+}
+
+/**
+ * The Recycle Bin of the drive at `driveRootText` as the scan of Windows offers it, holding
+ * `scannedContent`; its folder, title, texts and risk are those of the Windows platform.
+ */
+export function buildTestRecycleBinCandidate(params: {
+  driveRootText: string;
+  risk?: Risk;
+  /** 4096 bytes in 2 items when left out. */
+  scannedContent?: RecycleBinContent;
+}): CandidateRecycleBin {
+  const trash = getWin32RecycleBinScanTrash();
+  const scannedContent = params.scannedContent ?? { sizeBytes: 4096, itemCount: 2 };
+
+  return {
+    ...buildTestListing({
+      path: `${params.driveRootText}${trash.binFolderName}`,
+      title: `${trash.title} (${params.driveRootText.slice(0, 2)})`,
+      category: 'trash',
+      risk: params.risk ?? trash.risk,
+      explanation: trash.explanation,
+      regeneration: trash.regeneration,
+      allocatedBytes: scannedContent.sizeBytes,
+      entryCount: scannedContent.itemCount,
+    }),
+    origin: { kind: 'recycleBin' },
+    removal: {
+      kind: 'emptyRecycleBin',
+      driveRoot: buildTestDriveRoot({ text: params.driveRootText }),
+      scannedContent: scannedContent,
+    },
+  };
 }
 
 /** No place for any tool, so a scan in a test never runs a real tool. */

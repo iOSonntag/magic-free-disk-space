@@ -1,24 +1,26 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
-import { runCli } from '../../src/cli/runCli.js';
-import type { JournalEntry } from '../../src/delete/deletionJournal.js';
+import { join } from 'node:path';
 import { isSamePath } from '../../src/path/isSameOrInsidePath.js';
 import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import type { ScanReport } from '../../src/scan/runScan.js';
+import type { ScanView } from '../../src/report/buildScanView.js';
+import { buildScanView } from '../../src/report/buildScanView.js';
+import { runTestCli } from '../support/cliRunFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
+  buildPathBelowRoot,
   createFixtureRoot,
   deleteFixtureRoot,
+  isSameOrBelowPathBelowRoot,
   listFixturePathsBesideLog,
 } from '../support/fixtureRoot.js';
-import { PROTOCOL_FIXTURE_DISK } from '../support/protocolFixtureScan.js';
+import { getWin32RecycleBinScanTrash } from '../support/platformFixtures.js';
+import { runTestScanOnPlatform } from '../support/scanRunFixtures.js';
 import { createScriptedTerminalIo } from '../support/scriptedTerminalIo.js';
 import type { WindowsFixtureHome } from '../support/windowsFixtureHome.js';
 import {
   buildWindowsFixturePlatform,
   createWindowsFixtureHome,
-  runWindowsFixtureScan,
 } from '../support/windowsFixtureHome.js';
 
 // The fixture writes a file over the large-file limit, and the run scans twice and deletes.
@@ -51,18 +53,24 @@ describe.skipIf(process.platform !== 'win32')(
           home.paths.dotnetBinPath,
         ];
         const approvedBinPaths = home.environment.fixedDriveRoots.map((driveRoot) =>
-          join(driveRoot, '$Recycle.Bin'),
+          join(driveRoot, getWin32RecycleBinScanTrash().binFolderName),
         );
         const approvedPaths = [...approvedFixturePaths, ...approvedBinPaths];
-        const scannedReport = await runWindowsFixtureScan({
-          environment: home.environment,
-          platform: platform,
+        const scannedView = buildScanView({
+          report: await runTestScanOnPlatform({
+            environment: home.environment,
+            platform: platform,
+          }),
+          fullDiskAccessHolder: 'terminal',
+          texts: platform.report,
+          homeDir: home.environment.homeDir,
+          disk: null,
         });
         const approvedNumbers = approvedPaths.map((path) =>
-          findCandidateNumber({ report: scannedReport, path: path }),
+          findItemNumber({ view: scannedView, path: path }),
         );
         const approvedPathsBelowRoot = approvedFixturePaths.map((path) =>
-          buildPathBelowFixtureRoot({ fixtureRoot: fixtureRoot, path: path }),
+          buildPathBelowRoot({ rootDir: fixtureRoot.rootDir, path: path }),
         );
         const before = await listFixturePaths();
         const io = createScriptedTerminalIo({
@@ -70,24 +78,17 @@ describe.skipIf(process.platform !== 'win32')(
           inputLines: [approvedNumbers.join(', '), 'DELETE'],
         });
 
-        const exitCode = await runCli({
+        const exitCode = await runTestCli({
           argv: [],
           environment: home.environment,
-          catalog: platform.catalog,
-          tools: platform.tools,
-          scan: platform.scan,
-          // A fixed disk, so no test reads the volume it runs on.
-          system: { ...platform.system, loadVolumeSpace: async () => PROTOCOL_FIXTURE_DISK },
-          delete: platform.delete,
-          explore: platform.explore,
-          texts: platform.report,
+          platform: platform,
           io: io,
         });
 
         const after = await listFixturePaths();
-        const logEntries = await loadDeletionLogEntries({
-          logPath: home.environment.deletionLogPath,
-        });
+        const logLines = await loadDeletionLogLines({ logPath: home.environment.deletionLogPath });
+        const intentLines = filterLogLinesOfKind({ lines: logLines, kind: 'intent' });
+        const outcomeLines = filterLogLinesOfKind({ lines: logLines, kind: 'outcome' });
 
         expect(exitCode).toBe(0);
         expect(io.outText()).toContain(
@@ -102,23 +103,18 @@ describe.skipIf(process.platform !== 'win32')(
         expect(approvedPathsBelowRoot.filter((path) => !before.includes(path))).toEqual([]);
         expect(before.filter((path) => !after.includes(path))).toEqual(
           before.filter((path) =>
-            approvedPathsBelowRoot.some(
-              (approvedPath) => path === approvedPath || path.startsWith(`${approvedPath}/`),
+            approvedPathsBelowRoot.some((approvedPath) =>
+              isSameOrBelowPathBelowRoot({ path: path, parentPath: approvedPath }),
             ),
           ),
         );
         expect(after.filter((path) => !before.includes(path))).toEqual([]);
         expect(fixturePlatform.emptiedDriveRoots).toEqual(home.environment.fixedDriveRoots);
-        expect(
-          logEntries.flatMap((entry) => (entry.kind === 'intent' ? [entry.path] : [])).toSorted(),
-        ).toEqual(approvedPaths.toSorted());
-        expect(
-          logEntries
-            .flatMap((entry) =>
-              entry.kind === 'outcome' ? [`${entry.outcome} ${entry.path}`] : [],
-            )
-            .toSorted(),
-        ).toEqual(approvedPaths.map((path) => `removed ${path}`).toSorted());
+        expect(intentLines.map((line) => line.path).toSorted()).toEqual(approvedPaths.toSorted());
+        expect(outcomeLines.map((line) => line.path).toSorted()).toEqual(approvedPaths.toSorted());
+        expect(outcomeLines.map((line) => line.outcome)).toEqual(
+          approvedPaths.map(() => 'removed'),
+        );
       },
       CLI_RUN_TIMEOUT_MS,
     );
@@ -132,33 +128,45 @@ describe.skipIf(process.platform !== 'win32')(
   },
 );
 
-/** The number the command line shows for the item at `path`, which a scan of the same fixture ranks alike. */
-function findCandidateNumber(params: { report: ScanReport; path: string }): number {
-  const index = params.report.candidates.findIndex((candidate) =>
-    isSamePath({ rules: WIN32_PATH_RULES, path: candidate.path, otherPath: params.path }),
+/** The number the command line shows for the item at `path`, as the view of its scan numbers it. */
+function findItemNumber(params: { view: ScanView; path: string }): number {
+  const items = [
+    ...params.view.sections.flatMap((section) => [
+      ...section.items,
+      ...(section.checkGroup?.items ?? []),
+    ]),
+    ...(params.view.explore?.items ?? []),
+  ];
+  const item = items.find(
+    (candidate) =>
+      candidate.revealPath !== null &&
+      isSamePath({ rules: WIN32_PATH_RULES, path: candidate.revealPath, otherPath: params.path }),
   );
 
-  if (index === -1) {
-    throw new Error(`The scan offers no item at ${params.path}.`);
+  if (item === undefined) {
+    throw new Error(`The scan shows no item at ${params.path}.`);
   }
 
-  return index + 1;
+  return item.number;
 }
 
-function buildPathBelowFixtureRoot(params: { fixtureRoot: FixtureRoot; path: string }): string {
-  return relative(params.fixtureRoot.rootDir, params.path).split(sep).join('/');
-}
-
-async function loadDeletionLogEntries(params: { logPath: string }): Promise<JournalEntry[]> {
+/** The lines of the deletion log at `logPath`, each read back as JSON nobody checked yet. */
+async function loadDeletionLogLines(params: { logPath: string }): Promise<unknown[]> {
   const text = await readFile(params.logPath, 'utf8');
 
   return text
     .trim()
     .split('\n')
-    .map((line) => parseJournalLine(line));
+    .map((line): unknown => JSON.parse(line));
 }
 
-function parseJournalLine(line: string): JournalEntry {
-  // The journal writes each entry as one line of JSON, which `JSON.parse` reads back untyped.
-  return JSON.parse(line) as JournalEntry;
+/** The lines of the log that are records of `kind`, their fields still unchecked. */
+function filterLogLinesOfKind(params: {
+  lines: unknown[];
+  kind: string;
+}): Record<string, unknown>[] {
+  return params.lines.filter(
+    (line): line is Record<string, unknown> =>
+      typeof line === 'object' && line !== null && 'kind' in line && line.kind === params.kind,
+  );
 }

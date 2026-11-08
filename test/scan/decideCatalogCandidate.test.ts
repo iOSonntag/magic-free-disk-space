@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { TargetsMeasurement } from '../../src/scan/candidate.js';
 import { buildCarvedPaths, decideCatalogCandidate } from '../../src/scan/decideCatalogCandidate.js';
 import type { ActivityProbe } from '../../src/scan/loadTreeActivity.js';
@@ -208,7 +208,7 @@ describe('decideCatalogCandidate', () => {
       },
     });
     const carvedPaths = buildCarvedPaths({
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       entry: entry,
       path: PATH,
     });
@@ -221,7 +221,7 @@ describe('decideCatalogCandidate', () => {
   test('carves nothing for an entry that is no advice', () => {
     expect(
       buildCarvedPaths({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         entry: buildTestCatalogEntry({}),
         path: PATH,
       }),

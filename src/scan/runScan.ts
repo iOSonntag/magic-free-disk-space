@@ -2,8 +2,11 @@ import { join } from 'node:path';
 import type { CatalogEntry } from '../catalog/catalog.js';
 import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import type { ProjectArtifactRule } from '../catalog/projectArtifactRules.js';
-import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import {
+  resolveEnvironmentLocation,
+  resolveEnvironmentLocations,
+} from '../environment/environmentLocation.js';
 import type { ExplorePlatform, IdeVersionRoots } from '../explore/explorePlatform.js';
 import { buildExploreProbePlatform } from '../explore/exploreProbe.js';
 import type { ProjectPinsLoad } from '../explore/projectPins/loadProjectPins.js';
@@ -199,7 +202,7 @@ export async function runScan(params: {
   // Known from the start, so the first `found` already leaves out what a probe reserves.
   const reservedEntryPaths = params.catalog.entries.flatMap((entry) =>
     entry.removal.kind === 'explore'
-      ? [resolveCatalogLocation({ environment: params.environment, location: entry })]
+      ? [resolveEnvironmentLocation({ folders: params.environment, location: entry })]
       : [],
   );
   // The probe of the IDE versions takes folders outside its entry, in the roots of every version.
@@ -644,9 +647,10 @@ function listIdeVersionRootPaths(params: {
   environment: Environment;
   roots: IdeVersionRoots;
 }): string[] {
-  return [...params.roots.caches, ...params.roots.logs, ...params.roots.settings].map((location) =>
-    resolveCatalogLocation({ environment: params.environment, location: location }),
-  );
+  return resolveEnvironmentLocations({
+    folders: params.environment,
+    locations: [...params.roots.caches, ...params.roots.logs, ...params.roots.settings],
+  });
 }
 
 /** Whether an offer no probe made is, holds, or lies in one of `probeClaimPaths`. */

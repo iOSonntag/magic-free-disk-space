@@ -1,6 +1,6 @@
 import type { CatalogLocation } from '../../catalog/catalog.js';
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { PathRules } from '../../path/pathRules.js';
@@ -81,8 +81,8 @@ export async function loadAndroidSdkRoots(params: {
   );
   const candidates: SdkRootCandidate[] = [
     {
-      text: resolveCatalogLocation({
-        environment: params.environment,
+      text: resolveEnvironmentLocation({
+        folders: params.environment,
         location: params.androidSdkRoot,
       }),
       isRequired: true,
@@ -178,7 +178,7 @@ async function loadFlutterSettingsSdkRoot(params: {
 }): Promise<string | null> {
   for (const settingsPath of params.flutterSettingsPaths) {
     const settings = await loadExploreFileText({
-      path: resolveCatalogLocation({ environment: params.environment, location: settingsPath }),
+      path: resolveEnvironmentLocation({ folders: params.environment, location: settingsPath }),
       privacyDenialCode: params.privacyDenialCode,
     });
 

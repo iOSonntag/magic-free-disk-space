@@ -1,14 +1,12 @@
 import type { Platform } from '../platform.js';
 import { WIN32_CATALOG } from './catalog/win32Catalog.js';
 import { loadAdvisedApps, UNINSTALL_KEY_SOURCES } from './loadAdvisedApps.js';
-import { loadEntryPlacement } from './loadEntryPlacement.js';
 import { loadEnvironment } from './loadEnvironment.js';
-import { loadPrivateBytes } from './loadPrivateBytes.js';
 import { loadRunningProcesses } from './loadRunningProcesses.js';
 import { loadSystemVersion } from './loadSystemVersion.js';
 import { loadVolumeSpace } from './loadVolumeSpace.js';
 import { loadFullDiskAccess, WIN32_PRIVACY_DENIAL_CODE } from './readRules.js';
-import { removeTree } from './removeTree.js';
+import { removeTree, win32EntryReads } from './removeTree.js';
 import { WIN32_REPORT_TEXTS } from './reportTexts.js';
 import { WIN32_TOOL_PROCESSES } from './toolProcesses.js';
 import { emptyRecycleBin, loadRecycleBinCount } from './win32Api.js';
@@ -81,7 +79,7 @@ export const win32Platform: Platform = {
   explore: WIN32_CATALOG.explore,
   report: WIN32_REPORT_TEXTS,
   system: {
-    entryReads: { loadEntryPlacement: loadEntryPlacement, loadPrivateBytes: loadPrivateBytes },
+    entryReads: win32EntryReads,
     privacyDenialCode: WIN32_PRIVACY_DENIAL_CODE,
     loadFullDiskAccess: loadFullDiskAccess,
     loadRunningProcesses: loadRunningProcesses,

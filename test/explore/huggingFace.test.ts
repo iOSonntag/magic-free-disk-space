@@ -557,8 +557,7 @@ describeOnPosix('recheckHuggingFaceUnit', () => {
               unit: unit,
               environment: fixture.environment,
               platform: buildTestProbePlatform(),
-              runningProcesses:
-                commandLines === null ? null : buildRunningCommandLines(commandLines),
+              runningProcesses: buildRunningCommandLines(commandLines),
             });
           }
 

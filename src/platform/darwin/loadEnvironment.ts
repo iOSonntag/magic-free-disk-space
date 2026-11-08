@@ -12,7 +12,7 @@ import {
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { parseAbsolutePath } from '../../path/parseAbsolutePath.js';
-import type { PathRules } from '../../path/pathRules.js';
+import { POSIX_PATH_RULES } from '../../path/pathRules.js';
 import type { Result } from '../../result.js';
 import { getErrorCode } from '../../system/getErrorCode.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../system/limits.js';
@@ -25,9 +25,6 @@ import {
   SENSITIVE_EXCEPTION_HOME_DIR_NAMES,
   SENSITIVE_HOME_DIR_NAMES,
 } from './protectedPaths.js';
-
-/** How macOS spells and compares an absolute path. */
-export const DARWIN_PATH_RULES: PathRules = { rootForm: 'posix', separator: '/' };
 
 /** The root of the macOS file system, which is refused as a whole. */
 const DARWIN_PROTECTED_ROOT_PATHS: AbsolutePath[] = [parseDarwinAbsolutePath({ text: '/' })];
@@ -77,14 +74,14 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   const applicationDirs = [
     DARWIN_SHARED_APPLICATION_DIR,
     joinAbsolutePath({
-      rules: DARWIN_PATH_RULES,
+      rules: POSIX_PATH_RULES,
       parentPath: homeDir.value,
       names: DARWIN_USER_APPLICATION_DIR_NAMES,
     }),
   ];
 
   const homeRealPath = await loadEnvironmentRealPath({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     path: homeDir.value,
   });
 
@@ -106,7 +103,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   }
 
   const tempRealPath = await loadEnvironmentRealPath({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     path: tempDir.value,
   });
 
@@ -121,7 +118,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   }
 
   const userCacheRealPath = await loadEnvironmentRealPath({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     path: userCacheDir.value,
   });
 
@@ -131,7 +128,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
 
   const user = getEffectiveUser();
   const rootsFailure = checkEnvironmentRoots({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     user: user,
     homeRealPath: homeRealPath.value,
     homeOwner: buildPosixUser({ uid: homeOwnerId.value }),
@@ -144,7 +141,7 @@ export async function loadEnvironment(): Promise<Result<Environment, Environment
   }
 
   const applicationRealPaths = await loadExistingRealPaths({
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     paths: applicationDirs,
   });
 
@@ -181,7 +178,7 @@ export function buildDarwinEnvironment(params: {
   return buildEnvironment({
     nowMs: params.nowMs,
     user: params.user,
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     homeDir: params.homeDir,
     homeRealPath: params.homeRealPath,
     tempDir: params.tempDir,
@@ -215,7 +212,7 @@ function toHomeLocations(params: { nameLists: string[][] }): EnvironmentLocation
 
 /** A path of macOS this file spells out; throws for one that is not absolute, which is a bug. */
 function parseDarwinAbsolutePath(params: { text: string }): AbsolutePath {
-  const path = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text });
+  const path = parseAbsolutePath({ rules: POSIX_PATH_RULES, text: params.text });
 
   if (path.kind === 'failed') {
     throw new Error(`The macOS path ${params.text} is not absolute.`);
@@ -229,7 +226,7 @@ function parseEnvironmentPath(params: {
   text: string;
   failurePath: string;
 }): Result<AbsolutePath, EnvironmentFailure> {
-  const path = parseAbsolutePath({ rules: DARWIN_PATH_RULES, text: params.text });
+  const path = parseAbsolutePath({ rules: POSIX_PATH_RULES, text: params.text });
 
   if (path.kind === 'failed') {
     return {

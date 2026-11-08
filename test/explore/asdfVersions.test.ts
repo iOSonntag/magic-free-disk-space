@@ -43,7 +43,7 @@ import {
   buildTestAsdfToolVersion,
   buildTestHostPath,
 } from '../support/parsedValueFixtures.js';
-import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import { buildFixtureToolLocations, createProbeFakeTool } from './probeFakeTools.js';
@@ -409,8 +409,7 @@ describe('compareAsdfVersionUnit', () => {
   });
 });
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('the asdf probe and recheck against a fixture home', () => {
+describeWithFakeTools('the asdf probe and recheck against a fixture home', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 
@@ -498,8 +497,7 @@ describeOnPosix('the asdf probe and recheck against a fixture home', () => {
         environment: environment,
         platform: buildTestProbePlatform(),
         deadlineMs: Date.now() + TIMEOUT_MS,
-        runningProcesses:
-          params.commandLines === null ? null : buildRunningCommandLines(params.commandLines),
+        runningProcesses: buildRunningCommandLines(params.commandLines),
       },
     });
   }

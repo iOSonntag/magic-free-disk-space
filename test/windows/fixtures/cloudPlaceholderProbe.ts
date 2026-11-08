@@ -2,7 +2,8 @@ import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { join } from 'node:path';
 import { loadEntryPlacement } from '../../../src/platform/win32/loadEntryPlacement.js';
 import type { EntryRef } from '../../../src/system/entryReads.js';
-import { formatHex, loadAttributesText, loadLstatText, observeSafely } from '../observations.js';
+import { formatSystemCallCode } from '../../../src/system/systemCallFailure.js';
+import { loadAttributesText, loadLstatText, observeSafely } from '../observations.js';
 
 // Registers a sync root in the given empty folder, creates cloud placeholders in it through
 // cldapi, and writes one JSON line per stage, so a crash from a wrong struct layout still leaves
@@ -156,10 +157,12 @@ const createCloudOnlyPlaceholders = (cloudFilterApi: CloudFilterApi, syncRoot: s
   );
 
   writeStage('CfCreatePlaceholders', {
-    hresult: formatHex(hresult),
+    hresult: formatSystemCallCode({ code: hresult }),
     entriesProcessed: entriesProcessed[0],
-    fileResult: formatHex(view.getInt32(72, true)),
-    folderResult: formatHex(view.getInt32(PLACEHOLDER_CREATE_INFO_BYTES + 72, true)),
+    fileResult: formatSystemCallCode({ code: view.getInt32(72, true) }),
+    folderResult: formatSystemCallCode({
+      code: view.getInt32(PLACEHOLDER_CREATE_INFO_BYTES + 72, true),
+    }),
   });
 
   return hresult >= 0;
@@ -195,7 +198,7 @@ const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
     0,
   );
 
-  writeStage('CfRegisterSyncRoot', { hresult: formatHex(registerHresult) });
+  writeStage('CfRegisterSyncRoot', { hresult: formatSystemCallCode({ code: registerHresult }) });
 
   if (registerHresult < 0) {
     return;
@@ -215,7 +218,9 @@ const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
   } finally {
     const unregisterHresult = cloudFilterApi.symbols.CfUnregisterSyncRoot(toWideString(syncRoot));
 
-    writeStage('CfUnregisterSyncRoot', { hresult: formatHex(unregisterHresult) });
+    writeStage('CfUnregisterSyncRoot', {
+      hresult: formatSystemCallCode({ code: unregisterHresult }),
+    });
   }
 };
 

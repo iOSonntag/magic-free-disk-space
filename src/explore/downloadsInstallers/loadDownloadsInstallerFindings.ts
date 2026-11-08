@@ -1,4 +1,4 @@
-import { resolveCatalogLocation } from '../../catalog/resolveCatalogLocation.js';
+import { resolveEnvironmentLocation } from '../../environment/environmentLocation.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import { toNonEmpty } from '../../system/nonEmptyList.js';
@@ -36,8 +36,8 @@ export async function loadDownloadsInstallerFindings(
     return { kind: 'failed', failure: { reason: 'placeMissing' } };
   }
 
-  const folderPath = resolveCatalogLocation({
-    environment: run.environment,
+  const folderPath = resolveEnvironmentLocation({
+    folders: run.environment,
     location: run.platform.explore.downloadsRoot,
   });
   const entries = await loadExploreDirectoryEntries({

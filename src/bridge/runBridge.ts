@@ -502,7 +502,7 @@ async function answerDelete(params: {
     answer: {
       kind: 'deleted',
       lines: [
-        ...formatRemovalRun({ run: removal.value.run }),
+        ...formatRemovalRun({ run: removal.value.run, texts: params.context.texts }),
         formatDeletionLogLine({ logPath: removal.value.logPath }),
       ],
       ...buildDeletedFacts({

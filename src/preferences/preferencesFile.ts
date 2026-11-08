@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { MakeDirectoryOptions } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { OwnerOnlyModes } from '../environment/buildEnvironment.js';
 import type { Result } from '../result.js';
+import { createDirectory } from '../system/createDirectory.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import { loadFileText } from '../system/loadFileText.js';
 import { isJsonObject, parseJsonValue } from '../system/parseJsonValue.js';
@@ -49,20 +49,21 @@ export async function saveIsUpdateCheckEnabled(params: {
   ownerOnlyModes: OwnerOnlyModes | null;
   isEnabled: boolean;
 }): Promise<Result<null, PreferencesSaveFailure>> {
-  const directoryOptions: MakeDirectoryOptions & { recursive: true } = { recursive: true };
   const fileOptions: { flag: 'wx'; mode?: number } = { flag: 'wx' };
 
   if (params.ownerOnlyModes !== null) {
-    directoryOptions.mode = params.ownerOnlyModes.directoryMode;
     fileOptions.mode = params.ownerOnlyModes.fileMode;
   }
 
-  try {
-    await mkdir(params.preferencesDir, directoryOptions);
-  } catch (error) {
+  const directoryCreated = await createDirectory({
+    path: params.preferencesDir,
+    ownerOnlyModes: params.ownerOnlyModes,
+  });
+
+  if (directoryCreated.kind === 'failed') {
     return {
       kind: 'failed',
-      failure: { reason: 'directoryUnavailable', code: getErrorCode(error) },
+      failure: { reason: 'directoryUnavailable', code: directoryCreated.failure.code },
     };
   }
 

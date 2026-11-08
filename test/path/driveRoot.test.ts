@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { parseDriveRoot } from '../../src/path/driveRoot.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { Result } from '../../src/result.js';
 
 /** The drive root of `text` widened to its text, which the brand only marks as checked. */
@@ -55,7 +54,7 @@ describe('parseDriveRoot', () => {
 
   test('refuses every text under the POSIX rules, whose file system has no drive', () => {
     for (const text of ['/', 'C:\\', '/Volumes/Data']) {
-      expect(parseDriveRoot({ rules: DARWIN_PATH_RULES, text: text })).toEqual({
+      expect(parseDriveRoot({ rules: POSIX_PATH_RULES, text: text })).toEqual({
         kind: 'failed',
         failure: 'not a drive root',
       });

@@ -5,9 +5,9 @@ import { DOWNLOADS_ROOT, ICLOUD_DRIVE_ROOT, MAIL_DOWNLOADS_ROOT } from './appleD
 import { BROWSER_BUNDLES } from './browserBundles.js';
 import { CATALOG_ENTRIES } from './catalogEntries.js';
 import { CONTAINER_ENGINES } from './containerEngines.js';
-import { loadEntryPlacement } from './hasDatalessFlag.js';
 import { IDE_VERSION_ROOTS } from './ideVersionRoots.js';
 import { loadActiveXcodeBundlePath } from './loadActiveXcodeBundlePath.js';
+import { loadEntryPlacement } from './loadEntryPlacement.js';
 import { DARWIN_HOMEBREW_PREFIX_PATHS, loadEnvironment } from './loadEnvironment.js';
 import { DARWIN_PRIVACY_DENIAL_CODE, loadFullDiskAccess } from './loadFullDiskAccess.js';
 import { loadInstalledApps } from './loadInstalledApps.js';

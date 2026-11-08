@@ -162,8 +162,8 @@ describe('compareClaudeCodeVersionUnit', () => {
   });
 });
 
-// A test that links the launcher runs on POSIX only, as the launcher is a symbolic link.
 describe('loadClaudeCodeVersionFindings', () => {
+  // The launcher is a symbolic link, so each test that links it runs on POSIX only.
   testOnPosix(
     "keeps the two newest versions and the launcher's, and offers the others as safe",
     async () => {

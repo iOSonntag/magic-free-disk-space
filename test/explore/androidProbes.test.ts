@@ -16,7 +16,7 @@ import {
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
 import { buildTestAndroidAvdName } from '../support/parsedValueFixtures.js';
-import { describeOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
@@ -50,8 +50,7 @@ function buildSdkRoot(): AbsolutePath {
   return buildAndroidSdkRoot({ environment: environment });
 }
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('startExploreProbes with the Android probes', () => {
+describeWithFakeTools('startExploreProbes with the Android probes', () => {
   test('offers the unused AVD with the located avdmanager, and the image no AVD names', async () => {
     const avdmanager = await createProbeFakeTool({
       folder: join(fixtureRoot.rootDir, 'cmdline-tools', 'bin'),

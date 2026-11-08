@@ -7,8 +7,8 @@ import type {
   MacBundleId,
 } from '../catalog/catalogOwner.js';
 import { parseMacBundleId } from '../catalog/catalogOwner.js';
-import { resolveCatalogLocation } from '../catalog/resolveCatalogLocation.js';
 import type { Environment } from '../environment/buildEnvironment.js';
+import { resolveEnvironmentLocation } from '../environment/environmentLocation.js';
 import type { AbsolutePath } from '../path/parseAbsolutePath.js';
 import type { PathRules } from '../path/pathRules.js';
 import { isAnyBundleRunning } from '../system/isAnyBundleRunning.js';
@@ -390,8 +390,8 @@ function resolveInstallFolderPath(params: {
     return null;
   }
 
-  return resolveCatalogLocation({
-    environment: params.environment,
+  return resolveEnvironmentLocation({
+    folders: params.environment,
     location: params.owner.installFolder,
   });
 }

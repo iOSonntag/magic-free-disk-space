@@ -59,6 +59,19 @@ export function resolveEnvironmentLocation(params: {
 }
 
 /**
+ * The absolute path of each fixed location below the folders, in their order. Throws as
+ * `resolveEnvironmentLocation` does.
+ */
+export function resolveEnvironmentLocations(params: {
+  folders: EnvironmentFolders;
+  locations: EnvironmentLocationAtRoot[];
+}): AbsolutePath[] {
+  return params.locations.map((location) =>
+    resolveEnvironmentLocation({ folders: params.folders, location: location }),
+  );
+}
+
+/**
  * The absolute path of any location below the folders; `null` for one in a known folder Windows
  * names no path for. Throws as `resolveEnvironmentLocation` does, and for a known folder on macOS.
  */

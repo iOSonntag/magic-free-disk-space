@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { INPUT_ENDED_LINE } from './bridgeInputEndFixture.js';
 
-const FIXTURE_PATH = join(import.meta.dir, 'bridgeInputEndFixture.ts');
+const fixturePath = join(import.meta.dir, 'bridgeInputEndFixture.ts');
 
 /** Long enough for Bun to start the fixture on a slow runner, short of the test's own limit. */
 const EXIT_TIMEOUT_MS = 20_000;
@@ -11,7 +11,7 @@ describe('the bridge once its input closes', () => {
   test(
     'reads every request, then ends on its own with its listeners released',
     async () => {
-      const fixture = Bun.spawn([process.execPath, FIXTURE_PATH], {
+      const fixture = Bun.spawn([process.execPath, fixturePath], {
         stdin: 'pipe',
         stdout: 'pipe',
         stderr: 'ignore',

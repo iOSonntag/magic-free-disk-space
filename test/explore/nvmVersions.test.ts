@@ -28,6 +28,7 @@ import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
 import type { RunningProcesses } from '../../src/system/systemPlatform.js';
+import { describeOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -554,8 +555,6 @@ describe('compareNvmVersionUnit', () => {
 });
 
 // nvm is explored on macOS alone.
-const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
-
 describeOnDarwin('the nvm probe and recheck against a fixture home', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;

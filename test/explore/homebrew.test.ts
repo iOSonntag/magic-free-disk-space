@@ -25,7 +25,7 @@ import {
 } from '../../src/explore/homebrew/recheckHomebrewUnit.js';
 import { recheckExploreUnit } from '../../src/explore/recheckExploreUnit.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -38,7 +38,7 @@ import {
   buildTestAbsolutePath,
   buildTestHomebrewFormulaName,
 } from '../support/parsedValueFixtures.js';
-import { describeOnPosix, testOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeToolRun } from '../support/probeRunFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
@@ -140,7 +140,7 @@ describe('parseHomebrewCellarPath', () => {
   test('reads the one path brew prints', () => {
     expect(
       parseHomebrewCellarPath({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: '/opt/homebrew/Cellar\n',
       }),
     ).toEqual({
@@ -150,15 +150,15 @@ describe('parseHomebrewCellarPath', () => {
   });
 
   test('rejects an empty, relative, or second path', () => {
-    expect(parseHomebrewCellarPath({ pathRules: DARWIN_PATH_RULES, stdoutText: '' }).kind).toBe(
+    expect(parseHomebrewCellarPath({ pathRules: POSIX_PATH_RULES, stdoutText: '' }).kind).toBe(
       'failed',
     );
     expect(
-      parseHomebrewCellarPath({ pathRules: DARWIN_PATH_RULES, stdoutText: 'Cellar\n' }).kind,
+      parseHomebrewCellarPath({ pathRules: POSIX_PATH_RULES, stdoutText: 'Cellar\n' }).kind,
     ).toBe('failed');
     expect(
       parseHomebrewCellarPath({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: '/a/Cellar\n/b/Cellar\n',
       }).kind,
     ).toBe('failed');
@@ -168,7 +168,7 @@ describe('parseHomebrewCellarPath', () => {
 describe('parseHomebrewCleanupDryRun', () => {
   test('reads every Would remove line with its size, and skips the closing line', () => {
     const removals = parseHomebrewCleanupDryRun({
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       stdoutText: buildHomebrewCleanupDryRunText({
         homeDir: FIXTURE_HOME_DIR,
         cellarPaths: [APPLE_SILICON_CELLAR_PATH, INTEL_CELLAR_PATH],
@@ -192,7 +192,7 @@ describe('parseHomebrewCleanupDryRun', () => {
   test('reads a path with spaces and parentheses', () => {
     expect(
       parseHomebrewCleanupDryRun({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: 'Would remove: /a b/c (1) (12KB)\n',
       }),
     ).toEqual({
@@ -202,7 +202,7 @@ describe('parseHomebrewCleanupDryRun', () => {
   });
 
   test('reads nothing from an empty output', () => {
-    expect(parseHomebrewCleanupDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: '' })).toEqual({
+    expect(parseHomebrewCleanupDryRun({ pathRules: POSIX_PATH_RULES, stdoutText: '' })).toEqual({
       kind: 'succeeded',
       value: [],
     });
@@ -215,7 +215,7 @@ describe('parseHomebrewCleanupDryRun', () => {
       'Would remove: /opt/homebrew/Cellar/../wget/1.0 (1KB)',
     ]) {
       expect(
-        parseHomebrewCleanupDryRun({ pathRules: DARWIN_PATH_RULES, stdoutText: line }).kind,
+        parseHomebrewCleanupDryRun({ pathRules: POSIX_PATH_RULES, stdoutText: line }).kind,
       ).toBe('failed');
     }
   });
@@ -224,7 +224,7 @@ describe('parseHomebrewCleanupDryRun', () => {
 describe('buildHomebrewOldVersions', () => {
   test('groups the kegs of its own Cellar by formula and ignores every other line', () => {
     const removals = parseHomebrewCleanupDryRun({
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       stdoutText: buildHomebrewCleanupDryRunText({
         homeDir: FIXTURE_HOME_DIR,
         cellarPaths: [APPLE_SILICON_CELLAR_PATH, INTEL_CELLAR_PATH],
@@ -546,8 +546,7 @@ describe('compareHomebrewUnit', () => {
   });
 });
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('with fake brews', () => {
+describeWithFakeTools('with fake brews', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
   let appleSiliconCellarPath: string;

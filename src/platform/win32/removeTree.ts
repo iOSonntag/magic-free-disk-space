@@ -12,12 +12,13 @@ import { removeTreeEntries } from './removeTreeEntries.js';
 import type { Win32CallFailure } from './win32Api.js';
 import { loadFileAttributes, setFileAttributes } from './win32Api.js';
 
-const WIN32_ENTRY_ATTRIBUTES: EntryAttributeAccess = {
+const win32EntryAttributes: EntryAttributeAccess = {
   load: loadEntryAttributes,
   save: saveEntryAttributes,
 };
 
-const WIN32_ENTRY_READS: EntryReads = {
+/** How Windows places an entry and reads its private bytes, for the scan and for the removal. */
+export const win32EntryReads: EntryReads = {
   loadEntryPlacement: loadEntryPlacement,
   loadPrivateBytes: loadPrivateBytes,
 };
@@ -38,8 +39,8 @@ export async function removeTree(params: { path: string }): Promise<Result<TreeR
   return removeTreeEntries({
     rootPath: rootPath.value,
     rules: WIN32_PATH_RULES,
-    attributes: WIN32_ENTRY_ATTRIBUTES,
-    entryReads: WIN32_ENTRY_READS,
+    attributes: win32EntryAttributes,
+    entryReads: win32EntryReads,
   });
 }
 

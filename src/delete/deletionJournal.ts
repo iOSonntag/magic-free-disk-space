@@ -1,6 +1,5 @@
-import type { MakeDirectoryOptions } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
-import { mkdir, open } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { OwnerOnlyModes } from '../environment/buildEnvironment.js';
 import type {
@@ -10,6 +9,7 @@ import type {
   ExploreToolUnit,
 } from '../explore/exploreUnit.js';
 import type { Result } from '../result.js';
+import { createDirectory } from '../system/createDirectory.js';
 import { getErrorCode } from '../system/getErrorCode.js';
 import type { RemovalOutcomeCodedKind } from './deleteCandidates.js';
 import type { ToolCandidateSkipReason } from './runToolCandidate.js';
@@ -168,7 +168,7 @@ export async function createDeletionJournal(params: {
 }): Promise<Result<DeletionJournal, JournalFailure>> {
   const directoryCreated = await createJournalDirectory({
     path: dirname(params.logPath),
-    mode: params.ownerOnlyModes?.directoryMode ?? null,
+    ownerOnlyModes: params.ownerOnlyModes,
   });
 
   if (directoryCreated.kind === 'failed') {
@@ -204,27 +204,27 @@ export function formatJournalLine(params: { entry: JournalEntry }): string {
   return `${JSON.stringify(params.entry)}\n`;
 }
 
-/** `mode` `null` creates the folder with the system's default. */
 async function createJournalDirectory(params: {
   path: string;
-  mode: number | null;
+  ownerOnlyModes: OwnerOnlyModes | null;
 }): Promise<Result<null, JournalFailure>> {
-  const options: MakeDirectoryOptions & { recursive: true } = { recursive: true };
+  const directoryCreated = await createDirectory({
+    path: params.path,
+    ownerOnlyModes: params.ownerOnlyModes,
+  });
 
-  if (params.mode !== null) {
-    options.mode = params.mode;
-  }
-
-  try {
-    await mkdir(params.path, options);
-
-    return { kind: 'succeeded', value: null };
-  } catch (error) {
+  if (directoryCreated.kind === 'failed') {
     return {
       kind: 'failed',
-      failure: { reason: 'directoryUnavailable', path: params.path, code: getErrorCode(error) },
+      failure: {
+        reason: 'directoryUnavailable',
+        path: params.path,
+        code: directoryCreated.failure.code,
+      },
     };
   }
+
+  return directoryCreated;
 }
 
 async function appendJournalEntry(params: {

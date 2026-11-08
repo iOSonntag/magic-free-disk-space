@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { CatalogOwner } from '../../src/catalog/catalogOwner.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { RemovalOwner } from '../../src/scan/candidate.js';
 import type { OwnerState } from '../../src/scan/resolveOwnerState.js';
 import {
@@ -61,8 +61,7 @@ function resolveCatalogOwnerState(params: {
       systemApps: params.systemApps,
     }),
     pathRules: params.environment.pathRules,
-    runningProcesses:
-      params.commandLines === null ? null : buildRunningCommandLines(params.commandLines),
+    runningProcesses: buildRunningCommandLines(params.commandLines),
   });
 }
 
@@ -240,14 +239,8 @@ describe('resolveTargetOwner', () => {
   });
 
   test('takes the owner a children entry names, so a running Teams withholds its caches', () => {
-    const entry = WIN32_CATALOG.entries.find((candidate) => candidate.id === 'teams-cache');
-
-    if (entry === undefined) {
-      throw new Error('The Windows catalog holds no entry teams-cache.');
-    }
-
     const owner = resolveTargetOwner({
-      entry: entry,
+      entry: getCatalogEntry('teams-cache', win32Platform.catalog),
       path: 'C:\\Users\\tester\\AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\EBWebView',
       installedApps: [],
     });

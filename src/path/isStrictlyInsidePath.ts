@@ -1,4 +1,4 @@
-import { isSameOrInsidePath } from './isSameOrInsidePath.js';
+import { isSameOrInsidePath, isSamePath } from './isSameOrInsidePath.js';
 import type { PathRules } from './pathRules.js';
 
 /**
@@ -13,6 +13,6 @@ export function isStrictlyInsidePath(params: {
 }): boolean {
   return (
     isSameOrInsidePath({ rules: params.rules, path: params.path, parentPath: params.parentPath }) &&
-    !isSameOrInsidePath({ rules: params.rules, path: params.parentPath, parentPath: params.path })
+    !isSamePath({ rules: params.rules, path: params.path, otherPath: params.parentPath })
   );
 }

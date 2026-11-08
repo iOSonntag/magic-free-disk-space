@@ -1,6 +1,5 @@
 import { dirname, join } from 'node:path';
 import type { CatalogEntry } from '../../src/catalog/catalog.js';
-import type { DeletePlatformTrashRecycleBins } from '../../src/delete/deletePlatform.js';
 import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { DriveRoot } from '../../src/path/driveRoot.js';
@@ -10,14 +9,7 @@ import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { Result } from '../../src/result.js';
 import type { RecycleBinContent } from '../../src/scan/candidate.js';
 import { DAY_MS, SCAN_LIMITS } from '../../src/scan/limits.js';
-import type { ScanReport } from '../../src/scan/runScan.js';
-import { runScan } from '../../src/scan/runScan.js';
-import type {
-  AdvisedApp,
-  RecycleBinLoad,
-  ScanPlatformAppsAdvised,
-  ScanPlatformTrashRecycleBins,
-} from '../../src/scan/scanPlatform.js';
+import type { AdvisedApp, RecycleBinLoad } from '../../src/scan/scanPlatform.js';
 import type { SystemCallFailure } from '../../src/system/systemCallFailure.js';
 import type { FixtureRoot } from './fixtureRoot.js';
 import {
@@ -26,6 +18,8 @@ import {
   updateModifiedMs,
   writeFixtureTextFile,
 } from './fixtureRoot.js';
+import { buildTestWindowsPath } from './parsedValueFixtures.js';
+import { buildTestWin32Platform } from './platformFixtures.js';
 import { buildRunningImagePaths } from './runningProcessesFixtures.js';
 
 /** The paths of the items a Windows fixture home holds, each named for what the scan makes of it. */
@@ -63,7 +57,7 @@ type FakeRecycleBins = {
 export const WINDOWS_FIXTURE_ADVISED_APPS: AdvisedApp[] = [
   {
     displayName: 'Contoso Studio',
-    installFolderPath: 'C:\\Program Files\\Contoso Studio',
+    installFolderPath: buildTestWindowsPath({ text: 'C:\\Program Files\\Contoso Studio' }),
     estimatedBytes: 734_003_200,
   },
   { displayName: 'Fabrikam Notes', installFolderPath: null, estimatedBytes: null },
@@ -188,65 +182,27 @@ export function buildWindowsFixturePlatform(params: {
     (entry) => !isEntryInsideFixture({ entry: entry, environment: params.environment }),
   );
   const fakeRecycleBins = createFakeRecycleBins(WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT);
-  const platform: Platform = {
-    ...win32Platform,
-    catalog: {
-      ...win32Platform.catalog,
-      entries: win32Platform.catalog.entries.filter((entry) => !leftOutEntries.includes(entry)),
-    },
-    scan: {
-      ...win32Platform.scan,
-      apps: {
-        ...getAdvisedAppsSection(),
-        loadAdvisedApps: async () => ({ apps: WINDOWS_FIXTURE_ADVISED_APPS, issues: [] }),
-      },
-      trash: {
-        ...getRecycleBinScanTrash(),
-        loadRecycleBin: fakeRecycleBins.loadRecycleBin,
-      },
-    },
-    delete: {
-      ...win32Platform.delete,
-      trash: {
-        ...getRecycleBinDeleteTrash(),
-        loadRecycleBin: fakeRecycleBins.loadRecycleBin,
-        emptyRecycleBin: fakeRecycleBins.emptyRecycleBin,
-      },
-    },
-    system: {
-      ...win32Platform.system,
-      loadRunningProcesses: async () => ({
-        kind: 'succeeded',
-        value: buildRunningImagePaths(WINDOWS_FIXTURE_RUNNING_IMAGE_PATHS),
-      }),
-    },
-  };
+  const platform = buildTestWin32Platform({
+    loadAdvisedApps: async () => ({ apps: WINDOWS_FIXTURE_ADVISED_APPS, issues: [] }),
+    loadRecycleBin: fakeRecycleBins.loadRecycleBin,
+    emptyRecycleBin: fakeRecycleBins.emptyRecycleBin,
+    loadRunningProcesses: async () => ({
+      kind: 'succeeded',
+      value: buildRunningImagePaths(WINDOWS_FIXTURE_RUNNING_IMAGE_PATHS),
+    }),
+  });
 
   return {
-    platform: platform,
+    platform: {
+      ...platform,
+      catalog: {
+        ...platform.catalog,
+        entries: platform.catalog.entries.filter((entry) => !leftOutEntries.includes(entry)),
+      },
+    },
     leftOutEntryIds: leftOutEntries.map((entry) => entry.id),
     emptiedDriveRoots: fakeRecycleBins.emptiedDriveRoots,
   };
-}
-
-/** Scans `environment` through `platform` with the default ages of the command line. */
-export function runWindowsFixtureScan(params: {
-  environment: Environment;
-  platform: Platform;
-}): Promise<ScanReport> {
-  return runScan({
-    environment: params.environment,
-    catalog: params.platform.catalog,
-    tools: params.platform.tools,
-    scan: params.platform.scan,
-    system: params.platform.system,
-    explore: params.platform.explore,
-    options: {
-      staleDays: SCAN_LIMITS.defaultStaleDays,
-      unusedDays: SCAN_LIMITS.defaultUnusedDays,
-    },
-    onProgress: () => undefined,
-  });
 }
 
 async function createOldFile(params: { path: string; oldMs: number }): Promise<void> {
@@ -307,34 +263,4 @@ function createFakeRecycleBins(content: RecycleBinContent): FakeRecycleBins {
       return { kind: 'succeeded', value: null };
     },
   };
-}
-
-function getAdvisedAppsSection(): ScanPlatformAppsAdvised {
-  const apps = win32Platform.scan.apps;
-
-  if (apps.appSection !== 'adviseOnly') {
-    throw new Error('The scan of Windows only advises on the installed apps.');
-  }
-
-  return apps;
-}
-
-function getRecycleBinScanTrash(): ScanPlatformTrashRecycleBins {
-  const trash = win32Platform.scan.trash;
-
-  if (trash.kind !== 'recycleBins') {
-    throw new Error('The scan of Windows measures a Recycle Bin per drive.');
-  }
-
-  return trash;
-}
-
-function getRecycleBinDeleteTrash(): DeletePlatformTrashRecycleBins {
-  const trash = win32Platform.delete.trash;
-
-  if (trash.kind !== 'recycleBins') {
-    throw new Error('The deletion of Windows empties a Recycle Bin per drive.');
-  }
-
-  return trash;
 }

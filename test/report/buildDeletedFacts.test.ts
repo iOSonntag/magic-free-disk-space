@@ -4,6 +4,7 @@ import type {
   RemovalOutcomeCodedKind,
   RemovalRun,
 } from '../../src/delete/deleteCandidates.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { buildDeletedFacts } from '../../src/report/buildDeletedFacts.js';
 import { formatDeletionLogLine } from '../../src/report/formatDeletionLog.js';
 import { formatRemovalRun } from '../../src/report/formatRemovalRun.js';
@@ -40,7 +41,7 @@ describe('buildDeletedFacts', () => {
     expect<unknown>({
       kind: 'deleted',
       lines: [
-        ...formatRemovalRun({ run: run }),
+        ...formatRemovalRun({ run: run, texts: darwinPlatform.report }),
         formatDeletionLogLine({ logPath: PROTOCOL_FIXTURE_LOG_PATH }),
       ],
       ...buildDeletedFacts({

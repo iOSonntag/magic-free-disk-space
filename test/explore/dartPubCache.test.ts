@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { buildDartPubCacheFindings } from '../../src/explore/dartPubCache/buildDartPubCacheFindings.js';
 import { parseDartPubCacheGc } from '../../src/explore/dartPubCache/parseDartPubCacheGc.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
@@ -19,7 +19,7 @@ describe('parseDartPubCacheGc', () => {
   test('reads the paths after "Would delete:"', () => {
     expect(
       parseDartPubCacheGc({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: buildDartGcDryRunText({ homeDir: FIXTURE_HOME_DIR, gcPaths: gcPaths }),
       }),
     ).toEqual({ kind: 'succeeded', value: gcPaths });
@@ -28,7 +28,7 @@ describe('parseDartPubCacheGc', () => {
   test('reads an empty set when nothing is unused', () => {
     expect(
       parseDartPubCacheGc({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: DART_GC_NOTHING_UNUSED_TEXT,
       }),
     ).toEqual({
@@ -38,15 +38,15 @@ describe('parseDartPubCacheGc', () => {
   });
 
   test('rejects output with neither answer', () => {
-    expect(
-      parseDartPubCacheGc({ pathRules: DARWIN_PATH_RULES, stdoutText: 'garbage\n' }).kind,
-    ).toBe('failed');
+    expect(parseDartPubCacheGc({ pathRules: POSIX_PATH_RULES, stdoutText: 'garbage\n' }).kind).toBe(
+      'failed',
+    );
   });
 
   test('rejects a listed path that is not absolute', () => {
     expect(
       parseDartPubCacheGc({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         stdoutText: 'Would delete:\nrelative/path\n',
       }).kind,
     ).toBe('failed');

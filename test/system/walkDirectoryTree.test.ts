@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmod, mkdir, symlink, writeFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { join } from 'node:path';
 import type { EntryReads, EntryRef } from '../../src/system/entryReads.js';
 import type { TreeEntry, TreeUnreadable } from '../../src/system/walkDirectoryTree.js';
 import { walkDirectoryTree } from '../../src/system/walkDirectoryTree.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
-import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import {
+  buildPathBelowRoot,
+  createFixtureRoot,
+  deleteFixtureRoot,
+} from '../support/fixtureRoot.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
@@ -30,8 +34,7 @@ async function collectEntries(params: {
   isStatsNeeded: boolean;
   visit?: (entry: TreeEntry) => 'descend' | 'skip' | 'stop';
   isStopped?: () => boolean;
-  cloudOnlyPaths?: string[];
-  linkPaths?: string[];
+  /** The reads of `buildTestEntryReads` with none of its options when left out. */
   entryReads?: EntryReads;
 }) {
   const entries: TreeEntry[] = [];
@@ -42,13 +45,7 @@ async function collectEntries(params: {
     isStatsNeeded: params.isStatsNeeded,
     maxConcurrentDirectories: 2,
     isStopped: params.isStopped ?? (() => false),
-    entryReads:
-      params.entryReads ??
-      buildTestEntryReads({
-        privateBytes: null,
-        cloudOnlyPaths: params.cloudOnlyPaths ?? [],
-        linkPaths: params.linkPaths ?? [],
-      }),
+    entryReads: params.entryReads ?? buildTestEntryReads({ privateBytes: null }),
     visitEntry: (entry) => {
       entries.push(entry);
 
@@ -61,9 +58,8 @@ async function collectEntries(params: {
       evictedEntries.push(entry);
     },
   });
-  // The paths compare with `/` on every host, as the fixtures write them.
   const relativePaths = entries
-    .map((entry) => relative(treeRoot, entry.path).split(sep).join('/'))
+    .map((entry) => buildPathBelowRoot({ rootDir: treeRoot, path: entry.path }))
     .toSorted();
 
   return {
@@ -79,7 +75,10 @@ describe('walkDirectoryTree', () => {
   test('visits an evicted folder but never reads it, and reports it as skipped', async () => {
     const evictedPath = join(treeRoot, 'b');
 
-    const walk = await collectEntries({ isStatsNeeded: false, cloudOnlyPaths: [evictedPath] });
+    const walk = await collectEntries({
+      isStatsNeeded: false,
+      entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [evictedPath] }),
+    });
 
     expect(walk.walkEnd).toBe('completed');
     expect(walk.relativePaths).toContain('b');
@@ -93,7 +92,7 @@ describe('walkDirectoryTree', () => {
 
     const walk = await collectEntries({
       isStatsNeeded: false,
-      cloudOnlyPaths: [evictedPath],
+      entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [evictedPath] }),
       visit: (entry) => (entry.name === 'b' ? 'skip' : 'descend'),
     });
 
@@ -104,7 +103,10 @@ describe('walkDirectoryTree', () => {
   test('never visits an evicted file, and reports it as skipped', async () => {
     const evictedPath = join(treeRoot, 'top.txt');
 
-    const walk = await collectEntries({ isStatsNeeded: true, cloudOnlyPaths: [evictedPath] });
+    const walk = await collectEntries({
+      isStatsNeeded: true,
+      entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [evictedPath] }),
+    });
 
     expect(walk.walkEnd).toBe('completed');
     expect(walk.relativePaths).not.toContain('top.txt');
@@ -114,7 +116,10 @@ describe('walkDirectoryTree', () => {
   });
 
   test('reads no evicted root, and reports it as skipped', async () => {
-    const walk = await collectEntries({ isStatsNeeded: false, cloudOnlyPaths: [treeRoot] });
+    const walk = await collectEntries({
+      isStatsNeeded: false,
+      entryReads: buildTestEntryReads({ privateBytes: null, cloudOnlyPaths: [treeRoot] }),
+    });
 
     expect(walk.walkEnd).toBe('completed');
     expect(walk.entries).toEqual([]);
@@ -125,7 +130,10 @@ describe('walkDirectoryTree', () => {
     // As a mounted folder on Windows, which lstat calls a folder and its reparse point a link.
     const linkPath = join(treeRoot, 'a');
 
-    const walk = await collectEntries({ isStatsNeeded: true, linkPaths: [linkPath] });
+    const walk = await collectEntries({
+      isStatsNeeded: true,
+      entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [linkPath] }),
+    });
     const linkEntry = walk.entries.find((entry) => entry.path === linkPath);
 
     expect(walk.walkEnd).toBe('completed');
@@ -136,7 +144,10 @@ describe('walkDirectoryTree', () => {
   });
 
   test('never enters a root the entry reads call a link', async () => {
-    const walk = await collectEntries({ isStatsNeeded: false, linkPaths: [treeRoot] });
+    const walk = await collectEntries({
+      isStatsNeeded: false,
+      entryReads: buildTestEntryReads({ privateBytes: null, linkPaths: [treeRoot] }),
+    });
 
     expect(walk.walkEnd).toBe('completed');
     expect(walk.entries).toEqual([]);
@@ -154,7 +165,7 @@ describe('walkDirectoryTree', () => {
       }),
     });
     const placementFailureCodes = walk.entries.map((entry) => [
-      relative(treeRoot, entry.path).split(sep).join('/'),
+      buildPathBelowRoot({ rootDir: treeRoot, path: entry.path }),
       entry.placementFailureCode,
     ]);
 
@@ -293,9 +304,11 @@ describe('walkDirectoryTree', () => {
     const walk = await collectEntries({ isStatsNeeded: true });
 
     expect(walk.walkEnd).toBe('completed');
-    expect(walk.unreadables.map((unreadable) => relative(treeRoot, unreadable.path))).toEqual([
-      'a/deep',
-    ]);
+    expect(
+      walk.unreadables.map((unreadable) =>
+        buildPathBelowRoot({ rootDir: treeRoot, path: unreadable.path }),
+      ),
+    ).toEqual(['a/deep']);
     expect(walk.relativePaths).toContain('b/marker.json');
   });
 

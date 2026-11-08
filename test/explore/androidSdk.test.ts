@@ -30,8 +30,7 @@ import type {
   ExploreToolUnitAndroidAvd,
 } from '../../src/explore/exploreUnit.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -108,7 +107,7 @@ async function loadAndroidProbeAnswers(
 ): Promise<AndroidProbeAnswers> {
   const run = buildTestProbeRun({
     environment: environment,
-    runningProcesses: commandLines === null ? null : buildRunningCommandLines(commandLines),
+    runningProcesses: buildRunningCommandLines(commandLines),
     unusedCutoffMs: ANDROID_UNUSED_CUTOFF_MS,
   });
 
@@ -135,7 +134,7 @@ function buildRecheckRun(commandLines: string[] | null) {
     environment: environment,
     platform: buildTestProbePlatform(),
     deadlineMs: Date.now() + 10_000,
-    runningProcesses: commandLines === null ? null : buildRunningCommandLines(commandLines),
+    runningProcesses: buildRunningCommandLines(commandLines),
   };
 }
 
@@ -174,11 +173,11 @@ describe('parseAndroidImageSysdir', () => {
   test('keeps the sysdir as written on macOS, and null for an empty one', () => {
     expect(
       parseAndroidImageSysdir({
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         text: 'system-images/android-35/google_apis/arm64-v8a/',
       }),
     ).toBe('system-images/android-35/google_apis/arm64-v8a/');
-    expect(parseAndroidImageSysdir({ pathRules: DARWIN_PATH_RULES, text: '' })).toBeNull();
+    expect(parseAndroidImageSysdir({ pathRules: POSIX_PATH_RULES, text: '' })).toBeNull();
   });
 
   test('separates the names by either separator on Windows, and joins them by a backslash', () => {

@@ -9,10 +9,10 @@ import { compareVagrantBoxUnit } from '../../src/explore/vagrantBoxes/compareVag
 import { loadVagrantBoxFindings } from '../../src/explore/vagrantBoxes/loadVagrantBoxFindings.js';
 import type { VagrantBox } from '../../src/explore/vagrantBoxes/parseVagrantBoxList.js';
 import { parseVagrantBoxList } from '../../src/explore/vagrantBoxes/parseVagrantBoxList.js';
-import { DARWIN_PATH_RULES } from '../../src/platform/darwin/loadEnvironment.js';
+import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { describeOnPosix } from '../support/posixOnly.js';
+import { describeWithFakeTools } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
@@ -87,7 +87,7 @@ function buildOutdatedUnit(params: {
   const [unit] = buildVagrantBoxFindings({
     tool: params.tool,
     boxes: parseBoxes(BOX_LIST_TEXT),
-    pathRules: DARWIN_PATH_RULES,
+    pathRules: POSIX_PATH_RULES,
     homeDir: buildTestAbsolutePath({ text: params.homeDir }),
     runningProcesses: buildRunningCommandLines([]),
   }).map((finding) => finding.unit);
@@ -150,7 +150,7 @@ describe('buildVagrantBoxFindings', () => {
     const findings = buildVagrantBoxFindings({
       tool: FAKE_TOOL,
       boxes: parseBoxes(BOX_LIST_TEXT),
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       homeDir: HOME_DIR,
       runningProcesses: buildRunningCommandLines([]),
     });
@@ -190,7 +190,7 @@ describe('buildVagrantBoxFindings', () => {
     const findings = buildVagrantBoxFindings({
       tool: FAKE_TOOL,
       boxes: parseBoxes(BOX_LIST_TEXT),
-      pathRules: DARWIN_PATH_RULES,
+      pathRules: POSIX_PATH_RULES,
       homeDir: HOME_DIR,
       runningProcesses: buildRunningCommandLines(VAGRANT_RUNNING),
     });
@@ -208,7 +208,7 @@ describe('compareVagrantBoxUnit', () => {
       return compareVagrantBoxUnit({
         unit: unit,
         boxes: boxes,
-        pathRules: DARWIN_PATH_RULES,
+        pathRules: POSIX_PATH_RULES,
         homeDir: HOME_DIR,
         runningProcesses: buildRunningCommandLines(commandLines),
       });
@@ -230,7 +230,7 @@ describe('compareVagrantBoxUnit', () => {
         compareVagrantBoxUnit({
           unit: unit,
           boxes: list,
-          pathRules: DARWIN_PATH_RULES,
+          pathRules: POSIX_PATH_RULES,
           homeDir: HOME_DIR,
           runningProcesses: buildRunningCommandLines([]),
         }),
@@ -239,8 +239,7 @@ describe('compareVagrantBoxUnit', () => {
   });
 });
 
-// A fake tool runs only once it is trusted, which POSIX owners and modes decide.
-describeOnPosix('the Vagrant box probe with a fake vagrant', () => {
+describeWithFakeTools('the Vagrant box probe with a fake vagrant', () => {
   async function createFakeVagrant(params: {
     home: FixtureHome;
     exitCode: number;

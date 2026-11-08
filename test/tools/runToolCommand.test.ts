@@ -101,26 +101,32 @@ async function waitUntilPresent(path: string): Promise<void> {
   throw new Error(`${path} did not appear.`);
 }
 
-/** The entries the fixed environment of a mise run holds on the host, its tool folder given. */
-function buildExpectedMiseEnvironmentLines(params: { toolFolderPath: string }): string[] {
-  if (process.platform !== 'win32') {
+/**
+ * The entries the fixed environment of a mise run holds on `hostPlatform`, given the fixture's
+ * folders, its tool folder, and the `SystemRoot` Windows passes on.
+ */
+function buildExpectedMiseEnvironmentLines(params: {
+  hostPlatform: NodeJS.Platform;
+  fixtureRoot: FixtureRoot;
+  toolFolderPath: string;
+  systemRoot: string;
+}): string[] {
+  if (params.hostPlatform !== 'win32') {
     return [
-      `HOME=${fixtureRoot.homeDir}`,
-      `TMPDIR=${fixtureRoot.tempDir}`,
+      `HOME=${params.fixtureRoot.homeDir}`,
+      `TMPDIR=${params.fixtureRoot.tempDir}`,
       'LANG=en_US.UTF-8',
       `PATH=${params.toolFolderPath}:/usr/bin:/bin:/usr/sbin:/sbin`,
       'MISE_OFFLINE=1',
     ];
   }
 
-  const systemRoot = process.env.SystemRoot ?? '';
-
   return [
-    `USERPROFILE=${fixtureRoot.homeDir}`,
-    `TEMP=${fixtureRoot.tempDir}`,
-    `TMP=${fixtureRoot.tempDir}`,
-    `SystemRoot=${systemRoot}`,
-    `PATH=${params.toolFolderPath};${systemRoot}\\System32;${systemRoot}`,
+    `USERPROFILE=${params.fixtureRoot.homeDir}`,
+    `TEMP=${params.fixtureRoot.tempDir}`,
+    `TMP=${params.fixtureRoot.tempDir}`,
+    `SystemRoot=${params.systemRoot}`,
+    `PATH=${params.toolFolderPath};${params.systemRoot}\\System32;${params.systemRoot}`,
     'MISE_OFFLINE=1',
   ];
 }
@@ -249,12 +255,14 @@ for (;;) {
       }
 
       const lines = result.value.stdoutText.split(/\r?\n/);
+      const expectedLines = buildExpectedMiseEnvironmentLines({
+        hostPlatform: process.platform,
+        fixtureRoot: fixtureRoot,
+        toolFolderPath: join(fixtureRoot.rootDir, 'bin'),
+        systemRoot: process.env.SystemRoot ?? '',
+      });
 
-      expect(lines).toEqual(
-        expect.arrayContaining(
-          buildExpectedMiseEnvironmentLines({ toolFolderPath: join(fixtureRoot.rootDir, 'bin') }),
-        ),
-      );
+      expect(lines).toEqual(expect.arrayContaining(expectedLines));
       expect(result.value.stdoutText).not.toContain('MAGIC_FREE_DISK_SPACE_TEST_MARKER');
     } finally {
       delete process.env.MAGIC_FREE_DISK_SPACE_TEST_MARKER;

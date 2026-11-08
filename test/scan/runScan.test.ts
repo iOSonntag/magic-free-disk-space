@@ -17,6 +17,7 @@ import {
   buildTestInstallersCandidate,
   buildTestUnitPathsCandidate,
 } from '../support/candidateFixtures.js';
+import { describeOnDarwin } from '../support/darwinOnly.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import {
   buildTestPathEnvironment,
@@ -27,10 +28,6 @@ import {
 import { buildExampleHome, buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { withFixtureHome } from '../support/probeRunFixtures.js';
 import { getCatalogEntry, runTestScan } from '../support/scanRunFixtures.js';
-
-// The scans read the entries of the macOS catalog in a fixture home of the host, which only macOS
-// lays out as those entries expect.
-const describeOnDarwin = describe.skipIf(process.platform !== 'darwin');
 
 const HOME_DIR = '/Users/example';
 
@@ -236,7 +233,7 @@ describe('buildScanReportOfPhases', () => {
   test('keeps the installed apps beside the offers, never among them', () => {
     const app: AdvisedApp = {
       displayName: 'Example',
-      installFolderPath: `${HOME_DIR}/.vscode`,
+      installFolderPath: buildTestAbsolutePath({ text: `${HOME_DIR}/.vscode` }),
       estimatedBytes: 1024,
     };
 
@@ -254,6 +251,8 @@ describe('buildScanReportOfPhases', () => {
   });
 });
 
+// The scans read the entries of the macOS catalog in a fixture home of the host, which only macOS
+// lays out as those entries expect.
 describeOnDarwin('runScan', () => {
   test('never shows a section larger while it scans than the report makes it, for a folder a probe claims', async () => {
     await withFixtureHome({

@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { join } from 'node:path';
 import { buildScanView } from '../../src/report/buildScanView.js';
 import type { ConsumerSection } from '../../src/scan/placeCandidate.js';
 import { placeCandidate } from '../../src/scan/placeCandidate.js';
 import type { ScanReport } from '../../src/scan/runScan.js';
+import { buildTestRecycleBinCandidate } from '../support/candidateFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
+import { runTestScanOnPlatform } from '../support/scanRunFixtures.js';
 import type { WindowsFixtureHome, WindowsFixturePlatform } from '../support/windowsFixtureHome.js';
 import {
   buildWindowsFixturePlatform,
   createWindowsFixtureHome,
-  runWindowsFixtureScan,
   WINDOWS_FIXTURE_ADVISED_APPS,
   WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT,
 } from '../support/windowsFixtureHome.js';
@@ -30,7 +30,7 @@ describe.skipIf(process.platform !== 'win32')(
       fixtureRoot = await createFixtureRoot();
       home = await createWindowsFixtureHome({ fixtureRoot: fixtureRoot, nowMs: Date.now() });
       fixturePlatform = buildWindowsFixturePlatform({ environment: home.environment });
-      report = await runWindowsFixtureScan({
+      report = await runTestScanOnPlatform({
         environment: home.environment,
         platform: fixturePlatform.platform,
       });
@@ -115,22 +115,15 @@ describe.skipIf(process.platform !== 'win32')(
     });
 
     test('lists the Recycle Bin of each fixed drive under Recycle Bin', () => {
-      const bins = report.candidates
-        .filter((candidate) => placeCandidate(candidate).section === 'trash')
-        .map((candidate) => ({
-          path: candidate.path,
-          title: candidate.title,
-          origin: candidate.origin,
-          allocatedBytes: candidate.allocatedBytes,
-        }));
-
-      expect(bins).toEqual(
-        home.environment.fixedDriveRoots.map((driveRoot) => ({
-          path: join(driveRoot, '$Recycle.Bin'),
-          title: `Recycle Bin (${driveRoot.slice(0, 2)})`,
-          origin: { kind: 'recycleBin' },
-          allocatedBytes: WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT.sizeBytes,
-        })),
+      expect(
+        report.candidates.filter((candidate) => placeCandidate(candidate).section === 'trash'),
+      ).toEqual(
+        home.environment.fixedDriveRoots.map((driveRoot) =>
+          buildTestRecycleBinCandidate({
+            driveRootText: driveRoot,
+            scannedContent: WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT,
+          }),
+        ),
       );
     });
 
