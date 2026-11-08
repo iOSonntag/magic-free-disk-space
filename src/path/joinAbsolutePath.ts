@@ -60,6 +60,14 @@ export function listPathNames(params: { rules: PathRules; path: string }): strin
   return params.path.split(getNameSeparatorPattern(params.rules)).filter((name) => name !== '');
 }
 
+/**
+ * Whether `text` stands as the platform's rules normalize it, never the host's: with no `.` or `..`
+ * name and no doubled separator, and on Windows with `\` alone.
+ */
+export function isNormalPath(params: { rules: PathRules; text: string }): boolean {
+  return selectPathModule(params.rules).normalize(params.text) === params.text;
+}
+
 /** What separates two names of a path: Windows takes `/` as well as its own `\`. */
 function getNameSeparatorPattern(rules: PathRules): RegExp {
   switch (rules.rootForm) {

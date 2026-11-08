@@ -282,16 +282,20 @@ describe('loadPackageConfigTracking', () => {
       expect(tracking).toBe('tracked');
     });
 
-    test('returns tracked for an entry with a sigma where the project has a final sigma', async () => {
-      const tracking = await loadTrackingOfRepository({
-        projectFolderName: `x${String.fromCodePoint(0x3c2)}`,
-        indexedPath: `x${String.fromCodePoint(0x3c3)}/${PACKAGE_CONFIG_PATH}`,
-      });
+    // NTFS folds case by its upcase table, one letter to one, which keeps a final sigma apart from
+    // a sigma, and `ß` apart from `ss`.
+    testOnPosix(
+      'returns tracked for an entry with a sigma where the project has a final sigma',
+      async () => {
+        const tracking = await loadTrackingOfRepository({
+          projectFolderName: `x${String.fromCodePoint(0x3c2)}`,
+          indexedPath: `x${String.fromCodePoint(0x3c3)}/${PACKAGE_CONFIG_PATH}`,
+        });
 
-      expect(tracking).toBe('tracked');
-    });
+        expect(tracking).toBe('tracked');
+      },
+    );
 
-    // NTFS folds case letter by letter by its upcase table, so there `ß` never matches `ss`.
     testOnPosix(
       'returns tracked for an entry with a sharp s where the project has ss',
       async () => {

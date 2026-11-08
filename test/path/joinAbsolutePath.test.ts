@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  isNormalPath,
   joinAbsolutePath,
   listPathNames,
   resolveAbsolutePath,
@@ -106,6 +107,24 @@ describe('resolveAbsolutePath', () => {
     expect(
       resolveAbsolutePath({ rules: WIN32_PATH_RULES, basePath: basePath, text: 'D:\\ext' }),
     ).toEqual({ kind: 'succeeded', value: buildTestWindowsPath({ text: 'D:\\ext' }) });
+  });
+});
+
+describe('isNormalPath', () => {
+  test('holds for a POSIX path with slashes on every host, and fails for a dot name or a doubled slash', () => {
+    expect(isNormalPath({ rules: POSIX_PATH_RULES, text: '/opt/homebrew/Cellar' })).toBe(true);
+
+    for (const text of ['/a/../b', '/a/./b', '/a//b']) {
+      expect(isNormalPath({ rules: POSIX_PATH_RULES, text: text })).toBe(false);
+    }
+  });
+
+  test('holds for a Windows path with backslashes alone, and fails for a slash or a dot name', () => {
+    expect(isNormalPath({ rules: WIN32_PATH_RULES, text: 'C:\\Users\\tester' })).toBe(true);
+
+    for (const text of ['C:/Users/tester', 'C:\\Users\\..\\tester', 'C:\\Users\\\\tester']) {
+      expect(isNormalPath({ rules: WIN32_PATH_RULES, text: text })).toBe(false);
+    }
   });
 });
 

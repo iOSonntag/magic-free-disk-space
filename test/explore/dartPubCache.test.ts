@@ -3,6 +3,7 @@ import { buildDartPubCacheFindings } from '../../src/explore/dartPubCache/buildD
 import { parseDartPubCacheGc } from '../../src/explore/dartPubCache/parseDartPubCacheGc.js';
 import { POSIX_PATH_RULES } from '../../src/path/pathRules.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
+import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
 import {
   buildDartGcDryRunText,
@@ -14,6 +15,8 @@ import {
 const tool: LocatedTool = { name: 'dart', path: '/opt/example/dart-sdk/bin/dart' };
 
 const gcPaths = buildDartGcPaths({ homeDir: FIXTURE_HOME_DIR });
+
+const homeDir = buildTestAbsolutePath({ text: FIXTURE_HOME_DIR });
 
 describe('parseDartPubCacheGc', () => {
   test('reads the paths after "Would delete:"', () => {
@@ -59,7 +62,7 @@ describe('buildDartPubCacheFindings', () => {
       tool: tool,
       gcPaths: gcPaths,
       pathRules: POSIX_PATH_RULES,
-      homeDir: FIXTURE_HOME_DIR,
+      homeDir: homeDir,
       runningProcesses: null,
     });
 
@@ -83,7 +86,7 @@ describe('buildDartPubCacheFindings', () => {
         tool: tool,
         gcPaths: [],
         pathRules: POSIX_PATH_RULES,
-        homeDir: FIXTURE_HOME_DIR,
+        homeDir: homeDir,
         runningProcesses: buildRunningCommandLines([]),
       }),
     ).toEqual([]);
