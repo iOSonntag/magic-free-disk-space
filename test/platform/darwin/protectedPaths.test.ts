@@ -79,7 +79,10 @@ describe('the sensitive folders of the darwin platform', () => {
 
 describe('the user cache folder of the darwin platform', () => {
   test('is an allowed root: its contents may go, never the folder itself', () => {
-    expect(ENVIRONMENT.userCacheDir).toBe(buildTestAbsolutePath({ text: '/var/folders/xy/abc/C' }));
+    expect(ENVIRONMENT.platformFolders).toEqual({
+      kind: 'darwin',
+      userCacheDir: buildTestAbsolutePath({ text: '/var/folders/xy/abc/C' }),
+    });
     expect(
       validatePath({ path: '/private/var/folders/xy/abc/C/com.apple.metal/shaders' }).kind,
     ).toBe('approved');

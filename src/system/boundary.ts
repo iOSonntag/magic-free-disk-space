@@ -25,6 +25,7 @@ export const moduleBoundary = {
     'readFailure.ts',
     'requestUnixSocket.ts',
     'runFilesystemCall.ts',
+    'systemCallFailure.ts',
     'systemPlatform.ts',
     'userIdentity.ts',
     'volumeSpace.ts',

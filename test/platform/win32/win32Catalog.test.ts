@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import type { CatalogEntry, CatalogLocation } from '../../../src/catalog/catalog.js';
+import type { CatalogEntry } from '../../../src/catalog/catalog.js';
 import { resolveCatalogLocation } from '../../../src/catalog/resolveCatalogLocation.js';
-import type { EnvironmentDirNames } from '../../../src/environment/buildEnvironment.js';
+import type { EnvironmentLocation } from '../../../src/environment/environmentLocation.js';
+import { findEnvironmentLocationPath } from '../../../src/environment/environmentLocation.js';
 import { isSameOrInsidePath } from '../../../src/path/isSameOrInsidePath.js';
 import { joinAbsolutePath } from '../../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../../src/path/parseAbsolutePath.js';
@@ -21,7 +22,7 @@ const CHROMIUM_BROWSER_IMAGE_NAMES = ['brave.exe', 'chrome.exe', 'msedge.exe'];
 const FORBIDDEN_PATH_CHARACTER_PATTERN = /[\\:]/;
 
 /** A location the catalog names, with what names it for a failure message. */
-type NamedLocation = { name: string; location: CatalogLocation };
+type NamedLocation = { name: string; location: EnvironmentLocation };
 
 describe('WIN32_CATALOG', () => {
   test('gives every entry its own id in kebab case', () => {
@@ -98,9 +99,13 @@ describe('WIN32_CATALOG', () => {
   });
 
   test('keeps every browser cache inside the first profile, which stays guarded with its folder of profiles', () => {
-    const userDataPaths = WIN32_CATALOG.protectedDirNames
-      .filter((dirNames) => dirNames.names.at(-1) === 'User Data')
-      .map((dirNames) => resolveDirNamesPath({ dirNames: dirNames }));
+    const userDataPaths = WIN32_CATALOG.protectedLocations
+      .filter((location) => location.path.endsWith('/User Data'))
+      .flatMap((location) => {
+        const path = findEnvironmentLocationPath({ folders: ENVIRONMENT, location: location });
+
+        return path === null ? [] : [path];
+      });
     const unguardedProfilePaths = userDataPaths
       .map((userDataPath) => buildDefaultProfilePath({ userDataPath: userDataPath }))
       .filter((profilePath) => !ENVIRONMENT.protectedRealPaths.includes(profilePath));
@@ -141,13 +146,15 @@ function listNamedLocations(): NamedLocation[] {
       ? [{ name: `user files ${root.location.path}`, location: root.location }]
       : [],
   );
+  // A known folder is the root it names, wherever Windows keeps it, so only the rest is checked.
   const guardedLocations = [
-    ...WIN32_CATALOG.protectedDirNames,
-    ...WIN32_CATALOG.sensitiveDirNames,
-  ].map((dirNames) => ({
-    name: `guarded ${dirNames.names.join('/')}`,
-    location: toCatalogLocation({ dirNames: dirNames }),
-  }));
+    ...WIN32_CATALOG.protectedLocations,
+    ...WIN32_CATALOG.sensitiveLocations,
+  ].flatMap((location) =>
+    location.root === 'knownFolder'
+      ? []
+      : [{ name: `guarded ${location.root}/${location.path}`, location: location }],
+  );
 
   return [...entryLocations, ...exploreLocations, ...userFileLocations, ...guardedLocations];
 }
@@ -230,15 +237,4 @@ function buildDefaultProfilePath(params: { userDataPath: AbsolutePath }): Absolu
 
 function resolveEntryPath(params: { entry: CatalogEntry }): AbsolutePath {
   return resolveCatalogLocation({ environment: ENVIRONMENT, location: params.entry });
-}
-
-function resolveDirNamesPath(params: { dirNames: EnvironmentDirNames }): AbsolutePath {
-  return resolveCatalogLocation({
-    environment: ENVIRONMENT,
-    location: toCatalogLocation({ dirNames: params.dirNames }),
-  });
-}
-
-function toCatalogLocation(params: { dirNames: EnvironmentDirNames }): CatalogLocation {
-  return { root: params.dirNames.base, path: params.dirNames.names.join('/') };
 }

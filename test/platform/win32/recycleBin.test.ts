@@ -2,11 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
-import {
-  emptyDriveRecycleBin,
-  formatShellCallFailure,
-  loadRecycleBin,
-} from '../../../src/platform/win32/recycleBin.js';
+import { emptyDriveRecycleBin, loadRecycleBin } from '../../../src/platform/win32/recycleBin.js';
 import { loadLogicalDrives } from '../../../src/platform/win32/win32Api.js';
 import { buildTestHostPath, buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
@@ -19,17 +15,6 @@ const HRESULT_PATTERN = /^0x[0-9A-F]{8}$/;
  * tests.
  */
 const IS_RECYCLE_BIN_PROBE_OPTED_IN = process.env.MAGIC_FREE_DISK_SPACE_RECYCLE_BIN_PROBE === '1';
-
-describe('formatShellCallFailure', () => {
-  test('writes the HRESULT as eight upper-case hex digits', () => {
-    expect(
-      formatShellCallFailure({ failure: { call: 'SHEmptyRecycleBinW', code: 0x8007_0005 } }),
-    ).toBe('0x80070005');
-    expect(formatShellCallFailure({ failure: { call: 'SHQueryRecycleBinW', code: 0xe } })).toBe(
-      '0x0000000E',
-    );
-  });
-});
 
 describe('the Recycle Bin of a path that is no drive root', () => {
   test('is neither read nor emptied, before any call of the shell', () => {

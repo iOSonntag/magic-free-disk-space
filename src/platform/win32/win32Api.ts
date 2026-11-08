@@ -1,7 +1,8 @@
 import type { Pointer } from 'bun:ffi';
-import { dlopen, FFIType, read, toArrayBuffer } from 'bun:ffi';
+import { dlopen, FFIType, ptr, read, toArrayBuffer } from 'bun:ffi';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
+import type { SystemCallFailure } from '../../system/systemCallFailure.js';
 import type { DriveRoot } from './driveRoot.js';
 import type { ProcessEntry } from './processEntry.js';
 import { createProcessEntryBuffer, parseProcessEntry } from './processEntry.js';
@@ -11,11 +12,35 @@ declare const windowsHandleBrand: unique symbol;
 /** A HANDLE of Windows as the u64 a 64-bit process holds it in, made only by the calls below. */
 export type WindowsHandle = bigint & { [windowsHandleBrand]: true };
 
+/** The calls of Windows below whose failure a caller reads. */
+export type Win32CallName =
+  | 'AssignProcessToJobObject'
+  | 'ConvertSidToStringSidW'
+  | 'CreateJobObjectW'
+  | 'CreateToolhelp32Snapshot'
+  | 'GetDiskFreeSpaceExW'
+  | 'GetFileAttributesW'
+  | 'GetLogicalDrives'
+  | 'GetNamedSecurityInfoW'
+  | 'GetTokenInformation'
+  | 'OpenProcess'
+  | 'OpenProcessToken'
+  | 'Process32NextW'
+  | 'QueryFullProcessImageNameW'
+  | 'RegEnumKeyExW'
+  | 'RegOpenKeyExW'
+  | 'SetFileAttributesW'
+  | 'SetInformationJobObject'
+  | 'SHEmptyRecycleBinW'
+  | 'SHGetKnownFolderPath'
+  | 'SHQueryRecycleBinW'
+  | 'TerminateJobObject';
+
 /**
- * A call of Windows that failed, by its name, with the code it failed with: its `GetLastError`, the
- * error code it returned, or its HRESULT, as the call reports a failure.
+ * A call of Windows that failed, with the code it failed with: its `GetLastError`, the error code
+ * it returned, or its HRESULT, as the call reports a failure.
  */
-export type Win32CallFailure = { call: string; code: number };
+export type Win32CallFailure = SystemCallFailure & { call: Win32CallName };
 
 /** What `GetFileAttributesW` returns when it fails. */
 const INVALID_FILE_ATTRIBUTES = 0xffffffff;
@@ -38,11 +63,13 @@ const SE_FILE_OBJECT = 1;
 const OWNER_SECURITY_INFORMATION = 0x1;
 
 /**
- * `HKEY_CURRENT_USER` and `HKEY_LOCAL_MACHINE` are `(HKEY)(ULONG_PTR)(LONG)0x80000001` and
- * `0x80000002`, sign-extended to 64 bits.
+ * The predefined key of each hive: `HKEY_CURRENT_USER` and `HKEY_LOCAL_MACHINE` are
+ * `(HKEY)(ULONG_PTR)(LONG)0x80000001` and `0x80000002`, sign-extended to 64 bits.
  */
-const HKEY_CURRENT_USER = 0xffffffff80000001n;
-const HKEY_LOCAL_MACHINE = 0xffffffff80000002n;
+const REGISTRY_HIVE_KEYS: Record<RegistryHive, bigint> = {
+  currentUser: 0xffffffff80000001n,
+  localMachine: 0xffffffff80000002n,
+};
 const KEY_READ = 0x20019;
 const RRF_RT_REG_SZ = 0x2;
 const RRF_RT_REG_DWORD = 0x10;
@@ -106,6 +133,9 @@ export type UninstallKeyValues = {
   releaseType: string | null;
 };
 
+/** One subkey of an open key, by its name, which the value reads below take beside the key. */
+type RegistrySubkey = { key: bigint; subkeyName: string };
+
 /** What `SHQueryRecycleBinW` counts in the Recycle Bin of one drive. */
 export type RecycleBinCount = { sizeBytes: number; itemCount: number };
 
@@ -162,7 +192,7 @@ function openAdvapi32() {
       args: [FFIType.u64, FFIType.u32, FFIType.ptr, FFIType.u32, FFIType.ptr],
       returns: FFIType.i32,
     },
-    ConvertSidToStringSidW: { args: [FFIType.u64, FFIType.ptr], returns: FFIType.i32 },
+    ConvertSidToStringSidW: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
     GetNamedSecurityInfoW: {
       args: [
         FFIType.ptr,
@@ -232,12 +262,10 @@ export function loadFileAttributes(params: {
 }): Result<number, Win32CallFailure> {
   kernel32 ??= openKernel32();
 
-  const attributes = kernel32.symbols.GetFileAttributesW(
-    toWideString({ text: toExtendedLengthPath({ path: params.path }) }),
-  );
+  const attributes = kernel32.symbols.GetFileAttributesW(toWidePath({ path: params.path }));
 
   if (attributes === INVALID_FILE_ATTRIBUTES) {
-    return failWithLastError({ call: 'GetFileAttributesW' });
+    return buildLastErrorFailure({ call: 'GetFileAttributesW' });
   }
 
   return { kind: 'succeeded', value: attributes };
@@ -250,7 +278,7 @@ export function loadLogicalDrives(): Result<number, Win32CallFailure> {
   const drives = kernel32.symbols.GetLogicalDrives();
 
   if (drives === 0) {
-    return failWithLastError({ call: 'GetLogicalDrives' });
+    return buildLastErrorFailure({ call: 'GetLogicalDrives' });
   }
 
   return { kind: 'succeeded', value: drives };
@@ -260,9 +288,7 @@ export function loadLogicalDrives(): Result<number, Win32CallFailure> {
 export function loadDriveType(params: { rootPath: AbsolutePath }): number {
   kernel32 ??= openKernel32();
 
-  return kernel32.symbols.GetDriveTypeW(
-    toWideString({ text: toExtendedLengthPath({ path: params.rootPath }) }),
-  );
+  return kernel32.symbols.GetDriveTypeW(toWidePath({ path: params.rootPath }));
 }
 
 /**
@@ -289,7 +315,7 @@ export function loadDiskFreeSpace(params: {
   );
 
   if (isRead === 0) {
-    return failWithLastError({ call: 'GetDiskFreeSpaceExW' });
+    return buildLastErrorFailure({ call: 'GetDiskFreeSpaceExW' });
   }
 
   return {
@@ -316,7 +342,7 @@ export function loadKnownFolderPath(params: {
 
   try {
     if (hresult < 0) {
-      return { kind: 'failed', failure: { call: 'SHGetKnownFolderPath', code: hresult >>> 0 } };
+      return buildHresultFailure({ call: 'SHGetKnownFolderPath', hresult: hresult });
     }
 
     return { kind: 'succeeded', value: readWideString({ address: readAddress(pathAddress) }) };
@@ -339,7 +365,7 @@ export function openProcessToken(): Result<WindowsHandle, Win32CallFailure> {
   );
 
   if (isOpened === 0) {
-    return failWithLastError({ call: 'OpenProcessToken' });
+    return buildLastErrorFailure({ call: 'OpenProcessToken' });
   }
 
   // The brand records that the handle came from OpenProcessToken.
@@ -357,7 +383,8 @@ export function loadTokenUserSid(params: {
 }): Result<string, Win32CallFailure> {
   advapi32 ??= openAdvapi32();
 
-  const tokenUser = new Uint8Array(TOKEN_USER_BUFFER_BYTES);
+  // Over an ArrayBuffer of its own, which never moves, as a small typed array's bytes may.
+  const tokenUser = new Uint8Array(new ArrayBuffer(TOKEN_USER_BUFFER_BYTES));
   const returnLength = new Uint32Array(1);
   const isRead = advapi32.symbols.GetTokenInformation(
     params.token,
@@ -368,12 +395,17 @@ export function loadTokenUserSid(params: {
   );
 
   if (isRead === 0) {
-    return failWithLastError({ call: 'GetTokenInformation' });
+    return buildLastErrorFailure({ call: 'GetTokenInformation' });
   }
 
-  const sidAddress = new DataView(tokenUser.buffer).getBigUint64(0, true);
+  const sidOffset = Number(new DataView(tokenUser.buffer).getBigUint64(0, true)) - ptr(tokenUser);
 
-  return convertSidToString({ sidAddress: sidAddress });
+  if (sidOffset < 0 || sidOffset >= TOKEN_USER_BUFFER_BYTES) {
+    throw new Error('GetTokenInformation pointed to a SID outside its buffer.');
+  }
+
+  // A view of the buffer, not the SID's address, keeps the buffer that holds it alive in the call.
+  return convertSidToString({ sid: tokenUser.subarray(sidOffset) });
 }
 
 /** Whether the token is elevated, as by "Run as administrator". */
@@ -393,7 +425,7 @@ export function loadTokenElevation(params: {
   );
 
   if (isRead === 0) {
-    return failWithLastError({ call: 'GetTokenInformation' });
+    return buildLastErrorFailure({ call: 'GetTokenInformation' });
   }
 
   return { kind: 'succeeded', value: elevation[0] !== 0 };
@@ -407,7 +439,7 @@ export function loadFileOwnerSid(params: { path: AbsolutePath }): Result<string,
   const ownerSidAddress = new BigUint64Array(1);
   const descriptorAddress = new BigUint64Array(1);
   const status = advapi32.symbols.GetNamedSecurityInfoW(
-    toWideString({ text: toExtendedLengthPath({ path: params.path }) }),
+    toWidePath({ path: params.path }),
     SE_FILE_OBJECT,
     OWNER_SECURITY_INFORMATION,
     ownerSidAddress,
@@ -423,7 +455,7 @@ export function loadFileOwnerSid(params: { path: AbsolutePath }): Result<string,
 
   try {
     // The owner SID lies inside the security descriptor, which is freed after its conversion.
-    return convertSidToString({ sidAddress: readAddress(ownerSidAddress) });
+    return convertSidToString({ sid: toPointer({ address: readAddress(ownerSidAddress) }) });
   } finally {
     kernel32.symbols.LocalFree(readAddress(descriptorAddress));
   }
@@ -431,34 +463,28 @@ export function loadFileOwnerSid(params: { path: AbsolutePath }): Result<string,
 
 /**
  * The string value `valueName` of each subkey of the key `keyPath` of `HKEY_CURRENT_USER`, in the
- * order of the subkeys; a subkey without that string value is left out.
+ * order of the subkeys; a subkey without that string value is left out, and a key that does not
+ * exist holds no subkeys.
  */
 export function loadCurrentUserSubkeyStrings(params: {
   keyPath: string;
   valueName: string;
 }): Result<string[], Win32CallFailure> {
-  advapi32 ??= openAdvapi32();
+  const values = loadFromEachSubkey({
+    hive: 'currentUser',
+    view: 'shared',
+    keyPath: params.keyPath,
+    loadSubkey: (subkey) => loadSubkeyString({ ...subkey, valueName: params.valueName }),
+  });
 
-  const keyHandle = new BigUint64Array(1);
-  const openStatus = advapi32.symbols.RegOpenKeyExW(
-    HKEY_CURRENT_USER,
-    toWideString({ text: params.keyPath }),
-    0,
-    KEY_READ,
-    keyHandle,
-  );
-
-  if (openStatus !== ERROR_SUCCESS) {
-    return { kind: 'failed', failure: { call: 'RegOpenKeyExW', code: openStatus } };
+  if (values.kind === 'failed') {
+    return values;
   }
 
-  const key = readAddress(keyHandle);
-
-  try {
-    return listSubkeyStrings({ key: key, valueName: params.valueName });
-  } finally {
-    advapi32.symbols.RegCloseKey(key);
-  }
+  return {
+    kind: 'succeeded',
+    value: values.value.flatMap((value) => (value === null ? [] : [value])),
+  };
 }
 
 /**
@@ -470,54 +496,21 @@ export function loadUninstallKeyValues(params: {
   view: RegistryView;
   keyPath: string;
 }): Result<UninstallKeyValues[], Win32CallFailure> {
-  advapi32 ??= openAdvapi32();
-
-  const keyHandle = new BigUint64Array(1);
-  const openStatus = advapi32.symbols.RegOpenKeyExW(
-    params.hive === 'currentUser' ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE,
-    toWideString({ text: params.keyPath }),
-    0,
-    KEY_READ | KEY_WOW64_FLAGS[params.view],
-    keyHandle,
-  );
-
-  if (openStatus === ERROR_FILE_NOT_FOUND) {
-    return { kind: 'succeeded', value: [] };
-  }
-
-  if (openStatus !== ERROR_SUCCESS) {
-    return { kind: 'failed', failure: { call: 'RegOpenKeyExW', code: openStatus } };
-  }
-
-  const key = readAddress(keyHandle);
-
-  try {
-    const subkeyNames = listSubkeyNames({ key: key });
-
-    if (subkeyNames.kind === 'failed') {
-      return subkeyNames;
-    }
-
-    return {
-      kind: 'succeeded',
-      value: subkeyNames.value.map((subkeyName) => {
-        const subkey = { key: key, subkeyName: subkeyName };
-
-        return {
-          keyName: subkeyName,
-          displayName: loadSubkeyString({ ...subkey, valueName: 'DisplayName' }),
-          uninstallString: loadSubkeyString({ ...subkey, valueName: 'UninstallString' }),
-          installLocation: loadSubkeyString({ ...subkey, valueName: 'InstallLocation' }),
-          estimatedSize: loadSubkeyNumber({ ...subkey, valueName: 'EstimatedSize' }),
-          systemComponent: loadSubkeyNumber({ ...subkey, valueName: 'SystemComponent' }),
-          parentKeyName: loadSubkeyString({ ...subkey, valueName: 'ParentKeyName' }),
-          releaseType: loadSubkeyString({ ...subkey, valueName: 'ReleaseType' }),
-        };
-      }),
-    };
-  } finally {
-    advapi32.symbols.RegCloseKey(key);
-  }
+  return loadFromEachSubkey({
+    hive: params.hive,
+    view: params.view,
+    keyPath: params.keyPath,
+    loadSubkey: (subkey) => ({
+      keyName: subkey.subkeyName,
+      displayName: loadSubkeyString({ ...subkey, valueName: 'DisplayName' }),
+      uninstallString: loadSubkeyString({ ...subkey, valueName: 'UninstallString' }),
+      installLocation: loadSubkeyString({ ...subkey, valueName: 'InstallLocation' }),
+      estimatedSize: loadSubkeyNumber({ ...subkey, valueName: 'EstimatedSize' }),
+      systemComponent: loadSubkeyNumber({ ...subkey, valueName: 'SystemComponent' }),
+      parentKeyName: loadSubkeyString({ ...subkey, valueName: 'ParentKeyName' }),
+      releaseType: loadSubkeyString({ ...subkey, valueName: 'ReleaseType' }),
+    }),
+  });
 }
 
 /**
@@ -530,7 +523,7 @@ export function listProcesses(): Result<ProcessEntry[], Win32CallFailure> {
   const snapshot = kernel32.symbols.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
   if (snapshot === INVALID_HANDLE_VALUE) {
-    return failWithLastError({ call: 'CreateToolhelp32Snapshot' });
+    return buildLastErrorFailure({ call: 'CreateToolhelp32Snapshot' });
   }
 
   try {
@@ -571,7 +564,7 @@ export function loadProcessImagePath(params: {
   );
 
   if (processHandle === 0n) {
-    return failWithLastError({ call: 'OpenProcess' });
+    return buildLastErrorFailure({ call: 'OpenProcess' });
   }
 
   try {
@@ -585,7 +578,7 @@ export function loadProcessImagePath(params: {
     );
 
     if (isRead === 0) {
-      return failWithLastError({ call: 'QueryFullProcessImageNameW' });
+      return buildLastErrorFailure({ call: 'QueryFullProcessImageNameW' });
     }
 
     return {
@@ -607,7 +600,7 @@ export function createKillOnCloseJob(): Result<WindowsHandle, Win32CallFailure> 
   const job = kernel32.symbols.CreateJobObjectW(null, null);
 
   if (job === 0n) {
-    return failWithLastError({ call: 'CreateJobObjectW' });
+    return buildLastErrorFailure({ call: 'CreateJobObjectW' });
   }
 
   const limits = new Uint8Array(JOB_EXTENDED_LIMIT_BYTES);
@@ -626,7 +619,7 @@ export function createKillOnCloseJob(): Result<WindowsHandle, Win32CallFailure> 
   );
 
   if (isSet === 0) {
-    const failure = failWithLastError({ call: 'SetInformationJobObject' });
+    const failure = buildLastErrorFailure({ call: 'SetInformationJobObject' });
 
     kernel32.symbols.CloseHandle(job);
 
@@ -651,12 +644,12 @@ export function assignProcessToJob(params: {
   );
 
   if (processHandle === 0n) {
-    return failWithLastError({ call: 'OpenProcess' });
+    return buildLastErrorFailure({ call: 'OpenProcess' });
   }
 
   try {
     if (kernel32.symbols.AssignProcessToJobObject(params.job, processHandle) === 0) {
-      return failWithLastError({ call: 'AssignProcessToJobObject' });
+      return buildLastErrorFailure({ call: 'AssignProcessToJobObject' });
     }
 
     return { kind: 'succeeded', value: null };
@@ -670,7 +663,7 @@ export function terminateJob(params: { job: WindowsHandle }): Result<null, Win32
   kernel32 ??= openKernel32();
 
   if (kernel32.symbols.TerminateJobObject(params.job, 1) === 0) {
-    return failWithLastError({ call: 'TerminateJobObject' });
+    return buildLastErrorFailure({ call: 'TerminateJobObject' });
   }
 
   return { kind: 'succeeded', value: null };
@@ -684,12 +677,12 @@ export function setFileAttributes(params: {
   kernel32 ??= openKernel32();
 
   const isSet = kernel32.symbols.SetFileAttributesW(
-    toWideString({ text: toExtendedLengthPath({ path: params.path }) }),
+    toWidePath({ path: params.path }),
     params.attributes === 0 ? FILE_ATTRIBUTE_NORMAL : params.attributes,
   );
 
   if (isSet === 0) {
-    return failWithLastError({ call: 'SetFileAttributesW' });
+    return buildLastErrorFailure({ call: 'SetFileAttributesW' });
   }
 
   return { kind: 'succeeded', value: null };
@@ -715,7 +708,7 @@ export function loadRecycleBinCount(params: {
   );
 
   if (hresult < 0) {
-    return { kind: 'failed', failure: { call: 'SHQueryRecycleBinW', code: hresult >>> 0 } };
+    return buildHresultFailure({ call: 'SHQueryRecycleBinW', hresult: hresult });
   }
 
   return {
@@ -741,7 +734,7 @@ export function emptyRecycleBin(params: { driveRoot: DriveRoot }): Result<null, 
   );
 
   if (hresult < 0) {
-    return { kind: 'failed', failure: { call: 'SHEmptyRecycleBinW', code: hresult >>> 0 } };
+    return buildHresultFailure({ call: 'SHEmptyRecycleBinW', hresult: hresult });
   }
 
   return { kind: 'succeeded', value: null };
@@ -807,28 +800,54 @@ function loadSubkeyNumber(params: {
   return value[0] ?? null;
 }
 
-function listSubkeyStrings(params: {
-  key: bigint;
-  valueName: string;
-}): Result<string[], Win32CallFailure> {
-  const subkeyNames = listSubkeyNames({ key: params.key });
+/**
+ * What `loadSubkey` reads from each subkey of the key `keyPath` of the hive, in the given view, in
+ * the order of the subkeys, with the key open only for the reads. A key that does not exist holds
+ * no subkeys.
+ */
+function loadFromEachSubkey<TValue>(params: {
+  hive: RegistryHive;
+  view: RegistryView;
+  keyPath: string;
+  loadSubkey: (subkey: RegistrySubkey) => TValue;
+}): Result<TValue[], Win32CallFailure> {
+  advapi32 ??= openAdvapi32();
 
-  if (subkeyNames.kind === 'failed') {
-    return subkeyNames;
+  const keyHandle = new BigUint64Array(1);
+  const openStatus = advapi32.symbols.RegOpenKeyExW(
+    REGISTRY_HIVE_KEYS[params.hive],
+    toWideString({ text: params.keyPath }),
+    0,
+    KEY_READ | KEY_WOW64_FLAGS[params.view],
+    keyHandle,
+  );
+
+  if (openStatus === ERROR_FILE_NOT_FOUND) {
+    return { kind: 'succeeded', value: [] };
   }
 
-  return {
-    kind: 'succeeded',
-    value: subkeyNames.value.flatMap((subkeyName) => {
-      const value = loadSubkeyString({
-        key: params.key,
-        subkeyName: subkeyName,
-        valueName: params.valueName,
-      });
+  if (openStatus !== ERROR_SUCCESS) {
+    return { kind: 'failed', failure: { call: 'RegOpenKeyExW', code: openStatus } };
+  }
 
-      return value === null ? [] : [value];
-    }),
-  };
+  const key = readAddress(keyHandle);
+
+  try {
+    const subkeyNames = listSubkeyNames({ key: key });
+
+    if (subkeyNames.kind === 'failed') {
+      return subkeyNames;
+    }
+
+    return {
+      kind: 'succeeded',
+      value: subkeyNames.value.map((subkeyName) =>
+        params.loadSubkey({ key: key, subkeyName: subkeyName }),
+      ),
+    };
+  } finally {
+    advapi32.symbols.RegCloseKey(key);
+  }
 }
 
 /** The string value of the subkey, or `null` when it has none that fits the buffer. */
@@ -861,15 +880,17 @@ function loadSubkeyString(params: {
     .replace(/\0+$/, '');
 }
 
-function convertSidToString(params: { sidAddress: bigint }): Result<string, Win32CallFailure> {
+function convertSidToString(params: {
+  sid: Uint8Array | Pointer;
+}): Result<string, Win32CallFailure> {
   kernel32 ??= openKernel32();
   advapi32 ??= openAdvapi32();
 
   const stringAddress = new BigUint64Array(1);
-  const isConverted = advapi32.symbols.ConvertSidToStringSidW(params.sidAddress, stringAddress);
+  const isConverted = advapi32.symbols.ConvertSidToStringSidW(params.sid, stringAddress);
 
   if (isConverted === 0) {
-    return failWithLastError({ call: 'ConvertSidToStringSidW' });
+    return buildLastErrorFailure({ call: 'ConvertSidToStringSidW' });
   }
 
   try {
@@ -880,7 +901,7 @@ function convertSidToString(params: { sidAddress: bigint }): Result<string, Win3
 }
 
 /** The failure of `call` with its `GetLastError`, read right after the call failed. */
-function failWithLastError(params: { call: string }): Result<never, Win32CallFailure> {
+function buildLastErrorFailure(params: { call: Win32CallName }): Result<never, Win32CallFailure> {
   kernel32 ??= openKernel32();
 
   return {
@@ -889,9 +910,17 @@ function failWithLastError(params: { call: string }): Result<never, Win32CallFai
   };
 }
 
-/** The `\\?\` form of a drive path, which every W function above takes for a path. */
-function toExtendedLengthPath(params: { path: AbsolutePath }): string {
-  return `${EXTENDED_LENGTH_PREFIX}${params.path}`;
+/** The failure of `call` with the HRESULT it returned, a negative number, as its 32 bits. */
+function buildHresultFailure(params: {
+  call: Win32CallName;
+  hresult: number;
+}): Result<never, Win32CallFailure> {
+  return { kind: 'failed', failure: { call: params.call, code: params.hresult >>> 0 } };
+}
+
+/** The drive path in its `\\?\` form as an `LPCWSTR`, the form every W function above takes. */
+function toWidePath(params: { path: AbsolutePath }): Buffer {
+  return toWideString({ text: `${EXTENDED_LENGTH_PREFIX}${params.path}` });
 }
 
 /** The text as a NUL-terminated UTF-16LE buffer, the form of an `LPCWSTR`. */
@@ -904,10 +933,15 @@ function readAddress(slot: BigUint64Array): bigint {
   return slot[0] ?? 0n;
 }
 
+/** The address as the pointer a function of bun:ffi takes. */
+function toPointer(params: { address: bigint }): Pointer {
+  // A user-mode address lies below 2^47, which a number holds exactly.
+  return Number(params.address) as Pointer;
+}
+
 /** The NUL-terminated UTF-16LE string at `address`, read up to the longest path Windows allows. */
 function readWideString(params: { address: bigint }): string {
-  // A user-mode address lies below 2^47, which a number holds exactly.
-  const pointer = Number(params.address) as Pointer;
+  const pointer = toPointer({ address: params.address });
   let length = 0;
 
   while (length < MAX_WIDE_STRING_UNITS && read.u16(pointer, length * 2) !== 0) {

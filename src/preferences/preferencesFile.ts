@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { MakeDirectoryOptions } from 'node:fs';
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { OwnerOnlyModes } from '../environment/buildEnvironment.js';
@@ -48,11 +49,16 @@ export async function saveIsUpdateCheckEnabled(params: {
   ownerOnlyModes: OwnerOnlyModes | null;
   isEnabled: boolean;
 }): Promise<Result<null, PreferencesSaveFailure>> {
+  const directoryOptions: MakeDirectoryOptions & { recursive: true } = { recursive: true };
+  const fileOptions: { flag: 'wx'; mode?: number } = { flag: 'wx' };
+
+  if (params.ownerOnlyModes !== null) {
+    directoryOptions.mode = params.ownerOnlyModes.directoryMode;
+    fileOptions.mode = params.ownerOnlyModes.fileMode;
+  }
+
   try {
-    await mkdir(params.preferencesDir, {
-      recursive: true,
-      ...(params.ownerOnlyModes === null ? {} : { mode: params.ownerOnlyModes.directoryMode }),
-    });
+    await mkdir(params.preferencesDir, directoryOptions);
   } catch (error) {
     return {
       kind: 'failed',
@@ -65,10 +71,7 @@ export async function saveIsUpdateCheckEnabled(params: {
   const temporaryPath = join(params.preferencesDir, `${PREFERENCES_FILE_NAME}.${randomUUID()}.tmp`);
 
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(savedJson, null, 2)}\n`, {
-      flag: 'wx',
-      ...(params.ownerOnlyModes === null ? {} : { mode: params.ownerOnlyModes.fileMode }),
-    });
+    await writeFile(temporaryPath, `${JSON.stringify(savedJson, null, 2)}\n`, fileOptions);
     await rename(temporaryPath, buildPreferencesPath({ preferencesDir: params.preferencesDir }));
   } catch (error) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);

@@ -29,6 +29,7 @@ import {
   openProcessToken,
 } from '../../src/platform/win32/win32Api.js';
 import type { Result } from '../../src/result.js';
+import { formatSystemCallFailure } from '../../src/system/systemCallFailure.js';
 import { parseWindowsSid } from '../../src/system/userIdentity.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { buildLongPathSegments } from './longPath.js';
@@ -100,7 +101,7 @@ type ChildRun = {
 /** The value of a call that succeeded; throws with the call and its code for one that failed. */
 function unwrapCall<TValue>(result: Result<TValue, Win32CallFailure>): TValue {
   if (result.kind === 'failed') {
-    throw new Error(`${result.failure.call} failed with ${result.failure.code}.`);
+    throw new Error(`${formatSystemCallFailure({ failure: result.failure })}.`);
   }
 
   return result.value;
@@ -265,6 +266,23 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
 
       expect(parseWindowsSid({ text: sidText }).kind).toBe('succeeded');
       expect(typeof unwrapCall(loadTokenElevation({ token: token }))).toBe('boolean');
+    } finally {
+      closeHandle({ handle: token });
+    }
+  });
+
+  test('the SID of the token reads the same while the collector runs between the reads', () => {
+    const token = unwrapCall(openProcessToken());
+
+    try {
+      const sidTexts = Array.from({ length: 200 }, () => {
+        Bun.gc(true);
+
+        return unwrapCall(loadTokenUserSid({ token: token }));
+      });
+
+      expect(new Set(sidTexts).size).toBe(1);
+      expect(parseWindowsSid({ text: sidTexts[0] ?? '' }).kind).toBe('succeeded');
     } finally {
       closeHandle({ handle: token });
     }

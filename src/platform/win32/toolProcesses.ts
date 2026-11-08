@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import type { Result } from '../../result.js';
+import { formatSystemCallFailure } from '../../system/systemCallFailure.js';
 import type { StartedTool, ToolProcess, ToolProcessPlatform } from '../../tools/toolsPlatform.js';
-import type { Win32CallFailure, WindowsHandle } from './win32Api.js';
+import type { WindowsHandle } from './win32Api.js';
 import { assignProcessToJob, closeHandle, createKillOnCloseJob, terminateJob } from './win32Api.js';
 
 /**
@@ -47,7 +48,7 @@ function startTool(params: {
   const job = createKillOnCloseJob();
 
   if (job.kind === 'failed') {
-    return { kind: 'failed', failure: formatCallFailure({ failure: job.failure }) };
+    return { kind: 'failed', failure: formatSystemCallFailure({ failure: job.failure }) };
   }
 
   let child: ToolProcess;
@@ -73,7 +74,7 @@ function startTool(params: {
       child.kill('SIGKILL');
       closeHandle({ handle: job.value });
 
-      return { kind: 'failed', failure: formatCallFailure({ failure: assigned.failure }) };
+      return { kind: 'failed', failure: formatSystemCallFailure({ failure: assigned.failure }) };
     }
   }
 
@@ -98,8 +99,4 @@ function holdInJob(params: { child: ToolProcess; job: WindowsHandle }): StartedT
       }
     },
   };
-}
-
-function formatCallFailure(params: { failure: Win32CallFailure }): string {
-  return `${params.failure.call} failed with ${params.failure.code}`;
 }

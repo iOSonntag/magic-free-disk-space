@@ -1,3 +1,7 @@
+import type {
+  EnvironmentLocationAtRoot,
+  LocationRoot,
+} from '../environment/environmentLocation.js';
 import type { CatalogOwner } from './catalogOwner.js';
 
 export type Risk = 'safe' | 'review' | 'careful' | 'never';
@@ -37,24 +41,11 @@ export type CandidateCategory =
   | 'leftovers'
   | 'userFiles';
 
-/**
- * The folder a catalog path is named below: the home folder, the temporary folder, macOS' per-user
- * folder of the system's caches for `userCache`, Windows' two AppData folders, or none for
- * `absolute`, whose path is whole.
- */
-export type CatalogRoot =
-  | 'home'
-  | 'temp'
-  | 'userCache'
-  | 'absolute'
-  | 'localAppData'
-  | 'roamingAppData';
+/** The folder a catalog path is named below, as a fixed location of the environment names it. */
+export type CatalogRoot = LocationRoot;
 
-/**
- * A folder or file the platform names: relative to its root, with `/` between its names on every
- * platform and `''` for the root itself, or the whole path for `absolute`.
- */
-export type CatalogLocation = { root: CatalogRoot; path: string };
+/** A folder or file the catalog names, always at a fixed place of the run, never in a known folder. */
+export type CatalogLocation = EnvironmentLocationAtRoot;
 
 /** The apps an advice may open, by a key only the app maps to the app itself. */
 export type OpenableApp =

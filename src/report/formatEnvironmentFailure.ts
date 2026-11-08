@@ -1,4 +1,5 @@
 import type { EnvironmentFailure } from '../environment/environmentPlatform.js';
+import { formatSystemCallFailure } from '../system/systemCallFailure.js';
 import { formatDisplayText } from './formatDisplayText.js';
 
 /** The text with which the tool refuses to start on an operating system it does not run on. */
@@ -16,6 +17,8 @@ export function formatEnvironmentFailure(params: { failure: EnvironmentFailure }
       return 'Start this tool without "Run as administrator": it deletes in the user folder of the account that runs it.';
     case 'unresolvable':
       return `Cannot resolve ${formatDisplayText({ text: failure.path })}: ${failure.code}`;
+    case 'callFailed':
+      return `Cannot read your account and its folders from the system: ${formatSystemCallFailure({ failure: failure })}`;
     case 'homeNotOwned':
       return `The home folder ${formatDisplayText({ text: failure.path })} does not belong to you. Check the HOME variable.`;
     case 'profileNotOwned':

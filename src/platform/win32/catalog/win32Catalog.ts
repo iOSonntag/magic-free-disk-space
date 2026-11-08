@@ -2,30 +2,25 @@ import type { CatalogEntry } from '../../../catalog/catalog.js';
 import type { ProjectArtifactRule, ProjectMarker } from '../../../catalog/projectArtifactRules.js';
 import { PROJECT_ARTIFACT_RULES } from '../../../catalog/projectArtifactRules.js';
 import type {
-  EnvironmentDirNames,
-  WindowsKnownFolder,
-} from '../../../environment/buildEnvironment.js';
+  EnvironmentLocation,
+  EnvironmentLocationAtRoot,
+} from '../../../environment/environmentLocation.js';
 import type { ExplorePlatform } from '../../../explore/explorePlatform.js';
 import type { UserFileRoot } from '../../../scan/scanPlatform.js';
 import { WIN32_CATALOG_ENTRIES } from './catalogEntries.js';
-import { WIN32_PROTECTED_DIR_NAMES, WIN32_SENSITIVE_DIR_NAMES } from './protectedPaths.js';
+import { WIN32_PROTECTED_LOCATIONS, WIN32_SENSITIVE_LOCATIONS } from './protectedPaths.js';
 
 /** The data of Windows the run takes beside what it reads from the system. */
 export type Win32Catalog = {
   /** The caches and leftovers the scan measures, each at its location. */
   entries: CatalogEntry[];
   /**
-   * The known folders never removed as a whole, beside the profile and the two AppData folders,
-   * which are always: wherever the user moved one, its own path is guarded.
+   * Root-like folders, the profile and the known folders among them, never removed as a whole,
+   * while an entry below one may go, such as a browser's `User Data` with its cache inside.
    */
-  protectedKnownFolders: WindowsKnownFolder[];
-  /**
-   * Root-like folders below the profile and the AppData folders, never removed as a whole, while
-   * an entry below one may go, such as a browser's `User Data` with its cache inside.
-   */
-  protectedDirNames: EnvironmentDirNames[];
+  protectedLocations: EnvironmentLocation[];
   /** Folders below the profile and the AppData folders never removed, neither whole nor in part. */
-  sensitiveDirNames: EnvironmentDirNames[];
+  sensitiveLocations: EnvironmentLocationAtRoot[];
   /** Folders right below the profile that the project search never enters. */
   projectSearchExcludedNames: string[];
   /** The build and dependency folders the project search offers. */
@@ -46,18 +41,8 @@ const DOTNET_PROJECT_MARKERS: ProjectMarker[] = [
 /** The data of Windows, each location as the tool that keeps it or Microsoft documents it. */
 export const WIN32_CATALOG: Win32Catalog = {
   entries: WIN32_CATALOG_ENTRIES,
-  protectedKnownFolders: [
-    'desktop',
-    'documents',
-    'downloads',
-    'videos',
-    'music',
-    'pictures',
-    'localAppDataLow',
-    'skyDrive',
-  ],
-  protectedDirNames: WIN32_PROTECTED_DIR_NAMES,
-  sensitiveDirNames: WIN32_SENSITIVE_DIR_NAMES,
+  protectedLocations: WIN32_PROTECTED_LOCATIONS,
+  sensitiveLocations: WIN32_SENSITIVE_LOCATIONS,
   projectSearchExcludedNames: [
     '3D Objects',
     'AppData',

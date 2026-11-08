@@ -29,4 +29,21 @@ describe('formatEnvironmentFailure', () => {
       'The temporary folder /Users/tester overlaps the home folder, so nothing in it can count as temporary.',
     );
   });
+
+  test('names a failed call of the system by its name and its code in hex, never as a path', () => {
+    expect(
+      formatEnvironmentFailure({
+        failure: { reason: 'callFailed', call: 'GetTokenInformation', code: 5 },
+      }),
+    ).toBe(
+      'Cannot read your account and its folders from the system: GetTokenInformation failed with 0x00000005',
+    );
+    expect(
+      formatEnvironmentFailure({
+        failure: { reason: 'callFailed', call: 'SHGetKnownFolderPath', code: 0x8007_0002 },
+      }),
+    ).toBe(
+      'Cannot read your account and its folders from the system: SHGetKnownFolderPath failed with 0x80070002',
+    );
+  });
 });

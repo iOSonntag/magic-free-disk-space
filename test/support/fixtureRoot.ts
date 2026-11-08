@@ -109,8 +109,9 @@ export async function loadTestEnvironment(params: {
       localAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Local') }),
       roamingAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Roaming') }),
       knownFolderPaths: NO_KNOWN_FOLDER_PATHS,
+      knownFolderRealPaths: NO_KNOWN_FOLDER_PATHS,
       fixedDriveRoots: [buildTestHostPath({ text: parse(params.fixtureRoot.rootDir).root })],
-      protectedFolderRealPaths: [],
+      oneDriveRealPaths: [],
     });
   }
 

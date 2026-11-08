@@ -1,4 +1,7 @@
-import type { Environment } from '../../src/environment/buildEnvironment.js';
+import type {
+  Environment,
+  WindowsKnownFolderPaths,
+} from '../../src/environment/buildEnvironment.js';
 import { buildWin32Environment } from '../../src/platform/win32/loadEnvironment.js';
 import { buildTestMacEnvironment } from './fixtureRoot.js';
 import { buildTestWindowsPath, buildTestWindowsUser } from './parsedValueFixtures.js';
@@ -8,6 +11,18 @@ export type Win32EnvironmentParams = Parameters<typeof buildWin32Environment>[0]
 
 /** A macOS environment of example paths below `/Users/tester`, the same on every host. */
 export const EXAMPLE_DARWIN_ENVIRONMENT: Environment = buildTestMacEnvironment();
+
+/** The known folders of the example Windows environment, each its own real path. */
+const EXAMPLE_WIN32_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
+  desktop: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Desktop' }),
+  documents: buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive\\Documents' }),
+  downloads: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Downloads' }),
+  videos: null,
+  music: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Music' }),
+  pictures: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Pictures' }),
+  localAppDataLow: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\LocalLow' }),
+  skyDrive: buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive' }),
+};
 
 /**
  * The values of a Windows environment of example paths below `C:\Users\tester`, the same on every
@@ -32,18 +47,10 @@ export const EXAMPLE_WIN32_ENVIRONMENT_PARAMS: Win32EnvironmentParams = {
     path: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Roaming' }),
     realPath: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Roaming' }),
   },
-  knownFolderPaths: {
-    desktop: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Desktop' }),
-    documents: buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive\\Documents' }),
-    downloads: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Downloads' }),
-    videos: null,
-    music: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Music' }),
-    pictures: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Pictures' }),
-    localAppDataLow: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\LocalLow' }),
-    skyDrive: buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive' }),
-  },
+  knownFolderPaths: EXAMPLE_WIN32_KNOWN_FOLDER_PATHS,
+  knownFolderRealPaths: EXAMPLE_WIN32_KNOWN_FOLDER_PATHS,
   fixedDriveRoots: [buildTestWindowsPath({ text: 'C:\\' }), buildTestWindowsPath({ text: 'D:\\' })],
-  protectedFolderRealPaths: [buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive' })],
+  oneDriveRealPaths: [buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive' })],
 };
 
 /** The Windows environment of `EXAMPLE_WIN32_ENVIRONMENT_PARAMS`. */
