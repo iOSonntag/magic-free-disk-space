@@ -15,14 +15,14 @@ const HUGGING_FACE_HUB_PATH = '/home/.cache/huggingface/hub';
 const JETBRAINS_CACHES_PATH = '/home/Library/Caches/JetBrains';
 const OUTDATED_IDE_CACHE_PATH = `${JETBRAINS_CACHES_PATH}/IntelliJIdea2024.1`;
 
-const HOME = buildExampleHome({ text: '/home' });
+const home = buildExampleHome({ text: '/home' });
 
 describe('dedupeCandidates', () => {
   test('skips a tool item whose footprint lies inside an earlier offer', () => {
     const earlier = buildOfferDecision({ path: '/home/.local/share/mise', realPath: '/x' });
     const toolOffer: CandidateDecision = {
       kind: 'offer',
-      candidate: buildTestToolCandidate({ home: HOME, version: '20.1.0' }),
+      candidate: buildTestToolCandidate({ home: home, version: '20.1.0' }),
     };
 
     expect(dedupe({ decisions: [earlier, toolOffer] })).toEqual([
@@ -38,7 +38,7 @@ describe('dedupeCandidates', () => {
   test('skips a later offer inside the footprint of a kept tool item', () => {
     const toolOffer: CandidateDecision = {
       kind: 'offer',
-      candidate: buildTestToolCandidate({ home: HOME, version: '20.1.0' }),
+      candidate: buildTestToolCandidate({ home: home, version: '20.1.0' }),
     };
     const inside = buildOfferDecision({
       path: '/home/.local/share/mise/installs/node/20.1.0/bin',
@@ -63,7 +63,7 @@ describe('dedupeCandidates', () => {
     };
     const toolOffer: CandidateDecision = {
       kind: 'offer',
-      candidate: buildTestToolCandidate({ home: HOME, version: '20.1.0' }),
+      candidate: buildTestToolCandidate({ home: home, version: '20.1.0' }),
     };
 
     expect(dedupe({ decisions: [skip, toolOffer] })[1]).toEqual({

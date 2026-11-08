@@ -11,7 +11,7 @@ import {
   buildProtocolFixtureReport,
 } from '../support/protocolFixtureScan.js';
 
-const FIXTURE_HOME = buildExampleHome({ text: '/fixture' });
+const fixtureHome = buildExampleHome({ text: '/fixture' });
 
 const SAFE_CACHE = buildTestCandidate({
   path: '/fixture/cache',
@@ -30,7 +30,7 @@ const OLD_VIDEO = buildTestCandidate({
 });
 
 const TOOL_VERSION = buildTestToolCandidate({
-  home: FIXTURE_HOME,
+  home: fixtureHome,
   version: '20.1.0',
   risk: 'careful',
   allocatedBytes: 2000,
@@ -109,7 +109,7 @@ describe('buildPlannedFacts', () => {
 
   test('gives a safe item a probe found the review group its scan shows it in', () => {
     const probedSafeVersion = buildTestToolCandidate({
-      home: FIXTURE_HOME,
+      home: fixtureHome,
       version: '18.0.0',
       risk: 'safe',
     });

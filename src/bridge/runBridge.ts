@@ -363,6 +363,7 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
         report: report,
         fullDiskAccessHolder: 'app',
         texts: params.context.texts,
+        pathRules: environment.value.pathRules,
         homeDir: environment.value.homeDir,
         disk: disk,
       }),

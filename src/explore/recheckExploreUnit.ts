@@ -66,7 +66,13 @@ export async function recheckExploreUnit(params: {
 
   switch (params.unit.kind) {
     case 'simulatorDevice': {
-      const devices = await loadProbeOutput({ ...run, probe: SIMULATOR_DEVICE_LIST_PROBE });
+      const devices = await loadProbeOutput({
+        probe: SIMULATOR_DEVICE_LIST_PROBE,
+        tool: run.tool,
+        environment: run.environment,
+        processes: run.platform.toolProcesses,
+        deadlineMs: run.deadlineMs,
+      });
 
       if (devices.kind === 'failed') {
         return devices;
@@ -79,7 +85,13 @@ export async function recheckExploreUnit(params: {
       });
     }
     case 'dartPubCache': {
-      const gcPaths = await loadProbeOutput({ ...run, probe: DART_PUB_CACHE_GC_DRY_RUN_PROBE });
+      const gcPaths = await loadProbeOutput({
+        probe: DART_PUB_CACHE_GC_DRY_RUN_PROBE,
+        tool: run.tool,
+        environment: run.environment,
+        processes: run.platform.toolProcesses,
+        deadlineMs: run.deadlineMs,
+      });
 
       if (gcPaths.kind === 'failed') {
         return gcPaths;
@@ -92,7 +104,13 @@ export async function recheckExploreUnit(params: {
       });
     }
     case 'miseVersion': {
-      const versions = await loadProbeOutput({ ...run, probe: MISE_PRUNABLE_LIST_PROBE });
+      const versions = await loadProbeOutput({
+        probe: MISE_PRUNABLE_LIST_PROBE,
+        tool: run.tool,
+        environment: run.environment,
+        processes: run.platform.toolProcesses,
+        deadlineMs: run.deadlineMs,
+      });
 
       if (versions.kind === 'failed') {
         return versions;

@@ -19,7 +19,7 @@ import type {
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { CONTAINER_ENGINES } from '../../src/platform/darwin/containerEngines.js';
 import { DAY_MS } from '../../src/scan/limits.js';
-import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
+import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
   createFixtureDirectory,
@@ -29,6 +29,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { describeOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildTestProbeRun } from '../support/probeRunFixtures.js';
@@ -509,23 +510,20 @@ describe('isEngineUnitUnchanged', () => {
 
 describe('the engine probe on a platform without the engine', () => {
   test('answers socketMissing, as for an engine whose socket is missing', async () => {
-    const probePlatform = buildTestProbePlatform();
     const probe = buildEngineProbe('dockerDesktopEngine');
 
     expect(
       await probe.loadFindings(
         buildTestProbeRun({
-          environment: EXAMPLE_WIN32_ENVIRONMENT,
-          platform: {
-            ...probePlatform,
+          environment: exampleWin32Environment,
+          platform: buildTestProbePlatform({
             explore: {
-              ...probePlatform.explore,
               containerEngines: {
-                ...probePlatform.explore.containerEngines,
+                ...hostPlatform.explore.containerEngines,
                 dockerDesktopEngine: null,
               },
             },
-          },
+          }),
         }),
       ),
     ).toEqual({ kind: 'failed', failure: { kind: 'socketMissing' } });

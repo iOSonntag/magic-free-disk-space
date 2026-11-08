@@ -5,31 +5,31 @@ import { SCAN_LIMITS } from '../../../scan/limits.js';
 import { mapNonEmpty } from '../../../system/nonEmptyList.js';
 
 /** Brave, installed for the user or for every user of this PC. */
-const BRAVE_OWNER = buildExecutableOwner({ imageNames: ['brave.exe'], installFolder: null });
+const braveOwner = buildExecutableOwner({ imageNames: ['brave.exe'], installFolder: null });
 
 /** Chrome, installed for the user or for every user of this PC. */
-const CHROME_OWNER = buildExecutableOwner({ imageNames: ['chrome.exe'], installFolder: null });
+const chromeOwner = buildExecutableOwner({ imageNames: ['chrome.exe'], installFolder: null });
 
 /** Edge alone: the WebView2 runtime that other apps run has an image name of its own. */
-const EDGE_OWNER = buildExecutableOwner({ imageNames: ['msedge.exe'], installFolder: null });
+const edgeOwner = buildExecutableOwner({ imageNames: ['msedge.exe'], installFolder: null });
 
 /** Slack from its own setup or from the Microsoft Store. */
-const SLACK_OWNER = buildExecutableOwner({ imageNames: ['slack.exe'], installFolder: null });
+const slackOwner = buildExecutableOwner({ imageNames: ['slack.exe'], installFolder: null });
 
 /** Visual Studio Code from its user setup or its system setup. */
-const VSCODE_OWNER = buildExecutableOwner({
+const vscodeOwner = buildExecutableOwner({
   imageNames: ['Code.exe'],
   installFolder: { root: 'localAppData', path: 'Programs/Microsoft VS Code' },
 });
 
 /** Classic Teams; its updater runs under a name that other apps share, so it is no owner. */
-const TEAMS_CLASSIC_OWNER = buildExecutableOwner({
+const teamsClassicOwner = buildExecutableOwner({
   imageNames: ['Teams.exe'],
   installFolder: { root: 'localAppData', path: 'Microsoft/Teams/current' },
 });
 
 /** New Teams with its updater and its autostart, whose install folder moves with each version. */
-const TEAMS_OWNER = buildExecutableOwner({
+const teamsOwner = buildExecutableOwner({
   imageNames: ['ms-teams.exe', 'ms-teamsupdate.exe', 'msteams_autostarter.exe'],
   installFolder: null,
 });
@@ -76,26 +76,6 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
       probe: 'androidSystemImages',
       advice:
         'Remove system images with the SDK Manager in Android Studio or with `sdkmanager --uninstall "system-images;<api>;<variant>;<abi>"`.',
-    },
-  },
-  {
-    id: 'android-emulator-binaries',
-    category: 'developer',
-    title: 'Android emulator program',
-    explanation:
-      'The program that runs Android emulators, which you can remove if you no longer run them.',
-    regeneration: 'It comes back when you install the emulator again in the SDK Manager.',
-    risk: 'review',
-    root: 'localAppData',
-    path: 'Android/Sdk/emulator',
-    selection: { kind: 'path' },
-    ageRule: { kind: 'none' },
-    owner: null,
-    removal: {
-      kind: 'explore',
-      probe: 'androidEmulator',
-      advice:
-        'If you no longer run Android emulators, remove them with `sdkmanager --uninstall emulator`.',
     },
   },
   {
@@ -359,7 +339,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'BraveSoftware/Brave-Browser/User Data/Default/Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: BRAVE_OWNER,
+    owner: braveOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -373,7 +353,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'BraveSoftware/Brave-Browser/User Data/Default/Code Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: BRAVE_OWNER,
+    owner: braveOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -387,7 +367,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'BraveSoftware/Brave-Browser/User Data/Default/GPUCache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: BRAVE_OWNER,
+    owner: braveOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -401,7 +381,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Google/Chrome/User Data/Default/Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: CHROME_OWNER,
+    owner: chromeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -415,7 +395,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Google/Chrome/User Data/Default/Code Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: CHROME_OWNER,
+    owner: chromeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -429,7 +409,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Google/Chrome/User Data/Default/GPUCache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: CHROME_OWNER,
+    owner: chromeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -443,7 +423,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Google/Chrome/User Data/Default/Service Worker/ScriptCache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: CHROME_OWNER,
+    owner: chromeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -457,7 +437,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Microsoft/Edge/User Data/Default/Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: EDGE_OWNER,
+    owner: edgeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -471,7 +451,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Microsoft/Edge/User Data/Default/Code Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: EDGE_OWNER,
+    owner: edgeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -485,7 +465,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Microsoft/Edge/User Data/Default/GPUCache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: EDGE_OWNER,
+    owner: edgeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -499,7 +479,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'slack/Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: SLACK_OWNER,
+    owner: slackOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -513,7 +493,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'slack/Code Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: SLACK_OWNER,
+    owner: slackOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -527,7 +507,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'slack/Service Worker',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: SLACK_OWNER,
+    owner: slackOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -541,7 +521,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Packages/com.tinyspeck.slackdesktop_8yrtsj140pw4g/LocalCache/Roaming/Slack/Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: SLACK_OWNER,
+    owner: slackOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -555,7 +535,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Packages/com.tinyspeck.slackdesktop_8yrtsj140pw4g/LocalCache/Roaming/Slack/Code Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: SLACK_OWNER,
+    owner: slackOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -569,7 +549,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Packages/com.tinyspeck.slackdesktop_8yrtsj140pw4g/LocalCache/Roaming/Slack/Service Worker',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: SLACK_OWNER,
+    owner: slackOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -583,7 +563,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Code/Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: VSCODE_OWNER,
+    owner: vscodeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -597,7 +577,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Code/CachedData',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: VSCODE_OWNER,
+    owner: vscodeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -611,7 +591,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Code/Code Cache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: VSCODE_OWNER,
+    owner: vscodeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -625,7 +605,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Code/GPUCache',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: VSCODE_OWNER,
+    owner: vscodeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -639,7 +619,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Code/CachedExtensionVSIXs',
     selection: { kind: 'path' },
     ageRule: { kind: 'none' },
-    owner: VSCODE_OWNER,
+    owner: vscodeOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -673,7 +653,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Packages/MSTeams_8wekyb3d8bbwe/LocalCache/Microsoft/MSTeams',
     selection: { kind: 'children' },
     ageRule: { kind: 'none' },
-    owner: TEAMS_OWNER,
+    owner: teamsOwner,
     removal: { kind: 'delete' },
   },
   {
@@ -687,7 +667,7 @@ export const WIN32_CATALOG_ENTRIES: CatalogEntry[] = [
     path: 'Microsoft/Teams',
     selection: { kind: 'children' },
     ageRule: { kind: 'none' },
-    owner: TEAMS_CLASSIC_OWNER,
+    owner: teamsClassicOwner,
     removal: { kind: 'delete' },
   },
   {

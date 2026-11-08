@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import type { Result } from '../result.js';
 import { buildToolProcessEnvironment } from './buildToolProcessEnvironment.js';
 import type { LocatedTool } from './findTrustedTool.js';
@@ -70,9 +71,9 @@ const runningTools = new Set<StartedTool>();
 
 /**
  * Runs the tool as `processes` starts it, so its end reaches every process it started, in
- * `tempDir` (so no tool reads config from the folder the app started in), with the environment
- * `buildToolProcessEnvironment` builds and the arguments `buildToolArguments` builds. Only exit 0
- * succeeds.
+ * `tempDir` (so no tool reads config from the folder the app started in), with the base
+ * environment `processes` builds and the tool's own entries, and the arguments
+ * `buildToolArguments` builds. Only exit 0 succeeds.
  */
 export async function runToolCommand(params: {
   tool: LocatedTool;
@@ -82,15 +83,18 @@ export async function runToolCommand(params: {
   timeoutMs: number;
   processes: ToolProcessPlatform;
 }): Promise<ToolCommandResult> {
+  const baseEnvironment = params.processes.buildBaseEnvironment({
+    toolFolderPath: dirname(params.tool.path),
+    homeDir: params.homeDir,
+    tempDir: params.tempDir,
+  });
   const started = params.processes.startTool({
     path: params.tool.path,
     args: buildToolArguments({ name: params.tool.name, args: params.args }),
     cwd: params.tempDir,
     env: buildToolProcessEnvironment({
       tool: params.tool,
-      homeDir: params.homeDir,
-      tempDir: params.tempDir,
-      processes: params.processes,
+      baseEnvironment: baseEnvironment,
     }),
   });
 

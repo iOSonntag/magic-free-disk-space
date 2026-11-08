@@ -2,14 +2,35 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { ReadableStreamDefaultReader } from 'node:stream/web';
 import { removeTree } from '../../../src/platform/win32/removeTree.js';
 import { loadFileAttributes, setFileAttributes } from '../../../src/platform/win32/win32Api.js';
 import { isPresent } from '../../support/fixtureRoot.js';
 import { buildTestHostPath } from '../../support/parsedValueFixtures.js';
-
-const FILE_ATTRIBUTE_READONLY = 0x1;
+import {
+  FILE_ATTRIBUTE_ARCHIVE,
+  FILE_ATTRIBUTE_DIRECTORY,
+  FILE_ATTRIBUTE_READONLY,
+} from '../../support/windowsFileAttributes.js';
 
 const HELD_LINE = 'held';
+
+/** Reads the output of a held PowerShell until it prints the held line; throws if it ends first. */
+async function waitForHeldLine(
+  reader: ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>>,
+): Promise<void> {
+  let output = '';
+
+  while (!output.includes(HELD_LINE)) {
+    const chunk = await reader.read();
+
+    if (chunk.done) {
+      throw new Error('PowerShell ended before it held the file.');
+    }
+
+    output += new TextDecoder().decode(chunk.value);
+  }
+}
 
 /**
  * Opens `path` in PowerShell with no sharing, so no other program may delete it, until `release`
@@ -32,17 +53,8 @@ async function holdFile(params: { path: string }): Promise<{ release: () => Prom
     },
   );
   const reader = holder.stdout.getReader();
-  let output = '';
 
-  while (!output.includes(HELD_LINE)) {
-    const chunk = await reader.read();
-
-    if (chunk.done) {
-      throw new Error('PowerShell ended before it held the file.');
-    }
-
-    output += new TextDecoder().decode(chunk.value);
-  }
+  await waitForHeldLine(reader);
 
   return {
     release: async () => {
@@ -96,8 +108,14 @@ describe.skipIf(process.platform !== 'win32')('the removal of a tree on NTFS', (
     const filePath = join(innerPath, 'locked.txt');
     await mkdir(innerPath, { recursive: true });
     await writeFile(filePath, 'text');
-    setFileAttributes({ path: buildTestHostPath({ text: filePath }), attributes: 0x21 });
-    setFileAttributes({ path: buildTestHostPath({ text: innerPath }), attributes: 0x11 });
+    setFileAttributes({
+      path: buildTestHostPath({ text: filePath }),
+      attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE,
+    });
+    setFileAttributes({
+      path: buildTestHostPath({ text: innerPath }),
+      attributes: FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY,
+    });
 
     expect(await removeTree({ path: treePath })).toEqual({
       kind: 'succeeded',

@@ -58,6 +58,7 @@ describe('buildDartPubCacheFindings', () => {
     const findings = buildDartPubCacheFindings({
       tool: tool,
       gcPaths: gcPaths,
+      pathRules: POSIX_PATH_RULES,
       homeDir: FIXTURE_HOME_DIR,
       runningProcesses: null,
     });
@@ -81,6 +82,7 @@ describe('buildDartPubCacheFindings', () => {
       buildDartPubCacheFindings({
         tool: tool,
         gcPaths: [],
+        pathRules: POSIX_PATH_RULES,
         homeDir: FIXTURE_HOME_DIR,
         runningProcesses: buildRunningCommandLines([]),
       }),

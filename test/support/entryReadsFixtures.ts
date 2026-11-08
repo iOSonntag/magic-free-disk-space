@@ -1,7 +1,7 @@
 import { loadPathMeasurement } from '../../src/scan/loadPathMeasurement.js';
 import type { EntryReads } from '../../src/system/entryReads.js';
 import { loadEntryStats } from '../../src/system/loadEntryStats.js';
-import { HOST_PLATFORM } from './platformFixtures.js';
+import { hostPlatform } from './platformFixtures.js';
 
 /**
  * Entry reads that answer from the test: `privateBytes` as the private size of every file, `null`
@@ -60,7 +60,7 @@ export async function loadMeasuredAllocatedBytes(params: { paths: string[] }): P
   const measurement = await loadPathMeasurement({
     paths: params.paths,
     deadlineMs: Date.now() + 60_000,
-    entryReads: HOST_PLATFORM.system.entryReads,
+    entryReads: hostPlatform.system.entryReads,
     recordEvictedEntry: null,
   });
 

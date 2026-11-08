@@ -12,7 +12,7 @@ import {
   buildTestToolCandidate,
   buildTestUnitPathsCandidate,
 } from '../support/candidateFixtures.js';
-import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
+import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import { buildTestMacEnvironment, TEST_MAC_HOME_DIR } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
 
@@ -41,11 +41,7 @@ function validate(params: {
 
 /** The decision on `path` in the example environment of Windows. */
 function validateOnWindows(params: { path: string; kind?: FileKind }): RemovalDecision {
-  return validate({
-    path: params.path,
-    kind: params.kind ?? 'directory',
-    environment: EXAMPLE_WIN32_ENVIRONMENT,
-  });
+  return validate({ ...params, environment: exampleWin32Environment });
 }
 
 describe('validateRemoval on Windows', () => {
@@ -61,7 +57,7 @@ describe('validateRemoval on Windows', () => {
   });
 
   test('refuses every protected folder itself, each fixed drive root among them', () => {
-    for (const protectedPath of EXAMPLE_WIN32_ENVIRONMENT.protectedRealPaths) {
+    for (const protectedPath of exampleWin32Environment.protectedRealPaths) {
       expect(validateOnWindows({ path: protectedPath })).toMatchObject({ reason: 'protectedRoot' });
     }
   });
@@ -83,14 +79,14 @@ describe('validateRemoval on Windows', () => {
       const candidate = buildTestRecycleBinCandidate({ driveRootText: driveRootText });
 
       expect(
-        validateRemoval({ candidate: candidate, environment: EXAMPLE_WIN32_ENVIRONMENT }),
+        validateRemoval({ candidate: candidate, environment: exampleWin32Environment }),
       ).toEqual({ kind: 'approved', candidate: candidate });
     }
 
     expect(
       validateRemoval({
         candidate: buildTestRecycleBinCandidate({ driveRootText: 'E:\\' }),
-        environment: EXAMPLE_WIN32_ENVIRONMENT,
+        environment: exampleWin32Environment,
       }),
     ).toEqual({ kind: 'refused', path: 'E:\\', reason: 'outsideAllowedRoot' });
     expect(
@@ -105,7 +101,7 @@ describe('validateRemoval on Windows', () => {
     expect(
       validateRemoval({
         candidate: buildTestRecycleBinCandidate({ driveRootText: 'C:\\', risk: 'never' }),
-        environment: EXAMPLE_WIN32_ENVIRONMENT,
+        environment: exampleWin32Environment,
       }),
     ).toMatchObject({ kind: 'refused', reason: 'neverRisk' });
   });

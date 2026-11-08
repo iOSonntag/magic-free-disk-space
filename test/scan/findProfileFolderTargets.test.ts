@@ -9,10 +9,10 @@ import {
   withFixtureRoot,
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
-const PRIVACY_DENIAL_CODE = HOST_PLATFORM.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = hostPlatform.system.privacyDenialCode;
 
 const SELECTION: CatalogSelectionProfileFolders = {
   kind: 'profileFolders',

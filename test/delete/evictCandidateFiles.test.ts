@@ -11,7 +11,7 @@ import { buildTestEvictCandidate } from '../support/evictCandidateFixtures.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureFile, loadTestEnvironment, withFixtureRoot } from '../support/fixtureRoot.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const NOW_MS = Date.UTC(2026, 9, 1);
@@ -100,7 +100,7 @@ async function evictTestCandidateFiles(params: {
     candidate: candidate,
     removal: candidate.removal,
     environment: await loadTestEnvironment({ fixtureRoot: params.fixtureRoot, nowMs: NOW_MS }),
-    toolProcesses: HOST_PLATFORM.tools.processes,
+    toolProcesses: hostPlatform.tools.processes,
     clock: () => NOW_MS,
   });
 }

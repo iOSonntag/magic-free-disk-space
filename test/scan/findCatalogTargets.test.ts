@@ -15,12 +15,12 @@ import {
   deleteFixtureRoot,
   loadTestEnvironment,
 } from '../support/fixtureRoot.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const TEST_NOW_MS = 1_700_000_000_000;
 
-const PRIVACY_DENIAL_CODE = HOST_PLATFORM.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = hostPlatform.system.privacyDenialCode;
 
 describe('findCatalogTargets', () => {
   let fixtureRoot: FixtureRoot;

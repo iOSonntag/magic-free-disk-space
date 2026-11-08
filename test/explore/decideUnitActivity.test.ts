@@ -54,7 +54,7 @@ const PROCESS_RULES: { facts: UnitActivityFacts; ownerCommands: string[] }[] = [
  * Each unit kind Windows explores whose busy rule only reads the processes, with an image of its
  * owner as Windows lists it: its path, or its file name alone, in any case.
  */
-const WINDOWS_PROCESS_RULES: { facts: UnitActivityFacts; ownerImagePaths: string[] }[] = [
+const windowsProcessRules: { facts: UnitActivityFacts; ownerImagePaths: string[] }[] = [
   {
     facts: { kind: 'android' },
     ownerImagePaths: [
@@ -232,7 +232,7 @@ describe('decideUnitActivity', () => {
   });
 
   test('an Android, VS Code, or pnpm store unit is busy while each image of its owner runs on Windows', () => {
-    for (const rule of WINDOWS_PROCESS_RULES) {
+    for (const rule of windowsProcessRules) {
       for (const ownerImagePath of rule.ownerImagePaths) {
         expect(
           decideUnitActivity({
@@ -245,7 +245,7 @@ describe('decideUnitActivity', () => {
   });
 
   test('an Android, VS Code, or pnpm store unit is idle while no image of its owner runs on Windows', () => {
-    for (const rule of WINDOWS_PROCESS_RULES) {
+    for (const rule of windowsProcessRules) {
       expect(
         decideUnitActivity({
           facts: rule.facts,

@@ -15,7 +15,7 @@ export async function loadCondaPackageFindings(
     probe: CONDA_CLEAN_DRY_RUN_PROBE,
     tool: run.tool,
     environment: run.environment,
-    platform: run.platform,
+    processes: run.platform.toolProcesses,
     deadlineMs: run.deadlineMs,
   });
 

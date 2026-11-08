@@ -9,7 +9,7 @@ import {
 } from '../support/candidateFixtures.js';
 import { buildExampleHome } from '../support/parsedValueFixtures.js';
 
-const HOME = buildExampleHome({ text: '/home' });
+const home = buildExampleHome({ text: '/home' });
 
 function buildOffers(candidates: Candidate[]): CandidateDecision[] {
   return candidates.map(
@@ -70,12 +70,12 @@ describe('buildScanReport', () => {
     });
     const safeLarge = buildTestCandidate({ path: '/home/safe-large', allocatedBytes: 1000 });
     const toolSmall = buildTestToolCandidate({
-      home: HOME,
+      home: home,
       version: '18.0.0',
       allocatedBytes: 100,
     });
     const toolLarge = buildTestToolCandidate({
-      home: HOME,
+      home: home,
       version: '20.1.0',
       allocatedBytes: 5000,
     });
@@ -123,7 +123,7 @@ describe('buildScanReport', () => {
       allocatedBytes: 20,
     });
     const toolSafe = buildTestToolCandidate({
-      home: HOME,
+      home: home,
       version: '20.1.0',
       allocatedBytes: 99_000,
     });

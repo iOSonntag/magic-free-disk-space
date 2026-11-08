@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { Result } from '../../result.js';
+import { formatThrownError } from '../../system/formatThrownError.js';
 import { getErrorCode } from '../../system/getErrorCode.js';
 import type { StartedTool, ToolProcess, ToolProcessPlatform } from '../../tools/toolsPlatform.js';
 
@@ -52,7 +53,7 @@ function startTool(params: {
       },
     };
   } catch (error) {
-    return { kind: 'failed', failure: error instanceof Error ? error.message : String(error) };
+    return { kind: 'failed', failure: formatThrownError(error) };
   }
 }
 

@@ -3,9 +3,9 @@ import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { isExecutableOwnerRunning } from '../../src/scan/isExecutableOwnerRunning.js';
 import { buildTestWindowsImageName, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
-const SLACK_IMAGE_NAMES = [buildTestWindowsImageName({ text: 'slack.exe' })];
+const slackImageNames = [buildTestWindowsImageName({ text: 'slack.exe' })];
 
-const SLACK_FOLDER_PATH = buildTestWindowsPath({ text: 'C:\\Program Files\\Slack' });
+const slackFolderPath = buildTestWindowsPath({ text: 'C:\\Program Files\\Slack' });
 
 function isSlackRunning(params: {
   installFolder: 'named' | 'none';
@@ -13,8 +13,8 @@ function isSlackRunning(params: {
 }): boolean {
   return isExecutableOwnerRunning({
     pathRules: WIN32_PATH_RULES,
-    imageNames: SLACK_IMAGE_NAMES,
-    installFolderPath: params.installFolder === 'named' ? SLACK_FOLDER_PATH : null,
+    imageNames: slackImageNames,
+    installFolderPath: params.installFolder === 'named' ? slackFolderPath : null,
     processImagePaths: params.processImagePaths,
   });
 }

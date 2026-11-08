@@ -6,6 +6,7 @@ import type { EnvironmentFailure } from '../../environment/environmentPlatform.j
 import {
   loadEnvironmentRealPath,
   loadExistingRealPaths,
+  parseEnvironmentPath,
 } from '../../environment/loadEnvironmentRealPath.js';
 import type { DriveRoot } from '../../path/driveRoot.js';
 import { parseDriveRoot } from '../../path/driveRoot.js';
@@ -380,17 +381,12 @@ function loadKnownFolderDrivePath(params: {
     return buildCallFailure({ failure: pathText.failure });
   }
 
-  const path = parseAbsolutePath({ rules: WIN32_PATH_RULES, text: pathText.value });
-
   // A folder on a network share, as Folder Redirection may place it, is no drive path.
-  if (path.kind === 'failed') {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: pathText.value, code: 'notAbsolute' },
-    };
-  }
-
-  return path;
+  return parseEnvironmentPath({
+    pathRules: WIN32_PATH_RULES,
+    text: pathText.value,
+    failurePath: pathText.value,
+  });
 }
 
 /** The real path of each known folder; `null` for one without a path or whose path is gone. */

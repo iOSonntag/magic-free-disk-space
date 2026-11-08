@@ -12,19 +12,19 @@ import type { EntryReads } from '../../../src/system/entryReads.js';
 import { buildTestEntryReads } from '../../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../../support/fixtureRoot.js';
-import { buildTestHostPath, HOST_PATH_RULES } from '../../support/parsedValueFixtures.js';
+import { buildTestHostPath, hostPathRules } from '../../support/parsedValueFixtures.js';
 import { testOnPosix } from '../../support/posixOnly.js';
+import {
+  FILE_ATTRIBUTE_ARCHIVE,
+  FILE_ATTRIBUTE_DIRECTORY,
+  FILE_ATTRIBUTE_READONLY,
+  FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS,
+  FILE_ATTRIBUTE_RECALL_ON_OPEN,
+  FILE_ATTRIBUTE_REPARSE_POINT,
+} from '../../support/windowsFileAttributes.js';
 
 /** Reads no entry as evicted; the removal reads no private size. */
-const ENTRY_READS = buildTestEntryReads({ privateBytes: null });
-
-const FILE_ATTRIBUTE_READONLY = 0x1;
-
-const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
-
-const FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x40000;
-
-const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000;
+const entryReads = buildTestEntryReads({ privateBytes: null });
 
 /** The attributes a fake access answers from, and the calls it records. */
 type FakeAttributeState = {
@@ -97,9 +97,9 @@ function removeTestTree(params: {
 }): ReturnType<typeof removeTreeEntries> {
   return removeTreeEntries({
     rootPath: buildTestHostPath({ text: params.path }),
-    rules: HOST_PATH_RULES,
+    rules: hostPathRules,
     attributes: params.attributes,
-    entryReads: params.entryReads ?? ENTRY_READS,
+    entryReads: params.entryReads ?? entryReads,
   });
 }
 
@@ -135,8 +135,8 @@ describe('removeTreeEntries', () => {
     const readOnlyFolderPath = join(treePath, 'a', 'b');
     const { access, saves } = buildFakeAttributes({
       attributesByPath: new Map([
-        [readOnlyFilePath, FILE_ATTRIBUTE_READONLY | 0x20],
-        [readOnlyFolderPath, FILE_ATTRIBUTE_READONLY | 0x10],
+        [readOnlyFilePath, FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_ARCHIVE],
+        [readOnlyFolderPath, FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY],
       ]),
     });
 
@@ -145,8 +145,8 @@ describe('removeTreeEntries', () => {
       value: { kind: 'removed' },
     });
     expect(saves.toSorted((left, right) => left.path.localeCompare(right.path))).toEqual([
-      { path: readOnlyFolderPath, attributes: 0x10 },
-      { path: readOnlyFilePath, attributes: 0x20 },
+      { path: readOnlyFolderPath, attributes: FILE_ATTRIBUTE_DIRECTORY },
+      { path: readOnlyFilePath, attributes: FILE_ATTRIBUTE_ARCHIVE },
     ]);
   });
 
@@ -335,7 +335,9 @@ describe('removeTreeEntries', () => {
   test('leaves a folder that reads as kept online only right before its removal, and counts it alone', async () => {
     const evictedFolderPath = join(treePath, 'a', 'b');
     const { access } = buildFakeAttributes({
-      attributesByPath: new Map([[evictedFolderPath, FILE_ATTRIBUTE_RECALL_ON_OPEN | 0x10]]),
+      attributesByPath: new Map([
+        [evictedFolderPath, FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_DIRECTORY],
+      ]),
     });
 
     expect(await removeTestTree({ path: treePath, attributes: access })).toEqual({
@@ -351,7 +353,10 @@ describe('removeTreeEntries', () => {
     const linkedFolderPath = join(treePath, 'a', 'b');
     const { access, saves } = buildFakeAttributes({
       attributesByPath: new Map([
-        [linkedFolderPath, FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_READONLY | 0x10],
+        [
+          linkedFolderPath,
+          FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY,
+        ],
       ]),
     });
 

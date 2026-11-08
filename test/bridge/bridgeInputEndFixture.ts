@@ -1,6 +1,6 @@
 import { createBridgeIo } from '../../src/bridge/bridgeIo.js';
 import { stopRunningToolsOnProcessEnd } from '../../src/tools/runToolCommand.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 
 /** The line the fixture writes once its input ended, before it releases its listeners. */
 export const INPUT_ENDED_LINE = 'input ended';
@@ -11,7 +11,7 @@ export const INPUT_ENDED_LINE = 'input ended';
  */
 async function readInputToEnd(): Promise<void> {
   const releaseProcessEnd = stopRunningToolsOnProcessEnd({
-    processEndSignals: HOST_PLATFORM.tools.processEndSignals,
+    processEndSignals: hostPlatform.tools.processEndSignals,
   });
 
   try {

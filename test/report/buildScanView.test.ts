@@ -4,6 +4,7 @@ import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { ScanView } from '../../src/report/buildScanView.js';
 import { buildScanProgressView, buildScanView } from '../../src/report/buildScanView.js';
 import { FULL_DISK_ACCESS_SETTINGS_LINK } from '../../src/report/noticeView.js';
+import type { ReportTexts } from '../../src/report/reportTexts.js';
 import { buildScanReport } from '../../src/scan/buildScanReport.js';
 import { buildSectionTotals } from '../../src/scan/buildSectionTotals.js';
 import type { Advice, Candidate, CandidateDecision } from '../../src/scan/candidate.js';
@@ -18,7 +19,6 @@ import {
   buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { testOnDarwin } from '../support/darwinOnly.js';
 import { buildExampleHome, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 import { loadProtocolFixtureEventOfKind } from '../support/protocolFixture.js';
 import {
@@ -34,7 +34,7 @@ const TEXTS = darwinPlatform.report;
 
 const HOME_DIR = PROTOCOL_FIXTURE_HOME_DIR;
 
-const HOME = buildExampleHome({ text: HOME_DIR });
+const home = buildExampleHome({ text: HOME_DIR });
 
 function buildAdvice(params: {
   path: string;
@@ -75,12 +75,18 @@ function buildRankedReport(params: {
   });
 }
 
-function buildView(params: { report: ScanReport; disk?: VolumeSpace }): ScanView {
+/** The view the app gets for the scan of the example home, worded by `texts` or those of macOS. */
+function buildView(params: {
+  report: ScanReport;
+  texts?: ReportTexts;
+  disk?: VolumeSpace;
+}): ScanView {
   return buildScanView({
     report: params.report,
     fullDiskAccessHolder: 'app',
-    texts: TEXTS,
-    homeDir: HOME_DIR,
+    texts: params.texts ?? TEXTS,
+    pathRules: home.pathRules,
+    homeDir: home.homeDir,
     disk: params.disk ?? null,
   });
 }
@@ -96,9 +102,6 @@ function listNumbersTopToBottom(params: { view: ScanView }): number[] {
   return [...sectionNumbers, ...exploreNumbers];
 }
 
-// Some tests run on macOS only: the fixture of the bridge's events is the scan of a macOS home,
-// and a path below a home reads as `~/…` only with the separator of macOS, which the display path
-// takes from the host.
 describe('buildScanView', () => {
   test('shows an empty scan as its summary alone, with the disk it read', () => {
     expect(buildView({ report: EMPTY_REPORT, disk: PROTOCOL_FIXTURE_DISK })).toEqual({
@@ -122,7 +125,7 @@ describe('buildScanView', () => {
   });
 
   test('shows the installed apps of advice beside the sections, unnumbered, with what is known', () => {
-    const view = buildScanView({
+    const view = buildView({
       texts: win32Platform.report,
       report: {
         ...EMPTY_REPORT,
@@ -140,9 +143,6 @@ describe('buildScanView', () => {
           installedAppsPageName: 'Settings > Apps',
         },
       },
-      fullDiskAccessHolder: 'app',
-      homeDir: HOME_DIR,
-      disk: null,
     });
 
     expect(view.summary).toEqual({
@@ -228,16 +228,13 @@ describe('buildScanView', () => {
     ).toBeNull();
   });
 
-  testOnDarwin(
-    'gives the scanned event of the protocol fixture for the scan it shows',
-    async () => {
-      const fixtureEvent = await loadProtocolFixtureEventOfKind('scanned');
+  test('gives the scanned event of the protocol fixture for the scan it shows', async () => {
+    const fixtureEvent = await loadProtocolFixtureEventOfKind('scanned');
 
-      const view = buildView({ report: buildProtocolFixtureReport(), disk: PROTOCOL_FIXTURE_DISK });
+    const view = buildView({ report: buildProtocolFixtureReport(), disk: PROTOCOL_FIXTURE_DISK });
 
-      expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
-    },
-  );
+    expect<unknown>({ kind: 'scanned', ...view }).toEqual(fixtureEvent);
+  });
 
   test('counts the entries left in iCloud into the skipped items, on a line of their own', () => {
     const view = buildView({
@@ -255,12 +252,9 @@ describe('buildScanView', () => {
   });
 
   test('names OneDrive and this PC for the entries left in the cloud store on Windows', () => {
-    const view = buildScanView({
+    const view = buildView({
       texts: win32Platform.report,
       report: { ...EMPTY_REPORT, evictedEntryCount: 1 },
-      fullDiskAccessHolder: 'app',
-      homeDir: HOME_DIR,
-      disk: null,
     });
 
     expect(view.skipped).toEqual({
@@ -305,12 +299,9 @@ describe('buildScanView', () => {
       driveRootText: 'C:\\',
       scannedContent: { sizeBytes: 2 * MB, itemCount: 3 },
     });
-    const view = buildScanView({
+    const view = buildView({
       texts: win32Platform.report,
       report: buildRankedReport({ candidates: [candidate] }),
-      fullDiskAccessHolder: 'app',
-      homeDir: HOME_DIR,
-      disk: null,
     });
 
     expect<unknown>(view.sections).toEqual([
@@ -463,45 +454,42 @@ describe('buildScanView', () => {
     ]);
   });
 
-  testOnDarwin(
-    'shows a safe item a probe found under Explore, in the review group of its section',
-    () => {
-      const toolCandidate = buildTestToolCandidate({
-        home: HOME,
-        version: '20.1.0',
-        allocatedBytes: 2 * MB,
-      });
-      const view = buildView({ report: buildRankedReport({ candidates: [toolCandidate] }) });
+  test('shows a safe item a probe found under Explore, in the review group of its section', () => {
+    const toolCandidate = buildTestToolCandidate({
+      home: home,
+      version: '20.1.0',
+      allocatedBytes: 2 * MB,
+    });
+    const view = buildView({ report: buildRankedReport({ candidates: [toolCandidate] }) });
 
-      expect(view.sections).toEqual([]);
-      expect(view.explore?.items).toEqual([
-        expect.objectContaining({
-          number: 1,
-          key: 'explore:miseVersions:miseVersion:node@20.1.0',
-          sectionKey: 'developerTools',
-          group: 'review',
-          origin: 'explore',
-          removal: 'tool',
-          displayPath: '~/.local/share/mise/installs/node/20.1.0',
-          revealPath: `${HOME_DIR}/.local/share/mise/installs/node/20.1.0`,
-        }),
-      ]);
-      expect(view.summary.safeBytes).toBe(0);
-      expect(view.sectionTotals).toEqual([
-        {
-          sectionKey: 'developerTools',
-          allocatedBytes: 2 * MB,
-          isComplete: true,
-          removableBytes: 2 * MB,
-          isRemovableComplete: true,
-          itemCount: 1,
-          safeBytes: 0,
-          adviceCount: 0,
-          titleText: 'Developer tools',
-        },
-      ]);
-    },
-  );
+    expect(view.sections).toEqual([]);
+    expect(view.explore?.items).toEqual([
+      expect.objectContaining({
+        number: 1,
+        key: 'explore:miseVersions:miseVersion:node@20.1.0',
+        sectionKey: 'developerTools',
+        group: 'review',
+        origin: 'explore',
+        removal: 'tool',
+        displayPath: '~/.local/share/mise/installs/node/20.1.0',
+        revealPath: `${HOME_DIR}/.local/share/mise/installs/node/20.1.0`,
+      }),
+    ]);
+    expect(view.summary.safeBytes).toBe(0);
+    expect(view.sectionTotals).toEqual([
+      {
+        sectionKey: 'developerTools',
+        allocatedBytes: 2 * MB,
+        isComplete: true,
+        removableBytes: 2 * MB,
+        isRemovableComplete: true,
+        itemCount: 1,
+        safeBytes: 0,
+        adviceCount: 0,
+        titleText: 'Developer tools',
+      },
+    ]);
+  });
 
   test('titles each section total as its section, the Trash by the name of the platform', () => {
     const view = buildView({
@@ -552,7 +540,7 @@ describe('buildScanView', () => {
     });
   });
 
-  testOnDarwin('shows Explore with advice only when the scan offered no Explore item', () => {
+  test('shows Explore with advice only when the scan offered no Explore item', () => {
     const view = buildView({
       report: {
         ...EMPTY_REPORT,
@@ -625,29 +613,26 @@ describe('buildScanView', () => {
     ]);
   });
 
-  testOnDarwin(
-    'shows an engine item with nothing to reveal and the paths of a unit as deleted',
-    () => {
-      const engineCandidate = buildTestEngineCandidate({
-        homeDir: HOME_DIR,
-        allocatedBytes: 2 * MB,
-      });
-      const unitCandidate = buildTestVscodeExtensionCandidate({ home: HOME });
-      const view = buildView({
-        report: buildRankedReport({ candidates: [engineCandidate, unitCandidate] }),
-      });
+  test('shows an engine item with nothing to reveal and the paths of a unit as deleted', () => {
+    const engineCandidate = buildTestEngineCandidate({
+      homeDir: HOME_DIR,
+      allocatedBytes: 2 * MB,
+    });
+    const unitCandidate = buildTestVscodeExtensionCandidate({ home: home });
+    const view = buildView({
+      report: buildRankedReport({ candidates: [engineCandidate, unitCandidate] }),
+    });
 
-      expect(view.explore?.items).toEqual([
-        expect.objectContaining({
-          key: `explore:dockerDesktopEngine:engineBuildCache:dockerDesktopEngine:${HOME_DIR}/.docker/run/docker.sock`,
-          removal: 'engine',
-          displayPath: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
-          revealPath: null,
-        }),
-        expect.objectContaining({ removal: 'delete', revealPath: unitCandidate.path }),
-      ]);
-    },
-  );
+    expect(view.explore?.items).toEqual([
+      expect.objectContaining({
+        key: `explore:dockerDesktopEngine:engineBuildCache:dockerDesktopEngine:${HOME_DIR}/.docker/run/docker.sock`,
+        removal: 'engine',
+        displayPath: '~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw',
+        revealPath: null,
+      }),
+      expect.objectContaining({ removal: 'delete', revealPath: unitCandidate.path }),
+    ]);
+  });
 
   test('gives an advice the app or the Settings pane that handles its place', () => {
     const photosAdvice: Advice = {
@@ -892,7 +877,8 @@ describe('buildScanView', () => {
       report: report,
       fullDiskAccessHolder: 'terminal',
       texts: TEXTS,
-      homeDir: HOME_DIR,
+      pathRules: home.pathRules,
+      homeDir: home.homeDir,
       disk: null,
     });
 
@@ -948,7 +934,7 @@ describe('buildScanView', () => {
     expect(view.notices).toEqual([]);
   });
 
-  testOnDarwin('writes out control characters in every text that comes from outside', () => {
+  test('writes out control characters in every text that comes from outside', () => {
     const view = buildView({
       report: buildRankedReport({
         candidates: [

@@ -35,9 +35,9 @@ import { recheckExplorePathUnit } from '../../src/explore/recheckExploreUnit.js'
 import type { ExploreProbeOutcome } from '../../src/explore/startExploreProbes.js';
 import { startExploreProbes } from '../../src/explore/startExploreProbes.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
-import { PNPM_XDG_STORE_ROOT } from '../../src/platform/darwin/pnpmHomes.js';
+import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { PROJECT_SEARCH_INCOMPLETE_EVIDENCE } from '../../src/platform/darwin/projectSearchEvidence.js';
-import { WIN32_CATALOG } from '../../src/platform/win32/catalog/win32Catalog.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import type { Result } from '../../src/result.js';
 import { testOnDarwin } from '../support/darwinOnly.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
@@ -54,7 +54,7 @@ import {
   buildTestHostPath,
   buildTestPnpmStoreVersion,
 } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import { buildRunningCommandLines } from '../support/runningProcessesFixtures.js';
@@ -97,39 +97,52 @@ afterEach(async () => {
 });
 
 /** pnpm's homes of the probe platform, in the fixture environment. */
-function resolvePnpmHomePaths(): AbsolutePath[] {
+function resolvePnpmHomePaths(params: {
+  environment: Environment;
+  probePlatform: ExploreProbePlatform;
+}): AbsolutePath[] {
   return resolveEnvironmentLocations({
-    folders: environment,
-    locations: probePlatform.explore.pnpmInstallPlaces.homes,
+    folders: params.environment,
+    locations: params.probePlatform.explore.pnpmInstallPlaces.homes,
   });
 }
 
 /** A path below pnpm's own home of the host, the first of its homes, in the fixture environment. */
-function buildPnpmHomePath(...names: string[]): string {
-  const [pnpmHomePath] = resolvePnpmHomePaths();
+function buildPnpmHomePath(params: {
+  environment: Environment;
+  probePlatform: ExploreProbePlatform;
+  names: string[];
+}): string {
+  const [pnpmHomePath] = resolvePnpmHomePaths({
+    environment: params.environment,
+    probePlatform: params.probePlatform,
+  });
 
   if (pnpmHomePath === undefined) {
     throw new Error('The host has no pnpm home.');
   }
 
-  return join(pnpmHomePath, ...names);
+  return join(pnpmHomePath, ...params.names);
 }
 
 /**
  * The fixture environment with the folders of the fixture environment of Windows below its home,
  * so the places of Windows resolve and are read on any host.
  */
-function buildWindowsFolderEnvironment(): Environment {
+function buildWindowsFolderEnvironment(params: { environment: Environment }): Environment {
   return {
-    ...environment,
-    platformFolders: buildTestWin32PlatformFolders({ homeDir: homeDir }),
+    ...params.environment,
+    platformFolders: buildTestWin32PlatformFolders({ homeDir: params.environment.homeDir }),
   };
 }
 
 /** The path of `location` in the environment of `buildWindowsFolderEnvironment`. */
-function buildWindowsPlacePath(params: { location: CatalogLocation }): AbsolutePath {
+function buildWindowsPlacePath(params: {
+  environment: Environment;
+  location: CatalogLocation;
+}): AbsolutePath {
   return resolveEnvironmentLocation({
-    folders: buildWindowsFolderEnvironment(),
+    folders: buildWindowsFolderEnvironment({ environment: params.environment }),
     location: params.location,
   });
 }
@@ -708,7 +721,11 @@ describe('loadPnpmInstallState', () => {
   });
 
   test('keeps a global package.json with no version as an install without a version', async () => {
-    const packageFolder = buildPnpmHomePath('global/5/node_modules/pnpm');
+    const packageFolder = buildPnpmHomePath({
+      environment: environment,
+      probePlatform: probePlatform,
+      names: ['global/5/node_modules/pnpm'],
+    });
     await writeFixtureTextFile({
       path: join(packageFolder, 'package.json'),
       text: '{"name": "pnpm"}',
@@ -732,8 +749,8 @@ describe('loadPnpmInstallState', () => {
       Result<PnpmInstallState, ExploreFileUnreadable>
     > {
       return loadPnpmInstallState({
-        environment: buildWindowsFolderEnvironment(),
-        places: WIN32_CATALOG.explore.pnpmInstallPlaces,
+        environment: buildWindowsFolderEnvironment({ environment: environment }),
+        places: win32Platform.explore.pnpmInstallPlaces,
         homebrewPrefixPaths: [],
         privacyDenialCode: probePlatform.privacyDenialCode,
       });
@@ -741,9 +758,11 @@ describe('loadPnpmInstallState', () => {
 
     test('reads the standalone pnpm.exe in pnpm home and in its bin as installs of no known version', async () => {
       const homeExePath = buildWindowsPlacePath({
+        environment: environment,
         location: { root: 'localAppData', path: 'pnpm/pnpm.exe' },
       });
       const binExePath = buildWindowsPlacePath({
+        environment: environment,
         location: { root: 'localAppData', path: 'pnpm/bin/pnpm.exe' },
       });
       await writeFixtureTextFile({ path: homeExePath, text: WINDOWS_EXECUTABLE_TEXT });
@@ -762,11 +781,17 @@ describe('loadPnpmInstallState', () => {
 
     test('counts the pnpm.cmd and pnpm.ps1 shims in pnpm home for nothing', async () => {
       await writeFixtureTextFile({
-        path: buildWindowsPlacePath({ location: { root: 'localAppData', path: 'pnpm/pnpm.cmd' } }),
+        path: buildWindowsPlacePath({
+          environment: environment,
+          location: { root: 'localAppData', path: 'pnpm/pnpm.cmd' },
+        }),
         text: '@SETLOCAL\r\n@"%~dp0\\.tools\\pnpm\\10.14.0\\bin\\pnpm.cmd" %*\r\n',
       });
       await writeFixtureTextFile({
-        path: buildWindowsPlacePath({ location: { root: 'localAppData', path: 'pnpm/pnpm.ps1' } }),
+        path: buildWindowsPlacePath({
+          environment: environment,
+          location: { root: 'localAppData', path: 'pnpm/pnpm.ps1' },
+        }),
         text: '& "$PSScriptRoot\\.tools\\pnpm\\10.14.0\\bin\\pnpm.ps1" $args\r\n',
       });
 
@@ -775,9 +800,11 @@ describe('loadPnpmInstallState', () => {
 
     test("reads npm's global pnpm and @pnpm/exe in the roaming AppData by their package.json", async () => {
       const pnpmPackagePath = buildWindowsPlacePath({
+        environment: environment,
         location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
       });
       const exePackagePath = buildWindowsPlacePath({
+        environment: environment,
         location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
       });
       await writePnpmPackage({ packageFolder: pnpmPackagePath, version: '10.14.0' });
@@ -796,9 +823,11 @@ describe('loadPnpmInstallState', () => {
 
     test("reads corepack's pnpm versions in the local AppData, in either of its layouts", async () => {
       const v1VersionPath = buildWindowsPlacePath({
+        environment: environment,
         location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
       });
       const versionPath = buildWindowsPlacePath({
+        environment: environment,
         location: { root: 'localAppData', path: 'node/corepack/pnpm/9.15.4' },
       });
       await createFixtureDirectory({ path: v1VersionPath });
@@ -820,6 +849,7 @@ describe('loadPnpmInstallState', () => {
         place: "corepack's folder of pnpm",
         createUnreadablePlace: async () => {
           const corepackPnpmPath = buildWindowsPlacePath({
+            environment: environment,
             location: { root: 'localAppData', path: 'node/corepack/v1/pnpm' },
           });
           await createFixtureDirectory({ path: corepackPnpmPath });
@@ -832,6 +862,7 @@ describe('loadPnpmInstallState', () => {
         place: "npm's global pnpm",
         createUnreadablePlace: async () => {
           const packagePath = buildWindowsPlacePath({
+            environment: environment,
             location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
           });
           await writePnpmPackage({ packageFolder: packagePath, version: '10.14.0' });
@@ -844,6 +875,7 @@ describe('loadPnpmInstallState', () => {
         place: 'the standalone pnpm.exe',
         createUnreadablePlace: async () => {
           const exePath = buildWindowsPlacePath({
+            environment: environment,
             location: { root: 'localAppData', path: 'pnpm/pnpm.exe' },
           });
           await writeFixtureTextFile({ path: exePath, text: WINDOWS_EXECUTABLE_TEXT });
@@ -877,12 +909,12 @@ describe('loadPnpmInstallState', () => {
 type StoreVersionsOffered = { storeVersions: string[]; isComplete: boolean };
 
 const probeCases: { probeId: 'pnpmStores' | 'pnpmStoresXdg'; storeRoot: CatalogLocation }[] = [
-  { probeId: 'pnpmStores', storeRoot: HOST_PLATFORM.explore.pnpmStoreRoot },
+  { probeId: 'pnpmStores', storeRoot: hostPlatform.explore.pnpmStoreRoot },
 ];
 
 // The XDG store is a place of the host only where pnpm has a default for it.
-if (HOST_PLATFORM.explore.pnpmXdgStoreRoot !== null) {
-  probeCases.push({ probeId: 'pnpmStoresXdg', storeRoot: HOST_PLATFORM.explore.pnpmXdgStoreRoot });
+if (hostPlatform.explore.pnpmXdgStoreRoot !== null) {
+  probeCases.push({ probeId: 'pnpmStoresXdg', storeRoot: hostPlatform.explore.pnpmXdgStoreRoot });
 }
 
 for (const probeCase of probeCases) {
@@ -989,20 +1021,36 @@ for (const probeCase of probeCases) {
         place: "pnpm's .tools",
         testOfPlace: test,
         createInstall: () =>
-          createFixtureDirectory({ path: buildPnpmHomePath('.tools/pnpm/10.22.0') }),
+          createFixtureDirectory({
+            path: buildPnpmHomePath({
+              environment: environment,
+              probePlatform: probePlatform,
+              names: ['.tools/pnpm/10.22.0'],
+            }),
+          }),
       },
       {
         place: "pnpm's .tools of @pnpm/exe",
         testOfPlace: test,
         createInstall: () =>
-          createFixtureDirectory({ path: buildPnpmHomePath('.tools/@pnpm+exe/10.22.0') }),
+          createFixtureDirectory({
+            path: buildPnpmHomePath({
+              environment: environment,
+              probePlatform: probePlatform,
+              names: ['.tools/@pnpm+exe/10.22.0'],
+            }),
+          }),
       },
       {
         place: "pnpm's global folder",
         testOfPlace: test,
         createInstall: () =>
           writePnpmPackage({
-            packageFolder: buildPnpmHomePath('global/5/node_modules/pnpm'),
+            packageFolder: buildPnpmHomePath({
+              environment: environment,
+              probePlatform: probePlatform,
+              names: ['global/5/node_modules/pnpm'],
+            }),
             version: '10.14.0',
           }),
       },
@@ -1111,7 +1159,12 @@ for (const probeCase of probeCases) {
       {
         place: "pnpm's global folder",
         testOfPlace: test,
-        buildPackageFolder: () => buildPnpmHomePath('global/5/node_modules/@pnpm/exe'),
+        buildPackageFolder: () =>
+          buildPnpmHomePath({
+            environment: environment,
+            probePlatform: probePlatform,
+            names: ['global/5/node_modules/@pnpm/exe'],
+          }),
       },
       {
         place: 'the npm globals of an nvm node',
@@ -1140,7 +1193,14 @@ for (const probeCase of probeCases) {
       'offers nothing and is not judged beside the standalone pnpm executable',
       async () => {
         await createStore({ folderNames: ['v10'] });
-        await writeFixtureTextFile({ path: buildPnpmHomePath('pnpm'), text: 'Ïúíþ executable' });
+        await writeFixtureTextFile({
+          path: buildPnpmHomePath({
+            environment: environment,
+            probePlatform: probePlatform,
+            names: ['pnpm'],
+          }),
+          text: 'Ïúíþ executable',
+        });
 
         expect(await loadOfferedVersions({ files: [] })).toEqual({
           storeVersions: [],
@@ -1152,7 +1212,11 @@ for (const probeCase of probeCases) {
     testOnDarwin('counts a pnpm shell script in pnpm home for nothing', async () => {
       await createStore({ folderNames: ['v10'] });
       await writeFixtureTextFile({
-        path: buildPnpmHomePath('pnpm'),
+        path: buildPnpmHomePath({
+          environment: environment,
+          probePlatform: probePlatform,
+          names: ['pnpm'],
+        }),
         text: '#!/bin/sh\nexec "$basedir/.tools/pnpm/10.14.0/bin/pnpm" "$@"\n',
       });
 
@@ -1184,11 +1248,19 @@ for (const probeCase of probeCases) {
         storeFolderName: 'v10',
         createInstall: async () => {
           await writeFixtureTextFile({
-            path: buildPnpmHomePath('.tools/pnpm-exe/10.22.0/pnpm'),
+            path: buildPnpmHomePath({
+              environment: environment,
+              probePlatform: probePlatform,
+              names: ['.tools/pnpm-exe/10.22.0/pnpm'],
+            }),
             text: 'Ïúíþ executable',
           });
           await writeFixtureTextFile({
-            path: buildPnpmHomePath('pnpm'),
+            path: buildPnpmHomePath({
+              environment: environment,
+              probePlatform: probePlatform,
+              names: ['pnpm'],
+            }),
             text: '#!/bin/sh\nexec "$basedir/.tools/pnpm-exe/10.22.0/pnpm" "$@"\n',
           });
         },
@@ -1199,7 +1271,11 @@ for (const probeCase of probeCases) {
         storeFolderName: 'v11',
         createInstall: () =>
           writePnpmPackage({
-            packageFolder: buildPnpmHomePath('global/v11', PNPM_11_INSTALL_ID, 'node_modules/pnpm'),
+            packageFolder: buildPnpmHomePath({
+              environment: environment,
+              probePlatform: probePlatform,
+              names: ['global/v11', PNPM_11_INSTALL_ID, 'node_modules/pnpm'],
+            }),
             version: '11.1.2',
           }),
       },
@@ -1209,11 +1285,11 @@ for (const probeCase of probeCases) {
         storeFolderName: 'v11',
         createInstall: () =>
           writePnpmPackage({
-            packageFolder: buildPnpmHomePath(
-              'global/v11',
-              PNPM_11_INSTALL_ID,
-              'node_modules/@pnpm/exe',
-            ),
+            packageFolder: buildPnpmHomePath({
+              environment: environment,
+              probePlatform: probePlatform,
+              names: ['global/v11', PNPM_11_INSTALL_ID, 'node_modules/@pnpm/exe'],
+            }),
             version: '11.1.2',
           }),
       },
@@ -1239,7 +1315,11 @@ for (const probeCase of probeCases) {
         `keeps the store version the global package ${packageName} of pnpm 11 links into`,
         async () => {
           const storeRoot = await createStore({ folderNames: ['v11'] });
-          const globalInstallsPath = buildPnpmHomePath('global/v11');
+          const globalInstallsPath = buildPnpmHomePath({
+            environment: environment,
+            probePlatform: probePlatform,
+            names: ['global/v11'],
+          });
           const installFolderPath = join(globalInstallsPath, PNPM_11_INSTALL_ID);
           await linkGlobalPackageIntoStore({
             storeRoot: storeRoot,
@@ -1265,7 +1345,14 @@ for (const probeCase of probeCases) {
             storeRoot: storeRoot,
             storeFolderName: 'v10',
             packageName: packageName,
-            linkPath: join(buildPnpmHomePath('global/5/node_modules'), packageName),
+            linkPath: join(
+              buildPnpmHomePath({
+                environment: environment,
+                probePlatform: probePlatform,
+                names: ['global/5/node_modules'],
+              }),
+              packageName,
+            ),
           });
 
           expect(await loadOfferedVersions({ files: [] })).toEqual({
@@ -1401,7 +1488,13 @@ for (const probeCase of probeCases) {
 
     test('offers nothing and is not judged for an installed pnpm of an unknown major', async () => {
       await createStore({ folderNames: ['v3'] });
-      await createFixtureDirectory({ path: buildPnpmHomePath('.tools/pnpm/13.0.0') });
+      await createFixtureDirectory({
+        path: buildPnpmHomePath({
+          environment: environment,
+          probePlatform: probePlatform,
+          names: ['.tools/pnpm/13.0.0'],
+        }),
+      });
 
       expect(await loadOfferedVersions({ files: [] })).toEqual({
         storeVersions: [],
@@ -1476,7 +1569,11 @@ for (const probeCase of probeCases) {
         place: "pnpm's .tools",
         testOfPlace: testOnPosix,
         createUnreadablePlace: async () => {
-          const toolsPath = buildPnpmHomePath('.tools/pnpm');
+          const toolsPath = buildPnpmHomePath({
+            environment: environment,
+            probePlatform: probePlatform,
+            names: ['.tools/pnpm'],
+          });
           await createFixtureDirectory({ path: toolsPath });
           await chmod(toolsPath, 0o000);
 
@@ -1487,7 +1584,11 @@ for (const probeCase of probeCases) {
         place: 'the launcher in pnpm home',
         testOfPlace: testOnDarwin,
         createUnreadablePlace: async () => {
-          const launcherPath = buildPnpmHomePath('pnpm');
+          const launcherPath = buildPnpmHomePath({
+            environment: environment,
+            probePlatform: probePlatform,
+            names: ['pnpm'],
+          });
           await writeFixtureTextFile({ path: launcherPath, text: '#!/bin/sh\n' });
           await chmod(launcherPath, 0o000);
 
@@ -1524,17 +1625,13 @@ for (const probeCase of probeCases) {
     }
 
     describe.skipIf(process.platform !== 'win32')("at pnpm's places of Windows", () => {
-      /** The path of `location` in the fixture environment of Windows the probe reads. */
-      function buildProbedPlacePath(params: { location: CatalogLocation }): AbsolutePath {
-        return resolveEnvironmentLocation({ folders: environment, location: params.location });
-      }
-
       const windowsInstallPlaces: { place: string; createInstall: () => Promise<void> }[] = [
         {
           place: "corepack's v1 folder in the local AppData",
           createInstall: () =>
             createFixtureDirectory({
-              path: buildProbedPlacePath({
+              path: resolveEnvironmentLocation({
+                folders: environment,
                 location: { root: 'localAppData', path: 'node/corepack/v1/pnpm/10.14.0' },
               }),
             }),
@@ -1543,7 +1640,8 @@ for (const probeCase of probeCases) {
           place: "corepack's folder in the local AppData",
           createInstall: () =>
             createFixtureDirectory({
-              path: buildProbedPlacePath({
+              path: resolveEnvironmentLocation({
+                folders: environment,
                 location: { root: 'localAppData', path: 'node/corepack/pnpm/10.14.0' },
               }),
             }),
@@ -1552,7 +1650,8 @@ for (const probeCase of probeCases) {
           place: "npm's globals in the roaming AppData",
           createInstall: () =>
             writePnpmPackage({
-              packageFolder: buildProbedPlacePath({
+              packageFolder: resolveEnvironmentLocation({
+                folders: environment,
                 location: { root: 'roamingAppData', path: 'npm/node_modules/pnpm' },
               }),
               version: '10.14.0',
@@ -1562,7 +1661,8 @@ for (const probeCase of probeCases) {
           place: "npm's globals of @pnpm/exe in the roaming AppData",
           createInstall: () =>
             writePnpmPackage({
-              packageFolder: buildProbedPlacePath({
+              packageFolder: resolveEnvironmentLocation({
+                folders: environment,
                 location: { root: 'roamingAppData', path: 'npm/node_modules/@pnpm/exe' },
               }),
               version: '10.14.0',
@@ -1586,7 +1686,10 @@ for (const probeCase of probeCases) {
         test(`offers nothing and is not judged beside the standalone ${exePath}`, async () => {
           await createStore({ folderNames: ['v10'] });
           await writeFixtureTextFile({
-            path: buildProbedPlacePath({ location: { root: 'localAppData', path: exePath } }),
+            path: resolveEnvironmentLocation({
+              folders: environment,
+              location: { root: 'localAppData', path: exePath },
+            }),
             text: WINDOWS_EXECUTABLE_TEXT,
           });
 
@@ -1602,7 +1705,10 @@ for (const probeCase of probeCases) {
 
         for (const shimPath of ['pnpm/pnpm.cmd', 'pnpm/pnpm.ps1']) {
           await writeFixtureTextFile({
-            path: buildProbedPlacePath({ location: { root: 'localAppData', path: shimPath } }),
+            path: resolveEnvironmentLocation({
+              folders: environment,
+              location: { root: 'localAppData', path: shimPath },
+            }),
             text: '@SETLOCAL\r\n',
           });
         }
@@ -1616,11 +1722,17 @@ for (const probeCase of probeCases) {
   });
 }
 
-describe.skipIf(HOST_PLATFORM.explore.pnpmXdgStoreRoot !== null)(
+describe.skipIf(hostPlatform.explore.pnpmXdgStoreRoot !== null)(
   'the probe pnpmStoresXdg where pnpm has no XDG store',
   () => {
     test('is judged with no findings beside a store of the XDG layout', async () => {
-      await createStoreFolders({ storeRoot: PNPM_XDG_STORE_ROOT, folderNames: ['v3'] });
+      const xdgStoreRoot = darwinPlatform.explore.pnpmXdgStoreRoot;
+
+      if (xdgStoreRoot === null) {
+        throw new Error('The darwin platform has no XDG store root.');
+      }
+
+      await createStoreFolders({ storeRoot: xdgStoreRoot, folderNames: ['v3'] });
 
       const probes = startExploreProbes(
         buildTestProbeStart({ environment: environment, platform: probePlatform }),
@@ -1642,7 +1754,7 @@ describe('the recheck of a pnpm store unit', () => {
 
   beforeEach(async () => {
     storeRoot = await createStoreFolders({
-      storeRoot: HOST_PLATFORM.explore.pnpmStoreRoot,
+      storeRoot: hostPlatform.explore.pnpmStoreRoot,
       folderNames: ['v10'],
     });
     pinPath = buildTestHostPath({ text: join(homeDir, 'projects/app/package.json') });
@@ -1681,7 +1793,13 @@ describe('the recheck of a pnpm store unit', () => {
   });
 
   test('is changed once a pnpm of its store version is installed', async () => {
-    await createFixtureDirectory({ path: buildPnpmHomePath('.tools/pnpm/10.14.0') });
+    await createFixtureDirectory({
+      path: buildPnpmHomePath({
+        environment: environment,
+        probePlatform: probePlatform,
+        names: ['.tools/pnpm/10.14.0'],
+      }),
+    });
 
     expect(
       await recheckExplorePathUnit({
@@ -1738,7 +1856,11 @@ describe('the recheck of a pnpm store unit', () => {
   });
 
   testOnPosix('fails at a place of installed pnpm it cannot read, never as no pnpm', async () => {
-    const toolsPath = buildPnpmHomePath('.tools/pnpm');
+    const toolsPath = buildPnpmHomePath({
+      environment: environment,
+      probePlatform: probePlatform,
+      names: ['.tools/pnpm'],
+    });
     await createFixtureDirectory({ path: toolsPath });
     await chmod(toolsPath, 0o000);
 

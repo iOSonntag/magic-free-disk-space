@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadPlistValue } from '../../../src/platform/darwin/loadPlistValue.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../../src/system/limits.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import { withFixtureRoot } from '../../support/fixtureRoot.js';
 
 const PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
@@ -18,7 +19,7 @@ const PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
 `;
 
 // The value comes from `plutil`, which only macOS has.
-describe.skipIf(process.platform !== 'darwin')('loadPlistValue', () => {
+describeOnDarwin('loadPlistValue', () => {
   test('trims a value, keeps an empty one, and fails without the key or file', async () => {
     await withFixtureRoot({
       run: async (fixtureRoot) => {

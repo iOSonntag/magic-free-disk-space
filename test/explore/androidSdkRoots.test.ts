@@ -24,7 +24,7 @@ import {
   writeFixtureTextFile,
 } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import {
   ANDROID_RECENT_USE_MS,
@@ -132,8 +132,8 @@ describe('loadAndroidSdkRoots', () => {
   ): Promise<Result<AndroidSdkRoot[], ExploreFileUnreadable>> {
     return loadAndroidSdkRoots({
       environment: environment,
-      androidSdkRoot: HOST_PLATFORM.explore.androidSdkRoot,
-      flutterSettingsPaths: HOST_PLATFORM.explore.flutterSettingsPaths,
+      androidSdkRoot: hostPlatform.explore.androidSdkRoot,
+      flutterSettingsPaths: hostPlatform.explore.flutterSettingsPaths,
       pinFiles: files,
       privacyDenialCode: null,
     });

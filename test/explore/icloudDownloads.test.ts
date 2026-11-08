@@ -18,7 +18,7 @@ import type { FileIdentity } from '../../src/system/loadFileIdentity.js';
 import type { LocatedTool } from '../../src/tools/findTrustedTool.js';
 import { createFixtureDirectory, createFixtureFile } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
@@ -66,7 +66,7 @@ const placeMissingResult: ExploreProbeToolResult = {
 
 /** The folder of iCloud Drive where the host's catalog keeps it below the fixture home. */
 function getMobileDocumentsPath(params: { home: FixtureHome }): string {
-  const root = HOST_PLATFORM.explore.icloudDriveRoot;
+  const root = hostPlatform.explore.icloudDriveRoot;
 
   if (root === null) {
     throw new Error('The platform has no iCloud Drive folder.');
@@ -101,7 +101,9 @@ function buildRun(params: {
   unusedCutoffMs?: number;
   staleCutoffMs?: number;
 }): ExploreProbeToolRun {
-  const platform = buildTestProbePlatform();
+  const platform = buildTestProbePlatform({
+    explore: params.hasIcloudDrive === false ? { icloudDriveRoot: null } : {},
+  });
   const evictedPaths = params.evictedPaths ?? [];
 
   return buildTestProbeToolRun({
@@ -109,10 +111,6 @@ function buildRun(params: {
     tool: BRCTL_TOOL,
     platform: {
       ...platform,
-      explore: {
-        ...platform.explore,
-        icloudDriveRoot: params.hasIcloudDrive === false ? null : platform.explore.icloudDriveRoot,
-      },
       entryReads: {
         ...platform.entryReads,
         loadEntryPlacement: (entry) =>
@@ -199,7 +197,7 @@ describe('isEvictFileUnchanged', () => {
   });
 });
 
-describe.skipIf(HOST_PLATFORM.explore.icloudDriveRoot === null)('the iCloud Drive probe', () => {
+describe.skipIf(hostPlatform.explore.icloudDriveRoot === null)('the iCloud Drive probe', () => {
   test('finds downloaded files untouched since the cutoff, one unit per folder', async () => {
     await withFixtureHome({
       nowMs: NOW_MS,

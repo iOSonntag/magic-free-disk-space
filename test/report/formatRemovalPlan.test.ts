@@ -14,7 +14,7 @@ import {
 } from '../support/evictCandidateFixtures.js';
 import { buildExampleHome } from '../support/parsedValueFixtures.js';
 
-const FIXTURE_HOME = buildExampleHome({ text: '/fixture/home' });
+const fixtureHome = buildExampleHome({ text: '/fixture/home' });
 
 function buildCandidate(params: {
   path: string;
@@ -82,7 +82,7 @@ describe('formatRemovalPlan', () => {
 
   test('names the command that removes a tool item below its path', () => {
     const toolCandidate = buildTestToolCandidate({
-      home: FIXTURE_HOME,
+      home: fixtureHome,
       version: '20.1.0',
       allocatedBytes: 2000,
     });
@@ -125,7 +125,7 @@ describe('formatRemovalPlan', () => {
 
   test('names the command with the leading arguments of its tool', () => {
     const lines = formatRemovalPlan({
-      plan: { approved: [buildTestDartToolCandidate({ home: FIXTURE_HOME })], refused: [] },
+      plan: { approved: [buildTestDartToolCandidate({ home: fixtureHome })], refused: [] },
     });
 
     expect(lines).toContain('   by running: dart --suppress-analytics pub cache gc --force');

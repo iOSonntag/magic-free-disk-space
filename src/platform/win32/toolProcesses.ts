@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { Result } from '../../result.js';
+import { formatThrownError } from '../../system/formatThrownError.js';
 import { formatSystemCallFailure } from '../../system/systemCallFailure.js';
 import type { StartedTool, ToolProcess, ToolProcessPlatform } from '../../tools/toolsPlatform.js';
 import type { WindowsHandle } from './win32Api.js';
@@ -71,20 +72,15 @@ function startTool(params: {
     return { kind: 'failed', failure: formatSystemCallFailure({ failure: job.failure }) };
   }
 
-  let child: ToolProcess;
+  const spawned = spawnTool(params);
 
-  try {
-    child = spawn(params.path, params.args, {
-      cwd: params.cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: params.env,
-      windowsHide: true,
-    });
-  } catch (error) {
+  if (spawned.kind === 'failed') {
     closeHandle({ handle: job.value });
 
-    return { kind: 'failed', failure: error instanceof Error ? error.message : String(error) };
+    return { kind: 'failed', failure: spawned.failure };
   }
+
+  const child = spawned.value;
 
   // A tool that did not start has no id; the error it emits settles its run.
   if (child.pid !== undefined) {
@@ -99,6 +95,27 @@ function startTool(params: {
   }
 
   return { kind: 'succeeded', value: holdInJob({ child: child, job: job.value }) };
+}
+
+/** The tool's process, or the message of the error that the spawn threw. */
+function spawnTool(params: {
+  path: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+}): Result<ToolProcess, string> {
+  try {
+    const child = spawn(params.path, params.args, {
+      cwd: params.cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: params.env,
+      windowsHide: true,
+    });
+
+    return { kind: 'succeeded', value: child };
+  } catch (error) {
+    return { kind: 'failed', failure: formatThrownError(error) };
+  }
 }
 
 function holdInJob(params: { child: ToolProcess; job: WindowsHandle }): StartedTool {

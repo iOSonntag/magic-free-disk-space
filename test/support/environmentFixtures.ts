@@ -8,16 +8,17 @@ import {
   buildTestDriveRoot,
   buildTestWindowsPath,
   buildTestWindowsUser,
+  EXAMPLE_WINDOWS_SID_TEXT,
 } from './parsedValueFixtures.js';
 
 /** The values a Windows environment is built of, for a test that varies one of them. */
 export type Win32EnvironmentParams = Parameters<typeof buildWin32Environment>[0];
 
 /** A macOS environment of example paths below `/Users/tester`, the same on every host. */
-export const EXAMPLE_DARWIN_ENVIRONMENT: Environment = buildTestMacEnvironment();
+export const exampleDarwinEnvironment: Environment = buildTestMacEnvironment();
 
 /** The known folders of the example Windows environment, each its own real path. */
-const EXAMPLE_WIN32_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
+const exampleWin32KnownFolderPaths: WindowsKnownFolderPaths = {
   desktop: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Desktop' }),
   documents: buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive\\Documents' }),
   downloads: buildTestWindowsPath({ text: 'C:\\Users\\tester\\Downloads' }),
@@ -32,9 +33,9 @@ const EXAMPLE_WIN32_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
  * The values of a Windows environment of example paths below `C:\Users\tester`, the same on every
  * host: Documents moved into OneDrive, as Known Folder Move does, and no Videos folder.
  */
-export const EXAMPLE_WIN32_ENVIRONMENT_PARAMS: Win32EnvironmentParams = {
+export const exampleWin32EnvironmentParams: Win32EnvironmentParams = {
   nowMs: 0,
-  user: buildTestWindowsUser({ sidText: 'S-1-5-21-1000-2000-3000-1001' }),
+  user: buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT }),
   home: {
     path: buildTestWindowsPath({ text: 'C:\\Users\\tester' }),
     realPath: buildTestWindowsPath({ text: 'C:\\Users\\tester' }),
@@ -51,13 +52,13 @@ export const EXAMPLE_WIN32_ENVIRONMENT_PARAMS: Win32EnvironmentParams = {
     path: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Roaming' }),
     realPath: buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Roaming' }),
   },
-  knownFolderPaths: EXAMPLE_WIN32_KNOWN_FOLDER_PATHS,
-  knownFolderRealPaths: EXAMPLE_WIN32_KNOWN_FOLDER_PATHS,
+  knownFolderPaths: exampleWin32KnownFolderPaths,
+  knownFolderRealPaths: exampleWin32KnownFolderPaths,
   fixedDriveRoots: [buildTestDriveRoot({ text: 'C:\\' }), buildTestDriveRoot({ text: 'D:\\' })],
   oneDriveRealPaths: [buildTestWindowsPath({ text: 'C:\\Users\\tester\\OneDrive' })],
 };
 
-/** The Windows environment of `EXAMPLE_WIN32_ENVIRONMENT_PARAMS`. */
-export const EXAMPLE_WIN32_ENVIRONMENT: Environment = buildWin32Environment(
-  EXAMPLE_WIN32_ENVIRONMENT_PARAMS,
+/** The Windows environment of `exampleWin32EnvironmentParams`. */
+export const exampleWin32Environment: Environment = buildWin32Environment(
+  exampleWin32EnvironmentParams,
 );

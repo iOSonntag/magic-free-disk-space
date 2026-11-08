@@ -17,10 +17,11 @@ import {
   resolveTargetOwner,
 } from '../../src/scan/resolveOwnerState.js';
 import type { InstalledApp, SystemApp } from '../../src/scan/scanPlatform.js';
+import type { RunningProcesses } from '../../src/system/systemPlatform.js';
 import { buildTestCatalogEntry } from '../support/candidateFixtures.js';
 import {
-  EXAMPLE_DARWIN_ENVIRONMENT,
-  EXAMPLE_WIN32_ENVIRONMENT,
+  exampleDarwinEnvironment,
+  exampleWin32Environment,
 } from '../support/environmentFixtures.js';
 import { buildTestInstalledApp } from '../support/installedAppFixtures.js';
 import {
@@ -36,22 +37,22 @@ import {
 import { getCatalogEntry } from '../support/scanRunFixtures.js';
 
 /** VS Code as a Windows program: its image name, and its install folder below LocalAppData. */
-const CODE_OWNER: CatalogOwner = {
+const codeOwner: CatalogOwner = {
   kind: 'executable',
   imageNames: [buildTestWindowsImageName({ text: 'Code.exe' })],
   installFolder: { root: 'localAppData', path: 'Programs/Microsoft VS Code' },
 };
 
 /**
- * The state of `owner` as the scan decides it on macOS: the owner of the removal, then whether it
- * runs while the processes of `commandLines` do, `null` for a list that could not be read.
+ * The state of `owner` as the scan decides it: its removal owner, then whether it runs among
+ * `runningProcesses`, which is `null` when the processes could not be listed.
  */
-function resolveCatalogOwnerState(params: {
+function resolveOwnerStateOf(params: {
   owner: CatalogOwner | null;
   environment: Environment;
   installedApps: InstalledApp[];
   systemApps: SystemApp[];
-  commandLines: string[] | null;
+  runningProcesses: RunningProcesses | null;
 }): OwnerState {
   return resolveRemovalOwnerState({
     owner: findRemovalOwner({
@@ -61,7 +62,7 @@ function resolveCatalogOwnerState(params: {
       systemApps: params.systemApps,
     }),
     pathRules: params.environment.pathRules,
-    runningProcesses: buildRunningCommandLines(params.commandLines),
+    runningProcesses: params.runningProcesses,
   });
 }
 
@@ -81,12 +82,12 @@ function resolveFooCacheOwnerState(params: { commandLines: string[] | null }): O
     installedApps: [foo],
   });
 
-  return resolveCatalogOwnerState({
+  return resolveOwnerStateOf({
     owner: owner,
-    environment: EXAMPLE_DARWIN_ENVIRONMENT,
+    environment: exampleDarwinEnvironment,
     installedApps: [foo],
     systemApps: [],
-    commandLines: params.commandLines,
+    runningProcesses: buildRunningCommandLines(params.commandLines),
   });
 }
 
@@ -99,18 +100,14 @@ function resolveCatalogEntryOwner(params: { id: string }): CatalogOwner | null {
   });
 }
 
-/** The state of `CODE_OWNER` while the processes of `processImagePaths` run on Windows. */
+/** The state of `codeOwner` while the processes of `processImagePaths` run on Windows. */
 function resolveCodeOwnerState(params: { processImagePaths: string[] | null }): OwnerState {
-  return resolveRemovalOwnerState({
-    owner: findRemovalOwner({
-      owner: CODE_OWNER,
-      environment: EXAMPLE_WIN32_ENVIRONMENT,
-      installedApps: [],
-      systemApps: [],
-    }),
-    pathRules: EXAMPLE_WIN32_ENVIRONMENT.pathRules,
-    runningProcesses:
-      params.processImagePaths === null ? null : buildRunningImagePaths(params.processImagePaths),
+  return resolveOwnerStateOf({
+    owner: codeOwner,
+    environment: exampleWin32Environment,
+    installedApps: [],
+    systemApps: [],
+    runningProcesses: buildRunningImagePaths(params.processImagePaths),
   });
 }
 
@@ -244,12 +241,6 @@ describe('resolveTargetOwner', () => {
       path: 'C:\\Users\\tester\\AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\EBWebView',
       installedApps: [],
     });
-    const removalOwner = findRemovalOwner({
-      owner: owner,
-      environment: EXAMPLE_WIN32_ENVIRONMENT,
-      installedApps: [],
-      systemApps: [],
-    });
 
     expect(owner).toEqual({
       kind: 'executable',
@@ -261,18 +252,22 @@ describe('resolveTargetOwner', () => {
       installFolder: null,
     });
     expect(
-      resolveRemovalOwnerState({
-        owner: removalOwner,
-        pathRules: EXAMPLE_WIN32_ENVIRONMENT.pathRules,
+      resolveOwnerStateOf({
+        owner: owner,
+        environment: exampleWin32Environment,
+        installedApps: [],
+        systemApps: [],
         runningProcesses: buildRunningImagePaths([
           'C:\\Program Files\\WindowsApps\\MSTeams_25000.0.0.0_x64__8wekyb3d8bbwe\\ms-teams.exe',
         ]),
       }),
     ).toBe('running');
     expect(
-      resolveRemovalOwnerState({
-        owner: removalOwner,
-        pathRules: EXAMPLE_WIN32_ENVIRONMENT.pathRules,
+      resolveOwnerStateOf({
+        owner: owner,
+        environment: exampleWin32Environment,
+        installedApps: [],
+        systemApps: [],
         runningProcesses: buildRunningImagePaths(['C:\\Windows\\explorer.exe']),
       }),
     ).toBe('stopped');
@@ -306,7 +301,7 @@ describe('resolveRemovalOwnerState', () => {
       expect(
         resolveRemovalOwnerState({
           owner: { kind: 'none' },
-          pathRules: EXAMPLE_DARWIN_ENVIRONMENT.pathRules,
+          pathRules: exampleDarwinEnvironment.pathRules,
           runningProcesses: runningProcesses,
         }),
       ).toBe('stopped');
@@ -318,7 +313,7 @@ describe('resolveRemovalOwnerState', () => {
       expect(
         resolveRemovalOwnerState({
           owner: owner,
-          pathRules: EXAMPLE_WIN32_ENVIRONMENT.pathRules,
+          pathRules: exampleWin32Environment.pathRules,
           runningProcesses: null,
         }),
       ).toBe('unknown');
@@ -329,7 +324,7 @@ describe('resolveRemovalOwnerState', () => {
     expect(
       resolveRemovalOwnerState({
         owner: unbundledOwner,
-        pathRules: EXAMPLE_DARWIN_ENVIRONMENT.pathRules,
+        pathRules: exampleDarwinEnvironment.pathRules,
         runningProcesses: buildRunningCommandLines([
           '/Applications/Slack.app/Contents/MacOS/Slack',
         ]),
@@ -341,7 +336,7 @@ describe('resolveRemovalOwnerState', () => {
     expect(
       resolveRemovalOwnerState({
         owner: bundlesOwner,
-        pathRules: EXAMPLE_DARWIN_ENVIRONMENT.pathRules,
+        pathRules: exampleDarwinEnvironment.pathRules,
         runningProcesses: buildRunningCommandLines([
           '/Applications/Slack.app/Contents/MacOS/Slack',
         ]),
@@ -350,7 +345,7 @@ describe('resolveRemovalOwnerState', () => {
     expect(
       resolveRemovalOwnerState({
         owner: bundlesOwner,
-        pathRules: EXAMPLE_DARWIN_ENVIRONMENT.pathRules,
+        pathRules: exampleDarwinEnvironment.pathRules,
         runningProcesses: buildRunningCommandLines(['/Applications/Slack2.app/Contents/MacOS/S']),
       }),
     ).toBe('stopped');
@@ -360,7 +355,7 @@ describe('resolveRemovalOwnerState', () => {
     expect(
       resolveRemovalOwnerState({
         owner: bundlesOwner,
-        pathRules: EXAMPLE_WIN32_ENVIRONMENT.pathRules,
+        pathRules: exampleWin32Environment.pathRules,
         runningProcesses: buildRunningImagePaths(['C:\\Windows\\explorer.exe']),
       }),
     ).toBe('unknown');
@@ -370,7 +365,7 @@ describe('resolveRemovalOwnerState', () => {
     expect(
       resolveRemovalOwnerState({
         owner: executableOwner,
-        pathRules: EXAMPLE_DARWIN_ENVIRONMENT.pathRules,
+        pathRules: exampleDarwinEnvironment.pathRules,
         runningProcesses: buildRunningCommandLines(['/usr/local/bin/Code.exe']),
       }),
     ).toBe('unknown');
@@ -380,7 +375,7 @@ describe('resolveRemovalOwnerState', () => {
     expect(
       resolveRemovalOwnerState({
         owner: executableOwner,
-        pathRules: EXAMPLE_WIN32_ENVIRONMENT.pathRules,
+        pathRules: exampleWin32Environment.pathRules,
         runningProcesses: buildRunningImagePaths(['C:\\Tools\\CODE.EXE']),
       }),
     ).toBe('running');
@@ -392,7 +387,7 @@ describe('findRemovalOwner', () => {
     expect(
       findRemovalOwner({
         owner: null,
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [],
         systemApps: [],
       }),
@@ -408,7 +403,7 @@ describe('findRemovalOwner', () => {
     expect(
       findRemovalOwner({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
       }),
@@ -418,8 +413,8 @@ describe('findRemovalOwner', () => {
   test('is the program of an executable owner, its install folder resolved', () => {
     expect(
       findRemovalOwner({
-        owner: CODE_OWNER,
-        environment: EXAMPLE_WIN32_ENVIRONMENT,
+        owner: codeOwner,
+        environment: exampleWin32Environment,
         installedApps: [],
         systemApps: [],
       }),
@@ -562,81 +557,90 @@ describe('the state of a bundle owner', () => {
 
   test('an entry without owner counts as stopped', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: null }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
-        commandLines: null,
+        runningProcesses: buildRunningCommandLines(null),
       }),
     ).toBe('stopped');
   });
 
   test('any owner is unknown while the process list is missing, installed or not', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
-        commandLines: null,
+        runningProcesses: buildRunningCommandLines(null),
       }),
     ).toBe('unknown');
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
-        commandLines: null,
+        runningProcesses: buildRunningCommandLines(null),
       }),
     ).toBe('unknown');
   });
 
   test('an owner no installed app carries counts as stopped', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.gone' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
-        commandLines: ['/Applications/Slack.app/Contents/MacOS/Slack'],
+        runningProcesses: buildRunningCommandLines([
+          '/Applications/Slack.app/Contents/MacOS/Slack',
+        ]),
       }),
     ).toBe('stopped');
   });
 
   test('a process inside the bundle marks the owner running', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
-        commandLines: ['/sbin/launchd', '/Applications/Slack.app/Contents/MacOS/Slack --flag'],
+        runningProcesses: buildRunningCommandLines([
+          '/sbin/launchd',
+          '/Applications/Slack.app/Contents/MacOS/Slack --flag',
+        ]),
       }),
     ).toBe('running');
   });
 
   test('a nested bundle id maps to its app', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack.helper' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
-        commandLines: ['/Applications/Slack.app/Contents/Frameworks/Helper.app/Contents/MacOS/H'],
+        runningProcesses: buildRunningCommandLines([
+          '/Applications/Slack.app/Contents/Frameworks/Helper.app/Contents/MacOS/H',
+        ]),
       }),
     ).toBe('running');
   });
 
   test('a bundle whose path only shares a prefix does not count', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack],
         systemApps: [],
-        commandLines: ['/Applications/Slack.app.old/Contents/MacOS/Slack'],
+        runningProcesses: buildRunningCommandLines([
+          '/Applications/Slack.app.old/Contents/MacOS/Slack',
+        ]),
       }),
     ).toBe('stopped');
   });
@@ -658,12 +662,14 @@ describe('the state of a bundle owner', () => {
     });
 
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: buildTestCatalogOwner({ bundleId: 'com.example.slack' }),
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [slack, copy],
         systemApps: [],
-        commandLines: ['/Users/tester/Applications/Slack.app/Contents/MacOS/Slack'],
+        runningProcesses: buildRunningCommandLines([
+          '/Users/tester/Applications/Slack.app/Contents/MacOS/Slack',
+        ]),
       }),
     ).toBe('running');
   });
@@ -680,21 +686,21 @@ describe('a system app owner', () => {
 
   test('runs from the bundle the platform names, though no app folder lists it', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: notesOwner,
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [],
         systemApps: [notes],
-        commandLines: [notesCommand],
+        runningProcesses: buildRunningCommandLines([notesCommand]),
       }),
     ).toBe('running');
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: notesOwner,
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: [],
         systemApps: [notes],
-        commandLines: ['/sbin/launchd'],
+        runningProcesses: buildRunningCommandLines(['/sbin/launchd']),
       }),
     ).toBe('stopped');
   });
@@ -743,12 +749,12 @@ describe('a system app owner', () => {
 
     expect(
       ownerRuns.map(([id, command]) =>
-        resolveCatalogOwnerState({
+        resolveOwnerStateOf({
           owner: resolveCatalogEntryOwner({ id: id }),
-          environment: EXAMPLE_DARWIN_ENVIRONMENT,
+          environment: exampleDarwinEnvironment,
           installedApps: [],
           systemApps: darwinPlatform.scan.systemApps,
-          commandLines: [command],
+          runningProcesses: buildRunningCommandLines([command]),
         }),
       ),
     ).toEqual(['running', 'running', 'running', 'running']);
@@ -780,29 +786,29 @@ describe('a bundle id family owner', () => {
 
   test('a running member of the family marks the owner running', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: owner,
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: installedApps,
         systemApps: [],
-        commandLines: [
+        runningProcesses: buildRunningCommandLines([
           '/Applications/Adobe Premiere Pro 2025/Adobe Premiere Pro 2025.app/Contents/MacOS/Adobe Premiere Pro 2025',
-        ],
+        ]),
       }),
     ).toBe('running');
   });
 
   test('a running Creative Cloud helper leaves the owner stopped, though it nests a lookalike id', () => {
     expect(
-      resolveCatalogOwnerState({
+      resolveOwnerStateOf({
         owner: owner,
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         installedApps: installedApps,
         systemApps: [],
-        commandLines: [
+        runningProcesses: buildRunningCommandLines([
           '/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app/Contents/MacOS/Creative Cloud',
           '/Applications/Amex.app/Contents/MacOS/Amex',
-        ],
+        ]),
       }),
     ).toBe('stopped');
   });
@@ -859,14 +865,14 @@ describe('a Windows program owner beside the app bundles', () => {
 
   test('owns no bundle, names no app, and is never told uninstalled by the complete app list', () => {
     expect(
-      findOwnerBundlePaths({ owner: CODE_OWNER, installedApps: [codeBundle], systemApps: [] }),
+      findOwnerBundlePaths({ owner: codeOwner, installedApps: [codeBundle], systemApps: [] }),
     ).toEqual([]);
     expect(
-      findOwnerAppName({ owner: CODE_OWNER, installedApps: [codeBundle], systemApps: [] }),
+      findOwnerAppName({ owner: codeOwner, installedApps: [codeBundle], systemApps: [] }),
     ).toBeNull();
     expect(
       isOwnerUninstalled({
-        owner: CODE_OWNER,
+        owner: codeOwner,
         installedApps: [],
         systemApps: [],
         isInstalledAppListComplete: true,

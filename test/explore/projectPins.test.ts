@@ -26,9 +26,9 @@ import {
 import {
   buildTestAbsolutePath,
   buildTestHostPath,
-  HOST_PATH_RULES,
+  hostPathRules,
 } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import {
   buildTestPinFileText,
@@ -37,7 +37,7 @@ import {
   buildTestProjectPins,
 } from './projectPinsFixtures.js';
 
-const PRIVACY_DENIAL_CODE = HOST_PLATFORM.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = hostPlatform.system.privacyDenialCode;
 
 const NO_SIBLINGS: ReadonlySet<string> = new Set();
 
@@ -408,7 +408,7 @@ describe('loading the pins', () => {
       await writeFile(nvmrcPath, '22\n');
 
       const pins = await loadProjectPins({
-        pathRules: HOST_PATH_RULES,
+        pathRules: hostPathRules,
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [{ path: nvmrcPath, kind: 'nvmrc' }],
@@ -456,7 +456,7 @@ describe('loading the pins', () => {
       await writeFile(join(trackedConfigsPath, 'not-a-link.toml'), '[tools]\n');
 
       const pins = await loadProjectPins({
-        pathRules: HOST_PATH_RULES,
+        pathRules: hostPathRules,
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [],
@@ -494,7 +494,7 @@ describe('loading the pins', () => {
       await createTrackedConfigLink({ name: 'a1', targetPath: miseConfigPath });
 
       const pins = await loadProjectPins({
-        pathRules: HOST_PATH_RULES,
+        pathRules: hostPathRules,
         privacyDenialCode: PRIVACY_DENIAL_CODE,
         homeDir: fixtureRoot.homeDir,
         walkedPinFiles: [{ path: miseConfigPath, kind: 'miseConfig' }],
@@ -517,7 +517,7 @@ describe('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
-          pathRules: HOST_PATH_RULES,
+          pathRules: hostPathRules,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
@@ -548,7 +548,7 @@ describe('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
-          pathRules: HOST_PATH_RULES,
+          pathRules: hostPathRules,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],
@@ -577,7 +577,7 @@ describe('loading the pins', () => {
 
       try {
         const pins = await loadProjectPins({
-          pathRules: HOST_PATH_RULES,
+          pathRules: hostPathRules,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
           homeDir: fixtureRoot.homeDir,
           walkedPinFiles: [],

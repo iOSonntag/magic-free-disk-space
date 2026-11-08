@@ -51,7 +51,7 @@ export function runTestScan(params: {
   return runTestScanOnPlatform({
     environment: params.environment,
     platform: scanPlatform,
-    onProgress: params.onProgress ?? ignoreScanProgress,
+    onProgress: params.onProgress,
   });
 }
 
@@ -59,7 +59,7 @@ export function runTestScan(params: {
 export function runTestScanOnPlatform(params: {
   environment: Environment;
   platform: Platform;
-  onProgress?: (progress: ScanProgress) => void;
+  onProgress?: ((progress: ScanProgress) => void) | undefined;
 }): Promise<ScanReport> {
   return runScan({
     environment: params.environment,

@@ -137,8 +137,7 @@ function isAbsoluteRealPath(params: { environment: Environment; realPath: string
 
 /**
  * `rootOrHolder` when the path is or holds a cloud folder, before `strictlyInside` one, so a path
- * that is one cloud folder and lies in another counts as the folder. Compared without case: macOS
- * disks usually ignore it, and the looser match only refuses more.
+ * that is one cloud folder and lies in another counts as the folder.
  */
 function getEvictRootPlacement(params: {
   environment: Environment;

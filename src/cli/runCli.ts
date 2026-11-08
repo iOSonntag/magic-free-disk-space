@@ -104,6 +104,7 @@ export async function runCli(params: {
     lines: formatScanReport({
       report: report,
       texts: params.texts,
+      pathRules: params.environment.pathRules,
       homeDir: params.environment.homeDir,
       disk: disk,
     }),

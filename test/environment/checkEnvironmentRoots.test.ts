@@ -3,13 +3,17 @@ import { checkEnvironmentRoots } from '../../src/environment/checkEnvironmentRoo
 import type { EnvironmentFailure } from '../../src/environment/environmentPlatform.js';
 import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import type { UserIdentity } from '../../src/system/userIdentity.js';
-import { buildTestUserIdentity, buildTestWindowsUser } from '../support/parsedValueFixtures.js';
+import {
+  buildTestUserIdentity,
+  buildTestWindowsUser,
+  EXAMPLE_WINDOWS_SID_TEXT,
+} from '../support/parsedValueFixtures.js';
 
 const user = buildTestUserIdentity({ uid: 501 });
 const HOME = '/Users/tester';
 const TEMP = '/private/var/folders/xy/abc/T';
 
-const windowsUser = buildTestWindowsUser({ sidText: 'S-1-5-21-1000-2000-3000-1001' });
+const windowsUser = buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT });
 const WINDOWS_HOME = 'C:\\Users\\tester';
 const WINDOWS_TEMP = 'C:\\Users\\tester\\AppData\\Local\\Temp';
 

@@ -7,14 +7,14 @@ import type {
 import { checkVariablePlacement } from '../../../src/platform/win32/checkVariablePlacement.js';
 import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
-const TEMP_PATH = buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Local\\Temp' });
+const tempPath = buildTestWindowsPath({ text: 'C:\\Users\\tester\\AppData\\Local\\Temp' });
 
 function buildTempCheck(params: { variableName: string; reading: VariableReading }): VariableCheck {
   return {
     variableName: params.variableName,
     reading: params.reading,
-    expectedPath: TEMP_PATH,
-    expectedRealPath: TEMP_PATH,
+    expectedPath: tempPath,
+    expectedRealPath: tempPath,
   };
 }
 
@@ -50,7 +50,7 @@ describe('checkVariablePlacement', () => {
           buildTempCheck({ variableName: 'TEMP', reading: { kind: 'unresolvable' } }),
         ],
       }),
-    ).toEqual({ reason: 'variableElsewhere', variableName: 'TMP', path: TEMP_PATH });
+    ).toEqual({ reason: 'variableElsewhere', variableName: 'TMP', path: tempPath });
   });
 
   test('refuses a folder inside the expected one and one that holds it', () => {
@@ -65,7 +65,7 @@ describe('checkVariablePlacement', () => {
             buildTempCheck({ variableName: 'TEMP', reading: buildResolvedReading({ text: text }) }),
           ],
         }),
-      ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: TEMP_PATH });
+      ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: tempPath });
     }
   });
 
@@ -75,6 +75,6 @@ describe('checkVariablePlacement', () => {
         pathRules: WIN32_PATH_RULES,
         checks: [buildTempCheck({ variableName: 'TEMP', reading: { kind: 'unresolvable' } })],
       }),
-    ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: TEMP_PATH });
+    ).toEqual({ reason: 'variableElsewhere', variableName: 'TEMP', path: tempPath });
   });
 });

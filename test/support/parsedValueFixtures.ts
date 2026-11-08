@@ -58,7 +58,7 @@ import { parsePosixUid, parseWindowsSid } from '../../src/system/userIdentity.js
 /** Branded values for fixtures, each made by its one maker; a value that fails it throws. */
 
 /** The rules of the operating system that runs the tests, for the paths it names itself. */
-export const HOST_PATH_RULES: PathRules =
+export const hostPathRules: PathRules =
   process.platform === 'win32' ? WIN32_PATH_RULES : POSIX_PATH_RULES;
 
 /** An example macOS path, such as `/Users/test/Library`, the same on every host. */
@@ -72,7 +72,7 @@ export function buildTestAbsolutePath(params: { text: string }): AbsolutePath {
 /** A path the host names, such as one below its temporary folder, under the rules of the host. */
 export function buildTestHostPath(params: { text: string }): AbsolutePath {
   return unwrapFixtureValue({
-    parsed: parseAbsolutePath({ rules: HOST_PATH_RULES, text: params.text }),
+    parsed: parseAbsolutePath({ rules: hostPathRules, text: params.text }),
     text: params.text,
   });
 }
@@ -128,6 +128,9 @@ export function buildTestWindowsSid(params: { text: string }): WindowsSid {
 }
 
 /** A Windows user by its SID, such as `S-1-5-21-1-2-3-1001`. */
+/** The SID of the example user of the Windows fixtures. */
+export const EXAMPLE_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
+
 export function buildTestWindowsUser(params: { sidText: string }): UserIdentity {
   return { kind: 'windows', sid: buildTestWindowsSid({ text: params.sidText }) };
 }

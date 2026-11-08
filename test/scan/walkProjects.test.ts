@@ -17,6 +17,7 @@ import type { ProjectWalk } from '../../src/scan/walkProjects.js';
 import { walkProjects } from '../../src/scan/walkProjects.js';
 import type { EntryRef } from '../../src/system/entryReads.js';
 import type { EvictedEntryRecorder } from '../../src/system/walkDirectoryTree.js';
+import { testOnDarwin } from '../support/darwinOnly.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import {
@@ -27,8 +28,8 @@ import {
   loadTestEnvironment,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath, HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { buildTestHostPath, hostPathRules } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { runTestScan } from '../support/scanRunFixtures.js';
 
@@ -102,7 +103,7 @@ function walkTestProjects(params: {
   recordEvictedEntry?: EvictedEntryRecorder;
 }): Promise<ProjectWalk> {
   return walkProjects({
-    pathRules: params.pathRules ?? HOST_PATH_RULES,
+    pathRules: params.pathRules ?? hostPathRules,
     homeDir: params.homeDir,
     excludedTopNames: params.excludedTopNames ?? [],
     rules: params.rules ?? PROJECT_ARTIFACT_RULES,
@@ -114,7 +115,7 @@ function walkTestProjects(params: {
       linkPaths: params.linkPaths ?? [],
     }),
     recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
-    privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+    privacyDenialCode: hostPlatform.system.privacyDenialCode,
   });
 }
 
@@ -299,7 +300,7 @@ describe('walkProjects', () => {
     },
   );
 
-  test.skipIf(process.platform !== 'darwin')(
+  testOnDarwin(
     'walks a top folder whose name differs from an excluded name in case, as macOS compares names',
     async () => {
       const projectPath = join(fixtureRoot.homeDir, 'library', 'app');

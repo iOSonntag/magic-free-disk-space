@@ -60,7 +60,7 @@ export function buildTestWin32Platform(params: {
 }
 
 /** The platform of the host that runs the tests, with what a test must never touch faked. */
-export const HOST_PLATFORM: Platform =
+export const hostPlatform: Platform =
   process.platform === 'win32' ? buildTestWin32Platform({}) : darwinPlatform;
 
 /**
@@ -73,10 +73,10 @@ export function buildTestPlatform(params: {
   toolInstallLocations: ToolInstallLocations;
 }): Platform {
   return {
-    ...HOST_PLATFORM,
-    catalog: { ...HOST_PLATFORM.catalog, entries: params.catalogEntries },
+    ...hostPlatform,
+    catalog: { ...hostPlatform.catalog, entries: params.catalogEntries },
     tools: {
-      ...HOST_PLATFORM.tools,
+      ...hostPlatform.tools,
       installLocations: params.toolInstallLocations,
       homebrewPrefixPaths: [],
     },

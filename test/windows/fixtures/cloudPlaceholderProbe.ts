@@ -1,6 +1,6 @@
 import { dlopen, FFIType, ptr } from 'bun:ffi';
 import { join } from 'node:path';
-import { loadEntryPlacement } from '../../../src/platform/win32/loadEntryPlacement.js';
+import { win32Platform } from '../../../src/platform/win32/win32Platform.js';
 import type { EntryRef } from '../../../src/system/entryReads.js';
 import { formatSystemCallCode } from '../../../src/system/systemCallFailure.js';
 import { loadAttributesText, loadLstatText, observeSafely } from '../observations.js';
@@ -40,7 +40,7 @@ const FILETIME_UNIX_EPOCH_SECONDS = 11644473600n;
 const CLOUD_ONLY_FILE_NAME = 'cloudOnlyFile.txt';
 const CLOUD_ONLY_FOLDER_NAME = 'cloudOnlyFolder';
 
-const openCloudFilterApi = () => {
+function openCloudFilterApi() {
   return dlopen('cldapi.dll', {
     CfRegisterSyncRoot: {
       args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u32],
@@ -52,7 +52,7 @@ const openCloudFilterApi = () => {
       returns: FFIType.i32,
     },
   });
-};
+}
 
 type CloudFilterApi = ReturnType<typeof openCloudFilterApi>;
 
@@ -61,15 +61,15 @@ function toWideString(text: string): Buffer {
   return Buffer.from(`${text}\0`, 'utf16le');
 }
 
-const writeStage = (stage: string, observations: Record<string, unknown>): void => {
+function writeStage(stage: string, observations: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify({ stage: stage, ...observations })}\n`);
-};
+}
 
-const buildSyncRegistration = (params: {
+function buildSyncRegistration(params: {
   providerName: Buffer;
   providerVersion: Buffer;
   identity: Uint8Array;
-}): Uint8Array => {
+}): Uint8Array {
   const registration = new Uint8Array(SYNC_REGISTRATION_BYTES);
   const view = new DataView(registration.buffer);
 
@@ -81,9 +81,9 @@ const buildSyncRegistration = (params: {
   registration.set(crypto.getRandomValues(new Uint8Array(16)), 52);
 
   return registration;
-};
+}
 
-const buildSyncPolicies = (): Uint8Array => {
+function buildSyncPolicies(): Uint8Array {
   const policies = new Uint8Array(SYNC_POLICIES_BYTES);
   const view = new DataView(policies.buffer);
 
@@ -92,9 +92,9 @@ const buildSyncPolicies = (): Uint8Array => {
   view.setUint16(8, CF_POPULATION_POLICY_ALWAYS_FULL, true);
 
   return policies;
-};
+}
 
-const writePlaceholderCreateInfo = (params: {
+function writePlaceholderCreateInfo(params: {
   view: DataView;
   offset: number;
   relativeName: Buffer;
@@ -102,7 +102,7 @@ const writePlaceholderCreateInfo = (params: {
   fileAttributes: number;
   fileSizeBytes: bigint;
   flags: number;
-}): void => {
+}): void {
   const nowFiletime = (BigInt(Date.now()) / 1000n + FILETIME_UNIX_EPOCH_SECONDS) * 10000000n;
 
   params.view.setBigUint64(params.offset, BigInt(ptr(params.relativeName)), true);
@@ -116,9 +116,9 @@ const writePlaceholderCreateInfo = (params: {
   params.view.setBigUint64(params.offset + 56, BigInt(ptr(params.identity)), true);
   params.view.setUint32(params.offset + 64, params.identity.byteLength, true);
   params.view.setUint32(params.offset + 68, params.flags, true);
-};
+}
 
-const createCloudOnlyPlaceholders = (cloudFilterApi: CloudFilterApi, syncRoot: string): boolean => {
+function createCloudOnlyPlaceholders(cloudFilterApi: CloudFilterApi, syncRoot: string): boolean {
   const fileName = toWideString(CLOUD_ONLY_FILE_NAME);
   const folderName = toWideString(CLOUD_ONLY_FOLDER_NAME);
   const fileIdentity = new TextEncoder().encode('cloud-only-file');
@@ -166,19 +166,19 @@ const createCloudOnlyPlaceholders = (cloudFilterApi: CloudFilterApi, syncRoot: s
   });
 
   return hresult >= 0;
-};
+}
 
-const observeEntry = async (label: string, entry: EntryRef): Promise<void> => {
+async function observeEntry(label: string, entry: EntryRef): Promise<void> {
   const lstatText = await observeSafely(() => loadLstatText(entry.path));
 
   writeStage(label, {
     lstat: lstatText,
     attributes: loadAttributesText(entry.path),
-    placement: loadEntryPlacement(entry),
+    placement: win32Platform.system.entryReads.loadEntryPlacement(entry),
   });
-};
+}
 
-const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
+async function runCloudPlaceholderProbe(syncRoot: string): Promise<void> {
   const cloudFilterApi = openCloudFilterApi();
 
   writeStage('dlopen cldapi.dll', { result: 'ok' });
@@ -222,7 +222,7 @@ const runCloudPlaceholderProbe = async (syncRoot: string): Promise<void> => {
       hresult: formatSystemCallCode({ code: unregisterHresult }),
     });
   }
-};
+}
 
 const syncRoot = process.argv[2];
 

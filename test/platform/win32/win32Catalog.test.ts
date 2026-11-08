@@ -11,18 +11,16 @@ import { joinAbsolutePath } from '../../../src/path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../../src/path/parseAbsolutePath.js';
 import { WIN32_CATALOG } from '../../../src/platform/win32/catalog/win32Catalog.js';
 import { isLocationUnderRoot } from '../../support/catalogLocationFixtures.js';
-import { EXAMPLE_WIN32_ENVIRONMENT } from '../../support/environmentFixtures.js';
-
-const ENVIRONMENT = EXAMPLE_WIN32_ENVIRONMENT;
+import { exampleWin32Environment } from '../../support/environmentFixtures.js';
 
 /** Programs whose image names other apps share, so none may hold an entry back. */
-const SHARED_IMAGE_NAMES = ['msedgewebview2.exe', 'update.exe', 'squirrel.exe'];
+const sharedImageNames = ['msedgewebview2.exe', 'update.exe', 'squirrel.exe'];
 
 /** The images of the Chromium browsers, which keep their caches inside a profile. */
-const CHROMIUM_BROWSER_IMAGE_NAMES = ['brave.exe', 'chrome.exe', 'msedge.exe'];
+const chromiumBrowserImageNames = ['brave.exe', 'chrome.exe', 'msedge.exe'];
 
 /** A backslash or a colon, so also a drive letter, which no name of a catalog path may hold. */
-const FORBIDDEN_PATH_CHARACTER_PATTERN = /[\\:]/;
+const forbiddenPathCharacterPattern = /[\\:]/;
 
 /** A location the catalog names, with what names it for a failure message. */
 type NamedLocation = { name: string; location: EnvironmentLocation };
@@ -43,7 +41,7 @@ describe('WIN32_CATALOG', () => {
       .filter(
         (entry) =>
           entry.owner?.app.kind === 'executable' &&
-          entry.owner.app.imageNames.some((imageName) => SHARED_IMAGE_NAMES.includes(imageName)),
+          entry.owner.app.imageNames.some((imageName) => sharedImageNames.includes(imageName)),
       )
       .map((entry) => entry.id);
 
@@ -55,7 +53,10 @@ describe('WIN32_CATALOG', () => {
     const unresolvedNames = listNamedLocations()
       .filter(
         (namedLocation) =>
-          !isLocationUnderRoot({ location: namedLocation.location, environment: ENVIRONMENT }),
+          !isLocationUnderRoot({
+            location: namedLocation.location,
+            environment: exampleWin32Environment,
+          }),
       )
       .map((namedLocation) => namedLocation.name);
 
@@ -65,10 +66,10 @@ describe('WIN32_CATALOG', () => {
 
   test('names every location and excluded folder by plain names, with no backslash or drive letter', () => {
     const forbiddenPathNames = listNamedLocations()
-      .filter((namedLocation) => FORBIDDEN_PATH_CHARACTER_PATTERN.test(namedLocation.location.path))
+      .filter((namedLocation) => forbiddenPathCharacterPattern.test(namedLocation.location.path))
       .map((namedLocation) => namedLocation.name);
     const forbiddenExcludedNames = WIN32_CATALOG.projectSearchExcludedNames.filter(
-      (name) => FORBIDDEN_PATH_CHARACTER_PATTERN.test(name) || name.includes('/'),
+      (name) => forbiddenPathCharacterPattern.test(name) || name.includes('/'),
     );
 
     expect(forbiddenPathNames).toEqual([]);
@@ -76,12 +77,15 @@ describe('WIN32_CATALOG', () => {
   });
 
   test('offers no guarded folder whole and nothing inside a sensitive folder', () => {
-    const guardedPaths = [...ENVIRONMENT.protectedRealPaths, ...ENVIRONMENT.sensitiveRealPaths];
+    const guardedPaths = [
+      ...exampleWin32Environment.protectedRealPaths,
+      ...exampleWin32Environment.sensitiveRealPaths,
+    ];
     const insideSensitiveIds = WIN32_CATALOG.entries
       .filter((entry) =>
-        ENVIRONMENT.sensitiveRealPaths.some((sensitivePath) =>
+        exampleWin32Environment.sensitiveRealPaths.some((sensitivePath) =>
           isSameOrInsidePath({
-            rules: ENVIRONMENT.pathRules,
+            rules: exampleWin32Environment.pathRules,
             path: resolveEntryPath({ entry: entry }),
             parentPath: sensitivePath,
           }),
@@ -96,7 +100,7 @@ describe('WIN32_CATALOG', () => {
       )
       .map((entry) => entry.id);
 
-    expect(ENVIRONMENT.sensitiveRealPaths.length).toBeGreaterThan(2);
+    expect(exampleWin32Environment.sensitiveRealPaths.length).toBeGreaterThan(2);
     expect(insideSensitiveIds).toEqual([]);
     expect(offeringGuardedIds).toEqual([]);
   });
@@ -105,18 +109,21 @@ describe('WIN32_CATALOG', () => {
     const userDataPaths = WIN32_CATALOG.protectedLocations
       .filter((location) => location.path.endsWith('/User Data'))
       .flatMap((location) => {
-        const path = findEnvironmentLocationPath({ folders: ENVIRONMENT, location: location });
+        const path = findEnvironmentLocationPath({
+          folders: exampleWin32Environment,
+          location: location,
+        });
 
         return path === null ? [] : [path];
       });
     const unguardedProfilePaths = userDataPaths
       .map((userDataPath) => buildDefaultProfilePath({ userDataPath: userDataPath }))
-      .filter((profilePath) => !ENVIRONMENT.protectedRealPaths.includes(profilePath));
+      .filter((profilePath) => !exampleWin32Environment.protectedRealPaths.includes(profilePath));
     const misplacedIds = WIN32_CATALOG.entries
       .filter((entry) => isMisplacedBrowserCache({ entry: entry, userDataPaths: userDataPaths }))
       .map((entry) => entry.id);
 
-    expect(userDataPaths.length).toBe(CHROMIUM_BROWSER_IMAGE_NAMES.length);
+    expect(userDataPaths.length).toBe(chromiumBrowserImageNames.length);
     expect(unguardedProfilePaths).toEqual([]);
     expect(misplacedIds).toEqual([]);
   });
@@ -178,13 +185,13 @@ function isOfferingGuardedPath(params: { entry: CatalogEntry; guardedPath: strin
     case 'path':
     case 'profileFolders':
       return isSameOrInsidePath({
-        rules: ENVIRONMENT.pathRules,
+        rules: exampleWin32Environment.pathRules,
         path: params.guardedPath,
         parentPath: entryPath,
       });
     case 'children':
       return isStrictlyInsidePath({
-        rules: ENVIRONMENT.pathRules,
+        rules: exampleWin32Environment.pathRules,
         path: params.guardedPath,
         parentPath: entryPath,
       });
@@ -203,11 +210,15 @@ function isMisplacedBrowserCache(params: {
   const isBrowserOwned =
     params.entry.owner?.app.kind === 'executable' &&
     params.entry.owner.app.imageNames.some((imageName) =>
-      CHROMIUM_BROWSER_IMAGE_NAMES.includes(imageName),
+      chromiumBrowserImageNames.includes(imageName),
     );
   const userDataPath =
     params.userDataPaths.find((path) =>
-      isSameOrInsidePath({ rules: ENVIRONMENT.pathRules, path: entryPath, parentPath: path }),
+      isSameOrInsidePath({
+        rules: exampleWin32Environment.pathRules,
+        path: entryPath,
+        parentPath: path,
+      }),
     ) ?? null;
 
   if (userDataPath === null) {
@@ -217,7 +228,7 @@ function isMisplacedBrowserCache(params: {
   return (
     params.entry.selection.kind !== 'path' ||
     !isStrictlyInsidePath({
-      rules: ENVIRONMENT.pathRules,
+      rules: exampleWin32Environment.pathRules,
       path: entryPath,
       parentPath: buildDefaultProfilePath({ userDataPath: userDataPath }),
     })
@@ -226,12 +237,12 @@ function isMisplacedBrowserCache(params: {
 
 function buildDefaultProfilePath(params: { userDataPath: AbsolutePath }): AbsolutePath {
   return joinAbsolutePath({
-    rules: ENVIRONMENT.pathRules,
+    rules: exampleWin32Environment.pathRules,
     parentPath: params.userDataPath,
     names: ['Default'],
   });
 }
 
 function resolveEntryPath(params: { entry: CatalogEntry }): AbsolutePath {
-  return resolveEnvironmentLocation({ folders: ENVIRONMENT, location: params.entry });
+  return resolveEnvironmentLocation({ folders: exampleWin32Environment, location: params.entry });
 }

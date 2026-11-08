@@ -10,7 +10,7 @@ import { buildTestIdentity, buildTestProbedCandidate } from '../support/candidat
 import { createFixtureFile, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import type { HomeFolder } from '../support/parsedValueFixtures.js';
 import { joinBelowHome } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import {
   buildRunningCommandLines,
   buildRunningImagePaths,
@@ -59,7 +59,7 @@ export function buildVscodeExtensionsPath(params: { home: HomeFolder }): Absolut
 export function buildVscodeProfilesPath(params: { environment: Environment }): AbsolutePath {
   return resolveEnvironmentLocation({
     folders: params.environment,
-    location: HOST_PLATFORM.explore.vscodeProfilesRoot,
+    location: hostPlatform.explore.vscodeProfilesRoot,
   });
 }
 

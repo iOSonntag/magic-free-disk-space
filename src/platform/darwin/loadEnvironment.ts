@@ -8,6 +8,7 @@ import type { EnvironmentFailure } from '../../environment/environmentPlatform.j
 import {
   loadEnvironmentRealPath,
   loadExistingRealPaths,
+  parseEnvironmentPath,
 } from '../../environment/loadEnvironmentRealPath.js';
 import { joinAbsolutePath } from '../../path/joinAbsolutePath.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
@@ -65,7 +66,11 @@ const USER_CACHE_DIR_NAME = 'DARWIN_USER_CACHE_DIR';
 
 export async function loadEnvironment(): Promise<Result<Environment, EnvironmentFailure>> {
   const homeText = homedir();
-  const homeDir = parseEnvironmentPath({ text: homeText, failurePath: homeText });
+  const homeDir = parseEnvironmentPath({
+    pathRules: POSIX_PATH_RULES,
+    text: homeText,
+    failurePath: homeText,
+  });
 
   if (homeDir.kind === 'failed') {
     return homeDir;
@@ -221,23 +226,6 @@ function parseDarwinAbsolutePath(params: { text: string }): AbsolutePath {
   return path.value;
 }
 
-/** Parses `text` as a macOS absolute path; unresolvable at `failurePath` when it is not one. */
-function parseEnvironmentPath(params: {
-  text: string;
-  failurePath: string;
-}): Result<AbsolutePath, EnvironmentFailure> {
-  const path = parseAbsolutePath({ rules: POSIX_PATH_RULES, text: params.text });
-
-  if (path.kind === 'failed') {
-    return {
-      kind: 'failed',
-      failure: { reason: 'unresolvable', path: params.failurePath, code: 'notAbsolute' },
-    };
-  }
-
-  return { kind: 'succeeded', value: path.value };
-}
-
 /** The effective user of the process; throws for an id that is no non-negative integer. */
 function getEffectiveUser(): UserIdentity {
   // Without an id, as on no Mac, the check refuses as for root.
@@ -275,7 +263,11 @@ async function loadUserConfDir(params: {
   // Printed with a trailing slash, which would end up in every path shown below it.
   const dirText = output.value.trim().replace(/\/+$/, '');
 
-  return parseEnvironmentPath({ text: dirText, failurePath: params.name });
+  return parseEnvironmentPath({
+    pathRules: POSIX_PATH_RULES,
+    text: dirText,
+    failurePath: params.name,
+  });
 }
 
 async function loadOwnerId(params: { path: string }): Promise<Result<number, EnvironmentFailure>> {

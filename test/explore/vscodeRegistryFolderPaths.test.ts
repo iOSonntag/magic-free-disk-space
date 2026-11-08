@@ -3,14 +3,14 @@ import { parseRegistryFolderPaths } from '../../src/explore/vscodeExtensions/loa
 import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { buildTestAbsolutePath, buildTestWindowsPath } from '../support/parsedValueFixtures.js';
 
-const WINDOWS_EXTENSIONS_PATH = buildTestWindowsPath({
+const windowsExtensionsPath = buildTestWindowsPath({
   text: 'C:\\Users\\test\\.vscode\\extensions',
 });
 
-const MAC_EXTENSIONS_PATH = buildTestAbsolutePath({ text: '/Users/test/.vscode/extensions' });
+const posixExtensionsPath = buildTestAbsolutePath({ text: '/Users/test/.vscode/extensions' });
 
 /** An `extensions.json` as VS Code writes it on Windows: its URIs name the drive in lower case. */
-const WINDOWS_REGISTRY_TEXT = JSON.stringify([
+const windowsRegistryText = JSON.stringify([
   {
     identifier: { id: 'pub.listed' },
     version: '1.0.0',
@@ -40,8 +40,8 @@ describe('parseRegistryFolderPaths', () => {
     expect(
       parseRegistryFolderPaths({
         pathRules: WIN32_PATH_RULES,
-        text: WINDOWS_REGISTRY_TEXT,
-        extensionsPath: WINDOWS_EXTENSIONS_PATH,
+        text: windowsRegistryText,
+        extensionsPath: windowsExtensionsPath,
       }),
     ).toEqual([
       buildTestWindowsPath({ text: 'C:\\Users\\test\\.vscode\\extensions\\pub.listed-1.0.0' }),
@@ -58,7 +58,7 @@ describe('parseRegistryFolderPaths', () => {
       parseRegistryFolderPaths({
         pathRules: WIN32_PATH_RULES,
         text: text,
-        extensionsPath: WINDOWS_EXTENSIONS_PATH,
+        extensionsPath: windowsExtensionsPath,
       }),
     ).toBeNull();
   });
@@ -73,7 +73,7 @@ describe('parseRegistryFolderPaths', () => {
       parseRegistryFolderPaths({
         pathRules: POSIX_PATH_RULES,
         text: text,
-        extensionsPath: MAC_EXTENSIONS_PATH,
+        extensionsPath: posixExtensionsPath,
       }),
     ).toEqual([
       buildTestAbsolutePath({ text: '/Users/test/.vscode/extensions/pub.ext-1.0.0' }),

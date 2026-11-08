@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { EXAMPLE_DARWIN_ENVIRONMENT } from '../../support/environmentFixtures.js';
+import { exampleDarwinEnvironment } from '../../support/environmentFixtures.js';
 
 describe('buildDarwinEnvironment', () => {
   test('builds every path, guard list and mode of macOS from the values read for the run', () => {
-    expect<unknown>(EXAMPLE_DARWIN_ENVIRONMENT).toEqual({
+    expect<unknown>(exampleDarwinEnvironment).toEqual({
       nowMs: 0,
       user: { kind: 'posix', uid: 501 },
       pathRules: { rootForm: 'posix', separator: '/' },

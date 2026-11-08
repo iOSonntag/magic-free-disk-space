@@ -69,7 +69,7 @@ import {
   buildTestHostPath,
   buildTestWindowsImageName,
 } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { describeWithFakeTools, testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
@@ -84,9 +84,9 @@ const SIMULATOR_APP_COMMAND =
 
 /** The host's slices a deletion reads, with the probe facts of the tests. */
 const DELETION_PLATFORM = {
-  delete: HOST_PLATFORM.delete,
+  delete: hostPlatform.delete,
   probePlatform: buildTestProbePlatform(),
-  entryReads: HOST_PLATFORM.system.entryReads,
+  entryReads: hostPlatform.system.entryReads,
 };
 
 let fixtureRoot: FixtureRoot;
@@ -159,7 +159,7 @@ function buildFailingRemoval(params: {
   failure: string;
 }): DeletePlatform {
   return {
-    ...HOST_PLATFORM.delete,
+    ...hostPlatform.delete,
     removeTree: async () => {
       if (params.removedPath !== null) {
         await rm(params.removedPath, { recursive: true });

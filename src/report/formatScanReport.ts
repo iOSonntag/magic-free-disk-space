@@ -1,3 +1,4 @@
+import type { PathRules } from '../path/pathRules.js';
 import type { ScanReport } from '../scan/runScan.js';
 import type { VolumeSpace } from '../system/volumeSpace.js';
 import type {
@@ -33,6 +34,7 @@ const detailLinePrefixes: Record<ItemDetailLineKind, string> = {
 export function formatScanReport(params: {
   report: ScanReport;
   texts: ReportTexts;
+  pathRules: PathRules;
   homeDir: string;
   disk: VolumeSpace | null;
 }): string[] {
@@ -40,6 +42,7 @@ export function formatScanReport(params: {
     report: params.report,
     fullDiskAccessHolder: 'terminal',
     texts: params.texts,
+    pathRules: params.pathRules,
     homeDir: params.homeDir,
     disk: params.disk,
   });

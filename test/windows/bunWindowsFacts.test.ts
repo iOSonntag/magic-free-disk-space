@@ -32,6 +32,11 @@ import type { Result } from '../../src/result.js';
 import { formatSystemCallFailure } from '../../src/system/systemCallFailure.js';
 import { parseWindowsSid } from '../../src/system/userIdentity.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
+import {
+  FILE_ATTRIBUTE_DIRECTORY,
+  FILE_ATTRIBUTE_READONLY,
+  FILE_ATTRIBUTE_REPARSE_POINT,
+} from '../support/windowsFileAttributes.js';
 import { buildLongPathSegments } from './longPath.js';
 import { parseProbeLines } from './observations.js';
 
@@ -56,9 +61,6 @@ const isCloudProbeOptedIn = process.env.MAGIC_FREE_DISK_SPACE_CLOUD_PROBE === '1
 /** The longest path a W function takes without its `\\?\` form while long paths are off. */
 const MAX_PATH = 260;
 
-const FILE_ATTRIBUTE_READONLY = 0x1;
-const FILE_ATTRIBUTE_DIRECTORY = 0x10;
-const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
 const ERROR_FILE_NOT_FOUND = 2;
 const DRIVE_FIXED = 3;
 
@@ -66,7 +68,7 @@ const DRIVE_FIXED = 3;
 const NO_KNOWN_FOLDER_ID = '00000000-0000-0000-0000-000000000000';
 
 /** An attribute text of loadAttributesText: the call succeeded. */
-const ATTRIBUTES_HEX_PATTERN = /^0x[0-9A-F]{8}$/;
+const attributesHexPattern = /^0x[0-9A-F]{8}$/;
 
 // The flags the release compiles the bridge with, so the probe runs as the bridge does.
 const COMPILED_PROBE_BUILD_FLAGS = [
@@ -85,7 +87,7 @@ const COMPILED_PROBE_BUILD_FLAGS = [
 ] as const;
 
 /** The known folders the environment takes from Windows, by the variable that names each. */
-const KNOWN_FOLDER_VARIABLES = [
+const knownFolderVariables = [
   { folder: 'profile', variableName: 'USERPROFILE' },
   { folder: 'localAppData', variableName: 'LOCALAPPDATA' },
   { folder: 'roamingAppData', variableName: 'APPDATA' },
@@ -289,7 +291,7 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
   });
 
   test('the profile and the AppData folders are the folders their variables name', () => {
-    for (const knownFolder of KNOWN_FOLDER_VARIABLES) {
+    for (const knownFolder of knownFolderVariables) {
       const pathText = unwrapCall(
         loadKnownFolderPath({
           folderId: buildGuidBytes({ text: KNOWN_FOLDER_IDS[knownFolder.folder] }),
@@ -360,7 +362,7 @@ describe.skipIf(process.platform !== 'win32')('Bun and win32Api.ts on Windows', 
           mkdir: 'ok',
           writeFile: 'ok',
           lstat: 'ok isFile=true',
-          attributes: expect.stringMatching(ATTRIBUTES_HEX_PATTERN),
+          attributes: expect.stringMatching(attributesHexPattern),
           rm: 'ok',
         },
       ]);

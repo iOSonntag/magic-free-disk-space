@@ -19,7 +19,7 @@ import {
   createGitIndex,
   writeActiveRoot,
 } from '../support/flutterSdkFixtures.js';
-import { HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
+import { hostPathRules } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const PACKAGE_CONFIG_PATH = '.dart_tool/package_config.json';
@@ -63,7 +63,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -107,7 +107,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -132,7 +132,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -150,7 +150,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -166,7 +166,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -187,7 +187,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -205,7 +205,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -224,7 +224,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -248,7 +248,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -276,7 +276,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -298,7 +298,7 @@ describe('loadFlutterSdkDartPaths', () => {
     await symlink(targetPath, packageConfigPath);
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -325,7 +325,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -341,7 +341,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -358,7 +358,7 @@ describe('loadFlutterSdkDartPaths', () => {
     });
 
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 
@@ -367,7 +367,7 @@ describe('loadFlutterSdkDartPaths', () => {
 
   test('returns nothing without a pub cache', async () => {
     const paths = await loadFlutterSdkDartPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
     });
 

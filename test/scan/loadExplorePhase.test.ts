@@ -40,7 +40,7 @@ import {
   buildTestMiseToolName,
   buildTestMiseToolVersion,
 } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbeRun } from '../support/probeRunFixtures.js';
 
@@ -157,9 +157,9 @@ function loadVscodePhase(outcome: ExploreProbeOutcome): Promise<ExplorePhase> {
     catalogEntries: [vscodeEntry],
     measureTimeoutMs: MEASURE_TIMEOUT_MS,
     runItemMeasurement: runItemMeasurement,
-    entryReads: HOST_PLATFORM.system.entryReads,
+    entryReads: hostPlatform.system.entryReads,
     recordEvictedEntry: () => undefined,
-    privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+    privacyDenialCode: hostPlatform.system.privacyDenialCode,
   });
 }
 
@@ -214,9 +214,9 @@ describe('loadExplorePhase', () => {
         catalogEntries: [deleteEntry, simulatorEntry, dartEntry, miseEntry],
         measureTimeoutMs: MEASURE_TIMEOUT_MS,
         runItemMeasurement: runItemMeasurement,
-        entryReads: HOST_PLATFORM.system.entryReads,
+        entryReads: hostPlatform.system.entryReads,
         recordEvictedEntry: () => undefined,
-        privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+        privacyDenialCode: hostPlatform.system.privacyDenialCode,
       });
 
       expect(phase.issues).toEqual([]);
@@ -282,9 +282,9 @@ describe('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      entryReads: HOST_PLATFORM.system.entryReads,
+      entryReads: hostPlatform.system.entryReads,
       recordEvictedEntry: () => undefined,
-      privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+      privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 
     expect(phase.decisions).toMatchObject([
@@ -320,9 +320,9 @@ describe('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry, dartEntry, miseEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      entryReads: HOST_PLATFORM.system.entryReads,
+      entryReads: hostPlatform.system.entryReads,
       recordEvictedEntry: () => undefined,
-      privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+      privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 
     expect(phase.decisions).toEqual([]);
@@ -514,9 +514,9 @@ describe('loadExplorePhase', () => {
       catalogEntries: [simulatorEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      entryReads: HOST_PLATFORM.system.entryReads,
+      entryReads: hostPlatform.system.entryReads,
       recordEvictedEntry: () => undefined,
-      privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+      privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 
     expect(phase.issues).toEqual([
@@ -545,9 +545,9 @@ describe('loadExplorePhase', () => {
       catalogEntries: [engineEntry],
       measureTimeoutMs: MEASURE_TIMEOUT_MS,
       runItemMeasurement: runItemMeasurement,
-      entryReads: HOST_PLATFORM.system.entryReads,
+      entryReads: hostPlatform.system.entryReads,
       recordEvictedEntry: () => undefined,
-      privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+      privacyDenialCode: hostPlatform.system.privacyDenialCode,
     });
 
     expect(phase).toEqual({

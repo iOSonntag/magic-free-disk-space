@@ -17,11 +17,11 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath, HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { buildTestHostPath, hostPathRules } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
-const PRIVACY_DENIAL_CODE = HOST_PLATFORM.system.privacyDenialCode;
+const PRIVACY_DENIAL_CODE = hostPlatform.system.privacyDenialCode;
 
 describe('loadExploreRead', () => {
   let fixtureRoot: FixtureRoot;
@@ -290,17 +290,17 @@ describe('loadExploreRead', () => {
         await writeFile(filePath, '');
 
         const linked = await loadExploreRealPath({
-          pathRules: HOST_PATH_RULES,
+          pathRules: hostPathRules,
           path: linkPath,
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
         const missing = await loadExploreRealPath({
-          pathRules: HOST_PATH_RULES,
+          pathRules: hostPathRules,
           path: join(fixtureRoot.homeDir, 'gone'),
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
         const underFile = await loadExploreRealPath({
-          pathRules: HOST_PATH_RULES,
+          pathRules: hostPathRules,
           path: join(filePath, 'child'),
           privacyDenialCode: PRIVACY_DENIAL_CODE,
         });
@@ -324,7 +324,7 @@ describe('loadExploreRead', () => {
 
         try {
           const realPath = await loadExploreRealPath({
-            pathRules: HOST_PATH_RULES,
+            pathRules: hostPathRules,
             path: childPath,
             privacyDenialCode: PRIVACY_DENIAL_CODE,
           });

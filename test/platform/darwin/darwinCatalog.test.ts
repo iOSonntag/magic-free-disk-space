@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, test } from 'bun:test';
 import type { CatalogOwner } from '../../../src/catalog/catalogOwner.js';
 import type { Environment } from '../../../src/environment/buildEnvironment.js';
 import { darwinPlatform } from '../../../src/platform/darwin/darwinPlatform.js';
 import { isAppleBundleId } from '../../../src/scan/resolveOwnerState.js';
 import { isLocationUnderRoot } from '../../support/catalogLocationFixtures.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import {
   createFixtureRoot,
@@ -15,7 +16,7 @@ import {
 const DARWIN_OWNER_KINDS: CatalogOwner['kind'][] = ['bundleId', 'bundleIdFamily'];
 
 // The catalog resolves against the environment of the host, which only macOS gives it.
-describe.skipIf(process.platform !== 'darwin')('the catalog of darwinPlatform', () => {
+describeOnDarwin('the catalog of darwinPlatform', () => {
   let fixtureRoot: FixtureRoot;
   let environment: Environment;
 

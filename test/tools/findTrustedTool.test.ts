@@ -10,7 +10,7 @@ import { createActiveProject, writeDartVersionFile } from '../support/flutterSdk
 import {
   buildTestUserIdentity,
   buildTestWindowsUser,
-  HOST_PATH_RULES,
+  hostPathRules,
 } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
@@ -50,7 +50,7 @@ describe('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(path)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -72,7 +72,7 @@ describe('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(link)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -89,7 +89,7 @@ describe('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(path)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -145,7 +145,7 @@ describe('findTrustedTool', () => {
         buildAbsoluteLocation(join(fixtureRoot.rootDir, 'missing', 'mise')),
         buildAbsoluteLocation(link),
       ],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -166,7 +166,7 @@ describe('findTrustedTool', () => {
         buildAbsoluteLocation(trusted),
         buildAbsoluteLocation(later),
       ],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -188,7 +188,7 @@ describe('findTrustedTool', () => {
         buildAbsoluteLocation(notExecutable),
         buildAbsoluteLocation(writable),
       ],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -213,7 +213,7 @@ describe('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [{ kind: 'path', root: 'home', path: '.local/bin/mise' }],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -234,7 +234,7 @@ describe('findTrustedTool', () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -293,7 +293,7 @@ describe('findTrustedTool with the version of dart', () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -314,7 +314,7 @@ describe('findTrustedTool with the version of dart', () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -343,7 +343,7 @@ describe('findTrustedTool with the version of dart', () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [{ kind: 'flutterSdkFromActiveRoots' }, buildAbsoluteLocation(link)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -402,7 +402,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -423,7 +423,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -440,7 +440,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -454,7 +454,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
     const found = await findTrustedTool({
       name: 'dart',
       locations: [buildAbsoluteLocation(layout.linkPath)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: user,
     });
@@ -483,7 +483,7 @@ describe("findTrustedTool with Flutter's wrapper of dart", () => {
       const found = await findTrustedTool({
         name: 'dart',
         locations: [buildAbsoluteLocation(dart)],
-        pathRules: HOST_PATH_RULES,
+        pathRules: hostPathRules,
         homeDir: fixtureRoot.homeDir,
         user: user,
       });
@@ -513,7 +513,7 @@ describe('findTrustedTool for a Windows user', () => {
     const found = await findTrustedTool({
       name: 'mise',
       locations: [buildAbsoluteLocation(path), buildAbsoluteLocation(later)],
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       homeDir: fixtureRoot.homeDir,
       user: buildTestWindowsUser({ sidText: 'S-1-5-21-1-2-3-1001' }),
     });

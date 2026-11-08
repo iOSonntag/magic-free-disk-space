@@ -11,8 +11,8 @@ import { mapNonEmpty } from '../../src/system/nonEmptyList.js';
 import { buildTestEntryReads } from '../support/entryReadsFixtures.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureFile, createFixtureRoot, deleteFixtureRoot } from '../support/fixtureRoot.js';
-import { HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPathRules } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const FILE_SIZE_BYTES = 8192;
@@ -52,9 +52,9 @@ async function loadPhase(params: {
     carve: params.carve ?? null,
     measureTimeoutMs: 10_000,
     runItemMeasurement: createConcurrencyLimit({ maxConcurrent: 1 }),
-    entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    entryReads: params.entryReads ?? hostPlatform.system.entryReads,
     recordEvictedEntry: () => undefined,
-    privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+    privacyDenialCode: hostPlatform.system.privacyDenialCode,
     decide: async (measurement): Promise<CandidateDecision> => {
       measurements.push(measurement);
 
@@ -133,7 +133,7 @@ describe('loadMeasuredTargetsPhase', () => {
 
     const { measurements } = await loadPhase({
       paths: [userDataPath],
-      carve: { pathRules: HOST_PATH_RULES, carvedPaths: [carvedPath] },
+      carve: { pathRules: hostPathRules, carvedPaths: [carvedPath] },
     });
 
     expect(measurements[0]?.targets.map((target) => [target.path, target.identity.kind])).toEqual([

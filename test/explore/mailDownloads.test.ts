@@ -8,7 +8,7 @@ import { recheckMailDownloadsUnit } from '../../src/explore/mailDownloads/rechec
 import { DAY_MS } from '../../src/scan/limits.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import type { FixtureHome } from '../support/probeRunFixtures.js';
 import {
   buildTestProbeRun,
@@ -26,10 +26,10 @@ const FILE_SIZE_BYTES = 4096;
 const MAIL_COMMAND = '/System/Applications/Mail.app/Contents/MacOS/Mail';
 
 /** Runs a suite only on a host whose catalog names the folder Mail saves its attachments in. */
-const describeWithMailDownloads = describe.skipIf(HOST_PLATFORM.explore.mailDownloadsRoot === null);
+const describeWithMailDownloads = describe.skipIf(hostPlatform.explore.mailDownloadsRoot === null);
 
 function getMailDownloadsPath(home: FixtureHome): string {
-  const root = HOST_PLATFORM.explore.mailDownloadsRoot;
+  const root = hostPlatform.explore.mailDownloadsRoot;
 
   if (root === null) {
     throw new Error('The platform has no Mail Downloads folder.');

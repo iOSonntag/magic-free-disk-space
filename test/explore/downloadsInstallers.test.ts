@@ -2,15 +2,16 @@ import { describe, expect, test } from 'bun:test';
 import { chmod, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CatalogLocation } from '../../src/catalog/catalog.js';
+import type { Environment } from '../../src/environment/buildEnvironment.js';
 import { resolveEnvironmentLocation } from '../../src/environment/environmentLocation.js';
 import type { PathUnitRecheck } from '../../src/explore/decideComparisonActivity.js';
 import { loadDownloadsInstallerFindings } from '../../src/explore/downloadsInstallers/loadDownloadsInstallerFindings.js';
 import { recheckDownloadsUnit } from '../../src/explore/downloadsInstallers/recheckDownloadsUnit.js';
-import type { ExploreProbePlatform } from '../../src/explore/exploreProbe.js';
+import type { ExploreProbeRun } from '../../src/explore/exploreProbe.js';
 import type { ExploreFinding, ExploreUnit } from '../../src/explore/exploreUnit.js';
 import { DAY_MS } from '../../src/scan/limits.js';
 import { testOnDarwin } from '../support/darwinOnly.js';
-import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
+import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import { createFixtureFile, updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
@@ -39,16 +40,13 @@ const testWithBrowserBundles = testOnDarwin;
 /** The Downloads folder the probe platform of these tests names, on every host. */
 const fixtureDownloadsRoot: CatalogLocation = { root: 'home', path: 'Downloads' };
 
-/** The probe platform of the host with its Downloads folder at `downloadsRoot`. */
-function buildDownloadsProbePlatform(params: {
-  downloadsRoot: CatalogLocation | null;
-}): ExploreProbePlatform {
-  const probePlatform = buildTestProbePlatform();
-
-  return {
-    ...probePlatform,
-    explore: { ...probePlatform.explore, downloadsRoot: params.downloadsRoot },
-  };
+/** A probe run of the fixture home's Downloads folder, with the stale cutoff of these tests. */
+function buildDownloadsRun(environment: Environment): ExploreProbeRun {
+  return buildTestProbeRun({
+    environment: environment,
+    platform: buildTestProbePlatform({ explore: { downloadsRoot: fixtureDownloadsRoot } }),
+    staleCutoffMs: STALE_CUTOFF_MS,
+  });
 }
 
 function getDownloadsPath(home: FixtureHome): string {
@@ -113,13 +111,7 @@ describe('the Downloads probe', () => {
           await symlink(join(downloads, 'Old.dmg'), join(downloads, 'Link.dmg'));
 
           const probed = getProbeFindings(
-            await loadDownloadsInstallerFindings(
-              buildTestProbeRun({
-                environment: home.environment,
-                platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-                staleCutoffMs: STALE_CUTOFF_MS,
-              }),
-            ),
+            await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment)),
           );
           const installers = getUnitOfKind({ findings: probed, kind: 'downloadsInstallers' });
 
@@ -189,14 +181,10 @@ describe('the Downloads probe', () => {
         });
 
         const probed = getProbeFindings(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-              staleCutoffMs: STALE_CUTOFF_MS,
-              unusedCutoffMs: NOW_MS - 180 * DAY_MS,
-            }),
-          ),
+          await loadDownloadsInstallerFindings({
+            ...buildDownloadsRun(home.environment),
+            unusedCutoffMs: NOW_MS - 180 * DAY_MS,
+          }),
         );
 
         expect(
@@ -217,15 +205,10 @@ describe('the Downloads probe', () => {
         await createDownloadsFile({ path: join(safariDownload, 'A.zip'), modifiedMs: NOW_MS });
         await updateModifiedMs({ path: safariDownload, modifiedMs: OLD_MS });
 
-        expect(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-              staleCutoffMs: STALE_CUTOFF_MS,
-            }),
-          ),
-        ).toEqual({ kind: 'succeeded', value: { findings: [], isComplete: true } });
+        expect(await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment))).toEqual({
+          kind: 'succeeded',
+          value: { findings: [], isComplete: true },
+        });
       },
     });
   });
@@ -243,11 +226,7 @@ describe('the Downloads probe', () => {
 
         const probed = getProbeFindings(
           await loadDownloadsInstallerFindings({
-            ...buildTestProbeRun({
-              environment: home.environment,
-              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-              staleCutoffMs: STALE_CUTOFF_MS,
-            }),
+            ...buildDownloadsRun(home.environment),
             deadlineMs: Date.now() - 1,
           }),
         );
@@ -271,13 +250,7 @@ describe('the Downloads probe', () => {
         await chmod(downloads, 0o400);
 
         expect(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-              staleCutoffMs: STALE_CUTOFF_MS,
-            }),
-          ),
+          await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment)),
         ).toMatchObject({
           kind: 'failed',
           failure: { reason: 'fileUnreadable', path: join(downloads, 'Old.dmg') },
@@ -298,14 +271,10 @@ describe('the Downloads probe', () => {
           await createDownloadsFile({ path: join(downloads, 'Big.iso.crdownload') });
 
           const findings = getProbeFindings(
-            await loadDownloadsInstallerFindings(
-              buildTestProbeRun({
-                environment: home.environment,
-                platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-                runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
-                staleCutoffMs: STALE_CUTOFF_MS,
-              }),
-            ),
+            await loadDownloadsInstallerFindings({
+              ...buildDownloadsRun(home.environment),
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
+            }),
           ).findings;
 
           expect(findFinding({ findings: findings, kind: 'downloadsIncomplete' })?.activity).toBe(
@@ -330,14 +299,10 @@ describe('the Downloads probe', () => {
           await createDownloadsFile({ path: join(downloads, 'Big.iso.part') });
 
           const findings = getProbeFindings(
-            await loadDownloadsInstallerFindings(
-              buildTestProbeRun({
-                environment: home.environment,
-                platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-                runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
-                staleCutoffMs: STALE_CUTOFF_MS,
-              }),
-            ),
+            await loadDownloadsInstallerFindings({
+              ...buildDownloadsRun(home.environment),
+              runningProcesses: buildRunningCommandLines([buildChromeCommand(home)]),
+            }),
           ).findings;
 
           expect(findings).toMatchObject([
@@ -356,15 +321,10 @@ describe('the Downloads probe', () => {
     await withFixtureHome({
       nowMs: NOW_MS,
       run: async (home) => {
-        expect(
-          await loadDownloadsInstallerFindings(
-            buildTestProbeRun({
-              environment: home.environment,
-              platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-              staleCutoffMs: STALE_CUTOFF_MS,
-            }),
-          ),
-        ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
+        expect(await loadDownloadsInstallerFindings(buildDownloadsRun(home.environment))).toEqual({
+          kind: 'failed',
+          failure: { reason: 'placeMissing' },
+        });
       },
     });
   });
@@ -375,8 +335,8 @@ describe('the Downloads probe on a platform without a fixed Downloads place', ()
     expect(
       await loadDownloadsInstallerFindings(
         buildTestProbeRun({
-          environment: EXAMPLE_WIN32_ENVIRONMENT,
-          platform: buildDownloadsProbePlatform({ downloadsRoot: null }),
+          environment: exampleWin32Environment,
+          platform: buildTestProbePlatform({ explore: { downloadsRoot: null } }),
         }),
       ),
     ).toEqual({ kind: 'failed', failure: { reason: 'placeMissing' } });
@@ -393,11 +353,7 @@ describe('recheckDownloadsUnit', () => {
         await createDownloadsFile({ path: join(downloads, 'Old.dmg') });
         await createDownloadsFile({ path: join(downloads, 'Other.pkg') });
 
-        const run = buildTestProbeRun({
-          environment: home.environment,
-          platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-          staleCutoffMs: STALE_CUTOFF_MS,
-        });
+        const run = buildDownloadsRun(home.environment);
         const unit = getUnitOfKind({
           findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
           kind: 'downloadsInstallers',
@@ -435,11 +391,7 @@ describe('recheckDownloadsUnit', () => {
 
           await createDownloadsFile({ path: join(downloads, 'A.part') });
 
-          const run = buildTestProbeRun({
-            environment: home.environment,
-            platform: buildDownloadsProbePlatform({ downloadsRoot: fixtureDownloadsRoot }),
-            staleCutoffMs: STALE_CUTOFF_MS,
-          });
+          const run = buildDownloadsRun(home.environment);
           const unit = getUnitOfKind({
             findings: getProbeFindings(await loadDownloadsInstallerFindings(run)),
             kind: 'downloadsIncomplete',

@@ -63,6 +63,7 @@ describe.skipIf(process.platform !== 'win32')(
           }),
           fullDiskAccessHolder: 'terminal',
           texts: platform.report,
+          pathRules: home.environment.pathRules,
           homeDir: home.environment.homeDir,
           disk: null,
         });

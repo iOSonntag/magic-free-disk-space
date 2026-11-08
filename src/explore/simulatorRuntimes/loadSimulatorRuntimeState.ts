@@ -23,14 +23,14 @@ export async function loadSimulatorRuntimeState(
       probe: SIMULATOR_RUNTIME_LIST_PROBE,
       tool: run.tool,
       environment: run.environment,
-      platform: run.platform,
+      processes: run.platform.toolProcesses,
       deadlineMs: run.deadlineMs,
     }),
     loadProbeOutput({
       probe: SIMULATOR_DEVICE_LIST_PROBE,
       tool: run.tool,
       environment: run.environment,
-      platform: run.platform,
+      processes: run.platform.toolProcesses,
       deadlineMs: run.deadlineMs,
     }),
   ]);

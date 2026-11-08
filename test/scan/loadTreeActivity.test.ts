@@ -14,7 +14,7 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -53,7 +53,7 @@ async function loadActivity(params: {
     excludedPaths: params.excludedPaths ?? new Set(),
     maxEntries: params.maxEntries ?? 10_000,
     deadlineMs: params.deadlineMs ?? Date.now() + TEST_WALK_DURATION_MS,
-    entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    entryReads: params.entryReads ?? hostPlatform.system.entryReads,
     recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
   });
 }

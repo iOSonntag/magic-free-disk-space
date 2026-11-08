@@ -2,6 +2,7 @@ import type { AdviceOpener, Risk } from '../catalog/catalog.js';
 import { isRemovableRisk } from '../catalog/catalog.js';
 import type { ExploreEngineAnswerFailure } from '../explore/exploreProbe.js';
 import { formatHomeRelativePath } from '../path/formatHomeRelativePath.js';
+import type { PathRules } from '../path/pathRules.js';
 import type { SectionTotal } from '../scan/buildSectionTotals.js';
 import { buildSectionTotals } from '../scan/buildSectionTotals.js';
 import type { Advice, Candidate, SkipReason } from '../scan/candidate.js';
@@ -337,6 +338,7 @@ export function buildScanView(params: {
   report: ScanReport;
   fullDiskAccessHolder: FullDiskAccessHolder;
   texts: ReportTexts;
+  pathRules: PathRules;
   homeDir: string;
   /** The space of the home folder's volume, read right before the view. */
   disk: VolumeSpace | null;
@@ -351,6 +353,7 @@ export function buildScanView(params: {
         candidate: candidate,
         place: place,
         number: index + 1,
+        pathRules: params.pathRules,
         homeDir: params.homeDir,
       }),
     };
@@ -375,6 +378,7 @@ export function buildScanView(params: {
     explore: buildExploreView({
       placedItems: placedItems,
       advice: params.report.advice,
+      pathRules: params.pathRules,
       homeDir: params.homeDir,
     }),
     safeNumbers: params.report.safeNumbers,
@@ -599,6 +603,7 @@ function buildSectionView(params: {
 function buildExploreView(params: {
   placedItems: PlacedItem[];
   advice: Advice[];
+  pathRules: PathRules;
   homeDir: string;
 }): ExploreView | null {
   const items = params.placedItems.flatMap((item) =>
@@ -613,12 +618,17 @@ function buildExploreView(params: {
     titleText: EXPLORE_TITLE_TEXT,
     introText: EXPLORE_INTRO_TEXT,
     items: items,
-    adviceGroup: buildAdviceGroupView({ advice: params.advice, homeDir: params.homeDir }),
+    adviceGroup: buildAdviceGroupView({
+      advice: params.advice,
+      pathRules: params.pathRules,
+      homeDir: params.homeDir,
+    }),
   };
 }
 
 function buildAdviceGroupView(params: {
   advice: Advice[];
+  pathRules: PathRules;
   homeDir: string;
 }): AdviceGroupView | null {
   if (params.advice.length === 0) {
@@ -628,7 +638,7 @@ function buildAdviceGroupView(params: {
   return {
     titleText: ADVICE_GROUP_TITLE_TEXT,
     items: params.advice.map((item) =>
-      buildAdviceItemView({ advice: item, homeDir: params.homeDir }),
+      buildAdviceItemView({ advice: item, pathRules: params.pathRules, homeDir: params.homeDir }),
     ),
   };
 }
@@ -637,6 +647,7 @@ function buildItemView(params: {
   candidate: Candidate;
   place: CandidatePlace;
   number: number;
+  pathRules: PathRules;
   homeDir: string;
 }): ItemView {
   return {
@@ -653,7 +664,11 @@ function buildItemView(params: {
     removal: buildItemRemovalView({ removal: params.candidate.removal }),
     allocatedBytes: params.candidate.allocatedBytes,
     isComplete: params.candidate.isComplete,
-    displayPath: formatDisplayPath({ path: params.candidate.path, homeDir: params.homeDir }),
+    displayPath: formatDisplayPath({
+      pathRules: params.pathRules,
+      path: params.candidate.path,
+      homeDir: params.homeDir,
+    }),
     revealPath: params.candidate.removal.kind === 'callEngine' ? null : params.candidate.path,
     lastUsedAt: params.candidate.lastUsedAtMs,
     downloadedAt: params.candidate.downloadedAtMs,
@@ -672,9 +687,17 @@ function candidateOriginToView(params: { item: Candidate | Advice }): ItemOrigin
   return originViews[params.item.origin.kind];
 }
 
-function formatDisplayPath(params: { path: string; homeDir: string }): string {
+function formatDisplayPath(params: {
+  pathRules: PathRules;
+  path: string;
+  homeDir: string;
+}): string {
   return formatDisplayText({
-    text: formatHomeRelativePath({ path: params.path, homeDir: params.homeDir }),
+    text: formatHomeRelativePath({
+      rules: params.pathRules,
+      path: params.path,
+      homeDir: params.homeDir,
+    }),
   });
 }
 
@@ -704,7 +727,11 @@ function buildItemDetailLines(params: { candidate: Candidate }): ItemDetailLine[
   return lines;
 }
 
-function buildAdviceItemView(params: { advice: Advice; homeDir: string }): AdviceItemView {
+function buildAdviceItemView(params: {
+  advice: Advice;
+  pathRules: PathRules;
+  homeDir: string;
+}): AdviceItemView {
   return {
     key: buildItemKey({ item: params.advice }),
     title: formatDisplayText({ text: params.advice.title }),
@@ -721,7 +748,11 @@ function buildAdviceItemView(params: { advice: Advice; homeDir: string }): Advic
     removal: 'advice',
     allocatedBytes: params.advice.allocatedBytes,
     isComplete: params.advice.isComplete,
-    displayPath: formatDisplayPath({ path: params.advice.path, homeDir: params.homeDir }),
+    displayPath: formatDisplayPath({
+      pathRules: params.pathRules,
+      path: params.advice.path,
+      homeDir: params.homeDir,
+    }),
     revealPath: params.advice.path,
     opener: params.advice.opener,
     lastUsedAt: params.advice.lastUsedAtMs,

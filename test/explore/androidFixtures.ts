@@ -5,7 +5,7 @@ import { resolveEnvironmentLocation } from '../../src/environment/environmentLoc
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { updateModifiedMs } from '../support/fixtureRoot.js';
 import { buildTestHostPath } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 
 /** A last use before `ANDROID_UNUSED_CUTOFF_MS`. */
 export const ANDROID_OLD_USE_MS = 1_600_000_000_000;
@@ -22,7 +22,7 @@ export const ANDROID_EMULATOR_PROCESS_COMMAND =
 export function buildAndroidSdkRoot(params: { environment: Environment }): AbsolutePath {
   return resolveEnvironmentLocation({
     folders: params.environment,
-    location: HOST_PLATFORM.explore.androidSdkRoot,
+    location: hostPlatform.explore.androidSdkRoot,
   });
 }
 

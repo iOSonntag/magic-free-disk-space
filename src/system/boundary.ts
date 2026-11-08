@@ -8,6 +8,7 @@ export const moduleBoundary = {
     'createConcurrencyLimit.ts',
     'createDirectory.ts',
     'entryReads.ts',
+    'formatThrownError.ts',
     'fullDiskAccess.ts',
     'getErrorCode.ts',
     'isAnyBundleRunning.ts',

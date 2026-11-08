@@ -41,9 +41,7 @@ export function checkVariablePlacement(params: {
 }
 
 function isPlacedAsExpected(params: { pathRules: PathRules; check: VariableCheck }): boolean {
-  const reading = params.check.reading;
-
-  switch (reading.kind) {
+  switch (params.check.reading.kind) {
     case 'unset':
       return true;
     case 'unresolvable':
@@ -51,7 +49,7 @@ function isPlacedAsExpected(params: { pathRules: PathRules; check: VariableCheck
     case 'resolved':
       return isSamePath({
         rules: params.pathRules,
-        path: reading.realPath,
+        path: params.check.reading.realPath,
         otherPath: params.check.expectedRealPath,
       });
   }

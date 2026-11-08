@@ -1,41 +1,89 @@
 import { describe, expect, test } from 'bun:test';
-import { sep } from 'node:path';
 import { formatHomeRelativePath } from '../../src/path/formatHomeRelativePath.js';
+import { POSIX_PATH_RULES, WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 
-/** The path of `names` below the root, with the separator of the host, which the formatter reads. */
-function buildRootedPath(names: string[]): string {
-  return ['', ...names].join(sep);
-}
+const HOME_DIR = '/Users/me';
 
-/** The path `~` and `names` below it, as the formatter shows a path inside the home folder. */
-function buildTildePath(names: string[]): string {
-  return ['~', ...names].join(sep);
-}
-
-const HOME_DIR = buildRootedPath(['Users', 'me']);
+const WINDOWS_HOME_DIR = 'C:\\Users\\Oli';
 
 describe('formatHomeRelativePath', () => {
-  test('shows the home folder and a path inside it from ~', () => {
-    expect(formatHomeRelativePath({ path: HOME_DIR, homeDir: HOME_DIR })).toBe('~');
+  test('shows the home folder and a path inside it from ~ on POSIX', () => {
+    expect(
+      formatHomeRelativePath({ rules: POSIX_PATH_RULES, path: HOME_DIR, homeDir: HOME_DIR }),
+    ).toBe('~');
     expect(
       formatHomeRelativePath({
-        path: buildRootedPath(['Users', 'me', 'Movies', 'a.mov']),
+        rules: POSIX_PATH_RULES,
+        path: '/Users/me/Movies/a.mov',
         homeDir: HOME_DIR,
       }),
-    ).toBe(buildTildePath(['Movies', 'a.mov']));
+    ).toBe('~/Movies/a.mov');
     expect(
       formatHomeRelativePath({
-        path: buildRootedPath(['Users', 'me', 'Movies']),
-        homeDir: `${HOME_DIR}${sep}`,
+        rules: POSIX_PATH_RULES,
+        path: '/Users/me/Movies',
+        homeDir: `${HOME_DIR}/`,
       }),
-    ).toBe(buildTildePath(['Movies']));
+    ).toBe('~/Movies');
   });
 
-  test('keeps a path outside the home folder, and one that only shares its name prefix', () => {
-    const appPath = buildRootedPath(['Applications', 'Xcode.app']);
-    const neighbourPath = buildRootedPath(['Users', 'meier', 'a']);
+  test('keeps a POSIX path outside the home folder, one that only shares its name prefix, and one in another case', () => {
+    for (const path of ['/Applications/Xcode.app', '/Users/meier/a', '/Users/Me/a']) {
+      expect(
+        formatHomeRelativePath({ rules: POSIX_PATH_RULES, path: path, homeDir: HOME_DIR }),
+      ).toBe(path);
+    }
+  });
 
-    expect(formatHomeRelativePath({ path: appPath, homeDir: HOME_DIR })).toBe(appPath);
-    expect(formatHomeRelativePath({ path: neighbourPath, homeDir: HOME_DIR })).toBe(neighbourPath);
+  test('shows a Windows path inside the home folder from ~ in its own case, whatever the case of the home', () => {
+    expect(
+      formatHomeRelativePath({
+        rules: WIN32_PATH_RULES,
+        path: 'c:\\users\\oli',
+        homeDir: WINDOWS_HOME_DIR,
+      }),
+    ).toBe('~');
+    expect(
+      formatHomeRelativePath({
+        rules: WIN32_PATH_RULES,
+        path: 'C:\\Users\\Oli\\Videos\\a.mp4',
+        homeDir: WINDOWS_HOME_DIR,
+      }),
+    ).toBe('~\\Videos\\a.mp4');
+    expect(
+      formatHomeRelativePath({
+        rules: WIN32_PATH_RULES,
+        path: 'c:\\USERS\\oli\\AppData\\Local\\Temp',
+        homeDir: WINDOWS_HOME_DIR,
+      }),
+    ).toBe('~\\AppData\\Local\\Temp');
+    expect(
+      formatHomeRelativePath({
+        rules: WIN32_PATH_RULES,
+        path: 'C:\\Users\\Oli\\Videos',
+        homeDir: `${WINDOWS_HOME_DIR}\\`,
+      }),
+    ).toBe('~\\Videos');
+  });
+
+  test('shows a Windows path below a home at a drive root from ~', () => {
+    expect(formatHomeRelativePath({ rules: WIN32_PATH_RULES, path: 'D:\\', homeDir: 'D:\\' })).toBe(
+      '~',
+    );
+    expect(
+      formatHomeRelativePath({ rules: WIN32_PATH_RULES, path: 'd:\\Data\\a.bin', homeDir: 'D:\\' }),
+    ).toBe('~\\Data\\a.bin');
+  });
+
+  test('keeps a Windows path outside the home folder and one in a neighbour folder', () => {
+    for (const path of [
+      'C:\\Program Files\\Example',
+      'C:\\Users\\Oliver\\a',
+      'D:\\Users\\Oli\\a',
+    ]) {
+      expect(
+        formatHomeRelativePath({ rules: WIN32_PATH_RULES, path: path, homeDir: WINDOWS_HOME_DIR }),
+      ).toBe(path);
+    }
   });
 });

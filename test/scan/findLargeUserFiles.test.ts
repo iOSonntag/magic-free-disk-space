@@ -17,8 +17,8 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
-import { HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPathRules } from '../support/parsedValueFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const MIN_ALLOCATED_BYTES = 1024 * 1024;
@@ -35,14 +35,14 @@ async function findFiles(params: {
   recordEvictedEntry?: EvictedEntryRecorder;
 }): Promise<{ findings: UserFileFinding[]; issues: ScanIssue[] }> {
   return findLargeUserFiles({
-    pathRules: params.pathRules ?? HOST_PATH_RULES,
+    pathRules: params.pathRules ?? hostPathRules,
     rootDirs: params.rootDirs,
     artifactRules: PROJECT_ARTIFACT_RULES,
     minAllocatedBytes: MIN_ALLOCATED_BYTES,
     deadlineMs: params.deadlineMs ?? FAR_FUTURE_DEADLINE_MS,
-    entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    entryReads: params.entryReads ?? hostPlatform.system.entryReads,
     recordEvictedEntry: params.recordEvictedEntry ?? (() => undefined),
-    privacyDenialCode: HOST_PLATFORM.system.privacyDenialCode,
+    privacyDenialCode: hostPlatform.system.privacyDenialCode,
   });
 }
 

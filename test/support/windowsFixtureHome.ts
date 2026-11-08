@@ -54,7 +54,7 @@ type FakeRecycleBins = {
 };
 
 /** The apps the Uninstall keys list, as the fake listing answers them, the largest first. */
-export const WINDOWS_FIXTURE_ADVISED_APPS: AdvisedApp[] = [
+export const windowsFixtureAdvisedApps: AdvisedApp[] = [
   {
     displayName: 'Contoso Studio',
     installFolderPath: buildTestWindowsPath({ text: 'C:\\Program Files\\Contoso Studio' }),
@@ -64,18 +64,18 @@ export const WINDOWS_FIXTURE_ADVISED_APPS: AdvisedApp[] = [
 ];
 
 /** The image paths of the running processes: new Teams runs, Chrome and Edge do not. */
-export const WINDOWS_FIXTURE_RUNNING_IMAGE_PATHS = [
+export const windowsFixtureRunningImagePaths = [
   'C:\\Windows\\explorer.exe',
   'C:\\Program Files\\WindowsApps\\MSTeams_25031.805.3440.5290_x64__8wekyb3d8bbwe\\ms-teams.exe',
 ];
 
 /** What the fake bin of each fixed drive holds until the deletion empties it. */
-export const WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT: RecycleBinContent = {
+export const windowsFixtureRecycleBinContent: RecycleBinContent = {
   sizeBytes: 64 * SCAN_LIMITS.minOfferedBytes,
   itemCount: 3,
 };
 
-const FIXTURE_ITEM_BYTES = 2 * SCAN_LIMITS.minOfferedBytes;
+const fixtureItemBytes = 2 * SCAN_LIMITS.minOfferedBytes;
 const FIXTURE_AGE_DAYS = 400;
 
 /**
@@ -92,8 +92,12 @@ export async function createWindowsFixtureHome(params: {
     nowMs: params.nowMs,
     knownFolders: [{ folder: 'downloads', pathBelowHome: 'Downloads' }],
   });
+  if (environment.platformFolders.kind !== 'win32') {
+    throw new Error('The Windows fixture home has the folders of Windows.');
+  }
+
   const homeDir = environment.homeDir;
-  const localAppDataDir = join(homeDir, 'AppData', 'Local');
+  const localAppDataDir = environment.platformFolders.appDataDirs.localDir;
   const dotnetProjectPath = join(homeDir, 'source', 'repos', 'ContosoApp');
   const paths: WindowsFixturePaths = {
     staleTempFilePath: join(environment.tempDir, 'wct3F2A.tmp'),
@@ -123,7 +127,7 @@ export async function createWindowsFixtureHome(params: {
   await updateModifiedMs({ path: paths.staleTempFolderPath, modifiedMs: oldMs });
   await createFixtureFile({
     path: paths.freshTempFilePath,
-    sizeBytes: FIXTURE_ITEM_BYTES,
+    sizeBytes: fixtureItemBytes,
     modifiedMs: params.nowMs,
   });
 
@@ -181,14 +185,14 @@ export function buildWindowsFixturePlatform(params: {
   const leftOutEntries = win32Platform.catalog.entries.filter(
     (entry) => !isEntryInsideFixture({ entry: entry, environment: params.environment }),
   );
-  const fakeRecycleBins = createFakeRecycleBins(WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT);
+  const fakeRecycleBins = createFakeRecycleBins(windowsFixtureRecycleBinContent);
   const platform = buildTestWin32Platform({
-    loadAdvisedApps: async () => ({ apps: WINDOWS_FIXTURE_ADVISED_APPS, issues: [] }),
+    loadAdvisedApps: async () => ({ apps: windowsFixtureAdvisedApps, issues: [] }),
     loadRecycleBin: fakeRecycleBins.loadRecycleBin,
     emptyRecycleBin: fakeRecycleBins.emptyRecycleBin,
     loadRunningProcesses: async () => ({
       kind: 'succeeded',
-      value: buildRunningImagePaths(WINDOWS_FIXTURE_RUNNING_IMAGE_PATHS),
+      value: buildRunningImagePaths(windowsFixtureRunningImagePaths),
     }),
   });
 
@@ -208,7 +212,7 @@ export function buildWindowsFixturePlatform(params: {
 async function createOldFile(params: { path: string; oldMs: number }): Promise<void> {
   await createFixtureFile({
     path: params.path,
-    sizeBytes: FIXTURE_ITEM_BYTES,
+    sizeBytes: fixtureItemBytes,
     modifiedMs: params.oldMs,
   });
 }

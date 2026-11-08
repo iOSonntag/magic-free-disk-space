@@ -11,8 +11,8 @@ import type { WindowsFixtureHome, WindowsFixturePlatform } from '../support/wind
 import {
   buildWindowsFixturePlatform,
   createWindowsFixtureHome,
-  WINDOWS_FIXTURE_ADVISED_APPS,
-  WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT,
+  windowsFixtureAdvisedApps,
+  windowsFixtureRecycleBinContent,
 } from '../support/windowsFixtureHome.js';
 
 // The fixture writes a file over the large-file limit, which a busy runner takes a while for.
@@ -121,7 +121,7 @@ describe.skipIf(process.platform !== 'win32')(
         home.environment.fixedDriveRoots.map((driveRoot) =>
           buildTestRecycleBinCandidate({
             driveRootText: driveRoot,
-            scannedContent: WINDOWS_FIXTURE_RECYCLE_BIN_CONTENT,
+            scannedContent: windowsFixtureRecycleBinContent,
           }),
         ),
       );
@@ -132,12 +132,13 @@ describe.skipIf(process.platform !== 'win32')(
         report: report,
         fullDiskAccessHolder: 'terminal',
         texts: fixturePlatform.platform.report,
+        pathRules: home.environment.pathRules,
         homeDir: home.environment.homeDir,
         disk: null,
       });
 
       expect(report.appAdvice).toEqual({
-        apps: WINDOWS_FIXTURE_ADVISED_APPS,
+        apps: windowsFixtureAdvisedApps,
         installedAppsPageName: 'Settings > Apps',
       });
       expect(view.appAdvice?.introText).toBe(

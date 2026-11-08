@@ -14,7 +14,7 @@ export async function recheckVagrantBoxUnit(params: {
     probe: VAGRANT_BOX_LIST_PROBE,
     tool: params.run.tool,
     environment: params.run.environment,
-    platform: params.run.platform,
+    processes: params.run.platform.toolProcesses,
     deadlineMs: params.run.deadlineMs,
   });
 

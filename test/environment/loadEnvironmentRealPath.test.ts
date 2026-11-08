@@ -12,7 +12,7 @@ import {
   createFixtureRoot,
   deleteFixtureRoot,
 } from '../support/fixtureRoot.js';
-import { buildTestHostPath, HOST_PATH_RULES } from '../support/parsedValueFixtures.js';
+import { buildTestHostPath, hostPathRules } from '../support/parsedValueFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
@@ -32,7 +32,7 @@ describe('loadEnvironmentRealPath', () => {
     await createFixtureDirectory({ path: folderPath });
     await symlink(folderPath, linkPath);
 
-    expect(await loadEnvironmentRealPath({ pathRules: HOST_PATH_RULES, path: linkPath })).toEqual({
+    expect(await loadEnvironmentRealPath({ pathRules: hostPathRules, path: linkPath })).toEqual({
       kind: 'succeeded',
       value: buildTestHostPath({ text: await realpath(folderPath) }),
     });
@@ -41,9 +41,7 @@ describe('loadEnvironmentRealPath', () => {
   test('is unresolvable at the path with the code of the error when nothing is there', async () => {
     const missingPath = buildTestHostPath({ text: join(fixtureRoot.homeDir, 'missing') });
 
-    expect(
-      await loadEnvironmentRealPath({ pathRules: HOST_PATH_RULES, path: missingPath }),
-    ).toEqual({
+    expect(await loadEnvironmentRealPath({ pathRules: hostPathRules, path: missingPath })).toEqual({
       kind: 'failed',
       failure: { reason: 'unresolvable', path: missingPath, code: 'ENOENT' },
     });
@@ -65,7 +63,7 @@ describe('loadEnvironmentRealPath', () => {
 describe('loadExistingRealPaths', () => {
   test('keeps the real path of each folder that is there, in their order', async () => {
     const realPaths = await loadExistingRealPaths({
-      pathRules: HOST_PATH_RULES,
+      pathRules: hostPathRules,
       paths: [
         fixtureRoot.tempDir,
         buildTestHostPath({ text: join(fixtureRoot.homeDir, 'missing') }),

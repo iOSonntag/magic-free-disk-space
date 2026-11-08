@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadPlistVersion } from '../../../src/platform/darwin/loadSystemVersion.js';
 import { SYSTEM_COMMAND_TIMEOUT_MS } from '../../../src/system/limits.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import { withFixtureRoot } from '../../support/fixtureRoot.js';
 
 const VERSIONS_PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
@@ -19,7 +20,7 @@ const VERSIONS_PLIST_TEXT = `<?xml version="1.0" encoding="UTF-8"?>
 `;
 
 // The version comes from `plutil`, which only macOS has.
-describe.skipIf(process.platform !== 'darwin')('loadPlistVersion', () => {
+describeOnDarwin('loadPlistVersion', () => {
   test('reads the version under the key, and null for an empty, missing or unread one', async () => {
     await withFixtureRoot({
       run: async (fixtureRoot) => {

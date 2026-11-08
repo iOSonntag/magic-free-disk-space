@@ -18,7 +18,17 @@ export function buildRunningCommandLines(
   return { kind: 'commandLines', commandLines: commandLines };
 }
 
-/** The processes as Windows lists them, by the paths of their images. */
-export function buildRunningImagePaths(imagePaths: string[]): RunningProcessesImagePaths {
+/** The processes as Windows lists them, by the paths of their images; `null` stays `null`, a run whose processes could not be listed. */
+export function buildRunningImagePaths(imagePaths: string[]): RunningProcessesImagePaths;
+export function buildRunningImagePaths(
+  imagePaths: string[] | null,
+): RunningProcessesImagePaths | null;
+export function buildRunningImagePaths(
+  imagePaths: string[] | null,
+): RunningProcessesImagePaths | null {
+  if (imagePaths === null) {
+    return null;
+  }
+
   return { kind: 'imagePaths', imagePaths: imagePaths };
 }

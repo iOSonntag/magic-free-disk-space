@@ -3,6 +3,7 @@ import { dlopen, FFIType, ptr, read, toArrayBuffer } from 'bun:ffi';
 import type { DriveRoot } from '../../path/driveRoot.js';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
 import type { Result } from '../../result.js';
+import type { RecycleBinContent } from '../../scan/candidate.js';
 import type { SystemCallFailure } from '../../system/systemCallFailure.js';
 import type { ProcessEntry } from './processEntry.js';
 import { createProcessEntryBuffer, parseProcessEntry } from './processEntry.js';
@@ -135,9 +136,6 @@ export type UninstallKeyValues = {
 
 /** One subkey of an open key, by its name, which the value reads below take beside the key. */
 type RegistrySubkey = { key: bigint; subkeyName: string };
-
-/** What `SHQueryRecycleBinW` counts in the Recycle Bin of one drive. */
-export type RecycleBinCount = { sizeBytes: number; itemCount: number };
 
 /** What `GetDiskFreeSpaceExW` reads of one volume for the calling user. */
 export type DiskFreeSpace = { totalBytes: number; availableBytes: number };
@@ -694,7 +692,7 @@ export function setFileAttributes(params: {
  */
 export function loadRecycleBinCount(params: {
   driveRoot: DriveRoot;
-}): Result<RecycleBinCount, Win32CallFailure> {
+}): Result<RecycleBinContent, Win32CallFailure> {
   shell32 ??= openShell32();
 
   const info = new Uint8Array(RECYCLE_BIN_INFO_BYTES);

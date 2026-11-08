@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import type { AbsolutePath } from '../../path/parseAbsolutePath.js';
+import type { PathRules } from '../../path/pathRules.js';
 import type { RunningProcesses } from '../../system/systemPlatform.js';
 import type { LocatedTool } from '../../tools/findTrustedTool.js';
 import { decideUnitActivity } from '../decideUnitActivity.js';
@@ -17,6 +18,7 @@ export function isDartGcSetOffered(gcPaths: AbsolutePath[]): boolean {
 export function buildDartPubCacheFindings(params: {
   tool: LocatedTool;
   gcPaths: AbsolutePath[];
+  pathRules: PathRules;
   homeDir: string;
   runningProcesses: RunningProcesses | null;
 }): ExploreFinding[] {
@@ -34,6 +36,7 @@ export function buildDartPubCacheFindings(params: {
     evidenceLines: [
       `\`dart pub cache gc\` would delete ${countText} cache entries, such as:`,
       ...formatSamplePathLines({
+        pathRules: params.pathRules,
         paths: params.gcPaths,
         homeDir: params.homeDir,
         maxCount: SAMPLE_PATH_MAX_COUNT,

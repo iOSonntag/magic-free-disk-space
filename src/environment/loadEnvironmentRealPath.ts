@@ -20,16 +20,29 @@ export async function loadEnvironmentRealPath(params: {
     return realPathText;
   }
 
-  const realPath = parseAbsolutePath({ rules: params.pathRules, text: realPathText.value });
+  return parseEnvironmentPath({
+    pathRules: params.pathRules,
+    text: realPathText.value,
+    failurePath: params.path,
+  });
+}
 
-  if (realPath.kind === 'failed') {
+/** Parses `text` as an absolute path under `pathRules`; unresolvable at `failurePath` when it is not one. */
+export function parseEnvironmentPath(params: {
+  pathRules: PathRules;
+  text: string;
+  failurePath: string;
+}): Result<AbsolutePath, EnvironmentFailure> {
+  const path = parseAbsolutePath({ rules: params.pathRules, text: params.text });
+
+  if (path.kind === 'failed') {
     return {
       kind: 'failed',
-      failure: { reason: 'unresolvable', path: params.path, code: 'notAbsolute' },
+      failure: { reason: 'unresolvable', path: params.failurePath, code: 'notAbsolute' },
     };
   }
 
-  return { kind: 'succeeded', value: realPath.value };
+  return { kind: 'succeeded', value: path.value };
 }
 
 /** The real path of each of `paths` that `loadEnvironmentRealPath` resolves, in their order. */

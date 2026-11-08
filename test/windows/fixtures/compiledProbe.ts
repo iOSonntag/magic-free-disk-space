@@ -8,11 +8,11 @@ import { loadAttributesText, observeSafely } from '../observations.js';
 // leaves the earlier ones on stdout.
 //   compiledProbe.exe <folder for the long path>
 
-const writeFinding = (finding: string, observations: Record<string, unknown>): void => {
+function writeFinding(finding: string, observations: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify({ finding: finding, ...observations })}\n`);
-};
+}
 
-const echoStdinLines = async (): Promise<number> => {
+async function echoStdinLines(): Promise<number> {
   let echoedLineCount = 0;
 
   // A blank line is no input line; Bun's stdin reader also yields one when the input ends.
@@ -26,9 +26,9 @@ const echoStdinLines = async (): Promise<number> => {
   }
 
   return echoedLineCount;
-};
+}
 
-const observeLongPathInsideProbe = async (folder: string): Promise<void> => {
+async function observeLongPathInsideProbe(folder: string): Promise<void> {
   const longFolder = join(folder, ...buildLongPathSegments());
   const longFile = join(longFolder, 'file.txt');
 
@@ -56,7 +56,7 @@ const observeLongPathInsideProbe = async (folder: string): Promise<void> => {
       return 'ok';
     }),
   });
-};
+}
 
 const longPathFolder = process.argv[2];
 

@@ -6,7 +6,7 @@ import {
   buildTestRecycleBinCandidate,
   buildTestToolCandidate,
 } from '../support/candidateFixtures.js';
-import { EXAMPLE_WIN32_ENVIRONMENT } from '../support/environmentFixtures.js';
+import { exampleWin32Environment } from '../support/environmentFixtures.js';
 import {
   buildTestEvictCandidate,
   buildTestEvictTarget,
@@ -148,7 +148,7 @@ describe('skipOffersTheRemovalRefuses', () => {
 
   test('keeps the Recycle Bin of a drive the environment lists, and skips that of another', () => {
     const decisions = skipOffersTheRemovalRefuses({
-      environment: EXAMPLE_WIN32_ENVIRONMENT,
+      environment: exampleWin32Environment,
       decisions: ['D:\\', 'E:\\'].map(
         (driveRootText): CandidateDecision => ({
           kind: 'offer',

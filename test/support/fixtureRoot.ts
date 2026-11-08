@@ -26,6 +26,7 @@ import {
   buildTestHostPath,
   buildTestUserIdentity,
   buildTestWindowsUser,
+  EXAMPLE_WINDOWS_SID_TEXT,
 } from './parsedValueFixtures.js';
 
 export type FixtureRoot = {
@@ -38,9 +39,6 @@ export type FixtureRoot = {
 
 /** A folder of a fixture environment by its path and its real path. */
 type TestFolder = { path: AbsolutePath; realPath: AbsolutePath };
-
-/** A made-up user of Windows: the owner of a fixture is never read there, where no tool is trusted. */
-const TEST_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
 
 /** A known folder of Windows that a fixture creates below its home, at `pathBelowHome`. */
 export type TestKnownFolder = { folder: WindowsKnownFolder; pathBelowHome: string };
@@ -150,7 +148,8 @@ export async function loadTestWin32Environment(params: {
 
   return buildWin32Environment({
     nowMs: params.nowMs,
-    user: buildTestWindowsUser({ sidText: TEST_WINDOWS_SID_TEXT }),
+    // A made-up user serves: the owner of a fixture is never read on Windows, where no tool is trusted.
+    user: buildTestWindowsUser({ sidText: EXAMPLE_WINDOWS_SID_TEXT }),
     home: home,
     temp: temp,
     localAppData: await createTestFolder({ path: appDataDirs.localDir }),

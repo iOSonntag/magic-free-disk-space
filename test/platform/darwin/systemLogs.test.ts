@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { SYSTEM_LOG_ENTRIES } from '../../../src/platform/darwin/catalog/systemLogs.js';
 import { CATALOG_ENTRIES } from '../../../src/platform/darwin/catalogEntries.js';
 import { SCAN_LIMITS } from '../../../src/scan/limits.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import { buildRiskAndPathById } from './catalogPins.js';
 import { listCatalogOffers, withScannedCatalogHome } from './catalogScan.js';
 
@@ -55,7 +56,7 @@ describe('SYSTEM_LOG_ENTRIES', () => {
 });
 
 // Only macOS scans its catalog; Windows scans its own.
-describe.skipIf(process.platform !== 'darwin')('the scan of the log entries', () => {
+describeOnDarwin('the scan of the log entries', () => {
   test('offers the crash reports together, though each lies below the smallest size offered', async () => {
     await withScannedCatalogHome({
       entryIds: SYSTEM_LOG_ENTRIES.map((entry) => entry.id),

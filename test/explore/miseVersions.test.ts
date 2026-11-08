@@ -106,6 +106,7 @@ describe('buildMiseVersionFindings', () => {
       versions: [
         { miseToolName: nodeMiseToolName, version: nodeVersion, installPath: nodeInstallPath },
       ],
+      pathRules: POSIX_PATH_RULES,
       homeDir: FIXTURE_HOME_DIR,
       runningProcesses: null,
     });

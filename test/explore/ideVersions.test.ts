@@ -18,7 +18,7 @@ import { recheckIdeVersionUnit } from '../../src/explore/ideVersions/recheckIdeV
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
 import { createFixtureDirectory, writeFixtureTextFile } from '../support/fixtureRoot.js';
 import { buildTestAbsolutePath } from '../support/parsedValueFixtures.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 import { buildTestProbePlatform } from '../support/probePlatformFixtures.js';
 import {
@@ -42,7 +42,7 @@ const NEW_STUDIO = 'AndroidStudio2024.2';
 const VALUE_LIBRARY_PATH = '/Users/example/Library';
 
 /** Whether the host's catalog names any folder of IDE versions. */
-const hasIdeVersionRoots = Object.values(HOST_PLATFORM.explore.ideVersionRoots).some(
+const hasIdeVersionRoots = Object.values(hostPlatform.explore.ideVersionRoots).some(
   (roots) => roots.length > 0,
 );
 
@@ -63,7 +63,7 @@ function buildIdeVersionRootPath(params: {
   kind: keyof IdeVersionRoots;
   vendor: 'JetBrains' | 'Google';
 }): string {
-  const root = HOST_PLATFORM.explore.ideVersionRoots[params.kind].find((location) =>
+  const root = hostPlatform.explore.ideVersionRoots[params.kind].find((location) =>
     location.path.endsWith(`/${params.vendor}`),
   );
 

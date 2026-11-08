@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { LANGUAGE_ENTRIES } from '../../../src/platform/darwin/catalog/languages.js';
 import { SCAN_LIMITS } from '../../../src/scan/limits.js';
+import { describeOnDarwin } from '../../support/darwinOnly.js';
 import { buildRiskAndPathById } from './catalogPins.js';
 import { listCatalogOffers, withScannedCatalogHome } from './catalogScan.js';
 
@@ -38,7 +39,7 @@ describe('LANGUAGE_ENTRIES', () => {
 });
 
 // Only macOS scans its catalog; Windows scans its own.
-describe.skipIf(process.platform !== 'darwin')('the scan of the language entries', () => {
+describeOnDarwin('the scan of the language entries', () => {
   test("offers Deno's downloads and compiled code, never the data its scripts stored", async () => {
     await withScannedCatalogHome({
       entryIds: ['deno-cache', 'user-caches'],

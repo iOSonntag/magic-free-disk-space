@@ -160,6 +160,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
       buildDartPubCacheFindings({
         tool: probed.run.tool,
         gcPaths: probed.output,
+        pathRules: probed.run.environment.pathRules,
         homeDir: probed.run.environment.homeDir,
         runningProcesses: probed.run.runningProcesses,
       }),
@@ -170,6 +171,7 @@ const EXPLORE_PROBES: Record<ExploreProbeId, ExploreProbe> = {
       buildMiseVersionFindings({
         tool: probed.run.tool,
         versions: probed.output,
+        pathRules: probed.run.environment.pathRules,
         homeDir: probed.run.environment.homeDir,
         runningProcesses: probed.run.runningProcesses,
       }),
@@ -418,7 +420,7 @@ function buildCommandProbe<T>(params: {
         probe: params.definition,
         tool: run.tool,
         environment: run.environment,
-        platform: run.platform,
+        processes: run.platform.toolProcesses,
         deadlineMs: run.deadlineMs,
       });
 

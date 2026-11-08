@@ -7,17 +7,15 @@ import {
 } from '../../../src/platform/win32/loadEntryPlacement.js';
 import type { FixtureRoot } from '../../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot } from '../../support/fixtureRoot.js';
-
-/** `FILE_ATTRIBUTE_DIRECTORY`, which a folder carries whether a cloud store keeps it or not. */
-const FILE_ATTRIBUTE_DIRECTORY = 0x10;
-
-const FILE_ATTRIBUTE_ARCHIVE = 0x20;
-
-const FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
-
-const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000;
-
-const FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x40000;
+import {
+  FILE_ATTRIBUTE_ARCHIVE,
+  FILE_ATTRIBUTE_DIRECTORY,
+  FILE_ATTRIBUTE_OFFLINE,
+  FILE_ATTRIBUTE_PINNED,
+  FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS,
+  FILE_ATTRIBUTE_RECALL_ON_OPEN,
+  FILE_ATTRIBUTE_REPARSE_POINT,
+} from '../../support/windowsFileAttributes.js';
 
 describe('decideEntryPlacement', () => {
   test('places an entry a read downloads and one an open downloads in the cloud only', () => {
@@ -54,8 +52,9 @@ describe('decideEntryPlacement', () => {
   });
 
   test('places a pinned, an offline, or a plain entry on this PC', () => {
-    // FILE_ATTRIBUTE_PINNED, FILE_ATTRIBUTE_OFFLINE.
-    expect(decideEntryPlacement({ attributes: 0x80000 | 0x1000 })).toEqual({ kind: 'onDisk' });
+    expect(
+      decideEntryPlacement({ attributes: FILE_ATTRIBUTE_PINNED | FILE_ATTRIBUTE_OFFLINE }),
+    ).toEqual({ kind: 'onDisk' });
     expect(decideEntryPlacement({ attributes: FILE_ATTRIBUTE_DIRECTORY })).toEqual({
       kind: 'onDisk',
     });

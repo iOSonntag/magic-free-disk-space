@@ -13,7 +13,7 @@ import {
   deleteFixtureRoot,
   updateModifiedMs,
 } from '../support/fixtureRoot.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 const FAR_DEADLINE_MS = Number.MAX_SAFE_INTEGER;
@@ -26,7 +26,7 @@ async function loadMeasurement(params: {
   return loadPathMeasurement({
     paths: params.paths,
     deadlineMs: params.deadlineMs ?? FAR_DEADLINE_MS,
-    entryReads: params.entryReads ?? HOST_PLATFORM.system.entryReads,
+    entryReads: params.entryReads ?? hostPlatform.system.entryReads,
     recordEvictedEntry: null,
   });
 }

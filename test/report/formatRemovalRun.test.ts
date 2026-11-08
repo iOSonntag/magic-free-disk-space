@@ -4,10 +4,12 @@ import type {
   RemovalOutcomeCodedKind,
   RemovalOutcomePartlyRemoved,
   RemovalOutcomeToolFailed,
+  RemovalRun,
 } from '../../src/delete/deleteCandidates.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
-import { WIN32_REPORT_TEXTS } from '../../src/platform/win32/reportTexts.js';
+import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { formatAvailableSpaceLine, formatRemovalRun } from '../../src/report/formatRemovalRun.js';
+import type { ReportTexts } from '../../src/report/reportTexts.js';
 import {
   buildTestCandidate,
   buildTestEngineCandidate,
@@ -16,16 +18,15 @@ import {
 
 describe('formatRemovalRun', () => {
   test('reports an empty run as nothing freed', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: { outcomes: [], journalFailure: null },
-      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual(['Freed about 0 B in 0 items.']);
   });
 
   test('lists each outcome with its code and counts only the freed bytes', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildPathOutcome({ path: '/fixture/a', outcome: 'removed', freedBytes: 1024 }),
@@ -42,7 +43,6 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -60,7 +60,7 @@ describe('formatRemovalRun', () => {
 
   test('reports the folders of path units as paths, deleted or left alone', () => {
     const extensionsPath = '/Users/example/.vscode/extensions';
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildPathOutcome({
@@ -81,7 +81,6 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -96,7 +95,7 @@ describe('formatRemovalRun', () => {
     const cleaned = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 5000 });
     const inUse = buildTestEngineCandidate({ homeDir: '/fixture/other', allocatedBytes: 7000 });
     const stopped = buildTestEngineCandidate({ homeDir: '/fixture/third', allocatedBytes: 9000 });
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildPathOutcome({ path: '/fixture/a', outcome: 'removed', freedBytes: 1000 }),
@@ -110,7 +109,6 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -125,14 +123,13 @@ describe('formatRemovalRun', () => {
 
   test('names an engine item by its unit and its engine, never by the disk image its engine keeps', () => {
     const cleaned = buildTestEngineCandidate({ homeDir: '/fixture', allocatedBytes: 5000 });
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildTestRemovalOutcome({ candidate: cleaned, outcome: 'removed', freedBytes: 5000 }),
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines.some((line) => line.includes(cleaned.path))).toBe(false);
@@ -140,7 +137,7 @@ describe('formatRemovalRun', () => {
   });
 
   test('names how many entries of a partly deleted item stayed, counts what it freed, and counts it as not deleted', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildPartlyRemovedOutcome({
@@ -156,7 +153,7 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: WIN32_REPORT_TEXTS,
+      texts: win32Platform.report,
     });
 
     expect(lines).toEqual([
@@ -168,14 +165,13 @@ describe('formatRemovalRun', () => {
   });
 
   test('names the operating system of the platform as the one that refused a partly deleted entry', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildPartlyRemovedOutcome({ path: '/fixture/cache', freedBytes: 0, stayedEntryCount: 1 }),
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines[0]).toBe(
@@ -184,7 +180,7 @@ describe('formatRemovalRun', () => {
   });
 
   test('omits the summary lines that do not apply', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildPathOutcome({ path: '/fixture/a', outcome: 'removed', freedBytes: 2048 }),
@@ -192,7 +188,6 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -203,7 +198,7 @@ describe('formatRemovalRun', () => {
   });
 
   test('names the failure of a tool, each line of its stderr tail, and counts what it freed', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildPathOutcome({ path: '/fixture/tool-a', outcome: 'removed', freedBytes: 3072 }),
@@ -236,7 +231,6 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -254,7 +248,7 @@ describe('formatRemovalRun', () => {
   });
 
   test('names a signal, a spawn failure, and a too large output', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildToolFailedOutcome({
@@ -284,7 +278,6 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines.slice(0, 3)).toEqual([
@@ -295,7 +288,7 @@ describe('formatRemovalRun', () => {
   });
 
   test('names the file a recheck could not read, with its code and no stderr', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [
           buildToolFailedOutcome({
@@ -310,7 +303,6 @@ describe('formatRemovalRun', () => {
         ],
         journalFailure: null,
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines[0]).toBe(
@@ -326,12 +318,11 @@ describe('formatRemovalRun', () => {
   });
 
   test('adds the deletion log failure as the last line', () => {
-    const lines = formatRemovalRun({
+    const lines = formatRun({
       run: {
         outcomes: [],
         journalFailure: { reason: 'writeFailed', path: '/fixture/log.jsonl', code: 'EIO' },
       },
-      texts: darwinPlatform.report,
     });
 
     expect(lines).toEqual([
@@ -340,6 +331,11 @@ describe('formatRemovalRun', () => {
     ]);
   });
 });
+
+/** The lines of `run` in the texts of macOS, unless `texts` names those of another platform. */
+function formatRun(params: { run: RemovalRun; texts?: ReportTexts }): string[] {
+  return formatRemovalRun({ run: params.run, texts: params.texts ?? darwinPlatform.report });
+}
 
 /** The outcome of an item at `path` deleted as its one target. */
 function buildPathOutcome(params: {

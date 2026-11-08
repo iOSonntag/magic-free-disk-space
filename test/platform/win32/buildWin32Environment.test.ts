@@ -2,34 +2,32 @@ import { describe, expect, test } from 'bun:test';
 import { WIN32_PATH_RULES } from '../../../src/path/pathRules.js';
 import { buildWin32Environment } from '../../../src/platform/win32/loadEnvironment.js';
 import {
-  EXAMPLE_WIN32_ENVIRONMENT,
-  EXAMPLE_WIN32_ENVIRONMENT_PARAMS,
+  exampleWin32Environment,
+  exampleWin32EnvironmentParams,
 } from '../../support/environmentFixtures.js';
 import { buildTestWindowsPath } from '../../support/parsedValueFixtures.js';
 
-const ENVIRONMENT = EXAMPLE_WIN32_ENVIRONMENT;
-
 describe('buildWin32Environment', () => {
   test('keeps the deletion log and the preferences below LocalAppData', () => {
-    expect<string>(ENVIRONMENT.deletionLogPath).toBe(
+    expect<string>(exampleWin32Environment.deletionLogPath).toBe(
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space\\Logs\\deletions.jsonl',
     );
-    expect<string>(ENVIRONMENT.preferencesDir).toBe(
+    expect<string>(exampleWin32Environment.preferencesDir).toBe(
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space',
     );
-    expect<string[]>(ENVIRONMENT.sensitiveRealPaths.slice(-2)).toEqual([
+    expect<string[]>(exampleWin32Environment.sensitiveRealPaths.slice(-2)).toEqual([
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space\\Logs',
       'C:\\Users\\tester\\AppData\\Local\\magic-free-disk-space',
     ]);
   });
 
   test('writes no POSIX modes, and spells paths as Windows does', () => {
-    expect(ENVIRONMENT.ownerOnlyModes).toBeNull();
-    expect(ENVIRONMENT.pathRules).toEqual(WIN32_PATH_RULES);
+    expect(exampleWin32Environment.ownerOnlyModes).toBeNull();
+    expect(exampleWin32Environment.pathRules).toEqual(WIN32_PATH_RULES);
   });
 
   test('carries both AppData folders and the known folders Windows named as its own folders', () => {
-    expect<unknown>(ENVIRONMENT.platformFolders).toEqual({
+    expect<unknown>(exampleWin32Environment.platformFolders).toEqual({
       kind: 'win32',
       appDataDirs: {
         localDir: 'C:\\Users\\tester\\AppData\\Local',
@@ -49,22 +47,22 @@ describe('buildWin32Environment', () => {
   });
 
   test('allows a removal below the profile, both AppData folders, and the temporary folder', () => {
-    expect<string[]>(ENVIRONMENT.allowedRealRoots).toEqual([
+    expect<string[]>(exampleWin32Environment.allowedRealRoots).toEqual([
       'C:\\Users\\tester',
       'C:\\Users\\tester\\AppData\\Local\\Temp',
       'C:\\Users\\tester\\AppData\\Local',
       'C:\\Users\\tester\\AppData\\Roaming',
     ]);
-    expect(ENVIRONMENT.applicationDirs).toEqual([]);
+    expect(exampleWin32Environment.applicationDirs).toEqual([]);
   });
 
   test('has no exception to a sensitive folder and no cloud folder', () => {
-    expect(ENVIRONMENT.sensitiveExceptionRealPaths).toEqual([]);
-    expect(ENVIRONMENT.evictRealRoots).toEqual([]);
+    expect(exampleWin32Environment.sensitiveExceptionRealPaths).toEqual([]);
+    expect(exampleWin32Environment.evictRealRoots).toEqual([]);
   });
 
   test('refuses as a whole the profile, its guarded folders, each known folder named, the run folders, and each fixed drive', () => {
-    expect<string[]>(ENVIRONMENT.protectedRealPaths).toEqual([
+    expect<string[]>(exampleWin32Environment.protectedRealPaths).toEqual([
       'C:\\Users\\tester',
       'C:\\Users\\tester\\AppData',
       'C:\\Users\\tester\\.cache',
@@ -99,15 +97,17 @@ describe('buildWin32Environment', () => {
   });
 
   test('lists each fixed drive, whose Recycle Bin the scan counts, from the list it refuses', () => {
-    expect<string[]>(ENVIRONMENT.fixedDriveRoots).toEqual(['C:\\', 'D:\\']);
-    expect<string[]>(ENVIRONMENT.protectedRealPaths.slice(-2)).toEqual(ENVIRONMENT.fixedDriveRoots);
+    expect<string[]>(exampleWin32Environment.fixedDriveRoots).toEqual(['C:\\', 'D:\\']);
+    expect<string[]>(exampleWin32Environment.protectedRealPaths.slice(-2)).toEqual(
+      exampleWin32Environment.fixedDriveRoots,
+    );
   });
 
   test('refuses a moved known folder at its real path, and leaves out one whose real path is gone', () => {
     const environment = buildWin32Environment({
-      ...EXAMPLE_WIN32_ENVIRONMENT_PARAMS,
+      ...exampleWin32EnvironmentParams,
       knownFolderRealPaths: {
-        ...EXAMPLE_WIN32_ENVIRONMENT_PARAMS.knownFolderRealPaths,
+        ...exampleWin32EnvironmentParams.knownFolderRealPaths,
         desktop: buildTestWindowsPath({ text: 'D:\\Desktop' }),
         downloads: null,
       },
@@ -116,6 +116,6 @@ describe('buildWin32Environment', () => {
     expect<string[]>(environment.protectedRealPaths).toContain('D:\\Desktop');
     expect<string[]>(environment.protectedRealPaths).not.toContain('C:\\Users\\tester\\Desktop');
     expect<string[]>(environment.protectedRealPaths).not.toContain('C:\\Users\\tester\\Downloads');
-    expect<unknown>(environment.platformFolders).toEqual(ENVIRONMENT.platformFolders);
+    expect<unknown>(environment.platformFolders).toEqual(exampleWin32Environment.platformFolders);
   });
 });

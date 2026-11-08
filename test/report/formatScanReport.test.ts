@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { WIN32_PATH_RULES } from '../../src/path/pathRules.js';
 import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { formatScanReport } from '../../src/report/formatScanReport.js';
@@ -16,7 +17,7 @@ import { EMPTY_REPORT } from '../support/scanReportFixtures.js';
 
 const TEXTS = darwinPlatform.report;
 
-const FIXTURE_HOME = buildExampleHome({ text: '/fixture/home' });
+const fixtureHome = buildExampleHome({ text: '/fixture/home' });
 
 const fullDiskAccessLine =
   '- Give your terminal Full Disk Access in System Settings > Privacy & Security to scan protected folders.';
@@ -48,7 +49,8 @@ function formatReport(params: { report: ScanReport }): string[] {
   return formatScanReport({
     report: params.report,
     texts: TEXTS,
-    homeDir: '/fixture/home',
+    pathRules: fixtureHome.pathRules,
+    homeDir: fixtureHome.homeDir,
     disk: null,
   });
 }
@@ -197,6 +199,7 @@ describe('formatScanReport', () => {
         },
         skipped: [{ path: 'C:\\fixture\\a', reason: 'belowSizeThreshold' }],
       },
+      pathRules: WIN32_PATH_RULES,
       homeDir: 'C:\\Users\\fixture',
       disk: null,
     });
@@ -424,7 +427,7 @@ describe('formatScanReport', () => {
 
   test('lists the Explore items last, numbered on, with their evidence and command', () => {
     const toolCandidate = buildTestToolCandidate({
-      home: FIXTURE_HOME,
+      home: fixtureHome,
       version: '20.1.0',
       allocatedBytes: 2048,
     });
@@ -473,7 +476,7 @@ describe('formatScanReport', () => {
     const lines = formatReport({
       report: {
         ...EMPTY_REPORT,
-        candidates: [buildTestDartToolCandidate({ home: FIXTURE_HOME })],
+        candidates: [buildTestDartToolCandidate({ home: fixtureHome })],
       },
     });
 

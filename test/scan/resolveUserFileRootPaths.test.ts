@@ -3,15 +3,15 @@ import { darwinPlatform } from '../../src/platform/darwin/darwinPlatform.js';
 import { win32Platform } from '../../src/platform/win32/win32Platform.js';
 import { resolveUserFileRootPaths } from '../../src/scan/resolveUserFileRootPaths.js';
 import {
-  EXAMPLE_DARWIN_ENVIRONMENT,
-  EXAMPLE_WIN32_ENVIRONMENT,
+  exampleDarwinEnvironment,
+  exampleWin32Environment,
 } from '../support/environmentFixtures.js';
 
 describe('resolveUserFileRootPaths', () => {
   test('resolves the folders of macOS below the home, in their order', () => {
     expect<string[]>(
       resolveUserFileRootPaths({
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         roots: darwinPlatform.scan.userFileRoots,
       }),
     ).toEqual([
@@ -25,7 +25,7 @@ describe('resolveUserFileRootPaths', () => {
   test('takes the known folders of Windows where they moved, and leaves out a missing one', () => {
     expect<string[]>(
       resolveUserFileRootPaths({
-        environment: EXAMPLE_WIN32_ENVIRONMENT,
+        environment: exampleWin32Environment,
         roots: win32Platform.scan.userFileRoots,
       }),
     ).toEqual([
@@ -38,7 +38,7 @@ describe('resolveUserFileRootPaths', () => {
   test('throws for a known folder on macOS, which has none', () => {
     expect(() =>
       resolveUserFileRootPaths({
-        environment: EXAMPLE_DARWIN_ENVIRONMENT,
+        environment: exampleDarwinEnvironment,
         roots: [{ root: 'knownFolder', folder: 'desktop', path: '' }],
       }),
     ).toThrow();

@@ -11,7 +11,7 @@ import type { ToolName } from '../../src/tools/toolInstallLocations.js';
 import { createFakeTool } from '../support/fakeTool.js';
 import type { FixtureRoot } from '../support/fixtureRoot.js';
 import { createFixtureRoot, deleteFixtureRoot, isPresent } from '../support/fixtureRoot.js';
-import { HOST_PLATFORM } from '../support/platformFixtures.js';
+import { hostPlatform } from '../support/platformFixtures.js';
 import { testOnPosix } from '../support/posixOnly.js';
 
 let fixtureRoot: FixtureRoot;
@@ -42,7 +42,7 @@ async function runFakeTool(params: {
     homeDir: fixtureRoot.homeDir,
     tempDir: fixtureRoot.tempDir,
     timeoutMs: params.timeoutMs ?? 10_000,
-    processes: HOST_PLATFORM.tools.processes,
+    processes: hostPlatform.tools.processes,
   });
 }
 
@@ -102,16 +102,16 @@ async function waitUntilPresent(path: string): Promise<void> {
 }
 
 /**
- * The entries the fixed environment of a mise run holds on `hostPlatform`, given the fixture's
+ * The entries the fixed environment of a mise run holds on `platformName`, given the fixture's
  * folders, its tool folder, and the `SystemRoot` Windows passes on.
  */
 function buildExpectedMiseEnvironmentLines(params: {
-  hostPlatform: NodeJS.Platform;
+  platformName: NodeJS.Platform;
   fixtureRoot: FixtureRoot;
   toolFolderPath: string;
   systemRoot: string;
 }): string[] {
-  if (params.hostPlatform !== 'win32') {
+  if (params.platformName !== 'win32') {
     return [
       `HOME=${params.fixtureRoot.homeDir}`,
       `TMPDIR=${params.fixtureRoot.tempDir}`,
@@ -256,7 +256,7 @@ for (;;) {
 
       const lines = result.value.stdoutText.split(/\r?\n/);
       const expectedLines = buildExpectedMiseEnvironmentLines({
-        hostPlatform: process.platform,
+        platformName: process.platform,
         fixtureRoot: fixtureRoot,
         toolFolderPath: join(fixtureRoot.rootDir, 'bin'),
         systemRoot: process.env.SystemRoot ?? '',
@@ -373,7 +373,7 @@ await Bun.sleep(60_000);`,
       homeDir: fixtureRoot.homeDir,
       tempDir: fixtureRoot.tempDir,
       timeoutMs: 5_000,
-      processes: HOST_PLATFORM.tools.processes,
+      processes: hostPlatform.tools.processes,
     });
 
     expect(result.kind).toBe('failed');
