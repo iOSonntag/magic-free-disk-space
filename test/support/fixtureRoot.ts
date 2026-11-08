@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, parse, relative, sep } from 'node:path';
 import type {
   Environment,
+  WindowsKnownFolder,
   WindowsKnownFolderPaths,
 } from '../../src/environment/buildEnvironment.js';
 import type { AbsolutePath } from '../../src/path/parseAbsolutePath.js';
@@ -40,7 +41,10 @@ type TestFolder = { path: AbsolutePath; realPath: AbsolutePath };
 /** A made-up user of Windows: the owner of a fixture is never read there, where no tool is trusted. */
 const TEST_WINDOWS_SID_TEXT = 'S-1-5-21-1000-2000-3000-1001';
 
-/** The fixture environment of Windows names no known folder; each stays where none was created. */
+/** A known folder of Windows that a fixture creates below its home, at `pathBelowHome`. */
+export type TestKnownFolder = { folder: WindowsKnownFolder; pathBelowHome: string };
+
+/** Windows names no path for a known folder that a fixture did not create. */
 const NO_KNOWN_FOLDER_PATHS: WindowsKnownFolderPaths = {
   desktop: null,
   documents: null,
@@ -98,24 +102,16 @@ export async function loadTestEnvironment(params: {
   fixtureRoot: FixtureRoot;
   nowMs: number;
 }): Promise<Environment> {
-  const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
-  const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
-
   if (process.platform === 'win32') {
-    return buildWin32Environment({
+    return loadTestWin32Environment({
+      fixtureRoot: params.fixtureRoot,
       nowMs: params.nowMs,
-      user: buildTestWindowsUser({ sidText: TEST_WINDOWS_SID_TEXT }),
-      home: home,
-      temp: temp,
-      localAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Local') }),
-      roamingAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Roaming') }),
-      knownFolderPaths: NO_KNOWN_FOLDER_PATHS,
-      knownFolderRealPaths: NO_KNOWN_FOLDER_PATHS,
-      fixedDriveRoots: [buildTestDriveRoot({ text: parse(params.fixtureRoot.rootDir).root })],
-      oneDriveRealPaths: [],
+      knownFolders: [],
     });
   }
 
+  const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
+  const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
   const userCache = await loadTestFolder({ path: params.fixtureRoot.userCacheDir });
   const application = await loadTestFolder({ path: params.fixtureRoot.applicationDir });
 
@@ -131,6 +127,36 @@ export async function loadTestEnvironment(params: {
     userCacheRealPath: userCache.realPath,
     applicationDirs: [application.path],
     applicationRealPaths: [application.realPath],
+  });
+}
+
+/**
+ * The environment of a run on Windows, with its folders in the fixture root and each of
+ * `knownFolders` created below the fixture home. Call it on Windows only.
+ */
+export async function loadTestWin32Environment(params: {
+  fixtureRoot: FixtureRoot;
+  nowMs: number;
+  knownFolders: TestKnownFolder[];
+}): Promise<Environment> {
+  const home = await loadTestFolder({ path: params.fixtureRoot.homeDir });
+  const temp = await loadTestFolder({ path: params.fixtureRoot.tempDir });
+  const knownFolderPaths = await createTestKnownFolders({
+    homeDir: home.path,
+    knownFolders: params.knownFolders,
+  });
+
+  return buildWin32Environment({
+    nowMs: params.nowMs,
+    user: buildTestWindowsUser({ sidText: TEST_WINDOWS_SID_TEXT }),
+    home: home,
+    temp: temp,
+    localAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Local') }),
+    roamingAppData: await createTestFolder({ path: join(home.path, 'AppData', 'Roaming') }),
+    knownFolderPaths: knownFolderPaths.paths,
+    knownFolderRealPaths: knownFolderPaths.realPaths,
+    fixedDriveRoots: [buildTestDriveRoot({ text: parse(params.fixtureRoot.rootDir).root })],
+    oneDriveRealPaths: [],
   });
 }
 
@@ -268,6 +294,25 @@ async function createTestFolder(params: { path: string }): Promise<TestFolder> {
   await mkdir(params.path, { recursive: true });
 
   return loadTestFolder({ path: buildTestHostPath({ text: params.path }) });
+}
+
+async function createTestKnownFolders(params: {
+  homeDir: AbsolutePath;
+  knownFolders: TestKnownFolder[];
+}): Promise<{ paths: WindowsKnownFolderPaths; realPaths: WindowsKnownFolderPaths }> {
+  const paths: WindowsKnownFolderPaths = { ...NO_KNOWN_FOLDER_PATHS };
+  const realPaths: WindowsKnownFolderPaths = { ...NO_KNOWN_FOLDER_PATHS };
+
+  for (const knownFolder of params.knownFolders) {
+    const folder = await createTestFolder({
+      path: join(params.homeDir, knownFolder.pathBelowHome),
+    });
+
+    paths[knownFolder.folder] = folder.path;
+    realPaths[knownFolder.folder] = folder.realPath;
+  }
+
+  return { paths: paths, realPaths: realPaths };
 }
 
 async function restoreWritableDirectories(params: { path: string }): Promise<void> {
