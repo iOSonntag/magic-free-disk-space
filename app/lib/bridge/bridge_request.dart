@@ -27,3 +27,13 @@ Map<String, Object> buildCheckUpdateRequest() {
 Map<String, Object> buildSetUpdateCheckRequest(bool isEnabled) {
   return {'kind': 'setUpdateCheck', 'isEnabled': isEnabled};
 }
+
+/// Asks for the view of the scan the bridge holds, such as the one a deletion
+/// kept.
+Map<String, Object> buildShowScanRequest() {
+  return {'kind': 'showScan'};
+}
+
+Map<String, Object> buildSetRescanAfterDeletionRequest(bool isEnabled) {
+  return {'kind': 'setRescanAfterDeletion', 'isEnabled': isEnabled};
+}

@@ -114,6 +114,7 @@ final PlannedEvent twoItemPlan = buildSamplePlan(
 /// The run of [plannedEvent], which removed its one item.
 final DeletedEvent deletedEvent = DeletedEvent(
   lines: const ['Freed 6.0 MB.'],
+  isScanKept: false,
   outcomes: [
     DeletedOutcomeView(
       number: 1,
@@ -138,6 +139,7 @@ const StatusEvent deniedStatus = StatusEvent(
       settingsLink: null,
     ),
   ],
+  isRescanAfterDeletionEnabled: true,
 );
 
 /// Lets every answer of the fake bridge, which come as microtasks, arrive.
@@ -188,7 +190,11 @@ void main() {
     ]) {
       test('a status of ${fullDiskAccess.name} shows no banner', () async {
         bridge.answerStatus = () async =>
-            StatusEvent(fullDiskAccess: fullDiskAccess, notices: const []);
+            StatusEvent(
+              fullDiskAccess: fullDiskAccess,
+              notices: const [],
+              isRescanAfterDeletionEnabled: true,
+            );
 
         controller = CleanerController(bridge: bridge);
         await waitForAnswers();

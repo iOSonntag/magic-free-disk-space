@@ -50,6 +50,18 @@ final class _OrderRecordingBridge implements CleanerBridge, UpdateBridge {
   }
 
   @override
+  Future<ScanAnswer> showScan() {
+    requestedKinds.add('showScan');
+    return cleanerBridge.showScan();
+  }
+
+  @override
+  Future<RescanAfterDeletionSetAnswer> setRescanAfterDeletion(bool isEnabled) {
+    requestedKinds.add('setRescanAfterDeletion');
+    return cleanerBridge.setRescanAfterDeletion(isEnabled);
+  }
+
+  @override
   Future<UpdateCheckAnswer> checkUpdate() {
     requestedKinds.add('checkUpdate');
     return updateBridge.checkUpdate();

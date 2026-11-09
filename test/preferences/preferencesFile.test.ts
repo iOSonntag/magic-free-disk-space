@@ -5,6 +5,7 @@ import type { OwnerOnlyModes } from '../../src/environment/buildEnvironment.js';
 import {
   buildPreferencesPath,
   loadPreferences,
+  saveIsRescanAfterDeletionEnabled,
   saveIsUpdateCheckEnabled,
 } from '../../src/preferences/preferencesFile.js';
 import { testOnDarwin } from '../support/darwinOnly.js';
@@ -60,6 +61,7 @@ describe('loadPreferences', () => {
   test('is on without a file', async () => {
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: true,
+      isRescanAfterDeletionEnabled: true,
     });
   });
 
@@ -81,6 +83,7 @@ describe('loadPreferences', () => {
 
       expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
         isUpdateCheckEnabled: true,
+        isRescanAfterDeletionEnabled: true,
       });
     }
   });
@@ -91,6 +94,7 @@ describe('loadPreferences', () => {
 
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: true,
+      isRescanAfterDeletionEnabled: true,
     });
   });
 
@@ -99,6 +103,48 @@ describe('loadPreferences', () => {
 
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: false,
+      isRescanAfterDeletionEnabled: true,
+    });
+  });
+
+  test('reads each switch on its own, a mistyped one as its default', async () => {
+    await writePreferencesFile(
+      '{"isUpdateCheckEnabled":"no","isRescanAfterDeletionEnabled":false}',
+    );
+
+    expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
+      isUpdateCheckEnabled: true,
+      isRescanAfterDeletionEnabled: false,
+    });
+
+    await writePreferencesFile('{"isUpdateCheckEnabled":false,"isRescanAfterDeletionEnabled":0}');
+
+    expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
+      isUpdateCheckEnabled: false,
+      isRescanAfterDeletionEnabled: true,
+    });
+  });
+});
+
+describe('saveIsRescanAfterDeletionEnabled', () => {
+  test('saves the value for the next load and keeps the other switch', async () => {
+    await writePreferencesFile('{"isUpdateCheckEnabled":false,"theme":"dark"}');
+
+    expect(
+      await saveIsRescanAfterDeletionEnabled({
+        preferencesDir: preferencesDir,
+        ownerOnlyModes: ownerOnlyModes,
+        isEnabled: false,
+      }),
+    ).toEqual({ kind: 'succeeded', value: null });
+    expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
+      isUpdateCheckEnabled: false,
+      isRescanAfterDeletionEnabled: false,
+    });
+    expect(JSON.parse(await readFile(preferencesPath, 'utf8'))).toEqual({
+      isUpdateCheckEnabled: false,
+      theme: 'dark',
+      isRescanAfterDeletionEnabled: false,
     });
   });
 });
@@ -114,6 +160,7 @@ describe('saveIsUpdateCheckEnabled', () => {
     ).toEqual({ kind: 'succeeded', value: null });
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: false,
+      isRescanAfterDeletionEnabled: true,
     });
     expect(await readdir(preferencesDir)).toEqual(['preferences.json']);
 
@@ -125,6 +172,7 @@ describe('saveIsUpdateCheckEnabled', () => {
 
     expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
       isUpdateCheckEnabled: true,
+      isRescanAfterDeletionEnabled: true,
     });
   });
 
@@ -197,6 +245,7 @@ describe('saveIsUpdateCheckEnabled', () => {
       ).toEqual({ kind: 'failed', failure: { reason: 'writeFailed', code: 'EACCES' } });
       expect(await loadPreferences({ preferencesDir: preferencesDir })).toEqual({
         isUpdateCheckEnabled: true,
+        isRescanAfterDeletionEnabled: true,
       });
     },
   );
