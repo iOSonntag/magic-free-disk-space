@@ -53,7 +53,7 @@ function partitionDecision(decision: CandidateDecision): DecisionPartition {
 }
 
 /** An Explore item is in no safe group: it waits for the user to read its reasons. */
-function listSafeNumbers(params: { candidates: Candidate[] }): number[] {
+export function listSafeNumbers(params: { candidates: Candidate[] }): number[] {
   return params.candidates.flatMap((candidate, index) =>
     isPlacedInSafeGroup({ candidate: candidate }) ? [index + 1] : [],
   );
