@@ -10,3 +10,4 @@ coverage/
 *.p8
 *.certSigningRequest
 developer-id.key
+*.bun-build
