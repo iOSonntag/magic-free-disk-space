@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../bridge/bridge.dart';
 import 'cleaner_bridge.dart';
+import 'rescan_switch.dart';
 
 sealed class CleanerState {
   const CleanerState();
@@ -91,12 +92,15 @@ const String _deletionStoppedText =
 class CleanerController extends ChangeNotifier {
   /// Asks the bridge for its status at once.
   CleanerController({required this._bridge}) {
-    unawaited(_loadStatusNotices());
+    unawaited(_loadStatus());
   }
 
   final CleanerBridge _bridge;
   CleanerState _state = const IdleState();
   List<NoticeView> _statusNotices = const [];
+  RescanSwitch _rescanSwitch = const RescanSwitchLoading();
+  String? _rescanSaveFailureText;
+
   /// The token of the request whose answer the shown state waits for; `null`
   /// when no state waits, such as after the user left a replan.
   Object? _pendingRequest;
@@ -109,6 +113,13 @@ class CleanerController extends ChangeNotifier {
   /// The notices of the bridge's status, shown over every state; empty while
   /// it loads and when it failed.
   List<NoticeView> get statusNotices => _statusNotices;
+
+  /// Whether a deletion is followed by a new scan, as the bridge stores it.
+  RescanSwitch get rescanSwitch => _rescanSwitch;
+
+  /// Why the last change of [rescanSwitch] was not saved; cleared by the next
+  /// change.
+  String? get rescanSaveFailureText => _rescanSaveFailureText;
 
   @override
   void dispose() {
@@ -244,13 +255,72 @@ class CleanerController extends ChangeNotifier {
     }
   }
 
-  /// Leaves the Result of a run for a new scan, because the run changed the
-  /// disk its scan describes.
+  /// Leaves the Result of a run for the list without what the run took when
+  /// the bridge kept its scan, else for a new scan, because the run changed
+  /// the disk its scan describes. A kept scan the bridge no longer shows, such
+  /// as one older than an hour, makes way for a new scan too.
   Future<void> finishDeletion() async {
-    if (_state is! DeletedState) {
+    final CleanerState current = _state;
+    if (current is! DeletedState || _isRequestPending) {
       return;
     }
-    await scan();
+    if (!current.result.isScanKept) {
+      await scan();
+      return;
+    }
+    final ScanAnswer? answer = await _request(_bridge.showScan);
+    if (answer == null || !identical(_state, current)) {
+      return;
+    }
+    switch (answer) {
+      case ScannedEvent():
+        _setState(ScannedState(scan: answer, selectedNumbers: const {}));
+      case FailedEvent():
+        await scan();
+    }
+  }
+
+  /// Saves [isEnabled] when the switch holds the opposite; a change while the
+  /// status loads, a save runs, or the switch is unavailable is ignored. It
+  /// waits behind a request on its way, as every request to the bridge does,
+  /// but holds back none of the cleaner's.
+  Future<void> setRescanAfterDeletion(bool isEnabled) async {
+    switch (_rescanSwitch) {
+      case RescanSwitchLoading() ||
+          RescanSwitchSaving() ||
+          RescanSwitchUnavailable():
+        return;
+      case RescanSwitchConfirmed(isEnabled: final bool confirmedValue):
+        if (confirmedValue == isEnabled) {
+          return;
+        }
+    }
+    _setRescanSwitch(
+      RescanSwitchSaving(isEnabled: isEnabled),
+      failureText: null,
+    );
+    final RescanAfterDeletionSetAnswer answer;
+    try {
+      answer = await _bridge.setRescanAfterDeletion(isEnabled);
+    } catch (error) {
+      _setRescanSwitch(
+        RescanSwitchConfirmed(isEnabled: !isEnabled),
+        failureText: '$error',
+      );
+      return;
+    }
+    switch (answer) {
+      case RescanAfterDeletionSetEvent():
+        _setRescanSwitch(
+          RescanSwitchConfirmed(isEnabled: answer.isRescanAfterDeletionEnabled),
+          failureText: null,
+        );
+      case FailedEvent():
+        _setRescanSwitch(
+          RescanSwitchConfirmed(isEnabled: !isEnabled),
+          failureText: answer.message,
+        );
+    }
   }
 
   /// Asks the bridge to plan the selection of [waiting], the state shown
@@ -315,20 +385,26 @@ class CleanerController extends ChangeNotifier {
     }
   }
 
-  /// A status that failed or threw leaves the notices empty and the state as
-  /// it is; the next request starts the bridge again.
-  Future<void> _loadStatusNotices() async {
+  /// A status that failed or threw leaves the notices empty, the rescan
+  /// switch unavailable, and the state as it is; the next request starts the
+  /// bridge again.
+  Future<void> _loadStatus() async {
     final StatusAnswer answer;
     try {
       answer = await _bridge.status();
     } catch (_) {
+      _setRescanSwitch(const RescanSwitchUnavailable(), failureText: null);
       return;
     }
     switch (answer) {
       case StatusEvent():
         _setStatusNotices(answer.notices);
+        _setRescanSwitch(
+          RescanSwitchConfirmed(isEnabled: answer.isRescanAfterDeletionEnabled),
+          failureText: null,
+        );
       case FailedEvent():
-        return;
+        _setRescanSwitch(const RescanSwitchUnavailable(), failureText: null);
     }
   }
 
@@ -369,6 +445,19 @@ class CleanerController extends ChangeNotifier {
       return;
     }
     _statusNotices = notices;
+    notifyListeners();
+  }
+
+  void _setRescanSwitch(
+    RescanSwitch rescanSwitch, {
+    required String? failureText,
+  }) {
+    // A save may answer after the page that held the controller went away.
+    if (_isDisposed) {
+      return;
+    }
+    _rescanSwitch = rescanSwitch;
+    _rescanSaveFailureText = failureText;
     notifyListeners();
   }
 }

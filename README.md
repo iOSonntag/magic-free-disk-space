@@ -172,6 +172,18 @@ bun run app:run        # build and start a debug version
 - The selection holds across the pages. Its plan opens a Review page, and Delete asks for the
   confirmation [How it keeps you safe](#how-it-keeps-you-safe) describes. The result names the
   space freed and each item that stayed, whole or in part, with its reason.
+- When you click Done on the result page, the app scans your Mac again by default. This keeps
+  the list in line with what is now on the disk.
+  - You can turn this off with the "Scan again after deleting" setting on the Settings page. When
+    the setting is off, Done does not start a new scan. Instead, the app removes the deleted items
+    from the current list and shows the list right away. To scan again, click "Scan again" in the
+    toolbar. With the setting off:
+    - The items are numbered again, and nothing is selected.
+    - An item that was only partly deleted stays in the list. Its size is an estimate: the size
+      from the scan minus the space that was freed.
+    - All other items keep the sizes from the scan.
+    - The one-hour limit below still counts from the original scan. If that scan is older than an
+      hour when you click Done, the app scans again.
 - "Handled by its own app" has a page too, with the places the sections above name.
 - A scan older than an hour must be redone before anything is deleted, since the app may stay
   open for days.

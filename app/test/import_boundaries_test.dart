@@ -17,7 +17,7 @@ const Map<String, Set<String>> _moduleEdges = {
   'overview': {'bridge', 'cleaner', 'design', 'link', 'scan_view', 'update'},
   'section': {'bridge', 'cleaner', 'design', 'link', 'scan_view'},
   'removal': {'bridge', 'cleaner', 'design', 'feedback', 'link', 'scan_view'},
-  'settings': {'design', 'update'},
+  'settings': {'cleaner', 'design', 'update'},
   'shell': {
     'bridge',
     'cleaner',

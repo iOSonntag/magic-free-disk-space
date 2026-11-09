@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../cleaner/cleaner.dart';
 import '../design/design.dart';
 import '../update/update.dart';
 
 const String updateCheckItemText = 'Look for updates at start';
 
-/// The switch of the update check as it shows.
-final class UpdateCheckSwitchLook {
-  const UpdateCheckSwitchLook({required this.isOn, required this.isEnabled});
+const String rescanItemText = 'Scan again after deleting';
+
+/// A switch of the settings as it shows.
+final class SettingSwitchLook {
+  const SettingSwitchLook({required this.isOn, required this.isEnabled});
 
   final bool isOn;
 
@@ -15,29 +18,51 @@ final class UpdateCheckSwitchLook {
   final bool isEnabled;
 }
 
-UpdateCheckSwitchLook buildUpdateCheckSwitchLook(
+SettingSwitchLook buildUpdateCheckSwitchLook(
   UpdateCheckSwitch updateCheckSwitch,
 ) {
   return switch (updateCheckSwitch) {
     UpdateCheckSwitchLoading() || UpdateCheckSwitchUnavailable() =>
-      const UpdateCheckSwitchLook(isOn: false, isEnabled: false),
-    UpdateCheckSwitchSaving(:final bool isEnabled) => UpdateCheckSwitchLook(
+      const SettingSwitchLook(isOn: false, isEnabled: false),
+    UpdateCheckSwitchSaving(:final bool isEnabled) => SettingSwitchLook(
       isOn: isEnabled,
       isEnabled: false,
     ),
-    UpdateCheckSwitchConfirmed(:final bool isEnabled) => UpdateCheckSwitchLook(
+    UpdateCheckSwitchConfirmed(:final bool isEnabled) => SettingSwitchLook(
       isOn: isEnabled,
       isEnabled: true,
     ),
   };
 }
 
-/// The settings: the update check at start, and the licences of the fonts
-/// and the framework.
+/// The rescan switch shows on until the bridge answers, as the bridge
+/// scans again unless told otherwise.
+SettingSwitchLook buildRescanSwitchLook(RescanSwitch rescanSwitch) {
+  return switch (rescanSwitch) {
+    RescanSwitchLoading() || RescanSwitchUnavailable() =>
+      const SettingSwitchLook(isOn: true, isEnabled: false),
+    RescanSwitchSaving(:final bool isEnabled) => SettingSwitchLook(
+      isOn: isEnabled,
+      isEnabled: false,
+    ),
+    RescanSwitchConfirmed(:final bool isEnabled) => SettingSwitchLook(
+      isOn: isEnabled,
+      isEnabled: true,
+    ),
+  };
+}
+
+/// The settings: the update check at start, the scan after a deletion, and
+/// the licences of the fonts and the framework.
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key, required this.updateController});
+  const SettingsPage({
+    super.key,
+    required this.updateController,
+    required this.cleanerController,
+  });
 
   final UpdateController updateController;
+  final CleanerController cleanerController;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +75,37 @@ class SettingsPage extends StatelessWidget {
           child: ListenableBuilder(
             listenable: updateController,
             builder: (BuildContext context, Widget? _) {
-              return _UpdateCheckSetting(controller: updateController);
+              return _SwitchSetting(
+                titleText: updateCheckItemText,
+                bodyText:
+                    'Asks GitHub for a newer release each time the app starts.',
+                glyph: AppIcons.update,
+                look: buildUpdateCheckSwitchLook(
+                  updateController.updateCheckSwitch,
+                ),
+                saveFailureText: updateController.saveFailureText,
+                onChanged: updateController.setUpdateCheck,
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: StageSpacing.regular),
+        GlassCard(
+          accent: StageColors.overviewAccent,
+          child: ListenableBuilder(
+            listenable: cleanerController,
+            builder: (BuildContext context, Widget? _) {
+              return _SwitchSetting(
+                titleText: rescanItemText,
+                bodyText:
+                    'Scans anew once you close the result of a deletion. '
+                    'When off, the list drops what was deleted, and "Scan '
+                    'again" scans when you ask.',
+                glyph: AppIcons.scanAgain,
+                look: buildRescanSwitchLook(cleanerController.rescanSwitch),
+                saveFailureText: cleanerController.rescanSaveFailureText,
+                onChanged: cleanerController.setRescanAfterDeletion,
+              );
             },
           ),
         ),
@@ -96,17 +151,28 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-class _UpdateCheckSetting extends StatelessWidget {
-  const _UpdateCheckSetting({required this.controller});
+/// One switch of the settings: a row a tap toggles, with the reason a save
+/// failed below it.
+class _SwitchSetting extends StatelessWidget {
+  const _SwitchSetting({
+    required this.titleText,
+    required this.bodyText,
+    required this.glyph,
+    required this.look,
+    required this.saveFailureText,
+    required this.onChanged,
+  });
 
-  final UpdateController controller;
+  final String titleText;
+  final String bodyText;
+  final IconData glyph;
+  final SettingSwitchLook look;
+  final String? saveFailureText;
+  final Future<void> Function(bool isOn) onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final UpdateCheckSwitchLook look = buildUpdateCheckSwitchLook(
-      controller.updateCheckSwitch,
-    );
-    final String? saveFailureText = controller.saveFailureText;
+    final String? saveFailureText = this.saveFailureText;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -114,21 +180,19 @@ class _UpdateCheckSetting extends StatelessWidget {
           container: true,
           toggled: look.isOn,
           enabled: look.isEnabled,
-          label: updateCheckItemText,
+          label: titleText,
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
-              onTap: look.isEnabled
-                  ? () => controller.setUpdateCheck(!look.isOn)
-                  : null,
+              onTap: look.isEnabled ? () => onChanged(!look.isOn) : null,
               borderRadius: BorderRadius.circular(GlassTokens.tileRadius),
               child: ExcludeSemantics(
                 child: Padding(
                   padding: const EdgeInsets.all(StageSpacing.tight),
                   child: Row(
                     children: [
-                      const GlyphTile(
-                        glyph: AppIcons.update,
+                      GlyphTile(
+                        glyph: glyph,
                         accent: StageColors.overviewAccent,
                         size: 40,
                       ),
@@ -137,12 +201,9 @@ class _UpdateCheckSetting extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(updateCheckItemText, style: TypeRamp.title),
+                            Text(titleText, style: TypeRamp.title),
                             const SizedBox(height: StageSpacing.tight),
-                            Text(
-                              'Asks GitHub for a newer release each time the app starts.',
-                              style: TypeRamp.body,
-                            ),
+                            Text(bodyText, style: TypeRamp.body),
                           ],
                         ),
                       ),

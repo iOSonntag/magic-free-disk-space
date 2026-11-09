@@ -11,6 +11,7 @@ describe('buildFullDiskAccessNotices', () => {
       kind: 'status',
       fullDiskAccess: 'denied',
       notices: notices,
+      isRescanAfterDeletionEnabled: true,
     });
     expect(notices.map((notice) => notice.settingsLink)).toEqual([FULL_DISK_ACCESS_SETTINGS_LINK]);
   });
