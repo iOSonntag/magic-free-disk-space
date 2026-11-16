@@ -44,6 +44,7 @@ describe('buildDeletedFacts', () => {
         ...formatRemovalRun({ run: run, texts: darwinPlatform.report }),
         formatDeletionLogLine({ logPath: PROTOCOL_FIXTURE_LOG_PATH }),
       ],
+      isScanKept: false,
       ...buildDeletedFacts({
         run: run,
         ranked: buildProtocolFixtureReport().candidates,

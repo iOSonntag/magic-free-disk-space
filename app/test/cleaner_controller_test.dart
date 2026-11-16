@@ -4,8 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:magic_free_disk_space/bridge/bridge_event.dart';
 import 'package:magic_free_disk_space/bridge_process/process_bridge_client.dart';
 import 'package:magic_free_disk_space/cleaner/cleaner_controller.dart';
+import 'package:magic_free_disk_space/cleaner/rescan_switch.dart';
 
 import 'support/fake_cleaner_bridge.dart';
+import 'support/sample_events.dart';
 import 'support/test_items.dart';
 
 final ItemView toolCacheItem = buildTestItemView(
@@ -114,6 +116,7 @@ final PlannedEvent twoItemPlan = buildSamplePlan(
 /// The run of [plannedEvent], which removed its one item.
 final DeletedEvent deletedEvent = DeletedEvent(
   lines: const ['Freed 6.0 MB.'],
+  isScanKept: false,
   outcomes: [
     DeletedOutcomeView(
       number: 1,
@@ -129,6 +132,17 @@ final DeletedEvent deletedEvent = DeletedEvent(
   logPath: '/Users/me/Library/Logs/magic-free-disk-space/deletions.jsonl',
 );
 
+/// The run of [deletedEvent] after which the bridge kept its scan.
+final DeletedEvent keptScanRun = DeletedEvent(
+  lines: deletedEvent.lines,
+  isScanKept: true,
+  outcomes: deletedEvent.outcomes,
+  freedBytes: deletedEvent.freedBytes,
+  returnsLaterBytes: deletedEvent.returnsLaterBytes,
+  availableBytesAfter: deletedEvent.availableBytesAfter,
+  logPath: deletedEvent.logPath,
+);
+
 const StatusEvent deniedStatus = StatusEvent(
   fullDiskAccess: FullDiskAccess.denied,
   notices: [
@@ -138,6 +152,7 @@ const StatusEvent deniedStatus = StatusEvent(
       settingsLink: null,
     ),
   ],
+  isRescanAfterDeletionEnabled: true,
 );
 
 /// Lets every answer of the fake bridge, which come as microtasks, arrive.
@@ -188,7 +203,11 @@ void main() {
     ]) {
       test('a status of ${fullDiskAccess.name} shows no banner', () async {
         bridge.answerStatus = () async =>
-            StatusEvent(fullDiskAccess: fullDiskAccess, notices: const []);
+            StatusEvent(
+              fullDiskAccess: fullDiskAccess,
+              notices: const [],
+              isRescanAfterDeletionEnabled: true,
+            );
 
         controller = CleanerController(bridge: bridge);
         await waitForAnswers();
@@ -252,6 +271,50 @@ void main() {
         expect((controller.state as ScannedState).scan, same(scannedEvent));
       },
     );
+
+    test('a status gives the rescan switch its stored value', () async {
+      bridge.answerStatus = () async => const StatusEvent(
+        fullDiskAccess: FullDiskAccess.granted,
+        notices: [],
+        isRescanAfterDeletionEnabled: false,
+      );
+
+      controller = CleanerController(bridge: bridge);
+
+      expect(controller.rescanSwitch, isA<RescanSwitchLoading>());
+      await waitForAnswers();
+
+      expect(
+        controller.rescanSwitch,
+        isA<RescanSwitchConfirmed>().having(
+          (RescanSwitchConfirmed rescanSwitch) => rescanSwitch.isEnabled,
+          'isEnabled',
+          isFalse,
+        ),
+      );
+    });
+
+    test('a status that failed or threw leaves the rescan switch unavailable', () async {
+      bridge.answerStatus = () async => const FailedEvent(
+        message: 'Unknown request.',
+        effect: FailureEffect.scanKept,
+      );
+      controller = CleanerController(bridge: bridge);
+      await waitForAnswers();
+
+      expect(controller.rescanSwitch, isA<RescanSwitchUnavailable>());
+
+      await controller.setRescanAfterDeletion(false);
+
+      expect(bridge.savedRescanValues, isEmpty);
+      controller.dispose();
+
+      bridge.answerStatus = () async => throw StateError('gone');
+      controller = CleanerController(bridge: bridge);
+      await waitForAnswers();
+
+      expect(controller.rescanSwitch, isA<RescanSwitchUnavailable>());
+    });
 
     test('a status that answers after dispose changes nothing', () async {
       final Completer<StatusAnswer> pendingStatus = Completer<StatusAnswer>();
@@ -464,6 +527,152 @@ void main() {
       await controller.finishDeletion();
 
       expect(bridge.requestKinds, ['status', 'scan']);
+    });
+
+    group('done after a run that kept its scan', () {
+      setUp(() {
+        bridge.deleteAnswer = keptScanRun;
+      });
+
+      test('shows the kept scan with nothing selected and scans nothing', () async {
+        final ScannedEvent keptScan = loadSampleEvent<ScannedEvent>();
+        bridge.showScanAnswer = keptScan;
+        final List<ScanningState> scanningStates = recordStates<ScanningState>(
+          controller,
+        );
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+        await controller.confirmDeletion('DELETE');
+
+        await controller.finishDeletion();
+
+        expect(bridge.requestKinds, [
+          'status',
+          'scan',
+          'plan',
+          'delete',
+          'showScan',
+        ]);
+        // Only the first scan passed through scanning.
+        expect(scanningStates, hasLength(2));
+        final ScannedState state = controller.state as ScannedState;
+        expect(state.scan, same(keptScan));
+        expect(state.selectedNumbers, isEmpty);
+      });
+
+      test('scans again when the bridge no longer shows the kept scan', () async {
+        bridge.showScanAnswer = const FailedEvent(
+          message: 'The scan is older than an hour; scan again.',
+          effect: FailureEffect.scanDropped,
+        );
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+        await controller.confirmDeletion('DELETE');
+
+        await controller.finishDeletion();
+
+        expect(bridge.requestKinds, [
+          'status',
+          'scan',
+          'plan',
+          'delete',
+          'showScan',
+          'scan',
+        ]);
+        expect((controller.state as ScannedState).scan, same(scannedEvent));
+      });
+
+      test('a second done while the kept scan is on its way asks once', () async {
+        await scanAndSelectSafe();
+        await controller.requestPlan();
+        await controller.confirmDeletion('DELETE');
+
+        final Future<void> first = controller.finishDeletion();
+        await controller.finishDeletion();
+        await first;
+
+        expect(bridge.requestKinds.where((String kind) => kind == 'showScan'), hasLength(1));
+        expect(controller.state, isA<ScannedState>());
+      });
+    });
+
+    group('the rescan switch', () {
+      test('saves a change, showing it as saving meanwhile', () async {
+        await waitForAnswers();
+        final List<RescanSwitch> switches = [];
+        controller.addListener(() => switches.add(controller.rescanSwitch));
+
+        await controller.setRescanAfterDeletion(false);
+
+        expect(bridge.savedRescanValues, [false]);
+        expect(switches.first, isA<RescanSwitchSaving>());
+        expect(
+          controller.rescanSwitch,
+          isA<RescanSwitchConfirmed>().having(
+            (RescanSwitchConfirmed rescanSwitch) => rescanSwitch.isEnabled,
+            'isEnabled',
+            isFalse,
+          ),
+        );
+        expect(controller.rescanSaveFailureText, isNull);
+      });
+
+      test('ignores the value it already holds, and a change while saving', () async {
+        await waitForAnswers();
+
+        await controller.setRescanAfterDeletion(true);
+        final Future<void> save = controller.setRescanAfterDeletion(false);
+        await controller.setRescanAfterDeletion(true);
+        await save;
+
+        expect(bridge.savedRescanValues, [false]);
+      });
+
+      test('a failed save keeps the stored value and says why', () async {
+        bridge.answerSetRescan = (bool isEnabled) async => const FailedEvent(
+          message: 'The setting could not be saved.',
+          effect: FailureEffect.scanKept,
+        );
+        await waitForAnswers();
+
+        await controller.setRescanAfterDeletion(false);
+
+        expect(
+          controller.rescanSwitch,
+          isA<RescanSwitchConfirmed>().having(
+            (RescanSwitchConfirmed rescanSwitch) => rescanSwitch.isEnabled,
+            'isEnabled',
+            isTrue,
+          ),
+        );
+        expect(controller.rescanSaveFailureText, 'The setting could not be saved.');
+      });
+
+      test('a save that throws keeps the stored value and says why', () async {
+        bridge.answerSetRescan = (bool isEnabled) async => throw StateError('stopped');
+        await waitForAnswers();
+
+        await controller.setRescanAfterDeletion(false);
+
+        expect(
+          controller.rescanSwitch,
+          isA<RescanSwitchConfirmed>().having(
+            (RescanSwitchConfirmed rescanSwitch) => rescanSwitch.isEnabled,
+            'isEnabled',
+            isTrue,
+          ),
+        );
+        expect(controller.rescanSaveFailureText, contains('stopped'));
+      });
+
+      test('a change leaves the state of the cleaner as it is', () async {
+        await controller.scan();
+        final CleanerState before = controller.state;
+
+        await controller.setRescanAfterDeletion(false);
+
+        expect(controller.state, same(before));
+      });
     });
 
     group('a group tap', () {

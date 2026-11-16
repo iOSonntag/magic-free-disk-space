@@ -88,6 +88,11 @@ class ProcessBridgeClient implements CleanerBridge, UpdateBridge {
   }
 
   @override
+  Future<ScanAnswer> showScan() {
+    return _send<ScanAnswer>(buildShowScanRequest());
+  }
+
+  @override
   Future<PlanAnswer> plan(List<int> numbers) {
     return _send<PlanAnswer>(buildPlanRequest(numbers));
   }
@@ -105,6 +110,13 @@ class ProcessBridgeClient implements CleanerBridge, UpdateBridge {
   @override
   Future<StatusAnswer> status() {
     return _send<StatusAnswer>(buildStatusRequest());
+  }
+
+  @override
+  Future<RescanAfterDeletionSetAnswer> setRescanAfterDeletion(bool isEnabled) {
+    return _send<RescanAfterDeletionSetAnswer>(
+      buildSetRescanAfterDeletionRequest(isEnabled),
+    );
   }
 
   @override

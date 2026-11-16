@@ -1,7 +1,9 @@
 import type { CatalogPlatform } from '../catalog/catalogPlatform.js';
 import { isDeleteConfirmation } from '../delete/confirmation.js';
 import { deleteApprovedCandidates } from '../delete/deleteApprovedCandidates.js';
+import type { RemovalRun } from '../delete/deleteCandidates.js';
 import type { DeletePlatform } from '../delete/deletePlatform.js';
+import { isGoneOutcome } from '../delete/isGoneOutcome.js';
 import type { RemovalPlan } from '../delete/planRemoval.js';
 import { planRemoval } from '../delete/planRemoval.js';
 import type { Environment, OwnerOnlyModes } from '../environment/buildEnvironment.js';
@@ -34,6 +36,7 @@ import type { NoticeView } from '../report/noticeView.js';
 import type { ReportTexts } from '../report/reportTexts.js';
 import type { Result } from '../result.js';
 import { SCAN_LIMITS } from '../scan/limits.js';
+import { reduceScanReport } from '../scan/reduceScanReport.js';
 import type { ScanReport } from '../scan/runScan.js';
 import { runScan } from '../scan/runScan.js';
 import type { ScanPlatform } from '../scan/scanPlatform.js';
@@ -49,11 +52,15 @@ type BridgeEventProgress = { kind: 'progress' } & ScanProgressView;
 
 type BridgeEventScanned = { kind: 'scanned' } & ScanView;
 
-/** Whether the app has Full Disk Access, with the banner the app shows; `notices` is empty unless it is off. */
+/**
+ * Whether the app has Full Disk Access, with the banner the app shows; `notices` is empty unless
+ * it is off. Also the stored switch of the scan after a deletion.
+ */
 type BridgeEventStatus = {
   kind: 'status';
   fullDiskAccess: FullDiskAccess;
   notices: NoticeView[];
+  isRescanAfterDeletionEnabled: boolean;
 };
 
 /** The plan as lines the app shows today, with its facts beside them. */
@@ -66,8 +73,12 @@ type BridgeEventPlanned = {
 
 type BridgeEventNothingApproved = { kind: 'nothingApproved'; lines: string[] };
 
-/** The run as lines the app shows today, with its facts beside them. */
-type BridgeEventDeleted = { kind: 'deleted'; lines: string[] } & DeletedFacts;
+/**
+ * The run as lines the app shows today, with its facts beside them. `isScanKept` tells whether the
+ * bridge holds the scan without what the run took, which `showScan` shows, or dropped it, so the
+ * app scans again.
+ */
+type BridgeEventDeleted = { kind: 'deleted'; lines: string[]; isScanKept: boolean } & DeletedFacts;
 
 type BridgeEventCancelled = { kind: 'cancelled'; message: string };
 
@@ -79,6 +90,11 @@ type BridgeEventUpdateChecked = {
 };
 
 type BridgeEventUpdateCheckSet = { kind: 'updateCheckSet'; isUpdateCheckEnabled: boolean };
+
+type BridgeEventRescanAfterDeletionSet = {
+  kind: 'rescanAfterDeletionSet';
+  isRescanAfterDeletionEnabled: boolean;
+};
 
 /**
  * What a failure did to the bridge: `scanDropped` leaves it without a scan, so the next request
@@ -102,6 +118,7 @@ type BridgeAnswer =
   | BridgeEventCancelled
   | BridgeEventUpdateChecked
   | BridgeEventUpdateCheckSet
+  | BridgeEventRescanAfterDeletionSet
   | BridgeEventFailed;
 
 export type BridgeEvent = BridgeEventProgress | BridgeAnswer;
@@ -149,12 +166,16 @@ type BridgeContext = {
   /** Never throws. */
   loadPreferences: (params: { preferencesDir: string }) => Promise<Preferences>;
   /** Never throws. */
-  saveIsUpdateCheckEnabled: (params: {
-    preferencesDir: string;
-    ownerOnlyModes: OwnerOnlyModes | null;
-    isEnabled: boolean;
-  }) => Promise<Result<null, PreferencesSaveFailure>>;
+  saveIsUpdateCheckEnabled: SavePreferenceSwitch;
+  /** Never throws. */
+  saveIsRescanAfterDeletionEnabled: SavePreferenceSwitch;
 };
+
+type SavePreferenceSwitch = (params: {
+  preferencesDir: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
+  isEnabled: boolean;
+}) => Promise<Result<null, PreferencesSaveFailure>>;
 
 /**
  * A held scan older than this is refused: the app may stay open for days, while the items it
@@ -246,6 +267,7 @@ async function answerRequestLine(params: {
     case 'delete':
       return answerDelete({
         context: params.context,
+        preferencesDir: params.preferencesDir,
         state: params.state,
         planId: parsed.value.planId,
         confirmation: parsed.value.confirmation,
@@ -254,8 +276,11 @@ async function answerRequestLine(params: {
       return answerStatus({
         context: params.context,
         homeDir: params.homeDir,
+        preferencesDir: params.preferencesDir,
         state: params.state,
       });
+    case 'showScan':
+      return answerShowScan({ context: params.context, state: params.state });
     case 'checkUpdate':
       return answerCheckUpdate({
         context: params.context,
@@ -264,6 +289,14 @@ async function answerRequestLine(params: {
       });
     case 'setUpdateCheck':
       return answerSetUpdateCheck({
+        context: params.context,
+        preferencesDir: params.preferencesDir,
+        ownerOnlyModes: params.ownerOnlyModes,
+        state: params.state,
+        isEnabled: parsed.value.isEnabled,
+      });
+    case 'setRescanAfterDeletion':
+      return answerSetRescanAfterDeletion({
         context: params.context,
         preferencesDir: params.preferencesDir,
         ownerOnlyModes: params.ownerOnlyModes,
@@ -325,6 +358,33 @@ async function answerSetUpdateCheck(params: {
   };
 }
 
+/** Keeps the held scan and plan; saves the switch. */
+async function answerSetRescanAfterDeletion(params: {
+  context: BridgeContext;
+  preferencesDir: string;
+  ownerOnlyModes: OwnerOnlyModes | null;
+  state: BridgeState;
+  isEnabled: boolean;
+}): Promise<BridgeStep> {
+  const saved = await params.context.saveIsRescanAfterDeletionEnabled({
+    preferencesDir: params.preferencesDir,
+    ownerOnlyModes: params.ownerOnlyModes,
+    isEnabled: params.isEnabled,
+  });
+
+  if (saved.kind === 'failed') {
+    return buildFailedStep({
+      message: formatPreferencesSaveFailure({ failure: saved.failure }),
+      nextState: params.state,
+    });
+  }
+
+  return {
+    answer: { kind: 'rescanAfterDeletionSet', isRescanAfterDeletionEnabled: params.isEnabled },
+    nextState: params.state,
+  };
+}
+
 /** Loads the environment afresh, so the age cutoffs count from this scan. */
 async function answerScan(params: { context: BridgeContext }): Promise<BridgeStep> {
   const environment = await params.context.environment.loadEnvironment();
@@ -354,21 +414,61 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
       });
     },
   });
-  const disk = await params.context.system.loadVolumeSpace(environment.value.homeDir);
 
   return {
-    answer: {
-      kind: 'scanned',
-      ...buildScanView({
-        report: report,
-        fullDiskAccessHolder: 'app',
-        texts: params.context.texts,
-        pathRules: environment.value.pathRules,
-        homeDir: environment.value.homeDir,
-        disk: disk,
-      }),
-    },
+    answer: await buildScannedEvent({
+      context: params.context,
+      report: report,
+      environment: environment.value,
+    }),
     nextState: { kind: 'scanned', report: report, environment: environment.value },
+  };
+}
+
+/**
+ * Answers with the view of the held scan, as a deletion that kept it left it, and the disk as it
+ * is now. Drops a held plan, as the app shows the list without one.
+ */
+async function answerShowScan(params: {
+  context: BridgeContext;
+  state: BridgeState;
+}): Promise<BridgeStep> {
+  if (params.state.kind === 'awaitingScan') {
+    return buildFailedStep({ message: 'Scan first.', nextState: params.state });
+  }
+
+  if (isHeldScanExpired({ environment: params.state.environment, nowMs: params.context.clock() })) {
+    return buildExpiredStep();
+  }
+
+  return {
+    answer: await buildScannedEvent({
+      context: params.context,
+      report: params.state.report,
+      environment: params.state.environment,
+    }),
+    nextState: toScannedState({ state: params.state }),
+  };
+}
+
+/** The view of `report`, with the disk of its home as it is now. */
+async function buildScannedEvent(params: {
+  context: BridgeContext;
+  report: ScanReport;
+  environment: Environment;
+}): Promise<BridgeEventScanned> {
+  const disk = await params.context.system.loadVolumeSpace(params.environment.homeDir);
+
+  return {
+    kind: 'scanned',
+    ...buildScanView({
+      report: params.report,
+      fullDiskAccessHolder: 'app',
+      texts: params.context.texts,
+      pathRules: params.environment.pathRules,
+      homeDir: params.environment.homeDir,
+      disk: disk,
+    }),
   };
 }
 
@@ -376,10 +476,14 @@ async function answerScan(params: { context: BridgeContext }): Promise<BridgeSte
 async function answerStatus(params: {
   context: BridgeContext;
   homeDir: string;
+  preferencesDir: string;
   state: BridgeState;
 }): Promise<BridgeStep> {
   const fullDiskAccess = await params.context.system.loadFullDiskAccess({
     homeDir: params.homeDir,
+  });
+  const preferences = await params.context.loadPreferences({
+    preferencesDir: params.preferencesDir,
   });
 
   return {
@@ -387,6 +491,7 @@ async function answerStatus(params: {
       kind: 'status',
       fullDiskAccess: fullDiskAccess,
       notices: buildFullDiskAccessNotices(fullDiskAccess),
+      isRescanAfterDeletionEnabled: preferences.isRescanAfterDeletionEnabled,
     },
     nextState: params.state,
   };
@@ -446,8 +551,13 @@ function answerPlan(params: {
   };
 }
 
+/**
+ * Deletes the held plan once its id and the confirmation word match. After the run it keeps the
+ * scan without what the run took, unless the stored switch asks for a new scan.
+ */
 async function answerDelete(params: {
   context: BridgeContext;
+  preferencesDir: string;
   state: BridgeState;
   planId: number;
   confirmation: string;
@@ -498,6 +608,10 @@ async function answerDelete(params: {
   }
 
   const diskAfter = await params.context.system.loadVolumeSpace(params.state.environment.homeDir);
+  const preferences = await params.context.loadPreferences({
+    preferencesDir: params.preferencesDir,
+  });
+  const isScanKept = !preferences.isRescanAfterDeletionEnabled;
 
   return {
     answer: {
@@ -506,6 +620,7 @@ async function answerDelete(params: {
         ...formatRemovalRun({ run: removal.value.run, texts: params.context.texts }),
         formatDeletionLogLine({ logPath: removal.value.logPath }),
       ],
+      isScanKept: isScanKept,
       ...buildDeletedFacts({
         run: removal.value.run,
         ranked: params.state.report.candidates,
@@ -513,7 +628,29 @@ async function answerDelete(params: {
         logPath: removal.value.logPath,
       }),
     },
-    nextState: AWAITING_SCAN,
+    nextState: isScanKept
+      ? buildStateAfterRun({ state: params.state, run: removal.value.run })
+      : AWAITING_SCAN,
+  };
+}
+
+/** The held scan without what the run took, and without the plan the run deleted. */
+function buildStateAfterRun(params: {
+  state: BridgeStatePlanned;
+  run: RemovalRun;
+}): BridgeStateScanned {
+  return {
+    kind: 'scanned',
+    report: reduceScanReport({
+      report: params.state.report,
+      results: params.run.outcomes.map((outcome) => ({
+        candidate: outcome.candidate,
+        isGone: isGoneOutcome(outcome.outcome),
+        freedBytes: outcome.freedBytes,
+      })),
+    }),
+    // The scan's time stays, so the hour a held scan lasts still counts from the scan.
+    environment: params.state.environment,
   };
 }
 

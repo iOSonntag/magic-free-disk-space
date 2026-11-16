@@ -92,8 +92,14 @@ const RELEASE_1_3_0: ReleaseVersion = { major: 1, minor: 3, patch: 0 };
 /** The disk every run of the bridge reads, so no test reads the volume it runs on. */
 const TEST_DISK: VolumeSpace = { capacityBytes: 500_000_000_000, availableBytes: 52_000_000_000 };
 
+const SHOW_SCAN_LINE = '{"kind":"showScan"}';
+
 function buildSetUpdateCheckLine(params: { isEnabled: boolean }): string {
   return JSON.stringify({ kind: 'setUpdateCheck', isEnabled: params.isEnabled });
+}
+
+function buildSetRescanAfterDeletionLine(params: { isEnabled: boolean }): string {
+  return JSON.stringify({ kind: 'setRescanAfterDeletion', isEnabled: params.isEnabled });
 }
 
 let fixtureRoot: FixtureRoot;
@@ -151,11 +157,14 @@ async function loadJournalTimes(): Promise<unknown[]> {
 async function runBridgeWithLines(params: {
   lines: string[];
   nowMs?: number;
+  /** The time by the events answered so far; overrides `nowMs`. */
+  clockByEvents?: (events: BridgeEvent[]) => number;
   environmentResult?: Result<Environment, EnvironmentFailure>;
   fullDiskAccess?: FullDiskAccess;
   releaseVersion?: ReleaseVersion | null;
   latestRelease?: LatestReleaseFetchResult;
   isUpdateCheckEnabled?: boolean;
+  isRescanAfterDeletionEnabled?: boolean;
   saveResult?: Result<null, PreferencesSaveFailure>;
 }): Promise<{
   end: BridgeEnd;
@@ -164,11 +173,13 @@ async function runBridgeWithLines(params: {
   fetchCount: number;
   preferencesDirs: string[];
   savedValues: boolean[];
+  savedRescanValues: boolean[];
 }> {
   const events: BridgeEvent[] = [];
   const probedHomeDirs: string[] = [];
   const preferencesDirs: string[] = [];
   const savedValues: boolean[] = [];
+  const savedRescanValues: boolean[] = [];
   let fetchCount = 0;
   const environmentResult: Result<Environment, EnvironmentFailure> = params.environmentResult ?? {
     kind: 'succeeded',
@@ -201,7 +212,7 @@ async function runBridgeWithLines(params: {
     delete: platform.delete,
     explore: platform.explore,
     texts: platform.report,
-    clock: () => params.nowMs ?? NOW_MS,
+    clock: () => params.clockByEvents?.(events) ?? params.nowMs ?? NOW_MS,
     releaseVersion: params.releaseVersion === undefined ? RELEASE_1_2_0 : params.releaseVersion,
     fetchLatestReleaseVersion: async () => {
       fetchCount += 1;
@@ -211,11 +222,20 @@ async function runBridgeWithLines(params: {
     loadPreferences: async (load) => {
       preferencesDirs.push(load.preferencesDir);
 
-      return { isUpdateCheckEnabled: params.isUpdateCheckEnabled ?? true };
+      return {
+        isUpdateCheckEnabled: params.isUpdateCheckEnabled ?? true,
+        isRescanAfterDeletionEnabled: params.isRescanAfterDeletionEnabled ?? true,
+      };
     },
     saveIsUpdateCheckEnabled: async (save) => {
       preferencesDirs.push(save.preferencesDir);
       savedValues.push(save.isEnabled);
+
+      return params.saveResult ?? { kind: 'succeeded', value: null };
+    },
+    saveIsRescanAfterDeletionEnabled: async (save) => {
+      preferencesDirs.push(save.preferencesDir);
+      savedRescanValues.push(save.isEnabled);
 
       return params.saveResult ?? { kind: 'succeeded', value: null };
     },
@@ -228,6 +248,7 @@ async function runBridgeWithLines(params: {
     fetchCount: fetchCount,
     preferencesDirs: preferencesDirs,
     savedValues: savedValues,
+    savedRescanValues: savedRescanValues,
   };
 }
 
@@ -264,6 +285,7 @@ async function expectEventsMatchProtocolFixture(params: { events: BridgeEvent[] 
     'nothingApproved',
     'planned',
     'progress',
+    'rescanAfterDeletionSet',
     'scanned',
     'status',
     'updateCheckSet',
@@ -480,10 +502,20 @@ describe('runBridge', () => {
     }
 
     expect(answers.get('granted')).toEqual([
-      { kind: 'status', fullDiskAccess: 'granted', notices: [] },
+      {
+        kind: 'status',
+        fullDiskAccess: 'granted',
+        notices: [],
+        isRescanAfterDeletionEnabled: true,
+      },
     ]);
     expect(answers.get('unknown')).toEqual([
-      { kind: 'status', fullDiskAccess: 'unknown', notices: [] },
+      {
+        kind: 'status',
+        fullDiskAccess: 'unknown',
+        notices: [],
+        isRescanAfterDeletionEnabled: true,
+      },
     ]);
     expect(answers.get('denied')).toEqual([
       {
@@ -495,8 +527,26 @@ describe('runBridge', () => {
             settingsLink: FULL_DISK_ACCESS_SETTINGS_LINK,
           }),
         ],
+        isRescanAfterDeletionEnabled: true,
       },
     ]);
+  });
+
+  test('answers status with the stored switch of the scan after a deletion', async () => {
+    const { events, preferencesDirs } = await runBridgeWithLines({
+      lines: [STATUS_LINE],
+      isRescanAfterDeletionEnabled: false,
+    });
+
+    expect(events).toEqual([
+      {
+        kind: 'status',
+        fullDiskAccess: 'unknown',
+        notices: [],
+        isRescanAfterDeletionEnabled: false,
+      },
+    ]);
+    expect(preferencesDirs).toEqual([environment.preferencesDir]);
   });
 
   test('a status between the plan and its confirmation keeps the plan to delete', async () => {
@@ -531,7 +581,12 @@ describe('runBridge', () => {
     });
 
     expect(events).toEqual([
-      { kind: 'status', fullDiskAccess: 'unknown', notices: [] },
+      {
+        kind: 'status',
+        fullDiskAccess: 'unknown',
+        notices: [],
+        isRescanAfterDeletionEnabled: true,
+      },
       { kind: 'failed', message: 'Scan first.', effect: 'scanDropped' },
     ]);
     expect(await listFixturePaths()).toEqual(before);
@@ -576,6 +631,7 @@ describe('runBridge', () => {
       holdsCareful: false,
     });
     expect(answers[2]).toMatchObject({
+      isScanKept: false,
       outcomes: [
         { number: 2, key: appCacheKey, outcome: 'removed', reasonKey: null, freedBytes: 3 * MIB },
       ],
@@ -590,6 +646,130 @@ describe('runBridge', () => {
       'home/Library/Caches/AppCache/blob.bin',
     ]);
     expect(await loadJournalTimes()).toEqual([NOW_MS, NOW_MS, NOW_MS]);
+  });
+
+  test('with the switch off, keeps the scan without what the run took and numbers it anew', async () => {
+    const before = await listFixturePaths();
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildPlanLine({ numbers: [2] }),
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+        SHOW_SCAN_LINE,
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+        buildPlanLine({ numbers: [1] }),
+        buildDeleteLine({ planId: 2, confirmation: 'DELETE' }),
+      ],
+      isRescanAfterDeletionEnabled: false,
+    });
+    const after = await listFixturePaths();
+    const answers = findAnswers({ events: events });
+    const toolCachePath = joinBelowHome({ home: environment, path: 'Library/Caches/ToolCache' });
+    const keptStorePath = joinBelowHome({ home: environment, path: 'Library/KeptStore' });
+
+    expect(answers.map((answer) => answer.kind)).toEqual([
+      'scanned',
+      'planned',
+      'deleted',
+      'scanned',
+      'failed',
+      'planned',
+      'deleted',
+    ]);
+    expect(answers[2]).toMatchObject({ isScanKept: true });
+    expect(answers[3]).toMatchObject({
+      summary: { disk: TEST_DISK },
+      sections: [
+        {
+          key: 'caches',
+          items: [{ number: 1, key: `catalog:tool-cache:${toolCachePath}` }],
+          checkGroup: { items: [{ number: 2, key: `catalog:kept-store:${keptStorePath}` }] },
+        },
+      ],
+      safeNumbers: [1],
+    });
+    // The run deleted its plan, so its id deletes nothing more.
+    expect(answers[4]).toMatchObject({ kind: 'failed', effect: 'scanKept' });
+    expect(answers[5]).toMatchObject({
+      planId: 2,
+      items: [{ number: 1, key: `catalog:tool-cache:${toolCachePath}` }],
+    });
+    expect(answers[6]).toMatchObject({
+      isScanKept: true,
+      outcomes: [{ number: 1, outcome: 'removed' }],
+    });
+    expect(before.filter((path) => !after.includes(path))).toEqual([
+      'home/Library/Caches/AppCache',
+      'home/Library/Caches/AppCache/blob.bin',
+      'home/Library/Caches/ToolCache',
+      'home/Library/Caches/ToolCache/blob.bin',
+    ]);
+  });
+
+  test('a kept scan still lasts an hour from the scan, not from the run', async () => {
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildPlanLine({ numbers: [2] }),
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+        SHOW_SCAN_LINE,
+      ],
+      isRescanAfterDeletionEnabled: false,
+      // The clock moves past the hour once the run is answered.
+      clockByEvents: (answered) =>
+        answered.some((event) => event.kind === 'deleted') ? NOW_MS + HOUR_MS + 1 : NOW_MS,
+    });
+
+    expect(findAnswers({ events: events }).map((answer) => answer.kind)).toEqual([
+      'scanned',
+      'planned',
+      'deleted',
+      'failed',
+    ]);
+    expect(findAnswers({ events: events })[3]).toMatchObject({ effect: 'scanDropped' });
+  });
+
+  test('showScan before a scan or after a run that dropped it asks for a scan', async () => {
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SHOW_SCAN_LINE,
+        SCAN_LINE,
+        buildPlanLine({ numbers: [2] }),
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+        SHOW_SCAN_LINE,
+      ],
+    });
+    const answers = findAnswers({ events: events });
+
+    expect(answers.map((answer) => answer.kind)).toEqual([
+      'failed',
+      'scanned',
+      'planned',
+      'deleted',
+      'failed',
+    ]);
+    expect(answers[0]).toEqual({ kind: 'failed', message: 'Scan first.', effect: 'scanDropped' });
+    expect(answers[4]).toMatchObject({ effect: 'scanDropped' });
+  });
+
+  test('showScan drops a held plan, so its id deletes nothing', async () => {
+    const before = await listFixturePaths();
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildPlanLine({ numbers: [2] }),
+        SHOW_SCAN_LINE,
+        buildDeleteLine({ planId: 1, confirmation: 'DELETE' }),
+      ],
+    });
+
+    expect(findAnswers({ events: events }).map((answer) => answer.kind)).toEqual([
+      'scanned',
+      'planned',
+      'scanned',
+      'failed',
+    ]);
+    expect(await listFixturePaths()).toEqual(before);
   });
 
   test('a failed plan drops the plan before it, so its id deletes nothing', async () => {
@@ -830,6 +1010,44 @@ describe('runBridge', () => {
     expect(fetchCount).toBe(0);
   });
 
+  test('saves the switch of the scan after a deletion and answers with the saved value', async () => {
+    const { events, preferencesDirs, savedRescanValues, savedValues } = await runBridgeWithLines({
+      lines: [
+        buildSetRescanAfterDeletionLine({ isEnabled: false }),
+        buildSetRescanAfterDeletionLine({ isEnabled: true }),
+      ],
+    });
+
+    expect(events).toEqual([
+      { kind: 'rescanAfterDeletionSet', isRescanAfterDeletionEnabled: false },
+      { kind: 'rescanAfterDeletionSet', isRescanAfterDeletionEnabled: true },
+    ]);
+    expect(savedRescanValues).toEqual([false, true]);
+    expect(savedValues).toEqual([]);
+    expect(preferencesDirs).toEqual([environment.preferencesDir, environment.preferencesDir]);
+  });
+
+  test('a switch of the scan after a deletion that cannot be saved fails and keeps the scan', async () => {
+    const { events } = await runBridgeWithLines({
+      lines: [
+        SCAN_LINE,
+        buildSetRescanAfterDeletionLine({ isEnabled: false }),
+        buildPlanLine({ numbers: [1] }),
+      ],
+      saveResult: { kind: 'failed', failure: { reason: 'writeFailed', code: 'EACCES' } },
+    });
+
+    expect(findAnswers({ events: events }).slice(1)).toEqual([
+      {
+        kind: 'failed',
+        message:
+          'Cannot write the setting file in the support folder of the app (EACCES), so the setting stays as it was.',
+        effect: 'scanKept',
+      },
+      expect.objectContaining({ kind: 'planned', planId: 1 }),
+    ]);
+  });
+
   test('a switch that cannot be saved fails and keeps the held plan', async () => {
     const before = await listFixturePaths();
     const { events } = await runBridgeWithLines({
@@ -890,6 +1108,7 @@ describe('runBridge', () => {
         buildDeleteLine({ planId: 2, confirmation: 'DELETE' }),
         CHECK_UPDATE_LINE,
         buildSetUpdateCheckLine({ isEnabled: false }),
+        buildSetRescanAfterDeletionLine({ isEnabled: false }),
       ],
       fullDiskAccess: 'denied',
     });

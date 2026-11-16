@@ -75,6 +75,7 @@ class _DestinationNavigatorState extends State<DestinationNavigator> {
       ),
       SettingsDestination() => SettingsPage(
         updateController: widget.updateController,
+        cleanerController: widget.cleanerController,
       ),
     };
     return StagePage(

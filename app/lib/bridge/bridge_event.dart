@@ -415,7 +415,8 @@ sealed class BridgeEvent {
   const BridgeEvent();
 }
 
-/// The final event that answers a scan request.
+/// The final event that answers a scan request, or a request to show the
+/// scan the bridge holds.
 sealed class ScanAnswer implements BridgeEvent {}
 
 /// The final event that answers a plan request.
@@ -432,6 +433,10 @@ sealed class UpdateCheckAnswer implements BridgeEvent {}
 
 /// The final event that answers the change of the update check's preference.
 sealed class UpdateCheckSetAnswer implements BridgeEvent {}
+
+/// The final event that answers the change of the preference whether a
+/// deletion is followed by a new scan.
+sealed class RescanAfterDeletionSetAnswer implements BridgeEvent {}
 
 final class ProgressEvent extends BridgeEvent {
   const ProgressEvent({
@@ -495,12 +500,20 @@ final class ScannedEvent extends BridgeEvent implements ScanAnswer {
 }
 
 final class StatusEvent extends BridgeEvent implements StatusAnswer {
-  const StatusEvent({required this.fullDiskAccess, required this.notices});
+  const StatusEvent({
+    required this.fullDiskAccess,
+    required this.notices,
+    required this.isRescanAfterDeletionEnabled,
+  });
 
   final FullDiskAccess fullDiskAccess;
 
   /// The notices of the banner; empty when there is nothing to tell.
   final List<NoticeView> notices;
+
+  /// The stored switch: whether a deletion drops its scan, so the app scans
+  /// again, rather than keeping what is left.
+  final bool isRescanAfterDeletionEnabled;
 }
 
 final class PlannedEvent extends BridgeEvent implements PlanAnswer {
@@ -531,6 +544,7 @@ final class NothingApprovedEvent extends BridgeEvent implements PlanAnswer {
 final class DeletedEvent extends BridgeEvent implements DeleteAnswer {
   const DeletedEvent({
     required this.lines,
+    required this.isScanKept,
     required this.outcomes,
     required this.freedBytes,
     required this.returnsLaterBytes,
@@ -539,6 +553,11 @@ final class DeletedEvent extends BridgeEvent implements DeleteAnswer {
   });
 
   final List<String> lines;
+
+  /// Whether the bridge kept the scan without what the run took, which a
+  /// request to show the scan answers; otherwise the app must scan again.
+  final bool isScanKept;
+
   final List<DeletedOutcomeView> outcomes;
   final int freedBytes;
 
@@ -579,6 +598,15 @@ final class UpdateCheckSetEvent extends BridgeEvent
   final bool isUpdateCheckEnabled;
 }
 
+final class RescanAfterDeletionSetEvent extends BridgeEvent
+    implements RescanAfterDeletionSetAnswer {
+  const RescanAfterDeletionSetEvent({
+    required this.isRescanAfterDeletionEnabled,
+  });
+
+  final bool isRescanAfterDeletionEnabled;
+}
+
 /// Also the answer of a bridge older than a request it does not know.
 final class FailedEvent extends BridgeEvent
     implements
@@ -587,7 +615,8 @@ final class FailedEvent extends BridgeEvent
         DeleteAnswer,
         StatusAnswer,
         UpdateCheckAnswer,
-        UpdateCheckSetAnswer {
+        UpdateCheckSetAnswer,
+        RescanAfterDeletionSetAnswer {
   const FailedEvent({required this.message, required this.effect});
 
   final String message;
@@ -638,10 +667,12 @@ BridgeEvent parseBridgeEvent(Object? json) {
       'kind': 'status',
       'fullDiskAccess': final String fullDiskAccess,
       'notices': final List<Object?> notices,
+      'isRescanAfterDeletionEnabled': final bool isRescanAfterDeletionEnabled,
     } =>
       StatusEvent(
         fullDiskAccess: _parseEnumName(FullDiskAccess.values, fullDiskAccess),
         notices: notices.map(_parseNotice).toList(),
+        isRescanAfterDeletionEnabled: isRescanAfterDeletionEnabled,
       ),
     {
       'kind': 'planned',
@@ -664,6 +695,7 @@ BridgeEvent parseBridgeEvent(Object? json) {
     {
       'kind': 'deleted',
       'lines': final List<Object?> lines,
+      'isScanKept': final bool isScanKept,
       'outcomes': final List<Object?> outcomes,
       'freedBytes': final int freedBytes,
       'returnsLaterBytes': final int returnsLaterBytes,
@@ -672,6 +704,7 @@ BridgeEvent parseBridgeEvent(Object? json) {
     } =>
       DeletedEvent(
         lines: _parseLines(lines),
+        isScanKept: isScanKept,
         outcomes: outcomes.map(_parseDeletedOutcome).toList(),
         freedBytes: freedBytes,
         returnsLaterBytes: returnsLaterBytes,
@@ -695,6 +728,13 @@ BridgeEvent parseBridgeEvent(Object? json) {
       'isUpdateCheckEnabled': final bool isUpdateCheckEnabled,
     } =>
       UpdateCheckSetEvent(isUpdateCheckEnabled: isUpdateCheckEnabled),
+    {
+      'kind': 'rescanAfterDeletionSet',
+      'isRescanAfterDeletionEnabled': final bool isRescanAfterDeletionEnabled,
+    } =>
+      RescanAfterDeletionSetEvent(
+        isRescanAfterDeletionEnabled: isRescanAfterDeletionEnabled,
+      ),
     {
       'kind': 'failed',
       'message': final String message,

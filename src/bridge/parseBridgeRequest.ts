@@ -13,17 +13,24 @@ type BridgeRequestCheckUpdate = { kind: 'checkUpdate' };
 
 type BridgeRequestSetUpdateCheck = { kind: 'setUpdateCheck'; isEnabled: boolean };
 
+/** Asks for the view of the held scan, such as the one a deletion kept. */
+type BridgeRequestShowScan = { kind: 'showScan' };
+
+type BridgeRequestSetRescanAfterDeletion = { kind: 'setRescanAfterDeletion'; isEnabled: boolean };
+
 type BridgeRequest =
   | BridgeRequestScan
   | BridgeRequestPlan
   | BridgeRequestDelete
   | BridgeRequestStatus
   | BridgeRequestCheckUpdate
-  | BridgeRequestSetUpdateCheck;
+  | BridgeRequestSetUpdateCheck
+  | BridgeRequestShowScan
+  | BridgeRequestSetRescanAfterDeletion;
 
 type BridgeRequestFailure = { reason: 'invalidJson' | 'unknownRequest' };
 
-/** Parses one line the app sent; any shape but the six requests fails. */
+/** Parses one line the app sent; any shape but the eight requests fails. */
 export function parseBridgeRequest(params: {
   line: string;
 }): Result<BridgeRequest, BridgeRequestFailure> {
@@ -79,6 +86,17 @@ function toBridgeRequest(params: { value: unknown }): BridgeRequest | null {
 
   if (params.value.kind === 'setUpdateCheck' && typeof params.value.isEnabled === 'boolean') {
     return { kind: 'setUpdateCheck', isEnabled: params.value.isEnabled };
+  }
+
+  if (params.value.kind === 'showScan') {
+    return { kind: 'showScan' };
+  }
+
+  if (
+    params.value.kind === 'setRescanAfterDeletion' &&
+    typeof params.value.isEnabled === 'boolean'
+  ) {
+    return { kind: 'setRescanAfterDeletion', isEnabled: params.value.isEnabled };
   }
 
   return null;

@@ -5,7 +5,7 @@ import { parseBridgeRequest } from '../../src/bridge/parseBridgeRequest.js';
 
 describe('parseBridgeRequest', () => {
   // The app's test builds its requests against the same fixture.
-  test('parses the six requests of the protocol fixture', async () => {
+  test('parses the eight requests of the protocol fixture', async () => {
     const fixtureText = await readFile(join(import.meta.dir, 'bridgeRequests.jsonl'), 'utf8');
     const lines = fixtureText.split('\n').filter((line) => line !== '');
 
@@ -16,6 +16,8 @@ describe('parseBridgeRequest', () => {
       { kind: 'succeeded', value: { kind: 'status' } },
       { kind: 'succeeded', value: { kind: 'checkUpdate' } },
       { kind: 'succeeded', value: { kind: 'setUpdateCheck', isEnabled: false } },
+      { kind: 'succeeded', value: { kind: 'showScan' } },
+      { kind: 'succeeded', value: { kind: 'setRescanAfterDeletion', isEnabled: false } },
     ]);
   });
 
@@ -49,6 +51,10 @@ describe('parseBridgeRequest', () => {
       '{"kind":"setUpdateCheck","isEnabled":0}',
       '{"kind":"setUpdateCheck","isEnabled":null}',
       '{"kind":"setUpdateCheck","enabled":true}',
+      '{"kind":"ShowScan"}',
+      '{"kind":"setRescanAfterDeletion"}',
+      '{"kind":"setRescanAfterDeletion","isEnabled":"true"}',
+      '{"kind":"setRescanAfterDeletion","isEnabled":null}',
     ];
 
     for (const line of lines) {

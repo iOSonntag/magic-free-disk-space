@@ -16,6 +16,7 @@ import 'support/removal_harness.dart';
 /// Docker's disk image.
 const DeletedEvent mixedRun = DeletedEvent(
   lines: ['Freed about 2.0 MB in 1 item.'],
+  isScanKept: false,
   outcomes: [
     DeletedOutcomeView(
       number: 1,
@@ -132,6 +133,7 @@ void main() {
     final PlannedItemView appCache = planSampleItem(2);
     final DeletedEvent runWithUnknownReason = DeletedEvent(
       lines: const ['Freed nothing.'],
+      isScanKept: false,
       outcomes: [
         DeletedOutcomeView(
           number: appCache.number,

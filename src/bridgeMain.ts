@@ -4,7 +4,11 @@ import { darwinPlatform } from './platform/darwin/darwinPlatform.js';
 import type { Platform } from './platform/platform.js';
 import { parsePlatformId } from './platform/platform.js';
 import { win32Platform } from './platform/win32/win32Platform.js';
-import { loadPreferences, saveIsUpdateCheckEnabled } from './preferences/preferencesFile.js';
+import {
+  loadPreferences,
+  saveIsRescanAfterDeletionEnabled,
+  saveIsUpdateCheckEnabled,
+} from './preferences/preferencesFile.js';
 import { formatUnsupportedPlatform } from './report/formatEnvironmentFailure.js';
 import { runStoppingToolsOnProcessEnd } from './tools/runToolCommand.js';
 import { fetchLatestReleaseVersion } from './update/fetchLatestReleaseVersion.js';
@@ -83,6 +87,7 @@ async function runBridgeToEnd(params: { platform: Platform }): Promise<number> {
       }),
     loadPreferences: loadPreferences,
     saveIsUpdateCheckEnabled: saveIsUpdateCheckEnabled,
+    saveIsRescanAfterDeletionEnabled: saveIsRescanAfterDeletionEnabled,
   });
 
   switch (end) {

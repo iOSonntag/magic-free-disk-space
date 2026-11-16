@@ -7,6 +7,7 @@ import 'package:magic_free_disk_space/cleaner/cleaner.dart';
 const StatusEvent grantedStatus = StatusEvent(
   fullDiskAccess: FullDiskAccess.granted,
   notices: [],
+  isRescanAfterDeletionEnabled: true,
 );
 
 /// The progress the fake bridge sends before each scan answer, unless the
@@ -28,6 +29,13 @@ final class FakeCleanerBridge implements CleanerBridge {
   Future<StatusAnswer> Function() answerStatus = () async => grantedStatus;
   late PlanAnswer planAnswer;
   late DeleteAnswer deleteAnswer;
+
+  /// What a request to show the held scan answers; [scanAnswer] when unset.
+  ScanAnswer? showScanAnswer;
+  Future<RescanAfterDeletionSetAnswer> Function(bool isEnabled) answerSetRescan =
+      (bool isEnabled) async =>
+          RescanAfterDeletionSetEvent(isRescanAfterDeletionEnabled: isEnabled);
+  final List<bool> savedRescanValues = [];
   Object? scanError;
   Object? deleteError;
   List<int>? plannedNumbers;
@@ -74,6 +82,19 @@ final class FakeCleanerBridge implements CleanerBridge {
         return heldScan.future;
       }
       return scanAnswer;
+    });
+  }
+
+  @override
+  Future<ScanAnswer> showScan() {
+    return _answerRequest('showScan', () async => showScanAnswer ?? scanAnswer);
+  }
+
+  @override
+  Future<RescanAfterDeletionSetAnswer> setRescanAfterDeletion(bool isEnabled) {
+    return _answerRequest('setRescanAfterDeletion', () {
+      savedRescanValues.add(isEnabled);
+      return answerSetRescan(isEnabled);
     });
   }
 

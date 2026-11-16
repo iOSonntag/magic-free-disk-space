@@ -4,3 +4,4 @@ library;
 
 export 'cleaner_bridge.dart';
 export 'cleaner_controller.dart';
+export 'rescan_switch.dart';

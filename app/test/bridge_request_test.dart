@@ -20,6 +20,8 @@ void main() {
       buildStatusRequest(),
       buildCheckUpdateRequest(),
       buildSetUpdateCheckRequest(false),
+      buildShowScanRequest(),
+      buildSetRescanAfterDeletionRequest(false),
     ], fixtureRequests);
   });
 }

@@ -219,7 +219,7 @@ while read -r request; do
     echo "\$early_request" >> "\$(dirname "\$0")/early"
   fi
   if [ "\$request" = '{"kind":"status"}' ]; then
-    echo '{"kind":"status","fullDiskAccess":"granted","notices":[]}'
+    echo '{"kind":"status","fullDiskAccess":"granted","notices":[],"isRescanAfterDeletionEnabled":true}'
   else
     echo '{"kind":"updateChecked","isUpdateCheckEnabled":true,"notice":null}'
   fi
@@ -306,7 +306,7 @@ done
     client = await createClientOverScript('''
 while read -r request; do
   if [ "\$request" = '{"kind":"status"}' ]; then
-    echo '{"kind":"status","fullDiskAccess":"granted","notices":[]}'
+    echo '{"kind":"status","fullDiskAccess":"granted","notices":[],"isRescanAfterDeletionEnabled":true}'
   else
     echo '{"kind":"failed","message":"Unknown request.","effect":"scanKept"}'
   fi
@@ -318,6 +318,26 @@ done
     final StatusEvent status = answer as StatusEvent;
     expect(status.fullDiskAccess, FullDiskAccess.granted);
     expect(status.notices, isEmpty);
+  });
+
+  test('sends the requests of the rescan switch and the kept scan as the bridge reads them', () async {
+    client = await createClientOverScript('''
+while read -r request; do
+  if [ "\$request" = '{"kind":"setRescanAfterDeletion","isEnabled":false}' ]; then
+    echo '{"kind":"rescanAfterDeletionSet","isRescanAfterDeletionEnabled":false}'
+  elif [ "\$request" = '{"kind":"showScan"}' ]; then
+    echo '{"kind":"failed","message":"Scan first.","effect":"scanDropped"}'
+  else
+    echo '{"kind":"failed","message":"Unknown request.","effect":"scanKept"}'
+  fi
+done
+''');
+
+    final RescanAfterDeletionSetAnswer saved = await client.setRescanAfterDeletion(false);
+    final ScanAnswer shown = await client.showScan();
+
+    expect((saved as RescanAfterDeletionSetEvent).isRescanAfterDeletionEnabled, isFalse);
+    expect((shown as FailedEvent).effect, FailureEffect.scanDropped);
   });
 
   /// A bridge that cannot start on its first run and answers every request
